@@ -4,6 +4,8 @@ Diese Checkliste beschreibt den geplanten Staging-Aufbau fuer `kalender-beg-stag
 
 ## Zielnamen
 
+Backend und Datenbank werden in `Germany West Central` geplant. Die Static Web App wird fuer Staging in `West Europe` angelegt, falls `Germany West Central` im Portal/CLI nicht angeboten wird.
+
 | Zweck | Name |
 | --- | --- |
 | Resource Group | `kalender-beg-staging-rg` |
@@ -13,6 +15,12 @@ Diese Checkliste beschreibt den geplanten Staging-Aufbau fuer `kalender-beg-stag
 | Frontend Static Web App | `kalender-beg-staging-web` |
 
 Hinweis: Einige Azure-Namen muessen weltweit eindeutig sein. Wenn Azure einen Namen ablehnt, den gleichen Namen mit kurzem Zusatz verwenden, zum Beispiel `kalender-beg-staging-api-ce`.
+
+## Alternative: Azure Cloud Shell Script
+
+Statt die Ressourcen manuell im Portal anzulegen, kann `infra/azure/create-staging-resources.sh` in Azure Cloud Shell ausgefuehrt werden. Das Script fragt Passwoerter verdeckt ab, erstellt die Staging-Ressourcen und gibt danach die GitHub-Secrets aus, die noch eingetragen werden muessen.
+
+Wichtig: Das Script erzeugt kostenpflichtige Azure-Ressourcen, insbesondere PostgreSQL und App Service. Nach Tests nicht mehr benoetigte Ressourcen ueber die Resource Group `kalender-beg-staging-rg` loeschen.
 
 ## 1. Resource Group
 
@@ -89,7 +97,7 @@ Danach kann `.github/workflows/backend-staging.yml` manuell oder bei Push nach `
 Anlegen:
 
 - Name: `kalender-beg-staging-web`
-- Region: `Germany West Central`, falls auswaehlbar, sonst naechste verfuegbare europaeische Region
+- Region: `West Europe`, falls `Germany West Central` nicht angeboten wird
 - Deployment source: GitHub
 - Repository: `DonkeyKonger/Kalender_BEG`
 - Branch: `main`
