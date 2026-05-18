@@ -2,6 +2,8 @@
 
 Ziel: Eine fruehe Testversion online bereitstellen, ohne lokal Docker/PostgreSQL installieren zu muessen.
 
+Konkrete Namen fuer dieses Projekt stehen in `docs/AZURE_STAGING_CHECKLIST.md`.
+
 ## Ressourcen
 
 Empfohlen fuer diese Testphase:

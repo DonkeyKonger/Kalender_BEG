@@ -108,6 +108,8 @@ Direkte Zellbearbeitung Schritt 9:
 Azure-Staging:
 
 - Das Projekt ist fuer Azure App Service, Azure Static Web Apps und Azure Database for PostgreSQL vorbereitet.
-- Anleitung: `docs/AZURE_STAGING_DEPLOYMENT.md`
+- Allgemeine Anleitung: `docs/AZURE_STAGING_DEPLOYMENT.md`
+- Konkrete Checkliste fuer `kalender-beg-staging`: `docs/AZURE_STAGING_CHECKLIST.md`
 - Backend-Startup fuer App Service: `backend/startup.sh`
 - Frontend-SPA-Fallback: `frontend/staticwebapp.config.json`
+- GitHub Actions: `.github/workflows/backend-staging.yml` und `.github/workflows/frontend-staging.yml`
