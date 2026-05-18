@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+node_modules/
+dist/
+build/
+postgres_data/
+docs/Prompt_Kalender_V1.rtf
+docs/reference/*.xlsm
