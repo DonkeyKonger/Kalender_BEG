@@ -82,6 +82,20 @@ class MatrixService:
             rows=rows,
         )
 
+    def get_site_cells(self, *, site_id: int, start: date, end: date) -> list[MatrixCell]:
+        site = self.sites.get(site_id)
+        if site is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden.")
+        days = self._date_range(start, end)
+        assignments = self.assignments.list(start=start, end=end, site_id=site_id)
+        person_ids = {assignment.person_id for assignment in assignments}
+        absences = [
+            absence
+            for absence in self.absences.list(start=start, end=end)
+            if absence.status == AbsenceStatus.ACTIVE and absence.person_id in person_ids
+        ]
+        return self._build_cells(days=days, assignments=assignments, absences=absences)
+
     def _build_row(
         self,
         site: Site,
@@ -92,25 +106,7 @@ class MatrixService:
         site_assignments = [
             assignment for assignment in assignments if assignment.site_id == site.id
         ]
-        cells = []
-        for day in days:
-            day_assignments = [
-                assignment for assignment in site_assignments
-                if assignment.start_date <= day <= assignment.end_date
-            ]
-            assigned_person_ids = {assignment.person_id for assignment in day_assignments}
-            day_absences = [
-                absence for absence in absences
-                if absence.person_id in assigned_person_ids
-                and absence.start_date <= day <= absence.end_date
-            ]
-            cells.append(
-                MatrixCell(
-                    date=day,
-                    assignments=[self._build_assignment(item) for item in day_assignments],
-                    absences=[self._build_absence(item) for item in day_absences],
-                )
-            )
+        cells = self._build_cells(days=days, assignments=site_assignments, absences=absences)
 
         return MatrixRow(
             site=MatrixSite(
@@ -129,6 +125,34 @@ class MatrixService:
             ),
             cells=cells,
         )
+
+    def _build_cells(
+        self,
+        *,
+        days: list[date],
+        assignments: list[Assignment],
+        absences,
+    ) -> list[MatrixCell]:
+        cells = []
+        for day in days:
+            day_assignments = [
+                assignment for assignment in assignments
+                if assignment.start_date <= day <= assignment.end_date
+            ]
+            assigned_person_ids = {assignment.person_id for assignment in day_assignments}
+            day_absences = [
+                absence for absence in absences
+                if absence.person_id in assigned_person_ids
+                and absence.start_date <= day <= absence.end_date
+            ]
+            cells.append(
+                MatrixCell(
+                    date=day,
+                    assignments=[self._build_assignment(item) for item in day_assignments],
+                    absences=[self._build_absence(item) for item in day_absences],
+                )
+            )
+        return cells
 
     def _build_assignment(self, assignment: Assignment) -> MatrixAssignment:
         return MatrixAssignment(

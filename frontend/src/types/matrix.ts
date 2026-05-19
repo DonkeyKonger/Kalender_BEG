@@ -77,4 +77,5 @@ export type MatrixConflictMessage = {
 export type MatrixMutationResponse = {
   warnings: MatrixConflictMessage[];
   infos: MatrixConflictMessage[];
+  updated_cells: MatrixCell[];
 };

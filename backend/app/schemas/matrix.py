@@ -96,4 +96,5 @@ class MatrixConflictMessage(BaseModel):
 class MatrixMutationResponse(BaseModel):
     warnings: list[MatrixConflictMessage] = Field(default_factory=list)
     infos: list[MatrixConflictMessage] = Field(default_factory=list)
+    updated_cells: list[MatrixCell] = Field(default_factory=list)
 

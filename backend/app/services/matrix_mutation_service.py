@@ -12,6 +12,7 @@ from app.schemas.matrix import MatrixCellPatch, MatrixEntryInput, MatrixRangePat
 from app.services.audit_service import AuditService
 from app.services.conflict_service import ConflictMessage, ConflictService
 from app.services.external_person_service import ExternalPersonService
+from app.services.matrix_service import MatrixService
 
 
 class MatrixMutationService:
@@ -139,6 +140,11 @@ class MatrixMutationService:
         return {
             "warnings": [item.to_dict() for item in warnings],
             "infos": [item.to_dict() for item in infos],
+            "updated_cells": MatrixService(self.db).get_site_cells(
+                site_id=site_id,
+                start=start_date,
+                end=end_date,
+            ),
         }
 
     def _resolve_entries(self, entries: list[MatrixEntryInput]) -> list[Person]:

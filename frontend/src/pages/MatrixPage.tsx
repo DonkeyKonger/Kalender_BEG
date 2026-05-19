@@ -182,7 +182,7 @@ export function MatrixPage() {
         ...current,
         [activeCell.key]: response.warnings[0]?.message ?? "Gespeichert",
       }));
-      await loadMatrix();
+      replaceMatrixCells(activeCell.siteId, response.updated_cells);
     } catch (requestError) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "error" }));
       setCellMessage((current) => ({
@@ -200,20 +200,42 @@ export function MatrixPage() {
     setUndoStack((current) => current.slice(0, -1));
     const entries = item.before.map(toMatrixEntryInput);
     try {
-      if (item.endDate === item.date) {
-        await api.patchMatrixCell({ siteId: item.siteId, date: item.date, entries });
-      } else {
-        await api.patchMatrixRange({
-          siteId: item.siteId,
-          startDate: item.date,
-          endDate: item.endDate,
-          entries,
-        });
-      }
-      await loadMatrix();
+      const response = item.endDate === item.date
+        ? await api.patchMatrixCell({ siteId: item.siteId, date: item.date, entries })
+        : await api.patchMatrixRange({
+            siteId: item.siteId,
+            startDate: item.date,
+            endDate: item.endDate,
+            entries,
+          });
+      replaceMatrixCells(item.siteId, response.updated_cells);
     } catch (requestError) {
       setError(readApiError(requestError, "Undo konnte nicht ausgefuehrt werden."));
     }
+  }
+
+  function replaceMatrixCells(siteId: number, updatedCells: MatrixCell[]) {
+    if (!updatedCells.length) {
+      return;
+    }
+    const cellsByDate = new Map(updatedCells.map((cell) => [cell.date, cell]));
+    setMatrix((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        rows: current.rows.map((row) => {
+          if (row.site.id !== siteId) {
+            return row;
+          }
+          return {
+            ...row,
+            cells: row.cells.map((cell) => cellsByDate.get(cell.date) ?? cell),
+          };
+        }),
+      };
+    });
   }
 
   return (
