@@ -12,6 +12,8 @@ from app.api.routes import (
     users,
 )
 from app.core.config import settings
+from app.core.database import SessionLocal
+from app.seed_admin import seed_admin
 
 
 def create_app() -> FastAPI:
@@ -33,6 +35,14 @@ def create_app() -> FastAPI:
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
     app.include_router(matrix.router, prefix="/api")
+
+    @app.on_event("startup")
+    def ensure_admin_user() -> None:
+        if not settings.admin_username or not settings.admin_password:
+            return
+        with SessionLocal() as db:
+            seed_admin(db)
+
     return app
 
 
