@@ -2,18 +2,12 @@ name: Backend Staging Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-staging.yml"
 
 permissions:
   contents: read
 
 env:
-  AZURE_WEBAPP_NAME: kalender-beg-staging-api-a0c2c9b2hna9bjf2
+  AZURE_WEBAPP_NAME: kalender-beg-staging-api
   PYTHON_VERSION: "3.12"
 
 jobs:

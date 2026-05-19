@@ -2,12 +2,6 @@ name: Frontend Staging Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-staging.yml"
 
 permissions:
   contents: read
