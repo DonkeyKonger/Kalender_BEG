@@ -15,6 +15,13 @@ def seed_admin(db: Session) -> User:
     users = UserRepository(db)
     existing = users.get_by_username(settings.admin_username)
     if existing is not None:
+        existing.display_name = settings.admin_display_name
+        existing.password_hash = hash_password(settings.admin_password)
+        existing.role = UserRole.ADMIN
+        existing.is_active = True
+        users.add(existing)
+        db.commit()
+        db.refresh(existing)
         return existing
 
     admin = User(
