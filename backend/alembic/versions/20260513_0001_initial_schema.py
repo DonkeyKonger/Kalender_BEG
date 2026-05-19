@@ -22,12 +22,14 @@ user_role = postgresql.ENUM(
     "office",
     "monteur",
     name="user_role",
+    create_type=False,
 )
 person_type = postgresql.ENUM(
     "internal",
     "external",
     "external_temp",
     name="person_type",
+    create_type=False,
 )
 site_status = postgresql.ENUM(
     "active",
@@ -35,12 +37,14 @@ site_status = postgresql.ENUM(
     "closed",
     "archived",
     name="site_status",
+    create_type=False,
 )
 assignment_type = postgresql.ENUM(
     "regular",
     "support",
     "emergency",
     name="assignment_type",
+    create_type=False,
 )
 absence_type = postgresql.ENUM(
     "vacation",
@@ -49,11 +53,13 @@ absence_type = postgresql.ENUM(
     "free",
     "other",
     name="absence_type",
+    create_type=False,
 )
 absence_status = postgresql.ENUM(
     "active",
     "cancelled",
     name="absence_status",
+    create_type=False,
 )
 vehicle_type = postgresql.ENUM(
     "car",
@@ -61,6 +67,7 @@ vehicle_type = postgresql.ENUM(
     "truck",
     "other",
     name="vehicle_type",
+    create_type=False,
 )
 
 
