@@ -7,6 +7,7 @@ from app.api.routes import (
     auth,
     health,
     matrix,
+    me,
     persons,
     sites,
     users,
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
     app.include_router(matrix.router, prefix="/api")
+    app.include_router(me.router, prefix="/api")
 
     @app.on_event("startup")
     def ensure_admin_user() -> None:

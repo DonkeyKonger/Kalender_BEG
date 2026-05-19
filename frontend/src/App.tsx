@@ -5,6 +5,7 @@ import { AppShell } from "./layout/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MatrixPage } from "./pages/MatrixPage";
+import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 export function App() {
@@ -30,10 +31,7 @@ export function App() {
             />
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
-            <Route
-              path="me/assignments"
-              element={<PlaceholderPage eyebrow="Mobil" title="Meine Einsaetze" />}
-            />
+            <Route path="me/assignments" element={<MyAssignmentsPage />} />
           </Route>
         </Route>
       </Route>

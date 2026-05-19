@@ -1,0 +1,99 @@
+from datetime import date
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.assignment import Assignment
+from app.models.person import Person
+from app.models.site import Site
+from app.models.user import User
+from app.schemas.mobile import (
+    MobileAssignment,
+    MobileAssignmentsResponse,
+    MobilePerson,
+    MobileSite,
+)
+
+MAX_DEFAULT_DAYS = 45
+MAX_HISTORY_DAYS = 370
+
+
+class MobileAssignmentService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def list_own_assignments(
+        self,
+        *,
+        current_user: User,
+        start: date,
+        end: date,
+        allow_history: bool = False,
+    ) -> MobileAssignmentsResponse:
+        if current_user.person_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Dieser Benutzer ist keiner Person zugeordnet.",
+            )
+        if end < start:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
+
+        max_days = MAX_HISTORY_DAYS if allow_history else MAX_DEFAULT_DAYS
+        if (end - start).days + 1 > max_days:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Der angefragte Zeitraum ist fuer diese Ansicht zu gross.",
+            )
+
+        statement = (
+            select(Assignment)
+            .options(
+                selectinload(Assignment.person),
+                selectinload(Assignment.site).selectinload(Site.project_manager),
+            )
+            .where(
+                Assignment.person_id == current_user.person_id,
+                Assignment.start_date <= end,
+                Assignment.end_date >= start,
+            )
+            .order_by(Assignment.start_date, Assignment.end_date, Assignment.id)
+        )
+        assignments = list(self.db.scalars(statement))
+        return MobileAssignmentsResponse(
+            start_date=start,
+            end_date=end,
+            assignments=[self._build_assignment(item) for item in assignments],
+        )
+
+    def _build_assignment(self, assignment: Assignment) -> MobileAssignment:
+        return MobileAssignment(
+            id=assignment.id,
+            start_date=assignment.start_date,
+            end_date=assignment.end_date,
+            assignment_type=assignment.assignment_type,
+            note=assignment.note,
+            person=self._build_person(assignment.person),
+            site=self._build_site(assignment.site),
+        )
+
+    def _build_site(self, site: Site) -> MobileSite:
+        return MobileSite(
+            id=site.id,
+            site_number=site.site_number,
+            name=site.name,
+            location=site.location,
+            address=site.address,
+            customer=site.customer,
+            project_manager=self._build_person(site.project_manager) if site.project_manager else None,
+            status=site.status,
+            info=site.info,
+        )
+
+    def _build_person(self, person: Person) -> MobilePerson:
+        return MobilePerson(
+            id=person.id,
+            display_name=person.display_name,
+            phone=person.phone,
+            email=person.email,
+        )

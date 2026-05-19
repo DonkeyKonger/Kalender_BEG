@@ -1,6 +1,7 @@
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { MobileAssignmentsResponse } from "../types/mobile";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -65,6 +66,16 @@ export const api = {
 
   async persons(): Promise<Person[]> {
     return request<Person[]>("/persons?is_active=true");
+  },
+
+  async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
+    const search = new URLSearchParams({ start: params.start, end: params.end });
+    return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`);
+  },
+
+  async myAssignmentHistory(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
+    const search = new URLSearchParams({ start: params.start, end: params.end });
+    return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`);
   },
 
   async matrix(params: {

@@ -719,3 +719,187 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.form-info {
+  margin: 0;
+  border-left: 3px solid #1d5c99;
+  background: #eef6ff;
+  color: #143c6d;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.mobile-page {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.mobile-header {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-header h1,
+.mobile-header p,
+.assignment-section h2,
+.assignment-card h3,
+.assignment-card p,
+.cache-note,
+.empty-inline {
+  margin: 0;
+}
+
+.mobile-header h1 {
+  margin-top: 2px;
+  color: #111827;
+  font-size: 1.55rem;
+  letter-spacing: 0;
+}
+
+.mobile-header p:not(.eyebrow),
+.cache-note,
+.muted-text,
+.empty-inline {
+  color: #65738a;
+}
+
+.mobile-header .icon-button {
+  width: 100%;
+}
+
+.mobile-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 4px;
+}
+
+.mobile-segment button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #42526b;
+  font-weight: 800;
+}
+
+.mobile-segment button.active {
+  background: #143c6d;
+  color: #ffffff;
+}
+
+.cache-note {
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.cache-note.warning {
+  color: #815500;
+}
+
+.assignment-sections {
+  display: grid;
+  gap: 18px;
+}
+
+.assignment-section {
+  display: grid;
+  gap: 10px;
+}
+
+.assignment-section h2 {
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.assignment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.assignment-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+}
+
+.assignment-card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assignment-card h3 {
+  margin-top: 4px;
+  color: #111827;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+}
+
+.assignment-date,
+.assignment-detail-list p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.assignment-date {
+  color: #143c6d;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.assignment-detail-list {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.assignment-detail-list svg,
+.assignment-date svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.assignment-note {
+  border-left: 3px solid #cbd7e6;
+  background: #f8fafc;
+  color: #334155;
+  padding: 9px 10px;
+  line-height: 1.45;
+}
+
+.empty-inline {
+  border: 1px dashed #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  font-size: 0.92rem;
+}
+
+@media (min-width: 720px) {
+  .mobile-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: flex-start;
+  }
+
+  .mobile-header .icon-button {
+    width: auto;
+  }
+}
