@@ -25,3 +25,17 @@ export type Site = {
   created_at: string;
   updated_at: string;
 };
+
+export type SiteCreate = {
+  site_number: string | null;
+  name: string;
+  location: string | null;
+  address: string | null;
+  customer: string | null;
+  project_manager_person_id: number | null;
+  status: SiteStatus;
+  info: string | null;
+  color: string | null;
+};
+
+export type SiteUpdate = Partial<SiteCreate>;

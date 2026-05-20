@@ -2,7 +2,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonUpdate } from "../types/person";
-import type { Site } from "../types/site";
+import type { Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -148,6 +148,28 @@ export const api = {
 
   async site(siteId: number): Promise<Site> {
     return request<Site>(`/sites/${siteId}`);
+  },
+
+  async createSite(payload: SiteCreate): Promise<Site> {
+    return request<Site>("/sites", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateSite(siteId: number, payload: SiteUpdate): Promise<Site> {
+    return request<Site>(`/sites/${siteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async closeSite(siteId: number): Promise<Site> {
+    return request<Site>(`/sites/${siteId}/close`, { method: "POST" });
+  },
+
+  async reactivateSite(siteId: number): Promise<Site> {
+    return request<Site>(`/sites/${siteId}/reactivate`, { method: "POST" });
   },
 
   async dailyPlanPdf(planDate: string): Promise<Blob> {

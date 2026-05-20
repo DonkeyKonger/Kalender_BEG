@@ -37,10 +37,10 @@ def get_site(
 @router.post("", response_model=SiteRead, status_code=201)
 def create_site(
     payload: SiteCreate,
-    _user=Depends(CAN_WRITE),
+    current_user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> SiteRead:
-    site = SiteService(db).create_site(payload)
+    site = SiteService(db).create_site(payload, current_user.id)
     return SiteRead.model_validate(site)
 
 
@@ -52,4 +52,24 @@ def update_site(
     db: Session = Depends(get_db),
 ) -> SiteRead:
     site = SiteService(db).update_site(site_id, payload, current_user.id)
+    return SiteRead.model_validate(site)
+
+
+@router.post("/{site_id}/close", response_model=SiteRead)
+def close_site(
+    site_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> SiteRead:
+    site = SiteService(db).close_site(site_id, current_user.id)
+    return SiteRead.model_validate(site)
+
+
+@router.post("/{site_id}/reactivate", response_model=SiteRead)
+def reactivate_site(
+    site_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> SiteRead:
+    site = SiteService(db).reactivate_site(site_id, current_user.id)
     return SiteRead.model_validate(site)

@@ -519,12 +519,21 @@ button:disabled {
 }
 
 .row-heading strong,
-.row-heading small,
-.compact-text {
+.row-heading small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.compact-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-table .sticky-col {
+  background: #ffffff;
 }
 
 .row-heading strong {
@@ -1419,5 +1428,153 @@ button:disabled {
 
   .person-actions {
     grid-template-columns: max-content;
+  }
+}
+
+.site-list-toolbar {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.site-list-toolbar input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.checkbox-field.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+
+.site-create-panel,
+.site-admin-row {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.site-create-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.site-list {
+  display: grid;
+  gap: 12px;
+  border-top: 0;
+  background: transparent;
+}
+
+.site-row-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.site-list-link,
+.site-open-link {
+  color: #172033;
+  text-decoration: none;
+}
+
+.site-list-link:hover strong,
+.site-open-link:hover {
+  color: #143c6d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.site-open-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.site-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.site-form-grid input,
+.site-form-grid select,
+.site-form-grid textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.site-form-grid input[type="color"] {
+  padding: 4px;
+}
+
+.site-form-grid textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.site-form-grid input:focus,
+.site-form-grid select:focus,
+.site-form-grid textarea:focus,
+.site-list-toolbar input:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
+.site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.address-field,
+.site-info-field {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 760px) {
+  .site-list-toolbar {
+    grid-template-columns: minmax(220px, 360px) max-content;
+  }
+
+  .site-row-header {
+    grid-template-columns: auto minmax(0, 1.4fr) minmax(150px, 0.8fr) auto auto;
+  }
+
+  .site-form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .site-form-grid.compact {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
   }
 }
