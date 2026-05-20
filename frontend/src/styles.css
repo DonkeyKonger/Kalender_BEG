@@ -2461,3 +2461,42 @@ button.person-chip:focus-visible {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+
+.matrix-cell-editor-popup {
+  position: fixed;
+  z-index: 120;
+  width: min(320px, calc(100vw - 16px));
+  border: 1px solid #b9c7d8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  box-shadow: 0 18px 44px rgb(18 29 52 / 18%);
+}
+
+.matrix-cell-editor-popup .cell-editor {
+  min-width: 0;
+}
+
+.matrix-cell-editor-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  color: #65738a;
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.matrix-cell-editor-status .save-dot {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.matrix-cell-editor-status small {
+  display: block;
+}
+
+.matrix-cell-editor-status small.is-error {
+  color: #8a1f16;
+  font-weight: 750;
+}

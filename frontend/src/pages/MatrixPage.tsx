@@ -1,5 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -28,6 +29,7 @@ type CellKey = `${number}-${string}`;
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 type DraftEntry = MatrixEntryInput & { key: string; label: string };
 type ActiveCell = { siteId: number; date: string; endDate: string; key: CellKey };
+type EditorAnchor = { bottom: number; left: number; top: number; width: number };
 type UndoItem = {
   siteId: number;
   date: string;
@@ -44,6 +46,7 @@ export function MatrixPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
+  const [editorAnchor, setEditorAnchor] = useState<EditorAnchor | null>(null);
   const [draftEntries, setDraftEntries] = useState<DraftEntry[]>([]);
   const [initialEntries, setInitialEntries] = useState<DraftEntry[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
@@ -125,7 +128,7 @@ export function MatrixPage() {
     };
   }, [draftEntries]);
 
-  function openCell(row: MatrixRow, cell: MatrixCell, extendRange = false) {
+  function openCell(row: MatrixRow, cell: MatrixCell, extendRange = false, anchor?: EditorAnchor) {
     if (!isEditable) {
       return;
     }
@@ -133,6 +136,9 @@ export function MatrixPage() {
       const [startDate, endDate] = sortDates(activeCell.date, cell.date);
       const key = cellKey(row.site.id, startDate);
       setActiveCell({ siteId: row.site.id, date: startDate, endDate, key });
+      if (anchor) {
+        setEditorAnchor(anchor);
+      }
       setCellMessage((current) => ({
         ...current,
         [key]: "Zeitraum gewaehlt - mit Speichern bestaetigen",
@@ -142,6 +148,7 @@ export function MatrixPage() {
     const key = cellKey(row.site.id, cell.date);
     const entries = entriesFromCell(cell);
     setActiveCell({ siteId: row.site.id, date: cell.date, endDate: cell.date, key });
+    setEditorAnchor(anchor ?? null);
     setDraftEntries(entries);
     setInitialEntries(entries);
     setSelectedPersonId("");
@@ -174,13 +181,39 @@ export function MatrixPage() {
     setExternalName("");
   }
 
-  async function saveActiveCell() {
+  function closeActiveEditor() {
+    setActiveCell(null);
+    setEditorAnchor(null);
+    setSelectedPersonId("");
+    setExternalName("");
+  }
+
+  function closeOrSaveActiveEditor() {
     if (!activeCell) {
       return;
+    }
+    const hasChanges = !sameEntries(initialEntries, draftEntries) || activeCell.endDate !== activeCell.date;
+    if (!hasChanges) {
+      closeActiveEditor();
+      return;
+    }
+    void saveActiveCell({ closeOnSuccess: true });
+  }
+
+  async function saveActiveCell(options: { closeOnSuccess?: boolean } = {}) {
+    if (!activeCell) {
+      return;
+    }
+    if (autosaveRef.current) {
+      window.clearTimeout(autosaveRef.current);
+      autosaveRef.current = null;
     }
     const unchanged = sameEntries(initialEntries, draftEntries);
     if (unchanged && activeCell.endDate === activeCell.date) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "idle" }));
+      if (options.closeOnSuccess) {
+        closeActiveEditor();
+      }
       return;
     }
     const entries = draftEntries.map(toMatrixEntryInput);
@@ -220,6 +253,9 @@ export function MatrixPage() {
         [activeCell.key]: response.warnings[0]?.message ?? "Gespeichert",
       }));
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
+      if (options.closeOnSuccess) {
+        closeActiveEditor();
+      }
     } catch (requestError) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "error" }));
       const message = readApiError(requestError, "Speichern fehlgeschlagen.");
@@ -431,42 +467,166 @@ export function MatrixPage() {
       {error && <p className="form-error">{error}</p>}
       {isLoading && <div className="matrix-state">Matrix wird geladen...</div>}
       {!isLoading && matrix && (
-        <MatrixTable
-          activeCell={activeCell}
-          cellMessage={cellMessage}
-          draftEntries={draftEntries}
-          isEditable={isEditable}
-          matrix={matrix}
-          matrixScrollRef={matrixScrollRef}
-          onDeleteAssignment={deleteAssignmentFromCell}
-          onCycleCellMark={cycleCellMark}
-          onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
-          onInfoSave={(siteId) => void saveSiteInfo(siteId)}
-          onAddExternal={addExternalPerson}
-          onAddPerson={addSelectedPerson}
-          onEndDateChange={(endDate) => {
-            if (activeCell) {
-              setActiveCell({ ...activeCell, endDate });
+        <>
+          <MatrixTable
+            activeCell={activeCell}
+            cellMessage={cellMessage}
+            draftEntries={draftEntries}
+            isEditable={isEditable}
+            matrix={matrix}
+            matrixScrollRef={matrixScrollRef}
+            onDeleteAssignment={deleteAssignmentFromCell}
+            onCycleCellMark={cycleCellMark}
+            onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
+            onInfoSave={(siteId) => void saveSiteInfo(siteId)}
+            onAddExternal={addExternalPerson}
+            onAddPerson={addSelectedPerson}
+            onEndDateChange={(endDate) => {
+              if (activeCell) {
+                setActiveCell({ ...activeCell, endDate });
+              }
+            }}
+            onExternalNameChange={setExternalName}
+            onOpenCell={openCell}
+            onRemoveEntry={(key) =>
+              setDraftEntries((items) => items.filter((item) => item.key !== key))
             }
-          }}
-          onExternalNameChange={setExternalName}
-          onOpenCell={openCell}
-          onRemoveEntry={(key) =>
-            setDraftEntries((items) => items.filter((item) => item.key !== key))
-          }
-          onSave={() => void saveActiveCell()}
-          onSelectedPersonChange={setSelectedPersonId}
-          people={people}
-          saveStatus={saveStatus}
-          savingInfoSiteId={savingInfoSiteId}
-          selectedPersonId={selectedPersonId}
-          siteInfoDrafts={siteInfoDrafts}
-          today={today}
-          visibleRowGroups={visibleRowGroups}
-          externalName={externalName}
-        />
+            onSave={() => void saveActiveCell()}
+            onSelectedPersonChange={setSelectedPersonId}
+            people={people}
+            saveStatus={saveStatus}
+            savingInfoSiteId={savingInfoSiteId}
+            selectedPersonId={selectedPersonId}
+            siteInfoDrafts={siteInfoDrafts}
+            today={today}
+            visibleRowGroups={visibleRowGroups}
+            externalName={externalName}
+          />
+
+          {activeCell && editorAnchor && (
+            <MatrixCellEditorPopup
+              activeCell={activeCell}
+              anchor={editorAnchor}
+              cellMessage={cellMessage[activeCell.key]}
+              draftEntries={draftEntries}
+              externalName={externalName}
+              onAddExternal={addExternalPerson}
+              onAddPerson={addSelectedPerson}
+              onClose={closeOrSaveActiveEditor}
+              onEndDateChange={(endDate) => setActiveCell({ ...activeCell, endDate })}
+              onExternalNameChange={setExternalName}
+              onRemoveEntry={(key) =>
+                setDraftEntries((items) => items.filter((item) => item.key !== key))
+              }
+              onSave={() => void saveActiveCell({ closeOnSuccess: true })}
+              onSelectedPersonChange={setSelectedPersonId}
+              people={people}
+              saveStatus={saveStatus[activeCell.key]}
+              selectedPersonId={selectedPersonId}
+            />
+          )}
+        </>
       )}
     </section>
+  );
+}
+
+type MatrixCellEditorPopupProps = {
+  activeCell: ActiveCell;
+  anchor: EditorAnchor;
+  cellMessage?: string;
+  draftEntries: DraftEntry[];
+  externalName: string;
+  onAddExternal: () => void;
+  onAddPerson: () => void;
+  onClose: () => void;
+  onEndDateChange: (date: string) => void;
+  onExternalNameChange: (value: string) => void;
+  onRemoveEntry: (key: string) => void;
+  onSave: () => void;
+  onSelectedPersonChange: (value: string) => void;
+  people: Person[];
+  saveStatus?: SaveStatus;
+  selectedPersonId: string;
+};
+
+function MatrixCellEditorPopup({
+  activeCell,
+  anchor,
+  cellMessage,
+  draftEntries,
+  externalName,
+  onAddExternal,
+  onAddPerson,
+  onClose,
+  onEndDateChange,
+  onExternalNameChange,
+  onRemoveEntry,
+  onSave,
+  onSelectedPersonChange,
+  people,
+  saveStatus,
+  selectedPersonId,
+}: MatrixCellEditorPopupProps) {
+  const popupRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (popupRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      onClose();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const position = editorPopupPosition(anchor);
+
+  return createPortal(
+    <div
+      className="matrix-cell-editor-popup"
+      ref={popupRef}
+      style={{ left: position.left, top: position.top }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <MatrixCellEditor
+        activeCell={activeCell}
+        draftEntries={draftEntries}
+        externalName={externalName}
+        onAddExternal={onAddExternal}
+        onAddPerson={onAddPerson}
+        onEndDateChange={onEndDateChange}
+        onExternalNameChange={onExternalNameChange}
+        onRemoveEntry={onRemoveEntry}
+        onSave={onSave}
+        onSelectedPersonChange={onSelectedPersonChange}
+        people={people}
+        selectedPersonId={selectedPersonId}
+      />
+      {(saveStatus || cellMessage) && (
+        <div className="matrix-cell-editor-status">
+          {saveStatus && <span className={`save-dot ${saveStatus}`} />}
+          {cellMessage && <small className={saveStatus === "error" ? "is-error" : ""}>{cellMessage}</small>}
+        </div>
+      )}
+    </div>,
+    document.body,
   );
 }
 
@@ -486,7 +646,7 @@ type MatrixTableProps = {
   onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
-  onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean) => void;
+  onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean, anchor?: EditorAnchor) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
   onSelectedPersonChange: (value: string) => void;
@@ -593,7 +753,6 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       </td>
       {row.cells.map((cell, cellIndex) => {
         const key = cellKey(row.site.id, cell.date);
-        const isActive = props.activeCell?.key === key;
         return (
           <td
             className={matrixCellClassName(cell, props.today, isCellInActiveRange(row.site.id, cell.date, props.activeCell))}
@@ -603,7 +762,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
                 event.preventDefault();
               }
             }}
-            onClick={(event) => props.onOpenCell(row, cell, event.shiftKey)}
+            onClick={(event) => props.onOpenCell(row, cell, event.shiftKey, anchorFromRect(event.currentTarget.getBoundingClientRect()))}
             onMouseDown={(event) => {
               if (event.button !== 1) {
                 return;
@@ -613,24 +772,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               props.onCycleCellMark(row, cell);
             }}
           >
-            {isActive && props.activeCell ? (
-              <MatrixCellEditor
-                activeCell={props.activeCell}
-                draftEntries={props.draftEntries}
-                externalName={props.externalName}
-                onAddExternal={props.onAddExternal}
-                onAddPerson={props.onAddPerson}
-                onEndDateChange={props.onEndDateChange}
-                onExternalNameChange={props.onExternalNameChange}
-                onRemoveEntry={props.onRemoveEntry}
-                onSave={props.onSave}
-                onSelectedPersonChange={props.onSelectedPersonChange}
-                people={props.people}
-                selectedPersonId={props.selectedPersonId}
-              />
-            ) : (
-              <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
-            )}
+            <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
               <small className="cell-message">{props.cellMessage[key]}</small>
@@ -735,6 +877,8 @@ function MatrixInfoEditor({
 }
 
 const DAY_COLUMN_WIDTH = 104;
+const EDITOR_POPUP_HEIGHT = 210;
+const EDITOR_POPUP_WIDTH = 320;
 const FIXED_MATRIX_COLUMNS_WIDTH = 625;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 type ProjectManagerOption = {
@@ -749,6 +893,30 @@ type MatrixRowGroup = {
   rows: MatrixRow[];
   showHeading: boolean;
 };
+
+function anchorFromRect(rect: DOMRect): EditorAnchor {
+  return {
+    bottom: rect.bottom,
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+  };
+}
+
+function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number } {
+  const gap = 6;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const preferredLeft = anchor.left;
+  const left = Math.max(8, Math.min(preferredLeft, viewportWidth - EDITOR_POPUP_WIDTH - 8));
+  const belowTop = anchor.bottom + gap;
+  const aboveTop = anchor.top - EDITOR_POPUP_HEIGHT - gap;
+  const top = belowTop + EDITOR_POPUP_HEIGHT > viewportHeight
+    ? Math.max(8, aboveTop)
+    : belowTop;
+
+  return { left, top };
+}
 
 function matrixTableWidth(dayCount: number): string {
   return `${FIXED_MATRIX_COLUMNS_WIDTH + dayCount * DAY_COLUMN_WIDTH}px`;
