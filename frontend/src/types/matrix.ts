@@ -1,6 +1,7 @@
 export type AssignmentType = "regular" | "support" | "emergency";
 export type AbsenceType = "vacation" | "sick" | "school" | "free" | "other";
 export type SiteStatus = "active" | "paused" | "closed" | "archived";
+export type MatrixCellMark = "orange" | "red" | "blue";
 
 export type MatrixDay = {
   date: string;
@@ -35,6 +36,7 @@ export type MatrixCell = {
   date: string;
   assignments: MatrixAssignment[];
   absences: MatrixAbsence[];
+  mark: MatrixCellMark | null;
 };
 
 export type MatrixSite = {

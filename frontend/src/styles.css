@@ -936,6 +936,32 @@ button.person-chip:focus-visible {
   outline: 2px solid rgb(29 92 153 / 20%);
 }
 
+.person-chip.is-connected-start {
+  width: calc(100% + 4px);
+  max-width: calc(100% + 4px);
+  margin-right: -4px;
+  border-radius: 5px 0 0 5px;
+}
+
+.person-chip.is-connected-middle {
+  width: calc(100% + 8px);
+  max-width: calc(100% + 8px);
+  margin-right: -4px;
+  margin-left: -4px;
+  border-radius: 0;
+}
+
+.person-chip.is-connected-end {
+  width: calc(100% + 4px);
+  max-width: calc(100% + 4px);
+  margin-left: -4px;
+  border-radius: 0 5px 5px 0;
+}
+
+.person-chip.is-connected-single {
+  border-radius: 5px;
+}
+
 .absence-chip {
   background: #fff1f0;
   color: #9f1f16;
@@ -1008,6 +1034,33 @@ button.person-chip:focus-visible {
 
 .matrix-cell.today {
   background: #f8fbff;
+}
+
+.matrix-cell.mark-orange {
+  background: #fff2d6;
+  box-shadow: inset 0 0 0 2px rgb(245 158 11 / 32%);
+}
+
+.matrix-cell.mark-red {
+  background: #ffe5e5;
+  box-shadow: inset 0 0 0 2px rgb(220 38 38 / 30%);
+}
+
+.matrix-cell.mark-blue {
+  background: #e5f0ff;
+  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 28%);
+}
+
+.matrix-cell.is-range-selected {
+  outline: 2px solid rgb(29 92 153 / 28%);
+  outline-offset: -2px;
+}
+
+.matrix-cell.today.is-range-selected,
+.matrix-cell.today.mark-orange,
+.matrix-cell.today.mark-red,
+.matrix-cell.today.mark-blue {
+  box-shadow: inset 0 3px 0 #1d5c99, inset 0 0 0 2px rgb(29 92 153 / 22%);
 }
 
 .matrix-info-editor {

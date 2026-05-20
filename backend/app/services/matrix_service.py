@@ -1,11 +1,13 @@
 from datetime import date, timedelta
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus
 from app.models.person import Person
+from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
 from app.repositories.absence_repository import AbsenceRepository
 from app.repositories.assignment_repository import AssignmentRepository
@@ -65,6 +67,7 @@ class MatrixService:
         visible_sites = self.sites.list(include_closed=include_closed)
         site_ids = {site.id for site in visible_sites}
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
+        marks = self._list_marks(site_ids=site_ids, start=start, end=end)
         person_ids = {assignment.person_id for assignment in assignments}
         absences = [
             absence
@@ -73,7 +76,7 @@ class MatrixService:
         ]
 
         rows = [
-            self._build_row(site, visible_days, assignments, absences)
+            self._build_row(site, visible_days, assignments, absences, marks)
             for site in visible_sites
         ]
         return MatrixResponse(
@@ -95,7 +98,8 @@ class MatrixService:
             for absence in self.absences.list(start=start, end=end)
             if absence.status == AbsenceStatus.ACTIVE and absence.person_id in person_ids
         ]
-        return self._build_cells(days=days, assignments=assignments, absences=absences)
+        marks = self._list_marks(site_ids={site_id}, start=start, end=end)
+        return self._build_cells(days=days, site_id=site_id, assignments=assignments, absences=absences, marks=marks)
 
     def _build_row(
         self,
@@ -103,11 +107,12 @@ class MatrixService:
         days: list[date],
         assignments: list[Assignment],
         absences,
+        marks,
     ) -> MatrixRow:
         site_assignments = [
             assignment for assignment in assignments if assignment.site_id == site.id
         ]
-        cells = self._build_cells(days=days, assignments=site_assignments, absences=absences)
+        cells = self._build_cells(days=days, site_id=site.id, assignments=site_assignments, absences=absences, marks=marks)
 
         return MatrixRow(
             site=MatrixSite(
@@ -131,8 +136,10 @@ class MatrixService:
         self,
         *,
         days: list[date],
+        site_id: int,
         assignments: list[Assignment],
         absences,
+        marks,
     ) -> list[MatrixCell]:
         cells = []
         for day in days:
@@ -151,9 +158,30 @@ class MatrixService:
                     date=day,
                     assignments=[self._build_assignment(item) for item in day_assignments],
                     absences=[self._build_absence(item) for item in day_absences],
+                    mark=marks.get((site_id, day)),
                 )
             )
         return cells
+
+
+    def _list_marks(
+        self,
+        *,
+        site_ids: set[int],
+        start: date,
+        end: date,
+    ) -> dict[tuple[int, date], object]:
+        if not site_ids:
+            return {}
+        statement = select(PlanningCellMark).where(
+            PlanningCellMark.site_id.in_(site_ids),
+            PlanningCellMark.mark_date >= start,
+            PlanningCellMark.mark_date <= end,
+        )
+        return {
+            (mark.site_id, mark.mark_date): mark.mark
+            for mark in self.db.scalars(statement)
+        }
 
     def _build_assignment(self, assignment: Assignment) -> MatrixAssignment:
         return MatrixAssignment(

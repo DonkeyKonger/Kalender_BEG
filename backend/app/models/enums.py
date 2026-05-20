@@ -44,6 +44,12 @@ class AbsenceStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class MatrixCellMark(StrEnum):
+    ORANGE = "orange"
+    RED = "red"
+    BLUE = "blue"
+
+
 class VehicleType(StrEnum):
     CAR = "car"
     VAN = "van"

@@ -1,7 +1,7 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
+import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonUpdate } from "../types/person";
 import type { Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
@@ -250,6 +250,21 @@ export const api = {
         site_id: params.siteId,
         date: params.date,
         entries: params.entries,
+      }),
+    });
+  },
+
+  async patchMatrixCellMark(params: {
+    siteId: number;
+    date: string;
+    mark: MatrixCellMark | null;
+  }): Promise<MatrixMutationResponse> {
+    return request<MatrixMutationResponse>("/matrix/cell-mark", {
+      method: "PATCH",
+      body: JSON.stringify({
+        site_id: params.siteId,
+        date: params.date,
+        mark: params.mark,
       }),
     });
   },

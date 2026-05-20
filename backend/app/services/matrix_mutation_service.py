@@ -1,14 +1,16 @@
 from datetime import date as Date, timedelta
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
 from app.models.person import Person
+from app.models.planning_cell_mark import PlanningCellMark
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
-from app.schemas.matrix import MatrixCellPatch, MatrixEntryInput, MatrixRangePatch
+from app.schemas.matrix import MatrixCellMarkPatch, MatrixCellPatch, MatrixEntryInput, MatrixRangePatch
 from app.services.audit_service import AuditService
 from app.services.conflict_service import ConflictMessage, ConflictService
 from app.services.external_person_service import ExternalPersonService
@@ -46,6 +48,59 @@ class MatrixMutationService:
             user_id=user_id,
             action="matrix.range.updated",
         )
+
+
+    def patch_cell_mark(self, payload: MatrixCellMarkPatch, user_id: int) -> dict:
+        if self.sites.get(payload.site_id) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden.")
+
+        existing = self.db.scalar(
+            select(PlanningCellMark).where(
+                PlanningCellMark.site_id == payload.site_id,
+                PlanningCellMark.mark_date == payload.date,
+            )
+        )
+        old_value = {
+            "site_id": payload.site_id,
+            "date": payload.date.isoformat(),
+            "mark": existing.mark.value if existing else None,
+        }
+
+        if payload.mark is None:
+            if existing is not None:
+                self.db.delete(existing)
+        elif existing is None:
+            self.db.add(
+                PlanningCellMark(
+                    site_id=payload.site_id,
+                    mark_date=payload.date,
+                    mark=payload.mark,
+                    created_by_user_id=user_id,
+                    updated_by_user_id=user_id,
+                )
+            )
+        else:
+            existing.mark = payload.mark
+            existing.updated_by_user_id = user_id
+
+        self.audit.record(
+            user_id=user_id,
+            action="matrix.cell.mark.updated",
+            entity_type="matrix_cell_mark",
+            entity_id=payload.site_id,
+            old_value=old_value,
+            new_value={**old_value, "mark": payload.mark.value if payload.mark else None},
+        )
+        self.db.commit()
+        return {
+            "warnings": [],
+            "infos": [],
+            "updated_cells": MatrixService(self.db).get_site_cells(
+                site_id=payload.site_id,
+                start=payload.date,
+                end=payload.date,
+            ),
+        }
 
     def _replace_range(
         self,

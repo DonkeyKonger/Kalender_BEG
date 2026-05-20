@@ -4,7 +4,7 @@ from datetime import date as Date
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AbsenceType, AssignmentType, SiteStatus
+from app.models.enums import AbsenceType, AssignmentType, MatrixCellMark, SiteStatus
 
 
 class MatrixDay(BaseModel):
@@ -40,6 +40,7 @@ class MatrixCell(BaseModel):
     date: Date
     assignments: list[MatrixAssignment]
     absences: list[MatrixAbsence]
+    mark: MatrixCellMark | None = None
 
 
 class MatrixSite(BaseModel):
@@ -68,6 +69,7 @@ class MatrixResponse(BaseModel):
     days: list[MatrixDay]
     rows: list[MatrixRow]
 
+
 class MatrixEntryInput(BaseModel):
     person_id: int | None = None
     external_name: str | None = None
@@ -84,6 +86,12 @@ class MatrixRangePatch(BaseModel):
     start_date: Date
     end_date: Date
     entries: list[MatrixEntryInput]
+
+
+class MatrixCellMarkPatch(BaseModel):
+    site_id: int
+    date: Date
+    mark: MatrixCellMark | None = None
 
 
 class MatrixConflictMessage(BaseModel):

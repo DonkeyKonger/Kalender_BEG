@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.matrix import (
+    MatrixCellMarkPatch,
     MatrixCellPatch,
     MatrixMutationResponse,
     MatrixRangePatch,
@@ -58,4 +59,15 @@ def patch_matrix_range(
 ) -> MatrixMutationResponse:
     return MatrixMutationResponse(
         **MatrixMutationService(db).patch_range(payload, current_user.id)
+    )
+
+
+@router.patch("/cell-mark", response_model=MatrixMutationResponse)
+def patch_matrix_cell_mark(
+    payload: MatrixCellMarkPatch,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MatrixMutationResponse:
+    return MatrixMutationResponse(
+        **MatrixMutationService(db).patch_cell_mark(payload, current_user.id)
     )

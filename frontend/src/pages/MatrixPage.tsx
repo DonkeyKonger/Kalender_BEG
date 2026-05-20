@@ -8,6 +8,7 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type {
   MatrixCell,
+  MatrixCellMark,
   MatrixEntryInput,
   MatrixResponse,
   MatrixRow,
@@ -121,10 +122,20 @@ export function MatrixPage() {
         window.clearTimeout(autosaveRef.current);
       }
     };
-  }, [draftEntries, activeCell?.endDate]);
+  }, [draftEntries]);
 
-  function openCell(row: MatrixRow, cell: MatrixCell) {
+  function openCell(row: MatrixRow, cell: MatrixCell, extendRange = false) {
     if (!isEditable) {
+      return;
+    }
+    if (extendRange && activeCell?.siteId === row.site.id) {
+      const [startDate, endDate] = sortDates(activeCell.date, cell.date);
+      const key = cellKey(row.site.id, startDate);
+      setActiveCell({ siteId: row.site.id, date: startDate, endDate, key });
+      setCellMessage((current) => ({
+        ...current,
+        [key]: "Zeitraum gewaehlt - mit Speichern bestaetigen",
+      }));
       return;
     }
     const key = cellKey(row.site.id, cell.date);
@@ -296,6 +307,33 @@ export function MatrixPage() {
     }
   }
 
+
+  async function cycleCellMark(row: MatrixRow, cell: MatrixCell) {
+    if (!isEditable) {
+      return;
+    }
+    const key = cellKey(row.site.id, cell.date);
+    const nextMark = nextMatrixCellMark(cell.mark);
+    setSaveStatus((current) => ({ ...current, [key]: "saving" }));
+    setCellMessage((current) => ({ ...current, [key]: "" }));
+    try {
+      const response = await api.patchMatrixCellMark({
+        siteId: row.site.id,
+        date: cell.date,
+        mark: nextMark,
+      });
+      setError(null);
+      setSaveStatus((current) => ({ ...current, [key]: "saved" }));
+      setCellMessage((current) => ({ ...current, [key]: nextMark ? "Markierung gespeichert" : "Markierung entfernt" }));
+      replaceMatrixCells(row.site.id, response.updated_cells);
+    } catch (requestError) {
+      const message = readApiError(requestError, "Markierung konnte nicht gespeichert werden.");
+      setError(message);
+      setSaveStatus((current) => ({ ...current, [key]: "error" }));
+      setCellMessage((current) => ({ ...current, [key]: message }));
+    }
+  }
+
   async function saveSiteInfo(siteId: number) {
     const currentRow = matrix?.rows.find((row) => row.site.id === siteId);
     if (!currentRow) {
@@ -400,6 +438,7 @@ export function MatrixPage() {
           matrix={matrix}
           matrixScrollRef={matrixScrollRef}
           onDeleteAssignment={deleteAssignmentFromCell}
+          onCycleCellMark={cycleCellMark}
           onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
           onInfoSave={(siteId) => void saveSiteInfo(siteId)}
           onAddExternal={addExternalPerson}
@@ -440,12 +479,13 @@ type MatrixTableProps = {
   matrixScrollRef: RefObject<HTMLDivElement | null>;
   onAddExternal: () => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, personId: number) => void;
+  onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onAddPerson: () => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
-  onOpenCell: (row: MatrixRow, cell: MatrixCell) => void;
+  onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
   onSelectedPersonChange: (value: string) => void;
@@ -538,14 +578,27 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       <td className="sticky-col status-col">
         <SiteStatusBadge status={row.site.status} />
       </td>
-      {row.cells.map((cell) => {
+      {row.cells.map((cell, cellIndex) => {
         const key = cellKey(row.site.id, cell.date);
         const isActive = props.activeCell?.key === key;
         return (
           <td
-            className={matrixCellClassName(cell.date, props.today)}
+            className={matrixCellClassName(cell, props.today, isCellInActiveRange(row.site.id, cell.date, props.activeCell))}
             key={cell.date}
-            onClick={() => props.onOpenCell(row, cell)}
+            onAuxClick={(event) => {
+              if (event.button === 1) {
+                event.preventDefault();
+              }
+            }}
+            onClick={(event) => props.onOpenCell(row, cell, event.shiftKey)}
+            onMouseDown={(event) => {
+              if (event.button !== 1) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              props.onCycleCellMark(row, cell);
+            }}
           >
             {isActive && props.activeCell ? (
               <MatrixCellEditor
@@ -563,7 +616,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
                 selectedPersonId={props.selectedPersonId}
               />
             ) : (
-              <CellDisplay cell={cell} isEditable={props.isEditable} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
+              <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
             )}
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
@@ -578,18 +631,22 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
 
 function CellDisplay({
   cell,
+  cellIndex,
   isEditable,
+  rowCells,
   onDeleteAssignment,
 }: {
   cell: MatrixCell;
+  cellIndex: number;
   isEditable: boolean;
+  rowCells: MatrixCell[];
   onDeleteAssignment: (personId: number) => void;
 }) {
   return (
     <div className="cell-stack">
       {cell.assignments.map((assignment) => (
         <button
-          className="person-chip"
+          className={`person-chip ${assignmentConnectionClass(rowCells, cellIndex, assignment.person.id)}`}
           key={assignment.id}
           title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur` : assignment.person.display_name}
           type="button"
@@ -647,6 +704,7 @@ function MatrixInfoEditor({
 }
 
 const DAY_COLUMN_WIDTH = 104;
+const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 type ProjectManagerOption = {
   id: number;
   name: string;
@@ -735,8 +793,46 @@ function dayHeaderClassName(date: string, today: string): string {
   return ["day-col", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
 }
 
-function matrixCellClassName(date: string, today: string): string {
-  return ["matrix-cell", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
+function matrixCellClassName(cell: MatrixCell, today: string, isRangeSelected: boolean): string {
+  return [
+    "matrix-cell",
+    isWeekendDate(cell.date) ? "weekend" : "",
+    cell.date === today ? "today" : "",
+    cell.mark ? `mark-${cell.mark}` : "",
+    isRangeSelected ? "is-range-selected" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | null {
+  const currentIndex = MATRIX_CELL_MARKS.indexOf(current);
+  return MATRIX_CELL_MARKS[(currentIndex + 1) % MATRIX_CELL_MARKS.length];
+}
+
+function isCellInActiveRange(siteId: number, date: string, activeCell: ActiveCell | null): boolean {
+  if (!activeCell || activeCell.siteId !== siteId) {
+    return false;
+  }
+  const [startDate, endDate] = sortDates(activeCell.date, activeCell.endDate);
+  return date >= startDate && date <= endDate;
+}
+
+function sortDates(left: string, right: string): [string, string] {
+  return left <= right ? [left, right] : [right, left];
+}
+
+function assignmentConnectionClass(cells: MatrixCell[], cellIndex: number, personId: number): string {
+  const hasPrevious = Boolean(cells[cellIndex - 1]?.assignments.some((assignment) => assignment.person.id === personId));
+  const hasNext = Boolean(cells[cellIndex + 1]?.assignments.some((assignment) => assignment.person.id === personId));
+  if (hasPrevious && hasNext) {
+    return "is-connected-middle";
+  }
+  if (hasPrevious) {
+    return "is-connected-end";
+  }
+  if (hasNext) {
+    return "is-connected-start";
+  }
+  return "is-connected-single";
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
