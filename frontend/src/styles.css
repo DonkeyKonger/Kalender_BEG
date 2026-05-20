@@ -965,22 +965,41 @@ button.entity-card:focus-visible {
   }
 }
 
+.matrix-table td.calendar-grid-cell {
+  padding: 0;
+  border-right: 0;
+  background: transparent;
+}
+
+.calendar-row-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--day-count), minmax(104px, 1fr));
+  min-height: calc(42px + (var(--assignment-layers, 1) * 26px));
+}
+
 .matrix-cell {
   position: relative;
-  width: 104px;
   min-width: 104px;
+  min-height: 100%;
   overflow: visible;
   background: #ffffff;
 }
 
-.cell-stack {
+.calendar-day-cell {
+  z-index: 1;
+  border-right: 1px solid #dce3ee;
+  padding: 7px 8px;
+}
+
+.calendar-day-cell.is-active-cell {
+  z-index: 5;
+  background: #f8fbff;
+}
+
+.calendar-day-content {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  width: 100%;
-  min-height: calc(var(--assignment-layers, 1) * 26px);
+  z-index: 2;
 }
 
 .person-chip,
@@ -1010,13 +1029,13 @@ button.person-chip:focus-visible {
   outline: 2px solid rgb(29 92 153 / 20%);
 }
 
-.person-chip.is-assignment-run {
-  position: absolute;
-  top: calc(var(--assignment-layer) * 26px);
-  left: 0;
-  z-index: 2;
+.assignment-run-bar {
+  z-index: 4;
+  grid-row: 1;
   justify-content: flex-start;
+  width: auto;
   max-width: none;
+  margin: calc(10px + (var(--assignment-layer) * 26px)) 8px 0;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
 }
 
