@@ -7,9 +7,8 @@ export type PlanningRange = {
 };
 
 export function getDefaultPlanningRange(referenceDate = new Date()): PlanningRange {
-  const monday = startOfWeek(referenceDate);
-  const start = addDays(monday, -7);
-  const end = addDays(monday, 41);
+  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const end = addDays(start, 48);
   return {
     start: toDateInputValue(start),
     end: toDateInputValue(end),
@@ -30,12 +29,6 @@ export function formatDayNumber(value: string): string {
 export function isWeekendDate(value: string): boolean {
   const day = parseDate(value).getDay();
   return day === 0 || day === 6;
-}
-
-function startOfWeek(date: Date): Date {
-  const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = normalized.getDay() || 7;
-  return addDays(normalized, 1 - day);
 }
 
 function addDays(date: Date, days: number): Date {

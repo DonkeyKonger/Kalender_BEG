@@ -44,7 +44,6 @@ export function MatrixPage() {
   const defaultRange = useMemo(() => getDefaultPlanningRange(), []);
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [includeWeekends, setIncludeWeekends] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
@@ -66,7 +65,7 @@ export function MatrixPage() {
         api.matrix({
           start: defaultRange.start,
           end: defaultRange.end,
-          includeWeekends,
+          includeWeekends: true,
         }),
         api.persons(),
       ]);
@@ -77,7 +76,7 @@ export function MatrixPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [defaultRange.end, defaultRange.start, includeWeekends]);
+  }, [defaultRange.end, defaultRange.start]);
 
   useEffect(() => {
     void loadMatrix();
@@ -179,6 +178,7 @@ export function MatrixPage() {
         ]);
       }
       setInitialEntries(draftEntries);
+      setError(null);
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "saved" }));
       setCellMessage((current) => ({
         ...current,
@@ -187,9 +187,11 @@ export function MatrixPage() {
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
     } catch (requestError) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "error" }));
+      const message = readApiError(requestError, "Speichern fehlgeschlagen.");
+      setError(message);
       setCellMessage((current) => ({
         ...current,
-        [activeCell.key]: readApiError(requestError, "Speichern fehlgeschlagen."),
+        [activeCell.key]: message,
       }));
     }
   }
@@ -258,14 +260,6 @@ export function MatrixPage() {
             <RotateCcw aria-hidden="true" size={17} />
             <span>Undo</span>
           </button>
-          <label className="switch-control">
-            <input
-              type="checkbox"
-              checked={includeWeekends}
-              onChange={(event) => setIncludeWeekends(event.target.checked)}
-            />
-            <span>Wochenenden</span>
-          </label>
         </div>
       </div>
 
@@ -379,7 +373,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           {statusLabels[row.site.status]}
         </span>
       </td>
-      {row.cells.map((cell, index) => {
+      {row.cells.map((cell) => {
         const key = cellKey(row.site.id, cell.date);
         const isActive = props.activeCell?.key === key;
         return (
@@ -514,8 +508,59 @@ function readApiError(error: unknown, fallback: string): string {
   if (typeof error.detail === "string") {
     return error.detail;
   }
-  if (typeof error.detail === "object" && error.detail && "message" in error.detail) {
-    return String(error.detail.message);
+  const conflictMessage = readConflictDetail(error.detail);
+  if (conflictMessage) {
+    return conflictMessage;
   }
   return error.message;
+}
+
+function readConflictDetail(detail: unknown): string | null {
+  if (!isRecord(detail)) {
+    return null;
+  }
+  const blockers = Array.isArray(detail.blockers) ? detail.blockers : [];
+  const warnings = Array.isArray(detail.warnings) ? detail.warnings : [];
+  const messages = [...blockers, ...warnings]
+    .map(formatConflictMessage)
+    .filter(Boolean);
+  if (messages.length > 0) {
+    return `Nicht gespeichert: ${messages.slice(0, 2).join(" ")}`;
+  }
+  return typeof detail.message === "string" ? detail.message : null;
+}
+
+function formatConflictMessage(item: unknown): string {
+  if (!isRecord(item) || typeof item.message !== "string") {
+    return "";
+  }
+  const date = typeof item.date === "string" ? ` (${formatConflictDate(item.date)})` : "";
+  return `${humanConflictMessage(item)}${date}`;
+}
+
+function humanConflictMessage(item: Record<string, unknown>): string {
+  if (item.code === "absence_vacation") {
+    return "Die Person hat Urlaub und kann nicht eingeplant werden.";
+  }
+  if (item.code === "absence_sick") {
+    return "Die Person ist krankgemeldet und kann nicht eingeplant werden.";
+  }
+  if (item.code === "too_many_assignments") {
+    return "Die Person hat an diesem Tag bereits zwei Einsaetze.";
+  }
+  if (item.code === "person_inactive") {
+    return "Diese Person ist deaktiviert und darf nicht eingeplant werden.";
+  }
+  if (item.code === "site_closed_or_archived") {
+    return "Diese Baustelle ist geschlossen oder archiviert.";
+  }
+  return String(item.message);
+}
+
+function formatConflictDate(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

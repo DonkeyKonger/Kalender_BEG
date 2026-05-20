@@ -952,13 +952,17 @@ button.entity-card:focus-visible {
 
 .cell-message {
   display: block;
-  max-width: 74px;
-  margin-top: 3px;
-  overflow: hidden;
+  max-width: 180px;
+  margin-top: 4px;
   color: #65738a;
-  font-size: 0.66rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.save-dot.error + .cell-message {
+  color: #8a1f16;
+  font-weight: 750;
 }
 
 .form-info {
