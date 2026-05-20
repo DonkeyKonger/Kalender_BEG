@@ -1,0 +1,29 @@
+# Prompt Kalender V2 - Arbeitsplan
+
+Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten auf kompakte Cards/Bubbles mit Detailbearbeitung per Side Drawer umgebaut. Backend, Datenmodell und API bleiben unverändert, sofern kein Bugfix zwingend nötig ist.
+
+## Schritte
+
+1. Frontend-Struktur prüfen - erledigt am 2026-05-20.
+2. Allgemeine Card/Bubble-Komponente anlegen - erledigt am 2026-05-20.
+3. Detailfenster-Komponente anlegen - erledigt am 2026-05-20.
+4. Baustellen-Seite umbauen.
+5. Personen-Seite umbauen.
+6. Benutzer-Seite umbauen.
+7. Abwesenheiten-Seite umbauen.
+8. Such- und Filterverhalten erhalten oder verbessern.
+9. Listenlayout responsiv verdichten.
+10. Planmatrix-UX vorbereiten, ohne Matrix-Architektur umzubauen.
+11. Status-/Badge-Darstellung vereinheitlichen - Basis-Komponente vorbereitet am 2026-05-20.
+12. Keine Funktionalität verlieren.
+13. Leere Zustände, klare Primärbuttons und Drawer-Titel berücksichtigen.
+14. Build und Tests prüfen.
+
+## Analyse Schritt 1
+
+- Seiten liegen unter `frontend/src/pages`: `SitesPage.tsx`, `PersonsPage.tsx`, `AdminUsersPage.tsx`, `AbsencesPage.tsx`, `MatrixPage.tsx`.
+- Große Eingabe- und Bearbeitungsboxen werden aktuell direkt in den jeweiligen Seiten gerendert.
+- Ein zentrales Modal-/Drawer-System existierte vor V2 nicht.
+- Wiederverwendbare Formularfelder existieren noch nicht zentral; die Formularlogik bleibt vorerst in den Seiten, damit keine Speicherlogik verloren geht.
+- Status-Badges existierten bisher überwiegend als CSS-Klassen. Eine gemeinsame `StatusBadge`-Komponente ist nun vorbereitet.
+- Daten werden frontendseitig geladen und nach Speichern lokal aktualisiert; bestehende API-Endpunkte bleiben erhalten.

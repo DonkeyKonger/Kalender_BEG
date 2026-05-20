@@ -590,6 +590,231 @@ button:disabled {
   color: #4b5563;
 }
 
+
+/* Shared entity overview and detail components */
+.entity-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.entity-card {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 82px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  padding: 13px 14px;
+  text-align: left;
+  box-shadow: 0 1px 2px rgb(18 29 52 / 4%);
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+button.entity-card {
+  cursor: pointer;
+}
+
+button.entity-card:hover,
+button.entity-card:focus-visible {
+  border-color: #b8c8dc;
+  box-shadow: 0 8px 22px rgb(18 29 52 / 9%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.entity-card.is-inactive {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.entity-card-color {
+  width: 6px;
+  min-height: 56px;
+  border-radius: 999px;
+}
+
+.entity-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #edf5ff;
+  color: #143c6d;
+}
+
+.entity-card-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entity-card-title {
+  overflow: hidden;
+  color: #111827;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card-subtitle,
+.entity-card-meta {
+  color: #65738a;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.entity-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.entity-card-status {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.entity-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  pointer-events: none;
+}
+
+.entity-drawer-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(15 23 42 / 38%);
+  pointer-events: auto;
+}
+
+.entity-drawer-panel {
+  position: relative;
+  justify-self: end;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 620px);
+  height: 100%;
+  border-left: 1px solid #dce3ee;
+  background: #ffffff;
+  box-shadow: -18px 0 44px rgb(18 29 52 / 16%);
+  pointer-events: auto;
+}
+
+.entity-drawer-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 22px;
+}
+
+.entity-drawer-header h2,
+.entity-drawer-header p {
+  margin: 0;
+}
+
+.entity-drawer-header h2 {
+  color: #111827;
+  font-size: 1.25rem;
+  letter-spacing: 0;
+}
+
+.entity-drawer-header p {
+  margin-top: 4px;
+  color: #65738a;
+  font-size: 0.9rem;
+}
+
+.entity-drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+}
+
+.entity-drawer-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px;
+}
+
+.entity-drawer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 14px 22px;
+}
+
+.status-badge-inactive,
+.status-badge-neutral {
+  background: #edf0f4;
+  color: #4b5563;
+}
+
+.status-badge-active {
+  background: #e7f7ed;
+  color: #126b36;
+}
+
+.status-badge-paused,
+.status-badge-warning {
+  background: #fff4d6;
+  color: #815500;
+}
+
+.status-badge-closed,
+.status-badge-archived {
+  background: #edf0f4;
+  color: #4b5563;
+}
+
+.status-badge-danger {
+  background: #fff1f0;
+  color: #8a1f16;
+}
+
+.status-badge-role {
+  background: #e9f1fb;
+  color: #143c6d;
+}
+
+.status-badge-absence {
+  background: #f0f7ff;
+  color: #1d5c99;
+}
+
+@media (max-width: 700px) {
+  .entity-card-list {
+    grid-template-columns: 1fr;
+  }
+
+  .entity-drawer-panel {
+    width: 100%;
+    border-left: 0;
+  }
+}
+
 .matrix-cell {
   width: 104px;
   min-width: 104px;
