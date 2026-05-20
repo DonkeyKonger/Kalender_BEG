@@ -478,7 +478,7 @@ button:disabled {
 
 .matrix-scroll {
   width: 100%;
-  max-width: calc(100vw - 36px);
+  max-width: 100%;
   overflow: auto;
   border: 1px solid #cbd7e6;
   border-radius: 8px;
@@ -1016,7 +1016,6 @@ button.person-chip:focus-visible {
   left: 0;
   z-index: 2;
   justify-content: flex-start;
-  width: calc((var(--assignment-span) * 104px) - 8px);
   max-width: none;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
 }
@@ -1026,11 +1025,6 @@ button.person-chip:focus-visible {
   color: #9f1f16;
 }
 
-@media (min-width: 900px) {
-  .matrix-scroll {
-    max-width: calc(100vw - 308px);
-  }
-}
 
 @media (max-width: 720px) {
   .matrix-toolbar {

@@ -662,7 +662,10 @@ function CellDisplay({
           <button
             className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
             key={assignment.id}
-            style={{ "--assignment-span": span, "--assignment-layer": layer } as CSSProperties}
+            style={{
+              "--assignment-layer": layer,
+              width: span > 1 ? `calc(${span * 100}% - 8px)` : undefined,
+            } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
             onContextMenu={(event) => {
