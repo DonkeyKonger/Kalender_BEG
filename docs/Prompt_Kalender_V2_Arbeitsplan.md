@@ -8,7 +8,7 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 2. Allgemeine Card/Bubble-Komponente anlegen - erledigt am 2026-05-20.
 3. Detailfenster-Komponente anlegen - erledigt am 2026-05-20.
 4. Baustellen-Seite umbauen - erledigt am 2026-05-20.
-5. Personen-Seite umbauen.
+5. Personen-Seite umbauen - erledigt am 2026-05-20.
 6. Benutzer-Seite umbauen.
 7. Abwesenheiten-Seite umbauen.
 8. Such- und Filterverhalten erhalten oder verbessern.
@@ -35,3 +35,12 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Klick auf eine Baustellen-Card öffnet den Detail-Drawer mit den bestehenden Feldern und der bestehenden Speicherlogik.
 - Archiv-Schalter, Suche, Statuswechsel, Farbe, Projektleiter, Projektakte-Link sowie Schließen/Reaktivieren bleiben erhalten.
 - Für Benutzer ohne Bearbeitungsrechte ist der Drawer lesend nutzbar.
+
+## Umsetzung Schritt 5
+
+- Die Personen-Seite zeigt Datensätze nun als kompakte `EntityCard`-Liste.
+- `Neue Person` öffnet einen leeren `EntityDetailDrawer` statt ein dauerhaft sichtbares Formular.
+- Klick auf eine Personen-Card öffnet den Detail-Drawer mit allen bestehenden Feldern.
+- Suche durchsucht Name, Anzeigename, Kürzel, Typ, Kontaktfelder und Aktivstatus.
+- Aktiv/Inaktiv ist direkt auf der Card sichtbar; inaktive Personen werden optisch zurückgenommen.
+- Bestehende API- und Speicherlogik bleibt erhalten.

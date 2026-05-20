@@ -1,6 +1,9 @@
-import { Save, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Save, UserPlus, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import { EntityCard } from "../components/EntityCard";
+import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { StatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Person, PersonCreate, PersonType } from "../types/person";
 import { calendarPersonCode } from "../types/person";
@@ -12,6 +15,7 @@ const personTypeLabels: Record<PersonType, string> = {
 };
 
 type EditablePerson = PersonCreate & { id: number };
+type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
 
 const emptyPerson: PersonCreate = {
   first_name: "",
@@ -29,6 +33,8 @@ export function PersonsPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +58,21 @@ export function PersonsPage() {
     }
   }
 
+  const filteredPeople = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    if (!needle) {
+      return people;
+    }
+    return people.filter((person) => personSearchText(person).includes(needle));
+  }, [people, searchTerm]);
+
+  const selectedPerson = drawer?.mode === "edit"
+    ? people.find((person) => person.id === drawer.personId) ?? null
+    : null;
+  const selectedDraft = drawer?.mode === "edit" && selectedPerson
+    ? drafts[selectedPerson.id] ?? toEditablePerson(selectedPerson)
+    : null;
+
   async function createPerson() {
     const validationError = validatePersonPayload(createForm);
     if (validationError) {
@@ -68,6 +89,7 @@ export function PersonsPage() {
       setPeople((current) => [...current, created].sort(comparePeople));
       setDrafts((current) => ({ ...current, [created.id]: toEditablePerson(created) }));
       setCreateForm(emptyPerson);
+      setDrawer(null);
       setMessage("Person angelegt.");
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht angelegt werden."));
@@ -111,93 +133,112 @@ export function PersonsPage() {
     }));
   }
 
+  function closeDrawer() {
+    setDrawer(null);
+  }
+
   return (
     <section className="persons-page">
-      <div className="page-header">
+      <div className="page-header entity-page-header">
         <div>
           <p className="eyebrow">Stammdaten</p>
           <h1>Personen</h1>
         </div>
+        <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
+          <UserPlus aria-hidden="true" size={17} />
+          <span>Neue Person</span>
+        </button>
       </div>
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <section className="person-create-panel">
-        <h2>
-          <UserPlus aria-hidden="true" size={18} />
-          Neue Person
-        </h2>
-        <PersonFields
-          draft={createForm}
-          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
-        />
-        <button
-          className="icon-button"
-          disabled={savingPersonId === 0}
-          type="button"
-          onClick={() => void createPerson()}
-        >
-          <UserPlus aria-hidden="true" size={17} />
-          <span>Person anlegen</span>
-        </button>
-      </section>
+      <input
+        className="entity-search"
+        placeholder="Person suchen"
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+      />
 
       {isLoading && <div className="matrix-state">Personen werden geladen...</div>}
 
       {!isLoading && (
-        <div className="person-list">
-          {people.map((person) => {
-            const draft = drafts[person.id] ?? toEditablePerson(person);
-            return (
-              <article className="person-row" key={person.id}>
-                <div className="person-row-meta">
-                  <strong>{person.display_name}</strong>
-                  <span>
-                    {personTypeLabels[person.person_type]} - Kalender: {calendarPersonCode(person)}
-                  </span>
-                  <span className={person.is_active ? "active-text" : "inactive-text"}>
-                    {person.is_active ? "Aktiv" : "Inaktiv"}
-                  </span>
-                </div>
-
-                <PersonFields
-                  draft={draft}
-                  compact
-                  onChange={(values) => updateDraft(person.id, values)}
-                />
-
-                <div className="person-actions">
-                  <button
-                    className="icon-button secondary"
-                    disabled={savingPersonId === person.id}
-                    type="button"
-                    onClick={() => void savePerson(person.id)}
-                  >
-                    <Save aria-hidden="true" size={16} />
-                    <span>Speichern</span>
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+        <div className="entity-card-list">
+          {filteredPeople.map((person) => (
+            <EntityCard
+              key={person.id}
+              title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
+              subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
+              meta={personCardMeta(person)}
+              icon={<Users aria-hidden="true" size={17} />}
+              status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+              isInactive={!person.is_active}
+              onClick={() => setDrawer({ mode: "edit", personId: person.id })}
+            />
+          ))}
+          {!filteredPeople.length && (
+            <div className="empty-panel">
+              <p>{people.length ? "Keine Treffer gefunden." : "Noch keine Personen vorhanden."}</p>
+            </div>
+          )}
         </div>
       )}
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "new"}
+        title="Neue Person"
+        subtitle="Stammdaten anlegen"
+        onClose={closeDrawer}
+        footer={(
+          <button className="icon-button" disabled={savingPersonId === 0} type="button" onClick={() => void createPerson()}>
+            <UserPlus aria-hidden="true" size={17} />
+            <span>Person anlegen</span>
+          </button>
+        )}
+      >
+        <PersonFields
+          draft={createForm}
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+        />
+      </EntityDetailDrawer>
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "edit" && Boolean(selectedPerson && selectedDraft)}
+        title={selectedPerson ? "Person bearbeiten" : "Person"}
+        subtitle={selectedPerson ? `${personTypeLabels[selectedPerson.person_type]} · ${calendarPersonCode(selectedPerson)}` : undefined}
+        onClose={closeDrawer}
+        footer={selectedPerson ? (
+          <button
+            className="icon-button secondary"
+            disabled={savingPersonId === selectedPerson.id}
+            type="button"
+            onClick={() => void savePerson(selectedPerson.id)}
+          >
+            <Save aria-hidden="true" size={16} />
+            <span>Speichern</span>
+          </button>
+        ) : undefined}
+      >
+        {selectedPerson && selectedDraft && (
+          <PersonFields
+            draft={selectedDraft}
+            onChange={(values) => updateDraft(selectedPerson.id, values)}
+          />
+        )}
+      </EntityDetailDrawer>
     </section>
   );
 }
 
 function PersonFields({
   draft,
-  compact = false,
   onChange,
 }: {
   draft: PersonCreate;
-  compact?: boolean;
   onChange: (values: Partial<PersonCreate>) => void;
 }) {
   return (
-    <div className={compact ? "person-form-grid compact" : "person-form-grid"}>
+    <div className="person-form-grid">
       <label>
         <span>Vorname</span>
         <input
@@ -317,6 +358,24 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
 
 function comparePeople(left: Person, right: Person): number {
   return left.display_name.localeCompare(right.display_name);
+}
+
+function personCardMeta(person: Person): string[] {
+  return [person.email, person.phone].filter((item): item is string => Boolean(item));
+}
+
+function personSearchText(person: Person): string {
+  return [
+    person.first_name,
+    person.last_name,
+    person.display_name,
+    person.short_code,
+    calendarPersonCode(person),
+    personTypeLabels[person.person_type],
+    person.email,
+    person.phone,
+    person.is_active ? "Aktiv" : "Inaktiv",
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function readApiError(error: unknown, fallback: string): string {
