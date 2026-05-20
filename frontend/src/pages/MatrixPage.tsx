@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -19,6 +19,7 @@ import {
   formatDayNumber,
   getDefaultPlanningRange,
   isWeekendDate,
+  toDateInputValue,
 } from "../utils/dateRange";
 
 type CellKey = `${number}-${string}`;
@@ -49,6 +50,12 @@ export function MatrixPage() {
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
+  const matrixScrollRef = useRef<HTMLDivElement | null>(null);
+  const didSetInitialProjectManagerFilter = useRef(false);
+  const today = useMemo(() => toDateInputValue(new Date()), []);
+  const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
+  const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
+  const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
 
   const loadMatrix = useCallback(async () => {
@@ -64,6 +71,7 @@ export function MatrixPage() {
         api.persons(),
       ]);
       setMatrix(matrixData);
+      setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
       setPeople(personData);
     } catch (requestError) {
       setError(readApiError(requestError, "Matrixdaten konnten nicht geladen werden."));
@@ -75,6 +83,27 @@ export function MatrixPage() {
   useEffect(() => {
     void loadMatrix();
   }, [loadMatrix]);
+
+  useEffect(() => {
+    if (!matrix || didSetInitialProjectManagerFilter.current) {
+      return;
+    }
+    didSetInitialProjectManagerFilter.current = true;
+    if (user?.person_id && matrix.rows.some((row) => row.site.project_manager_person_id === user.person_id)) {
+      setProjectManagerFilter(String(user.person_id));
+    }
+  }, [matrix, user?.person_id]);
+
+  useEffect(() => {
+    if (!matrix || !matrixScrollRef.current) {
+      return;
+    }
+    const todayIndex = matrix.days.findIndex((day) => day.date === today);
+    if (todayIndex < 0) {
+      return;
+    }
+    matrixScrollRef.current.scrollLeft = todayIndex * DAY_COLUMN_WIDTH;
+  }, [matrix, today]);
 
   useEffect(() => {
     if (!activeCell) {
@@ -236,6 +265,88 @@ export function MatrixPage() {
     });
   }
 
+  async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, personId: number) {
+    if (!isEditable) {
+      return;
+    }
+    const key = cellKey(row.site.id, cell.date);
+    const before = entriesFromCell(cell);
+    const after = before.filter((entry) => entry.person_id !== personId);
+    setSaveStatus((current) => ({ ...current, [key]: "saving" }));
+    setCellMessage((current) => ({ ...current, [key]: "" }));
+    try {
+      const response = await api.patchMatrixCell({
+        siteId: row.site.id,
+        date: cell.date,
+        entries: after.map(toMatrixEntryInput),
+      });
+      setUndoStack((current) => [
+        ...current,
+        { siteId: row.site.id, date: cell.date, endDate: cell.date, before, after },
+      ]);
+      setError(null);
+      setSaveStatus((current) => ({ ...current, [key]: "saved" }));
+      setCellMessage((current) => ({ ...current, [key]: "Monteur entfernt" }));
+      replaceMatrixCells(row.site.id, response.updated_cells);
+    } catch (requestError) {
+      const message = readApiError(requestError, "Monteur konnte nicht entfernt werden.");
+      setError(message);
+      setSaveStatus((current) => ({ ...current, [key]: "error" }));
+      setCellMessage((current) => ({ ...current, [key]: message }));
+    }
+  }
+
+  async function saveSiteInfo(siteId: number) {
+    const currentRow = matrix?.rows.find((row) => row.site.id === siteId);
+    if (!currentRow) {
+      return;
+    }
+    const nextInfo = siteInfoDrafts[siteId]?.trim() || null;
+    if ((currentRow.site.info ?? null) === nextInfo) {
+      return;
+    }
+    setSavingInfoSiteId(siteId);
+    try {
+      const updated = await api.updateSite(siteId, { info: nextInfo });
+      setError(null);
+      updateMatrixSiteInfo(updated.id, updated.info);
+      setSiteInfoDrafts((current) => ({ ...current, [updated.id]: updated.info ?? "" }));
+    } catch (requestError) {
+      setError(readApiError(requestError, "Info konnte nicht gespeichert werden."));
+      setSiteInfoDrafts((current) => ({ ...current, [siteId]: currentRow.site.info ?? "" }));
+    } finally {
+      setSavingInfoSiteId(null);
+    }
+  }
+
+  function updateMatrixSiteInfo(siteId: number, info: string | null) {
+    setMatrix((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        rows: current.rows.map((row) => row.site.id === siteId
+          ? { ...row, site: { ...row.site, info } }
+          : row),
+      };
+    });
+  }
+
+  const projectManagerOptions = useMemo(() => {
+    if (!matrix) {
+      return [];
+    }
+    return projectManagerOptionsFromRows(matrix.rows);
+  }, [matrix]);
+
+  const visibleRowGroups = useMemo(() => {
+    if (!matrix) {
+      return [];
+    }
+    return groupMatrixRows(matrix.rows, projectManagerFilter);
+  }, [matrix, projectManagerFilter]);
+
   return (
     <section className="matrix-page">
       <div className="matrix-toolbar">
@@ -245,6 +356,27 @@ export function MatrixPage() {
           <p className="matrix-range">{defaultRange.label}</p>
         </div>
         <div className="matrix-actions">
+          {projectManagerOptions.length > 0 && (
+            <div className="matrix-pm-filter" aria-label="Projektleiter filtern">
+              <button
+                className={projectManagerFilter === "all" ? "is-active" : ""}
+                type="button"
+                onClick={() => setProjectManagerFilter("all")}
+              >
+                Alle
+              </button>
+              {projectManagerOptions.map((manager) => (
+                <button
+                  className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
+                  key={manager.id}
+                  type="button"
+                  onClick={() => setProjectManagerFilter(String(manager.id))}
+                >
+                  {manager.shortCode || manager.name}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             className="icon-button secondary"
             disabled={!undoStack.length}
@@ -266,6 +398,10 @@ export function MatrixPage() {
           draftEntries={draftEntries}
           isEditable={isEditable}
           matrix={matrix}
+          matrixScrollRef={matrixScrollRef}
+          onDeleteAssignment={deleteAssignmentFromCell}
+          onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
+          onInfoSave={(siteId) => void saveSiteInfo(siteId)}
           onAddExternal={addExternalPerson}
           onAddPerson={addSelectedPerson}
           onEndDateChange={(endDate) => {
@@ -282,7 +418,11 @@ export function MatrixPage() {
           onSelectedPersonChange={setSelectedPersonId}
           people={people}
           saveStatus={saveStatus}
+          savingInfoSiteId={savingInfoSiteId}
           selectedPersonId={selectedPersonId}
+          siteInfoDrafts={siteInfoDrafts}
+          today={today}
+          visibleRowGroups={visibleRowGroups}
           externalName={externalName}
         />
       )}
@@ -297,22 +437,30 @@ type MatrixTableProps = {
   externalName: string;
   isEditable: boolean;
   matrix: MatrixResponse;
+  matrixScrollRef: RefObject<HTMLDivElement | null>;
   onAddExternal: () => void;
+  onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, personId: number) => void;
   onAddPerson: () => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
+  onInfoChange: (siteId: number, value: string) => void;
+  onInfoSave: (siteId: number) => void;
   onOpenCell: (row: MatrixRow, cell: MatrixCell) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
   onSelectedPersonChange: (value: string) => void;
   people: Person[];
   saveStatus: Record<CellKey, SaveStatus>;
+  savingInfoSiteId: number | null;
   selectedPersonId: string;
+  siteInfoDrafts: Record<number, string>;
+  today: string;
+  visibleRowGroups: MatrixRowGroup[];
 };
 
 function MatrixTable(props: MatrixTableProps) {
   return (
-    <div className="matrix-scroll" role="region" aria-label="Planmatrix">
+    <div className="matrix-scroll" ref={props.matrixScrollRef} role="region" aria-label="Planmatrix">
       <table className="matrix-table">
         <thead>
           <tr>
@@ -323,7 +471,7 @@ function MatrixTable(props: MatrixTableProps) {
             <th className="sticky-col status-col">Status</th>
             {props.matrix.days.map((day) => (
               <th
-                className={isWeekendDate(day.date) ? "day-col weekend" : "day-col"}
+                className={dayHeaderClassName(day.date, props.today)}
                 key={day.date}
               >
                 <span>{formatDayHeader(day.date)}</span>
@@ -333,12 +481,27 @@ function MatrixTable(props: MatrixTableProps) {
           </tr>
         </thead>
         <tbody>
-          {props.matrix.rows.map((row) => (
-            <MatrixTableRow key={row.site.id} row={row} {...props} />
+          {props.visibleRowGroups.map((group) => (
+            <MatrixTableGroup group={group} key={group.key} {...props} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function MatrixTableGroup({ group, ...props }: MatrixTableProps & { group: MatrixRowGroup }) {
+  return (
+    <>
+      {group.showHeading && (
+        <tr className="matrix-group-row">
+          <th colSpan={5 + props.matrix.days.length}>{group.label}</th>
+        </tr>
+      )}
+      {group.rows.map((row) => (
+        <MatrixTableRow key={row.site.id} row={row} {...props} />
+      ))}
+    </>
   );
 }
 
@@ -348,20 +511,30 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   return (
     <tr>
       <th className="sticky-col site-col row-heading" scope="row">
-        <span
-          className="site-color"
-          style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
-        />
-        <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
-          <strong>{row.site.name}</strong>
-          {row.site.site_number && <small>{row.site.site_number}</small>}
-        </Link>
+        <div className="row-heading-content">
+          <span
+            className="site-color"
+            style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
+          />
+          <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
+            <strong>{row.site.name}</strong>
+            {row.site.site_number && <small>{row.site.site_number}</small>}
+          </Link>
+        </div>
       </th>
       <td className="sticky-col location-col compact-text">{row.site.location ?? ""}</td>
       <td className="sticky-col pm-col compact-text">
         {row.site.project_manager?.short_code ?? ""}
       </td>
-      <td className="sticky-col info-col compact-text">{row.site.info ?? ""}</td>
+      <td className="sticky-col info-col compact-text matrix-info-cell">
+        <MatrixInfoEditor
+          disabled={!props.isEditable}
+          isSaving={props.savingInfoSiteId === row.site.id}
+          value={props.siteInfoDrafts[row.site.id] ?? row.site.info ?? ""}
+          onChange={(value) => props.onInfoChange(row.site.id, value)}
+          onSave={() => props.onInfoSave(row.site.id)}
+        />
+      </td>
       <td className="sticky-col status-col">
         <SiteStatusBadge status={row.site.status} />
       </td>
@@ -370,7 +543,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         const isActive = props.activeCell?.key === key;
         return (
           <td
-            className={isWeekendDate(cell.date) ? "matrix-cell weekend" : "matrix-cell"}
+            className={matrixCellClassName(cell.date, props.today)}
             key={cell.date}
             onClick={() => props.onOpenCell(row, cell)}
           >
@@ -390,7 +563,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
                 selectedPersonId={props.selectedPersonId}
               />
             ) : (
-              <CellDisplay cell={cell} />
+              <CellDisplay cell={cell} isEditable={props.isEditable} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
             )}
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
@@ -403,17 +576,34 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   );
 }
 
-function CellDisplay({ cell }: { cell: MatrixCell }) {
+function CellDisplay({
+  cell,
+  isEditable,
+  onDeleteAssignment,
+}: {
+  cell: MatrixCell;
+  isEditable: boolean;
+  onDeleteAssignment: (personId: number) => void;
+}) {
   return (
     <div className="cell-stack">
       {cell.assignments.map((assignment) => (
-        <span
+        <button
           className="person-chip"
           key={assignment.id}
-          title={assignment.person.display_name}
+          title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur` : assignment.person.display_name}
+          type="button"
+          onContextMenu={(event) => {
+            if (!isEditable) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            onDeleteAssignment(assignment.person.id);
+          }}
         >
           {assignment.person.short_code}
-        </span>
+        </button>
       ))}
       {cell.absences.map((absence) => (
         <span
@@ -426,6 +616,127 @@ function CellDisplay({ cell }: { cell: MatrixCell }) {
       ))}
     </div>
   );
+}
+
+function MatrixInfoEditor({
+  disabled,
+  isSaving,
+  value,
+  onChange,
+  onSave,
+}: {
+  disabled: boolean;
+  isSaving: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  return (
+    <label className="matrix-info-editor">
+      <span className="sr-only">Info</span>
+      <textarea
+        disabled={disabled || isSaving}
+        placeholder="Info"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onSave}
+        onClick={(event) => event.stopPropagation()}
+      />
+    </label>
+  );
+}
+
+const DAY_COLUMN_WIDTH = 104;
+type ProjectManagerOption = {
+  id: number;
+  name: string;
+  shortCode: string;
+};
+
+type MatrixRowGroup = {
+  key: string;
+  label: string;
+  rows: MatrixRow[];
+  showHeading: boolean;
+};
+
+function projectManagerOptionsFromRows(rows: MatrixRow[]): ProjectManagerOption[] {
+  const options = new Map<number, ProjectManagerOption>();
+  rows.forEach((row) => {
+    const manager = row.site.project_manager;
+    if (!manager) {
+      return;
+    }
+    options.set(manager.id, {
+      id: manager.id,
+      name: manager.display_name,
+      shortCode: manager.short_code,
+    });
+  });
+  return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, "de"));
+}
+
+function groupMatrixRows(rows: MatrixRow[], projectManagerFilter: string): MatrixRowGroup[] {
+  const filteredRows = projectManagerFilter === "all"
+    ? rows
+    : rows.filter((row) => String(row.site.project_manager_person_id ?? "") === projectManagerFilter);
+  const sortedRows = filteredRows.slice().sort(compareMatrixRowsByNumber);
+  if (projectManagerFilter !== "all") {
+    return [{ key: projectManagerFilter, label: "", rows: sortedRows, showHeading: false }];
+  }
+  const groups = new Map<string, MatrixRowGroup>();
+  sortedRows.forEach((row) => {
+    const key = row.site.project_manager_person_id ? String(row.site.project_manager_person_id) : "unassigned";
+    const label = row.site.project_manager?.display_name ?? "Ohne Projektleiter";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.rows.push(row);
+      return;
+    }
+    groups.set(key, { key, label, rows: [row], showHeading: true });
+  });
+  return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, "de"));
+}
+
+function compareMatrixRowsByNumber(left: MatrixRow, right: MatrixRow): number {
+  return compareSiteNumbers(left.site.site_number, right.site.site_number)
+    || left.site.name.localeCompare(right.site.name, "de")
+    || left.site.id - right.site.id;
+}
+
+function compareSiteNumbers(left: string | null, right: string | null): number {
+  const leftNumber = parseSiteNumber(left);
+  const rightNumber = parseSiteNumber(right);
+  if (leftNumber !== null && rightNumber !== null) {
+    return leftNumber - rightNumber;
+  }
+  if (leftNumber !== null) {
+    return -1;
+  }
+  if (rightNumber !== null) {
+    return 1;
+  }
+  return (left ?? "").localeCompare(right ?? "", "de");
+}
+
+function parseSiteNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const matches = value.match(/\d+/g);
+  return matches?.length ? Number(matches[matches.length - 1]) : null;
+}
+
+function siteInfoDraftsFromRows(rows: MatrixRow[]): Record<number, string> {
+  return Object.fromEntries(rows.map((row) => [row.site.id, row.site.info ?? ""]));
+}
+
+function dayHeaderClassName(date: string, today: string): string {
+  return ["day-col", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
+}
+
+function matrixCellClassName(date: string, today: string): string {
+  return ["matrix-cell", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {

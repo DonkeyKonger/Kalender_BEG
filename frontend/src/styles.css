@@ -476,12 +476,12 @@ button:disabled {
 
 .info-col {
   left: 424px;
-  width: 230px;
-  min-width: 230px;
+  width: 115px;
+  min-width: 115px;
 }
 
 .status-col {
-  left: 654px;
+  left: 539px;
   width: 86px;
   min-width: 86px;
   box-shadow: 8px 0 14px rgb(18 29 52 / 10%);
@@ -517,7 +517,14 @@ button:disabled {
   text-align: left;
 }
 
-.row-heading > span:last-child {
+.row-heading-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.matrix-site-link {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -535,6 +542,11 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.matrix-info-cell {
+  overflow: visible;
+  white-space: normal;
 }
 
 .matrix-table .sticky-col {
@@ -555,7 +567,6 @@ button:disabled {
   display: inline-block;
   width: 7px;
   height: 34px;
-  margin-right: 8px;
   border-radius: 4px;
   vertical-align: middle;
 }
@@ -914,8 +925,15 @@ button.entity-card:focus-visible {
 }
 
 .person-chip {
+  border: 0;
   background: #e9f1fb;
   color: #143c6d;
+  cursor: pointer;
+}
+
+button.person-chip:hover,
+button.person-chip:focus-visible {
+  outline: 2px solid rgb(29 92 153 / 20%);
 }
 
 .absence-chip {
@@ -941,6 +959,86 @@ button.entity-card:focus-visible {
   .matrix-actions > * {
     flex: 1 1 auto;
   }
+}
+
+.matrix-pm-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.matrix-pm-filter button {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #26344d;
+  padding: 6px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.matrix-pm-filter button.is-active {
+  border-color: #1d5c99;
+  background: #e9f1fb;
+  color: #143c6d;
+}
+
+.matrix-group-row th {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  height: 32px;
+  border-right: 1px solid #dce3ee;
+  border-bottom: 1px solid #dce3ee;
+  background: #f8fafc;
+  color: #334155;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: left;
+}
+
+.day-col.today,
+.matrix-table thead th.today {
+  background: #e5f0ff;
+  box-shadow: inset 0 3px 0 #1d5c99;
+}
+
+.matrix-cell.today {
+  background: #f8fbff;
+}
+
+.matrix-info-editor {
+  display: block;
+}
+
+.matrix-info-editor textarea {
+  width: 100%;
+  min-height: 42px;
+  max-height: 84px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #26344d;
+  padding: 4px 5px;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  resize: vertical;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.matrix-info-editor textarea:focus {
+  border-color: #9db7d4;
+  background: #ffffff;
+  outline: 2px solid rgb(29 92 153 / 16%);
+}
+
+.matrix-info-editor textarea:disabled {
+  color: #64748b;
+  cursor: default;
 }
 
 .cell-editor {
@@ -2037,4 +2135,13 @@ button.entity-card:focus-visible {
   .absence-person-field {
     grid-column: 1 / -1;
   }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }

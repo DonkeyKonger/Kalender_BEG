@@ -7,8 +7,9 @@ export type PlanningRange = {
 };
 
 export function getDefaultPlanningRange(referenceDate = new Date()): PlanningRange {
-  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
-  const end = addDays(start, 48);
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const start = addDays(today, -7);
+  const end = addDays(today, 48);
   return {
     start: toDateInputValue(start),
     end: toDateInputValue(end),
