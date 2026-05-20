@@ -1,6 +1,7 @@
 import {
   BriefcaseBusiness,
   CalendarDays,
+  Download,
   FolderKanban,
   Home,
   Users,
@@ -25,6 +26,12 @@ export const navigationItems: NavigationItem[] = [
     label: "Baustellen",
     path: "/sites",
     icon: BriefcaseBusiness,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Exporte",
+    path: "/exports",
+    icon: Download,
     roles: ["admin", "project_manager", "office"],
   },
   {

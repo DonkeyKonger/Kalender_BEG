@@ -1110,3 +1110,68 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.exports-page {
+  display: grid;
+  gap: 18px;
+}
+
+.export-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.export-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.export-panel h2,
+.export-panel label {
+  margin: 0;
+}
+
+.export-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.export-panel label {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.export-panel input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px 11px;
+  color: #111827;
+  background: #ffffff;
+}
+
+.export-panel input:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
+.export-panel .icon-button {
+  width: 100%;
+}
+
+@media (min-width: 760px) {
+  .export-grid {
+    grid-template-columns: repeat(2, minmax(0, 360px));
+  }
+}

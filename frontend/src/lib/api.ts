@@ -17,6 +17,25 @@ export class ApiError extends Error {
   }
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const token = localStorage.getItem("kb_access_token");
+  const headers = new Headers();
+  headers.set("Accept", "application/pdf");
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+    throw new ApiError(response.status, payload.detail ?? payload);
+  }
+  return response.blob();
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("kb_access_token");
   const headers = new Headers(options.headers);
@@ -80,6 +99,16 @@ export const api = {
 
   async site(siteId: number): Promise<Site> {
     return request<Site>(`/sites/${siteId}`);
+  },
+
+  async dailyPlanPdf(planDate: string): Promise<Blob> {
+    const search = new URLSearchParams({ date: planDate });
+    return requestBlob(`/exports/daily-plan?${search.toString()}`);
+  },
+
+  async weeklyPlanPdf(weekStart: string): Promise<Blob> {
+    const search = new URLSearchParams({ week_start: weekStart });
+    return requestBlob(`/exports/weekly-plan?${search.toString()}`);
   },
 
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {

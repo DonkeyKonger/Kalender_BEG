@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./layout/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
+import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MatrixPage } from "./pages/MatrixPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
@@ -23,6 +24,7 @@ export function App() {
             <Route path="matrix" element={<MatrixPage />} />
             <Route path="sites" element={<SitesPage />} />
             <Route path="sites/:siteId" element={<SiteDetailPage />} />
+            <Route path="exports" element={<ExportsPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
             <Route
