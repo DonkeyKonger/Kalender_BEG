@@ -7,7 +7,7 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 1. Frontend-Struktur prüfen - erledigt am 2026-05-20.
 2. Allgemeine Card/Bubble-Komponente anlegen - erledigt am 2026-05-20.
 3. Detailfenster-Komponente anlegen - erledigt am 2026-05-20.
-4. Baustellen-Seite umbauen.
+4. Baustellen-Seite umbauen - erledigt am 2026-05-20.
 5. Personen-Seite umbauen.
 6. Benutzer-Seite umbauen.
 7. Abwesenheiten-Seite umbauen.
@@ -27,3 +27,11 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Wiederverwendbare Formularfelder existieren noch nicht zentral; die Formularlogik bleibt vorerst in den Seiten, damit keine Speicherlogik verloren geht.
 - Status-Badges existierten bisher überwiegend als CSS-Klassen. Eine gemeinsame `StatusBadge`-Komponente ist nun vorbereitet.
 - Daten werden frontendseitig geladen und nach Speichern lokal aktualisiert; bestehende API-Endpunkte bleiben erhalten.
+
+## Umsetzung Schritt 4
+
+- Die Baustellen-Seite zeigt Datensätze nun als kompakte `EntityCard`-Liste.
+- `Neue Baustelle` öffnet einen leeren `EntityDetailDrawer` statt ein dauerhaft sichtbares Formular.
+- Klick auf eine Baustellen-Card öffnet den Detail-Drawer mit den bestehenden Feldern und der bestehenden Speicherlogik.
+- Archiv-Schalter, Suche, Statuswechsel, Farbe, Projektleiter, Projektakte-Link sowie Schließen/Reaktivieren bleiben erhalten.
+- Für Benutzer ohne Bearbeitungsrechte ist der Drawer lesend nutzbar.
