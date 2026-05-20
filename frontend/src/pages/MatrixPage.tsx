@@ -500,9 +500,21 @@ type MatrixTableProps = {
 };
 
 function MatrixTable(props: MatrixTableProps) {
+  const tableWidth = matrixTableWidth(props.matrix.days.length);
+
   return (
     <div className="matrix-scroll" ref={props.matrixScrollRef} role="region" aria-label="Planmatrix">
-      <table className="matrix-table">
+      <table className="matrix-table" style={{ width: tableWidth, minWidth: tableWidth }}>
+        <colgroup>
+          <col className="site-col-width" />
+          <col className="location-col-width" />
+          <col className="pm-col-width" />
+          <col className="info-col-width" />
+          <col className="status-col-width" />
+          {props.matrix.days.map((day) => (
+            <col className="day-col-width" key={day.date} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th className="sticky-col site-col">Baustelle</th>
@@ -664,7 +676,7 @@ function CellDisplay({
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
-              width: span > 1 ? `calc(${span * 100}% - 8px)` : undefined,
+              width: span > 1 ? `${span * DAY_COLUMN_WIDTH - 8}px` : undefined,
             } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
@@ -723,6 +735,7 @@ function MatrixInfoEditor({
 }
 
 const DAY_COLUMN_WIDTH = 104;
+const FIXED_MATRIX_COLUMNS_WIDTH = 625;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 type ProjectManagerOption = {
   id: number;
@@ -736,6 +749,10 @@ type MatrixRowGroup = {
   rows: MatrixRow[];
   showHeading: boolean;
 };
+
+function matrixTableWidth(dayCount: number): string {
+  return `${FIXED_MATRIX_COLUMNS_WIDTH + dayCount * DAY_COLUMN_WIDTH}px`;
+}
 
 function projectManagerOptionsFromRows(rows: MatrixRow[]): ProjectManagerOption[] {
   const options = new Map<number, ProjectManagerOption>();

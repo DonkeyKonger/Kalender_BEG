@@ -487,7 +487,7 @@ button:disabled {
 }
 
 .matrix-table {
-  min-width: max-content;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   color: #111827;
@@ -556,9 +556,35 @@ button:disabled {
   box-shadow: 8px 0 14px rgb(18 29 52 / 10%);
 }
 
-.day-col {
+.site-col-width {
+  width: 220px;
+}
+
+.location-col-width {
+  width: 130px;
+}
+
+.pm-col-width {
+  width: 74px;
+}
+
+.info-col-width {
+  width: 115px;
+}
+
+.status-col-width {
+  width: 86px;
+}
+
+.day-col-width,
+.day-col,
+.matrix-cell {
   width: 104px;
   min-width: 104px;
+  max-width: 104px;
+}
+
+.day-col {
   text-align: center;
 }
 
@@ -967,8 +993,6 @@ button.entity-card:focus-visible {
 
 .matrix-cell {
   position: relative;
-  width: 104px;
-  min-width: 104px;
   overflow: visible;
   background: #ffffff;
 }
@@ -1018,6 +1042,7 @@ button.person-chip:focus-visible {
   justify-content: flex-start;
   max-width: none;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
+  pointer-events: auto;
 }
 
 .absence-chip {
