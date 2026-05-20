@@ -8,7 +8,6 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type {
   MatrixCell,
-  MatrixAssignment,
   MatrixCellMark,
   MatrixEntryInput,
   MatrixPerson,
@@ -550,9 +549,6 @@ function MatrixTableGroup({ group, ...props }: MatrixTableProps & { group: Matri
 type MatrixTableRowProps = MatrixTableProps & { row: MatrixRow };
 
 function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
-  const assignmentRuns = assignmentRunsFromCells(row.cells);
-  const maxAssignmentLayer = Math.max(0, ...assignmentRuns.map((run) => run.layer));
-
   return (
     <tr>
       <th className="sticky-col site-col row-heading" scope="row">
@@ -583,108 +579,108 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       <td className="sticky-col status-col">
         <SiteStatusBadge status={row.site.status} />
       </td>
-      <td className="calendar-grid-cell" colSpan={props.matrix.days.length}>
-        <div
-          className="calendar-row-grid"
-          style={{
-            "--assignment-layers": maxAssignmentLayer + 1,
-            "--day-count": props.matrix.days.length,
-          } as CSSProperties}
-        >
-          {row.cells.map((cell, cellIndex) => {
-            const key = cellKey(row.site.id, cell.date);
-            const isActive = props.activeCell?.key === key;
-            return (
-              <div
-                className={`${matrixCellClassName(cell, props.today, isCellInActiveRange(row.site.id, cell.date, props.activeCell))} calendar-day-cell ${isActive ? "is-active-cell" : ""}`}
-                key={cell.date}
-                role={props.isEditable ? "button" : undefined}
-                style={{ gridColumn: cellIndex + 1 } as CSSProperties}
-                tabIndex={props.isEditable ? 0 : undefined}
-                onAuxClick={(event) => {
-                  if (event.button === 1) {
-                    event.preventDefault();
-                  }
-                }}
-                onClick={(event) => props.onOpenCell(row, cell, event.shiftKey)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") {
-                    return;
-                  }
-                  event.preventDefault();
-                  props.onOpenCell(row, cell, event.shiftKey);
-                }}
-                onMouseDown={(event) => {
-                  if (event.button !== 1) {
-                    return;
-                  }
-                  event.preventDefault();
-                  event.stopPropagation();
-                  props.onCycleCellMark(row, cell);
-                }}
-              >
-                {isActive && props.activeCell ? (
-                  <MatrixCellEditor
-                    activeCell={props.activeCell}
-                    draftEntries={props.draftEntries}
-                    externalName={props.externalName}
-                    onAddExternal={props.onAddExternal}
-                    onAddPerson={props.onAddPerson}
-                    onEndDateChange={props.onEndDateChange}
-                    onExternalNameChange={props.onExternalNameChange}
-                    onRemoveEntry={props.onRemoveEntry}
-                    onSave={props.onSave}
-                    onSelectedPersonChange={props.onSelectedPersonChange}
-                    people={props.people}
-                    selectedPersonId={props.selectedPersonId}
-                  />
-                ) : (
-                  <CalendarDayContent cell={cell} />
-                )}
-                {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
-                {props.cellMessage[key] && (
-                  <small className="cell-message">{props.cellMessage[key]}</small>
-                )}
-              </div>
-            );
-          })}
-          {assignmentRuns.map((run) => (
-            <button
-              className="person-chip assignment-run-bar"
-              key={run.key}
-              style={{
-                "--assignment-layer": run.layer,
-                gridColumn: `${run.startIndex + 1} / span ${run.span}`,
-              } as CSSProperties}
-              title={props.isEditable
-                ? `${run.assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag`
-                : run.assignment.person.display_name}
-              type="button"
-              onClick={(event) => {
+      {row.cells.map((cell, cellIndex) => {
+        const key = cellKey(row.site.id, cell.date);
+        const isActive = props.activeCell?.key === key;
+        return (
+          <td
+            className={matrixCellClassName(cell, props.today, isCellInActiveRange(row.site.id, cell.date, props.activeCell))}
+            key={cell.date}
+            onAuxClick={(event) => {
+              if (event.button === 1) {
                 event.preventDefault();
-                event.stopPropagation();
-              }}
-              onContextMenu={(event) => {
-                if (!props.isEditable) {
-                  return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                props.onDeleteAssignment(row, run.startCell, run.assignment.person.id);
-              }}
-            >
-              {run.assignment.person.short_code}
-            </button>
-          ))}
-        </div>
-      </td>
+              }
+            }}
+            onClick={(event) => props.onOpenCell(row, cell, event.shiftKey)}
+            onMouseDown={(event) => {
+              if (event.button !== 1) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              props.onCycleCellMark(row, cell);
+            }}
+          >
+            {isActive && props.activeCell ? (
+              <MatrixCellEditor
+                activeCell={props.activeCell}
+                draftEntries={props.draftEntries}
+                externalName={props.externalName}
+                onAddExternal={props.onAddExternal}
+                onAddPerson={props.onAddPerson}
+                onEndDateChange={props.onEndDateChange}
+                onExternalNameChange={props.onExternalNameChange}
+                onRemoveEntry={props.onRemoveEntry}
+                onSave={props.onSave}
+                onSelectedPersonChange={props.onSelectedPersonChange}
+                people={props.people}
+                selectedPersonId={props.selectedPersonId}
+              />
+            ) : (
+              <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
+            )}
+            {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
+            {props.cellMessage[key] && (
+              <small className="cell-message">{props.cellMessage[key]}</small>
+            )}
+          </td>
+        );
+      })}
     </tr>
   );
 }
 
-function CalendarDayContent({ cell }: { cell: MatrixCell }) {
+function CellDisplay({
+  cell,
+  cellIndex,
+  isEditable,
+  rowCells,
+  onDeleteAssignment,
+}: {
+  cell: MatrixCell;
+  cellIndex: number;
+  isEditable: boolean;
+  rowCells: MatrixCell[];
+  onDeleteAssignment: (personId: number) => void;
+}) {
+  const visibleAssignmentCount = cell.assignments.filter(
+    (assignment) => assignmentRunSpan(rowCells, cellIndex, assignment.person.id) > 0,
+  ).length;
+
   return (
-    <div className="calendar-day-content">
+    <div
+      className="cell-stack"
+      style={{ "--assignment-layers": Math.max(1, visibleAssignmentCount) } as CSSProperties}
+    >
+      {cell.assignments.map((assignment) => {
+        const span = assignmentRunSpan(rowCells, cellIndex, assignment.person.id);
+        if (span === 0) {
+          return null;
+        }
+        const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.person.id);
+        return (
+          <button
+            className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
+            key={assignment.id}
+            style={{
+              "--assignment-layer": layer,
+              width: span > 1 ? `calc(${span * 100}% - 8px)` : undefined,
+            } as CSSProperties}
+            title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
+            type="button"
+            onContextMenu={(event) => {
+              if (!isEditable) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              onDeleteAssignment(assignment.person.id);
+            }}
+          >
+            {assignment.person.short_code}
+          </button>
+        );
+      })}
       {cell.absences.map((absence) => (
         <span
           className="absence-chip"
@@ -843,42 +839,13 @@ function sortDates(left: string, right: string): [string, string] {
   return left <= right ? [left, right] : [right, left];
 }
 
-type AssignmentRun = {
-  assignment: MatrixAssignment;
-  key: string;
-  layer: number;
-  span: number;
-  startCell: MatrixCell;
-  startIndex: number;
-};
-
-function assignmentRunsFromCells(cells: MatrixCell[]): AssignmentRun[] {
-  const runs: AssignmentRun[] = [];
-  cells.forEach((cell, cellIndex) => {
-    cell.assignments.forEach((assignment) => {
-      const previousHasPerson = cells[cellIndex - 1]?.assignments.some(
-        (previousAssignment) => previousAssignment.person.id === assignment.person.id,
-      );
-      if (previousHasPerson) {
-        return;
-      }
-      const span = assignmentRunLength(cells, cellIndex, assignment.person.id);
-      runs.push({
-        assignment,
-        key: `${assignment.person.id}-${cell.date}`,
-        layer: firstAvailableAssignmentLayer(runs, cellIndex, span),
-        span,
-        startCell: cell,
-        startIndex: cellIndex,
-      });
-    });
-  });
-  return runs;
-}
-
-function assignmentRunLength(cells: MatrixCell[], startIndex: number, personId: number): number {
+function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, personId: number): number {
+  const previousHasPerson = cells[cellIndex - 1]?.assignments.some((assignment) => assignment.person.id === personId);
+  if (previousHasPerson) {
+    return 0;
+  }
   let span = 1;
-  for (let index = startIndex + 1; index < cells.length; index += 1) {
+  for (let index = cellIndex + 1; index < cells.length; index += 1) {
     const hasPerson = cells[index].assignments.some((assignment) => assignment.person.id === personId);
     if (!hasPerson) {
       break;
@@ -888,22 +855,11 @@ function assignmentRunLength(cells: MatrixCell[], startIndex: number, personId: 
   return span;
 }
 
-function firstAvailableAssignmentLayer(runs: AssignmentRun[], startIndex: number, span: number): number {
-  const endIndex = startIndex + span - 1;
-  const occupiedLayers = new Set(
-    runs
-      .filter((run) => rangesOverlap(startIndex, endIndex, run.startIndex, run.startIndex + run.span - 1))
-      .map((run) => run.layer),
-  );
-  let layer = 0;
-  while (occupiedLayers.has(layer)) {
-    layer += 1;
-  }
-  return layer;
-}
-
-function rangesOverlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number): boolean {
-  return leftStart <= rightEnd && rightStart <= leftEnd;
+function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: MatrixCell[], cellIndex: number, personId: number): number {
+  return assignments
+    .slice(0, assignments.findIndex((assignment) => assignment.person.id === personId))
+    .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.person.id) > 0)
+    .length;
 }
 
 function compactProjectManagerCode(person: MatrixPerson | null): string {
