@@ -10,6 +10,7 @@ from app.models.site import Site
 from app.repositories.absence_repository import AbsenceRepository
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.site_repository import SiteRepository
+from app.services.person_display import calendar_short_code
 from app.schemas.matrix import (
     MatrixAbsence,
     MatrixAssignment,
@@ -177,7 +178,7 @@ class MatrixService:
         return MatrixPerson(
             id=person.id,
             display_name=person.display_name,
-            short_code=person.short_code,
+            short_code=calendar_short_code(person),
         )
 
     def _build_day(self, day: date) -> MatrixDay:

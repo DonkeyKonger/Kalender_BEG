@@ -26,10 +26,10 @@ def list_persons(
 @router.post("", response_model=PersonRead, status_code=201)
 def create_person(
     payload: PersonCreate,
-    _user=Depends(CAN_WRITE),
+    current_user=Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> PersonRead:
-    person = PersonService(db).create_person(payload)
+    person = PersonService(db).create_person(payload, current_user.id)
     return PersonRead.model_validate(person)
 
 
@@ -37,8 +37,8 @@ def create_person(
 def update_person(
     person_id: int,
     payload: PersonUpdate,
-    _user=Depends(CAN_WRITE),
+    current_user=Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> PersonRead:
-    person = PersonService(db).update_person(person_id, payload)
+    person = PersonService(db).update_person(person_id, payload, current_user.id)
     return PersonRead.model_validate(person)

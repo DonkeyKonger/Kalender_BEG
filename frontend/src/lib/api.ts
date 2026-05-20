@@ -1,7 +1,7 @@
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
-import type { Person } from "../types/person";
+import type { Person, PersonCreate, PersonUpdate } from "../types/person";
 import type { Site } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 
@@ -96,6 +96,20 @@ export const api = {
 
   async users(): Promise<AdminUser[]> {
     return request<AdminUser[]>("/users");
+  },
+
+  async createPerson(payload: PersonCreate): Promise<Person> {
+    return request<Person>("/persons", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updatePerson(personId: number, payload: PersonUpdate): Promise<Person> {
+    return request<Person>(`/persons/${personId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
 
   async createUser(payload: AdminUserCreate): Promise<AdminUser> {

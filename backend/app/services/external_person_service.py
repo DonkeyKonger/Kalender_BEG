@@ -35,5 +35,5 @@ class ExternalPersonService:
     def _short_code(self, name: str) -> str:
         parts = [part for part in name.replace(",", " ").split() if part]
         if len(parts) >= 2:
-            return f"{parts[0][:2]}. {parts[-1][:2]}."
-        return f"{name[:6]}."
+            return f"{parts[0][:1]}.{parts[-1]}"
+        return f"{name[:1]}.{name}"

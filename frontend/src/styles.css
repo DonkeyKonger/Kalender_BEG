@@ -18,7 +18,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -485,8 +487,8 @@ button:disabled {
 }
 
 .day-col {
-  width: 82px;
-  min-width: 82px;
+  width: 104px;
+  min-width: 104px;
   text-align: center;
 }
 
@@ -576,8 +578,8 @@ button:disabled {
 }
 
 .matrix-cell {
-  width: 82px;
-  min-width: 82px;
+  width: 104px;
+  min-width: 104px;
   background: #ffffff;
 }
 
@@ -592,7 +594,7 @@ button:disabled {
 .absence-chip {
   display: inline-flex;
   align-items: center;
-  max-width: 68px;
+  max-width: 96px;
   min-height: 22px;
   overflow: hidden;
   border-radius: 5px;
@@ -1301,5 +1303,121 @@ button:disabled {
 
   .password-reset-row label {
     min-width: 240px;
+  }
+}
+
+.persons-page {
+  display: grid;
+  gap: 18px;
+}
+
+.person-create-panel,
+.person-row {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.person-create-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.person-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.person-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.person-form-grid input,
+.person-form-grid select,
+.person-form-grid textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.person-form-grid textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.person-form-grid input:focus,
+.person-form-grid select:focus,
+.person-form-grid textarea:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
+.person-list {
+  display: grid;
+  gap: 12px;
+}
+
+.person-row-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.person-row-meta strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.person-row-meta span {
+  color: #65738a;
+  font-size: 0.86rem;
+}
+
+.person-row-meta .active-text {
+  color: #126b36;
+  font-weight: 800;
+}
+
+.person-row-meta .inactive-text {
+  color: #8a1f16;
+  font-weight: 800;
+}
+
+.person-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.notes-field {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 760px) {
+  .person-form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .person-form-grid.compact {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+
+  .person-actions {
+    grid-template-columns: max-content;
   }
 }

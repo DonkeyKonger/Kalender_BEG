@@ -12,7 +12,7 @@ import type {
   SiteStatus,
 } from "../types/matrix";
 import type { Person } from "../types/person";
-import { canEditMatrix } from "../types/person";
+import { calendarPersonCode, canEditMatrix } from "../types/person";
 import {
   formatDayHeader,
   formatDayNumber,
@@ -120,7 +120,7 @@ export function MatrixPage() {
     }
     setDraftEntries((current) => addDraftEntry(current, {
       key: `p-${person.id}`,
-      label: person.short_code,
+      label: calendarPersonCode(person),
       person_id: person.id,
     }));
     setSelectedPersonId("");

@@ -8,7 +8,7 @@ import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MatrixPage } from "./pages/MatrixPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { PersonsPage } from "./pages/PersonsPage";
 import { SiteDetailPage } from "./pages/SiteDetailPage";
 import { SitesPage } from "./pages/SitesPage";
 
@@ -31,10 +31,7 @@ export function App() {
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
-            <Route
-              path="persons"
-              element={<PlaceholderPage eyebrow="Stammdaten" title="Personen" />}
-            />
+            <Route path="persons" element={<PersonsPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
             <Route path="me/assignments" element={<MyAssignmentsPage />} />
