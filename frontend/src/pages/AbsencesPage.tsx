@@ -1,6 +1,9 @@
-import { CalendarX, Save, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CalendarClock, CalendarX, ClipboardCheck, PlusCircle, Save, Trash2, TrendingUp } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { EntityCard } from "../components/EntityCard";
+import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
@@ -10,7 +13,7 @@ import { toDateInputValue } from "../utils/dateRange";
 
 const absenceTypeLabels: Record<AbsenceType, string> = {
   vacation: "Urlaub",
-  sick: "Krankheit",
+  sick: "Krank",
   school: "Schule",
   free: "Frei",
   other: "Sonstiges",
@@ -22,6 +25,8 @@ const absenceStatusLabels: Record<AbsenceStatus, string> = {
 };
 
 type EditableAbsence = AbsenceCreate & { id: number };
+type DrawerState = { mode: "new" } | { mode: "edit"; absenceId: number } | null;
+type FocusMode = "past" | "today" | "future" | "all";
 
 function emptyAbsence(): AbsenceCreate {
   const today = toDateInputValue(new Date());
@@ -42,6 +47,8 @@ export function AbsencesPage() {
   const [drafts, setDrafts] = useState<Record<string, EditableAbsence>>({});
   const [people, setPeople] = useState<Person[]>([]);
   const [createForm, setCreateForm] = useState<AbsenceCreate>(emptyAbsence);
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [focusMode, setFocusMode] = useState<FocusMode>("today");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingAbsenceId, setSavingAbsenceId] = useState<number | null>(null);
@@ -62,7 +69,7 @@ export function AbsencesPage() {
       ]);
       setAbsences(absenceData);
       setDrafts(toEditableAbsences(absenceData));
-      setPeople(personData);
+      setPeople(personData.sort(comparePeople));
     } catch (requestError) {
       setError(readApiError(requestError, "Abwesenheiten konnten nicht geladen werden."));
     } finally {
@@ -71,14 +78,38 @@ export function AbsencesPage() {
   }
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
+  const today = toDateInputValue(new Date());
+
+  const focusBuckets = useMemo(() => ({
+    past: absences.filter((absence) => isPastAbsence(absence, today)),
+    today: absences.filter((absence) => isCurrentAbsence(absence, today)),
+    future: absences.filter((absence) => isFutureRelevantAbsence(absence, today)),
+  }), [absences, today]);
+
+  const focusedAbsences = useMemo(() => {
+    if (focusMode === "all") {
+      return absences;
+    }
+    return focusBuckets[focusMode];
+  }, [absences, focusBuckets, focusMode]);
 
   const filteredAbsences = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
+    const list = focusedAbsences;
     if (!needle) {
-      return absences;
+      return list.slice().sort((left, right) => compareAbsencesForFocus(left, right, focusMode));
     }
-    return absences.filter((absence) => absenceSearchText(absence, peopleById).includes(needle));
-  }, [absences, peopleById, searchTerm]);
+    return list
+      .filter((absence) => absenceSearchText(absence, peopleById).includes(needle))
+      .sort((left, right) => compareAbsencesForFocus(left, right, focusMode));
+  }, [focusedAbsences, focusMode, peopleById, searchTerm]);
+
+  const selectedAbsence = drawer?.mode === "edit"
+    ? absences.find((absence) => absence.id === drawer.absenceId) ?? null
+    : null;
+  const selectedDraft = drawer?.mode === "edit" && selectedAbsence
+    ? drafts[selectedAbsence.id] ?? toEditableAbsence(selectedAbsence)
+    : null;
 
   async function createAbsence() {
     const validationError = validateAbsencePayload(createForm);
@@ -95,6 +126,7 @@ export function AbsencesPage() {
       setAbsences((current) => [...current, created].sort(compareAbsences));
       setDrafts((current) => ({ ...current, [created.id]: toEditableAbsence(created) }));
       setCreateForm(emptyAbsence());
+      setDrawer(null);
       setMessage("Abwesenheit angelegt.");
     } catch (requestError) {
       setError(readApiError(requestError, "Abwesenheit konnte nicht angelegt werden."));
@@ -140,6 +172,7 @@ export function AbsencesPage() {
         delete next[absenceId];
         return next;
       });
+      setDrawer(null);
       setMessage("Abwesenheit geloescht.");
     } catch (requestError) {
       setError(readApiError(requestError, "Abwesenheit konnte nicht geloescht werden."));
@@ -162,124 +195,217 @@ export function AbsencesPage() {
     }));
   }
 
+  function closeDrawer() {
+    setDrawer(null);
+  }
+
   return (
     <section className="absences-page">
-      <div className="page-header">
+      <div className="page-header entity-page-header">
         <div>
-          <p className="eyebrow">Stammdaten</p>
+          <p className="eyebrow">Personaldecke</p>
           <h1>Abwesenheiten</h1>
         </div>
+        {canEdit && (
+          <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
+            <PlusCircle aria-hidden="true" size={17} />
+            <span>Neue Abwesenheit</span>
+          </button>
+        )}
       </div>
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <input
-        className="absence-search"
-        placeholder="Abwesenheit suchen"
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-      />
+      <div className="absence-focus-grid" aria-label="Arbeitsbereiche fuer Abwesenheiten">
+        <FocusCard
+          icon={<ClipboardCheck aria-hidden="true" size={20} />}
+          title="Rueckblick pruefen"
+          description="Vergangene Krankmeldungen und Urlaube fuer das Buero."
+          count={focusBuckets.past.length}
+          isActive={focusMode === "past"}
+          onClick={() => setFocusMode("past")}
+        />
+        <FocusCard
+          icon={<CalendarClock aria-hidden="true" size={20} />}
+          title="Heute pruefen"
+          description="Aktuelle Ausfaelle fuer Projektleiter und Tagesplanung."
+          count={focusBuckets.today.length}
+          isActive={focusMode === "today"}
+          onClick={() => setFocusMode("today")}
+        />
+        <FocusCard
+          icon={<TrendingUp aria-hidden="true" size={20} />}
+          title="Vorschau planen"
+          description="Kommende Engstellen und Einsatzmoeglichkeiten erkennen."
+          count={focusBuckets.future.length}
+          isActive={focusMode === "future"}
+          onClick={() => setFocusMode("future")}
+        />
+      </div>
 
-      {canEdit && (
-        <section className="absence-create-panel">
-          <h2>
-            <CalendarX aria-hidden="true" size={18} />
-            Neue Abwesenheit
-          </h2>
-          <AbsenceFields
-            draft={createForm}
-            people={people}
-            onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
-          />
-          <button
-            className="icon-button"
-            disabled={savingAbsenceId === 0}
-            type="button"
-            onClick={() => void createAbsence()}
-          >
-            <CalendarX aria-hidden="true" size={17} />
-            <span>Abwesenheit anlegen</span>
-          </button>
-        </section>
-      )}
+      <div className="absence-toolbar">
+        <input
+          className="entity-search"
+          placeholder="Abwesenheit suchen"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+        <button
+          className={focusMode === "all" ? "absence-filter-button is-active" : "absence-filter-button"}
+          type="button"
+          onClick={() => setFocusMode(focusMode === "all" ? "today" : "all")}
+        >
+          Alle anzeigen
+        </button>
+      </div>
+
+      <div className="absence-type-legend" aria-label="Legende Abwesenheitstypen">
+        {Object.entries(absenceTypeLabels).map(([type, label]) => (
+          <AbsenceTypeBubble key={type} type={type as AbsenceType}>{label}</AbsenceTypeBubble>
+        ))}
+      </div>
 
       {isLoading && <div className="matrix-state">Abwesenheiten werden geladen...</div>}
 
       {!isLoading && (
-        <div className="absence-list">
+        <div className="entity-card-list absence-card-list" role="list">
           {filteredAbsences.map((absence) => {
-            const draft = drafts[absence.id] ?? toEditableAbsence(absence);
             const person = peopleById.get(absence.person_id);
             return (
-              <article className="absence-row" key={absence.id}>
-                <div className="absence-row-meta">
-                  <strong>{person?.display_name ?? `Person #${absence.person_id}`}</strong>
-                  <span>
-                    {absenceTypeLabels[absence.absence_type]} - {formatDateRange(absence)}
-                  </span>
-                  <span className={absence.status === "active" ? "active-text" : "inactive-text"}>
-                    {absenceStatusLabels[absence.status]}
-                  </span>
-                  {absence.note && <small>{absence.note}</small>}
-                </div>
-
-                {canEdit && (
-                  <>
-                    <AbsenceFields
-                      draft={draft}
-                      compact
-                      people={people}
-                      onChange={(values) => updateDraft(absence.id, values)}
-                    />
-                    <div className="absence-actions">
-                      <button
-                        className="icon-button secondary"
-                        disabled={savingAbsenceId === absence.id}
-                        type="button"
-                        onClick={() => void saveAbsence(absence.id)}
-                      >
-                        <Save aria-hidden="true" size={16} />
-                        <span>Speichern</span>
-                      </button>
-                      <button
-                        className="icon-button secondary"
-                        disabled={savingAbsenceId === absence.id}
-                        type="button"
-                        onClick={() => void deleteAbsence(absence.id)}
-                      >
-                        <Trash2 aria-hidden="true" size={16} />
-                        <span>Loeschen</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </article>
+              <EntityCard
+                key={absence.id}
+                title={person?.display_name ?? `Person #${absence.person_id}`}
+                subtitle={`${absenceTypeLabels[absence.absence_type]} · ${formatDateRange(absence)}`}
+                meta={absenceCardMeta(absence, today)}
+                color={absenceTypeColor(absence.absence_type)}
+                icon={<CalendarX aria-hidden="true" size={17} />}
+                status={<AbsenceStatus absence={absence} />}
+                isInactive={absence.status === "cancelled"}
+                onClick={() => setDrawer({ mode: "edit", absenceId: absence.id })}
+              />
             );
           })}
-          {!filteredAbsences.length && <p className="empty-inline">Keine Abwesenheiten gefunden.</p>}
+          {!filteredAbsences.length && (
+            <div className="empty-panel">
+              <p>{absences.length ? "Keine Treffer in diesem Arbeitsbereich." : "Noch keine Abwesenheiten vorhanden."}</p>
+            </div>
+          )}
         </div>
       )}
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "new"}
+        title="Neue Abwesenheit"
+        subtitle="Krankheit, Urlaub, Schule, Frei oder Sonstiges eintragen"
+        onClose={closeDrawer}
+        footer={canEdit ? (
+          <button className="icon-button" disabled={savingAbsenceId === 0} type="button" onClick={() => void createAbsence()}>
+            <CalendarX aria-hidden="true" size={17} />
+            <span>Abwesenheit anlegen</span>
+          </button>
+        ) : undefined}
+      >
+        <AbsenceFields
+          draft={createForm}
+          people={people}
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+        />
+      </EntityDetailDrawer>
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "edit" && Boolean(selectedAbsence && selectedDraft)}
+        title={selectedAbsence ? peopleById.get(selectedAbsence.person_id)?.display_name ?? "Abwesenheit bearbeiten" : "Abwesenheit"}
+        subtitle={selectedAbsence ? `${absenceTypeLabels[selectedAbsence.absence_type]} · ${formatDateRange(selectedAbsence)}` : undefined}
+        onClose={closeDrawer}
+        footer={selectedAbsence && canEdit ? (
+          <>
+            <button
+              className="icon-button secondary"
+              disabled={savingAbsenceId === selectedAbsence.id}
+              type="button"
+              onClick={() => void deleteAbsence(selectedAbsence.id)}
+            >
+              <Trash2 aria-hidden="true" size={16} />
+              <span>Loeschen</span>
+            </button>
+            <button
+              className="icon-button"
+              disabled={savingAbsenceId === selectedAbsence.id}
+              type="button"
+              onClick={() => void saveAbsence(selectedAbsence.id)}
+            >
+              <Save aria-hidden="true" size={16} />
+              <span>Speichern</span>
+            </button>
+          </>
+        ) : undefined}
+      >
+        {selectedAbsence && selectedDraft && (
+          <>
+            <div className="absence-drawer-summary">
+              <AbsenceTypeBubble type={selectedAbsence.absence_type}>{absenceTypeLabels[selectedAbsence.absence_type]}</AbsenceTypeBubble>
+              <StatusBadge tone={selectedAbsence.status === "active" ? "active" : "inactive"}>
+                {absenceStatusLabels[selectedAbsence.status]}
+              </StatusBadge>
+            </div>
+            <AbsenceFields
+              draft={selectedDraft}
+              people={people}
+              disabled={!canEdit}
+              onChange={(values) => updateDraft(selectedAbsence.id, values)}
+            />
+          </>
+        )}
+      </EntityDetailDrawer>
     </section>
+  );
+}
+
+function FocusCard({
+  icon,
+  title,
+  description,
+  count,
+  isActive,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button className={isActive ? "absence-focus-card is-active" : "absence-focus-card"} type="button" onClick={onClick}>
+      <span className="absence-focus-icon">{icon}</span>
+      <span className="absence-focus-body">
+        <span className="absence-focus-title">{title}</span>
+        <span className="absence-focus-description">{description}</span>
+      </span>
+      <span className="absence-focus-count">{count}</span>
+    </button>
   );
 }
 
 function AbsenceFields({
   draft,
   people,
-  compact = false,
+  disabled = false,
   onChange,
 }: {
   draft: AbsenceCreate;
   people: Person[];
-  compact?: boolean;
+  disabled?: boolean;
   onChange: (values: Partial<AbsenceCreate>) => void;
 }) {
   return (
-    <div className={compact ? "absence-form-grid compact" : "absence-form-grid"}>
-      <label>
+    <div className="absence-form-grid">
+      <label className="drawer-field absence-person-field">
         <span>Person</span>
         <select
+          disabled={disabled}
           value={draft.person_id || ""}
           onChange={(event) => onChange({ person_id: Number(event.target.value) })}
         >
@@ -291,9 +417,10 @@ function AbsenceFields({
           ))}
         </select>
       </label>
-      <label>
+      <label className="drawer-field">
         <span>Typ</span>
         <select
+          disabled={disabled}
           value={draft.absence_type}
           onChange={(event) => onChange({ absence_type: event.target.value as AbsenceType })}
         >
@@ -304,26 +431,29 @@ function AbsenceFields({
           ))}
         </select>
       </label>
-      <label>
+      <label className="drawer-field">
         <span>Von</span>
         <input
+          disabled={disabled}
           type="date"
           value={draft.start_date}
           onChange={(event) => onChange({ start_date: event.target.value })}
         />
       </label>
-      <label>
+      <label className="drawer-field">
         <span>Bis</span>
         <input
+          disabled={disabled}
           min={draft.start_date}
           type="date"
           value={draft.end_date}
           onChange={(event) => onChange({ end_date: event.target.value })}
         />
       </label>
-      <label>
+      <label className="drawer-field">
         <span>Status</span>
         <select
+          disabled={disabled}
           value={draft.status}
           onChange={(event) => onChange({ status: event.target.value as AbsenceStatus })}
         >
@@ -334,15 +464,27 @@ function AbsenceFields({
           ))}
         </select>
       </label>
-      <label className="absence-note-field">
+      <label className="drawer-field absence-note-field">
         <span>Notiz</span>
         <textarea
+          disabled={disabled}
           value={draft.note ?? ""}
           onChange={(event) => onChange({ note: event.target.value || null })}
         />
       </label>
     </div>
   );
+}
+
+function AbsenceStatus({ absence }: { absence: Absence }) {
+  if (absence.status === "cancelled") {
+    return <StatusBadge tone="inactive">Storniert</StatusBadge>;
+  }
+  return <AbsenceTypeBubble type={absence.absence_type}>{absenceTypeLabels[absence.absence_type]}</AbsenceTypeBubble>;
+}
+
+function AbsenceTypeBubble({ type, children }: { type: AbsenceType; children: ReactNode }) {
+  return <span className={`absence-type-bubble absence-type-${type}`}>{children}</span>;
 }
 
 function toEditableAbsences(absences: Absence[]): Record<string, EditableAbsence> {
@@ -384,16 +526,70 @@ function compareAbsences(left: Absence, right: Absence): number {
   return left.start_date.localeCompare(right.start_date) || left.id - right.id;
 }
 
+function compareAbsencesForFocus(left: Absence, right: Absence, focusMode: FocusMode): number {
+  if (focusMode === "past") {
+    return right.end_date.localeCompare(left.end_date) || right.id - left.id;
+  }
+  return compareAbsences(left, right);
+}
+
+function comparePeople(left: Person, right: Person): number {
+  return left.display_name.localeCompare(right.display_name, "de") || left.id - right.id;
+}
+
 function absenceSearchText(absence: Absence, peopleById: Map<number, Person>): string {
   const person = peopleById.get(absence.person_id);
   return [
     person?.display_name,
+    person?.first_name,
+    person?.last_name,
     absenceTypeLabels[absence.absence_type],
     absenceStatusLabels[absence.status],
     absence.start_date,
     absence.end_date,
     absence.note,
   ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function absenceCardMeta(absence: Absence, today: string): string[] {
+  const items = [absence.status === "cancelled" ? "Storniert" : absenceTimingLabel(absence, today)];
+  if (absence.note) {
+    items.push(absence.note);
+  }
+  return items;
+}
+
+function absenceTimingLabel(absence: Absence, today: string): string {
+  if (isCurrentAbsence(absence, today)) {
+    return "Heute relevant";
+  }
+  if (isPastAbsence(absence, today)) {
+    return `Beendet am ${formatDate(absence.end_date)}`;
+  }
+  return `Startet am ${formatDate(absence.start_date)}`;
+}
+
+function isPastAbsence(absence: Absence, today: string): boolean {
+  return absence.status === "active" && absence.end_date < today;
+}
+
+function isCurrentAbsence(absence: Absence, today: string): boolean {
+  return absence.status === "active" && absence.start_date <= today && absence.end_date >= today;
+}
+
+function isFutureRelevantAbsence(absence: Absence, today: string): boolean {
+  return absence.status === "active" && absence.end_date >= today;
+}
+
+function absenceTypeColor(type: AbsenceType): string {
+  const colors: Record<AbsenceType, string> = {
+    vacation: "#18a058",
+    sick: "#d92d20",
+    school: "#2563eb",
+    free: "#7c3aed",
+    other: "#64748b",
+  };
+  return colors[type];
 }
 
 function formatDateRange(absence: Absence): string {

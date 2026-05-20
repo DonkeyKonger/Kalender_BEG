@@ -10,13 +10,13 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 4. Baustellen-Seite umbauen - erledigt am 2026-05-20.
 5. Personen-Seite umbauen - erledigt am 2026-05-20.
 6. Benutzer-Seite umbauen - erledigt am 2026-05-20.
-7. Abwesenheiten-Seite umbauen.
-8. Such- und Filterverhalten erhalten oder verbessern.
+7. Abwesenheiten-Seite umbauen - erledigt am 2026-05-20.
+8. Such- und Filterverhalten erhalten oder verbessern - fuer Abwesenheiten erweitert am 2026-05-20.
 9. Listenlayout responsiv verdichten.
 10. Planmatrix-UX vorbereiten, ohne Matrix-Architektur umzubauen.
 11. Status-/Badge-Darstellung vereinheitlichen - Basis-Komponente vorbereitet am 2026-05-20.
 12. Keine Funktionalität verlieren.
-13. Leere Zustände, klare Primärbuttons und Drawer-Titel berücksichtigen.
+13. Leere Zustände, klare Primärbuttons und Drawer-Titel berücksichtigen - fuer Abwesenheiten umgesetzt am 2026-05-20.
 14. Build und Tests prüfen.
 
 ## Analyse Schritt 1
@@ -52,4 +52,13 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Klick auf eine Benutzer-Card öffnet den Detail-Drawer mit Stammdaten, Rollen, Personen-Zuordnung und Passwort-Reset.
 - Passwortfelder sind nicht mehr in der Listenansicht sichtbar.
 - Suche durchsucht Anmeldename, Anzeigename, Rolle, zugeordnete Person und Aktivstatus.
+- Bestehende API- und Speicherlogik bleibt erhalten.
+
+## Umsetzung Schritt 7
+
+- Die Abwesenheiten-Seite zeigt nun drei fachliche Arbeitsbereiche: Rueckblick pruefen, Heute pruefen und Vorschau planen.
+- Die Arbeitsbereiche bilden die drei Kernfragen ab: vergangene Urlaube/Krankmeldungen fuer das Buero, aktuelle Ausfaelle fuer Projektleiter und kommende Engstellen fuer die Personalplanung.
+- Abwesenheiten werden als kompakte `EntityCard`-Bubbles dargestellt und im `EntityDetailDrawer` angelegt oder bearbeitet.
+- Suche und optionales `Alle anzeigen` bleiben erhalten, arbeiten aber jetzt innerhalb des aktiven Arbeitsbereichs.
+- Abwesenheitstypen sind farblich getrennt: Krank rot, Urlaub gruen, Schule blau, Frei violett, Sonstiges grau.
 - Bestehende API- und Speicherlogik bleibt erhalten.
