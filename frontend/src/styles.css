@@ -508,6 +508,10 @@ button:disabled {
   background: #f6f1e8;
 }
 
+.matrix-table thead th.weekend {
+  background: #f6f1e8;
+}
+
 .row-heading {
   text-align: left;
 }
@@ -1576,5 +1580,131 @@ button:disabled {
 
   .site-form-grid.compact {
     grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+}
+
+.absences-page {
+  display: grid;
+  gap: 18px;
+}
+
+.absence-search {
+  width: 100%;
+  max-width: 360px;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.absence-create-panel,
+.absence-row {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.absence-create-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.absence-list {
+  display: grid;
+  gap: 12px;
+}
+
+.absence-row-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.absence-row-meta strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.absence-row-meta span,
+.absence-row-meta small {
+  color: #65738a;
+  font-size: 0.86rem;
+}
+
+.absence-row-meta .active-text {
+  color: #126b36;
+  font-weight: 800;
+}
+
+.absence-row-meta .inactive-text {
+  color: #8a1f16;
+  font-weight: 800;
+}
+
+.absence-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.absence-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.absence-form-grid input,
+.absence-form-grid select,
+.absence-form-grid textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.absence-form-grid textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.absence-form-grid input:focus,
+.absence-form-grid select:focus,
+.absence-form-grid textarea:focus,
+.absence-search:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
+.absence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.absence-note-field {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 760px) {
+  .absence-form-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .absence-form-grid.compact {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
   }
 }

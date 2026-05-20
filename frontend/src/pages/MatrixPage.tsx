@@ -17,6 +17,7 @@ import {
   formatDayHeader,
   formatDayNumber,
   getDefaultPlanningRange,
+  isWeekendDate,
 } from "../utils/dateRange";
 
 const statusLabels: Record<SiteStatus, string> = {
@@ -334,7 +335,7 @@ function MatrixTable(props: MatrixTableProps) {
             <th className="sticky-col status-col">Status</th>
             {props.matrix.days.map((day) => (
               <th
-                className={day.is_weekend ? "day-col weekend" : "day-col"}
+                className={isWeekendDate(day.date) ? "day-col weekend" : "day-col"}
                 key={day.date}
               >
                 <span>{formatDayHeader(day.date)}</span>
@@ -383,7 +384,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         const isActive = props.activeCell?.key === key;
         return (
           <td
-            className={props.matrix.days[index]?.is_weekend ? "matrix-cell weekend" : "matrix-cell"}
+            className={isWeekendDate(cell.date) ? "matrix-cell weekend" : "matrix-cell"}
             key={cell.date}
             onClick={() => props.onOpenCell(row, cell)}
           >

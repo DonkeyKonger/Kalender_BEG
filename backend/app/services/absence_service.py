@@ -19,9 +19,10 @@ class AbsenceService:
         return self.absences.list(**filters)
 
     def create_absence(self, payload: AbsenceCreate, user_id: int) -> Absence:
-        self._ensure_person_exists(payload.person_id)
+        values = clean_absence_values(payload.model_dump())
+        self._ensure_person_exists(values["person_id"])
         absence = Absence(
-            **payload.model_dump(),
+            **values,
             created_by_user_id=user_id,
             updated_by_user_id=user_id,
         )
@@ -32,7 +33,7 @@ class AbsenceService:
             entity_type="absence",
             entity_id=absence.id,
             old_value=None,
-            new_value=payload.model_dump(mode="json"),
+            new_value=absence_snapshot(absence),
         )
         self.db.commit()
         self.db.refresh(absence)
@@ -43,8 +44,8 @@ class AbsenceService:
         if absence is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
 
-        old_value = self._absence_snapshot(absence)
-        values = payload.model_dump(exclude_unset=True)
+        old_value = absence_snapshot(absence)
+        values = clean_absence_values(payload.model_dump(exclude_unset=True))
         person_id = values.get("person_id", absence.person_id)
         self._ensure_person_exists(person_id)
         start_date = values.get("start_date", absence.start_date)
@@ -61,7 +62,7 @@ class AbsenceService:
             entity_type="absence",
             entity_id=absence.id,
             old_value=old_value,
-            new_value=self._absence_snapshot(absence),
+            new_value=absence_snapshot(absence),
         )
         self.db.commit()
         self.db.refresh(absence)
@@ -71,7 +72,7 @@ class AbsenceService:
         absence = self.absences.get(absence_id)
         if absence is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
-        old_value = self._absence_snapshot(absence)
+        old_value = absence_snapshot(absence)
         self.absences.delete(absence)
         self.audit.record(
             user_id=user_id,
@@ -87,13 +88,21 @@ class AbsenceService:
         if self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
 
-    def _absence_snapshot(self, absence: Absence) -> dict:
-        return {
-            "id": absence.id,
-            "person_id": absence.person_id,
-            "absence_type": absence.absence_type.value,
-            "start_date": absence.start_date.isoformat(),
-            "end_date": absence.end_date.isoformat(),
-            "status": absence.status.value,
-            "note": absence.note,
-        }
+
+def clean_absence_values(values: dict) -> dict:
+    cleaned = dict(values)
+    if isinstance(cleaned.get("note"), str):
+        cleaned["note"] = cleaned["note"].strip() or None
+    return cleaned
+
+
+def absence_snapshot(absence: Absence) -> dict:
+    return {
+        "id": absence.id,
+        "person_id": absence.person_id,
+        "absence_type": absence.absence_type.value,
+        "start_date": absence.start_date.isoformat(),
+        "end_date": absence.end_date.isoformat(),
+        "status": absence.status.value,
+        "note": absence.note,
+    }

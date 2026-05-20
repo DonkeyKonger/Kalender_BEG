@@ -1,3 +1,4 @@
+import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
@@ -170,6 +171,39 @@ export const api = {
 
   async reactivateSite(siteId: number): Promise<Site> {
     return request<Site>(`/sites/${siteId}/reactivate`, { method: "POST" });
+  },
+
+  async absences(params: { start?: string; end?: string; personId?: number | null } = {}): Promise<Absence[]> {
+    const search = new URLSearchParams();
+    if (params.start) {
+      search.set("start", params.start);
+    }
+    if (params.end) {
+      search.set("end", params.end);
+    }
+    if (params.personId) {
+      search.set("person_id", String(params.personId));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<Absence[]>(`/absences${suffix}`);
+  },
+
+  async createAbsence(payload: AbsenceCreate): Promise<Absence> {
+    return request<Absence>("/absences", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateAbsence(absenceId: number, payload: AbsenceUpdate): Promise<Absence> {
+    return request<Absence>(`/absences/${absenceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteAbsence(absenceId: number): Promise<void> {
+    return request<void>(`/absences/${absenceId}`, { method: "DELETE" });
   },
 
   async dailyPlanPdf(planDate: string): Promise<Blob> {
