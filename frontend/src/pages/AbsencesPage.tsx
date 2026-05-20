@@ -3,21 +3,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { StatusBadge } from "../components/StatusBadge";
+import { AbsenceTypeBadge, StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import { toDateInputValue } from "../utils/dateRange";
-
-const absenceTypeLabels: Record<AbsenceType, string> = {
-  vacation: "Urlaub",
-  sick: "Krank",
-  school: "Schule",
-  free: "Frei",
-  other: "Sonstiges",
-};
 
 const absenceStatusLabels: Record<AbsenceStatus, string> = {
   active: "Aktiv",
@@ -261,8 +253,8 @@ export function AbsencesPage() {
       </div>
 
       <div className="absence-type-legend" aria-label="Legende Abwesenheitstypen">
-        {Object.entries(absenceTypeLabels).map(([type, label]) => (
-          <AbsenceTypeBubble key={type} type={type as AbsenceType}>{label}</AbsenceTypeBubble>
+        {Object.keys(absenceTypeLabels).map((type) => (
+          <AbsenceTypeBadge key={type} type={type as AbsenceType} />
         ))}
       </div>
 
@@ -344,7 +336,7 @@ export function AbsencesPage() {
         {selectedAbsence && selectedDraft && (
           <>
             <div className="absence-drawer-summary">
-              <AbsenceTypeBubble type={selectedAbsence.absence_type}>{absenceTypeLabels[selectedAbsence.absence_type]}</AbsenceTypeBubble>
+              <AbsenceTypeBadge type={selectedAbsence.absence_type} />
               <StatusBadge tone={selectedAbsence.status === "active" ? "active" : "inactive"}>
                 {absenceStatusLabels[selectedAbsence.status]}
               </StatusBadge>
@@ -480,12 +472,9 @@ function AbsenceStatus({ absence }: { absence: Absence }) {
   if (absence.status === "cancelled") {
     return <StatusBadge tone="inactive">Storniert</StatusBadge>;
   }
-  return <AbsenceTypeBubble type={absence.absence_type}>{absenceTypeLabels[absence.absence_type]}</AbsenceTypeBubble>;
+  return <AbsenceTypeBadge type={absence.absence_type} />;
 }
 
-function AbsenceTypeBubble({ type, children }: { type: AbsenceType; children: ReactNode }) {
-  return <span className={`absence-type-bubble absence-type-${type}`}>{children}</span>;
-}
 
 function toEditableAbsences(absences: Absence[]): Record<string, EditableAbsence> {
   return Object.fromEntries(

@@ -4,13 +4,13 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MatrixCellEditor } from "../components/MatrixCellEditor";
+import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type {
   MatrixCell,
   MatrixEntryInput,
   MatrixResponse,
   MatrixRow,
-  SiteStatus,
 } from "../types/matrix";
 import type { Person } from "../types/person";
 import { calendarPersonCode, canEditMatrix } from "../types/person";
@@ -20,13 +20,6 @@ import {
   getDefaultPlanningRange,
   isWeekendDate,
 } from "../utils/dateRange";
-
-const statusLabels: Record<SiteStatus, string> = {
-  active: "Aktiv",
-  paused: "Pause",
-  closed: "Zu",
-  archived: "Archiv",
-};
 
 type CellKey = `${number}-${string}`;
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
@@ -370,9 +363,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       </td>
       <td className="sticky-col info-col compact-text">{row.site.info ?? ""}</td>
       <td className="sticky-col status-col">
-        <span className={`status-badge status-${row.site.status}`}>
-          {statusLabels[row.site.status]}
-        </span>
+        <SiteStatusBadge status={row.site.status} />
       </td>
       {row.cells.map((cell) => {
         const key = cellKey(row.site.id, cell.date);

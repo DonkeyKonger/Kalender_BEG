@@ -1,6 +1,7 @@
 import { CalendarClock, History, MapPin, Phone, RefreshCcw, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
@@ -143,7 +144,7 @@ function AssignmentCard({ assignment }: { assignment: MobileAssignment }) {
           <h3>{assignment.site.name}</h3>
           {assignment.site.site_number && <p className="muted-text">{assignment.site.site_number}</p>}
         </div>
-        <span className={`status-badge status-${assignment.site.status}`}>{siteStatusLabel(assignment.site.status)}</span>
+        <SiteStatusBadge status={assignment.site.status} />
       </div>
 
       <div className="assignment-detail-list">
@@ -237,14 +238,4 @@ function formatAssignmentRange(assignment: MobileAssignment): string {
   return assignment.start_date === assignment.end_date
     ? formatDate(assignment.start_date)
     : formatRangeLabel(assignment.start_date, assignment.end_date);
-}
-
-function siteStatusLabel(status: MobileAssignment["site"]["status"]): string {
-  const labels = {
-    active: "Aktiv",
-    paused: "Pause",
-    closed: "Zu",
-    archived: "Archiv",
-  };
-  return labels[status];
 }

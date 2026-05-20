@@ -1,13 +1,7 @@
 import { CalendarDays, ClipboardList, ShieldCheck } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-
-const roleLabels = {
-  admin: "Admin",
-  project_manager: "Projektleiter",
-  office: "Buero",
-  monteur: "Monteur",
-};
+import { RoleBadge } from "../components/StatusBadge";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -19,7 +13,7 @@ export function DashboardPage() {
           <p className="eyebrow">Start</p>
           <h1>Ubersicht</h1>
         </div>
-        <span className="role-pill">{user ? roleLabels[user.role] : ""}</span>
+        {user && <RoleBadge role={user.role} />}
       </div>
 
       <div className="status-grid">

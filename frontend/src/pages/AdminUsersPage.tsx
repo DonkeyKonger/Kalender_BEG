@@ -3,18 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { StatusBadge } from "../components/StatusBadge";
+import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-
-const roleLabels: Record<UserRole, string> = {
-  admin: "Admin",
-  project_manager: "Projektleiter",
-  office: "Buero",
-  monteur: "Monteur",
-};
 
 type EditableUser = {
   id: number;
@@ -224,7 +217,7 @@ export function AdminUsersPage() {
                 subtitle={`${adminUser.username} · Rolle: ${roleLabels[adminUser.role]}`}
                 meta={[linkedPerson?.display_name ?? "Keine Person"]}
                 icon={<UserCog aria-hidden="true" size={17} />}
-                status={<StatusBadge tone={adminUser.is_active ? "active" : "inactive"}>{adminUser.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                status={adminUser.is_active ? <RoleBadge role={adminUser.role} /> : <StatusBadge tone="inactive">Inaktiv</StatusBadge>}
                 isInactive={!adminUser.is_active}
                 onClick={() => setDrawer({ mode: "edit", userId: adminUser.id })}
               />

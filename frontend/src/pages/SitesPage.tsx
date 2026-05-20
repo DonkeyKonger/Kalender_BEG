@@ -4,19 +4,12 @@ import { Link } from "react-router-dom";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
+import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { Site, SiteCreate } from "../types/site";
-
-const statusLabels: Record<SiteStatus, string> = {
-  active: "Aktiv",
-  paused: "Pause",
-  closed: "Zu",
-  archived: "Archiv",
-};
 
 const emptySite: SiteCreate = {
   site_number: null,
@@ -333,10 +326,6 @@ export function SitesPage() {
   );
 }
 
-function SiteStatusBadge({ status }: { status: SiteStatus }) {
-  return <StatusBadge tone={siteStatusTone(status)}>{statusLabels[status]}</StatusBadge>;
-}
-
 function SiteFields({
   draft,
   people,
@@ -400,7 +389,7 @@ function SiteFields({
           value={draft.status}
           onChange={(event) => onChange({ status: event.target.value as SiteStatus })}
         >
-          {Object.entries(statusLabels).map(([value, label]) => (
+          {Object.entries(siteStatusLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -494,19 +483,6 @@ function siteCardMeta(site: Site): string[] {
   ].filter(Boolean);
 }
 
-function siteStatusTone(status: SiteStatus): StatusBadgeTone {
-  if (status === "active") {
-    return "active";
-  }
-  if (status === "paused") {
-    return "paused";
-  }
-  if (status === "closed") {
-    return "closed";
-  }
-  return "archived";
-}
-
 function siteSearchText(site: Site): string {
   return [
     site.name,
@@ -515,7 +491,7 @@ function siteSearchText(site: Site): string {
     site.customer,
     site.project_manager?.display_name,
     site.project_manager?.short_code,
-    statusLabels[site.status],
+    siteStatusLabels[site.status],
   ].filter(Boolean).join(" ").toLowerCase();
 }
 

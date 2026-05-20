@@ -4,15 +4,9 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Site } from "../types/site";
-
-const statusLabels: Record<Site["status"], string> = {
-  active: "Aktiv",
-  paused: "Pause",
-  closed: "Zu",
-  archived: "Archiv",
-};
 
 export function SiteDetailPage() {
   const { siteId } = useParams();
@@ -65,14 +59,14 @@ export function SiteDetailPage() {
           <h1>{site.name}</h1>
           <p>{[site.site_number, site.customer].filter(Boolean).join(" - ")}</p>
         </div>
-        <span className={`status-badge status-${site.status}`}>{statusLabels[site.status]}</span>
+        <SiteStatusBadge status={site.status} />
       </div>
 
       <div className="site-detail-grid">
         <DetailSection title="Stammdaten" icon={Building2}>
           <DetailItem label="Baustellennummer" value={site.site_number} />
           <DetailItem label="Kunde" value={site.customer} />
-          <DetailItem label="Status" value={statusLabels[site.status]} />
+          <DetailItem label="Status" value={siteStatusLabels[site.status]} />
           <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
         </DetailSection>
 

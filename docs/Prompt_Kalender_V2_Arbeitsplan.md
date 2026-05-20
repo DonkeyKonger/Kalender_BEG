@@ -14,7 +14,7 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 8. Such- und Filterverhalten erhalten oder verbessern - fuer Abwesenheiten erweitert am 2026-05-20.
 9. Listenlayout responsiv verdichten - erledigt am 2026-05-20.
 10. Planmatrix-UX vorbereiten, ohne Matrix-Architektur umzubauen - erledigt am 2026-05-20.
-11. Status-/Badge-Darstellung vereinheitlichen - Basis-Komponente vorbereitet am 2026-05-20.
+11. Status-/Badge-Darstellung vereinheitlichen - erledigt am 2026-05-20.
 12. Keine Funktionalität verlieren.
 13. Leere Zustände, klare Primärbuttons und Drawer-Titel berücksichtigen - fuer Abwesenheiten umgesetzt am 2026-05-20.
 14. Build und Tests prüfen.
@@ -70,3 +70,10 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Die Planmatrix-Architektur bleibt unveraendert.
 - Der bisherige Zell-Editor wurde in `MatrixCellEditor` gekapselt, damit er spaeter leichter als Popover ersetzt werden kann.
 - Bestehende Matrix-Funktionen wie Person hinzufuegen, externe Schnelleingabe, Mehrtages-Enddatum, Speichern und Konfliktanzeige bleiben erhalten.
+
+## Umsetzung Schritt 11
+
+- `StatusBadge` enthaelt nun zentrale Labels und Helfer fuer Baustellenstatus, Benutzerrollen und Abwesenheitstypen.
+- Matrix, Projektakte, mobile Monteuransicht, Dashboard, Benutzerseite und Abwesenheiten nutzen die gemeinsamen Badge-Komponenten.
+- Alte lokale Status-/Rollen-Label-Dopplungen wurden reduziert, ohne Backend oder Datenmodell zu aendern.
+- Die farbliche Darstellung bleibt fachlich gleich: aktive Status gruen, Pause gelb, geschlossen/archiv grau, Rollen blau und Abwesenheitstypen je Typ farblich unterscheidbar.
