@@ -924,6 +924,13 @@ button.entity-card:focus-visible {
   gap: 5px;
 }
 
+.cell-editor-person-row,
+.cell-editor-date-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 5px;
+}
+
 .editor-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -955,7 +962,8 @@ button.entity-card:focus-visible {
   font-size: 0.74rem;
 }
 
-.cell-editor > button {
+.cell-editor-person-row > button,
+.cell-editor-date-row > button {
   min-height: 25px;
   border: 0;
   border-radius: 5px;

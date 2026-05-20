@@ -1,8 +1,9 @@
-import { RotateCcw, Save, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { MatrixCellEditor } from "../components/MatrixCellEditor";
 import { ApiError, api } from "../lib/api";
 import type {
   MatrixCell,
@@ -382,7 +383,24 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             key={cell.date}
             onClick={() => props.onOpenCell(row, cell)}
           >
-            {isActive ? <CellEditor cell={cell} {...props} /> : <CellDisplay cell={cell} />}
+            {isActive && props.activeCell ? (
+              <MatrixCellEditor
+                activeCell={props.activeCell}
+                draftEntries={props.draftEntries}
+                externalName={props.externalName}
+                onAddExternal={props.onAddExternal}
+                onAddPerson={props.onAddPerson}
+                onEndDateChange={props.onEndDateChange}
+                onExternalNameChange={props.onExternalNameChange}
+                onRemoveEntry={props.onRemoveEntry}
+                onSave={props.onSave}
+                onSelectedPersonChange={props.onSelectedPersonChange}
+                people={props.people}
+                selectedPersonId={props.selectedPersonId}
+              />
+            ) : (
+              <CellDisplay cell={cell} />
+            )}
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
               <small className="cell-message">{props.cellMessage[key]}</small>
@@ -415,58 +433,6 @@ function CellDisplay({ cell }: { cell: MatrixCell }) {
           {absence.person.short_code}
         </span>
       ))}
-    </div>
-  );
-}
-
-function CellEditor(props: MatrixTableProps & { cell: MatrixCell }) {
-  const activeCell = props.activeCell;
-  if (!activeCell) {
-    return null;
-  }
-
-  return (
-    <div className="cell-editor" onClick={(event) => event.stopPropagation()}>
-      <div className="editor-chip-list">
-        {props.draftEntries.map((entry) => (
-          <button key={entry.key} type="button" onClick={() => props.onRemoveEntry(entry.key)}>
-            <span>{entry.label}</span>
-            <X aria-hidden="true" size={12} />
-          </button>
-        ))}
-      </div>
-      <select
-        value={props.selectedPersonId}
-        onChange={(event) => props.onSelectedPersonChange(event.target.value)}
-      >
-        <option value="">Person</option>
-        {props.people.map((person) => (
-          <option key={person.id} value={person.id}>
-            {person.display_name}
-          </option>
-        ))}
-      </select>
-      <button type="button" onClick={props.onAddPerson}>+</button>
-      <input
-        placeholder="Extern"
-        value={props.externalName}
-        onChange={(event) => props.onExternalNameChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            props.onAddExternal();
-          }
-        }}
-      />
-      <input
-        aria-label="Bis Datum"
-        min={activeCell.date}
-        type="date"
-        value={activeCell.endDate}
-        onChange={(event) => props.onEndDateChange(event.target.value)}
-      />
-      <button className="save-cell-button" type="button" onClick={props.onSave}>
-        <Save aria-hidden="true" size={13} />
-      </button>
     </div>
   );
 }

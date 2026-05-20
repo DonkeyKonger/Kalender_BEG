@@ -12,8 +12,8 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 6. Benutzer-Seite umbauen - erledigt am 2026-05-20.
 7. Abwesenheiten-Seite umbauen - erledigt am 2026-05-20.
 8. Such- und Filterverhalten erhalten oder verbessern - fuer Abwesenheiten erweitert am 2026-05-20.
-9. Listenlayout responsiv verdichten.
-10. Planmatrix-UX vorbereiten, ohne Matrix-Architektur umzubauen.
+9. Listenlayout responsiv verdichten - erledigt am 2026-05-20.
+10. Planmatrix-UX vorbereiten, ohne Matrix-Architektur umzubauen - erledigt am 2026-05-20.
 11. Status-/Badge-Darstellung vereinheitlichen - Basis-Komponente vorbereitet am 2026-05-20.
 12. Keine Funktionalität verlieren.
 13. Leere Zustände, klare Primärbuttons und Drawer-Titel berücksichtigen - fuer Abwesenheiten umgesetzt am 2026-05-20.
@@ -62,3 +62,11 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Suche und optionales `Alle anzeigen` bleiben erhalten, arbeiten aber jetzt innerhalb des aktiven Arbeitsbereichs.
 - Abwesenheitstypen sind farblich getrennt: Krank rot, Urlaub gruen, Schule blau, Frei violett, Sonstiges grau.
 - Bestehende API- und Speicherlogik bleibt erhalten.
+
+## Umsetzung Schritt 9 und 10
+
+- Die Verwaltungslisten nutzen ein gemeinsames responsives Card-Grid mit mehreren kompakten Cards auf Desktop und einer Spalte auf kleinen Bildschirmen.
+- Die Drawer bleiben auf Desktop rechts und werden auf kleinen Bildschirmen auf volle Breite gezogen.
+- Die Planmatrix-Architektur bleibt unveraendert.
+- Der bisherige Zell-Editor wurde in `MatrixCellEditor` gekapselt, damit er spaeter leichter als Popover ersetzt werden kann.
+- Bestehende Matrix-Funktionen wie Person hinzufuegen, externe Schnelleingabe, Mehrtages-Enddatum, Speichern und Konfliktanzeige bleiben erhalten.
