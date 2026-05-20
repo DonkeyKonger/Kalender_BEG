@@ -10,7 +10,12 @@ class SiteRepository:
         self.db = db
 
     def get(self, site_id: int) -> Site | None:
-        return self.db.get(Site, site_id)
+        statement = (
+            select(Site)
+            .options(selectinload(Site.project_manager))
+            .where(Site.id == site_id)
+        )
+        return self.db.scalar(statement)
 
     def list(self, include_closed: bool = False) -> list[Site]:
         statement = (

@@ -5,6 +5,16 @@ from pydantic import BaseModel, Field
 from app.models.enums import SiteStatus
 
 
+class SitePersonRead(BaseModel):
+    id: int
+    display_name: str
+    short_code: str
+    email: str | None = None
+    phone: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class SiteBase(BaseModel):
     site_number: str | None = Field(default=None, max_length=80)
     name: str = Field(min_length=1, max_length=200)
@@ -35,6 +45,7 @@ class SiteUpdate(BaseModel):
 
 class SiteRead(SiteBase):
     id: int
+    project_manager: SitePersonRead | None = None
     closed_at: datetime | None = None
     closed_by_user_id: int | None = None
     created_at: datetime

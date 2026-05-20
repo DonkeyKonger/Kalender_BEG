@@ -24,6 +24,16 @@ def list_sites(
     return [SiteRead.model_validate(site) for site in sites]
 
 
+@router.get("/{site_id}", response_model=SiteRead)
+def get_site(
+    site_id: int,
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> SiteRead:
+    site = SiteService(db).get_site(site_id)
+    return SiteRead.model_validate(site)
+
+
 @router.post("", response_model=SiteRead, status_code=201)
 def create_site(
     payload: SiteCreate,

@@ -19,6 +19,12 @@ class SiteService:
     def list_sites(self, include_closed: bool = False) -> list[Site]:
         return self.sites.list(include_closed=include_closed)
 
+    def get_site(self, site_id: int) -> Site:
+        site = self.sites.get(site_id)
+        if site is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
+        return site
+
     def create_site(self, payload: SiteCreate) -> Site:
         self._ensure_project_manager_exists(payload.project_manager_person_id)
         site = Site(**payload.model_dump())

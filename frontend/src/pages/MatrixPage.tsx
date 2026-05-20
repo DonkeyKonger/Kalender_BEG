@@ -1,5 +1,6 @@
 import { RotateCcw, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
@@ -362,10 +363,10 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           className="site-color"
           style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
         />
-        <span>
+        <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
           <strong>{row.site.name}</strong>
           {row.site.site_number && <small>{row.site.site_number}</small>}
-        </span>
+        </Link>
       </th>
       <td className="sticky-col location-col compact-text">{row.site.location ?? ""}</td>
       <td className="sticky-col pm-col compact-text">

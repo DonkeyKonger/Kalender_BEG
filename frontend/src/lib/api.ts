@@ -1,6 +1,7 @@
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { Site } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -66,6 +67,19 @@ export const api = {
 
   async persons(): Promise<Person[]> {
     return request<Person[]>("/persons?is_active=true");
+  },
+
+  async sites(params: { includeClosed?: boolean } = {}): Promise<Site[]> {
+    const search = new URLSearchParams();
+    if (params.includeClosed) {
+      search.set("include_closed", "true");
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<Site[]>(`/sites${suffix}`);
+  },
+
+  async site(siteId: number): Promise<Site> {
+    return request<Site>(`/sites/${siteId}`);
   },
 
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
