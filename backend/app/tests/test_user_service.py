@@ -1,0 +1,77 @@
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
+from app.models.enums import UserRole
+from app.schemas.user import UserCreate, UserUpdate
+from app.services.user_service import UserService
+
+
+class FakeDb:
+    def commit(self):
+        raise AssertionError("commit should not be reached")
+
+    def refresh(self, _item):
+        raise AssertionError("refresh should not be reached")
+
+
+class FakeUsers:
+    def __init__(self, *, by_id=None, by_username=None):
+        self.by_id = by_id
+        self.by_username = by_username
+
+    def get_by_id(self, user_id):
+        return self.by_id if self.by_id and self.by_id.id == user_id else None
+
+    def get_by_username(self, username):
+        return self.by_username if self.by_username and self.by_username.username == username else None
+
+
+class FakePeople:
+    def get(self, _person_id):
+        return None
+
+
+def service_with(*, user=None, username_user=None):
+    service = UserService.__new__(UserService)
+    service.db = FakeDb()
+    service.users = FakeUsers(by_id=user, by_username=username_user)
+    service.people = FakePeople()
+    return service
+
+
+def test_admin_cannot_disable_self():
+    with pytest.raises(HTTPException) as error:
+        service_with().disable_user(user_id=1, current_user_id=1)
+
+    assert error.value.status_code == 400
+
+
+def test_admin_cannot_remove_own_admin_role():
+    user = SimpleNamespace(id=1, role=UserRole.ADMIN, is_active=True)
+
+    with pytest.raises(HTTPException) as error:
+        service_with(user=user).update_user(
+            1,
+            UserUpdate(role=UserRole.PROJECT_MANAGER),
+            current_user_id=1,
+        )
+
+    assert error.value.status_code == 400
+
+
+def test_duplicate_username_is_blocked_on_create():
+    existing = SimpleNamespace(id=5, username="admin")
+
+    with pytest.raises(HTTPException) as error:
+        service_with(username_user=existing).create_user(
+            UserCreate(
+                username="admin",
+                display_name="Administrator",
+                password="admin",
+                role=UserRole.ADMIN,
+            )
+        )
+
+    assert error.value.status_code == 409

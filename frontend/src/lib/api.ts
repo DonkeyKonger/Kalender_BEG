@@ -1,4 +1,5 @@
 import type { CurrentUser, LoginResponse } from "../types/auth";
+import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { Site } from "../types/site";
@@ -84,8 +85,42 @@ export const api = {
     return request<void>("/auth/logout", { method: "POST" });
   },
 
-  async persons(): Promise<Person[]> {
-    return request<Person[]>("/persons?is_active=true");
+  async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {
+    const search = new URLSearchParams();
+    if (params.isActive !== null && params.isActive !== undefined) {
+      search.set("is_active", String(params.isActive));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<Person[]>(`/persons${suffix}`);
+  },
+
+  async users(): Promise<AdminUser[]> {
+    return request<AdminUser[]>("/users");
+  },
+
+  async createUser(payload: AdminUserCreate): Promise<AdminUser> {
+    return request<AdminUser>("/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateUser(userId: number, payload: AdminUserUpdate): Promise<AdminUser> {
+    return request<AdminUser>(`/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async resetUserPassword(userId: number, password: string): Promise<AdminUser> {
+    return request<AdminUser>(`/users/${userId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  async disableUser(userId: number): Promise<AdminUser> {
+    return request<AdminUser>(`/users/${userId}/disable`, { method: "POST" });
   },
 
   async sites(params: { includeClosed?: boolean } = {}): Promise<Site[]> {

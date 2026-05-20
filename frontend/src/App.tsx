@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./layout/AppShell";
+import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -25,6 +26,9 @@ export function App() {
             <Route path="sites" element={<SitesPage />} />
             <Route path="sites/:siteId" element={<SiteDetailPage />} />
             <Route path="exports" element={<ExportsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin"]} />}>
+            <Route path="users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
             <Route

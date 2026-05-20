@@ -4,6 +4,7 @@ import {
   Download,
   FolderKanban,
   Home,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 
@@ -33,6 +34,12 @@ export const navigationItems: NavigationItem[] = [
     path: "/exports",
     icon: Download,
     roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Benutzer",
+    path: "/users",
+    icon: ShieldCheck,
+    roles: ["admin"],
   },
   {
     label: "Personen",

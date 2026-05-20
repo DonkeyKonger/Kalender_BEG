@@ -1175,3 +1175,131 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 360px));
   }
 }
+
+.admin-users-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-create-panel,
+.admin-user-row {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.admin-create-panel h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-form-grid label,
+.password-reset-row label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.admin-form-grid input,
+.admin-form-grid select,
+.password-reset-row input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.admin-form-grid input:focus,
+.admin-form-grid select:focus,
+.password-reset-row input:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
+.checkbox-field {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px !important;
+  min-height: 38px;
+}
+
+.checkbox-field input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: #143c6d;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-user-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-user-meta strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.admin-user-meta span {
+  color: #65738a;
+  font-size: 0.86rem;
+}
+
+.admin-user-meta .active-text {
+  color: #126b36;
+  font-weight: 800;
+}
+
+.admin-user-meta .inactive-text {
+  color: #8a1f16;
+  font-weight: 800;
+}
+
+.admin-user-actions,
+.password-reset-row {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 760px) {
+  .admin-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .admin-form-grid.compact {
+    grid-template-columns: minmax(130px, 0.9fr) minmax(160px, 1.1fr) minmax(130px, 0.8fr) minmax(160px, 1fr) auto;
+  }
+
+  .admin-user-actions,
+  .password-reset-row {
+    grid-template-columns: repeat(2, max-content);
+    align-items: end;
+  }
+
+  .password-reset-row label {
+    min-width: 240px;
+  }
+}
