@@ -160,6 +160,17 @@ button:disabled {
   padding: 14px;
 }
 
+.brand-block {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.brand-copy,
+.nav-label {
+  min-width: 0;
+}
+
 .brand-name {
   color: #111827;
   font-weight: 800;
@@ -306,14 +317,51 @@ button:disabled {
 @media (min-width: 900px) {
   .app-shell {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
   .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 72px;
     min-height: 100vh;
+    overflow: hidden;
     border-right: 1px solid #dce3ee;
     border-bottom: 0;
+    padding: 18px 10px;
+    transition: width 160ms ease, box-shadow 160ms ease, padding 160ms ease;
+  }
+
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: 260px;
     padding: 18px;
+    box-shadow: 14px 0 28px rgb(18 29 52 / 10%);
+  }
+
+  .brand-block {
+    justify-content: center;
+  }
+
+  .sidebar:hover .brand-block,
+  .sidebar:focus-within .brand-block {
+    justify-content: flex-start;
+  }
+
+  .brand-copy,
+  .nav-label {
+    overflow: hidden;
+    opacity: 0;
+    white-space: nowrap;
+    transition: opacity 120ms ease;
+  }
+
+  .sidebar:hover .brand-copy,
+  .sidebar:focus-within .brand-copy,
+  .sidebar:hover .nav-label,
+  .sidebar:focus-within .nav-label {
+    opacity: 1;
   }
 
   .nav-list {
@@ -324,6 +372,14 @@ button:disabled {
 
   .nav-list a {
     width: 100%;
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .sidebar:hover .nav-list a,
+  .sidebar:focus-within .nav-list a {
+    justify-content: flex-start;
+    padding: 8px 10px;
   }
 
   .topbar {
@@ -897,8 +953,10 @@ button.entity-card:focus-visible {
 }
 
 .matrix-cell {
+  position: relative;
   width: 104px;
   min-width: 104px;
+  overflow: visible;
   background: #ffffff;
 }
 
@@ -907,6 +965,7 @@ button.entity-card:focus-visible {
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+  min-height: 24px;
 }
 
 .person-chip,
@@ -936,30 +995,13 @@ button.person-chip:focus-visible {
   outline: 2px solid rgb(29 92 153 / 20%);
 }
 
-.person-chip.is-connected-start {
-  width: calc(100% + 4px);
-  max-width: calc(100% + 4px);
-  margin-right: -4px;
-  border-radius: 5px 0 0 5px;
-}
-
-.person-chip.is-connected-middle {
-  width: calc(100% + 8px);
-  max-width: calc(100% + 8px);
-  margin-right: -4px;
-  margin-left: -4px;
-  border-radius: 0;
-}
-
-.person-chip.is-connected-end {
-  width: calc(100% + 4px);
-  max-width: calc(100% + 4px);
-  margin-left: -4px;
-  border-radius: 0 5px 5px 0;
-}
-
-.person-chip.is-connected-single {
-  border-radius: 5px;
+.person-chip.is-assignment-run {
+  position: relative;
+  z-index: 2;
+  justify-content: flex-start;
+  width: calc((var(--assignment-span) * 104px) - 8px);
+  max-width: calc((var(--assignment-span) * 104px) - 8px);
+  box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
 }
 
 .absence-chip {

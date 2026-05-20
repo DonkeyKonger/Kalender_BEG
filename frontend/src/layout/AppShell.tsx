@@ -13,7 +13,7 @@ export function AppShell() {
       <aside className="sidebar" aria-label="Hauptnavigation">
         <div className="brand-block">
           <span className="brand-mark">KB</span>
-          <div>
+          <div className="brand-copy">
             <p className="brand-name">Kalender Baustellen</p>
             <p className="brand-subtitle">Einsatzplanung</p>
           </div>
@@ -25,7 +25,7 @@ export function AppShell() {
             return (
               <NavLink key={item.path} to={item.path} end={item.path === "/"}>
                 <Icon aria-hidden="true" size={18} />
-                <span>{item.label}</span>
+                <span className="nav-label">{item.label}</span>
               </NavLink>
             );
           })}

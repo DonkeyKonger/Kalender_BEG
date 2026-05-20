@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -644,24 +644,31 @@ function CellDisplay({
 }) {
   return (
     <div className="cell-stack">
-      {cell.assignments.map((assignment) => (
-        <button
-          className={`person-chip ${assignmentConnectionClass(rowCells, cellIndex, assignment.person.id)}`}
-          key={assignment.id}
-          title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur` : assignment.person.display_name}
-          type="button"
-          onContextMenu={(event) => {
-            if (!isEditable) {
-              return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            onDeleteAssignment(assignment.person.id);
-          }}
-        >
-          {assignment.person.short_code}
-        </button>
-      ))}
+      {cell.assignments.map((assignment) => {
+        const span = assignmentRunSpan(rowCells, cellIndex, assignment.person.id);
+        if (span === 0) {
+          return null;
+        }
+        return (
+          <button
+            className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
+            key={assignment.id}
+            style={{ "--assignment-span": span } as CSSProperties}
+            title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
+            type="button"
+            onContextMenu={(event) => {
+              if (!isEditable) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              onDeleteAssignment(assignment.person.id);
+            }}
+          >
+            {assignment.person.short_code}
+          </button>
+        );
+      })}
       {cell.absences.map((absence) => (
         <span
           className="absence-chip"
@@ -820,19 +827,20 @@ function sortDates(left: string, right: string): [string, string] {
   return left <= right ? [left, right] : [right, left];
 }
 
-function assignmentConnectionClass(cells: MatrixCell[], cellIndex: number, personId: number): string {
-  const hasPrevious = Boolean(cells[cellIndex - 1]?.assignments.some((assignment) => assignment.person.id === personId));
-  const hasNext = Boolean(cells[cellIndex + 1]?.assignments.some((assignment) => assignment.person.id === personId));
-  if (hasPrevious && hasNext) {
-    return "is-connected-middle";
+function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, personId: number): number {
+  const previousHasPerson = cells[cellIndex - 1]?.assignments.some((assignment) => assignment.person.id === personId);
+  if (previousHasPerson) {
+    return 0;
   }
-  if (hasPrevious) {
-    return "is-connected-end";
+  let span = 1;
+  for (let index = cellIndex + 1; index < cells.length; index += 1) {
+    const hasPerson = cells[index].assignments.some((assignment) => assignment.person.id === personId);
+    if (!hasPerson) {
+      break;
+    }
+    span += 1;
   }
-  if (hasNext) {
-    return "is-connected-start";
-  }
-  return "is-connected-single";
+  return span;
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
