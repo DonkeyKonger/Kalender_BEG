@@ -18,3 +18,7 @@ def test_calendar_short_code_uses_first_initial_and_full_last_name():
 
 def test_calendar_short_code_uses_display_name_last_token_for_external_temp_people():
     assert calendar_short_code(person("Max Mustermann", "", "Max Mustermann")) == "M.Mustermann"
+
+
+def test_calendar_short_code_handles_single_name_external_temp_people():
+    assert calendar_short_code(person("Leihmann", "Leihmann", "Leihmann")) == "L.Leihmann"

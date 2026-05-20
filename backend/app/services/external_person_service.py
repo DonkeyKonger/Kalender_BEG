@@ -21,19 +21,30 @@ class ExternalPersonService:
         if len(matches) == 1:
             return matches[0]
 
+        name_parts = external_person_name_parts(cleaned)
         person = Person(
-            first_name=cleaned,
-            last_name="",
-            display_name=cleaned,
-            short_code=self._short_code(cleaned),
+            first_name=name_parts["first_name"],
+            last_name=name_parts["last_name"],
+            display_name=name_parts["display_name"],
+            short_code=name_parts["short_code"],
             person_type=PersonType.EXTERNAL_TEMP,
             is_active=True,
             notes="Aus Matrix-Schnelleingabe erzeugt.",
         )
         return self.people.add(person)
 
-    def _short_code(self, name: str) -> str:
-        parts = [part for part in name.replace(",", " ").split() if part]
-        if len(parts) >= 2:
-            return f"{parts[0][:1]}.{parts[-1]}"
-        return f"{name[:1]}.{name}"
+
+def external_person_name_parts(name: str) -> dict[str, str]:
+    cleaned = " ".join(name.split())
+    parts = [part for part in cleaned.replace(",", " ").split() if part]
+    if not parts:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Externer Name fehlt.")
+
+    first_name = parts[0]
+    last_name = parts[-1] if len(parts) >= 2 else parts[0]
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "display_name": cleaned,
+        "short_code": f"{first_name[:1]}.{last_name}",
+    }
