@@ -783,6 +783,34 @@ button.entity-card:focus-visible {
   padding: 14px 22px;
 }
 
+.drawer-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.drawer-field input,
+.drawer-field select,
+.drawer-field textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+}
+
+.drawer-field input:focus,
+.drawer-field select:focus,
+.drawer-field textarea:focus {
+  border-color: #1d5c99;
+  outline: 3px solid rgb(29 92 153 / 18%);
+}
+
 .status-badge-inactive,
 .status-badge-neutral {
   background: #edf0f4;

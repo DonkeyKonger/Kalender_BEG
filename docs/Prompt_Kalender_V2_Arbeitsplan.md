@@ -9,7 +9,7 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 3. Detailfenster-Komponente anlegen - erledigt am 2026-05-20.
 4. Baustellen-Seite umbauen - erledigt am 2026-05-20.
 5. Personen-Seite umbauen - erledigt am 2026-05-20.
-6. Benutzer-Seite umbauen.
+6. Benutzer-Seite umbauen - erledigt am 2026-05-20.
 7. Abwesenheiten-Seite umbauen.
 8. Such- und Filterverhalten erhalten oder verbessern.
 9. Listenlayout responsiv verdichten.
@@ -43,4 +43,13 @@ Ziel: Die Verwaltungsseiten werden von dauerhaft aufgeklappten Formularlisten au
 - Klick auf eine Personen-Card öffnet den Detail-Drawer mit allen bestehenden Feldern.
 - Suche durchsucht Name, Anzeigename, Kürzel, Typ, Kontaktfelder und Aktivstatus.
 - Aktiv/Inaktiv ist direkt auf der Card sichtbar; inaktive Personen werden optisch zurückgenommen.
+- Bestehende API- und Speicherlogik bleibt erhalten.
+
+## Umsetzung Schritt 6
+
+- Die Benutzer-Seite zeigt Datensätze nun als kompakte `EntityCard`-Liste.
+- `Neuer Benutzer` öffnet einen leeren `EntityDetailDrawer` mit Startpasswort-Feld.
+- Klick auf eine Benutzer-Card öffnet den Detail-Drawer mit Stammdaten, Rollen, Personen-Zuordnung und Passwort-Reset.
+- Passwortfelder sind nicht mehr in der Listenansicht sichtbar.
+- Suche durchsucht Anmeldename, Anzeigename, Rolle, zugeordnete Person und Aktivstatus.
 - Bestehende API- und Speicherlogik bleibt erhalten.

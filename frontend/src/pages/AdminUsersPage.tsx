@@ -1,6 +1,9 @@
-import { KeyRound, Save, UserPlus } from "lucide-react";
+import { KeyRound, Save, UserCog, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { EntityCard } from "../components/EntityCard";
+import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { StatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
@@ -23,6 +26,9 @@ type EditableUser = {
   reset_password: string;
 };
 
+type UserBaseDraft = Pick<AdminUserCreate, "username" | "display_name" | "role" | "is_active" | "person_id">;
+type DrawerState = { mode: "new" } | { mode: "edit"; userId: number } | null;
+
 const emptyCreateForm: AdminUserCreate = {
   username: "",
   display_name: "",
@@ -37,6 +43,8 @@ export function AdminUsersPage() {
   const [drafts, setDrafts] = useState<Record<string, EditableUser>>({});
   const [people, setPeople] = useState<Person[]>([]);
   const [createForm, setCreateForm] = useState<AdminUserCreate>(emptyCreateForm);
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +70,20 @@ export function AdminUsersPage() {
   }
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
+  const filteredUsers = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    if (!needle) {
+      return users;
+    }
+    return users.filter((user) => userSearchText(user, peopleById).includes(needle));
+  }, [peopleById, searchTerm, users]);
+
+  const selectedUser = drawer?.mode === "edit"
+    ? users.find((item) => item.id === drawer.userId) ?? null
+    : null;
+  const selectedDraft = drawer?.mode === "edit" && selectedUser
+    ? drafts[selectedUser.id] ?? toEditableUser(selectedUser)
+    : null;
 
   async function createUser() {
     setSavingUserId(0);
@@ -73,9 +95,10 @@ export function AdminUsersPage() {
         username: createForm.username.trim(),
         display_name: createForm.display_name.trim(),
       });
-      setUsers((current) => [...current, created].sort((left, right) => left.username.localeCompare(right.username)));
+      setUsers((current) => [...current, created].sort(compareUsers));
       setDrafts((current) => ({ ...current, [created.id]: toEditableUser(created) }));
       setCreateForm(emptyCreateForm);
+      setDrawer(null);
       setMessage("Benutzer angelegt.");
     } catch (requestError) {
       setError(readApiError(requestError, "Benutzer konnte nicht angelegt werden."));
@@ -150,7 +173,7 @@ export function AdminUsersPage() {
   }
 
   function replaceUser(updated: AdminUser) {
-    setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
+    setUsers((current) => current.map((user) => user.id === updated.id ? updated : user).sort(compareUsers));
     setDrafts((current) => ({ ...current, [updated.id]: toEditableUser(updated) }));
   }
 
@@ -161,126 +184,182 @@ export function AdminUsersPage() {
     }));
   }
 
+  function closeDrawer() {
+    setDrawer(null);
+  }
+
   return (
     <section className="admin-users-page">
-      <div className="page-header">
+      <div className="page-header entity-page-header">
         <div>
           <p className="eyebrow">Admin</p>
           <h1>Benutzer</h1>
         </div>
+        <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
+          <UserPlus aria-hidden="true" size={17} />
+          <span>Neuer Benutzer</span>
+        </button>
       </div>
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <section className="admin-create-panel">
-        <h2><UserPlus aria-hidden="true" size={18} />Neuer Benutzer</h2>
-        <div className="admin-form-grid">
-          <label>
-            <span>Anmeldename</span>
-            <input value={createForm.username} onChange={(event) => setCreateForm({ ...createForm, username: event.target.value })} />
-          </label>
-          <label>
-            <span>Anzeigename</span>
-            <input value={createForm.display_name} onChange={(event) => setCreateForm({ ...createForm, display_name: event.target.value })} />
-          </label>
-          <label>
-            <span>Startpasswort</span>
-            <input type="password" value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
-          </label>
-          <label>
-            <span>Rolle</span>
-            <select value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value as UserRole })}>
-              {roleOptions()}
-            </select>
-          </label>
-          <label>
-            <span>Person</span>
-            <select value={createForm.person_id ?? ""} onChange={(event) => setCreateForm({ ...createForm, person_id: parsePersonId(event.target.value) })}>
-              <option value="">Keine Zuordnung</option>
-              {personOptions(people)}
-            </select>
-          </label>
-          <label className="checkbox-field">
-            <input checked={createForm.is_active} type="checkbox" onChange={(event) => setCreateForm({ ...createForm, is_active: event.target.checked })} />
-            <span>Aktiv</span>
-          </label>
-        </div>
-        <button className="icon-button" disabled={savingUserId === 0} type="button" onClick={() => void createUser()}>
-          <UserPlus aria-hidden="true" size={17} />
-          <span>Benutzer anlegen</span>
-        </button>
-      </section>
+      <input
+        className="entity-search"
+        placeholder="Benutzer suchen"
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+      />
 
       {isLoading && <div className="matrix-state">Benutzer werden geladen...</div>}
 
       {!isLoading && (
-        <div className="admin-user-list">
-          {users.map((user) => {
-            const draft = drafts[user.id] ?? toEditableUser(user);
-            const linkedPerson = user.person_id ? peopleById.get(user.person_id) : null;
+        <div className="entity-card-list">
+          {filteredUsers.map((adminUser) => {
+            const linkedPerson = adminUser.person_id ? peopleById.get(adminUser.person_id) : null;
             return (
-              <article className="admin-user-row" key={user.id}>
-                <div className="admin-user-meta">
-                  <strong>{user.username}</strong>
-                  <span>{linkedPerson?.display_name ?? "Keine Person"}</span>
-                  <span className={user.is_active ? "active-text" : "inactive-text"}>{user.is_active ? "Aktiv" : "Deaktiviert"}</span>
-                </div>
-
-                <div className="admin-form-grid compact">
-                  <label>
-                    <span>Anmeldename</span>
-                    <input value={draft.username} onChange={(event) => updateDraft(user.id, { username: event.target.value })} />
-                  </label>
-                  <label>
-                    <span>Anzeigename</span>
-                    <input value={draft.display_name} onChange={(event) => updateDraft(user.id, { display_name: event.target.value })} />
-                  </label>
-                  <label>
-                    <span>Rolle</span>
-                    <select value={draft.role} onChange={(event) => updateDraft(user.id, { role: event.target.value as UserRole })}>
-                      {roleOptions()}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Person</span>
-                    <select value={draft.person_id ?? ""} onChange={(event) => updateDraft(user.id, { person_id: parsePersonId(event.target.value) })}>
-                      <option value="">Keine Zuordnung</option>
-                      {personOptions(people)}
-                    </select>
-                  </label>
-                  <label className="checkbox-field">
-                    <input checked={draft.is_active} type="checkbox" onChange={(event) => updateDraft(user.id, { is_active: event.target.checked })} />
-                    <span>Aktiv</span>
-                  </label>
-                </div>
-
-                <div className="admin-user-actions">
-                  <button className="icon-button secondary" disabled={savingUserId === user.id} type="button" onClick={() => void saveUser(user.id)}>
-                    <Save aria-hidden="true" size={16} />
-                    <span>Speichern</span>
-                  </button>
-                  <button className="icon-button secondary" disabled={savingUserId === user.id || !draft.is_active} type="button" onClick={() => void disableUser(user.id)}>
-                    <span>Deaktivieren</span>
-                  </button>
-                </div>
-
-                <div className="password-reset-row">
-                  <label>
-                    <span>Neues Passwort</span>
-                    <input type="password" value={draft.reset_password} onChange={(event) => updateDraft(user.id, { reset_password: event.target.value })} />
-                  </label>
-                  <button className="icon-button secondary" disabled={savingUserId === user.id} type="button" onClick={() => void resetPassword(user.id)}>
-                    <KeyRound aria-hidden="true" size={16} />
-                    <span>Passwort setzen</span>
-                  </button>
-                </div>
-              </article>
+              <EntityCard
+                key={adminUser.id}
+                title={adminUser.display_name}
+                subtitle={`${adminUser.username} · Rolle: ${roleLabels[adminUser.role]}`}
+                meta={[linkedPerson?.display_name ?? "Keine Person"]}
+                icon={<UserCog aria-hidden="true" size={17} />}
+                status={<StatusBadge tone={adminUser.is_active ? "active" : "inactive"}>{adminUser.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                isInactive={!adminUser.is_active}
+                onClick={() => setDrawer({ mode: "edit", userId: adminUser.id })}
+              />
             );
           })}
+          {!filteredUsers.length && (
+            <div className="empty-panel">
+              <p>{users.length ? "Keine Treffer gefunden." : "Noch keine Benutzer vorhanden."}</p>
+            </div>
+          )}
         </div>
       )}
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "new"}
+        title="Neuer Benutzer"
+        subtitle="Internen Zugang anlegen"
+        onClose={closeDrawer}
+        footer={(
+          <button className="icon-button" disabled={savingUserId === 0} type="button" onClick={() => void createUser()}>
+            <UserPlus aria-hidden="true" size={17} />
+            <span>Benutzer anlegen</span>
+          </button>
+        )}
+      >
+        <UserBaseFields
+          draft={createForm}
+          people={people}
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+        />
+        <label className="drawer-field">
+          <span>Startpasswort</span>
+          <input
+            type="password"
+            value={createForm.password}
+            onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+          />
+        </label>
+      </EntityDetailDrawer>
+
+      <EntityDetailDrawer
+        isOpen={drawer?.mode === "edit" && Boolean(selectedUser && selectedDraft)}
+        title={selectedUser ? "Benutzer bearbeiten" : "Benutzer"}
+        subtitle={selectedUser ? `${selectedUser.username} · ${roleLabels[selectedUser.role]}` : undefined}
+        onClose={closeDrawer}
+        footer={selectedUser && selectedDraft ? (
+          <>
+            <button
+              className="icon-button secondary"
+              disabled={savingUserId === selectedUser.id}
+              type="button"
+              onClick={() => void saveUser(selectedUser.id)}
+            >
+              <Save aria-hidden="true" size={16} />
+              <span>Speichern</span>
+            </button>
+            <button
+              className="icon-button secondary"
+              disabled={savingUserId === selectedUser.id || !selectedDraft.is_active}
+              type="button"
+              onClick={() => void disableUser(selectedUser.id)}
+            >
+              <span>Deaktivieren</span>
+            </button>
+            <button
+              className="icon-button secondary"
+              disabled={savingUserId === selectedUser.id}
+              type="button"
+              onClick={() => void resetPassword(selectedUser.id)}
+            >
+              <KeyRound aria-hidden="true" size={16} />
+              <span>Passwort setzen</span>
+            </button>
+          </>
+        ) : undefined}
+      >
+        {selectedUser && selectedDraft && (
+          <>
+            <UserBaseFields
+              draft={selectedDraft}
+              people={people}
+              onChange={(values) => updateDraft(selectedUser.id, values)}
+            />
+            <label className="drawer-field">
+              <span>Neues Passwort</span>
+              <input
+                type="password"
+                value={selectedDraft.reset_password}
+                onChange={(event) => updateDraft(selectedUser.id, { reset_password: event.target.value })}
+              />
+            </label>
+          </>
+        )}
+      </EntityDetailDrawer>
     </section>
+  );
+}
+
+function UserBaseFields({
+  draft,
+  people,
+  onChange,
+}: {
+  draft: UserBaseDraft;
+  people: Person[];
+  onChange: (values: Partial<UserBaseDraft>) => void;
+}) {
+  return (
+    <div className="admin-form-grid drawer-form-grid">
+      <label>
+        <span>Anmeldename</span>
+        <input value={draft.username} onChange={(event) => onChange({ username: event.target.value })} />
+      </label>
+      <label>
+        <span>Anzeigename</span>
+        <input value={draft.display_name} onChange={(event) => onChange({ display_name: event.target.value })} />
+      </label>
+      <label>
+        <span>Rolle</span>
+        <select value={draft.role} onChange={(event) => onChange({ role: event.target.value as UserRole })}>
+          {roleOptions()}
+        </select>
+      </label>
+      <label>
+        <span>Person</span>
+        <select value={draft.person_id ?? ""} onChange={(event) => onChange({ person_id: parsePersonId(event.target.value) })}>
+          <option value="">Keine Zuordnung</option>
+          {personOptions(people)}
+        </select>
+      </label>
+      <label className="checkbox-field">
+        <input checked={draft.is_active} type="checkbox" onChange={(event) => onChange({ is_active: event.target.checked })} />
+        <span>Aktiv</span>
+      </label>
+    </div>
   );
 }
 
@@ -312,6 +391,21 @@ function personOptions(people: Person[]) {
       {person.display_name}{person.is_active ? "" : " (inaktiv)"}
     </option>
   ));
+}
+
+function compareUsers(left: AdminUser, right: AdminUser): number {
+  return left.username.localeCompare(right.username);
+}
+
+function userSearchText(user: AdminUser, peopleById: Map<number, Person>): string {
+  const linkedPerson = user.person_id ? peopleById.get(user.person_id) : null;
+  return [
+    user.username,
+    user.display_name,
+    roleLabels[user.role],
+    linkedPerson?.display_name,
+    user.is_active ? "Aktiv" : "Inaktiv",
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function parsePersonId(value: string): number | null {
