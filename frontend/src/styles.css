@@ -342,25 +342,36 @@ button:disabled {
 
   .brand-block {
     justify-content: center;
+    gap: 0;
   }
 
   .sidebar:hover .brand-block,
   .sidebar:focus-within .brand-block {
     justify-content: flex-start;
+    gap: 10px;
   }
 
   .brand-copy,
   .nav-label {
+    width: 0;
+    max-width: 0;
     overflow: hidden;
     opacity: 0;
     white-space: nowrap;
-    transition: opacity 120ms ease;
+    transition: opacity 120ms ease, max-width 160ms ease;
   }
 
   .sidebar:hover .brand-copy,
-  .sidebar:focus-within .brand-copy,
+  .sidebar:focus-within .brand-copy {
+    width: auto;
+    max-width: 190px;
+    opacity: 1;
+  }
+
   .sidebar:hover .nav-label,
   .sidebar:focus-within .nav-label {
+    width: auto;
+    max-width: 160px;
     opacity: 1;
   }
 
@@ -373,12 +384,14 @@ button:disabled {
   .nav-list a {
     width: 100%;
     justify-content: center;
+    gap: 0;
     padding: 8px;
   }
 
   .sidebar:hover .nav-list a,
   .sidebar:focus-within .nav-list a {
     justify-content: flex-start;
+    gap: 8px;
     padding: 8px 10px;
   }
 
@@ -961,11 +974,13 @@ button.entity-card:focus-visible {
 }
 
 .cell-stack {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
-  min-height: 24px;
+  width: 100%;
+  min-height: calc(var(--assignment-layers, 1) * 26px);
 }
 
 .person-chip,
@@ -996,11 +1011,13 @@ button.person-chip:focus-visible {
 }
 
 .person-chip.is-assignment-run {
-  position: relative;
+  position: absolute;
+  top: calc(var(--assignment-layer) * 26px);
+  left: 0;
   z-index: 2;
   justify-content: flex-start;
   width: calc((var(--assignment-span) * 104px) - 8px);
-  max-width: calc((var(--assignment-span) * 104px) - 8px);
+  max-width: none;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
 }
 

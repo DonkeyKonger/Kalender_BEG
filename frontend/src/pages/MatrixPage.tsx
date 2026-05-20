@@ -10,6 +10,7 @@ import type {
   MatrixCell,
   MatrixCellMark,
   MatrixEntryInput,
+  MatrixPerson,
   MatrixResponse,
   MatrixRow,
 } from "../types/matrix";
@@ -564,7 +565,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       </th>
       <td className="sticky-col location-col compact-text">{row.site.location ?? ""}</td>
       <td className="sticky-col pm-col compact-text">
-        {row.site.project_manager?.short_code ?? ""}
+        {compactProjectManagerCode(row.site.project_manager)}
       </td>
       <td className="sticky-col info-col compact-text matrix-info-cell">
         <MatrixInfoEditor
@@ -642,18 +643,26 @@ function CellDisplay({
   rowCells: MatrixCell[];
   onDeleteAssignment: (personId: number) => void;
 }) {
+  const visibleAssignmentCount = cell.assignments.filter(
+    (assignment) => assignmentRunSpan(rowCells, cellIndex, assignment.person.id) > 0,
+  ).length;
+
   return (
-    <div className="cell-stack">
+    <div
+      className="cell-stack"
+      style={{ "--assignment-layers": Math.max(1, visibleAssignmentCount) } as CSSProperties}
+    >
       {cell.assignments.map((assignment) => {
         const span = assignmentRunSpan(rowCells, cellIndex, assignment.person.id);
         if (span === 0) {
           return null;
         }
+        const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.person.id);
         return (
           <button
             className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
             key={assignment.id}
-            style={{ "--assignment-span": span } as CSSProperties}
+            style={{ "--assignment-span": span, "--assignment-layer": layer } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
             onContextMenu={(event) => {
@@ -841,6 +850,26 @@ function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, personId: num
     span += 1;
   }
   return span;
+}
+
+function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: MatrixCell[], cellIndex: number, personId: number): number {
+  return assignments
+    .slice(0, assignments.findIndex((assignment) => assignment.person.id === personId))
+    .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.person.id) > 0)
+    .length;
+}
+
+function compactProjectManagerCode(person: MatrixPerson | null): string {
+  if (!person) {
+    return "";
+  }
+  const value = person.short_code || person.display_name;
+  const parts = value.split(/[.\s-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
+  }
+  const letters = value.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
+  return letters.slice(0, 2).toUpperCase();
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
