@@ -910,15 +910,24 @@ type MatrixTableProps = {
 
 function MatrixTable(props: MatrixTableProps) {
   const tableWidth = matrixTableWidth(props.matrix.days.length, props.isCompactView);
-  const tableStyle = {
-    width: tableWidth,
-    minWidth: tableWidth,
+  const matrixCssVars = {
     "--day-column-width": `${props.dayColumnWidth}px`,
     "--fixed-columns-width": `${props.isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH}px`,
   } as CSSProperties;
+  const tableStyle = {
+    ...matrixCssVars,
+    width: tableWidth,
+    minWidth: tableWidth,
+  } as CSSProperties;
 
   return (
-    <div className="matrix-scroll" ref={props.matrixScrollRef} role="region" aria-label="Planmatrix">
+    <div
+      className="matrix-scroll"
+      ref={props.matrixScrollRef}
+      role="region"
+      aria-label="Planmatrix"
+      style={matrixCssVars}
+    >
       <table className="matrix-table" style={tableStyle}>
         <colgroup>
           <col className="site-col-width" />
@@ -1169,14 +1178,15 @@ function MatrixInfoEditor({
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
+  const displayValue = matrixInfoDisplayValue(value);
   return (
     <label className="matrix-info-editor">
       <span className="sr-only">Info</span>
       <textarea
-        className={matrixInfoTextClassName(value)}
+        className={matrixInfoTextClassName(displayValue)}
         disabled={disabled || isSaving}
-        title={value || undefined}
-        value={value}
+        title={displayValue || undefined}
+        value={displayValue}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onSave}
         onClick={(event) => event.stopPropagation()}
@@ -1354,17 +1364,28 @@ function siteInfoDraftsFromRows(rows: MatrixRow[]): Record<number, string> {
 }
 
 function dayHeaderClassName(date: string, today: string): string {
-  return ["day-col", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
+  return [
+    "day-col",
+    isWeekendDate(date) ? "weekend" : "",
+    isWeekStartDate(date) ? "is-week-start" : "",
+    date === today ? "today" : "",
+  ].filter(Boolean).join(" ");
 }
 
 function matrixCellClassName(cell: MatrixCell, today: string, isRangeSelected: boolean): string {
   return [
     "matrix-cell",
     isWeekendDate(cell.date) ? "weekend" : "",
+    isWeekStartDate(cell.date) ? "is-week-start" : "",
     cell.date === today ? "today" : "",
     cell.mark ? `mark-${cell.mark}` : "",
     isRangeSelected ? "is-range-selected" : "",
   ].filter(Boolean).join(" ");
+}
+
+function isWeekStartDate(value: string): boolean {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day).getDay() === 1;
 }
 
 function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | null {
@@ -1454,6 +1475,10 @@ function compactCodeFromText(value: string): string {
   }
   const letters = value.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
   return letters.slice(0, 2).toUpperCase();
+}
+
+function matrixInfoDisplayValue(value: string): string {
+  return value.trim().toLowerCase() === "info" ? "" : value;
 }
 
 function matrixInfoTextClassName(value: string): string {

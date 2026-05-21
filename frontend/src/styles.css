@@ -497,6 +497,8 @@ button:disabled {
   width: 100%;
   max-width: 100%;
   overflow: auto;
+  scroll-padding-left: var(--fixed-columns-width, 552px);
+  scroll-snap-type: x proximity;
   border: 1px solid #cbd7e6;
   border-radius: 8px;
   background: #ffffff;
@@ -513,11 +515,11 @@ button:disabled {
 
 .matrix-table th,
 .matrix-table td {
-  height: 44px;
+  height: 36px;
   border-right: 1px solid #dce3ee;
   border-bottom: 1px solid #dce3ee;
   background: #ffffff;
-  padding: 5px 6px;
+  padding: 4px 5px;
   vertical-align: middle;
 }
 
@@ -525,10 +527,10 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 4;
-  height: 40px;
+  height: 34px;
   background: #eef3f9;
   color: #334155;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-align: left;
 }
@@ -586,12 +588,12 @@ button:disabled {
 
 .matrix-status-select {
   width: 100%;
-  min-height: 23px;
+  min-height: 21px;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 2px 18px 2px 7px;
+  padding: 1px 17px 1px 7px;
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 800;
   cursor: pointer;
 }
@@ -625,9 +627,14 @@ button:disabled {
 }
 
 .day-col strong {
-  margin-top: 2px;
+  margin-top: 1px;
   color: #111827;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
+}
+
+.day-col.is-week-start,
+.matrix-cell.is-week-start {
+  scroll-snap-align: start;
 }
 
 .weekend,
@@ -706,7 +713,7 @@ button:disabled {
 .site-color {
   display: inline-block;
   width: 7px;
-  height: 28px;
+  height: 23px;
   border-radius: 4px;
   vertical-align: middle;
 }
@@ -1148,7 +1155,7 @@ button.entity-card:focus-visible {
   gap: 3px;
   align-items: center;
   width: 100%;
-  min-height: calc(var(--assignment-layers, 1) * 22px);
+  min-height: calc(var(--assignment-layers, 1) * 20px);
 }
 
 .person-chip,
@@ -1156,13 +1163,13 @@ button.entity-card:focus-visible {
   display: inline-flex;
   align-items: center;
   max-width: 92px;
-  min-height: 19px;
+  min-height: 17px;
   overflow: hidden;
   border-radius: 5px;
   padding: 2px 5px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
 }
 
@@ -1180,7 +1187,7 @@ button.person-chip:focus-visible {
 
 .person-chip.is-assignment-run {
   position: absolute;
-  top: calc(var(--assignment-layer) * 22px);
+  top: calc(var(--assignment-layer) * 20px);
   left: 0;
   z-index: 2;
   justify-content: flex-start;
@@ -1305,15 +1312,15 @@ button.person-chip:focus-visible {
 .matrix-info-editor textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 40px;
-  max-height: 86px;
+  min-height: 32px;
+  max-height: 64px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
   color: #a8322b;
-  padding: 4px 5px;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  padding: 3px 4px;
+  font-size: 0.68rem;
+  line-height: 1.16;
   resize: vertical;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1350,14 +1357,14 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .matrix-table th,
 .matrix-page.is-compact .matrix-table td {
-  height: 44px;
-  padding: 3px 5px;
+  height: 34px;
+  padding: 2px 4px;
 }
 
 .matrix-page.is-compact .matrix-table thead th {
-  height: 36px;
-  font-size: 0.66rem;
-  padding: 4px 5px;
+  height: 30px;
+  font-size: 0.64rem;
+  padding: 3px 4px;
 }
 
 .matrix-page.is-compact .site-col {
@@ -1406,7 +1413,7 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .site-color {
   width: 6px;
-  height: 24px;
+  height: 20px;
 }
 
 .matrix-page.is-compact .matrix-site-link {
@@ -1415,8 +1422,8 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .row-heading strong {
   max-width: 190px;
-  font-size: 0.78rem;
-  line-height: 1.15;
+  font-size: 0.74rem;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -1434,11 +1441,11 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea {
-  min-height: 34px;
-  max-height: 34px;
-  padding: 3px 4px;
-  font-size: 0.66rem;
-  line-height: 1.18;
+  min-height: 28px;
+  max-height: 28px;
+  padding: 2px 4px;
+  font-size: 0.62rem;
+  line-height: 1.12;
   overflow: hidden;
   resize: none;
 }
@@ -1453,36 +1460,38 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-status-select {
-  min-height: 21px;
-  padding: 2px 18px 2px 7px;
-  font-size: 0.65rem;
+  min-height: 19px;
+  padding: 1px 16px 1px 6px;
+  font-size: 0.61rem;
 }
 
 .matrix-page.is-compact .day-col strong {
   margin-top: 1px;
-  font-size: 0.76rem;
+  font-size: 0.7rem;
 }
 
 .matrix-page.is-compact .matrix-cell {
-  padding: 4px 5px;
+  padding: 3px 4px;
 }
 
 .matrix-page.is-compact .cell-stack {
   gap: 2px;
-  min-height: calc(var(--assignment-layers, 1) * 19px);
+  min-height: calc(var(--assignment-layers, 1) * 17px);
 }
 
 .matrix-page.is-compact .person-chip,
 .matrix-page.is-compact .absence-chip {
   max-width: 80px;
-  min-height: 17px;
+  min-height: 15px;
   border-radius: 5px;
-  padding: 2px 4px;
-  font-size: 0.64rem;
+  padding: 1px 4px;
+  font-size: 0.6rem;
 }
 
 .matrix-page.is-compact .person-chip.is-assignment-run {
-  top: calc(var(--assignment-layer) * 19px);
+  top: calc(var(--assignment-layer) * 17px);
+  max-width: none;
+  overflow: visible;
 }
 
 .matrix-page.is-compact .save-dot {
@@ -3019,11 +3028,11 @@ button.person-chip:focus-visible {
   position: fixed;
   z-index: 120;
   width: min(390px, calc(100vw - 16px));
-  border: 1px solid rgb(185 199 216 / 82%);
+  border: 1px solid rgb(185 199 216 / 72%);
   border-radius: 10px;
-  background: rgb(255 255 255 / 96%);
+  background: rgb(255 255 255 / 94%);
   padding: 14px;
-  box-shadow: 0 18px 42px rgb(18 29 52 / 16%);
+  box-shadow: 0 14px 34px rgb(18 29 52 / 14%), 0 1px 0 rgb(255 255 255 / 72%) inset;
 }
 
 .matrix-cell-editor-popup .cell-editor {
