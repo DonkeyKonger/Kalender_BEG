@@ -155,6 +155,27 @@ export function SitesPage() {
     }
   }
 
+  async function applyGeocodedSite(siteId: number, values: Partial<SiteCreate>) {
+    const draft = drafts[siteId];
+    if (!draft) {
+      return;
+    }
+    const nextDraft = { ...draft, ...values };
+    setSavingSiteId(siteId);
+    setError(null);
+    setMessage(null);
+    updateDraft(siteId, values as Partial<EditableSite>);
+    try {
+      const updated = await api.updateSite(siteId, normalizeSitePayload(nextDraft));
+      replaceSite(updated);
+      setMessage("Standort aus Vorschlag uebernommen und gespeichert.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Standort konnte nicht gespeichert werden."));
+    } finally {
+      setSavingSiteId(null);
+    }
+  }
+
   async function checkSiteLocation(siteId: number) {
     const draft = drafts[siteId];
     if (!draft) {
@@ -363,6 +384,7 @@ export function SitesPage() {
             isCheckingLocation={checkingLocationSiteId === selectedSite.id}
             onChange={(values) => updateDraft(selectedSite.id, values)}
             onCheckLocation={() => void checkSiteLocation(selectedSite.id)}
+            onGeocodeSelected={(values) => void applyGeocodedSite(selectedSite.id, values)}
           />
         )}
       </EntityDetailDrawer>
@@ -377,6 +399,7 @@ function SiteFields({
   isCheckingLocation = false,
   onChange,
   onCheckLocation,
+  onGeocodeSelected,
 }: {
   draft: SiteCreate;
   people: Person[];
@@ -384,14 +407,21 @@ function SiteFields({
   isCheckingLocation?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
   onCheckLocation?: () => void;
+  onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
 }) {
   const [addressSearch, setAddressSearch] = useState(draft.address ?? "");
   const [addressResults, setAddressResults] = useState<SiteGeocodeSearchResult[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
+  const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
 
   useEffect(() => {
     const query = addressSearch.trim();
+    if (selectedGeocodeResult && query === selectedGeocodeResult.label) {
+      setAddressResults([]);
+      setIsSearchingAddress(false);
+      return;
+    }
     if (query.length < 3 || disabled) {
       setAddressResults([]);
       setIsSearchingAddress(false);
@@ -429,7 +459,7 @@ function SiteFields({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [addressSearch, disabled]);
+  }, [addressSearch, disabled, selectedGeocodeResult]);
 
   function markLocationUnchecked(values: Partial<SiteCreate>): Partial<SiteCreate> {
     return {
@@ -441,8 +471,13 @@ function SiteFields({
     };
   }
 
+  function updateManualAddress(values: Partial<SiteCreate>) {
+    setSelectedGeocodeResult(null);
+    onChange(markLocationUnchecked(values));
+  }
+
   function applyGeocodeResult(result: SiteGeocodeSearchResult) {
-    onChange({
+    const selectedValues: Partial<SiteCreate> = {
       address: result.label,
       postal_code: result.postal_code,
       city: result.city,
@@ -452,10 +487,13 @@ function SiteFields({
       latitude: result.latitude,
       longitude: result.longitude,
       location_status: "geocoded",
-    });
+    };
+    setSelectedGeocodeResult(result);
+    onChange(selectedValues);
+    onGeocodeSelected?.(selectedValues);
     setAddressSearch(result.label);
     setAddressResults([]);
-    setAddressSearchMessage(null);
+    setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
   }
 
   return (
@@ -537,7 +575,10 @@ function SiteFields({
             disabled={disabled}
             placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
             value={addressSearch}
-            onChange={(event) => setAddressSearch(event.target.value)}
+            onChange={(event) => {
+              setSelectedGeocodeResult(null);
+              setAddressSearch(event.target.value);
+            }}
           />
           {isSearchingAddress && <small>Adresse wird gesucht...</small>}
           {addressSearchMessage && <small>{addressSearchMessage}</small>}
@@ -561,7 +602,7 @@ function SiteFields({
           <input
             disabled={disabled}
             value={draft.postal_code ?? ""}
-            onChange={(event) => onChange(markLocationUnchecked({ postal_code: event.target.value || null }))}
+            onChange={(event) => updateManualAddress({ postal_code: event.target.value || null })}
           />
         </label>
         <label>
@@ -569,7 +610,7 @@ function SiteFields({
           <input
             disabled={disabled}
             value={draft.city ?? ""}
-            onChange={(event) => onChange(markLocationUnchecked({ city: event.target.value || null }))}
+            onChange={(event) => updateManualAddress({ city: event.target.value || null })}
           />
         </label>
         <label>
@@ -577,7 +618,7 @@ function SiteFields({
           <input
             disabled={disabled}
             value={draft.street ?? ""}
-            onChange={(event) => onChange(markLocationUnchecked({ street: event.target.value || null }))}
+            onChange={(event) => updateManualAddress({ street: event.target.value || null })}
           />
         </label>
         <label>
@@ -585,7 +626,7 @@ function SiteFields({
           <input
             disabled={disabled}
             value={draft.house_number ?? ""}
-            onChange={(event) => onChange(markLocationUnchecked({ house_number: event.target.value || null }))}
+            onChange={(event) => updateManualAddress({ house_number: event.target.value || null })}
           />
         </label>
         <label className="address-field">
@@ -617,11 +658,11 @@ function SiteFields({
         </div>
         <button
           className="icon-button secondary"
-          disabled={disabled || !onCheckLocation || isCheckingLocation}
+          disabled={disabled || !onCheckLocation || isCheckingLocation || draft.location_status === "geocoded"}
           type="button"
           onClick={onCheckLocation}
         >
-          {isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
+          {draft.location_status === "geocoded" ? "Standort geprueft" : isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
         </button>
       </section>
 

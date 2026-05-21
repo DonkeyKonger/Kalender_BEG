@@ -140,6 +140,8 @@ class SiteService:
 
     def check_location(self, site_id: int, user_id: int) -> Site:
         site = self.get_site(site_id)
+        if site.location_status == SiteLocationStatus.GEOCODED and has_valid_coordinates(site):
+            return site
         old_value = site_snapshot(site)
         candidates = geocode_site_address(site)
         if len(candidates) == 1:
