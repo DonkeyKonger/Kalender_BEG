@@ -7,11 +7,17 @@ import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
 import { api, ApiError } from "../lib/api";
 import type { PersonMapItem, PersonMapResponse, PersonType } from "../types/person";
-import type { SiteMapItem, SiteMapProjectManager, SiteMapResponse } from "../types/site";
+import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
 const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
 const DEFAULT_ZOOM = 6;
 const ALL_FILTER = "all";
+
+type MapProjectManagerOption = {
+  id: number;
+  display_name: string;
+  short_code: string;
+};
 
 const personTypeLabels: Record<PersonType, string> = {
   internal: "Intern",
@@ -327,8 +333,8 @@ function markerColor(site: SiteMapItem): string {
   return "#64748b";
 }
 
-function mapProjectManagerOptions(sites: SiteMapItem[]): SiteMapProjectManager[] {
-  const byId = new Map<number, SiteMapProjectManager>();
+function mapProjectManagerOptions(sites: SiteMapItem[]): MapProjectManagerOption[] {
+  const byId = new Map<number, MapProjectManagerOption>();
   for (const site of sites) {
     if (site.project_manager) {
       byId.set(site.project_manager.id, site.project_manager);
@@ -337,8 +343,8 @@ function mapProjectManagerOptions(sites: SiteMapItem[]): SiteMapProjectManager[]
   return Array.from(byId.values()).sort((left, right) => left.display_name.localeCompare(right.display_name));
 }
 
-function personProjectManagerOptions(people: PersonMapItem[], fallback: SiteMapProjectManager[]): SiteMapProjectManager[] {
-  const byId = new Map<number, SiteMapProjectManager>();
+function personProjectManagerOptions(people: PersonMapItem[], fallback: MapProjectManagerOption[]): MapProjectManagerOption[] {
+  const byId = new Map<number, MapProjectManagerOption>();
   for (const manager of fallback) {
     byId.set(manager.id, manager);
   }
