@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -104,3 +105,12 @@ class SiteGeocodeSearchResult(BaseModel):
     longitude: float
     confidence: float | None = None
     source: str | None = None
+
+
+class SiteRemovePlan(BaseModel):
+    action: Literal["delete", "archive"]
+
+
+class SiteRemoveResponse(BaseModel):
+    action: Literal["deleted", "archived"]
+    site: SiteRead | None = None

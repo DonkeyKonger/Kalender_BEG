@@ -1,4 +1,4 @@
-import { ArchiveRestore, BriefcaseBusiness, ExternalLink, PlusCircle, Save } from "lucide-react";
+import { ArchiveRestore, BriefcaseBusiness, ExternalLink, PlusCircle, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -38,6 +38,7 @@ type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 export function SitesPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
+  const canRemove = user?.role === "admin";
   const [sites, setSites] = useState<Site[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditableSite>>({});
   const [people, setPeople] = useState<Person[]>([]);
@@ -51,6 +52,7 @@ export function SitesPage() {
   const [checkingLocationSiteId, setCheckingLocationSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [removalPlans, setRemovalPlans] = useState<Record<number, "delete" | "archive">>({});
 
   useEffect(() => {
     void loadData();
@@ -88,6 +90,13 @@ export function SitesPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedSite
     ? drafts[selectedSite.id] ?? toEditableSite(selectedSite)
     : null;
+
+  useEffect(() => {
+    if (!selectedSite || !isEditingSite || !canRemove || removalPlans[selectedSite.id]) {
+      return;
+    }
+    void loadSiteRemovalPlan(selectedSite.id);
+  }, [canRemove, isEditingSite, removalPlans, selectedSite]);
 
   async function createSite() {
     const validationError = validateSitePayload(createForm);
@@ -135,6 +144,52 @@ export function SitesPage() {
     } catch (requestError) {
       setError(readApiError(requestError, "Baustelle konnte nicht gespeichert werden."));
       return false;
+    } finally {
+      setSavingSiteId(null);
+    }
+  }
+
+  async function loadSiteRemovalPlan(siteId: number) {
+    try {
+      const plan = await api.siteRemovalPlan(siteId);
+      setRemovalPlans((current) => ({ ...current, [siteId]: plan.action }));
+    } catch {
+      setRemovalPlans((current) => ({ ...current, [siteId]: "archive" }));
+    }
+  }
+
+  async function removeSite(siteId: number) {
+    const plan = removalPlans[siteId] ?? "archive";
+    const confirmed = window.confirm(
+      plan === "delete"
+        ? "Dieser Baustellendatensatz hat keine abhaengigen Daten und kann endgueltig geloescht werden. Diese Aktion kann nicht rueckgaengig gemacht werden. Fortfahren?"
+        : "Diese Baustelle wird archiviert und aus der Standardansicht ausgeblendet. Historische Planungen bleiben erhalten. Fortfahren?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingSiteId(siteId);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await api.removeSite(siteId);
+      if (result.action === "deleted") {
+        setSites((current) => current.filter((site) => site.id !== siteId));
+        setDrafts((current) => {
+          const next = { ...current };
+          delete next[siteId];
+          return next;
+        });
+        setMessage("Baustelle geloescht.");
+      } else if (result.site) {
+        replaceSite(result.site);
+        setMessage("Baustelle archiviert.");
+      }
+      setDrawer(null);
+      setIsEditingSite(false);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Baustelle konnte nicht entfernt werden."));
     } finally {
       setSavingSiteId(null);
     }
@@ -370,6 +425,17 @@ export function SitesPage() {
         footer={selectedSite && selectedDraft ? (
           isEditingSite && canEdit ? (
             <>
+              {canRemove && (
+                <button
+                  className="icon-button danger danger-action"
+                  disabled={savingSiteId === selectedSite.id}
+                  type="button"
+                  onClick={() => void removeSite(selectedSite.id)}
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                  <span>{removalPlans[selectedSite.id] === "delete" ? "Baustelle loeschen" : "Baustelle archivieren"}</span>
+                </button>
+              )}
               <button className="icon-button secondary" disabled={savingSiteId === selectedSite.id} type="button" onClick={cancelSiteEdit}>
                 <span>Abbrechen</span>
               </button>

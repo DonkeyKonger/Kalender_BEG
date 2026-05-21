@@ -5,7 +5,15 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.site import SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRead, SiteUpdate
+from app.schemas.site import (
+    SiteCreate,
+    SiteGeocodeSearchResult,
+    SiteMapResponse,
+    SiteRead,
+    SiteRemovePlan,
+    SiteRemoveResponse,
+    SiteUpdate,
+)
 from app.services.geo_service import search_geocoding_candidates
 from app.services.site_service import SiteService
 
@@ -13,6 +21,7 @@ router = APIRouter(prefix="/sites", tags=["sites"])
 
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_ADMIN = require_roles(UserRole.ADMIN)
 
 
 @router.get("", response_model=list[SiteRead])
@@ -63,6 +72,25 @@ def get_site(
 ) -> SiteRead:
     site = SiteService(db).get_site(site_id)
     return SiteRead.model_validate(site)
+
+
+@router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)
+def site_removal_plan(
+    site_id: int,
+    _user: User = Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> SiteRemovePlan:
+    return SiteRemovePlan(action=SiteService(db).remove_plan(site_id))
+
+
+@router.post("/{site_id}/remove", response_model=SiteRemoveResponse)
+def remove_site(
+    site_id: int,
+    current_user: User = Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> SiteRemoveResponse:
+    action, site = SiteService(db).remove_site(site_id, current_user.id)
+    return SiteRemoveResponse(action=action, site=SiteRead.model_validate(site) if site else None)
 
 
 @router.post("", response_model=SiteRead, status_code=201)

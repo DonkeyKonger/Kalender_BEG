@@ -111,3 +111,12 @@ export type PersonGeocodeSearchResult = {
   confidence: number | null;
   source: string | null;
 };
+
+export type PersonRemovePlan = {
+  action: "delete" | "deactivate";
+};
+
+export type PersonRemoveResponse = {
+  action: "deleted" | "deactivated";
+  person: Person | null;
+};

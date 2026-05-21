@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.enums import PersonType, SiteLocationStatus
-from app.services.person_service import apply_selected_person_geocode, clean_person_values, person_snapshot
+from app.services.person_service import PersonService, apply_selected_person_geocode, clean_person_values, person_snapshot
 
 
 def test_clean_person_values_generates_display_name_and_calendar_search_code():
@@ -69,3 +69,19 @@ def test_apply_selected_person_geocode_strips_unchecked_coordinates():
     assert "address_latitude" not in values
     assert "address_longitude" not in values
     assert values["address_location_status"] == SiteLocationStatus.UNCHECKED
+
+
+def test_person_dependency_check_keeps_empty_person_deletable():
+    service = PersonService.__new__(PersonService)
+    service._has_row = lambda *args: False
+    person = SimpleNamespace(id=1)
+
+    assert service._person_has_dependencies(person) is False
+
+
+def test_person_dependency_check_keeps_person_with_location_soft_removable():
+    service = PersonService.__new__(PersonService)
+    service._has_row = lambda *args: False
+    person = SimpleNamespace(id=1, address_city="Achim")
+
+    assert service._person_has_dependencies(person) is True

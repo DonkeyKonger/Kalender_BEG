@@ -2,8 +2,8 @@ import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
-import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonUpdate } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteUpdate } from "../types/site";
+import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
+import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -127,6 +127,14 @@ export const api = {
     });
   },
 
+  async personRemovalPlan(personId: number): Promise<PersonRemovePlan> {
+    return request<PersonRemovePlan>(`/persons/${personId}/removal-plan`);
+  },
+
+  async removePerson(personId: number): Promise<PersonRemoveResponse> {
+    return request<PersonRemoveResponse>(`/persons/${personId}/remove`, { method: "POST" });
+  },
+
   async createUser(payload: AdminUserCreate): Promise<AdminUser> {
     return request<AdminUser>("/users", {
       method: "POST",
@@ -198,6 +206,14 @@ export const api = {
 
   async checkSiteLocation(siteId: number): Promise<Site> {
     return request<Site>(`/sites/${siteId}/check-location`, { method: "POST" });
+  },
+
+  async siteRemovalPlan(siteId: number): Promise<SiteRemovePlan> {
+    return request<SiteRemovePlan>(`/sites/${siteId}/removal-plan`);
+  },
+
+  async removeSite(siteId: number): Promise<SiteRemoveResponse> {
+    return request<SiteRemoveResponse>(`/sites/${siteId}/remove`, { method: "POST" });
   },
 
   async absences(params: { start?: string; end?: string; personId?: number | null } = {}): Promise<Absence[]> {

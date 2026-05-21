@@ -450,6 +450,21 @@ button:disabled {
   color: #243348;
 }
 
+.icon-button.danger {
+  border: 1px solid #f0b8b2;
+  background: #fff5f4;
+  color: #9f1c12;
+}
+
+.icon-button.danger:hover {
+  border-color: #d92d20;
+  background: #fee4e2;
+}
+
+.danger-action {
+  margin-right: auto;
+}
+
 .switch-control {
   display: inline-flex;
   align-items: center;

@@ -96,3 +96,12 @@ export type SiteGeocodeSearchResult = {
   confidence: number | null;
   source: string | null;
 };
+
+export type SiteRemovePlan = {
+  action: "delete" | "archive";
+};
+
+export type SiteRemoveResponse = {
+  action: "deleted" | "archived";
+  site: Site | null;
+};

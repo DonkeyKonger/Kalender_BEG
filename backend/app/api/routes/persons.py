@@ -4,7 +4,15 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
-from app.schemas.person import PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRead, PersonUpdate
+from app.schemas.person import (
+    PersonCreate,
+    PersonGeocodeSearchResult,
+    PersonMapResponse,
+    PersonRead,
+    PersonRemovePlan,
+    PersonRemoveResponse,
+    PersonUpdate,
+)
 from app.services.geo_service import search_geocoding_candidates
 from app.services.person_service import PersonService
 
@@ -12,6 +20,7 @@ router = APIRouter(prefix="/persons", tags=["persons"])
 
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_ADMIN = require_roles(UserRole.ADMIN)
 
 
 @router.get("", response_model=list[PersonRead])
@@ -52,6 +61,25 @@ def search_person_geocode(
         )
         for candidate in search_geocoding_candidates(q, limit=limit)
     ]
+
+
+@router.get("/{person_id}/removal-plan", response_model=PersonRemovePlan)
+def person_removal_plan(
+    person_id: int,
+    _user=Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> PersonRemovePlan:
+    return PersonRemovePlan(action=PersonService(db).remove_plan(person_id))
+
+
+@router.post("/{person_id}/remove", response_model=PersonRemoveResponse)
+def remove_person(
+    person_id: int,
+    current_user=Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> PersonRemoveResponse:
+    action, person = PersonService(db).remove_person(person_id, current_user.id)
+    return PersonRemoveResponse(action=action, person=PersonRead.model_validate(person) if person else None)
 
 
 @router.post("", response_model=PersonRead, status_code=201)

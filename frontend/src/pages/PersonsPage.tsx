@@ -1,4 +1,4 @@
-import { Save, UserPlus, Users } from "lucide-react";
+import { Save, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
@@ -42,6 +42,7 @@ const emptyPerson: PersonCreate = {
 export function PersonsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
+  const canRemove = user?.role === "admin";
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
@@ -52,6 +53,7 @@ export function PersonsPage() {
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [removalPlans, setRemovalPlans] = useState<Record<number, "delete" | "deactivate">>({});
 
   useEffect(() => {
     void loadPeople();
@@ -85,6 +87,13 @@ export function PersonsPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedPerson
     ? drafts[selectedPerson.id] ?? toEditablePerson(selectedPerson)
     : null;
+
+  useEffect(() => {
+    if (!selectedPerson || !isEditingPerson || !canRemove || removalPlans[selectedPerson.id]) {
+      return;
+    }
+    void loadPersonRemovalPlan(selectedPerson.id);
+  }, [canRemove, isEditingPerson, removalPlans, selectedPerson]);
 
   async function createPerson() {
     const validationError = validatePersonPayload(createForm);
@@ -136,6 +145,56 @@ export function PersonsPage() {
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht gespeichert werden."));
       return false;
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
+  async function loadPersonRemovalPlan(personId: number) {
+    try {
+      const plan = await api.personRemovalPlan(personId);
+      setRemovalPlans((current) => ({ ...current, [personId]: plan.action }));
+    } catch {
+      setRemovalPlans((current) => ({ ...current, [personId]: "deactivate" }));
+    }
+  }
+
+  async function removePerson(personId: number) {
+    const plan = removalPlans[personId] ?? "deactivate";
+    const confirmed = window.confirm(
+      plan === "delete"
+        ? "Dieser Personendatensatz hat keine abhaengigen Daten und kann endgueltig geloescht werden. Diese Aktion kann nicht rueckgaengig gemacht werden. Fortfahren?"
+        : "Diese Person wird deaktiviert und kann nicht mehr neu eingeplant werden. Historische Einsaetze bleiben erhalten. Fortfahren?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingPersonId(personId);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await api.removePerson(personId);
+      if (result.action === "deleted") {
+        setPeople((current) => current.filter((person) => person.id !== personId));
+        setDrafts((current) => {
+          const next = { ...current };
+          delete next[personId];
+          return next;
+        });
+        setMessage("Person geloescht.");
+      } else if (result.person) {
+        const deactivatedPerson = result.person;
+        setPeople((current) =>
+          current.map((person) => person.id === deactivatedPerson.id ? deactivatedPerson : person).sort(comparePeople),
+        );
+        setDrafts((current) => ({ ...current, [deactivatedPerson.id]: toEditablePerson(deactivatedPerson) }));
+        setMessage("Person deaktiviert.");
+      }
+      setDrawer(null);
+      setIsEditingPerson(false);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Person konnte nicht entfernt werden."));
     } finally {
       setSavingPersonId(null);
     }
@@ -282,6 +341,17 @@ export function PersonsPage() {
         footer={selectedPerson ? (
           isEditingPerson && canEdit ? (
             <>
+              {canRemove && (
+                <button
+                  className="icon-button danger danger-action"
+                  disabled={savingPersonId === selectedPerson.id}
+                  type="button"
+                  onClick={() => void removePerson(selectedPerson.id)}
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                  <span>{removalPlans[selectedPerson.id] === "delete" ? "Person loeschen" : "Person deaktivieren"}</span>
+                </button>
+              )}
               <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
                 <span>Abbrechen</span>
               </button>

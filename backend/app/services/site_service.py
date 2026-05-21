@@ -1,10 +1,15 @@
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.enums import SiteLocationStatus, SiteStatus
+from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
+from app.models.vehicle import SiteVehicleAssignment
 from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdate
@@ -18,6 +23,17 @@ OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED}
 ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
 TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
 VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
+SITE_LOCATION_DEPENDENCY_FIELDS = (
+    "location",
+    "address",
+    "postal_code",
+    "city",
+    "street",
+    "house_number",
+    "address_extra",
+    "latitude",
+    "longitude",
+)
 
 
 class SiteService:
@@ -45,6 +61,66 @@ class SiteService:
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         return site
+
+    def remove_plan(self, site_id: int) -> str:
+        site = self.get_site(site_id)
+        return "archive" if self._site_has_dependencies(site) else "delete"
+
+    def remove_site(self, site_id: int, user_id: int) -> tuple[str, Site | None]:
+        site = self.get_site(site_id)
+        if self._site_has_dependencies(site):
+            return "archived", self.archive_site(site_id, user_id)
+
+        old_value = site_snapshot(site)
+        self.audit.record(
+            user_id=user_id,
+            action="site.deleted",
+            entity_type="site",
+            entity_id=site.id,
+            old_value=old_value,
+            new_value=None,
+        )
+        self.db.delete(site)
+        self.db.commit()
+        return "deleted", None
+
+    def archive_site(self, site_id: int, user_id: int) -> Site:
+        site = self.get_site(site_id)
+        if site.status == SiteStatus.ARCHIVED:
+            return site
+        old_value = site_snapshot(site)
+        site.status = SiteStatus.ARCHIVED
+        self._apply_status_metadata(site, SiteStatus.ARCHIVED, user_id)
+        self.audit.record(
+            user_id=user_id,
+            action="site.archived",
+            entity_type="site",
+            entity_id=site.id,
+            old_value=old_value,
+            new_value=site_snapshot(site),
+        )
+        self.db.commit()
+        self.db.refresh(site)
+        return site
+
+    def _site_has_dependencies(self, site: Site) -> bool:
+        if any(getattr(site, field, None) not in (None, "") for field in SITE_LOCATION_DEPENDENCY_FIELDS):
+            return True
+        return (
+            self._has_row(Assignment, Assignment.site_id == site.id)
+            or self._has_row(PlanningCellMark, PlanningCellMark.site_id == site.id)
+            or self._has_row(SiteVehicleAssignment, SiteVehicleAssignment.site_id == site.id)
+            or self._has_row(
+                AuditLog,
+                AuditLog.entity_type == "site",
+                AuditLog.entity_id == site.id,
+                AuditLog.action != "site.created",
+            )
+        )
+
+    def _has_row(self, model, *criteria) -> bool:
+        statement = select(model.id).where(*criteria).limit(1)
+        return self.db.scalar(statement) is not None
 
     def create_site(self, payload: SiteCreate, user_id: int) -> Site:
         values = clean_site_values(payload.model_dump())

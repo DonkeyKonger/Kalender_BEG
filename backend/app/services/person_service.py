@@ -4,10 +4,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.absence import Absence
 from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.enums import SiteLocationStatus
+from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
+from app.models.user import User
 from app.repositories.person_repository import PersonRepository
 from app.schemas.person import PersonCreate, PersonMapItem, PersonMapProjectManager, PersonMapResponse, PersonUpdate
 from app.services.audit_service import AuditService
@@ -45,6 +49,16 @@ ADDRESS_FIELDS = {
 }
 TECHNICAL_LOCATION_FIELDS = {"address_latitude", "address_longitude", "address_location_status"}
 VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
+PERSON_LOCATION_DEPENDENCY_FIELDS = (
+    "address_postal_code",
+    "address_city",
+    "address_street",
+    "address_house_number",
+    "address_extra",
+    "address_formatted",
+    "address_latitude",
+    "address_longitude",
+)
 
 
 class PersonService:
@@ -114,6 +128,70 @@ class PersonService:
         self.db.commit()
         self.db.refresh(person)
         return person
+
+    def remove_plan(self, person_id: int) -> str:
+        person = self.people.get(person_id)
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
+        return "deactivate" if self._person_has_dependencies(person) else "delete"
+
+    def remove_person(self, person_id: int, user_id: int) -> tuple[str, Person | None]:
+        person = self.people.get(person_id)
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
+        if self._person_has_dependencies(person):
+            return "deactivated", self._deactivate_person(person, user_id)
+
+        old_value = person_snapshot(person)
+        self.audit.record(
+            user_id=user_id,
+            action="person.deleted",
+            entity_type="person",
+            entity_id=person.id,
+            old_value=old_value,
+            new_value=None,
+        )
+        self.db.delete(person)
+        self.db.commit()
+        return "deleted", None
+
+    def _deactivate_person(self, person: Person, user_id: int) -> Person:
+        if not person.is_active:
+            return person
+        old_value = person_snapshot(person)
+        person.is_active = False
+        self.audit.record(
+            user_id=user_id,
+            action="person.deactivated",
+            entity_type="person",
+            entity_id=person.id,
+            old_value=old_value,
+            new_value=person_snapshot(person),
+        )
+        self.db.commit()
+        self.db.refresh(person)
+        return person
+
+    def _person_has_dependencies(self, person: Person) -> bool:
+        if any(getattr(person, field, None) not in (None, "") for field in PERSON_LOCATION_DEPENDENCY_FIELDS):
+            return True
+        return (
+            self._has_row(Assignment, Assignment.person_id == person.id)
+            or self._has_row(Absence, Absence.person_id == person.id)
+            or self._has_row(User, User.person_id == person.id)
+            or self._has_row(Site, Site.project_manager_person_id == person.id)
+            or self._has_row(GpsPoint, GpsPoint.person_id == person.id)
+            or self._has_row(
+                AuditLog,
+                AuditLog.entity_type == "person",
+                AuditLog.entity_id == person.id,
+                AuditLog.action != "person.created",
+            )
+        )
+
+    def _has_row(self, model, *criteria) -> bool:
+        statement = select(model.id).where(*criteria).limit(1)
+        return self.db.scalar(statement) is not None
 
     def _last_project_manager_by_person(self, day: date) -> dict[int, Person]:
         statement = (
