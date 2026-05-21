@@ -9,7 +9,7 @@ from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdate
 from app.services.audit_service import AuditService
-from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address
+from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address, has_valid_coordinates
 
 
 OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
@@ -49,9 +49,7 @@ class SiteService:
     def create_site(self, payload: SiteCreate, user_id: int) -> Site:
         values = clean_site_values(payload.model_dump())
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
-        for field in TECHNICAL_LOCATION_FIELDS:
-            values.pop(field, None)
-        values["location_status"] = SiteLocationStatus.UNCHECKED
+        apply_selected_geocode(values)
         site = Site(**values)
         self._apply_status_metadata(site, site.status, user_id)
         self.sites.add(site)
@@ -80,14 +78,13 @@ class SiteService:
             field in values and getattr(site, field) != values[field]
             for field in ADDRESS_FIELDS
         )
-        for field in TECHNICAL_LOCATION_FIELDS:
-            values.pop(field, None)
+        selected_geocode = apply_selected_geocode(values)
         status_value = values.get("status")
         if status_value is not None:
             self._apply_status_metadata(site, status_value, user_id)
         for field, value in values.items():
             setattr(site, field, value)
-        if address_changed:
+        if address_changed and not selected_geocode:
             site.latitude = None
             site.longitude = None
             site.location_status = SiteLocationStatus.UNCHECKED
@@ -245,3 +242,22 @@ def site_map_item(site: Site) -> SiteMapItem:
         geofence_radius_m=site.geofence_radius_m,
         location_status=site.location_status,
     )
+
+
+def apply_selected_geocode(values: dict) -> bool:
+    if values.get("location_status") == SiteLocationStatus.GEOCODED and has_valid_coordinates(
+        CoordinateDraft(values.get("latitude"), values.get("longitude"))
+    ):
+        return True
+    had_location_status = "location_status" in values
+    for field in TECHNICAL_LOCATION_FIELDS:
+        values.pop(field, None)
+    if had_location_status:
+        values["location_status"] = SiteLocationStatus.UNCHECKED
+    return False
+
+
+class CoordinateDraft:
+    def __init__(self, latitude: float | None, longitude: float | None) -> None:
+        self.latitude = latitude
+        self.longitude = longitude

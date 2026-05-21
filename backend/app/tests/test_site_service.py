@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.enums import SiteLocationStatus, SiteStatus
-from app.services.site_service import clean_site_values, has_valid_map_location, site_map_item, site_snapshot
+from app.services.site_service import apply_selected_geocode, clean_site_values, has_valid_map_location, site_map_item, site_snapshot
 
 
 def test_clean_site_values_trims_name_and_turns_blank_optional_text_to_none():
@@ -115,3 +115,37 @@ def test_site_map_item_returns_only_slim_map_fields():
     assert item.project_manager.short_code == "CE"
     assert item.latitude == 52.9234
     assert item.geofence_radius_m == 5000
+
+
+def test_apply_selected_geocode_keeps_coordinates_only_for_geocoded_selection():
+    values = {
+        "postal_code": "21079",
+        "latitude": 53.456,
+        "longitude": 9.987,
+        "location_status": SiteLocationStatus.GEOCODED,
+    }
+
+    assert apply_selected_geocode(values) is True
+    assert values["latitude"] == 53.456
+    assert values["location_status"] == SiteLocationStatus.GEOCODED
+
+
+def test_apply_selected_geocode_strips_manual_technical_location_fields():
+    values = {
+        "postal_code": "21079",
+        "latitude": 53.456,
+        "longitude": 9.987,
+        "location_status": SiteLocationStatus.UNCHECKED,
+    }
+
+    assert apply_selected_geocode(values) is False
+    assert "latitude" not in values
+    assert "longitude" not in values
+    assert values["location_status"] == SiteLocationStatus.UNCHECKED
+
+
+def test_apply_selected_geocode_leaves_unrelated_updates_alone():
+    values = {"customer": "Badener Elektro"}
+
+    assert apply_selected_geocode(values) is False
+    assert values == {"customer": "Badener Elektro"}

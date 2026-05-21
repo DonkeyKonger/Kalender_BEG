@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonUpdate } from "../types/person";
-import type { Site, SiteCreate, SiteMapResponse, SiteUpdate } from "../types/site";
+import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -154,6 +154,11 @@ export const api = {
 
   async siteMap(): Promise<SiteMapResponse> {
     return request<SiteMapResponse>("/sites/map");
+  },
+
+  async searchSiteAddress(query: string): Promise<SiteGeocodeSearchResult[]> {
+    const search = new URLSearchParams({ q: query, limit: "5" });
+    return request<SiteGeocodeSearchResult[]>(`/sites/geocode/search?${search.toString()}`);
   },
 
   async site(siteId: number): Promise<Site> {

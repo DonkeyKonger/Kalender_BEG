@@ -36,6 +36,12 @@ class GeocodingCandidate:
     latitude: float
     longitude: float
     label: str
+    postal_code: str | None = None
+    city: str | None = None
+    street: str | None = None
+    house_number: str | None = None
+    confidence: float | None = None
+    source: str = "nominatim"
 
 
 def distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -81,7 +87,14 @@ def geocode_site_address(site: object) -> list[GeocodingCandidate]:
     query = site_address_query(site)
     if not query:
         return []
-    return fetch_geocoding_candidates(query)
+    return fetch_geocoding_candidates(query, limit=2)
+
+
+def search_geocoding_candidates(query: str, limit: int = 5) -> list[GeocodingCandidate]:
+    clean_query = query.strip()
+    if len(clean_query) < 3:
+        return []
+    return fetch_geocoding_candidates(clean_query, limit=limit)
 
 
 def site_address_query(site: object) -> str | None:
@@ -100,8 +113,8 @@ def site_address_query(site: object) -> str | None:
     return query or None
 
 
-def fetch_geocoding_candidates(query: str) -> list[GeocodingCandidate]:
-    params = urlencode({"q": query, "format": "jsonv2", "limit": "2", "addressdetails": "1"})
+def fetch_geocoding_candidates(query: str, limit: int = 5) -> list[GeocodingCandidate]:
+    params = urlencode({"q": query, "format": "jsonv2", "limit": str(limit), "addressdetails": "1"})
     request = Request(
         f"{NOMINATIM_SEARCH_URL}?{params}",
         headers={"User-Agent": GEOCODING_USER_AGENT, "Accept": "application/json"},
@@ -112,18 +125,46 @@ def fetch_geocoding_candidates(query: str) -> list[GeocodingCandidate]:
     except (OSError, URLError, TimeoutError, json.JSONDecodeError):
         return []
 
-    candidates: list[GeocodingCandidate] = []
-    for item in payload[:2]:
-        try:
-            latitude = float(item["lat"])
-            longitude = float(item["lon"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        candidates.append(
-            GeocodingCandidate(
-                latitude=latitude,
-                longitude=longitude,
-                label=str(item.get("display_name") or query),
-            )
-        )
-    return candidates
+    candidates = [candidate for item in payload[:limit] if (candidate := geocoding_candidate_from_payload(item, query))]
+    return sorted(candidates, key=lambda candidate: candidate.confidence or 0, reverse=True)
+
+
+def geocoding_candidate_from_payload(item: dict, fallback_label: str) -> GeocodingCandidate | None:
+    try:
+        latitude = float(item["lat"])
+        longitude = float(item["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    address = item.get("address") if isinstance(item.get("address"), dict) else {}
+    city = first_present(address, "city", "town", "village", "municipality", "hamlet")
+    street = first_present(address, "road", "pedestrian", "footway", "residential", "path")
+    house_number = first_present(address, "house_number")
+    postal_code = first_present(address, "postcode")
+    confidence = parse_float(item.get("importance"))
+
+    return GeocodingCandidate(
+        latitude=latitude,
+        longitude=longitude,
+        label=str(item.get("display_name") or fallback_label),
+        postal_code=postal_code,
+        city=city,
+        street=street,
+        house_number=house_number,
+        confidence=confidence,
+    )
+
+
+def first_present(values: dict, *keys: str) -> str | None:
+    for key in keys:
+        value = values.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def parse_float(value: object) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

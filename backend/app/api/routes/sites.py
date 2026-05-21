@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.site import SiteCreate, SiteMapResponse, SiteRead, SiteUpdate
+from app.schemas.site import SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRead, SiteUpdate
+from app.services.geo_service import search_geocoding_candidates
 from app.services.site_service import SiteService
 
 router = APIRouter(prefix="/sites", tags=["sites"])
@@ -30,6 +31,28 @@ def site_map(
     db: Session = Depends(get_db),
 ) -> SiteMapResponse:
     return SiteService(db).site_map()
+
+
+@router.get("/geocode/search", response_model=list[SiteGeocodeSearchResult])
+def search_site_geocode(
+    q: str = Query(..., min_length=3, max_length=200),
+    limit: int = Query(default=5, ge=1, le=5),
+    _user=Depends(CAN_READ),
+) -> list[SiteGeocodeSearchResult]:
+    return [
+        SiteGeocodeSearchResult(
+            label=candidate.label,
+            postal_code=candidate.postal_code,
+            city=candidate.city,
+            street=candidate.street,
+            house_number=candidate.house_number,
+            latitude=candidate.latitude,
+            longitude=candidate.longitude,
+            confidence=candidate.confidence,
+            source=candidate.source,
+        )
+        for candidate in search_geocoding_candidates(q, limit=limit)
+    ]
 
 
 @router.get("/{site_id}", response_model=SiteRead)

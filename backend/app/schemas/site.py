@@ -92,3 +92,15 @@ class SiteMapItem(BaseModel):
 class SiteMapResponse(BaseModel):
     sites: list[SiteMapItem]
     missing_location: int
+
+
+class SiteGeocodeSearchResult(BaseModel):
+    label: str
+    postal_code: str | None = None
+    city: str | None = None
+    street: str | None = None
+    house_number: str | None = None
+    latitude: float
+    longitude: float
+    confidence: float | None = None
+    source: str | None = None

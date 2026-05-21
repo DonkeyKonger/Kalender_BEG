@@ -3287,3 +3287,54 @@ button.person-chip:focus-visible {
   font-weight: 750;
   text-decoration: none;
 }
+
+.site-address-search {
+  position: relative;
+}
+
+.site-address-search small {
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.site-address-results {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 12px 28px rgb(18 29 52 / 10%);
+}
+
+.site-address-results button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172033;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.site-address-results button:hover,
+.site-address-results button:focus-visible {
+  background: #eef5ff;
+  outline: none;
+}
+
+.site-address-results strong {
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+.site-address-results span {
+  color: #65738a;
+  font-size: 0.76rem;
+  font-weight: 650;
+}

@@ -84,3 +84,15 @@ export type SiteMapResponse = {
   sites: SiteMapItem[];
   missing_location: number;
 };
+
+export type SiteGeocodeSearchResult = {
+  label: string;
+  postal_code: string | null;
+  city: string | null;
+  street: string | null;
+  house_number: string | null;
+  latitude: number;
+  longitude: number;
+  confidence: number | null;
+  source: string | null;
+};
