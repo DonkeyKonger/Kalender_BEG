@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { WeatherSummary } from "../types/weather";
 
 type DateRange = {
   historyStart: string;
@@ -81,11 +82,18 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workerSearch, setWorkerSearch] = useState("");
+  const [weather, setWeather] = useState<WeatherSummary | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
 
   useEffect(() => {
     let active = true;
+
+    if (user?.role === "monteur") {
+      setLoading(false);
+      return undefined;
+    }
 
     async function loadDashboard() {
       setLoading(true);
@@ -120,7 +128,39 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [range.historyStart, range.nextWeekEnd]);
+  }, [range.historyStart, range.nextWeekEnd, user?.role]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (user?.role === "monteur") {
+      return undefined;
+    }
+
+    async function loadWeather() {
+      setWeatherLoading(true);
+      try {
+        const weatherData = await api.dashboardWeather();
+        if (active) {
+          setWeather(weatherData);
+        }
+      } catch {
+        if (active) {
+          setWeather(null);
+        }
+      } finally {
+        if (active) {
+          setWeatherLoading(false);
+        }
+      }
+    }
+
+    void loadWeather();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.role]);
 
   const dashboard = useMemo(() => {
     if (!matrix) {
@@ -166,12 +206,12 @@ export function DashboardPage() {
           <h1>{formatFullDate(range.today)}</h1>
           <p>Heute, morgen und die naechsten beiden Wochen auf einen Blick.</p>
         </div>
-        <div className="dashboard-weather" aria-label="Wetter">
+        <div className="dashboard-weather" aria-label="Wetter Firmenzentrale">
           <CloudSun aria-hidden="true" size={24} />
           <div>
-            <span>Wetter</span>
-            <strong>Platzhalter</strong>
-            <p>Wetterdaten werden spaeter je Baustellenort ergaenzt.</p>
+            <span>Wetter Firmenzentrale</span>
+            <strong>{weatherLoading ? "Wetter wird geladen..." : weather?.available ? weather.summary : "derzeit nicht verfuegbar"}</strong>
+            <p>{weather?.label ?? "Firmenzentrale"}{weather?.is_cached ? " · aus Cache" : ""}</p>
           </div>
         </div>
         <div className="dashboard-free-summary">

@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     admin_display_name: str = Field(default="Administrator", alias="ADMIN_DISPLAY_NAME")
     seed_default_password: str | None = Field(default=None, alias="SEED_DEFAULT_PASSWORD")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
+    company_location_label: str = Field(default="Firmenzentrale Achim", alias="COMPANY_LOCATION_LABEL")
+    company_location_lat: float = Field(default=53.0142, alias="COMPANY_LOCATION_LAT")
+    company_location_lon: float = Field(default=9.0263, alias="COMPANY_LOCATION_LON")
+    weather_cache_ttl_minutes: int = Field(default=45, alias="WEATHER_CACHE_TTL_MINUTES")
+    weather_request_timeout_seconds: float = Field(default=5.0, alias="WEATHER_REQUEST_TIMEOUT_SECONDS")
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

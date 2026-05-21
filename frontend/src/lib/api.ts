@@ -5,6 +5,7 @@ import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixRe
 import type { Person, PersonCreate, PersonUpdate } from "../types/person";
 import type { Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
+import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -84,6 +85,10 @@ export const api = {
 
   async logout(): Promise<void> {
     return request<void>("/auth/logout", { method: "POST" });
+  },
+
+  async dashboardWeather(): Promise<WeatherSummary> {
+    return request<WeatherSummary>("/dashboard/weather");
   },
 
   async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {
