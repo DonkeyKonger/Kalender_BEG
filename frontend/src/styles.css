@@ -3612,26 +3612,26 @@ button.person-chip:focus-visible {
 }
 
 .site-map-marker-label {
-  border: 1px solid #d7deea;
+  border: 1px solid rgb(203 213 225 / 86%);
   border-radius: 6px;
-  background: rgb(255 255 255 / 90%);
+  background: rgb(255 255 255 / 86%);
   color: #172033;
-  padding: 2px 5px;
-  box-shadow: 0 2px 8px rgb(18 29 52 / 10%);
-  font-size: 0.66rem;
+  padding: 2px 4px;
+  box-shadow: 0 1px 5px rgb(18 29 52 / 8%);
+  font-size: 0.62rem;
   font-weight: 750;
-  line-height: 1.1;
+  line-height: 1.08;
   white-space: nowrap;
 }
 
 .site-map-marker-label-hover {
   background: rgb(255 255 255 / 94%);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
 }
 
 .site-map-person-label {
-  border-color: #fed7aa;
-  background: rgb(255 247 237 / 94%);
+  border-color: rgb(254 215 170 / 86%);
+  background: rgb(255 247 237 / 88%);
   color: #7c2d12;
 }
 

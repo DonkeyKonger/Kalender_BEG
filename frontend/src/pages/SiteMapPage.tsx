@@ -16,7 +16,13 @@ const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18
 
 type SiteLabelMode = "full" | "number" | "points";
 type PersonLabelMode = "full" | "short" | "points";
-type VisibleMarkerCounts = { sites: number; persons: number };
+type VisibleMarkerState = {
+  sites: number;
+  persons: number;
+  zoom: number;
+  hasDenseSites: boolean;
+  hasDensePersons: boolean;
+};
 
 type MapProjectManagerOption = {
   id: number;
@@ -41,8 +47,13 @@ export function SiteMapPage() {
   const [showPersons, setShowPersons] = useState(false);
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [personFilter, setPersonFilter] = useState(ALL_FILTER);
-  const [visibleSiteCount, setVisibleSiteCount] = useState(15);
-  const [visiblePersonCount, setVisiblePersonCount] = useState(15);
+  const [visibleMarkers, setVisibleMarkers] = useState<VisibleMarkerState>({
+    sites: 15,
+    persons: 15,
+    zoom: DEFAULT_ZOOM,
+    hasDenseSites: false,
+    hasDensePersons: false,
+  });
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
 
@@ -155,14 +166,13 @@ export function SiteMapPage() {
     () => people.filter((person) => personFilter === ALL_FILTER || String(person.project_manager_assignment?.id) === personFilter),
     [people, personFilter],
   );
-  const siteLabelMode = siteLabelModeForVisibleCount(visibleSiteCount);
-  const personLabelMode = personLabelModeForVisibleCount(visiblePersonCount);
+  const siteLabelMode = siteLabelModeForVisibleMarkers(visibleMarkers);
+  const personLabelMode = personLabelModeForVisibleMarkers(visibleMarkers);
   const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
   const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
   const visiblePeopleForMap = useMemo(() => showPersons ? filteredPeople : [], [filteredPeople, showPersons]);
-  const updateVisibleMarkerCounts = useCallback((counts: VisibleMarkerCounts) => {
-    setVisibleSiteCount(counts.sites);
-    setVisiblePersonCount(counts.persons);
+  const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerState) => {
+    setVisibleMarkers((current) => areVisibleMarkerStatesEqual(current, nextMarkers) ? current : nextMarkers);
   }, []);
 
   return (
@@ -215,7 +225,7 @@ export function SiteMapPage() {
           <div className="empty-state">Keine Marker fuer die aktuellen Filter vorhanden.</div>
         ) : (
           <MapContainer center={GERMANY_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom className="site-map-canvas">
-            <VisibleMarkerTracker sites={filteredSites} people={visiblePeopleForMap} onVisibleCountsChange={updateVisibleMarkerCounts} />
+            <VisibleMarkerTracker sites={filteredSites} people={visiblePeopleForMap} onVisibleMarkersChange={updateVisibleMarkerState} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -226,7 +236,7 @@ export function SiteMapPage() {
                 <CircleMarker
                   key={`site-${site.id}`}
                   center={[site.latitude, site.longitude]}
-                  radius={isSelected ? 6 : 4.5}
+                  radius={isSelected ? 5.5 : 3.8}
                   pathOptions={{
                     color: isSelected ? "#ffffff" : siteMarkerFill(site, siteLabelMode),
                     fillColor: siteMarkerFill(site, siteLabelMode),
@@ -262,7 +272,7 @@ export function SiteMapPage() {
                 <CircleMarker
                   key={`person-${person.id}`}
                   center={[person.address_latitude, person.address_longitude]}
-                  radius={isSelected ? 6 : 4.5}
+                  radius={isSelected ? 5.5 : 3.8}
                   pathOptions={{
                     color: isSelected ? "#ffffff" : personMarkerFill(personLabelMode),
                     fillColor: personMarkerFill(personLabelMode),
@@ -302,11 +312,11 @@ export function SiteMapPage() {
 function VisibleMarkerTracker({
   sites,
   people,
-  onVisibleCountsChange,
+  onVisibleMarkersChange,
 }: {
   sites: SiteMapItem[];
   people: PersonMapItem[];
-  onVisibleCountsChange: (counts: VisibleMarkerCounts) => void;
+  onVisibleMarkersChange: (markers: VisibleMarkerState) => void;
 }) {
   const map = useMapEvents({
     moveend: updateVisibleMarkers,
@@ -318,15 +328,21 @@ function VisibleMarkerTracker({
       return;
     }
     const bounds = map.getBounds();
-    onVisibleCountsChange({
-      sites: sites.filter((site) => bounds.contains([site.latitude, site.longitude])).length,
-      persons: people.filter((person) => bounds.contains([person.address_latitude, person.address_longitude])).length,
+    const visibleSites = sites.filter((site) => bounds.contains([site.latitude, site.longitude]));
+    const visiblePeople = people.filter((person) => bounds.contains([person.address_latitude, person.address_longitude]));
+    const zoom = map.getZoom?.() ?? DEFAULT_ZOOM;
+    onVisibleMarkersChange({
+      sites: visibleSites.length,
+      persons: visiblePeople.length,
+      zoom,
+      hasDenseSites: hasDenseSiteGroup(visibleSites, zoom),
+      hasDensePersons: hasDensePersonGroup(visiblePeople, zoom),
     });
   }
 
   useEffect(() => {
     updateVisibleMarkers();
-  }, [map, onVisibleCountsChange, people, sites]);
+  }, [map, onVisibleMarkersChange, people, sites]);
 
   return null;
 }
@@ -408,24 +424,85 @@ function personMarkerFill(mode: PersonLabelMode): string {
   return mode === "points" ? "#b45309" : "#f97316";
 }
 
-function siteLabelModeForVisibleCount(count: number): SiteLabelMode {
-  if (count < 5) {
-    return "full";
+function siteLabelModeForVisibleMarkers(markers: VisibleMarkerState): SiteLabelMode {
+  if (markers.sites <= 0) {
+    return "points";
   }
-  if (count < 15) {
-    return "number";
+  if (markers.sites < 5) {
+    if (markers.zoom <= 6) {
+      return "points";
+    }
+    return markers.hasDenseSites || markers.zoom < 8 ? "number" : "full";
+  }
+  if (markers.sites < 15) {
+    return markers.zoom >= 13 && !markers.hasDenseSites ? "full" : "number";
   }
   return "points";
 }
 
-function personLabelModeForVisibleCount(count: number): PersonLabelMode {
-  if (count < 5) {
-    return "full";
+function personLabelModeForVisibleMarkers(markers: VisibleMarkerState): PersonLabelMode {
+  if (markers.persons <= 0) {
+    return "points";
   }
-  if (count < 15) {
-    return "short";
+  if (markers.persons < 5) {
+    if (markers.zoom <= 6) {
+      return "points";
+    }
+    return markers.hasDensePersons || markers.zoom < 8 ? "short" : "full";
+  }
+  if (markers.persons < 15) {
+    return markers.zoom >= 13 && !markers.hasDensePersons ? "short" : "points";
   }
   return "points";
+}
+
+function areVisibleMarkerStatesEqual(left: VisibleMarkerState, right: VisibleMarkerState): boolean {
+  return left.sites === right.sites
+    && left.persons === right.persons
+    && left.zoom === right.zoom
+    && left.hasDenseSites === right.hasDenseSites
+    && left.hasDensePersons === right.hasDensePersons;
+}
+
+function hasDenseSiteGroup(sites: SiteMapItem[], zoom: number): boolean {
+  return hasDenseMarkerGroup(
+    sites.map((site) => ({ latitude: site.latitude, longitude: site.longitude })),
+    zoom,
+  );
+}
+
+function hasDensePersonGroup(people: PersonMapItem[], zoom: number): boolean {
+  return hasDenseMarkerGroup(
+    people.map((person) => ({ latitude: person.address_latitude, longitude: person.address_longitude })),
+    zoom,
+  );
+}
+
+function hasDenseMarkerGroup(items: Array<{ latitude: number; longitude: number }>, zoom: number): boolean {
+  if (items.length < 2) {
+    return false;
+  }
+  const bucketSize = denseBucketSizeForZoom(zoom);
+  const buckets = new Map<string, number>();
+  for (const item of items) {
+    const key = `${Math.round(item.latitude / bucketSize)}:${Math.round(item.longitude / bucketSize)}`;
+    const count = (buckets.get(key) ?? 0) + 1;
+    if (count >= 2) {
+      return true;
+    }
+    buckets.set(key, count);
+  }
+  return false;
+}
+
+function denseBucketSizeForZoom(zoom: number): number {
+  if (zoom >= 13) {
+    return 0.004;
+  }
+  if (zoom >= 10) {
+    return 0.012;
+  }
+  return 0.03;
 }
 
 function buildLabelOffsets<T extends { id: number; latitude?: number; longitude?: number; address_latitude?: number; address_longitude?: number }>(
