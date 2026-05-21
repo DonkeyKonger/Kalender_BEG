@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { StatusBadge } from "../components/StatusBadge";
+import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
 import { calendarPersonCode } from "../types/person";
@@ -39,10 +40,13 @@ const emptyPerson: PersonCreate = {
 };
 
 export function PersonsPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
   const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [isEditingPerson, setIsEditingPerson] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
@@ -107,16 +111,16 @@ export function PersonsPage() {
     }
   }
 
-  async function savePerson(personId: number) {
+  async function savePerson(personId: number): Promise<boolean> {
     const draft = drafts[personId];
     if (!draft) {
-      return;
+      return false;
     }
     const validationError = validatePersonPayload(draft);
     if (validationError) {
       setError(validationError);
       setMessage(null);
-      return;
+      return false;
     }
     setSavingPersonId(personId);
     setError(null);
@@ -128,8 +132,10 @@ export function PersonsPage() {
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
       setMessage("Person gespeichert.");
+      return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht gespeichert werden."));
+      return false;
     } finally {
       setSavingPersonId(null);
     }
@@ -166,7 +172,33 @@ export function PersonsPage() {
     }));
   }
 
+  function openNewPersonDrawer() {
+    setCreateForm(emptyPerson);
+    setIsEditingPerson(false);
+    setDrawer({ mode: "new" });
+  }
+
+  function openPersonDrawer(personId: number) {
+    setIsEditingPerson(false);
+    setDrawer({ mode: "edit", personId });
+  }
+
+  function cancelPersonEdit() {
+    if (selectedPerson) {
+      setDrafts((current) => ({ ...current, [selectedPerson.id]: toEditablePerson(selectedPerson) }));
+    }
+    setIsEditingPerson(false);
+    setError(null);
+  }
+
   function closeDrawer() {
+    if (drawer?.mode === "edit" && selectedPerson) {
+      setDrafts((current) => ({ ...current, [selectedPerson.id]: toEditablePerson(selectedPerson) }));
+    }
+    if (drawer?.mode === "new") {
+      setCreateForm(emptyPerson);
+    }
+    setIsEditingPerson(false);
     setDrawer(null);
   }
 
@@ -177,10 +209,12 @@ export function PersonsPage() {
           <p className="eyebrow">Stammdaten</p>
           <h1>Personen</h1>
         </div>
-        <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
-          <UserPlus aria-hidden="true" size={17} />
-          <span>Neue Person</span>
-        </button>
+        {canEdit && (
+          <button className="icon-button" type="button" onClick={openNewPersonDrawer}>
+            <UserPlus aria-hidden="true" size={17} />
+            <span>Neue Person</span>
+          </button>
+        )}
       </div>
 
       {error && <p className="form-error">{error}</p>}
@@ -206,7 +240,7 @@ export function PersonsPage() {
               icon={<Users aria-hidden="true" size={17} />}
               status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
               isInactive={!person.is_active}
-              onClick={() => setDrawer({ mode: "edit", personId: person.id })}
+              onClick={() => openPersonDrawer(person.id)}
             />
           ))}
           {!filteredPeople.length && (
@@ -237,30 +271,100 @@ export function PersonsPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedPerson && selectedDraft)}
-        title={selectedPerson ? "Person bearbeiten" : "Person"}
+        title={selectedPerson ? isEditingPerson ? "Person bearbeiten" : "Person" : "Person"}
         subtitle={selectedPerson ? `${personTypeLabels[selectedPerson.person_type]} · ${calendarPersonCode(selectedPerson)}` : undefined}
         onClose={closeDrawer}
-        footer={selectedPerson ? (
-          <button
-            className="icon-button secondary"
-            disabled={savingPersonId === selectedPerson.id}
-            type="button"
-            onClick={() => void savePerson(selectedPerson.id)}
-          >
-            <Save aria-hidden="true" size={16} />
-            <span>Speichern</span>
+        actions={selectedPerson && canEdit && !isEditingPerson ? (
+          <button className="icon-button secondary" type="button" onClick={() => setIsEditingPerson(true)}>
+            <span>Bearbeiten</span>
           </button>
+        ) : undefined}
+        footer={selectedPerson ? (
+          isEditingPerson && canEdit ? (
+            <>
+              <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
+                <span>Abbrechen</span>
+              </button>
+              <button
+                className="icon-button secondary"
+                disabled={savingPersonId === selectedPerson.id}
+                type="button"
+                onClick={() => {
+                  void savePerson(selectedPerson.id).then((saved) => {
+                    if (saved) {
+                      setIsEditingPerson(false);
+                    }
+                  });
+                }}
+              >
+                <Save aria-hidden="true" size={16} />
+                <span>Speichern</span>
+              </button>
+            </>
+          ) : (
+            <button className="icon-button secondary" type="button" onClick={closeDrawer}>
+              <span>Schliessen</span>
+            </button>
+          )
         ) : undefined}
       >
         {selectedPerson && selectedDraft && (
-          <PersonFields
-            draft={selectedDraft}
-            onChange={(values) => updateDraft(selectedPerson.id, values)}
-            onGeocodeSelected={(values) => void applyGeocodedPerson(selectedPerson.id, values)}
-          />
+          isEditingPerson ? (
+            <PersonFields
+              draft={selectedDraft}
+              onChange={(values) => updateDraft(selectedPerson.id, values)}
+              onGeocodeSelected={(values) => void applyGeocodedPerson(selectedPerson.id, values)}
+            />
+          ) : (
+            <PersonReadView person={selectedPerson} />
+          )
         )}
       </EntityDetailDrawer>
     </section>
+  );
+}
+
+function PersonReadView({ person }: { person: Person }) {
+  const addressText = formatPersonAddress(person);
+  return (
+    <div className="detail-read-view">
+      <section className="detail-read-section">
+        <h3>Stammdaten</h3>
+        <div className="detail-read-grid">
+          <ReadItem label="Name" value={person.display_name || `${person.first_name} ${person.last_name}`.trim()} />
+          <ReadItem label="Typ" value={personTypeLabels[person.person_type]} />
+          <ReadItem label="Kuerzel" value={calendarPersonCode(person)} />
+          <ReadItem label="E-Mail" value={person.email || "-"} />
+          <ReadItem label="Telefon" value={person.phone || "-"} />
+          <div className="detail-read-item">
+            <span>Status</span>
+            <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="detail-read-section">
+        <h3>Adresse / Startort</h3>
+        <div className={`detail-address-card ${addressText ? "has-address" : "is-empty"}`}>
+          <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+          {addressText ? <strong>{addressText}</strong> : null}
+        </div>
+      </section>
+
+      <section className="detail-read-section">
+        <h3>Info / Notizen</h3>
+        <p className={person.notes ? "detail-note" : "detail-empty"}>{person.notes || "Keine Notizen hinterlegt."}</p>
+      </section>
+    </div>
+  );
+}
+
+function ReadItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-read-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -354,9 +458,10 @@ function PersonFields({
     setSelectedGeocodeResult(result);
     onChange(selectedValues);
     onGeocodeSelected?.(selectedValues);
-    setAddressSearch(result.label);
+    setAddressSearch("");
     setAddressResults([]);
     setAddressSearchMessage("Startort aus Vorschlag uebernommen und geprueft.");
+    (document.activeElement as HTMLElement | null)?.blur();
   }
 
   return (
@@ -457,49 +562,41 @@ function PersonFields({
             </div>
           )}
         </label>
-        <label>
+        <label className="address-postal-field">
           <span>PLZ</span>
           <input
             value={draft.address_postal_code ?? ""}
             onChange={(event) => updateManualAddress({ address_postal_code: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-city-field">
           <span>Stadt</span>
           <input
             value={draft.address_city ?? ""}
             onChange={(event) => updateManualAddress({ address_city: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-street-field">
           <span>Strasse</span>
           <input
             value={draft.address_street ?? ""}
             onChange={(event) => updateManualAddress({ address_street: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-house-number-field">
           <span>Hausnummer</span>
           <input
             value={draft.address_house_number ?? ""}
             onChange={(event) => updateManualAddress({ address_house_number: event.target.value || null })}
           />
         </label>
-        <label className="address-field">
+        <label className="address-extra-field address-field">
           <span>Adresszusatz / Bereich</span>
           <input
             value={draft.address_extra ?? ""}
             onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
           />
         </label>
-        <div className="site-location-readonly">
-          <span>Standortstatus</span>
-          <strong>{personLocationStatusLabels[draft.address_location_status]}</strong>
-        </div>
-        <div className="site-location-readonly">
-          <span>Koordinaten</span>
-          <strong>{formatCoordinates(draft.address_latitude, draft.address_longitude)}</strong>
-        </div>
       </section>
 
       <label className="notes-field">
@@ -578,6 +675,15 @@ function comparePeople(left: Person, right: Person): number {
   return left.display_name.localeCompare(right.display_name);
 }
 
+function formatPersonAddress(person: Pick<Person, "address_formatted" | "address_postal_code" | "address_city" | "address_street" | "address_house_number" | "address_extra">): string {
+  if (person.address_formatted) {
+    return person.address_formatted;
+  }
+  const streetLine = [person.address_street, person.address_house_number].filter(Boolean).join(" ");
+  const cityLine = [person.address_postal_code, person.address_city].filter(Boolean).join(" ");
+  return [streetLine, person.address_extra, cityLine].filter(Boolean).join(", ");
+}
+
 function personCardMeta(person: Person): string[] {
   return [
     person.email,
@@ -612,13 +718,6 @@ const personLocationStatusLabels: Record<PersonLocationStatus, string> = {
   ambiguous: "Nicht eindeutig",
   failed: "Fehler",
 };
-
-function formatCoordinates(latitude: number | null, longitude: number | null): string {
-  if (latitude === null || longitude === null) {
-    return "Noch nicht geprueft";
-  }
-  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-}
 
 function formatGeocodeMeta(result: PersonGeocodeSearchResult): string {
   const place = [result.postal_code, result.city].filter(Boolean).join(" ");

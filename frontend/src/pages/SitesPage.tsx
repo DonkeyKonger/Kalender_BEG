@@ -43,6 +43,7 @@ export function SitesPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
   const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [isEditingSite, setIsEditingSite] = useState(false);
   const [includeClosed, setIncludeClosed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -112,16 +113,16 @@ export function SitesPage() {
     }
   }
 
-  async function saveSite(siteId: number) {
+  async function saveSite(siteId: number): Promise<boolean> {
     const draft = drafts[siteId];
     if (!draft) {
-      return;
+      return false;
     }
     const validationError = validateSitePayload(draft);
     if (validationError) {
       setError(validationError);
       setMessage(null);
-      return;
+      return false;
     }
     setSavingSiteId(siteId);
     setError(null);
@@ -130,8 +131,10 @@ export function SitesPage() {
       const updated = await api.updateSite(siteId, normalizeSitePayload(draft));
       replaceSite(updated);
       setMessage("Baustelle gespeichert.");
+      return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Baustelle konnte nicht gespeichert werden."));
+      return false;
     } finally {
       setSavingSiteId(null);
     }
@@ -245,7 +248,33 @@ export function SitesPage() {
     }));
   }
 
+  function openNewSiteDrawer() {
+    setCreateForm(emptySite);
+    setIsEditingSite(false);
+    setDrawer({ mode: "new" });
+  }
+
+  function openSiteDrawer(siteId: number) {
+    setIsEditingSite(false);
+    setDrawer({ mode: "edit", siteId });
+  }
+
+  function cancelSiteEdit() {
+    if (selectedSite) {
+      setDrafts((current) => ({ ...current, [selectedSite.id]: toEditableSite(selectedSite) }));
+    }
+    setIsEditingSite(false);
+    setError(null);
+  }
+
   function closeDrawer() {
+    if (drawer?.mode === "edit" && selectedSite) {
+      setDrafts((current) => ({ ...current, [selectedSite.id]: toEditableSite(selectedSite) }));
+    }
+    if (drawer?.mode === "new") {
+      setCreateForm(emptySite);
+    }
+    setIsEditingSite(false);
     setDrawer(null);
   }
 
@@ -257,7 +286,7 @@ export function SitesPage() {
           <h1>Baustellen</h1>
         </div>
         {canEdit && (
-          <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
+          <button className="icon-button" type="button" onClick={openNewSiteDrawer}>
             <PlusCircle aria-hidden="true" size={17} />
             <span>Neue Baustelle</span>
           </button>
@@ -297,7 +326,7 @@ export function SitesPage() {
               icon={<BriefcaseBusiness aria-hidden="true" size={17} />}
               status={<SiteStatusBadge status={site.status} />}
               isInactive={site.status === "closed" || site.status === "archived"}
-              onClick={() => setDrawer({ mode: "edit", siteId: site.id })}
+              onClick={() => openSiteDrawer(site.id)}
             />
           ))}
           {!filteredSites.length && (
@@ -330,65 +359,132 @@ export function SitesPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedSite && selectedDraft)}
-        title={selectedSite ? "Baustelle bearbeiten" : "Baustelle"}
+        title={selectedSite ? isEditingSite ? "Baustelle bearbeiten" : "Baustelle" : "Baustelle"}
         subtitle={selectedSite ? [selectedSite.site_number, selectedSite.location].filter(Boolean).join(" · ") : undefined}
         onClose={closeDrawer}
-        footer={selectedSite && selectedDraft && canEdit ? (
-          <>
-            <Link className="icon-button secondary" to={`/sites/${selectedSite.id}`}>
-              <ExternalLink aria-hidden="true" size={16} />
-              <span>Projektakte</span>
-            </Link>
-            <button
-              className="icon-button secondary"
-              disabled={savingSiteId === selectedSite.id}
-              type="button"
-              onClick={() => void saveSite(selectedSite.id)}
-            >
-              <Save aria-hidden="true" size={16} />
-              <span>Speichern</span>
-            </button>
-            {selectedSite.status === "closed" || selectedSite.status === "archived" ? (
-              <button
-                className="icon-button secondary"
-                disabled={savingSiteId === selectedSite.id}
-                type="button"
-                onClick={() => void reactivateSite(selectedSite.id)}
-              >
-                <ArchiveRestore aria-hidden="true" size={16} />
-                <span>Reaktivieren</span>
+        actions={selectedSite && canEdit && !isEditingSite ? (
+          <button className="icon-button secondary" type="button" onClick={() => setIsEditingSite(true)}>
+            <span>Bearbeiten</span>
+          </button>
+        ) : undefined}
+        footer={selectedSite && selectedDraft ? (
+          isEditingSite && canEdit ? (
+            <>
+              <button className="icon-button secondary" disabled={savingSiteId === selectedSite.id} type="button" onClick={cancelSiteEdit}>
+                <span>Abbrechen</span>
               </button>
-            ) : (
               <button
                 className="icon-button secondary"
                 disabled={savingSiteId === selectedSite.id}
                 type="button"
-                onClick={() => void closeSite(selectedSite.id)}
+                onClick={() => {
+                  void saveSite(selectedSite.id).then((saved) => {
+                    if (saved) {
+                      setIsEditingSite(false);
+                    }
+                  });
+                }}
               >
+                <Save aria-hidden="true" size={16} />
+                <span>Speichern</span>
+              </button>
+              {selectedSite.status === "closed" || selectedSite.status === "archived" ? (
+                <button
+                  className="icon-button secondary"
+                  disabled={savingSiteId === selectedSite.id}
+                  type="button"
+                  onClick={() => void reactivateSite(selectedSite.id)}
+                >
+                  <ArchiveRestore aria-hidden="true" size={16} />
+                  <span>Reaktivieren</span>
+                </button>
+              ) : (
+                <button
+                  className="icon-button secondary"
+                  disabled={savingSiteId === selectedSite.id}
+                  type="button"
+                  onClick={() => void closeSite(selectedSite.id)}
+                >
+                  <span>Schliessen</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <Link className="icon-button secondary" to={`/sites/${selectedSite.id}`}>
+                <ExternalLink aria-hidden="true" size={16} />
+                <span>Projektakte</span>
+              </Link>
+              <button className="icon-button secondary" type="button" onClick={closeDrawer}>
                 <span>Schliessen</span>
               </button>
-            )}
-          </>
-        ) : selectedSite ? (
-          <Link className="icon-button secondary" to={`/sites/${selectedSite.id}`}>
-            <ExternalLink aria-hidden="true" size={16} />
-            <span>Projektakte</span>
-          </Link>
+            </>
+          )
         ) : undefined}
       >
         {selectedSite && selectedDraft && (
-          <SiteFields
-            draft={selectedDraft}
-            people={people}
-            disabled={!canEdit}
-            isCheckingLocation={checkingLocationSiteId === selectedSite.id}
-            onChange={(values) => updateDraft(selectedSite.id, values)}
-            onCheckLocation={() => void checkSiteLocation(selectedSite.id)}
-            onGeocodeSelected={(values) => void applyGeocodedSite(selectedSite.id, values)}
-          />
+          isEditingSite ? (
+            <SiteFields
+              draft={selectedDraft}
+              people={people}
+              disabled={!canEdit}
+              isCheckingLocation={checkingLocationSiteId === selectedSite.id}
+              onChange={(values) => updateDraft(selectedSite.id, values)}
+              onCheckLocation={() => void checkSiteLocation(selectedSite.id)}
+              onGeocodeSelected={(values) => void applyGeocodedSite(selectedSite.id, values)}
+            />
+          ) : (
+            <SiteReadView site={selectedSite} />
+          )
         )}
       </EntityDetailDrawer>
     </section>
+  );
+}
+
+function SiteReadView({ site }: { site: Site }) {
+  const projectManager = site.project_manager?.display_name || "Nicht zugeordnet";
+  const addressText = formatSiteAddress(site);
+  return (
+    <div className="detail-read-view">
+      <section className="detail-read-section">
+        <h3>Stammdaten</h3>
+        <div className="detail-read-grid">
+          <ReadItem label="Baustelle" value={site.name} />
+          <ReadItem label="Nummer" value={site.site_number || "-"} />
+          <ReadItem label="Ort" value={site.location || site.city || "-"} />
+          <ReadItem label="Kunde" value={site.customer || "-"} />
+          <ReadItem label="Projektleiter" value={projectManager} />
+          <div className="detail-read-item">
+            <span>Status</span>
+            <strong><SiteStatusBadge status={site.status} /></strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="detail-read-section">
+        <h3>Adresse / Standort</h3>
+        <div className={`detail-address-card ${addressText ? "has-address" : "is-empty"}`}>
+          <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+          {addressText ? <strong>{addressText}</strong> : null}
+          <small>Geofence-Radius: {site.geofence_radius_m.toLocaleString("de-DE")} m</small>
+        </div>
+      </section>
+
+      <section className="detail-read-section">
+        <h3>Info / Notizen</h3>
+        <p className={site.info ? "detail-note" : "detail-empty"}>{site.info || "Keine Info hinterlegt."}</p>
+      </section>
+    </div>
+  );
+}
+
+function ReadItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-read-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -491,9 +587,10 @@ function SiteFields({
     setSelectedGeocodeResult(result);
     onChange(selectedValues);
     onGeocodeSelected?.(selectedValues);
-    setAddressSearch(result.label);
+    setAddressSearch("");
     setAddressResults([]);
     setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
+    (document.activeElement as HTMLElement | null)?.blur();
   }
 
   return (
@@ -597,7 +694,7 @@ function SiteFields({
             </div>
           )}
         </label>
-        <label>
+        <label className="address-postal-field">
           <span>PLZ</span>
           <input
             disabled={disabled}
@@ -605,7 +702,7 @@ function SiteFields({
             onChange={(event) => updateManualAddress({ postal_code: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-city-field">
           <span>Stadt</span>
           <input
             disabled={disabled}
@@ -613,7 +710,7 @@ function SiteFields({
             onChange={(event) => updateManualAddress({ city: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-street-field">
           <span>Strasse</span>
           <input
             disabled={disabled}
@@ -621,7 +718,7 @@ function SiteFields({
             onChange={(event) => updateManualAddress({ street: event.target.value || null })}
           />
         </label>
-        <label>
+        <label className="address-house-number-field">
           <span>Hausnummer</span>
           <input
             disabled={disabled}
@@ -629,12 +726,12 @@ function SiteFields({
             onChange={(event) => updateManualAddress({ house_number: event.target.value || null })}
           />
         </label>
-        <label className="address-field">
+        <label className="address-extra-field address-field">
           <span>Adresszusatz / Bereich</span>
           <input
             disabled={disabled}
             value={draft.address_extra ?? ""}
-            onChange={(event) => onChange({ address_extra: event.target.value || null })}
+            onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
           />
         </label>
         <label>
@@ -648,14 +745,6 @@ function SiteFields({
             onChange={(event) => onChange({ geofence_radius_m: parsePositiveInt(event.target.value) ?? 5000 })}
           />
         </label>
-        <div className="site-location-readonly">
-          <span>Standortstatus</span>
-          <strong>{siteLocationStatusLabels[draft.location_status]}</strong>
-        </div>
-        <div className="site-location-readonly">
-          <span>Koordinaten</span>
-          <strong>{formatCoordinates(draft.latitude, draft.longitude)}</strong>
-        </div>
         <button
           className="icon-button secondary"
           disabled={disabled || !onCheckLocation || isCheckingLocation || draft.location_status === "geocoded"}
@@ -772,6 +861,15 @@ function siteSearchText(site: Site): string {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
+function formatSiteAddress(site: Pick<Site, "address" | "postal_code" | "city" | "street" | "house_number" | "address_extra">): string {
+  if (site.address) {
+    return site.address;
+  }
+  const streetLine = [site.street, site.house_number].filter(Boolean).join(" ");
+  const cityLine = [site.postal_code, site.city].filter(Boolean).join(" ");
+  return [streetLine, site.address_extra, cityLine].filter(Boolean).join(", ");
+}
+
 function formatGeocodeMeta(result: SiteGeocodeSearchResult): string {
   const place = [result.postal_code, result.city].filter(Boolean).join(" ");
   const precision = result.street || result.house_number ? "Adresse" : "Ort";
@@ -784,13 +882,6 @@ const siteLocationStatusLabels: Record<SiteLocationStatus, string> = {
   ambiguous: "Nicht eindeutig",
   failed: "Fehler",
 };
-
-function formatCoordinates(latitude: number | null, longitude: number | null): string {
-  if (latitude === null || longitude === null) {
-    return "Noch nicht geprueft";
-  }
-  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-}
 
 function parsePositiveInt(value: string): number | null {
   const parsed = Number(value);

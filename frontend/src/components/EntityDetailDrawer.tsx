@@ -8,6 +8,7 @@ export type EntityDetailDrawerProps = {
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
+  actions?: ReactNode;
   onClose: () => void;
 };
 
@@ -17,6 +18,7 @@ export function EntityDetailDrawer({
   subtitle,
   children,
   footer,
+  actions,
   onClose,
 }: EntityDetailDrawerProps) {
   useEffect(() => {
@@ -47,9 +49,12 @@ export function EntityDetailDrawer({
             <h2 id="entity-drawer-title">{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button className="entity-drawer-close" type="button" onClick={onClose} aria-label="Schliessen">
-            <X aria-hidden="true" size={18} />
-          </button>
+          <div className="entity-drawer-header-actions">
+            {actions}
+            <button className="entity-drawer-close" type="button" onClick={onClose} aria-label="Schliessen">
+              <X aria-hidden="true" size={18} />
+            </button>
+          </div>
         </header>
         <div className="entity-drawer-content">{children}</div>
         {footer && <footer className="entity-drawer-footer">{footer}</footer>}

@@ -891,6 +891,12 @@ button.entity-card:focus-visible {
   font-size: 0.9rem;
 }
 
+.entity-drawer-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .entity-drawer-close {
   display: inline-flex;
   align-items: center;
@@ -926,6 +932,97 @@ button.entity-card:focus-visible {
   color: #334155;
   font-size: 0.86rem;
   font-weight: 750;
+}
+
+.detail-read-view {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-read-section {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.detail-read-section h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 0.96rem;
+  letter-spacing: 0;
+}
+
+.detail-read-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-read-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.detail-read-item span,
+.detail-address-card span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detail-read-item strong {
+  min-width: 0;
+  color: #172033;
+  font-size: 0.94rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.detail-address-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.detail-address-card.has-address {
+  border-color: #bddfc8;
+  background: #f1fbf5;
+}
+
+.detail-address-card strong {
+  color: #172033;
+  line-height: 1.35;
+}
+
+.detail-address-card small,
+.detail-empty {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.detail-note {
+  margin: 0;
+  color: #172033;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.detail-empty {
+  margin: 0;
+  font-weight: 650;
+}
+
+@media (min-width: 620px) {
+  .detail-read-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .drawer-field input,
@@ -2518,6 +2615,26 @@ button.person-chip:focus-visible {
   }
 
   .site-location-section > div {
+    grid-column: 1 / -1;
+  }
+
+  .site-location-section .address-postal-field {
+    grid-column: span 1;
+  }
+
+  .site-location-section .address-city-field {
+    grid-column: span 3;
+  }
+
+  .site-location-section .address-street-field {
+    grid-column: span 3;
+  }
+
+  .site-location-section .address-house-number-field {
+    grid-column: span 1;
+  }
+
+  .site-location-section .address-extra-field {
     grid-column: 1 / -1;
   }
 
