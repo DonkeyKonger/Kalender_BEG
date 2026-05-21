@@ -15,6 +15,8 @@ const ALL_FILTER = "all";
 const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18, -18], [18, 6], [-18, 6]];
 
 type SiteLabelMode = "full" | "number" | "points";
+type PersonLabelMode = "full" | "short" | "points";
+type VisibleMarkerCounts = { sites: number; persons: number };
 
 type MapProjectManagerOption = {
   id: number;
@@ -39,8 +41,10 @@ export function SiteMapPage() {
   const [showPersons, setShowPersons] = useState(false);
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [personFilter, setPersonFilter] = useState(ALL_FILTER);
-  const [visibleSiteCount, setVisibleSiteCount] = useState(0);
+  const [visibleSiteCount, setVisibleSiteCount] = useState(15);
+  const [visiblePersonCount, setVisiblePersonCount] = useState(15);
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -151,10 +155,14 @@ export function SiteMapPage() {
     () => people.filter((person) => personFilter === ALL_FILTER || String(person.project_manager_assignment?.id) === personFilter),
     [people, personFilter],
   );
-  const siteLabelMode = labelModeForVisibleCount(visibleSiteCount);
-  const siteLabelOffsets = useMemo(() => buildSiteLabelOffsets(filteredSites), [filteredSites]);
-  const updateVisibleSiteCount = useCallback((count: number) => {
-    setVisibleSiteCount(count);
+  const siteLabelMode = siteLabelModeForVisibleCount(visibleSiteCount);
+  const personLabelMode = personLabelModeForVisibleCount(visiblePersonCount);
+  const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
+  const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
+  const visiblePeopleForMap = useMemo(() => showPersons ? filteredPeople : [], [filteredPeople, showPersons]);
+  const updateVisibleMarkerCounts = useCallback((counts: VisibleMarkerCounts) => {
+    setVisibleSiteCount(counts.sites);
+    setVisiblePersonCount(counts.persons);
   }, []);
 
   return (
@@ -166,13 +174,6 @@ export function SiteMapPage() {
           <p className="page-subtitle">Aktive und pausierte Baustellen sowie optionale Startorte von Personen.</p>
         </div>
       </header>
-
-      <section className="site-map-summary" aria-label="Kartenuebersicht">
-        <InfoTile label="Baustellenmarker" value={String(filteredSites.length)} />
-        <InfoTile label="Personenmarker" value={showPersons ? String(filteredPeople.length) : "Aus"} />
-        <InfoTile label="Baustellen ohne Standort" value={String(data?.missing_location ?? 0)} tone="warning" />
-        <InfoTile label="Personen ohne Startort" value={showPersons ? String(personData?.missing_location ?? 0) : "-"} tone="warning" />
-      </section>
 
       <section className="site-map-controls" aria-label="Kartenfilter">
         <label>
@@ -214,7 +215,7 @@ export function SiteMapPage() {
           <div className="empty-state">Keine Marker fuer die aktuellen Filter vorhanden.</div>
         ) : (
           <MapContainer center={GERMANY_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom className="site-map-canvas">
-            <VisibleSiteTracker sites={filteredSites} onVisibleCountChange={updateVisibleSiteCount} />
+            <VisibleMarkerTracker sites={filteredSites} people={visiblePeopleForMap} onVisibleCountsChange={updateVisibleMarkerCounts} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -225,16 +226,19 @@ export function SiteMapPage() {
                 <CircleMarker
                   key={`site-${site.id}`}
                   center={[site.latitude, site.longitude]}
-                  radius={isSelected ? 7 : 5}
+                  radius={isSelected ? 6 : 4.5}
                   pathOptions={{
-                    color: isSelected ? "#f8fafc" : siteMarkerFill(site, siteLabelMode),
+                    color: isSelected ? "#ffffff" : siteMarkerFill(site, siteLabelMode),
                     fillColor: siteMarkerFill(site, siteLabelMode),
-                    fillOpacity: siteLabelMode === "points" ? 0.72 : 0.82,
+                    fillOpacity: siteLabelMode === "points" ? 0.68 : 0.82,
                     opacity: isSelected ? 1 : 0.9,
-                    weight: isSelected ? 2 : 0.5,
+                    weight: isSelected ? 2 : 0,
                   }}
                   eventHandlers={{
-                    click: () => setSelectedSiteId(site.id),
+                    click: () => {
+                      setSelectedSiteId(site.id);
+                      setSelectedPersonId(null);
+                    },
                   }}
                 >
                   <Tooltip
@@ -252,27 +256,42 @@ export function SiteMapPage() {
                 </CircleMarker>
               );
             })}
-            {showPersons && filteredPeople.map((person) => (
-              <CircleMarker
-                key={`person-${person.id}`}
-                center={[person.address_latitude, person.address_longitude]}
-                radius={7}
-                pathOptions={{
-                  color: "#7c2d12",
-                  fillColor: "#f97316",
-                  fillOpacity: 0.86,
-                  weight: 2,
-                  dashArray: "3 2",
-                }}
-              >
-                <Tooltip permanent direction="right" offset={[8, 0]} opacity={1} className="site-map-marker-label site-map-person-label">
-                  {personMarkerLabel(person)}
-                </Tooltip>
-                <Popup>
-                  <PersonMapPopup person={person} />
-                </Popup>
-              </CircleMarker>
-            ))}
+            {showPersons && filteredPeople.map((person) => {
+              const isSelected = selectedPersonId === person.id;
+              return (
+                <CircleMarker
+                  key={`person-${person.id}`}
+                  center={[person.address_latitude, person.address_longitude]}
+                  radius={isSelected ? 6 : 4.5}
+                  pathOptions={{
+                    color: isSelected ? "#ffffff" : personMarkerFill(personLabelMode),
+                    fillColor: personMarkerFill(personLabelMode),
+                    fillOpacity: personLabelMode === "points" ? 0.68 : 0.82,
+                    opacity: isSelected ? 1 : 0.9,
+                    weight: isSelected ? 2 : 0,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedPersonId(person.id);
+                      setSelectedSiteId(null);
+                    },
+                  }}
+                >
+                  <Tooltip
+                    permanent={personLabelMode !== "points"}
+                    direction="top"
+                    offset={personLabelMode === "points" ? [0, -8] : personLabelOffsets[person.id] ?? LABEL_OFFSET_PATTERN[0]}
+                    opacity={1}
+                    className={personLabelMode === "points" ? "site-map-marker-label site-map-person-label site-map-marker-label-hover" : "site-map-marker-label site-map-person-label"}
+                  >
+                    {personMarkerLabel(person, personLabelMode)}
+                  </Tooltip>
+                  <Popup>
+                    <PersonMapPopup person={person} />
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
           </MapContainer>
         )}
       </section>
@@ -280,43 +299,36 @@ export function SiteMapPage() {
   );
 }
 
-type InfoTileProps = {
-  label: string;
-  value: string;
-  tone?: "default" | "warning";
-};
-
-function VisibleSiteTracker({
+function VisibleMarkerTracker({
   sites,
-  onVisibleCountChange,
+  people,
+  onVisibleCountsChange,
 }: {
   sites: SiteMapItem[];
-  onVisibleCountChange: (count: number) => void;
+  people: PersonMapItem[];
+  onVisibleCountsChange: (counts: VisibleMarkerCounts) => void;
 }) {
   const map = useMapEvents({
-    moveend: updateVisibleSites,
-    zoomend: updateVisibleSites,
+    moveend: updateVisibleMarkers,
+    zoomend: updateVisibleMarkers,
   });
 
-  function updateVisibleSites() {
+  function updateVisibleMarkers() {
+    if (!map || typeof map.getBounds !== "function") {
+      return;
+    }
     const bounds = map.getBounds();
-    onVisibleCountChange(sites.filter((site) => bounds.contains([site.latitude, site.longitude])).length);
+    onVisibleCountsChange({
+      sites: sites.filter((site) => bounds.contains([site.latitude, site.longitude])).length,
+      persons: people.filter((person) => bounds.contains([person.address_latitude, person.address_longitude])).length,
+    });
   }
 
   useEffect(() => {
-    updateVisibleSites();
-  }, [map, onVisibleCountChange, sites]);
+    updateVisibleMarkers();
+  }, [map, onVisibleCountsChange, people, sites]);
 
   return null;
-}
-
-function InfoTile({ label, value, tone = "default" }: InfoTileProps) {
-  return (
-    <article className={`site-map-info-tile site-map-info-tile-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
-  );
 }
 
 function SiteMapPopup({ site }: { site: SiteMapItem }) {
@@ -360,8 +372,13 @@ function siteMarkerLabel(site: SiteMapItem, mode: SiteLabelMode): string {
   return `${prefix}${truncateLabel(site.name || site.city || "Baustelle")}`;
 }
 
-function personMarkerLabel(person: PersonMapItem): string {
-  return `${person.short_name} · ${truncateLabel(person.address_city || person.display_name, 18)}`;
+function personMarkerLabel(person: PersonMapItem, mode: PersonLabelMode): string {
+  const name = person.short_name || truncateLabel(person.display_name, 16);
+  if (mode === "short") {
+    return name;
+  }
+  const place = person.address_city ? truncateLabel(person.address_city, 18) : "Startort";
+  return `${name} · ${place}`;
 }
 
 function truncateLabel(value: string, max = 24): string {
@@ -387,7 +404,11 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
   return "#64748b";
 }
 
-function labelModeForVisibleCount(count: number): SiteLabelMode {
+function personMarkerFill(mode: PersonLabelMode): string {
+  return mode === "points" ? "#b45309" : "#f97316";
+}
+
+function siteLabelModeForVisibleCount(count: number): SiteLabelMode {
   if (count < 5) {
     return "full";
   }
@@ -397,12 +418,29 @@ function labelModeForVisibleCount(count: number): SiteLabelMode {
   return "points";
 }
 
-function buildSiteLabelOffsets(sites: SiteMapItem[]): Record<number, [number, number]> {
-  const groups = new Map<string, SiteMapItem[]>();
-  sites.forEach((site) => {
-    const key = `${Math.round(site.latitude / 0.025)}:${Math.round(site.longitude / 0.025)}`;
+function personLabelModeForVisibleCount(count: number): PersonLabelMode {
+  if (count < 5) {
+    return "full";
+  }
+  if (count < 15) {
+    return "short";
+  }
+  return "points";
+}
+
+function buildLabelOffsets<T extends { id: number; latitude?: number; longitude?: number; address_latitude?: number; address_longitude?: number }>(
+  items: T[],
+): Record<number, [number, number]> {
+  const groups = new Map<string, T[]>();
+  items.forEach((item) => {
+    const latitude = item.latitude ?? item.address_latitude;
+    const longitude = item.longitude ?? item.address_longitude;
+    if (latitude === undefined || longitude === undefined) {
+      return;
+    }
+    const key = `${Math.round(latitude / 0.025)}:${Math.round(longitude / 0.025)}`;
     const group = groups.get(key) ?? [];
-    group.push(site);
+    group.push(item);
     groups.set(key, group);
   });
 
@@ -411,8 +449,8 @@ function buildSiteLabelOffsets(sites: SiteMapItem[]): Record<number, [number, nu
     group
       .slice()
       .sort((left, right) => left.id - right.id)
-      .forEach((site, index) => {
-        offsets[site.id] = LABEL_OFFSET_PATTERN[index % LABEL_OFFSET_PATTERN.length];
+      .forEach((item, index) => {
+        offsets[item.id] = LABEL_OFFSET_PATTERN[index % LABEL_OFFSET_PATTERN.length];
       });
   });
   return offsets;

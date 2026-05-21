@@ -3501,40 +3501,6 @@ button.person-chip:focus-visible {
   font-weight: 650;
 }
 
-.site-map-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
-}
-
-.site-map-info-tile {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #d7deea;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 14px 16px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 6%);
-}
-
-.site-map-info-tile span {
-  color: #65738a;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.site-map-info-tile strong {
-  color: #111827;
-  font-size: 1.35rem;
-}
-
-.site-map-info-tile-warning strong {
-  color: #9a6700;
-}
-
-
 .site-map-controls {
   display: flex;
   flex-wrap: wrap;
