@@ -673,33 +673,34 @@ button:disabled {
 }
 
 .matrix-status-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 30;
+  position: fixed;
+  z-index: 180;
   display: grid;
-  min-width: 104px;
+  width: 128px;
   gap: 2px;
-  border: 1px solid #d7deea;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 4px;
-  box-shadow: 0 12px 26px rgb(18 29 52 / 14%);
+  border: 1px solid rgb(203 213 225 / 92%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 98%);
+  padding: 5px;
+  box-shadow: 0 16px 34px rgb(18 29 52 / 16%), 0 1px 0 rgb(255 255 255 / 84%) inset;
 }
 
 .matrix-status-menu-item {
   justify-content: flex-start;
   width: 100%;
   background: transparent;
-  padding: 6px 7px;
+  padding: 6px 8px;
   text-align: left;
 }
 
 .matrix-status-menu-item:hover,
-.matrix-status-menu-item:focus-visible,
-.matrix-status-menu-item[aria-checked="true"] {
+.matrix-status-menu-item:focus-visible {
   background: #f3f7fb;
   outline: none;
+}
+
+.matrix-status-menu-item[aria-checked="true"] {
+  background: #eef5fc;
 }
 
 

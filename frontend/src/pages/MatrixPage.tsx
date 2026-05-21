@@ -1083,6 +1083,55 @@ function MatrixStatusPicker({
   onChange: (status: SiteStatus) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<EditorAnchor | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function closeMenu() {
+      setIsOpen(false);
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || pickerRef.current?.contains(target) || menuRef.current?.contains(target)) {
+        return;
+      }
+      closeMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", closeMenu, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [isOpen]);
+
+  function toggleMenu(event: ReactMouseEvent<HTMLButtonElement>) {
+    if (disabled) {
+      return;
+    }
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+    setMenuAnchor(anchorFromRect(event.currentTarget.getBoundingClientRect()));
+    setIsOpen(true);
+  }
 
   function chooseStatus(nextStatus: SiteStatus) {
     setIsOpen(false);
@@ -1094,12 +1143,7 @@ function MatrixStatusPicker({
   return (
     <div
       className={`matrix-status-picker ${isOpen ? "is-open" : ""}`}
-      onBlur={(event) => {
-        const nextFocus = event.relatedTarget instanceof Node ? event.relatedTarget : null;
-        if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
-          setIsOpen(false);
-        }
-      }}
+      ref={pickerRef}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           setIsOpen(false);
@@ -1115,13 +1159,20 @@ function MatrixStatusPicker({
         className={`matrix-status-chip status-${status}`}
         disabled={disabled}
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={toggleMenu}
       >
         <span className="matrix-status-dot" aria-hidden="true" />
         <span>{siteStatusLabels[status]}</span>
       </button>
-      {isOpen && !disabled && (
-        <div className="matrix-status-menu" role="menu">
+      {isOpen && !disabled && menuAnchor && createPortal(
+        <div
+          className="matrix-status-menu"
+          ref={menuRef}
+          role="menu"
+          style={statusMenuPosition(menuAnchor)}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
           {SITE_STATUS_OPTIONS.map((option) => (
             <button
               className={`matrix-status-menu-item status-${option}`}
@@ -1135,7 +1186,8 @@ function MatrixStatusPicker({
               <span>{siteStatusLabels[option]}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -1241,6 +1293,8 @@ const DAY_COLUMN_WIDTH = 104;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
+const STATUS_MENU_HEIGHT = 142;
+const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 538;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
@@ -1311,6 +1365,21 @@ function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number 
   const belowTop = anchor.bottom + gap;
   const aboveTop = anchor.top - EDITOR_POPUP_HEIGHT - gap;
   const top = belowTop + EDITOR_POPUP_HEIGHT > viewportHeight
+    ? Math.max(8, aboveTop)
+    : belowTop;
+
+  return { left, top };
+}
+
+function statusMenuPosition(anchor: EditorAnchor): CSSProperties {
+  const gap = 6;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const preferredLeft = anchor.left + anchor.width - STATUS_MENU_WIDTH;
+  const left = Math.max(8, Math.min(preferredLeft, viewportWidth - STATUS_MENU_WIDTH - 8));
+  const belowTop = anchor.bottom + gap;
+  const aboveTop = anchor.top - STATUS_MENU_HEIGHT - gap;
+  const top = belowTop + STATUS_MENU_HEIGHT > viewportHeight
     ? Math.max(8, aboveTop)
     : belowTop;
 
