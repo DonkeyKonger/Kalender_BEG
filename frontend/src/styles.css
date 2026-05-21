@@ -539,20 +539,21 @@ button:disabled {
 
 .pm-col {
   left: 350px;
-  width: 74px;
-  min-width: 74px;
+  width: 56px;
+  min-width: 56px;
 }
 
 .info-col {
-  left: 424px;
-  width: 115px;
-  min-width: 115px;
+  left: 406px;
+  width: 150px;
+  min-width: 150px;
 }
 
 .status-col {
-  left: 539px;
+  left: 556px;
   width: 86px;
   min-width: 86px;
+  border-right: 2px solid #cbd7e6;
   box-shadow: 8px 0 14px rgb(18 29 52 / 10%);
 }
 
@@ -565,11 +566,11 @@ button:disabled {
 }
 
 .pm-col-width {
-  width: 74px;
+  width: 56px;
 }
 
 .info-col-width {
-  width: 115px;
+  width: 150px;
 }
 
 .status-col-width {
@@ -1149,18 +1150,30 @@ button.person-chip:focus-visible {
 
 .matrix-info-editor textarea {
   width: 100%;
-  min-height: 42px;
-  max-height: 84px;
+  min-height: 55px;
+  max-height: 110px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: #26344d;
-  padding: 4px 5px;
-  font-size: 0.68rem;
+  color: #a8322b;
+  padding: 5px 6px;
+  font-size: 0.75rem;
   line-height: 1.2;
   resize: vertical;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.matrix-info-editor textarea.info-text-long {
+  font-size: 0.6875rem;
+}
+
+.matrix-info-editor textarea.info-text-very-long {
+  font-size: 0.625rem;
+}
+
+.matrix-info-editor textarea.info-text-extreme {
+  font-size: 0.5625rem;
 }
 
 .matrix-info-editor textarea:focus {
@@ -1170,8 +1183,9 @@ button.person-chip:focus-visible {
 }
 
 .matrix-info-editor textarea:disabled {
-  color: #64748b;
+  color: #a94740;
   cursor: default;
+  opacity: 1;
 }
 
 .cell-editor {

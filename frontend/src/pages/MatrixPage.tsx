@@ -69,6 +69,7 @@ export function MatrixPage() {
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
+  const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
   const skipNextDraftAutosaveRef = useRef(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
@@ -132,6 +133,12 @@ export function MatrixPage() {
     }
     matrixScrollRef.current.scrollLeft = todayIndex * DAY_COLUMN_WIDTH;
   }, [matrix, today]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(cellMessageTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeCell) {
@@ -251,6 +258,7 @@ export function MatrixPage() {
       return;
     }
     const entries = draftEntries.map(toMatrixEntryInput);
+    clearTemporaryCellFeedback(activeCell.key);
     setSaveStatus((current) => ({ ...current, [activeCell.key]: "saving" }));
     setCellMessage((current) => ({ ...current, [activeCell.key]: "" }));
 
@@ -281,11 +289,15 @@ export function MatrixPage() {
       }
       setInitialEntries(draftEntries);
       setError(null);
-      setSaveStatus((current) => ({ ...current, [activeCell.key]: "saved" }));
-      setCellMessage((current) => ({
-        ...current,
-        [activeCell.key]: response.warnings[0]?.message ?? "Gespeichert",
-      }));
+      if (response.warnings[0]?.message) {
+        setSaveStatus((current) => ({ ...current, [activeCell.key]: "saved" }));
+        setCellMessage((current) => ({
+          ...current,
+          [activeCell.key]: response.warnings[0].message,
+        }));
+      } else {
+        showTemporaryCellFeedback(activeCell.key, "Gespeichert");
+      }
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
       if (options.closeOnSuccess) {
         closeActiveEditor();
@@ -414,6 +426,7 @@ export function MatrixPage() {
     const key = cellKey(row.site.id, cell.date);
     const before = entriesFromCell(cell);
     const after = before.filter((entry) => entry.person_id !== personId);
+    clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
@@ -427,8 +440,7 @@ export function MatrixPage() {
         { siteId: row.site.id, date: cell.date, endDate: cell.date, before, after },
       ]);
       setError(null);
-      setSaveStatus((current) => ({ ...current, [key]: "saved" }));
-      setCellMessage((current) => ({ ...current, [key]: "Monteur entfernt" }));
+      showTemporaryCellFeedback(key, "Monteur entfernt");
       replaceMatrixCells(row.site.id, response.updated_cells);
     } catch (requestError) {
       const message = readApiError(requestError, "Monteur konnte nicht entfernt werden.");
@@ -445,6 +457,7 @@ export function MatrixPage() {
     }
     const key = cellKey(row.site.id, cell.date);
     const nextMark = nextMatrixCellMark(cell.mark);
+    clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
@@ -454,14 +467,46 @@ export function MatrixPage() {
         mark: nextMark,
       });
       setError(null);
-      setSaveStatus((current) => ({ ...current, [key]: "saved" }));
-      setCellMessage((current) => ({ ...current, [key]: nextMark ? "Markierung gespeichert" : "Markierung entfernt" }));
+      showTemporaryCellFeedback(key, nextMark ? "Markierung gespeichert" : "Markierung entfernt");
       replaceMatrixCells(row.site.id, response.updated_cells);
     } catch (requestError) {
       const message = readApiError(requestError, "Markierung konnte nicht gespeichert werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
       setCellMessage((current) => ({ ...current, [key]: message }));
+    }
+  }
+
+  function showTemporaryCellFeedback(key: CellKey, message: string) {
+    clearTemporaryCellFeedback(key);
+    setSaveStatus((current) => ({ ...current, [key]: "saved" }));
+    setCellMessage((current) => ({ ...current, [key]: message }));
+    cellMessageTimeoutsRef.current[key] = window.setTimeout(() => {
+      setCellMessage((current) => {
+        if (current[key] !== message) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setSaveStatus((current) => {
+        if (current[key] !== "saved") {
+          return current;
+        }
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      delete cellMessageTimeoutsRef.current[key];
+    }, 3000);
+  }
+
+  function clearTemporaryCellFeedback(key: CellKey) {
+    const timeoutId = cellMessageTimeoutsRef.current[key];
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+      delete cellMessageTimeoutsRef.current[key];
     }
   }
 
@@ -970,6 +1015,7 @@ function MatrixInfoEditor({
     <label className="matrix-info-editor">
       <span className="sr-only">Info</span>
       <textarea
+        className={matrixInfoTextClassName(value)}
         disabled={disabled || isSaving}
         placeholder="Info"
         value={value}
@@ -984,7 +1030,7 @@ function MatrixInfoEditor({
 const DAY_COLUMN_WIDTH = 104;
 const EDITOR_POPUP_HEIGHT = 210;
 const EDITOR_POPUP_WIDTH = 320;
-const FIXED_MATRIX_COLUMNS_WIDTH = 625;
+const FIXED_MATRIX_COLUMNS_WIDTH = 642;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 type ProjectManagerOption = {
   id: number;
@@ -1192,6 +1238,20 @@ function compactProjectManagerCode(person: MatrixPerson | null): string {
   }
   const letters = value.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
   return letters.slice(0, 2).toUpperCase();
+}
+
+function matrixInfoTextClassName(value: string): string {
+  const length = value.trim().length;
+  if (length > 130) {
+    return "info-text-extreme";
+  }
+  if (length > 90) {
+    return "info-text-very-long";
+  }
+  if (length > 55) {
+    return "info-text-long";
+  }
+  return "";
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
