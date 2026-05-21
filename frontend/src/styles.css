@@ -564,8 +564,8 @@ button:disabled {
 
 .status-col {
   left: 466px;
-  width: 86px;
-  min-width: 86px;
+  width: 72px;
+  min-width: 72px;
   border-right: 2px solid #cbd7e6;
   box-shadow: 8px 0 14px rgb(18 29 52 / 10%);
 }
@@ -583,29 +583,123 @@ button:disabled {
 }
 
 .status-col-width {
-  width: 86px;
+  width: 72px;
 }
 
-.matrix-status-select {
+.matrix-status-picker {
+  position: relative;
+  display: inline-flex;
   width: 100%;
-  min-height: 21px;
+  justify-content: center;
+}
+
+.matrix-status-chip,
+.matrix-status-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 1px 17px 1px 7px;
   font: inherit;
-  font-size: 0.66rem;
-  font-weight: 800;
+  font-size: 0.61rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.matrix-status-chip {
+  min-height: 18px;
+  max-width: 100%;
+  background: transparent;
+  color: #475569;
+  padding: 1px 5px;
   cursor: pointer;
 }
 
-.matrix-status-select:focus {
-  border-color: #9db7d4;
-  outline: 2px solid rgb(29 92 153 / 16%);
+.matrix-status-chip:hover,
+.matrix-status-chip:focus-visible,
+.matrix-status-picker.is-open .matrix-status-chip {
+  border-color: #cbd7e6;
+  background: #f8fafc;
+  outline: none;
 }
 
-.matrix-status-select:disabled {
-  cursor: wait;
+.matrix-status-chip:disabled {
+  cursor: default;
   opacity: 0.68;
+}
+
+.matrix-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.matrix-status-chip.status-active,
+.matrix-status-menu-item.status-active {
+  color: #166534;
+}
+
+.matrix-status-chip.status-paused,
+.matrix-status-menu-item.status-paused {
+  color: #8a5b00;
+}
+
+.matrix-status-chip.status-closed,
+.matrix-status-chip.status-archived,
+.matrix-status-menu-item.status-closed,
+.matrix-status-menu-item.status-archived {
+  color: #475569;
+}
+
+.matrix-status-chip.status-active .matrix-status-dot,
+.matrix-status-menu-item.status-active .matrix-status-dot {
+  background: #22c55e;
+}
+
+.matrix-status-chip.status-paused .matrix-status-dot,
+.matrix-status-menu-item.status-paused .matrix-status-dot {
+  background: #d99a12;
+}
+
+.matrix-status-chip.status-closed .matrix-status-dot,
+.matrix-status-menu-item.status-closed .matrix-status-dot {
+  background: #94a3b8;
+}
+
+.matrix-status-chip.status-archived .matrix-status-dot,
+.matrix-status-menu-item.status-archived .matrix-status-dot {
+  background: #64748b;
+}
+
+.matrix-status-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 104px;
+  gap: 2px;
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 4px;
+  box-shadow: 0 12px 26px rgb(18 29 52 / 14%);
+}
+
+.matrix-status-menu-item {
+  justify-content: flex-start;
+  width: 100%;
+  background: transparent;
+  padding: 6px 7px;
+  text-align: left;
+}
+
+.matrix-status-menu-item:hover,
+.matrix-status-menu-item:focus-visible,
+.matrix-status-menu-item[aria-checked="true"] {
+  background: #f3f7fb;
+  outline: none;
 }
 
 
@@ -1387,8 +1481,8 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .status-col {
   left: 410px;
-  width: 78px;
-  min-width: 78px;
+  width: 66px;
+  min-width: 66px;
 }
 
 .matrix-page.is-compact .site-col-width {
@@ -1404,7 +1498,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .status-col-width {
-  width: 78px;
+  width: 66px;
 }
 
 .matrix-page.is-compact .row-heading-content {
@@ -1459,10 +1553,19 @@ button.person-chip:focus-visible {
   font-size: 0.58rem;
 }
 
-.matrix-page.is-compact .matrix-status-select {
-  min-height: 19px;
-  padding: 1px 16px 1px 6px;
-  font-size: 0.61rem;
+.matrix-page.is-compact .matrix-status-chip,
+.matrix-page.is-compact .matrix-status-menu-item {
+  font-size: 0.58rem;
+}
+
+.matrix-page.is-compact .matrix-status-chip {
+  min-height: 16px;
+  padding: 1px 4px;
+}
+
+.matrix-page.is-compact .matrix-status-dot {
+  width: 4px;
+  height: 4px;
 }
 
 .matrix-page.is-compact .day-col strong {

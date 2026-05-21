@@ -1018,7 +1018,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         />
       </td>
       <td className="sticky-col status-col">
-        <MatrixStatusSelect
+        <MatrixStatusPicker
           disabled={!props.isEditable || props.savingStatusSiteId === row.site.id}
           status={row.site.status}
           onChange={(status) => props.onStatusChange(row.site.id, status)}
@@ -1073,7 +1073,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   );
 }
 
-function MatrixStatusSelect({
+function MatrixStatusPicker({
   disabled,
   status,
   onChange,
@@ -1082,20 +1082,62 @@ function MatrixStatusSelect({
   status: SiteStatus;
   onChange: (status: SiteStatus) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  function chooseStatus(nextStatus: SiteStatus) {
+    setIsOpen(false);
+    if (nextStatus !== status) {
+      onChange(nextStatus);
+    }
+  }
+
   return (
-    <select
-      aria-label="Baustellenstatus"
-      className={`matrix-status-select status-${status}`}
-      disabled={disabled}
-      value={status}
-      onChange={(event) => onChange(event.target.value as SiteStatus)}
+    <div
+      className={`matrix-status-picker ${isOpen ? "is-open" : ""}`}
+      onBlur={(event) => {
+        const nextFocus = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+        if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
+          setIsOpen(false);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          setIsOpen(false);
+        }
+      }}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      {SITE_STATUS_OPTIONS.map((option) => (
-        <option key={option} value={option}>{siteStatusLabels[option]}</option>
-      ))}
-    </select>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label={`Baustellenstatus: ${siteStatusLabels[status]}`}
+        className={`matrix-status-chip status-${status}`}
+        disabled={disabled}
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span className="matrix-status-dot" aria-hidden="true" />
+        <span>{siteStatusLabels[status]}</span>
+      </button>
+      {isOpen && !disabled && (
+        <div className="matrix-status-menu" role="menu">
+          {SITE_STATUS_OPTIONS.map((option) => (
+            <button
+              className={`matrix-status-menu-item status-${option}`}
+              key={option}
+              role="menuitemradio"
+              aria-checked={option === status}
+              type="button"
+              onClick={() => chooseStatus(option)}
+            >
+              <span className="matrix-status-dot" aria-hidden="true" />
+              <span>{siteStatusLabels[option]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1199,8 +1241,8 @@ const DAY_COLUMN_WIDTH = 104;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
-const FIXED_MATRIX_COLUMNS_WIDTH = 552;
-const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 488;
+const FIXED_MATRIX_COLUMNS_WIDTH = 538;
+const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "closed", "archived"];
 type ProjectManagerOption = {
