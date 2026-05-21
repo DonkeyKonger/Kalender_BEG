@@ -377,7 +377,7 @@ function PersonFields({
   onChange: (values: Partial<PersonCreate>) => void;
   onGeocodeSelected?: (values: Partial<PersonCreate>) => void;
 }) {
-  const [addressSearch, setAddressSearch] = useState(draft.address_formatted ?? "");
+  const [addressSearch, setAddressSearch] = useState("");
   const [addressResults, setAddressResults] = useState<PersonGeocodeSearchResult[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
@@ -460,6 +460,7 @@ function PersonFields({
     onGeocodeSelected?.(selectedValues);
     setAddressSearch("");
     setAddressResults([]);
+    setIsSearchingAddress(false);
     setAddressSearchMessage("Startort aus Vorschlag uebernommen und geprueft.");
     (document.activeElement as HTMLElement | null)?.blur();
   }

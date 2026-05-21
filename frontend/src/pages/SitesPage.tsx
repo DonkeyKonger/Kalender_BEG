@@ -505,7 +505,7 @@ function SiteFields({
   onCheckLocation?: () => void;
   onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
 }) {
-  const [addressSearch, setAddressSearch] = useState(draft.address ?? "");
+  const [addressSearch, setAddressSearch] = useState("");
   const [addressResults, setAddressResults] = useState<SiteGeocodeSearchResult[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
@@ -589,6 +589,7 @@ function SiteFields({
     onGeocodeSelected?.(selectedValues);
     setAddressSearch("");
     setAddressResults([]);
+    setIsSearchingAddress(false);
     setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
     (document.activeElement as HTMLElement | null)?.blur();
   }
