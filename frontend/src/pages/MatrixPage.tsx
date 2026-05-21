@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MatrixCellEditor } from "../components/MatrixCellEditor";
-import { SiteStatusBadge } from "../components/StatusBadge";
+import { siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type {
   MatrixCell,
@@ -14,6 +14,7 @@ import type {
   MatrixPerson,
   MatrixResponse,
   MatrixRow,
+  SiteStatus,
 } from "../types/matrix";
 import type { Person } from "../types/person";
 import { calendarPersonCode, canEditMatrix } from "../types/person";
@@ -78,6 +79,7 @@ export function MatrixPage() {
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
+  const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const selectedCellRange = useMemo(() => {
     if (!matrix || !selectionStartCell || !selectionEndCell) {
@@ -457,6 +459,31 @@ export function MatrixPage() {
   }
 
 
+  async function clearCellMark(row: MatrixRow, cell: MatrixCell) {
+    if (!isEditable || !cell.mark) {
+      return;
+    }
+    const key = cellKey(row.site.id, cell.date);
+    clearTemporaryCellFeedback(key);
+    setSaveStatus((current) => ({ ...current, [key]: "saving" }));
+    setCellMessage((current) => ({ ...current, [key]: "" }));
+    try {
+      const response = await api.patchMatrixCellMark({
+        siteId: row.site.id,
+        date: cell.date,
+        mark: null,
+      });
+      setError(null);
+      showTemporaryCellFeedback(key, "Markierung entfernt");
+      replaceMatrixCells(row.site.id, response.updated_cells);
+    } catch (requestError) {
+      const message = readApiError(requestError, "Markierung konnte nicht entfernt werden.");
+      setError(message);
+      setSaveStatus((current) => ({ ...current, [key]: "error" }));
+      setCellMessage((current) => ({ ...current, [key]: message }));
+    }
+  }
+
   async function cycleCellMark(row: MatrixRow, cell: MatrixCell) {
     if (!isEditable) {
       return;
@@ -539,6 +566,26 @@ export function MatrixPage() {
     }
   }
 
+  async function saveSiteStatus(siteId: number, status: SiteStatus) {
+    const currentRow = matrix?.rows.find((row) => row.site.id === siteId);
+    if (!currentRow || currentRow.site.status === status) {
+      return;
+    }
+    setSavingStatusSiteId(siteId);
+    try {
+      const updated = await api.updateSite(siteId, { status });
+      setError(null);
+      updateMatrixSiteStatus(updated.id, updated.status);
+      if (updated.status === "closed" || updated.status === "archived") {
+        void loadMatrix();
+      }
+    } catch (requestError) {
+      setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
+    } finally {
+      setSavingStatusSiteId(null);
+    }
+  }
+
   function updateMatrixSiteInfo(siteId: number, info: string | null) {
     setMatrix((current) => {
       if (!current) {
@@ -548,6 +595,20 @@ export function MatrixPage() {
         ...current,
         rows: current.rows.map((row) => row.site.id === siteId
           ? { ...row, site: { ...row.site, info } }
+          : row),
+      };
+    });
+  }
+
+  function updateMatrixSiteStatus(siteId: number, status: SiteStatus) {
+    setMatrix((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        rows: current.rows.map((row) => row.site.id === siteId
+          ? { ...row, site: { ...row.site, status } }
           : row),
       };
     });
@@ -621,9 +682,11 @@ export function MatrixPage() {
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
             onDeleteAssignment={deleteAssignmentFromCell}
+            onClearCellMark={clearCellMark}
             onCycleCellMark={cycleCellMark}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
             onInfoSave={(siteId) => void saveSiteInfo(siteId)}
+            onStatusChange={(siteId, status) => void saveSiteStatus(siteId, status)}
             onAddExternal={addExternalPerson}
             onAddPerson={addSelectedPerson}
             onEndDateChange={(endDate) => {
@@ -645,6 +708,7 @@ export function MatrixPage() {
             people={people}
             saveStatus={saveStatus}
             savingInfoSiteId={savingInfoSiteId}
+            savingStatusSiteId={savingStatusSiteId}
             selectedPersonId={selectedPersonId}
             siteInfoDrafts={siteInfoDrafts}
             today={today}
@@ -791,12 +855,14 @@ type MatrixTableProps = {
   matrixScrollRef: RefObject<HTMLDivElement | null>;
   onAddExternal: () => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, personId: number) => void;
+  onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onAddPerson: () => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
+  onStatusChange: (siteId: number, status: SiteStatus) => void;
   onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
@@ -807,6 +873,7 @@ type MatrixTableProps = {
   people: Person[];
   saveStatus: Record<CellKey, SaveStatus>;
   savingInfoSiteId: number | null;
+  savingStatusSiteId: number | null;
   selectedPersonId: string;
   siteInfoDrafts: Record<number, string>;
   today: string;
@@ -821,7 +888,6 @@ function MatrixTable(props: MatrixTableProps) {
       <table className="matrix-table" style={{ width: tableWidth, minWidth: tableWidth }}>
         <colgroup>
           <col className="site-col-width" />
-          <col className="location-col-width" />
           <col className="pm-col-width" />
           <col className="info-col-width" />
           <col className="status-col-width" />
@@ -832,7 +898,6 @@ function MatrixTable(props: MatrixTableProps) {
         <thead>
           <tr>
             <th className="sticky-col site-col">Baustelle</th>
-            <th className="sticky-col location-col">Ort</th>
             <th className="sticky-col pm-col">PL</th>
             <th className="sticky-col info-col">Info</th>
             <th className="sticky-col status-col">Status</th>
@@ -862,7 +927,7 @@ function MatrixTableGroup({ group, ...props }: MatrixTableProps & { group: Matri
     <>
       {group.showHeading && (
         <tr className="matrix-group-row">
-          <th colSpan={5 + props.matrix.days.length}>{group.label}</th>
+          <th colSpan={4 + props.matrix.days.length}>{group.label}</th>
         </tr>
       )}
       {group.rows.map((row) => (
@@ -886,10 +951,10 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
             <strong>{row.site.name}</strong>
             {row.site.site_number && <small>{row.site.site_number}</small>}
+            {row.site.location && <span className="matrix-site-location">{row.site.location}</span>}
           </Link>
         </div>
       </th>
-      <td className="sticky-col location-col compact-text">{row.site.location ?? ""}</td>
       <td className="sticky-col pm-col compact-text">
         {compactProjectManagerCode(row.site.project_manager)}
       </td>
@@ -903,7 +968,11 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         />
       </td>
       <td className="sticky-col status-col">
-        <SiteStatusBadge status={row.site.status} />
+        <MatrixStatusSelect
+          disabled={!props.isEditable || props.savingStatusSiteId === row.site.id}
+          status={row.site.status}
+          onChange={(status) => props.onStatusChange(row.site.id, status)}
+        />
       </td>
       {row.cells.map((cell, cellIndex) => {
         const key = cellKey(row.site.id, cell.date);
@@ -927,6 +996,14 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             }}
             onMouseEnter={(event) => props.onCellMouseEnter(row, cell, cellIndex, event)}
             onMouseUp={(event) => props.onCellMouseUp(row, cell, cellIndex, event)}
+            onContextMenu={(event) => {
+              if (!props.isEditable || !cell.mark) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              props.onClearCellMark(row, cell);
+            }}
           >
             <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
@@ -937,6 +1014,32 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         );
       })}
     </tr>
+  );
+}
+
+function MatrixStatusSelect({
+  disabled,
+  status,
+  onChange,
+}: {
+  disabled: boolean;
+  status: SiteStatus;
+  onChange: (status: SiteStatus) => void;
+}) {
+  return (
+    <select
+      aria-label="Baustellenstatus"
+      className={`matrix-status-select status-${status}`}
+      disabled={disabled}
+      value={status}
+      onChange={(event) => onChange(event.target.value as SiteStatus)}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {SITE_STATUS_OPTIONS.map((option) => (
+        <option key={option} value={option}>{siteStatusLabels[option]}</option>
+      ))}
+    </select>
   );
 }
 
@@ -1037,8 +1140,9 @@ function MatrixInfoEditor({
 const DAY_COLUMN_WIDTH = 104;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
-const FIXED_MATRIX_COLUMNS_WIDTH = 642;
+const FIXED_MATRIX_COLUMNS_WIDTH = 552;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
+const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "closed", "archived"];
 type ProjectManagerOption = {
   id: number;
   name: string;

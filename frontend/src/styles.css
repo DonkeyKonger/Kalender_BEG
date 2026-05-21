@@ -527,30 +527,24 @@ button:disabled {
 
 .site-col {
   left: 0;
-  width: 220px;
-  min-width: 220px;
-}
-
-.location-col {
-  left: 220px;
-  width: 130px;
-  min-width: 130px;
+  width: 260px;
+  min-width: 260px;
 }
 
 .pm-col {
-  left: 350px;
+  left: 260px;
   width: 56px;
   min-width: 56px;
 }
 
 .info-col {
-  left: 406px;
+  left: 316px;
   width: 150px;
   min-width: 150px;
 }
 
 .status-col {
-  left: 556px;
+  left: 466px;
   width: 86px;
   min-width: 86px;
   border-right: 2px solid #cbd7e6;
@@ -558,11 +552,7 @@ button:disabled {
 }
 
 .site-col-width {
-  width: 220px;
-}
-
-.location-col-width {
-  width: 130px;
+  width: 260px;
 }
 
 .pm-col-width {
@@ -576,6 +566,29 @@ button:disabled {
 .status-col-width {
   width: 86px;
 }
+
+.matrix-status-select {
+  width: 100%;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 20px 3px 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.matrix-status-select:focus {
+  border-color: #9db7d4;
+  outline: 2px solid rgb(29 92 153 / 16%);
+}
+
+.matrix-status-select:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 
 .day-col-width,
 .day-col,
@@ -627,7 +640,8 @@ button:disabled {
 }
 
 .row-heading strong,
-.row-heading small {
+.row-heading small,
+.matrix-site-location {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -650,13 +664,20 @@ button:disabled {
 }
 
 .row-heading strong {
-  max-width: 174px;
+  max-width: 210px;
   font-weight: 800;
 }
 
 .row-heading small {
   color: #65738a;
   font-size: 0.72rem;
+}
+
+.matrix-site-location {
+  max-width: 210px;
+  color: #7a8799;
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
 .site-color {
