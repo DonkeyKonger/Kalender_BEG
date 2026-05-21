@@ -7,7 +7,7 @@ from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
 from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
-from app.schemas.site import SiteCreate, SiteUpdate
+from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdate
 from app.services.audit_service import AuditService
 from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address
 
@@ -17,6 +17,7 @@ CLOSED_STATUSES = {SiteStatus.CLOSED, SiteStatus.ARCHIVED}
 OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED}
 ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
 TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
+VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
 
 
 class SiteService:
@@ -28,6 +29,16 @@ class SiteService:
 
     def list_sites(self, include_closed: bool = False) -> list[Site]:
         return self.sites.list(include_closed=include_closed)
+
+    def site_map(self) -> SiteMapResponse:
+        map_sites = []
+        missing_location = 0
+        for site in self.sites.list(include_closed=False):
+            if has_valid_map_location(site):
+                map_sites.append(site_map_item(site))
+            else:
+                missing_location += 1
+        return SiteMapResponse(sites=map_sites, missing_location=missing_location)
 
     def get_site(self, site_id: int) -> Site:
         site = self.sites.get(site_id)
@@ -207,3 +218,30 @@ def site_snapshot(site: Site) -> dict:
         "closed_at": site.closed_at.isoformat() if site.closed_at else None,
         "closed_by_user_id": site.closed_by_user_id,
     }
+
+
+def has_valid_map_location(site: Site) -> bool:
+    return (
+        site.latitude is not None
+        and site.longitude is not None
+        and site.location_status in VALID_MAP_LOCATION_STATUSES
+    )
+
+
+def site_map_item(site: Site) -> SiteMapItem:
+    return SiteMapItem(
+        id=site.id,
+        name=site.name,
+        number=site.site_number,
+        city=site.city or site.location,
+        postal_code=site.postal_code,
+        street=site.street,
+        house_number=site.house_number,
+        project_manager=site.project_manager,
+        status=site.status,
+        color=site.color,
+        latitude=site.latitude,
+        longitude=site.longitude,
+        geofence_radius_m=site.geofence_radius_m,
+        location_status=site.location_status,
+    )

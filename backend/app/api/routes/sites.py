@@ -5,7 +5,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.site import SiteCreate, SiteRead, SiteUpdate
+from app.schemas.site import SiteCreate, SiteMapResponse, SiteRead, SiteUpdate
 from app.services.site_service import SiteService
 
 router = APIRouter(prefix="/sites", tags=["sites"])
@@ -22,6 +22,14 @@ def list_sites(
 ) -> list[SiteRead]:
     sites = SiteService(db).list_sites(include_closed=include_closed)
     return [SiteRead.model_validate(site) for site in sites]
+
+
+@router.get("/map", response_model=SiteMapResponse)
+def site_map(
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> SiteMapResponse:
+    return SiteService(db).site_map()
 
 
 @router.get("/{site_id}", response_model=SiteRead)

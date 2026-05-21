@@ -59,3 +59,28 @@ export type SiteCreate = {
 };
 
 export type SiteUpdate = Partial<SiteCreate>;
+
+
+export type SiteMapProjectManager = SitePerson;
+
+export type SiteMapItem = {
+  id: number;
+  name: string;
+  number: string | null;
+  city: string | null;
+  postal_code: string | null;
+  street: string | null;
+  house_number: string | null;
+  project_manager: SiteMapProjectManager | null;
+  status: SiteStatus;
+  color: string | null;
+  latitude: number;
+  longitude: number;
+  geofence_radius_m: number;
+  location_status: SiteLocationStatus;
+};
+
+export type SiteMapResponse = {
+  sites: SiteMapItem[];
+  missing_location: number;
+};

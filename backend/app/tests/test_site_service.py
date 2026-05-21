@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.enums import SiteLocationStatus, SiteStatus
-from app.services.site_service import clean_site_values, site_snapshot
+from app.services.site_service import clean_site_values, has_valid_map_location, site_map_item, site_snapshot
 
 
 def test_clean_site_values_trims_name_and_turns_blank_optional_text_to_none():
@@ -61,3 +61,57 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
     assert snapshot["location_status"] == "geocoded"
     assert snapshot["geofence_radius_m"] == 5000
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"
+
+
+def test_has_valid_map_location_requires_coordinates_and_geocoded_status():
+    site = SimpleNamespace(
+        latitude=53.0142,
+        longitude=9.0263,
+        location_status=SiteLocationStatus.GEOCODED,
+    )
+
+    assert has_valid_map_location(site) is True
+
+    site.location_status = SiteLocationStatus.UNCHECKED
+    assert has_valid_map_location(site) is False
+
+    site.location_status = SiteLocationStatus.GEOCODED
+    site.longitude = None
+    assert has_valid_map_location(site) is False
+
+
+def test_site_map_item_returns_only_slim_map_fields():
+    project_manager = SimpleNamespace(
+        id=7,
+        display_name="Christopher Erichsen",
+        short_code="CE",
+        email=None,
+        phone=None,
+    )
+    site = SimpleNamespace(
+        id=12,
+        site_number="8014",
+        name="FTZ Verden",
+        city="Verden",
+        location="Verden",
+        postal_code="27283",
+        street="Hauptstrasse",
+        house_number="5",
+        project_manager=project_manager,
+        status=SiteStatus.ACTIVE,
+        color="#1d5c99",
+        latitude=52.9234,
+        longitude=9.2345,
+        geofence_radius_m=5000,
+        location_status=SiteLocationStatus.GEOCODED,
+    )
+
+    item = site_map_item(site)
+
+    assert item.id == 12
+    assert item.number == "8014"
+    assert item.city == "Verden"
+    assert item.project_manager is not None
+    assert item.project_manager.short_code == "CE"
+    assert item.latitude == 52.9234
+    assert item.geofence_radius_m == 5000

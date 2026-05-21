@@ -5,6 +5,7 @@ import {
   Download,
   FolderKanban,
   Home,
+  MapPinned,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -28,6 +29,12 @@ export const navigationItems: NavigationItem[] = [
     label: "Baustellen",
     path: "/sites",
     icon: BriefcaseBusiness,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Baustellenkarte",
+    path: "/site-map",
+    icon: MapPinned,
     roles: ["admin", "project_manager", "office"],
   },
   {

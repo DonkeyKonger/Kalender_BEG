@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonUpdate } from "../types/person";
-import type { Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { Site, SiteCreate, SiteMapResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -150,6 +150,10 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<Site[]>(`/sites${suffix}`);
+  },
+
+  async siteMap(): Promise<SiteMapResponse> {
+    return request<SiteMapResponse>("/sites/map");
   },
 
   async site(siteId: number): Promise<Site> {

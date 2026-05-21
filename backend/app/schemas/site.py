@@ -70,3 +70,25 @@ class SiteRead(SiteBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SiteMapItem(BaseModel):
+    id: int
+    name: str
+    number: str | None = None
+    city: str | None = None
+    postal_code: str | None = None
+    street: str | None = None
+    house_number: str | None = None
+    project_manager: SitePersonRead | None = None
+    status: SiteStatus
+    color: str | None = None
+    latitude: float
+    longitude: float
+    geofence_radius_m: int
+    location_status: SiteLocationStatus
+
+
+class SiteMapResponse(BaseModel):
+    sites: list[SiteMapItem]
+    missing_location: int

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./auth/ProtectedRoute";
@@ -13,6 +14,10 @@ import { PersonsPage } from "./pages/PersonsPage";
 import { SiteDetailPage } from "./pages/SiteDetailPage";
 import { SitesPage } from "./pages/SitesPage";
 
+const SiteMapPage = lazy(() =>
+  import("./pages/SiteMapPage").then((module) => ({ default: module.SiteMapPage })),
+);
+
 export function App() {
   return (
     <Routes>
@@ -25,6 +30,14 @@ export function App() {
           >
             <Route path="matrix" element={<MatrixPage />} />
             <Route path="sites" element={<SitesPage />} />
+            <Route
+              path="site-map"
+              element={
+                <Suspense fallback={<div className="empty-state">Baustellenkarte wird geladen...</div>}>
+                  <SiteMapPage />
+                </Suspense>
+              }
+            />
             <Route path="sites/:siteId" element={<SiteDetailPage />} />
             <Route path="absences" element={<AbsencesPage />} />
             <Route path="exports" element={<ExportsPage />} />
