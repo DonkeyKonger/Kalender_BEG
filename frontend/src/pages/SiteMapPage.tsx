@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { siteStatusLabels } from "../components/StatusBadge";
@@ -95,6 +95,9 @@ export function SiteMapPage() {
                   weight: 1.5,
                 }}
               >
+                <Tooltip permanent direction="top" offset={[0, -12]} opacity={1} className="site-map-marker-label">
+                  {markerLabel(site)}
+                </Tooltip>
                 <Popup>
                   <SiteMapPopup site={site} />
                 </Popup>
@@ -141,6 +144,18 @@ function formatAddress(site: SiteMapItem): string {
   const streetLine = [site.street, site.house_number].filter(Boolean).join(" ");
   const cityLine = [site.postal_code, site.city].filter(Boolean).join(" ");
   return [streetLine, cityLine].filter(Boolean).join(", ") || "Adresse nicht hinterlegt";
+}
+
+function markerLabel(site: SiteMapItem): string {
+  const prefix = site.number ? `${site.number} · ` : "";
+  return `${prefix}${truncateLabel(site.name || site.city || "Baustelle")}`;
+}
+
+function truncateLabel(value: string, max = 24): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max - 3)}...`;
 }
 
 function markerColor(site: SiteMapItem): string {
