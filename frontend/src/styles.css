@@ -3493,16 +3493,20 @@ button.person-chip:focus-visible {
 .site-map-marker-label {
   border: 1px solid #d7deea;
   border-radius: 6px;
-  background: rgb(255 255 255 / 92%);
+  background: rgb(255 255 255 / 90%);
   color: #172033;
-  padding: 3px 6px;
-  box-shadow: 0 4px 12px rgb(18 29 52 / 12%);
-  font-size: 0.72rem;
+  padding: 2px 5px;
+  box-shadow: 0 2px 8px rgb(18 29 52 / 10%);
+  font-size: 0.66rem;
   font-weight: 750;
-  line-height: 1.15;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
+.site-map-marker-label-hover {
+  background: rgb(255 255 255 / 94%);
+  font-size: 0.68rem;
+}
 
 .site-map-person-label {
   border-color: #fed7aa;

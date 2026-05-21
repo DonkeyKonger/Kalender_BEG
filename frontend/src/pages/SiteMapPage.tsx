@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
@@ -12,6 +12,9 @@ import type { SiteMapItem, SiteMapResponse } from "../types/site";
 const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
 const DEFAULT_ZOOM = 6;
 const ALL_FILTER = "all";
+const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18, -18], [18, 6], [-18, 6]];
+
+type SiteLabelMode = "full" | "number" | "points";
 
 type MapProjectManagerOption = {
   id: number;
@@ -36,6 +39,8 @@ export function SiteMapPage() {
   const [showPersons, setShowPersons] = useState(false);
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [personFilter, setPersonFilter] = useState(ALL_FILTER);
+  const [visibleSiteCount, setVisibleSiteCount] = useState(0);
+  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -146,6 +151,11 @@ export function SiteMapPage() {
     () => people.filter((person) => personFilter === ALL_FILTER || String(person.project_manager_assignment?.id) === personFilter),
     [people, personFilter],
   );
+  const siteLabelMode = labelModeForVisibleCount(visibleSiteCount);
+  const siteLabelOffsets = useMemo(() => buildSiteLabelOffsets(filteredSites), [filteredSites]);
+  const updateVisibleSiteCount = useCallback((count: number) => {
+    setVisibleSiteCount(count);
+  }, []);
 
   return (
     <div className="page-stack site-map-page">
@@ -204,30 +214,44 @@ export function SiteMapPage() {
           <div className="empty-state">Keine Marker fuer die aktuellen Filter vorhanden.</div>
         ) : (
           <MapContainer center={GERMANY_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom className="site-map-canvas">
+            <VisibleSiteTracker sites={filteredSites} onVisibleCountChange={updateVisibleSiteCount} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {filteredSites.map((site) => (
-              <CircleMarker
-                key={`site-${site.id}`}
-                center={[site.latitude, site.longitude]}
-                radius={9}
-                pathOptions={{
-                  color: "#172033",
-                  fillColor: markerColor(site),
-                  fillOpacity: 0.9,
-                  weight: 1.5,
-                }}
-              >
-                <Tooltip permanent direction="top" offset={[0, -12]} opacity={1} className="site-map-marker-label">
-                  {markerLabel(site)}
-                </Tooltip>
-                <Popup>
-                  <SiteMapPopup site={site} />
-                </Popup>
-              </CircleMarker>
-            ))}
+            {filteredSites.map((site) => {
+              const isSelected = selectedSiteId === site.id;
+              return (
+                <CircleMarker
+                  key={`site-${site.id}`}
+                  center={[site.latitude, site.longitude]}
+                  radius={isSelected ? 7 : 5}
+                  pathOptions={{
+                    color: isSelected ? "#f8fafc" : siteMarkerFill(site, siteLabelMode),
+                    fillColor: siteMarkerFill(site, siteLabelMode),
+                    fillOpacity: siteLabelMode === "points" ? 0.72 : 0.82,
+                    opacity: isSelected ? 1 : 0.9,
+                    weight: isSelected ? 2 : 0.5,
+                  }}
+                  eventHandlers={{
+                    click: () => setSelectedSiteId(site.id),
+                  }}
+                >
+                  <Tooltip
+                    permanent={siteLabelMode !== "points"}
+                    direction="top"
+                    offset={siteLabelMode === "points" ? [0, -8] : siteLabelOffsets[site.id] ?? LABEL_OFFSET_PATTERN[0]}
+                    opacity={1}
+                    className={siteLabelMode === "points" ? "site-map-marker-label site-map-marker-label-hover" : "site-map-marker-label"}
+                  >
+                    {siteMarkerLabel(site, siteLabelMode)}
+                  </Tooltip>
+                  <Popup>
+                    <SiteMapPopup site={site} />
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
             {showPersons && filteredPeople.map((person) => (
               <CircleMarker
                 key={`person-${person.id}`}
@@ -261,6 +285,30 @@ type InfoTileProps = {
   value: string;
   tone?: "default" | "warning";
 };
+
+function VisibleSiteTracker({
+  sites,
+  onVisibleCountChange,
+}: {
+  sites: SiteMapItem[];
+  onVisibleCountChange: (count: number) => void;
+}) {
+  const map = useMapEvents({
+    moveend: updateVisibleSites,
+    zoomend: updateVisibleSites,
+  });
+
+  function updateVisibleSites() {
+    const bounds = map.getBounds();
+    onVisibleCountChange(sites.filter((site) => bounds.contains([site.latitude, site.longitude])).length);
+  }
+
+  useEffect(() => {
+    updateVisibleSites();
+  }, [map, onVisibleCountChange, sites]);
+
+  return null;
+}
 
 function InfoTile({ label, value, tone = "default" }: InfoTileProps) {
   return (
@@ -304,7 +352,10 @@ function formatAddress(site: SiteMapItem): string {
   return [streetLine, cityLine].filter(Boolean).join(", ") || "Adresse nicht hinterlegt";
 }
 
-function markerLabel(site: SiteMapItem): string {
+function siteMarkerLabel(site: SiteMapItem, mode: SiteLabelMode): string {
+  if (mode === "number") {
+    return site.number || truncateLabel(site.name || site.city || "Baustelle", 12);
+  }
   const prefix = site.number ? `${site.number} · ` : "";
   return `${prefix}${truncateLabel(site.name || site.city || "Baustelle")}`;
 }
@@ -320,7 +371,10 @@ function truncateLabel(value: string, max = 24): string {
   return `${value.slice(0, max - 3)}...`;
 }
 
-function markerColor(site: SiteMapItem): string {
+function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
+  if (mode === "points") {
+    return "#64748b";
+  }
   if (site.color && /^#[0-9a-f]{6}$/i.test(site.color)) {
     return site.color;
   }
@@ -331,6 +385,37 @@ function markerColor(site: SiteMapItem): string {
     return "#d18b00";
   }
   return "#64748b";
+}
+
+function labelModeForVisibleCount(count: number): SiteLabelMode {
+  if (count < 5) {
+    return "full";
+  }
+  if (count < 15) {
+    return "number";
+  }
+  return "points";
+}
+
+function buildSiteLabelOffsets(sites: SiteMapItem[]): Record<number, [number, number]> {
+  const groups = new Map<string, SiteMapItem[]>();
+  sites.forEach((site) => {
+    const key = `${Math.round(site.latitude / 0.025)}:${Math.round(site.longitude / 0.025)}`;
+    const group = groups.get(key) ?? [];
+    group.push(site);
+    groups.set(key, group);
+  });
+
+  const offsets: Record<number, [number, number]> = {};
+  groups.forEach((group) => {
+    group
+      .slice()
+      .sort((left, right) => left.id - right.id)
+      .forEach((site, index) => {
+        offsets[site.id] = LABEL_OFFSET_PATTERN[index % LABEL_OFFSET_PATTERN.length];
+      });
+  });
+  return offsets;
 }
 
 function mapProjectManagerOptions(sites: SiteMapItem[]): MapProjectManagerOption[] {
