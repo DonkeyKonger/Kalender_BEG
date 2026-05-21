@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.models.enums import PersonType
-from app.services.person_service import clean_person_values, person_snapshot
+from app.models.enums import PersonType, SiteLocationStatus
+from app.services.person_service import apply_selected_person_geocode, clean_person_values, person_snapshot
 
 
 def test_clean_person_values_generates_display_name_and_calendar_search_code():
@@ -43,3 +43,29 @@ def test_person_snapshot_uses_json_safe_enum_value():
     )
 
     assert person_snapshot(person)["person_type"] == "internal"
+
+
+def test_apply_selected_person_geocode_keeps_selected_coordinates():
+    values = {
+        "address_formatted": "Moorburger Strasse 16, Hamburg",
+        "address_latitude": 53.456,
+        "address_longitude": 9.987,
+        "address_location_status": SiteLocationStatus.GEOCODED,
+    }
+
+    assert apply_selected_person_geocode(values) is True
+    assert values["address_latitude"] == 53.456
+    assert values["address_location_status"] == SiteLocationStatus.GEOCODED
+
+
+def test_apply_selected_person_geocode_strips_unchecked_coordinates():
+    values = {
+        "address_latitude": 53.456,
+        "address_longitude": 9.987,
+        "address_location_status": SiteLocationStatus.UNCHECKED,
+    }
+
+    assert apply_selected_person_geocode(values) is False
+    assert "address_latitude" not in values
+    assert "address_longitude" not in values
+    assert values["address_location_status"] == SiteLocationStatus.UNCHECKED

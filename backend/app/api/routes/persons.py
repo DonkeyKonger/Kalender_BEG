@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
-from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
+from app.schemas.person import PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRead, PersonUpdate
+from app.services.geo_service import search_geocoding_candidates
 from app.services.person_service import PersonService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
@@ -21,6 +22,36 @@ def list_persons(
 ) -> list[PersonRead]:
     people = PersonService(db).list_people(is_active=is_active)
     return [PersonRead.model_validate(person) for person in people]
+
+
+@router.get("/map", response_model=PersonMapResponse)
+def person_map(
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> PersonMapResponse:
+    return PersonService(db).person_map()
+
+
+@router.get("/geocode/search", response_model=list[PersonGeocodeSearchResult])
+def search_person_geocode(
+    q: str = Query(..., min_length=3, max_length=200),
+    limit: int = Query(default=5, ge=1, le=5),
+    _user=Depends(CAN_READ),
+) -> list[PersonGeocodeSearchResult]:
+    return [
+        PersonGeocodeSearchResult(
+            label=candidate.label,
+            postal_code=candidate.postal_code,
+            city=candidate.city,
+            street=candidate.street,
+            house_number=candidate.house_number,
+            latitude=candidate.latitude,
+            longitude=candidate.longitude,
+            confidence=candidate.confidence,
+            source=candidate.source,
+        )
+        for candidate in search_geocoding_candidates(q, limit=limit)
+    ]
 
 
 @router.post("", response_model=PersonRead, status_code=201)

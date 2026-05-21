@@ -5,7 +5,7 @@ import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { StatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { Person, PersonCreate, PersonType } from "../types/person";
+import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
 import { calendarPersonCode } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
@@ -26,6 +26,15 @@ const emptyPerson: PersonCreate = {
   is_active: true,
   email: null,
   phone: null,
+  address_postal_code: null,
+  address_city: null,
+  address_street: null,
+  address_house_number: null,
+  address_extra: null,
+  address_formatted: null,
+  address_latitude: null,
+  address_longitude: null,
+  address_location_status: "unchecked",
   notes: null,
 };
 
@@ -121,6 +130,30 @@ export function PersonsPage() {
       setMessage("Person gespeichert.");
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht gespeichert werden."));
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
+  async function applyGeocodedPerson(personId: number, values: Partial<PersonCreate>) {
+    const draft = drafts[personId];
+    if (!draft) {
+      return;
+    }
+    const nextDraft = { ...draft, ...values };
+    setSavingPersonId(personId);
+    setError(null);
+    setMessage(null);
+    updateDraft(personId, values as Partial<EditablePerson>);
+    try {
+      const updated = await api.updatePerson(personId, normalizePersonPayload(nextDraft));
+      setPeople((current) =>
+        current.map((person) => person.id === updated.id ? updated : person).sort(comparePeople),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      setMessage("Startort aus Vorschlag uebernommen und gespeichert.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Startort konnte nicht gespeichert werden."));
     } finally {
       setSavingPersonId(null);
     }
@@ -223,6 +256,7 @@ export function PersonsPage() {
           <PersonFields
             draft={selectedDraft}
             onChange={(values) => updateDraft(selectedPerson.id, values)}
+            onGeocodeSelected={(values) => void applyGeocodedPerson(selectedPerson.id, values)}
           />
         )}
       </EntityDetailDrawer>
@@ -233,10 +267,98 @@ export function PersonsPage() {
 function PersonFields({
   draft,
   onChange,
+  onGeocodeSelected,
 }: {
   draft: PersonCreate;
   onChange: (values: Partial<PersonCreate>) => void;
+  onGeocodeSelected?: (values: Partial<PersonCreate>) => void;
 }) {
+  const [addressSearch, setAddressSearch] = useState(draft.address_formatted ?? "");
+  const [addressResults, setAddressResults] = useState<PersonGeocodeSearchResult[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
+  const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<PersonGeocodeSearchResult | null>(null);
+
+  useEffect(() => {
+    const query = addressSearch.trim();
+    if (selectedGeocodeResult && query === selectedGeocodeResult.label) {
+      setAddressResults([]);
+      setIsSearchingAddress(false);
+      return;
+    }
+    if (query.length < 3) {
+      setAddressResults([]);
+      setIsSearchingAddress(false);
+      setAddressSearchMessage(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingAddress(true);
+    setAddressSearchMessage(null);
+    const timer = window.setTimeout(() => {
+      api
+        .searchPersonAddress(query)
+        .then((results) => {
+          if (cancelled) {
+            return;
+          }
+          setAddressResults(results);
+          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Eingabe pruefen oder genauer formulieren.");
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAddressResults([]);
+            setAddressSearchMessage("Adresssuche aktuell nicht verfuegbar.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsSearchingAddress(false);
+          }
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [addressSearch, selectedGeocodeResult]);
+
+  function markAddressUnchecked(values: Partial<PersonCreate>): Partial<PersonCreate> {
+    return {
+      ...values,
+      address_formatted: null,
+      address_latitude: null,
+      address_longitude: null,
+      address_location_status: "unchecked",
+    };
+  }
+
+  function updateManualAddress(values: Partial<PersonCreate>) {
+    setSelectedGeocodeResult(null);
+    onChange(markAddressUnchecked(values));
+  }
+
+  function applyGeocodeResult(result: PersonGeocodeSearchResult) {
+    const selectedValues: Partial<PersonCreate> = {
+      address_postal_code: result.postal_code,
+      address_city: result.city,
+      address_street: result.street,
+      address_house_number: result.house_number,
+      address_formatted: result.label,
+      address_latitude: result.latitude,
+      address_longitude: result.longitude,
+      address_location_status: "geocoded",
+    };
+    setSelectedGeocodeResult(result);
+    onChange(selectedValues);
+    onGeocodeSelected?.(selectedValues);
+    setAddressSearch(result.label);
+    setAddressResults([]);
+    setAddressSearchMessage("Startort aus Vorschlag uebernommen und geprueft.");
+  }
+
   return (
     <div className="person-form-grid">
       <label>
@@ -302,6 +424,84 @@ function PersonFields({
         />
         <span>Aktiv</span>
       </label>
+
+      <section className="person-location-section site-location-section">
+        <div>
+          <h3>Adresse / Startort</h3>
+          <p>Adresse suchen, passenden Treffer auswaehlen. Koordinaten werden technisch gespeichert.</p>
+        </div>
+        <label className="address-field site-address-search">
+          <span>Adresse suchen</span>
+          <input
+            placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
+            value={addressSearch}
+            onChange={(event) => {
+              setSelectedGeocodeResult(null);
+              setAddressSearch(event.target.value);
+            }}
+          />
+          {isSearchingAddress && <small>Adresse wird gesucht...</small>}
+          {addressSearchMessage && <small>{addressSearchMessage}</small>}
+          {addressResults.length > 0 && (
+            <div className="site-address-results" role="listbox">
+              {addressResults.map((result) => (
+                <button
+                  key={`${result.latitude}-${result.longitude}-${result.label}`}
+                  type="button"
+                  onClick={() => applyGeocodeResult(result)}
+                >
+                  <strong>{result.label}</strong>
+                  <span>{formatGeocodeMeta(result)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </label>
+        <label>
+          <span>PLZ</span>
+          <input
+            value={draft.address_postal_code ?? ""}
+            onChange={(event) => updateManualAddress({ address_postal_code: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Stadt</span>
+          <input
+            value={draft.address_city ?? ""}
+            onChange={(event) => updateManualAddress({ address_city: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Strasse</span>
+          <input
+            value={draft.address_street ?? ""}
+            onChange={(event) => updateManualAddress({ address_street: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Hausnummer</span>
+          <input
+            value={draft.address_house_number ?? ""}
+            onChange={(event) => updateManualAddress({ address_house_number: event.target.value || null })}
+          />
+        </label>
+        <label className="address-field">
+          <span>Adresszusatz / Bereich</span>
+          <input
+            value={draft.address_extra ?? ""}
+            onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
+          />
+        </label>
+        <div className="site-location-readonly">
+          <span>Standortstatus</span>
+          <strong>{personLocationStatusLabels[draft.address_location_status]}</strong>
+        </div>
+        <div className="site-location-readonly">
+          <span>Koordinaten</span>
+          <strong>{formatCoordinates(draft.address_latitude, draft.address_longitude)}</strong>
+        </div>
+      </section>
+
       <label className="notes-field">
         <span>Notizen</span>
         <textarea
@@ -330,6 +530,15 @@ function toEditablePerson(person: Person): EditablePerson {
     is_active: person.is_active,
     email: person.email,
     phone: person.phone,
+    address_postal_code: person.address_postal_code,
+    address_city: person.address_city,
+    address_street: person.address_street,
+    address_house_number: person.address_house_number,
+    address_extra: person.address_extra,
+    address_formatted: person.address_formatted,
+    address_latitude: person.address_latitude,
+    address_longitude: person.address_longitude,
+    address_location_status: person.address_location_status,
     notes: person.notes,
   };
 }
@@ -352,6 +561,15 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
     short_code: person.short_code.trim() || `${firstName.slice(0, 1)}.${lastName}`.trim(),
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,
+    address_postal_code: person.address_postal_code?.trim() || null,
+    address_city: person.address_city?.trim() || null,
+    address_street: person.address_street?.trim() || null,
+    address_house_number: person.address_house_number?.trim() || null,
+    address_extra: person.address_extra?.trim() || null,
+    address_formatted: person.address_formatted?.trim() || null,
+    address_latitude: person.address_latitude,
+    address_longitude: person.address_longitude,
+    address_location_status: person.address_location_status,
     notes: person.notes?.trim() || null,
   };
 }
@@ -361,7 +579,11 @@ function comparePeople(left: Person, right: Person): number {
 }
 
 function personCardMeta(person: Person): string[] {
-  return [person.email, person.phone].filter((item): item is string => Boolean(item));
+  return [
+    person.email,
+    person.phone,
+    person.address_city ? `Startort: ${person.address_city}` : "",
+  ].filter((item): item is string => Boolean(item));
 }
 
 function personSearchText(person: Person): string {
@@ -374,8 +596,34 @@ function personSearchText(person: Person): string {
     personTypeLabels[person.person_type],
     person.email,
     person.phone,
+    person.address_postal_code,
+    person.address_city,
+    person.address_street,
+    person.address_house_number,
+    person.address_formatted,
+    personLocationStatusLabels[person.address_location_status],
     person.is_active ? "Aktiv" : "Inaktiv",
   ].filter(Boolean).join(" ").toLowerCase();
+}
+
+const personLocationStatusLabels: Record<PersonLocationStatus, string> = {
+  unchecked: "Ungeprueft",
+  geocoded: "Geprueft",
+  ambiguous: "Nicht eindeutig",
+  failed: "Fehler",
+};
+
+function formatCoordinates(latitude: number | null, longitude: number | null): string {
+  if (latitude === null || longitude === null) {
+    return "Noch nicht geprueft";
+  }
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+function formatGeocodeMeta(result: PersonGeocodeSearchResult): string {
+  const place = [result.postal_code, result.city].filter(Boolean).join(" ");
+  const precision = result.street || result.house_number ? "Adresse" : "Ort";
+  return [place, precision].filter(Boolean).join(" · ");
 }
 
 function readApiError(error: unknown, fallback: string): string {

@@ -2140,6 +2140,10 @@ button.person-chip:focus-visible {
 .notes-field {
   grid-column: 1 / -1;
 }
+.person-location-section {
+  grid-column: 1 / -1;
+}
+
 
 @media (min-width: 760px) {
   .person-form-grid {
@@ -3244,6 +3248,49 @@ button.person-chip:focus-visible {
   color: #9a6700;
 }
 
+
+.site-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 10px 26px rgb(18 29 52 / 5%);
+}
+
+.site-map-controls label:not(.checkbox-field) {
+  display: grid;
+  min-width: 190px;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.site-map-controls select {
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172033;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+
+.site-map-toggle {
+  min-height: 38px;
+  align-items: center;
+}
+
+.site-map-loading-note {
+  color: #65738a;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .site-map-card {
   position: relative;
   z-index: 0;
@@ -3285,6 +3332,13 @@ button.person-chip:focus-visible {
   font-weight: 750;
   line-height: 1.15;
   white-space: nowrap;
+}
+
+
+.site-map-person-label {
+  border-color: #fed7aa;
+  background: rgb(255 247 237 / 94%);
+  color: #7c2d12;
 }
 
 .site-map-marker-label::before {

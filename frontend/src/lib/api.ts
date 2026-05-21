@@ -2,7 +2,7 @@ import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
-import type { Person, PersonCreate, PersonUpdate } from "../types/person";
+import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonUpdate } from "../types/person";
 import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
@@ -98,6 +98,15 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<Person[]>(`/persons${suffix}`);
+  },
+
+  async personMap(): Promise<PersonMapResponse> {
+    return request<PersonMapResponse>("/persons/map");
+  },
+
+  async searchPersonAddress(query: string): Promise<PersonGeocodeSearchResult[]> {
+    const search = new URLSearchParams({ q: query, limit: "5" });
+    return request<PersonGeocodeSearchResult[]>(`/persons/geocode/search?${search.toString()}`);
   },
 
   async users(): Promise<AdminUser[]> {
