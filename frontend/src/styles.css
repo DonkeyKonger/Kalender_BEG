@@ -498,11 +498,11 @@ button:disabled {
 
 .matrix-table th,
 .matrix-table td {
-  height: 54px;
+  height: 44px;
   border-right: 1px solid #dce3ee;
   border-bottom: 1px solid #dce3ee;
   background: #ffffff;
-  padding: 7px 8px;
+  padding: 5px 6px;
   vertical-align: middle;
 }
 
@@ -510,7 +510,7 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 4;
-  height: 48px;
+  height: 40px;
   background: #eef3f9;
   color: #334155;
   font-size: 0.75rem;
@@ -571,12 +571,12 @@ button:disabled {
 
 .matrix-status-select {
   width: 100%;
-  min-height: 26px;
+  min-height: 23px;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 3px 20px 3px 8px;
+  padding: 2px 18px 2px 7px;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
   cursor: pointer;
 }
@@ -630,7 +630,7 @@ button:disabled {
 
 .row-heading-content {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   min-width: 0;
 }
@@ -691,7 +691,7 @@ button:disabled {
 .site-color {
   display: inline-block;
   width: 7px;
-  height: 34px;
+  height: 28px;
   border-radius: 4px;
   vertical-align: middle;
 }
@@ -1130,21 +1130,21 @@ button.entity-card:focus-visible {
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
   align-items: center;
   width: 100%;
-  min-height: calc(var(--assignment-layers, 1) * 26px);
+  min-height: calc(var(--assignment-layers, 1) * 22px);
 }
 
 .person-chip,
 .absence-chip {
   display: inline-flex;
   align-items: center;
-  max-width: 96px;
-  min-height: 22px;
+  max-width: 92px;
+  min-height: 19px;
   overflow: hidden;
   border-radius: 5px;
-  padding: 3px 5px;
+  padding: 2px 5px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.72rem;
@@ -1165,13 +1165,26 @@ button.person-chip:focus-visible {
 
 .person-chip.is-assignment-run {
   position: absolute;
-  top: calc(var(--assignment-layer) * 26px);
+  top: calc(var(--assignment-layer) * 22px);
   left: 0;
   z-index: 2;
   justify-content: flex-start;
   max-width: none;
+  overflow: visible;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
   pointer-events: auto;
+}
+
+.person-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.person-chip.is-assignment-run .person-chip-label {
+  position: sticky;
+  left: calc(var(--fixed-columns-width, 552px) + 10px);
+  max-width: min(140px, 100%);
 }
 
 .absence-chip {
@@ -1275,15 +1288,16 @@ button.person-chip:focus-visible {
 }
 
 .matrix-info-editor textarea {
+  box-sizing: border-box;
   width: 100%;
-  min-height: 55px;
-  max-height: 110px;
+  min-height: 40px;
+  max-height: 86px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
   color: #a8322b;
-  padding: 5px 6px;
-  font-size: 0.75rem;
+  padding: 4px 5px;
+  font-size: 0.72rem;
   line-height: 1.2;
   resize: vertical;
   white-space: normal;
@@ -1321,14 +1335,14 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .matrix-table th,
 .matrix-page.is-compact .matrix-table td {
-  height: 56px;
-  padding: 4px 6px;
+  height: 44px;
+  padding: 3px 5px;
 }
 
 .matrix-page.is-compact .matrix-table thead th {
-  height: 42px;
-  font-size: 0.68rem;
-  padding: 5px 6px;
+  height: 36px;
+  font-size: 0.66rem;
+  padding: 4px 5px;
 }
 
 .matrix-page.is-compact .site-col {
@@ -1377,7 +1391,7 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .site-color {
   width: 6px;
-  height: 30px;
+  height: 24px;
 }
 
 .matrix-page.is-compact .matrix-site-link {
@@ -1405,8 +1419,8 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea {
-  min-height: 42px;
-  max-height: 42px;
+  min-height: 34px;
+  max-height: 34px;
   padding: 3px 4px;
   font-size: 0.66rem;
   line-height: 1.18;
@@ -1424,7 +1438,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-status-select {
-  min-height: 24px;
+  min-height: 21px;
   padding: 2px 18px 2px 7px;
   font-size: 0.65rem;
 }
@@ -1439,21 +1453,21 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .cell-stack {
-  gap: 3px;
-  min-height: calc(var(--assignment-layers, 1) * 22px);
+  gap: 2px;
+  min-height: calc(var(--assignment-layers, 1) * 19px);
 }
 
 .matrix-page.is-compact .person-chip,
 .matrix-page.is-compact .absence-chip {
-  max-width: 82px;
-  min-height: 19px;
+  max-width: 80px;
+  min-height: 17px;
   border-radius: 5px;
   padding: 2px 4px;
   font-size: 0.64rem;
 }
 
 .matrix-page.is-compact .person-chip.is-assignment-run {
-  top: calc(var(--assignment-layer) * 22px);
+  top: calc(var(--assignment-layer) * 19px);
 }
 
 .matrix-page.is-compact .save-dot {
@@ -2990,11 +3004,11 @@ button.person-chip:focus-visible {
   position: fixed;
   z-index: 120;
   width: min(390px, calc(100vw - 16px));
-  border: 1px solid #b9c7d8;
+  border: 1px solid rgb(185 199 216 / 82%);
   border-radius: 10px;
-  background: #ffffff;
+  background: rgb(255 255 255 / 96%);
   padding: 14px;
-  box-shadow: 0 22px 52px rgb(18 29 52 / 20%);
+  box-shadow: 0 18px 42px rgb(18 29 52 / 16%);
 }
 
 .matrix-cell-editor-popup .cell-editor {

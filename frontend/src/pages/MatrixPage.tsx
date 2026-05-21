@@ -914,6 +914,7 @@ function MatrixTable(props: MatrixTableProps) {
     width: tableWidth,
     minWidth: tableWidth,
     "--day-column-width": `${props.dayColumnWidth}px`,
+    "--fixed-columns-width": `${props.isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH}px`,
   } as CSSProperties;
 
   return (
@@ -1048,7 +1049,6 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             <CellDisplay
               cell={cell}
               cellIndex={cellIndex}
-              dayColumnWidth={props.dayColumnWidth}
               isEditable={props.isEditable}
               rowCells={row.cells}
               onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)}
@@ -1093,14 +1093,12 @@ function MatrixStatusSelect({
 function CellDisplay({
   cell,
   cellIndex,
-  dayColumnWidth,
   isEditable,
   rowCells,
   onDeleteAssignment,
 }: {
   cell: MatrixCell;
   cellIndex: number;
-  dayColumnWidth: number;
   isEditable: boolean;
   rowCells: MatrixCell[];
   onDeleteAssignment: (personId: number) => void;
@@ -1126,7 +1124,8 @@ function CellDisplay({
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
-              width: span > 1 ? `${span * dayColumnWidth - 8}px` : undefined,
+              "--assignment-span": span,
+              width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
             } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
@@ -1140,7 +1139,7 @@ function CellDisplay({
               onDeleteAssignment(assignment.person.id);
             }}
           >
-            {assignment.person.short_code}
+            <span className="person-chip-label">{assignment.person.short_code}</span>
           </button>
         );
       })}
@@ -1176,7 +1175,6 @@ function MatrixInfoEditor({
       <textarea
         className={matrixInfoTextClassName(value)}
         disabled={disabled || isSaving}
-        placeholder="Info"
         title={value || undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
