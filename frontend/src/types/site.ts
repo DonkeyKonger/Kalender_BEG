@@ -1,6 +1,6 @@
 import type { SiteStatus } from "./matrix";
 
-export type SiteLocationStatus = "unknown" | "geocoded" | "manually_set" | "verified";
+export type SiteLocationStatus = "unchecked" | "geocoded" | "ambiguous" | "failed";
 
 export type SitePerson = {
   id: number;
@@ -18,6 +18,9 @@ export type Site = {
   address: string | null;
   postal_code: string | null;
   city: string | null;
+  street: string | null;
+  house_number: string | null;
+  address_extra: string | null;
   latitude: number | null;
   longitude: number | null;
   geofence_radius_m: number;
@@ -41,6 +44,9 @@ export type SiteCreate = {
   address: string | null;
   postal_code: string | null;
   city: string | null;
+  street: string | null;
+  house_number: string | null;
+  address_extra: string | null;
   latitude: number | null;
   longitude: number | null;
   geofence_radius_m: number;

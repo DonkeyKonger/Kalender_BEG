@@ -26,10 +26,10 @@ class SiteStatus(StrEnum):
 
 
 class SiteLocationStatus(StrEnum):
-    UNKNOWN = "unknown"
+    UNCHECKED = "unchecked"
     GEOCODED = "geocoded"
-    MANUALLY_SET = "manually_set"
-    VERIFIED = "verified"
+    AMBIGUOUS = "ambiguous"
+    FAILED = "failed"
 
 
 class AssignmentType(StrEnum):

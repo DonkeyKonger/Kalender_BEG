@@ -18,10 +18,13 @@ const emptySite: SiteCreate = {
   address: null,
   postal_code: null,
   city: null,
+  street: null,
+  house_number: null,
+  address_extra: null,
   latitude: null,
   longitude: null,
   geofence_radius_m: 5000,
-  location_status: "unknown",
+  location_status: "unchecked",
   customer: null,
   project_manager_person_id: null,
   status: "active",
@@ -44,6 +47,7 @@ export function SitesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
+  const [checkingLocationSiteId, setCheckingLocationSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -148,6 +152,38 @@ export function SitesPage() {
       setError(readApiError(requestError, "Baustelle konnte nicht geschlossen werden."));
     } finally {
       setSavingSiteId(null);
+    }
+  }
+
+  async function checkSiteLocation(siteId: number) {
+    const draft = drafts[siteId];
+    if (!draft) {
+      return;
+    }
+    const validationError = validateSitePayload(draft);
+    if (validationError) {
+      setError(validationError);
+      setMessage(null);
+      return;
+    }
+    setCheckingLocationSiteId(siteId);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateSite(siteId, normalizeSitePayload(draft));
+      const updated = await api.checkSiteLocation(siteId);
+      replaceSite(updated);
+      if (updated.location_status === "geocoded") {
+        setMessage("Standort wurde geprueft und Koordinaten wurden gespeichert.");
+      } else if (updated.location_status === "ambiguous") {
+        setError("Standort ist nicht eindeutig. Bitte Adresse genauer erfassen.");
+      } else {
+        setError("Standort konnte nicht geprueft werden. Bitte Adresse pruefen.");
+      }
+    } catch (requestError) {
+      setError(readApiError(requestError, "Standort konnte nicht geprueft werden."));
+    } finally {
+      setCheckingLocationSiteId(null);
     }
   }
 
@@ -324,7 +360,9 @@ export function SitesPage() {
             draft={selectedDraft}
             people={people}
             disabled={!canEdit}
+            isCheckingLocation={checkingLocationSiteId === selectedSite.id}
             onChange={(values) => updateDraft(selectedSite.id, values)}
+            onCheckLocation={() => void checkSiteLocation(selectedSite.id)}
           />
         )}
       </EntityDetailDrawer>
@@ -336,12 +374,16 @@ function SiteFields({
   draft,
   people,
   disabled = false,
+  isCheckingLocation = false,
   onChange,
+  onCheckLocation,
 }: {
   draft: SiteCreate;
   people: Person[];
   disabled?: boolean;
+  isCheckingLocation?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
+  onCheckLocation?: () => void;
 }) {
   return (
     <div className="site-form-grid">
@@ -411,19 +453,10 @@ function SiteFields({
           onChange={(event) => onChange({ color: event.target.value })}
         />
       </label>
-      <label className="address-field">
-        <span>Adresse / Standort</span>
-        <input
-          disabled={disabled}
-          value={draft.address ?? ""}
-          onChange={(event) => onChange({ address: event.target.value || null })}
-        />
-      </label>
-
       <section className="site-location-section">
         <div>
           <h3>Standort / GPS</h3>
-          <p>Koordinaten koennen manuell gepflegt werden. Der Radius ist fuer V1 bewusst grosszuegig.</p>
+          <p>Adresse pflegen, Standort pruefen lassen. Koordinaten werden technisch gespeichert.</p>
         </div>
         <label>
           <span>PLZ</span>
@@ -442,23 +475,27 @@ function SiteFields({
           />
         </label>
         <label>
-          <span>Latitude</span>
+          <span>Strasse</span>
           <input
             disabled={disabled}
-            inputMode="decimal"
-            placeholder="z. B. 52.2799"
-            value={formatNumberInput(draft.latitude)}
-            onChange={(event) => onChange({ latitude: parseNullableNumber(event.target.value) })}
+            value={draft.street ?? ""}
+            onChange={(event) => onChange({ street: event.target.value || null })}
           />
         </label>
         <label>
-          <span>Longitude</span>
+          <span>Hausnummer</span>
           <input
             disabled={disabled}
-            inputMode="decimal"
-            placeholder="z. B. 8.0472"
-            value={formatNumberInput(draft.longitude)}
-            onChange={(event) => onChange({ longitude: parseNullableNumber(event.target.value) })}
+            value={draft.house_number ?? ""}
+            onChange={(event) => onChange({ house_number: event.target.value || null })}
+          />
+        </label>
+        <label className="address-field">
+          <span>Adresszusatz / Bereich</span>
+          <input
+            disabled={disabled}
+            value={draft.address_extra ?? ""}
+            onChange={(event) => onChange({ address_extra: event.target.value || null })}
           />
         </label>
         <label>
@@ -472,22 +509,21 @@ function SiteFields({
             onChange={(event) => onChange({ geofence_radius_m: parsePositiveInt(event.target.value) ?? 5000 })}
           />
         </label>
-        <label>
+        <div className="site-location-readonly">
           <span>Standortstatus</span>
-          <select
-            disabled={disabled}
-            value={draft.location_status}
-            onChange={(event) => onChange({ location_status: event.target.value as SiteLocationStatus })}
-          >
-            {Object.entries(siteLocationStatusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="icon-button secondary" disabled type="button">
-          Standort pruefen spaeter
+          <strong>{siteLocationStatusLabels[draft.location_status]}</strong>
+        </div>
+        <div className="site-location-readonly">
+          <span>Koordinaten</span>
+          <strong>{formatCoordinates(draft.latitude, draft.longitude)}</strong>
+        </div>
+        <button
+          className="icon-button secondary"
+          disabled={disabled || !onCheckLocation || isCheckingLocation}
+          type="button"
+          onClick={onCheckLocation}
+        >
+          {isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
         </button>
       </section>
 
@@ -516,6 +552,9 @@ function toEditableSite(site: Site): EditableSite {
     address: site.address,
     postal_code: site.postal_code,
     city: site.city,
+    street: site.street,
+    house_number: site.house_number,
+    address_extra: site.address_extra,
     latitude: site.latitude,
     longitude: site.longitude,
     geofence_radius_m: site.geofence_radius_m,
@@ -544,6 +583,9 @@ function normalizeSitePayload(site: SiteCreate): SiteCreate {
     address: cleanOptionalText(site.address),
     postal_code: cleanOptionalText(site.postal_code),
     city: cleanOptionalText(site.city),
+    street: cleanOptionalText(site.street),
+    house_number: cleanOptionalText(site.house_number),
+    address_extra: cleanOptionalText(site.address_extra),
     latitude: site.latitude,
     longitude: site.longitude,
     geofence_radius_m: site.geofence_radius_m || 5000,
@@ -581,6 +623,9 @@ function siteSearchText(site: Site): string {
     site.address,
     site.postal_code,
     site.city,
+    site.street,
+    site.house_number,
+    site.address_extra,
     site.customer,
     site.project_manager?.display_name,
     site.project_manager?.short_code,
@@ -589,23 +634,17 @@ function siteSearchText(site: Site): string {
 }
 
 const siteLocationStatusLabels: Record<SiteLocationStatus, string> = {
-  unknown: "Ungeprueft",
-  geocoded: "Geocodiert",
-  manually_set: "Manuell gesetzt",
-  verified: "Geprueft",
+  unchecked: "Ungeprueft",
+  geocoded: "Geprueft",
+  ambiguous: "Nicht eindeutig",
+  failed: "Fehler",
 };
 
-function formatNumberInput(value: number | null): string {
-  return value === null ? "" : String(value);
-}
-
-function parseNullableNumber(value: string): number | null {
-  if (!value.trim()) {
-    return null;
+function formatCoordinates(latitude: number | null, longitude: number | null): string {
+  if (latitude === null || longitude === null) {
+    return "Noch nicht geprueft";
   }
-  const normalized = value.replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function parsePositiveInt(value: string): number | null {

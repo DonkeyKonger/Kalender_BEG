@@ -17,13 +17,16 @@ class Site(TimestampMixin, Base):
     address: Mapped[str | None] = mapped_column(String(500))
     postal_code: Mapped[str | None] = mapped_column(String(20))
     city: Mapped[str | None] = mapped_column(String(120))
+    street: Mapped[str | None] = mapped_column(String(200))
+    house_number: Mapped[str | None] = mapped_column(String(40))
+    address_extra: Mapped[str | None] = mapped_column(String(200))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
     geofence_radius_m: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
     location_status: Mapped[SiteLocationStatus] = mapped_column(
         Enum(SiteLocationStatus, values_callable=enum_values, name="site_location_status"),
         nullable=False,
-        default=SiteLocationStatus.UNKNOWN,
+        default=SiteLocationStatus.UNCHECKED,
     )
     customer: Mapped[str | None] = mapped_column(String(200))
     project_manager_person_id: Mapped[int | None] = mapped_column(

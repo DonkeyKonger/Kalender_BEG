@@ -3,18 +3,20 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.enums import SiteStatus
+from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
 from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteUpdate
 from app.services.audit_service import AuditService
-from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M
+from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address
 
 
-OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "customer", "info", "color"]
+OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
 CLOSED_STATUSES = {SiteStatus.CLOSED, SiteStatus.ARCHIVED}
 OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED}
+ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
+TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
 
 
 class SiteService:
@@ -36,6 +38,9 @@ class SiteService:
     def create_site(self, payload: SiteCreate, user_id: int) -> Site:
         values = clean_site_values(payload.model_dump())
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
+        for field in TECHNICAL_LOCATION_FIELDS:
+            values.pop(field, None)
+        values["location_status"] = SiteLocationStatus.UNCHECKED
         site = Site(**values)
         self._apply_status_metadata(site, site.status, user_id)
         self.sites.add(site)
@@ -60,11 +65,21 @@ class SiteService:
         values = clean_site_values(payload.model_dump(exclude_unset=True))
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
         old_value = site_snapshot(site)
+        address_changed = any(
+            field in values and getattr(site, field) != values[field]
+            for field in ADDRESS_FIELDS
+        )
+        for field in TECHNICAL_LOCATION_FIELDS:
+            values.pop(field, None)
         status_value = values.get("status")
         if status_value is not None:
             self._apply_status_metadata(site, status_value, user_id)
         for field, value in values.items():
             setattr(site, field, value)
+        if address_changed:
+            site.latitude = None
+            site.longitude = None
+            site.location_status = SiteLocationStatus.UNCHECKED
         self.audit.record(
             user_id=user_id,
             action="site.updated",
@@ -115,6 +130,31 @@ class SiteService:
         self.db.refresh(site)
         return site
 
+    def check_location(self, site_id: int, user_id: int) -> Site:
+        site = self.get_site(site_id)
+        old_value = site_snapshot(site)
+        candidates = geocode_site_address(site)
+        if len(candidates) == 1:
+            candidate = candidates[0]
+            site.latitude = candidate.latitude
+            site.longitude = candidate.longitude
+            site.location_status = SiteLocationStatus.GEOCODED
+        elif len(candidates) > 1:
+            site.location_status = SiteLocationStatus.AMBIGUOUS
+        else:
+            site.location_status = SiteLocationStatus.FAILED
+        self.audit.record(
+            user_id=user_id,
+            action="site.location_checked",
+            entity_type="site",
+            entity_id=site.id,
+            old_value=old_value,
+            new_value=site_snapshot(site),
+        )
+        self.db.commit()
+        self.db.refresh(site)
+        return site
+
     def _apply_status_metadata(self, site: Site, status_value: SiteStatus, user_id: int) -> None:
         if status_value in CLOSED_STATUSES:
             if site.closed_at is None:
@@ -152,6 +192,9 @@ def site_snapshot(site: Site) -> dict:
         "address": site.address,
         "postal_code": site.postal_code,
         "city": site.city,
+        "street": site.street,
+        "house_number": site.house_number,
+        "address_extra": site.address_extra,
         "latitude": site.latitude,
         "longitude": site.longitude,
         "geofence_radius_m": site.geofence_radius_m,

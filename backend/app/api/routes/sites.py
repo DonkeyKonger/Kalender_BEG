@@ -65,6 +65,16 @@ def close_site(
     return SiteRead.model_validate(site)
 
 
+@router.post("/{site_id}/check-location", response_model=SiteRead)
+def check_site_location(
+    site_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> SiteRead:
+    site = SiteService(db).check_location(site_id, current_user.id)
+    return SiteRead.model_validate(site)
+
+
 @router.post("/{site_id}/reactivate", response_model=SiteRead)
 def reactivate_site(
     site_id: int,

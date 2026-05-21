@@ -39,10 +39,13 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
         address=None,
         postal_code="28832",
         city="Achim",
+        street="Hauptstrasse",
+        house_number="12",
+        address_extra="Halle links",
         latitude=53.0142,
         longitude=9.0263,
         geofence_radius_m=5000,
-        location_status=SiteLocationStatus.MANUALLY_SET,
+        location_status=SiteLocationStatus.GEOCODED,
         customer="Badener Elektro",
         project_manager_person_id=3,
         status=SiteStatus.CLOSED,
@@ -55,6 +58,6 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
     snapshot = site_snapshot(site)
 
     assert snapshot["status"] == "closed"
-    assert snapshot["location_status"] == "manually_set"
+    assert snapshot["location_status"] == "geocoded"
     assert snapshot["geofence_radius_m"] == 5000
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"

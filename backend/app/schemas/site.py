@@ -22,10 +22,13 @@ class SiteBase(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     postal_code: str | None = Field(default=None, max_length=20)
     city: str | None = Field(default=None, max_length=120)
+    street: str | None = Field(default=None, max_length=200)
+    house_number: str | None = Field(default=None, max_length=40)
+    address_extra: str | None = Field(default=None, max_length=200)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     geofence_radius_m: int = Field(default=5000, ge=1, le=100000)
-    location_status: SiteLocationStatus = SiteLocationStatus.UNKNOWN
+    location_status: SiteLocationStatus = SiteLocationStatus.UNCHECKED
     customer: str | None = Field(default=None, max_length=200)
     project_manager_person_id: int | None = None
     status: SiteStatus = SiteStatus.ACTIVE
@@ -44,6 +47,9 @@ class SiteUpdate(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     postal_code: str | None = Field(default=None, max_length=20)
     city: str | None = Field(default=None, max_length=120)
+    street: str | None = Field(default=None, max_length=200)
+    house_number: str | None = Field(default=None, max_length=40)
+    address_extra: str | None = Field(default=None, max_length=200)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     geofence_radius_m: int | None = Field(default=None, ge=1, le=100000)

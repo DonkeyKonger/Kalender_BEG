@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from math import asin, cos, radians, sin, sqrt
 from typing import Protocol
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 DEFAULT_SITE_GEOFENCE_RADIUS_M = 5000
 EARTH_RADIUS_M = 6_371_000
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+GEOCODING_USER_AGENT = "Kalender-Baustellen/1.0"
 
 
 class CoordinateLike(Protocol):
@@ -23,6 +29,13 @@ class GeofenceCheckResult:
     distance_m: float | None
     radius_m: int
     reason: str
+
+
+@dataclass(frozen=True)
+class GeocodingCandidate:
+    latitude: float
+    longitude: float
+    label: str
 
 
 def distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -64,10 +77,53 @@ def is_point_inside_site_geofence(
     )
 
 
-def geocode_site_address(site: object) -> None:
-    """Placeholder for a later geocoding provider integration.
+def geocode_site_address(site: object) -> list[GeocodingCandidate]:
+    query = site_address_query(site)
+    if not query:
+        return []
+    return fetch_geocoding_candidates(query)
 
-    V1 supports manually maintained coordinates. A future provider must be wired
-    through configuration, never with hardcoded API keys.
-    """
-    return None
+
+def site_address_query(site: object) -> str | None:
+    street = " ".join(
+        value
+        for value in [getattr(site, "street", None), getattr(site, "house_number", None)]
+        if value
+    )
+    parts = [
+        street or getattr(site, "address", None),
+        getattr(site, "postal_code", None),
+        getattr(site, "city", None) or getattr(site, "location", None),
+        "Deutschland",
+    ]
+    query = ", ".join(str(part).strip() for part in parts if part and str(part).strip())
+    return query or None
+
+
+def fetch_geocoding_candidates(query: str) -> list[GeocodingCandidate]:
+    params = urlencode({"q": query, "format": "jsonv2", "limit": "2", "addressdetails": "1"})
+    request = Request(
+        f"{NOMINATIM_SEARCH_URL}?{params}",
+        headers={"User-Agent": GEOCODING_USER_AGENT, "Accept": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError):
+        return []
+
+    candidates: list[GeocodingCandidate] = []
+    for item in payload[:2]:
+        try:
+            latitude = float(item["lat"])
+            longitude = float(item["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        candidates.append(
+            GeocodingCandidate(
+                latitude=latitude,
+                longitude=longitude,
+                label=str(item.get("display_name") or query),
+            )
+        )
+    return candidates

@@ -178,6 +178,10 @@ export const api = {
     return request<Site>(`/sites/${siteId}/reactivate`, { method: "POST" });
   },
 
+  async checkSiteLocation(siteId: number): Promise<Site> {
+    return request<Site>(`/sites/${siteId}/check-location`, { method: "POST" });
+  },
+
   async absences(params: { start?: string; end?: string; personId?: number | null } = {}): Promise<Absence[]> {
     const search = new URLSearchParams();
     if (params.start) {

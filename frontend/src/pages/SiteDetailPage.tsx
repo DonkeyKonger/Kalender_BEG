@@ -72,8 +72,9 @@ export function SiteDetailPage() {
 
         <DetailSection title="Adresse / Standort" icon={MapPin}>
           <DetailItem label="Ort" value={site.location} />
-          <DetailItem label="Adresse" value={site.address} />
           <DetailItem label="PLZ / Stadt" value={[site.postal_code, site.city].filter(Boolean).join(" ")} />
+          <DetailItem label="Strasse" value={[site.street, site.house_number].filter(Boolean).join(" ")} />
+          <DetailItem label="Adresszusatz" value={site.address_extra || site.address} />
           <DetailItem label="Koordinaten" value={formatCoordinates(site.latitude, site.longitude)} />
           <DetailItem label="Radius" value={`${site.geofence_radius_m} m`} />
           <DetailItem label="Standortstatus" value={formatLocationStatus(site.location_status)} />
@@ -137,15 +138,15 @@ function formatCoordinates(latitude: number | null, longitude: number | null): s
   if (latitude === null || longitude === null) {
     return null;
   }
-  return `${latitude}, ${longitude}`;
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function formatLocationStatus(status: Site["location_status"]): string {
   const labels: Record<Site["location_status"], string> = {
-    unknown: "Ungeprueft",
-    geocoded: "Geocodiert",
-    manually_set: "Manuell gesetzt",
-    verified: "Geprueft",
+    unchecked: "Ungeprueft",
+    geocoded: "Geprueft",
+    ambiguous: "Nicht eindeutig",
+    failed: "Fehler",
   };
   return labels[status];
 }
