@@ -995,6 +995,8 @@ button.entity-card:focus-visible {
   position: relative;
   overflow: visible;
   background: #ffffff;
+  cursor: cell;
+  user-select: none;
 }
 
 .cell-stack {

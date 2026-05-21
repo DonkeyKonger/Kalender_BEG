@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -30,6 +30,16 @@ type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 type DraftEntry = MatrixEntryInput & { key: string; label: string };
 type ActiveCell = { siteId: number; date: string; endDate: string; key: CellKey };
 type EditorAnchor = { bottom: number; left: number; top: number; width: number };
+type SelectionCell = { siteId: number; date: string; dayIndex: number };
+type CellRange = {
+  siteId: number;
+  startDate: string;
+  endDate: string;
+  startIndex: number;
+  endIndex: number;
+  dates: string[];
+};
+type MatrixCellMouseEvent = ReactMouseEvent<HTMLTableCellElement>;
 type UndoItem = {
   siteId: number;
   date: string;
@@ -47,6 +57,10 @@ export function MatrixPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
   const [editorAnchor, setEditorAnchor] = useState<EditorAnchor | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStartCell, setSelectionStartCell] = useState<SelectionCell | null>(null);
+  const [selectionEndCell, setSelectionEndCell] = useState<SelectionCell | null>(null);
+  const [activeEditorRange, setActiveEditorRange] = useState<CellRange | null>(null);
   const [draftEntries, setDraftEntries] = useState<DraftEntry[]>([]);
   const [initialEntries, setInitialEntries] = useState<DraftEntry[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
@@ -55,13 +69,22 @@ export function MatrixPage() {
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
+  const skipNextDraftAutosaveRef = useRef(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
+  const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
+  const selectedCellRange = useMemo(() => {
+    if (!matrix || !selectionStartCell || !selectionEndCell) {
+      return null;
+    }
+    return buildCellRange(selectionStartCell, selectionEndCell, matrix.days);
+  }, [matrix, selectionEndCell, selectionStartCell]);
+  const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
 
   const loadMatrix = useCallback(async () => {
     setIsLoading(true);
@@ -114,6 +137,10 @@ export function MatrixPage() {
     if (!activeCell) {
       return;
     }
+    if (skipNextDraftAutosaveRef.current) {
+      skipNextDraftAutosaveRef.current = false;
+      return;
+    }
     setSaveStatus((current) => ({ ...current, [activeCell.key]: "dirty" }));
     if (autosaveRef.current) {
       window.clearTimeout(autosaveRef.current);
@@ -134,25 +161,30 @@ export function MatrixPage() {
     }
     if (extendRange && activeCell?.siteId === row.site.id) {
       const [startDate, endDate] = sortDates(activeCell.date, cell.date);
-      const key = cellKey(row.site.id, startDate);
-      setActiveCell({ siteId: row.site.id, date: startDate, endDate, key });
-      if (anchor) {
-        setEditorAnchor(anchor);
-      }
-      setCellMessage((current) => ({
-        ...current,
-        [key]: "Zeitraum gewaehlt - mit Speichern bestaetigen",
-      }));
+      const range = rangeFromDates(row.site.id, startDate, endDate, matrix?.days ?? []);
+      openEditorForRange(row, cell, range, anchor);
       return;
     }
-    const key = cellKey(row.site.id, cell.date);
+    openEditorForRange(row, cell, singleCellRange(row.site.id, cell.date, matrix?.days ?? []), anchor);
+  }
+
+  function openEditorForRange(row: MatrixRow, cell: MatrixCell, range: CellRange, anchor?: EditorAnchor) {
+    const key = cellKey(row.site.id, range.startDate);
     const entries = entriesFromCell(cell);
-    setActiveCell({ siteId: row.site.id, date: cell.date, endDate: cell.date, key });
+    skipNextDraftAutosaveRef.current = true;
+    setActiveCell({ siteId: row.site.id, date: range.startDate, endDate: range.endDate, key });
+    setActiveEditorRange(range);
     setEditorAnchor(anchor ?? null);
     setDraftEntries(entries);
     setInitialEntries(entries);
     setSelectedPersonId("");
     setExternalName("");
+    if (range.startDate !== range.endDate) {
+      setCellMessage((current) => ({
+        ...current,
+        [key]: "Zeitraum gewaehlt - mit Speichern bestaetigen",
+      }));
+    }
   }
 
   function addSelectedPerson() {
@@ -184,6 +216,8 @@ export function MatrixPage() {
   function closeActiveEditor() {
     setActiveCell(null);
     setEditorAnchor(null);
+    setActiveEditorRange(null);
+    clearSelection();
     setSelectedPersonId("");
     setExternalName("");
   }
@@ -192,7 +226,7 @@ export function MatrixPage() {
     if (!activeCell) {
       return;
     }
-    const hasChanges = !sameEntries(initialEntries, draftEntries) || activeCell.endDate !== activeCell.date;
+    const hasChanges = !sameEntries(initialEntries, draftEntries);
     if (!hasChanges) {
       closeActiveEditor();
       return;
@@ -255,6 +289,9 @@ export function MatrixPage() {
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
       if (options.closeOnSuccess) {
         closeActiveEditor();
+      } else {
+        setActiveEditorRange(null);
+        clearSelection();
       }
     } catch (requestError) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "error" }));
@@ -266,6 +303,63 @@ export function MatrixPage() {
       }));
     }
   }
+
+  function startCellSelection(row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) {
+    if (!isEditable || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    if (activeCell) {
+      closeActiveEditor();
+    }
+    const selectionCell = { siteId: row.site.id, date: cell.date, dayIndex: cellIndex };
+    selectionAnchorRef.current = anchorFromRect(event.currentTarget.getBoundingClientRect());
+    setIsSelecting(true);
+    setSelectionStartCell(selectionCell);
+    setSelectionEndCell(selectionCell);
+  }
+
+  function extendCellSelection(row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) {
+    if (!isSelecting || !selectionStartCell || row.site.id !== selectionStartCell.siteId) {
+      return;
+    }
+    selectionAnchorRef.current = anchorFromRect(event.currentTarget.getBoundingClientRect());
+    setSelectionEndCell({ siteId: row.site.id, date: cell.date, dayIndex: cellIndex });
+  }
+
+  function finishCellSelection(row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) {
+    if (!isSelecting || !selectionStartCell || row.site.id !== selectionStartCell.siteId) {
+      return;
+    }
+    event.preventDefault();
+    const endCell = { siteId: row.site.id, date: cell.date, dayIndex: cellIndex };
+    const range = buildCellRange(selectionStartCell, endCell, matrix?.days ?? []);
+    setIsSelecting(false);
+    setSelectionEndCell(endCell);
+    selectionAnchorRef.current = anchorFromRect(event.currentTarget.getBoundingClientRect());
+    const startCell = row.cells[range.startIndex] ?? cell;
+    openEditorForRange(row, startCell, range, selectionAnchorRef.current);
+  }
+
+  function clearSelection() {
+    setIsSelecting(false);
+    setSelectionStartCell(null);
+    setSelectionEndCell(null);
+    selectionAnchorRef.current = null;
+  }
+
+  useEffect(() => {
+    if (!isSelecting) {
+      return;
+    }
+    function cancelSelection(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        clearSelection();
+      }
+    }
+    document.addEventListener("keydown", cancelSelection);
+    return () => document.removeEventListener("keydown", cancelSelection);
+  }, [isSelecting]);
 
   async function undoLast() {
     const item = undoStack.at(-1);
@@ -487,6 +581,10 @@ export function MatrixPage() {
               }
             }}
             onExternalNameChange={setExternalName}
+            highlightedCellRange={highlightedCellRange}
+            onCellMouseDown={startCellSelection}
+            onCellMouseEnter={extendCellSelection}
+            onCellMouseUp={finishCellSelection}
             onOpenCell={openCell}
             onRemoveEntry={(key) =>
               setDraftEntries((items) => items.filter((item) => item.key !== key))
@@ -633,6 +731,7 @@ function MatrixCellEditorPopup({
 type MatrixTableProps = {
   activeCell: ActiveCell | null;
   cellMessage: Record<CellKey, string>;
+  highlightedCellRange: CellRange | null;
   draftEntries: DraftEntry[];
   externalName: string;
   isEditable: boolean;
@@ -646,6 +745,9 @@ type MatrixTableProps = {
   onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
+  onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
+  onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
+  onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean, anchor?: EditorAnchor) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
@@ -755,22 +857,24 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         const key = cellKey(row.site.id, cell.date);
         return (
           <td
-            className={matrixCellClassName(cell, props.today, isCellInActiveRange(row.site.id, cell.date, props.activeCell))}
+            className={matrixCellClassName(cell, props.today, isCellInCellRange(row.site.id, cellIndex, props.highlightedCellRange))}
             key={cell.date}
             onAuxClick={(event) => {
               if (event.button === 1) {
                 event.preventDefault();
               }
             }}
-            onClick={(event) => props.onOpenCell(row, cell, event.shiftKey, anchorFromRect(event.currentTarget.getBoundingClientRect()))}
             onMouseDown={(event) => {
-              if (event.button !== 1) {
+              if (event.button === 1) {
+                event.preventDefault();
+                event.stopPropagation();
+                props.onCycleCellMark(row, cell);
                 return;
               }
-              event.preventDefault();
-              event.stopPropagation();
-              props.onCycleCellMark(row, cell);
+              props.onCellMouseDown(row, cell, cellIndex, event);
             }}
+            onMouseEnter={(event) => props.onCellMouseEnter(row, cell, cellIndex, event)}
+            onMouseUp={(event) => props.onCellMouseUp(row, cell, cellIndex, event)}
           >
             <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
@@ -822,6 +926,7 @@ function CellDisplay({
             } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
+            onMouseDown={(event) => event.stopPropagation()}
             onContextMenu={(event) => {
               if (!isEditable) {
                 return;
@@ -1012,12 +1117,41 @@ function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | nu
   return MATRIX_CELL_MARKS[(currentIndex + 1) % MATRIX_CELL_MARKS.length];
 }
 
-function isCellInActiveRange(siteId: number, date: string, activeCell: ActiveCell | null): boolean {
-  if (!activeCell || activeCell.siteId !== siteId) {
-    return false;
-  }
-  const [startDate, endDate] = sortDates(activeCell.date, activeCell.endDate);
-  return date >= startDate && date <= endDate;
+function isCellInCellRange(siteId: number, dayIndex: number, range: CellRange | null): boolean {
+  return Boolean(range && range.siteId === siteId && dayIndex >= range.startIndex && dayIndex <= range.endIndex);
+}
+
+function buildCellRange(start: SelectionCell, end: SelectionCell, visibleDays: MatrixResponse["days"]): CellRange {
+  const startIndex = Math.min(start.dayIndex, end.dayIndex);
+  const endIndex = Math.max(start.dayIndex, end.dayIndex);
+  const dates = visibleDays.slice(startIndex, endIndex + 1).map((day) => day.date);
+  return {
+    siteId: start.siteId,
+    startDate: dates[0] ?? start.date,
+    endDate: dates.at(-1) ?? end.date,
+    startIndex,
+    endIndex,
+    dates,
+  };
+}
+
+function singleCellRange(siteId: number, date: string, visibleDays: MatrixResponse["days"]): CellRange {
+  const dayIndex = Math.max(0, visibleDays.findIndex((day) => day.date === date));
+  return { siteId, startDate: date, endDate: date, startIndex: dayIndex, endIndex: dayIndex, dates: [date] };
+}
+
+function rangeFromDates(siteId: number, startDate: string, endDate: string, visibleDays: MatrixResponse["days"]): CellRange {
+  const [sortedStartDate, sortedEndDate] = sortDates(startDate, endDate);
+  const startIndex = Math.max(0, visibleDays.findIndex((day) => day.date === sortedStartDate));
+  const endIndex = Math.max(startIndex, visibleDays.findIndex((day) => day.date === sortedEndDate));
+  return {
+    siteId,
+    startDate: sortedStartDate,
+    endDate: sortedEndDate,
+    startIndex,
+    endIndex,
+    dates: visibleDays.slice(startIndex, endIndex + 1).map((day) => day.date),
+  };
 }
 
 function sortDates(left: string, right: string): [string, string] {
