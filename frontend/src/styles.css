@@ -595,9 +595,9 @@ button:disabled {
 .day-col-width,
 .day-col,
 .matrix-cell {
-  width: 104px;
-  min-width: 104px;
-  max-width: 104px;
+  width: var(--day-column-width, 104px);
+  min-width: var(--day-column-width, 104px);
+  max-width: var(--day-column-width, 104px);
 }
 
 .day-col {
@@ -643,7 +643,8 @@ button:disabled {
 
 .row-heading strong,
 .row-heading small,
-.matrix-site-location {
+.matrix-site-location,
+.matrix-site-compact-meta {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -675,11 +676,16 @@ button:disabled {
   font-size: 0.72rem;
 }
 
-.matrix-site-location {
+.matrix-site-location,
+.matrix-site-compact-meta {
   max-width: 210px;
   color: #7a8799;
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.matrix-site-compact-meta {
+  display: none;
 }
 
 .site-color {
@@ -1209,6 +1215,169 @@ button.person-chip:focus-visible {
   color: #a94740;
   cursor: default;
   opacity: 1;
+}
+
+
+.matrix-page.is-compact .matrix-table {
+  font-size: 0.78rem;
+}
+
+.matrix-page.is-compact .matrix-table th,
+.matrix-page.is-compact .matrix-table td {
+  height: 56px;
+  padding: 4px 6px;
+}
+
+.matrix-page.is-compact .matrix-table thead th {
+  height: 42px;
+  font-size: 0.68rem;
+  padding: 5px 6px;
+}
+
+.matrix-page.is-compact .site-col {
+  left: 0;
+  width: 232px;
+  min-width: 232px;
+}
+
+.matrix-page.is-compact .pm-col {
+  left: 232px;
+  width: 42px;
+  min-width: 42px;
+}
+
+.matrix-page.is-compact .info-col {
+  left: 274px;
+  width: 136px;
+  min-width: 136px;
+}
+
+.matrix-page.is-compact .status-col {
+  left: 410px;
+  width: 78px;
+  min-width: 78px;
+}
+
+.matrix-page.is-compact .site-col-width {
+  width: 232px;
+}
+
+.matrix-page.is-compact .pm-col-width {
+  width: 42px;
+}
+
+.matrix-page.is-compact .info-col-width {
+  width: 136px;
+}
+
+.matrix-page.is-compact .status-col-width {
+  width: 78px;
+}
+
+.matrix-page.is-compact .row-heading-content {
+  gap: 6px;
+}
+
+.matrix-page.is-compact .site-color {
+  width: 6px;
+  height: 30px;
+}
+
+.matrix-page.is-compact .matrix-site-link {
+  gap: 1px;
+}
+
+.matrix-page.is-compact .row-heading strong {
+  max-width: 190px;
+  font-size: 0.78rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.matrix-page.is-compact .matrix-site-number,
+.matrix-page.is-compact .matrix-site-location {
+  display: none;
+}
+
+.matrix-page.is-compact .matrix-site-compact-meta {
+  display: block;
+  max-width: 190px;
+  font-size: 0.65rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.matrix-page.is-compact .matrix-info-editor textarea {
+  min-height: 42px;
+  max-height: 42px;
+  padding: 3px 4px;
+  font-size: 0.66rem;
+  line-height: 1.18;
+  overflow: hidden;
+  resize: none;
+}
+
+.matrix-page.is-compact .matrix-info-editor textarea.info-text-long {
+  font-size: 0.62rem;
+}
+
+.matrix-page.is-compact .matrix-info-editor textarea.info-text-very-long,
+.matrix-page.is-compact .matrix-info-editor textarea.info-text-extreme {
+  font-size: 0.58rem;
+}
+
+.matrix-page.is-compact .matrix-status-select {
+  min-height: 24px;
+  padding: 2px 18px 2px 7px;
+  font-size: 0.65rem;
+}
+
+.matrix-page.is-compact .day-col strong {
+  margin-top: 1px;
+  font-size: 0.76rem;
+}
+
+.matrix-page.is-compact .matrix-cell {
+  padding: 4px 5px;
+}
+
+.matrix-page.is-compact .cell-stack {
+  gap: 3px;
+  min-height: calc(var(--assignment-layers, 1) * 22px);
+}
+
+.matrix-page.is-compact .person-chip,
+.matrix-page.is-compact .absence-chip {
+  max-width: 82px;
+  min-height: 19px;
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 0.64rem;
+}
+
+.matrix-page.is-compact .person-chip.is-assignment-run {
+  top: calc(var(--assignment-layer) * 22px);
+}
+
+.matrix-page.is-compact .save-dot {
+  bottom: 4px;
+  left: 5px;
+}
+
+.matrix-page.is-compact .cell-message {
+  bottom: 3px;
+  left: 18px;
+  max-width: calc(100% - 20px);
+  font-size: 0.58rem;
+}
+
+.matrix-page.is-compact .matrix-pm-filter button,
+.matrix-page.is-compact .matrix-compact-toggle,
+.matrix-page.is-compact .icon-button.secondary {
+  min-height: 30px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 0.78rem;
 }
 
 .cell-editor {

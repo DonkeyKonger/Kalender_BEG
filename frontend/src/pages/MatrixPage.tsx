@@ -77,10 +77,12 @@ export function MatrixPage() {
   const didSetInitialProjectManagerFilter = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
+  const [isCompactView, setIsCompactView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
+  const dayColumnWidth = matrixDayColumnWidth(isCompactView);
   const selectedCellRange = useMemo(() => {
     if (!matrix || !selectionStartCell || !selectionEndCell) {
       return null;
@@ -122,6 +124,13 @@ export function MatrixPage() {
   }, [loadMatrix]);
 
   useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    setIsCompactView(localStorage.getItem(matrixCompactPreferenceKey(user.id)) === "true");
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!matrix || didSetInitialProjectManagerFilter.current) {
       return;
     }
@@ -139,8 +148,8 @@ export function MatrixPage() {
     if (todayIndex < 0) {
       return;
     }
-    matrixScrollRef.current.scrollLeft = todayIndex * DAY_COLUMN_WIDTH;
-  }, [matrix, today]);
+    matrixScrollRef.current.scrollLeft = todayIndex * dayColumnWidth;
+  }, [dayColumnWidth, matrix, today]);
 
   useEffect(() => {
     return () => {
@@ -169,6 +178,13 @@ export function MatrixPage() {
       }
     };
   }, [draftEntries]);
+
+  function updateCompactView(value: boolean) {
+    setIsCompactView(value);
+    if (user) {
+      localStorage.setItem(matrixCompactPreferenceKey(user.id), String(value));
+    }
+  }
 
   function openCell(row: MatrixRow, cell: MatrixCell, extendRange = false, anchor?: EditorAnchor) {
     if (!isEditable) {
@@ -629,7 +645,7 @@ export function MatrixPage() {
   }, [matrix, projectManagerFilter]);
 
   return (
-    <section className="matrix-page">
+    <section className={isCompactView ? "matrix-page is-compact" : "matrix-page"}>
       <div className="matrix-toolbar">
         <div>
           <p className="eyebrow">Planung</p>
@@ -653,11 +669,19 @@ export function MatrixPage() {
                   type="button"
                   onClick={() => setProjectManagerFilter(String(manager.id))}
                 >
-                  {manager.shortCode || manager.name}
+                  {isCompactView ? compactProjectManagerFilterLabel(manager) : manager.shortCode || manager.name}
                 </button>
               ))}
             </div>
           )}
+          <label className="switch-control matrix-compact-toggle">
+            <input
+              checked={isCompactView}
+              type="checkbox"
+              onChange={(event) => updateCompactView(event.target.checked)}
+            />
+            <span>Kompakte Ansicht</span>
+          </label>
           <button
             className="icon-button secondary"
             disabled={!undoStack.length}
@@ -677,7 +701,9 @@ export function MatrixPage() {
           <MatrixTable
             activeCell={activeCell}
             cellMessage={cellMessage}
+            dayColumnWidth={dayColumnWidth}
             draftEntries={draftEntries}
+            isCompactView={isCompactView}
             isEditable={isEditable}
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
@@ -847,9 +873,11 @@ function MatrixCellEditorPopup({
 type MatrixTableProps = {
   activeCell: ActiveCell | null;
   cellMessage: Record<CellKey, string>;
+  dayColumnWidth: number;
   highlightedCellRange: CellRange | null;
   draftEntries: DraftEntry[];
   externalName: string;
+  isCompactView: boolean;
   isEditable: boolean;
   matrix: MatrixResponse;
   matrixScrollRef: RefObject<HTMLDivElement | null>;
@@ -881,11 +909,16 @@ type MatrixTableProps = {
 };
 
 function MatrixTable(props: MatrixTableProps) {
-  const tableWidth = matrixTableWidth(props.matrix.days.length);
+  const tableWidth = matrixTableWidth(props.matrix.days.length, props.isCompactView);
+  const tableStyle = {
+    width: tableWidth,
+    minWidth: tableWidth,
+    "--day-column-width": `${props.dayColumnWidth}px`,
+  } as CSSProperties;
 
   return (
     <div className="matrix-scroll" ref={props.matrixScrollRef} role="region" aria-label="Planmatrix">
-      <table className="matrix-table" style={{ width: tableWidth, minWidth: tableWidth }}>
+      <table className="matrix-table" style={tableStyle}>
         <colgroup>
           <col className="site-col-width" />
           <col className="pm-col-width" />
@@ -906,8 +939,14 @@ function MatrixTable(props: MatrixTableProps) {
                 className={dayHeaderClassName(day.date, props.today)}
                 key={day.date}
               >
-                <span>{formatDayHeader(day.date)}</span>
-                <strong>{formatDayNumber(day.date)}</strong>
+                {props.isCompactView ? (
+                  <strong>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</strong>
+                ) : (
+                  <>
+                    <span>{formatDayHeader(day.date)}</span>
+                    <strong>{formatDayNumber(day.date)}</strong>
+                  </>
+                )}
               </th>
             ))}
           </tr>
@@ -950,8 +989,9 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           />
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
             <strong>{row.site.name}</strong>
-            {row.site.site_number && <small>{row.site.site_number}</small>}
+            {row.site.site_number && <small className="matrix-site-number">{row.site.site_number}</small>}
             {row.site.location && <span className="matrix-site-location">{row.site.location}</span>}
+            <span className="matrix-site-compact-meta">{siteCompactMeta(row.site.site_number, row.site.location)}</span>
           </Link>
         </div>
       </th>
@@ -1005,7 +1045,14 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               props.onClearCellMark(row, cell);
             }}
           >
-            <CellDisplay cell={cell} cellIndex={cellIndex} isEditable={props.isEditable} rowCells={row.cells} onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)} />
+            <CellDisplay
+              cell={cell}
+              cellIndex={cellIndex}
+              dayColumnWidth={props.dayColumnWidth}
+              isEditable={props.isEditable}
+              rowCells={row.cells}
+              onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)}
+            />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
               <small className="cell-message">{props.cellMessage[key]}</small>
@@ -1046,12 +1093,14 @@ function MatrixStatusSelect({
 function CellDisplay({
   cell,
   cellIndex,
+  dayColumnWidth,
   isEditable,
   rowCells,
   onDeleteAssignment,
 }: {
   cell: MatrixCell;
   cellIndex: number;
+  dayColumnWidth: number;
   isEditable: boolean;
   rowCells: MatrixCell[];
   onDeleteAssignment: (personId: number) => void;
@@ -1077,7 +1126,7 @@ function CellDisplay({
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
-              width: span > 1 ? `${span * DAY_COLUMN_WIDTH - 8}px` : undefined,
+              width: span > 1 ? `${span * dayColumnWidth - 8}px` : undefined,
             } as CSSProperties}
             title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
             type="button"
@@ -1128,6 +1177,7 @@ function MatrixInfoEditor({
         className={matrixInfoTextClassName(value)}
         disabled={disabled || isSaving}
         placeholder="Info"
+        title={value || undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onSave}
@@ -1138,9 +1188,11 @@ function MatrixInfoEditor({
 }
 
 const DAY_COLUMN_WIDTH = 104;
+const COMPACT_DAY_COLUMN_WIDTH = 88;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
 const FIXED_MATRIX_COLUMNS_WIDTH = 552;
+const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 488;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "closed", "archived"];
 type ProjectManagerOption = {
@@ -1215,8 +1267,21 @@ function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number 
   return { left, top };
 }
 
-function matrixTableWidth(dayCount: number): string {
-  return `${FIXED_MATRIX_COLUMNS_WIDTH + dayCount * DAY_COLUMN_WIDTH}px`;
+function matrixDayColumnWidth(isCompactView: boolean): number {
+  return isCompactView ? COMPACT_DAY_COLUMN_WIDTH : DAY_COLUMN_WIDTH;
+}
+
+function matrixTableWidth(dayCount: number, isCompactView: boolean): string {
+  const fixedWidth = isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH;
+  return `${fixedWidth + dayCount * matrixDayColumnWidth(isCompactView)}px`;
+}
+
+function matrixCompactPreferenceKey(userId: number): string {
+  return `kb_matrix_compact_view_${userId}`;
+}
+
+function siteCompactMeta(siteNumber: string | null, location: string | null): string {
+  return [siteNumber, location].filter(Boolean).join(" · ");
 }
 
 function projectManagerOptionsFromRows(rows: MatrixRow[]): ProjectManagerOption[] {
@@ -1377,7 +1442,14 @@ function compactProjectManagerCode(person: MatrixPerson | null): string {
   if (!person) {
     return "";
   }
-  const value = person.short_code || person.display_name;
+  return compactCodeFromText(person.short_code || person.display_name);
+}
+
+function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
+  return compactCodeFromText(manager.shortCode || manager.name);
+}
+
+function compactCodeFromText(value: string): string {
   const parts = value.split(/[.\s-]+/).filter(Boolean);
   if (parts.length >= 2) {
     return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
