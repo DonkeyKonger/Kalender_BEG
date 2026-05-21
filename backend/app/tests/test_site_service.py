@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.models.enums import SiteStatus
+from app.models.enums import SiteLocationStatus, SiteStatus
 from app.services.site_service import clean_site_values, site_snapshot
 
 
@@ -37,6 +37,12 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
         name="Neubau Halle",
         location="Baden",
         address=None,
+        postal_code="28832",
+        city="Achim",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+        location_status=SiteLocationStatus.MANUALLY_SET,
         customer="Badener Elektro",
         project_manager_person_id=3,
         status=SiteStatus.CLOSED,
@@ -49,4 +55,6 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
     snapshot = site_snapshot(site)
 
     assert snapshot["status"] == "closed"
+    assert snapshot["location_status"] == "manually_set"
+    assert snapshot["geofence_radius_m"] == 5000
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"

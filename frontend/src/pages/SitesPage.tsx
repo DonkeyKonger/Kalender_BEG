@@ -9,13 +9,19 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { Site, SiteCreate } from "../types/site";
+import type { Site, SiteCreate, SiteLocationStatus } from "../types/site";
 
 const emptySite: SiteCreate = {
   site_number: null,
   name: "",
   location: null,
   address: null,
+  postal_code: null,
+  city: null,
+  latitude: null,
+  longitude: null,
+  geofence_radius_m: 5000,
+  location_status: "unknown",
   customer: null,
   project_manager_person_id: null,
   status: "active",
@@ -406,13 +412,85 @@ function SiteFields({
         />
       </label>
       <label className="address-field">
-        <span>Adresse</span>
+        <span>Adresse / Standort</span>
         <input
           disabled={disabled}
           value={draft.address ?? ""}
           onChange={(event) => onChange({ address: event.target.value || null })}
         />
       </label>
+
+      <section className="site-location-section">
+        <div>
+          <h3>Standort / GPS</h3>
+          <p>Koordinaten koennen manuell gepflegt werden. Der Radius ist fuer V1 bewusst grosszuegig.</p>
+        </div>
+        <label>
+          <span>PLZ</span>
+          <input
+            disabled={disabled}
+            value={draft.postal_code ?? ""}
+            onChange={(event) => onChange({ postal_code: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Stadt</span>
+          <input
+            disabled={disabled}
+            value={draft.city ?? ""}
+            onChange={(event) => onChange({ city: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Latitude</span>
+          <input
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder="z. B. 52.2799"
+            value={formatNumberInput(draft.latitude)}
+            onChange={(event) => onChange({ latitude: parseNullableNumber(event.target.value) })}
+          />
+        </label>
+        <label>
+          <span>Longitude</span>
+          <input
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder="z. B. 8.0472"
+            value={formatNumberInput(draft.longitude)}
+            onChange={(event) => onChange({ longitude: parseNullableNumber(event.target.value) })}
+          />
+        </label>
+        <label>
+          <span>Geofence-Radius</span>
+          <input
+            disabled={disabled}
+            inputMode="numeric"
+            min={1}
+            type="number"
+            value={draft.geofence_radius_m}
+            onChange={(event) => onChange({ geofence_radius_m: parsePositiveInt(event.target.value) ?? 5000 })}
+          />
+        </label>
+        <label>
+          <span>Standortstatus</span>
+          <select
+            disabled={disabled}
+            value={draft.location_status}
+            onChange={(event) => onChange({ location_status: event.target.value as SiteLocationStatus })}
+          >
+            {Object.entries(siteLocationStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="icon-button secondary" disabled type="button">
+          Standort pruefen spaeter
+        </button>
+      </section>
+
       <label className="site-info-field">
         <span>Info</span>
         <textarea
@@ -436,6 +514,12 @@ function toEditableSite(site: Site): EditableSite {
     name: site.name,
     location: site.location,
     address: site.address,
+    postal_code: site.postal_code,
+    city: site.city,
+    latitude: site.latitude,
+    longitude: site.longitude,
+    geofence_radius_m: site.geofence_radius_m,
+    location_status: site.location_status,
     customer: site.customer,
     project_manager_person_id: site.project_manager_person_id,
     status: site.status,
@@ -458,6 +542,12 @@ function normalizeSitePayload(site: SiteCreate): SiteCreate {
     name: site.name.trim(),
     location: cleanOptionalText(site.location),
     address: cleanOptionalText(site.address),
+    postal_code: cleanOptionalText(site.postal_code),
+    city: cleanOptionalText(site.city),
+    latitude: site.latitude,
+    longitude: site.longitude,
+    geofence_radius_m: site.geofence_radius_m || 5000,
+    location_status: site.location_status,
     customer: cleanOptionalText(site.customer),
     info: cleanOptionalText(site.info),
     color: cleanOptionalText(site.color),
@@ -488,11 +578,42 @@ function siteSearchText(site: Site): string {
     site.name,
     site.site_number,
     site.location,
+    site.address,
+    site.postal_code,
+    site.city,
     site.customer,
     site.project_manager?.display_name,
     site.project_manager?.short_code,
     siteStatusLabels[site.status],
   ].filter(Boolean).join(" ").toLowerCase();
+}
+
+const siteLocationStatusLabels: Record<SiteLocationStatus, string> = {
+  unknown: "Ungeprueft",
+  geocoded: "Geocodiert",
+  manually_set: "Manuell gesetzt",
+  verified: "Geprueft",
+};
+
+function formatNumberInput(value: number | null): string {
+  return value === null ? "" : String(value);
+}
+
+function parseNullableNumber(value: string): number | null {
+  if (!value.trim()) {
+    return null;
+  }
+  const normalized = value.replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePositiveInt(value: string): number | null {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
 }
 
 function readApiError(error: unknown, fallback: string): string {

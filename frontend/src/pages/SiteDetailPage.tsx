@@ -70,9 +70,13 @@ export function SiteDetailPage() {
           <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
         </DetailSection>
 
-        <DetailSection title="Adresse" icon={MapPin}>
+        <DetailSection title="Adresse / Standort" icon={MapPin}>
           <DetailItem label="Ort" value={site.location} />
           <DetailItem label="Adresse" value={site.address} />
+          <DetailItem label="PLZ / Stadt" value={[site.postal_code, site.city].filter(Boolean).join(" ")} />
+          <DetailItem label="Koordinaten" value={formatCoordinates(site.latitude, site.longitude)} />
+          <DetailItem label="Radius" value={`${site.geofence_radius_m} m`} />
+          <DetailItem label="Standortstatus" value={formatLocationStatus(site.location_status)} />
         </DetailSection>
 
         <DetailSection title="Projektleiter" icon={UserRound}>
@@ -127,6 +131,23 @@ function DetailItem({
       <strong>{Icon && value ? <Icon aria-hidden="true" size={14} /> : null}{value || "-"}</strong>
     </p>
   );
+}
+
+function formatCoordinates(latitude: number | null, longitude: number | null): string | null {
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+  return `${latitude}, ${longitude}`;
+}
+
+function formatLocationStatus(status: Site["location_status"]): string {
+  const labels: Record<Site["location_status"], string> = {
+    unknown: "Ungeprueft",
+    geocoded: "Geocodiert",
+    manually_set: "Manuell gesetzt",
+    verified: "Geprueft",
+  };
+  return labels[status];
 }
 
 function formatDateTime(value: string): string {

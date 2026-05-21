@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import SiteStatus, enum_values
+from app.models.enums import SiteLocationStatus, SiteStatus, enum_values
 
 
 class Site(TimestampMixin, Base):
@@ -15,6 +15,16 @@ class Site(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     location: Mapped[str | None] = mapped_column(String(200))
     address: Mapped[str | None] = mapped_column(String(500))
+    postal_code: Mapped[str | None] = mapped_column(String(20))
+    city: Mapped[str | None] = mapped_column(String(120))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    geofence_radius_m: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
+    location_status: Mapped[SiteLocationStatus] = mapped_column(
+        Enum(SiteLocationStatus, values_callable=enum_values, name="site_location_status"),
+        nullable=False,
+        default=SiteLocationStatus.UNKNOWN,
+    )
     customer: Mapped[str | None] = mapped_column(String(200))
     project_manager_person_id: Mapped[int | None] = mapped_column(
         ForeignKey("persons.id", ondelete="SET NULL")

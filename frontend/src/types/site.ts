@@ -1,5 +1,7 @@
 import type { SiteStatus } from "./matrix";
 
+export type SiteLocationStatus = "unknown" | "geocoded" | "manually_set" | "verified";
+
 export type SitePerson = {
   id: number;
   display_name: string;
@@ -14,6 +16,12 @@ export type Site = {
   name: string;
   location: string | null;
   address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geofence_radius_m: number;
+  location_status: SiteLocationStatus;
   customer: string | null;
   project_manager_person_id: number | null;
   project_manager: SitePerson | null;
@@ -31,6 +39,12 @@ export type SiteCreate = {
   name: string;
   location: string | null;
   address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geofence_radius_m: number;
+  location_status: SiteLocationStatus;
   customer: string | null;
   project_manager_person_id: number | null;
   status: SiteStatus;

@@ -20,6 +20,7 @@ class Vehicle(TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     gps_vehicle_id: Mapped[str | None] = mapped_column(String(120))
+    gps_device_id: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
 
     site_assignments = relationship("SiteVehicleAssignment", back_populates="vehicle")

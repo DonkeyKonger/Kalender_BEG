@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import SiteStatus
+from app.models.enums import SiteLocationStatus, SiteStatus
 
 
 class SitePersonRead(BaseModel):
@@ -20,6 +20,12 @@ class SiteBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     location: str | None = Field(default=None, max_length=200)
     address: str | None = Field(default=None, max_length=500)
+    postal_code: str | None = Field(default=None, max_length=20)
+    city: str | None = Field(default=None, max_length=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    geofence_radius_m: int = Field(default=5000, ge=1, le=100000)
+    location_status: SiteLocationStatus = SiteLocationStatus.UNKNOWN
     customer: str | None = Field(default=None, max_length=200)
     project_manager_person_id: int | None = None
     status: SiteStatus = SiteStatus.ACTIVE
@@ -36,6 +42,12 @@ class SiteUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     location: str | None = Field(default=None, max_length=200)
     address: str | None = Field(default=None, max_length=500)
+    postal_code: str | None = Field(default=None, max_length=20)
+    city: str | None = Field(default=None, max_length=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    geofence_radius_m: int | None = Field(default=None, ge=1, le=100000)
+    location_status: SiteLocationStatus | None = None
     customer: str | None = Field(default=None, max_length=200)
     project_manager_person_id: int | None = None
     status: SiteStatus | None = None

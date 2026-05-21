@@ -2279,8 +2279,30 @@ button.person-chip:focus-visible {
 }
 
 .address-field,
-.site-info-field {
+.site-info-field,
+.site-location-section {
   grid-column: 1 / -1;
+}
+
+.site-location-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.site-location-section h3 {
+  margin: 0 0 3px;
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.site-location-section p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
 }
 
 @media (min-width: 760px) {
@@ -2295,6 +2317,15 @@ button.person-chip:focus-visible {
   .site-form-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: end;
+  }
+
+  .site-location-section {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .site-location-section > div {
+    grid-column: 1 / -1;
   }
 
   .site-form-grid.compact {

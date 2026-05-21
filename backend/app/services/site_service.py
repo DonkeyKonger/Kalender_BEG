@@ -9,9 +9,10 @@ from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteUpdate
 from app.services.audit_service import AuditService
+from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M
 
 
-OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "customer", "info", "color"]
+OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "customer", "info", "color"]
 CLOSED_STATUSES = {SiteStatus.CLOSED, SiteStatus.ARCHIVED}
 OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED}
 
@@ -135,6 +136,8 @@ def clean_site_values(values: dict) -> dict:
     for field in OPTIONAL_TEXT_FIELDS:
         if isinstance(cleaned.get(field), str):
             cleaned[field] = cleaned[field].strip() or None
+    if "geofence_radius_m" in cleaned and cleaned.get("geofence_radius_m") is None:
+        cleaned["geofence_radius_m"] = DEFAULT_SITE_GEOFENCE_RADIUS_M
     if "name" in cleaned and not cleaned.get("name"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustellenname darf nicht leer sein.")
     return cleaned
@@ -147,6 +150,12 @@ def site_snapshot(site: Site) -> dict:
         "name": site.name,
         "location": site.location,
         "address": site.address,
+        "postal_code": site.postal_code,
+        "city": site.city,
+        "latitude": site.latitude,
+        "longitude": site.longitude,
+        "geofence_radius_m": site.geofence_radius_m,
+        "location_status": site.location_status.value,
         "customer": site.customer,
         "project_manager_person_id": site.project_manager_person_id,
         "status": site.status.value,

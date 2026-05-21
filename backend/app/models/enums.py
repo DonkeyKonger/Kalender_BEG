@@ -25,6 +25,13 @@ class SiteStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class SiteLocationStatus(StrEnum):
+    UNKNOWN = "unknown"
+    GEOCODED = "geocoded"
+    MANUALLY_SET = "manually_set"
+    VERIFIED = "verified"
+
+
 class AssignmentType(StrEnum):
     REGULAR = "regular"
     SUPPORT = "support"
@@ -48,6 +55,11 @@ class MatrixCellMark(StrEnum):
     ORANGE = "orange"
     RED = "red"
     BLUE = "blue"
+
+
+class GpsSourceType(StrEnum):
+    VEHICLE = "vehicle"
+    PHONE = "phone"
 
 
 class VehicleType(StrEnum):
