@@ -1190,56 +1190,202 @@ button.person-chip:focus-visible {
 
 .cell-editor {
   display: grid;
-  min-width: 188px;
-  gap: 5px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cell-editor-header {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid #e1e8f2;
+  padding-bottom: 10px;
+}
+
+.cell-editor-eyebrow,
+.cell-editor-label {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cell-editor-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.02rem;
+  line-height: 1.15;
+}
+
+.cell-editor-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #52627a;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.cell-editor-context span:not(:last-child)::after {
+  content: "·";
+  margin-left: 6px;
+  color: #a7b3c5;
+}
+
+.cell-editor-section {
+  display: grid;
+  gap: 7px;
+}
+
+.cell-editor-empty {
+  margin: 0;
+  color: #7b8798;
+  font-size: 0.75rem;
 }
 
 .cell-editor-person-row,
 .cell-editor-date-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 7px;
 }
 
 .editor-chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 
 .editor-chip-list button {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  border: 0;
-  border-radius: 5px;
-  background: #143c6d;
-  color: #ffffff;
-  padding: 3px 5px;
-  font-size: 0.72rem;
-  font-weight: 800;
+  gap: 5px;
+  border: 1px solid #c4d4e7;
+  border-radius: 999px;
+  background: #e9f1fb;
+  color: #143c6d;
+  padding: 5px 8px;
+  font-size: 0.74rem;
+  font-weight: 850;
 }
 
-.cell-editor select,
+.editor-chip-list button.is-external {
+  border-color: #d8c8a4;
+  background: #fff7e6;
+  color: #805b12;
+}
+
 .cell-editor input {
   min-width: 0;
   width: 100%;
   border: 1px solid #b9c7d8;
-  border-radius: 5px;
+  border-radius: 7px;
   background: #ffffff;
   color: #111827;
-  padding: 5px 6px;
-  font-size: 0.74rem;
+  padding: 8px 9px;
+  font-size: 0.82rem;
 }
 
-.cell-editor-person-row > button,
-.cell-editor-date-row > button {
-  min-height: 25px;
+.cell-editor input:focus {
+  border-color: #7fa0c8;
+  outline: 3px solid rgb(29 92 153 / 14%);
+}
+
+.cell-editor-suggestions {
+  display: grid;
+  max-height: 154px;
+  overflow: auto;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.cell-editor-suggestions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 0;
-  border-radius: 5px;
+  border-bottom: 1px solid #edf2f7;
+  background: #ffffff;
+  color: #26344d;
+  padding: 8px 9px;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-align: left;
+}
+
+.cell-editor-suggestions button:last-child {
+  border-bottom: 0;
+}
+
+.cell-editor-suggestions button:hover {
+  background: #f1f6fc;
+}
+
+.cell-editor-suggestions small {
+  color: #6b7a90;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.cell-editor-link {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: #1d5c99;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.cell-editor-person-row > button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
   background: #e9f1fb;
   color: #143c6d;
-  font-weight: 850;
+  font-weight: 900;
+}
+
+.cell-editor-date-section {
+  max-width: 180px;
+}
+
+.cell-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #e1e8f2;
+  padding-top: 11px;
+}
+
+.cell-editor-actions button {
+  min-height: 34px;
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.cell-editor-secondary {
+  border: 1px solid #cbd7e6;
+  background: #ffffff;
+  color: #52627a;
+}
+
+.cell-editor-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: #1d4775;
+  color: #ffffff;
+}
+
+.cell-editor-primary:disabled {
+  opacity: 0.72;
 }
 
 .save-cell-button {
@@ -2481,12 +2627,12 @@ button.person-chip:focus-visible {
 .matrix-cell-editor-popup {
   position: fixed;
   z-index: 120;
-  width: min(320px, calc(100vw - 16px));
+  width: min(390px, calc(100vw - 16px));
   border: 1px solid #b9c7d8;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #ffffff;
-  padding: 10px;
-  box-shadow: 0 18px 44px rgb(18 29 52 / 18%);
+  padding: 14px;
+  box-shadow: 0 22px 52px rgb(18 29 52 / 20%);
 }
 
 .matrix-cell-editor-popup .cell-editor {
@@ -2497,7 +2643,7 @@ button.person-chip:focus-visible {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  margin-top: 8px;
+  margin-top: 0;
   color: #65738a;
   font-size: 0.7rem;
   line-height: 1.3;

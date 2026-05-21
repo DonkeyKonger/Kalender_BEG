@@ -1,4 +1,5 @@
 import { Save, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type { Person } from "../types/person";
 
@@ -12,84 +13,203 @@ export type MatrixCellEditorActiveCell = {
   endDate: string;
 };
 
+export type MatrixCellEditorContext = {
+  siteName: string;
+  siteNumber?: string | null;
+  location?: string | null;
+  dateLabel: string;
+};
+
 export type MatrixCellEditorProps = {
   activeCell: MatrixCellEditorActiveCell;
+  cellMessage?: string;
+  context: MatrixCellEditorContext;
   draftEntries: MatrixCellEditorEntry[];
   externalName: string;
   onAddExternal: () => void;
-  onAddPerson: () => void;
+  onAddPerson: (personId?: string) => void;
+  onClose: () => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
   onSelectedPersonChange: (value: string) => void;
   people: Person[];
+  saveStatus?: string;
   selectedPersonId: string;
 };
 
 export function MatrixCellEditor({
   activeCell,
+  cellMessage,
+  context,
   draftEntries,
   externalName,
   onAddExternal,
   onAddPerson,
+  onClose,
   onEndDateChange,
   onExternalNameChange,
   onRemoveEntry,
   onSave,
   onSelectedPersonChange,
   people,
+  saveStatus,
   selectedPersonId,
 }: MatrixCellEditorProps) {
+  const [personQuery, setPersonQuery] = useState("");
+  const [isExternalOpen, setIsExternalOpen] = useState(false);
+  const assignedKeys = useMemo(() => new Set(draftEntries.map((entry) => entry.key)), [draftEntries]);
+  const suggestions = useMemo(() => {
+    const query = personQuery.trim().toLowerCase();
+    const availablePeople = people.filter((person) => person.is_active && person.person_type === "internal");
+    if (!query) {
+      return [];
+    }
+    return availablePeople
+      .filter((person) => {
+        if (assignedKeys.has("p-" + person.id)) {
+          return false;
+        }
+        return [person.display_name, person.first_name, person.last_name, person.short_code]
+          .some((value) => value.toLowerCase().includes(query));
+      })
+      .slice(0, 6);
+  }, [assignedKeys, people, personQuery]);
+
+  function addPerson(personId: string) {
+    onSelectedPersonChange(personId);
+    onAddPerson(personId);
+    setPersonQuery("");
+  }
+
+  function addExternal() {
+    onAddExternal();
+    setIsExternalOpen(false);
+  }
+
+  const hasEntries = draftEntries.length > 0;
+
   return (
     <div className="cell-editor" onClick={(event) => event.stopPropagation()}>
-      <div className="editor-chip-list" aria-label="Geplante Personen">
-        {draftEntries.map((entry) => (
-          <button key={entry.key} type="button" onClick={() => onRemoveEntry(entry.key)}>
-            <span>{entry.label}</span>
-            <X aria-hidden="true" size={12} />
-          </button>
-        ))}
-      </div>
-      <div className="cell-editor-person-row">
-        <select
-          aria-label="Person auswaehlen"
-          value={selectedPersonId}
-          onChange={(event) => onSelectedPersonChange(event.target.value)}
-        >
-          <option value="">Person</option>
-          {people.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.display_name}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={onAddPerson} aria-label="Person hinzufuegen">
-          +
-        </button>
-      </div>
-      <input
-        placeholder="Extern"
-        value={externalName}
-        onChange={(event) => onExternalNameChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            onAddExternal();
-          }
-        }}
-      />
-      <div className="cell-editor-date-row">
+      <header className="cell-editor-header">
+        <p className="cell-editor-eyebrow">Einsatz bearbeiten</p>
+        <h2>{context.siteName}</h2>
+        <div className="cell-editor-context">
+          <span>{context.dateLabel}</span>
+          {context.location && <span>{context.location}</span>}
+          {context.siteNumber && <span>{context.siteNumber}</span>}
+        </div>
+      </header>
+
+      <section className="cell-editor-section">
+        <p className="cell-editor-label">Bereits eingeteilt</p>
+        {hasEntries ? (
+          <div className="editor-chip-list" aria-label="Geplante Personen">
+            {draftEntries.map((entry) => (
+              <button
+                className={entry.key.startsWith("x-") ? "is-external" : ""}
+                key={entry.key}
+                type="button"
+                onClick={() => onRemoveEntry(entry.key)}
+              >
+                <span>{entry.label}</span>
+                <X aria-hidden="true" size={13} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="cell-editor-empty">Noch niemand eingeteilt</p>
+        )}
+      </section>
+
+      <section className="cell-editor-section">
+        <label className="cell-editor-label" htmlFor="matrix-person-search">Monteur hinzufügen</label>
         <input
+          id="matrix-person-search"
+          placeholder="Person suchen..."
+          value={personQuery}
+          onChange={(event) => setPersonQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && suggestions[0]) {
+              event.preventDefault();
+              addPerson(String(suggestions[0].id));
+            }
+          }}
+        />
+        {personQuery && suggestions.length === 0 && (
+          <p className="cell-editor-empty">Keine passende Person gefunden</p>
+        )}
+        {suggestions.length > 0 && (
+          <div className="cell-editor-suggestions" role="listbox" aria-label="Personenvorschlaege">
+            {suggestions.map((person) => (
+              <button key={person.id} type="button" onClick={() => addPerson(String(person.id))}>
+                <span>{person.display_name}</span>
+                <small>{person.short_code}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="cell-editor-section">
+        {!isExternalOpen ? (
+          <button className="cell-editor-link" type="button" onClick={() => setIsExternalOpen(true)}>
+            + Externen Mitarbeiter eintragen
+          </button>
+        ) : (
+          <div className="cell-editor-external">
+            <label className="cell-editor-label" htmlFor="matrix-external-name">Name externer Mitarbeiter</label>
+            <div className="cell-editor-person-row">
+              <input
+                id="matrix-external-name"
+                placeholder="Freitext eingeben..."
+                value={externalName}
+                onChange={(event) => onExternalNameChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addExternal();
+                  }
+                }}
+              />
+              <button type="button" onClick={addExternal} aria-label="Externen Mitarbeiter hinzufuegen">
+                +
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="cell-editor-section cell-editor-date-section">
+        <label className="cell-editor-label" htmlFor="matrix-end-date">Bis Datum</label>
+        <input
+          id="matrix-end-date"
           aria-label="Bis Datum"
           min={activeCell.date}
           type="date"
           value={activeCell.endDate}
           onChange={(event) => onEndDateChange(event.target.value)}
         />
-        <button className="save-cell-button" type="button" onClick={onSave} aria-label="Zelle speichern">
-          <Save aria-hidden="true" size={13} />
+      </section>
+
+      {(saveStatus || cellMessage) && (
+        <div className="matrix-cell-editor-status">
+          {saveStatus && <span className={'save-dot ' + saveStatus} />}
+          {cellMessage && <small className={saveStatus === "error" ? "is-error" : ""}>{cellMessage}</small>}
+        </div>
+      )}
+
+      <footer className="cell-editor-actions">
+        <button className="cell-editor-secondary" type="button" onClick={onClose}>
+          Schließen
         </button>
-      </div>
+        <button className="cell-editor-primary" type="button" onClick={onSave} disabled={saveStatus === "saving"}>
+          <Save aria-hidden="true" size={14} />
+          <span>{saveStatus === "saving" ? "Speichert..." : "Speichern"}</span>
+        </button>
+      </footer>
+      <input type="hidden" value={selectedPersonId} readOnly />
     </div>
   );
 }

@@ -86,6 +86,12 @@ export function MatrixPage() {
     return buildCellRange(selectionStartCell, selectionEndCell, matrix.days);
   }, [matrix, selectionEndCell, selectionStartCell]);
   const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
+  const activeEditorContext = useMemo(() => {
+    if (!matrix || !activeCell) {
+      return null;
+    }
+    return matrixEditorContext(matrix, activeCell);
+  }, [activeCell, matrix]);
 
   const loadMatrix = useCallback(async () => {
     setIsLoading(true);
@@ -194,8 +200,8 @@ export function MatrixPage() {
     }
   }
 
-  function addSelectedPerson() {
-    const person = people.find((item) => item.id === Number(selectedPersonId));
+  function addSelectedPerson(personId = selectedPersonId) {
+    const person = people.find((item) => item.id === Number(personId));
     if (!person) {
       return;
     }
@@ -646,11 +652,12 @@ export function MatrixPage() {
             externalName={externalName}
           />
 
-          {activeCell && editorAnchor && (
+          {activeCell && editorAnchor && activeEditorContext && (
             <MatrixCellEditorPopup
               activeCell={activeCell}
               anchor={editorAnchor}
               cellMessage={cellMessage[activeCell.key]}
+              context={activeEditorContext}
               draftEntries={draftEntries}
               externalName={externalName}
               onAddExternal={addExternalPerson}
@@ -661,7 +668,7 @@ export function MatrixPage() {
               onRemoveEntry={(key) =>
                 setDraftEntries((items) => items.filter((item) => item.key !== key))
               }
-              onSave={() => void saveActiveCell({ closeOnSuccess: true })}
+              onSave={() => void saveActiveCell()}
               onSelectedPersonChange={setSelectedPersonId}
               people={people}
               saveStatus={saveStatus[activeCell.key]}
@@ -678,10 +685,11 @@ type MatrixCellEditorPopupProps = {
   activeCell: ActiveCell;
   anchor: EditorAnchor;
   cellMessage?: string;
+  context: MatrixEditorContext;
   draftEntries: DraftEntry[];
   externalName: string;
   onAddExternal: () => void;
-  onAddPerson: () => void;
+  onAddPerson: (personId?: string) => void;
   onClose: () => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
@@ -697,6 +705,7 @@ function MatrixCellEditorPopup({
   activeCell,
   anchor,
   cellMessage,
+  context,
   draftEntries,
   externalName,
   onAddExternal,
@@ -750,24 +759,22 @@ function MatrixCellEditorPopup({
     >
       <MatrixCellEditor
         activeCell={activeCell}
+        cellMessage={cellMessage}
+        context={context}
         draftEntries={draftEntries}
         externalName={externalName}
         onAddExternal={onAddExternal}
         onAddPerson={onAddPerson}
+        onClose={onClose}
         onEndDateChange={onEndDateChange}
         onExternalNameChange={onExternalNameChange}
         onRemoveEntry={onRemoveEntry}
         onSave={onSave}
         onSelectedPersonChange={onSelectedPersonChange}
         people={people}
+        saveStatus={saveStatus}
         selectedPersonId={selectedPersonId}
       />
-      {(saveStatus || cellMessage) && (
-        <div className="matrix-cell-editor-status">
-          {saveStatus && <span className={`save-dot ${saveStatus}`} />}
-          {cellMessage && <small className={saveStatus === "error" ? "is-error" : ""}>{cellMessage}</small>}
-        </div>
-      )}
     </div>,
     document.body,
   );
@@ -1028,8 +1035,8 @@ function MatrixInfoEditor({
 }
 
 const DAY_COLUMN_WIDTH = 104;
-const EDITOR_POPUP_HEIGHT = 210;
-const EDITOR_POPUP_WIDTH = 320;
+const EDITOR_POPUP_HEIGHT = 560;
+const EDITOR_POPUP_WIDTH = 390;
 const FIXED_MATRIX_COLUMNS_WIDTH = 642;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 type ProjectManagerOption = {
@@ -1038,12 +1045,47 @@ type ProjectManagerOption = {
   shortCode: string;
 };
 
+type MatrixEditorContext = {
+  siteName: string;
+  siteNumber: string | null;
+  location: string | null;
+  dateLabel: string;
+};
+
 type MatrixRowGroup = {
   key: string;
   label: string;
   rows: MatrixRow[];
   showHeading: boolean;
 };
+
+function matrixEditorContext(matrix: MatrixResponse, activeCell: ActiveCell): MatrixEditorContext {
+  const row = matrix.rows.find((item) => item.site.id === activeCell.siteId);
+  return {
+    siteName: row?.site.name ?? "Baustelle",
+    siteNumber: row?.site.site_number ?? null,
+    location: row?.site.location ?? null,
+    dateLabel: formatEditorDateRange(activeCell.date, activeCell.endDate),
+  };
+}
+
+function formatEditorDateRange(startDate: string, endDate: string): string {
+  if (startDate === endDate) {
+    return formatEditorDate(startDate);
+  }
+  return formatEditorDate(startDate) + " - " + formatEditorDate(endDate);
+}
+
+function formatEditorDate(value: string): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat("de-DE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
 
 function anchorFromRect(rect: DOMRect): EditorAnchor {
   return {
