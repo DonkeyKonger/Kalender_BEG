@@ -69,6 +69,9 @@ type UndoItem = {
   after: DraftEntry[];
 };
 
+const CELL_ERROR_MESSAGE = "Nicht möglich";
+const ERROR_AUTO_HIDE_MS = 5000;
+
 export function MatrixPage() {
   const { user } = useAuth();
   const defaultRange = useMemo(() => getDefaultPlanningRange(), []);
@@ -91,6 +94,7 @@ export function MatrixPage() {
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
   const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
+  const errorTimeoutRef = useRef<number | null>(null);
   const skipNextDraftAutosaveRef = useRef(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
@@ -187,8 +191,31 @@ export function MatrixPage() {
   useEffect(() => {
     return () => {
       Object.values(cellMessageTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
+      if (errorTimeoutRef.current) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (errorTimeoutRef.current) {
+      window.clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    if (!error) {
+      return undefined;
+    }
+    errorTimeoutRef.current = window.setTimeout(() => {
+      setError(null);
+      errorTimeoutRef.current = null;
+    }, ERROR_AUTO_HIDE_MS);
+    return () => {
+      if (errorTimeoutRef.current) {
+        window.clearTimeout(errorTimeoutRef.current);
+        errorTimeoutRef.current = null;
+      }
+    };
+  }, [error]);
 
   useEffect(() => {
     if (!activeCell) {
@@ -368,7 +395,7 @@ export function MatrixPage() {
       setError(message);
       setCellMessage((current) => ({
         ...current,
-        [activeCell.key]: message,
+        [activeCell.key]: CELL_ERROR_MESSAGE,
       }));
     }
   }
@@ -548,7 +575,7 @@ export function MatrixPage() {
       const message = readApiError(requestError, "Einsatz konnte nicht entfernt werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
-      setCellMessage((current) => ({ ...current, [key]: message }));
+      setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
     }
   }
 
@@ -641,7 +668,7 @@ export function MatrixPage() {
         : "Einsatz konnte nicht verschoben werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
-      setCellMessage((current) => ({ ...current, [key]: message }));
+      setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
     }
   }
 
@@ -667,7 +694,7 @@ export function MatrixPage() {
       const message = readApiError(requestError, "Markierung konnte nicht entfernt werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
-      setCellMessage((current) => ({ ...current, [key]: message }));
+      setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
     }
   }
 
@@ -693,7 +720,18 @@ export function MatrixPage() {
       const message = readApiError(requestError, "Markierung konnte nicht gespeichert werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
-      setCellMessage((current) => ({ ...current, [key]: message }));
+      setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
+    }
+  }
+
+  function handleMatrixContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(".person-chip") || target?.closest(".matrix-cell-editor-popup")) {
+      return;
+    }
+    event.preventDefault();
+    if (activeCell) {
+      closeOrSaveActiveEditor();
     }
   }
 
@@ -883,6 +921,7 @@ export function MatrixPage() {
             onStartAssignmentDrag={startAssignmentDrag}
             onClearCellMark={clearCellMark}
             onCycleCellMark={cycleCellMark}
+            onMatrixContextMenu={handleMatrixContextMenu}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
             onInfoSave={(siteId) => void saveSiteInfo(siteId)}
             onStatusChange={(siteId, status) => void saveSiteStatus(siteId, status)}
@@ -1079,6 +1118,7 @@ type MatrixTableProps = {
   onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
+  onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
   onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
@@ -1117,6 +1157,7 @@ function MatrixTable(props: MatrixTableProps) {
       role="region"
       aria-label="Planmatrix"
       style={matrixCssVars}
+      onContextMenu={props.onMatrixContextMenu}
     >
       <table className="matrix-table" style={tableStyle}>
         <colgroup>
@@ -1249,7 +1290,6 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
                 return;
               }
               event.preventDefault();
-              event.stopPropagation();
               props.onClearCellMark(row, cell);
             }}
           >
