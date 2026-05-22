@@ -5,8 +5,9 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MatrixCellEditor } from "../components/MatrixCellEditor";
-import { siteStatusLabels } from "../components/StatusBadge";
+import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import type { Absence } from "../types/absence";
 import type {
   MatrixAssignment,
   MatrixCell,
@@ -15,6 +16,7 @@ import type {
   MatrixPerson,
   MatrixResponse,
   MatrixRow,
+  AbsenceType,
   SiteStatus,
 } from "../types/matrix";
 import type { Person } from "../types/person";
@@ -31,6 +33,7 @@ type CellKey = `${number}-${string}`;
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 type DraftEntry = MatrixEntryInput & { key: string; label: string };
 type ActiveCell = { siteId: number; date: string; endDate: string; key: CellKey };
+type ActiveAbsenceCell = { date: string; endDate: string };
 type EditorAnchor = { bottom: number; left: number; top: number; width: number };
 type SelectionCell = { siteId: number; date: string; dayIndex: number };
 type CellRange = {
@@ -77,6 +80,7 @@ export function MatrixPage() {
   const defaultRange = useMemo(() => getDefaultPlanningRange(), []);
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
+  const [absences, setAbsences] = useState<Absence[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
@@ -89,6 +93,10 @@ export function MatrixPage() {
   const [initialEntries, setInitialEntries] = useState<DraftEntry[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [externalName, setExternalName] = useState("");
+  const [activeAbsenceCell, setActiveAbsenceCell] = useState<ActiveAbsenceCell | null>(null);
+  const [absenceEditorAnchor, setAbsenceEditorAnchor] = useState<EditorAnchor | null>(null);
+  const [selectedAbsencePersonId, setSelectedAbsencePersonId] = useState("");
+  const [selectedAbsenceType, setSelectedAbsenceType] = useState<AbsenceType>("vacation");
   const [saveStatus, setSaveStatus] = useState<Record<CellKey, SaveStatus>>({});
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
@@ -108,6 +116,7 @@ export function MatrixPage() {
   const [assignmentDrag, setAssignmentDrag] = useState<AssignmentDragState | null>(null);
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
+  const [isSavingAbsence, setIsSavingAbsence] = useState(false);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const dayColumnWidth = matrixDayColumnWidth(isCompactView);
   const selectedCellRange = useMemo(() => {
@@ -118,6 +127,7 @@ export function MatrixPage() {
   }, [matrix, selectionEndCell, selectionStartCell]);
   const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
   const isDraggingAssignment = assignmentDrag !== null;
+  const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const activeEditorContext = useMemo(() => {
     if (!matrix || !activeCell) {
       return null;
@@ -129,17 +139,19 @@ export function MatrixPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [matrixData, personData] = await Promise.all([
+      const [matrixData, personData, absenceData] = await Promise.all([
         api.matrix({
           start: defaultRange.start,
           end: defaultRange.end,
           includeWeekends: true,
         }),
         api.persons(),
+        api.absences({ start: defaultRange.start, end: defaultRange.end }),
       ]);
       setMatrix(matrixData);
       setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
       setPeople(personData);
+      setAbsences(absenceData);
     } catch (requestError) {
       setError(readApiError(requestError, "Matrixdaten konnten nicht geladen werden."));
     } finally {
@@ -155,6 +167,11 @@ export function MatrixPage() {
     });
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
+  }, [defaultRange.end, defaultRange.start]);
+
+  const refreshAbsencesOnly = useCallback(async () => {
+    const absenceData = await api.absences({ start: defaultRange.start, end: defaultRange.end });
+    setAbsences(absenceData);
   }, [defaultRange.end, defaultRange.start]);
 
   useEffect(() => {
@@ -262,6 +279,7 @@ export function MatrixPage() {
   }
 
   function openEditorForRange(row: MatrixRow, cell: MatrixCell, range: CellRange, anchor?: EditorAnchor) {
+    closeAbsenceEditor();
     const key = cellKey(row.site.id, range.startDate);
     const entries = entriesFromCell(cell);
     skipNextDraftAutosaveRef.current = true;
@@ -304,6 +322,63 @@ export function MatrixPage() {
       external_name: cleaned,
     }));
     setExternalName("");
+  }
+
+  function openAbsenceCell(date: string, anchor: EditorAnchor) {
+    if (!isEditable) {
+      return;
+    }
+    closeActiveEditor();
+    setActiveAbsenceCell({ date, endDate: date });
+    setAbsenceEditorAnchor(anchor);
+    setSelectedAbsencePersonId("");
+    setSelectedAbsenceType("vacation");
+  }
+
+  function closeAbsenceEditor() {
+    setActiveAbsenceCell(null);
+    setAbsenceEditorAnchor(null);
+    setSelectedAbsencePersonId("");
+    setSelectedAbsenceType("vacation");
+  }
+
+  async function saveAbsenceFromEditor() {
+    if (!activeAbsenceCell || !selectedAbsencePersonId) {
+      setError("Bitte eine Person fuer die Fehlzeit auswaehlen.");
+      return;
+    }
+    const [startDate, endDate] = sortDates(activeAbsenceCell.date, activeAbsenceCell.endDate);
+    setIsSavingAbsence(true);
+    try {
+      await api.createAbsence({
+        person_id: Number(selectedAbsencePersonId),
+        absence_type: selectedAbsenceType,
+        start_date: startDate,
+        end_date: endDate,
+        status: "active",
+        note: null,
+      });
+      setError(null);
+      closeAbsenceEditor();
+      await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Fehlzeit konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingAbsence(false);
+    }
+  }
+
+  async function deleteAbsenceFromPlanning(absence: Absence) {
+    if (!isEditable) {
+      return;
+    }
+    try {
+      await api.deleteAbsence(absence.id);
+      setError(null);
+      await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Fehlzeit konnte nicht geloescht werden."));
+    }
   }
 
   function closeActiveEditor() {
@@ -735,6 +810,9 @@ export function MatrixPage() {
     if (activeCell) {
       closeOrSaveActiveEditor();
     }
+    if (activeAbsenceCell) {
+      closeAbsenceEditor();
+    }
   }
 
   function showTemporaryCellFeedback(key: CellKey, message: string) {
@@ -910,6 +988,7 @@ export function MatrixPage() {
       {!isLoading && matrix && (
         <>
           <MatrixTable
+            absences={absences}
             activeCell={activeCell}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
@@ -919,6 +998,8 @@ export function MatrixPage() {
             assignmentDragTarget={assignmentDrag?.target ?? null}
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
+            peopleById={peopleById}
+            onDeleteAbsence={deleteAbsenceFromPlanning}
             onDeleteAssignment={deleteAssignmentFromCell}
             onStartAssignmentDrag={startAssignmentDrag}
             onClearCellMark={clearCellMark}
@@ -939,6 +1020,7 @@ export function MatrixPage() {
             onCellMouseDown={startCellSelection}
             onCellMouseEnter={extendCellSelection}
             onCellMouseUp={finishCellSelection}
+            onOpenAbsenceCell={openAbsenceCell}
             onOpenCell={openCell}
             onRemoveEntry={(key) =>
               setDraftEntries((items) => items.filter((item) => item.key !== key))
@@ -977,6 +1059,22 @@ export function MatrixPage() {
               people={people}
               saveStatus={saveStatus[activeCell.key]}
               selectedPersonId={selectedPersonId}
+            />
+          )}
+
+          {activeAbsenceCell && absenceEditorAnchor && (
+            <AbsenceCellEditorPopup
+              activeCell={activeAbsenceCell}
+              anchor={absenceEditorAnchor}
+              absenceType={selectedAbsenceType}
+              isSaving={isSavingAbsence}
+              onAbsenceTypeChange={setSelectedAbsenceType}
+              onClose={closeAbsenceEditor}
+              onEndDateChange={(endDate) => setActiveAbsenceCell({ ...activeAbsenceCell, endDate })}
+              onSave={() => void saveAbsenceFromEditor()}
+              onSelectedPersonChange={setSelectedAbsencePersonId}
+              people={people}
+              selectedPersonId={selectedAbsencePersonId}
             />
           )}
 
@@ -1099,7 +1197,251 @@ function MatrixCellEditorPopup({
   );
 }
 
+type AbsenceCellEditorPopupProps = {
+  activeCell: ActiveAbsenceCell;
+  anchor: EditorAnchor;
+  absenceType: AbsenceType;
+  isSaving: boolean;
+  onAbsenceTypeChange: (value: AbsenceType) => void;
+  onClose: () => void;
+  onEndDateChange: (date: string) => void;
+  onSave: () => void;
+  onSelectedPersonChange: (value: string) => void;
+  people: Person[];
+  selectedPersonId: string;
+};
+
+function AbsenceCellEditorPopup({
+  activeCell,
+  anchor,
+  absenceType,
+  isSaving,
+  onAbsenceTypeChange,
+  onClose,
+  onEndDateChange,
+  onSave,
+  onSelectedPersonChange,
+  people,
+  selectedPersonId,
+}: AbsenceCellEditorPopupProps) {
+  const popupRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (popupRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      onClose();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const position = editorPopupPosition(anchor);
+
+  return createPortal(
+    <div
+      className="matrix-cell-editor-popup absence-cell-editor-popup"
+      ref={popupRef}
+      style={{ left: position.left, top: position.top }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <AbsenceCellEditor
+        activeCell={activeCell}
+        absenceType={absenceType}
+        isSaving={isSaving}
+        onAbsenceTypeChange={onAbsenceTypeChange}
+        onClose={onClose}
+        onEndDateChange={onEndDateChange}
+        onSave={onSave}
+        onSelectedPersonChange={onSelectedPersonChange}
+        people={people}
+        selectedPersonId={selectedPersonId}
+      />
+    </div>,
+    document.body,
+  );
+}
+
+function AbsenceCellEditor({
+  activeCell,
+  absenceType,
+  isSaving,
+  onAbsenceTypeChange,
+  onClose,
+  onEndDateChange,
+  onSave,
+  onSelectedPersonChange,
+  people,
+  selectedPersonId,
+}: Omit<AbsenceCellEditorPopupProps, "anchor">) {
+  const [personQuery, setPersonQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedPerson = people.find((person) => person.id === Number(selectedPersonId)) ?? null;
+  const suggestions = useMemo(() => {
+    const query = personQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+    return people
+      .filter((person) => person.is_active)
+      .filter((person) => [person.display_name, person.first_name, person.last_name, person.short_code]
+        .some((value) => value.toLowerCase().includes(query)))
+      .slice(0, 6);
+  }, [people, personQuery]);
+
+  useEffect(() => {
+    setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
+  }, [personQuery, suggestions.length]);
+
+  useEffect(() => {
+    if (highlightedIndex < 0) {
+      return;
+    }
+    suggestionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex]);
+
+  function choosePerson(person: Person) {
+    onSelectedPersonChange(String(person.id));
+    setPersonQuery("");
+    setHighlightedIndex(-1);
+  }
+
+  return (
+    <div className="cell-editor absence-cell-editor" onClick={(event) => event.stopPropagation()}>
+      <header className="cell-editor-header">
+        <p className="cell-editor-eyebrow">Fehlzeit eintragen</p>
+        <h2>{formatShortDate(activeCell.date)}</h2>
+        <div className="cell-editor-context">
+          <span>{activeCell.endDate === activeCell.date ? "Ein Tag" : `${formatShortDate(activeCell.date)} - ${formatShortDate(activeCell.endDate)}`}</span>
+        </div>
+      </header>
+
+      <section className="cell-editor-section">
+        <label className="cell-editor-label" htmlFor="matrix-absence-person-search">Person</label>
+        {selectedPerson && (
+          <div className="absence-selected-person">
+            <span>{selectedPerson.display_name}</span>
+            <small>{selectedPerson.short_code}</small>
+          </div>
+        )}
+        <input
+          id="matrix-absence-person-search"
+          placeholder="Person suchen..."
+          value={personQuery}
+          aria-activedescendant={highlightedIndex >= 0 ? `matrix-absence-person-suggestion-${suggestions[highlightedIndex]?.id}` : undefined}
+          aria-controls="matrix-absence-person-suggestions"
+          aria-expanded={suggestions.length > 0}
+          role="combobox"
+          onChange={(event) => setPersonQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" && suggestions.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((current) => (current + 1) % suggestions.length);
+              return;
+            }
+            if (event.key === "ArrowUp" && suggestions.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
+              return;
+            }
+            if (event.key === "Enter") {
+              const selectedSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : suggestions[0];
+              if (selectedSuggestion) {
+                event.preventDefault();
+                choosePerson(selectedSuggestion);
+              }
+              return;
+            }
+            if (event.key === "Escape" && (personQuery || suggestions.length > 0)) {
+              event.preventDefault();
+              event.stopPropagation();
+              setPersonQuery("");
+              setHighlightedIndex(-1);
+            }
+          }}
+        />
+        {personQuery && suggestions.length === 0 && (
+          <p className="cell-editor-empty">Keine passende Person gefunden</p>
+        )}
+        {suggestions.length > 0 && (
+          <div
+            className="cell-editor-suggestions"
+            id="matrix-absence-person-suggestions"
+            role="listbox"
+            aria-label="Personenvorschlaege Fehlzeiten"
+          >
+            {suggestions.map((person, index) => (
+              <button
+                aria-selected={highlightedIndex === index}
+                className={highlightedIndex === index ? "is-highlighted" : ""}
+                id={`matrix-absence-person-suggestion-${person.id}`}
+                key={person.id}
+                ref={(element) => {
+                  suggestionRefs.current[index] = element;
+                }}
+                role="option"
+                type="button"
+                onClick={() => choosePerson(person)}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
+                <span>{person.display_name}</span>
+                <small>{person.short_code}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="cell-editor-section absence-editor-grid">
+        <label className="cell-editor-label" htmlFor="matrix-absence-type">Typ</label>
+        <select
+          id="matrix-absence-type"
+          value={absenceType}
+          onChange={(event) => onAbsenceTypeChange(event.target.value as AbsenceType)}
+        >
+          {Object.entries(absenceTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <label className="cell-editor-label" htmlFor="matrix-absence-end-date">Bis Datum</label>
+        <input
+          id="matrix-absence-end-date"
+          min={activeCell.date}
+          type="date"
+          value={activeCell.endDate}
+          onChange={(event) => onEndDateChange(event.target.value)}
+        />
+      </section>
+
+      <footer className="cell-editor-actions">
+        <button className="secondary" type="button" onClick={onClose}>Abbrechen</button>
+        <button disabled={!selectedPersonId || isSaving} type="button" onClick={onSave}>
+          {isSaving ? "Speichert..." : "Speichern"}
+        </button>
+      </footer>
+    </div>
+  );
+}
+
 type MatrixTableProps = {
+  absences: Absence[];
   activeCell: ActiveCell | null;
   cellMessage: Record<CellKey, string>;
   dayColumnWidth: number;
@@ -1111,7 +1453,9 @@ type MatrixTableProps = {
   assignmentDragTarget: AssignmentDragTarget | null;
   matrix: MatrixResponse;
   matrixScrollRef: RefObject<HTMLDivElement | null>;
+  peopleById: Map<number, Person>;
   onAddExternal: () => void;
+  onDeleteAbsence: (absence: Absence) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
@@ -1126,6 +1470,7 @@ type MatrixTableProps = {
   onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
+  onOpenAbsenceCell: (date: string, anchor: EditorAnchor) => void;
   onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean, anchor?: EditorAnchor) => void;
   onRemoveEntry: (key: string) => void;
   onSave: () => void;
@@ -1195,12 +1540,87 @@ function MatrixTable(props: MatrixTableProps) {
           </tr>
         </thead>
         <tbody>
+          <MatrixAbsencePlanningRow {...props} />
           {props.visibleRowGroups.map((group) => (
             <MatrixTableGroup group={group} key={group.key} {...props} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function MatrixAbsencePlanningRow(props: MatrixTableProps) {
+  const days = props.matrix.days.map((day) => day.date);
+  const absencesByDate = new Map(days.map((date) => [date, activeAbsencesForDay(props.absences, date)]));
+  const layerCount = Math.max(1, ...Array.from(absencesByDate.values()).map((items) => items.length));
+  const rowStyle = { "--absence-layers": layerCount } as CSSProperties;
+
+  return (
+    <tr className="matrix-absence-row" style={rowStyle}>
+      <th className="sticky-col site-col row-heading matrix-absence-heading" scope="row">
+        <div className="row-heading-content">
+          <span className="matrix-absence-icon" />
+          <strong>Fehlzeiten</strong>
+        </div>
+      </th>
+      <td className="sticky-col pm-col matrix-absence-empty" />
+      <td className="sticky-col info-col matrix-absence-empty" />
+      <td className="sticky-col status-col matrix-absence-empty" />
+      {props.matrix.days.map((day, cellIndex) => {
+        const date = day.date;
+        const dayAbsences = absencesByDate.get(date) ?? [];
+        return (
+          <td
+            className={matrixAbsenceCellClassName(date, props.today)}
+            data-matrix-date={date}
+            data-matrix-day-index={cellIndex}
+            key={`absence-${date}`}
+            onClick={(event) => {
+              if (!props.isEditable) {
+                return;
+              }
+              props.onOpenAbsenceCell(date, anchorFromRect(event.currentTarget.getBoundingClientRect()));
+            }}
+          >
+            <div className="absence-planning-stack">
+              {dayAbsences.map((absence) => {
+                const span = absenceVisibleSpan(days, cellIndex, absence);
+                if (span === 0) {
+                  return null;
+                }
+                const person = props.peopleById.get(absence.person_id);
+                const layer = absencePlanningLayer(dayAbsences, absence.id);
+                return (
+                  <button
+                    className={absencePlanningBlockClassName(absence)}
+                    key={absence.id}
+                    style={{
+                      "--absence-layer": layer,
+                      "--absence-span": span,
+                      width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
+                    } as CSSProperties}
+                    title={`${person?.display_name ?? "Person"}: ${absenceTypeLabels[absence.absence_type]} ${formatAbsenceDateRange(absence)}`}
+                    type="button"
+                    onClick={(event) => event.stopPropagation()}
+                    onContextMenu={(event) => {
+                      if (!props.isEditable) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.stopPropagation();
+                      props.onDeleteAbsence(absence);
+                    }}
+                  >
+                    <span>{person ? calendarPersonCode(person) : "Person"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
@@ -1883,6 +2303,68 @@ function addIsoDays(value: string, days: number): string {
   const date = new Date(isoDateToTime(value));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
+  return absences
+    .filter((absence) => absence.status === "active" && absence.start_date <= date && absence.end_date >= date)
+    .sort(comparePlanningAbsences);
+}
+
+function absenceVisibleSpan(days: string[], cellIndex: number, absence: Absence): number {
+  const date = days[cellIndex];
+  const firstVisibleDate = days[0];
+  const lastVisibleDate = days.at(-1);
+  if (!date || !firstVisibleDate || !lastVisibleDate) {
+    return 0;
+  }
+  const visibleStartDate = absence.start_date > firstVisibleDate ? absence.start_date : firstVisibleDate;
+  if (date !== visibleStartDate) {
+    return 0;
+  }
+  const visibleEndDate = absence.end_date < lastVisibleDate ? absence.end_date : lastVisibleDate;
+  const endIndex = days.findIndex((day) => day === visibleEndDate);
+  return endIndex >= cellIndex ? endIndex - cellIndex + 1 : 1;
+}
+
+function absencePlanningLayer(dayAbsences: Absence[], absenceId: number): number {
+  return Math.max(0, dayAbsences.findIndex((absence) => absence.id === absenceId));
+}
+
+function absencePlanningBlockClassName(absence: Absence): string {
+  return [
+    "absence-planning-chip",
+    `absence-block-${absence.absence_type}`,
+    absence.status === "cancelled" ? "is-cancelled" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function matrixAbsenceCellClassName(date: string, today: string): string {
+  return [
+    "matrix-cell",
+    "matrix-absence-cell",
+    isWeekendDate(date) ? "weekend" : "",
+    isWeekStartDate(date) ? "is-week-start" : "",
+    date === today ? "today" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function comparePlanningAbsences(left: Absence, right: Absence): number {
+  return left.start_date.localeCompare(right.start_date)
+    || left.end_date.localeCompare(right.end_date)
+    || left.person_id - right.person_id
+    || left.id - right.id;
+}
+
+function formatAbsenceDateRange(absence: Absence): string {
+  if (absence.start_date === absence.end_date) {
+    return formatShortDate(absence.start_date);
+  }
+  return `${formatShortDate(absence.start_date)} - ${formatShortDate(absence.end_date)}`;
+}
+
+function formatShortDate(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
 function isoDateToTime(value: string): number {
