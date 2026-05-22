@@ -24,8 +24,11 @@ import {
   formatDayHeader,
   formatDayNumber,
   getDefaultPlanningRange,
+  getIsoWeekInfo,
+  getLowerSaxonyPublicHolidayMap,
   isWeekendDate,
   toDateInputValue,
+  type HolidayInfo,
 } from "../utils/dateRange";
 
 type CellKey = `${number}-${string}`;
@@ -65,6 +68,7 @@ type AssignmentDragState = {
 };
 type PlanningAbsenceItem = { absence: Absence };
 type CellTypingPreview = { siteId: number; date: string; text: string };
+type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
 
 type UndoItem = {
   siteId: number;
@@ -1499,6 +1503,11 @@ type MatrixTableProps = {
 
 function MatrixTable(props: MatrixTableProps) {
   const tableWidth = matrixTableWidth(props.matrix.days, props.isCompactView);
+  const holidayMap = useMemo(() => matrixHolidayMap(props.matrix.days), [props.matrix.days]);
+  const weekGroups = useMemo(
+    () => matrixWeekGroups(props.matrix.days, props.isCompactView),
+    [props.isCompactView, props.matrix.days],
+  );
   const matrixCssVars = {
     "--day-column-width": `${props.dayColumnWidth}px`,
     "--weekend-column-width": `${matrixWeekendColumnWidth(props.isCompactView)}px`,
@@ -1530,32 +1539,53 @@ function MatrixTable(props: MatrixTableProps) {
           ))}
         </colgroup>
         <thead>
-          <tr>
+          <tr className="matrix-week-row">
+            <th className="sticky-col site-col matrix-week-fixed" aria-hidden="true" />
+            <th className="sticky-col pm-col matrix-week-fixed" aria-hidden="true" />
+            <th className="sticky-col info-col matrix-week-fixed" aria-hidden="true" />
+            <th className="sticky-col status-col matrix-week-fixed" aria-hidden="true" />
+            {weekGroups.map((group) => (
+              <th
+                className="matrix-week-cell"
+                colSpan={group.dayCount}
+                key={String(group.isoYear) + "-" + String(group.week)}
+                scope="colgroup"
+                style={matrixWeekCellStyle(group.width)}
+              >
+                KW {group.week}
+              </th>
+            ))}
+          </tr>
+          <tr className="matrix-day-row">
             <th className="sticky-col site-col">Baustelle</th>
             <th className="sticky-col pm-col">PL</th>
             <th className="sticky-col info-col">Info</th>
             <th className="sticky-col status-col">Status</th>
-            {props.matrix.days.map((day) => (
-              <th
-                className={dayHeaderClassName(day.date, props.today)}
-                key={day.date}
-              >
-                {props.isCompactView ? (
-                  <strong>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</strong>
-                ) : (
-                  <>
-                    <span>{formatDayHeader(day.date)}</span>
-                    <strong>{formatDayNumber(day.date)}</strong>
-                  </>
-                )}
-              </th>
-            ))}
+            {props.matrix.days.map((day) => {
+              const holiday = holidayMap.get(day.date) ?? null;
+              return (
+                <th
+                  className={dayHeaderClassName(day.date, props.today, holiday)}
+                  key={day.date}
+                  title={holiday?.name}
+                >
+                  {props.isCompactView ? (
+                    <strong>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</strong>
+                  ) : (
+                    <>
+                      <span>{formatDayHeader(day.date)}</span>
+                      <strong>{formatDayNumber(day.date)}</strong>
+                    </>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          <MatrixAbsencePlanningRow {...props} />
+          <MatrixAbsencePlanningRow {...props} holidayMap={holidayMap} />
           {props.visibleRowGroups.map((group) => (
-            <MatrixTableGroup group={group} key={group.key} {...props} />
+            <MatrixTableGroup group={group} holidayMap={holidayMap} key={group.key} {...props} />
           ))}
         </tbody>
       </table>
@@ -1563,7 +1593,9 @@ function MatrixTable(props: MatrixTableProps) {
   );
 }
 
-function MatrixAbsencePlanningRow(props: MatrixTableProps) {
+type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<string, HolidayInfo> };
+
+function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
   const days = props.matrix.days.map((day) => day.date);
   const absenceItemsByDate = new Map(
     days.map((date) => [date, absencePlanningItemsForDay(props.absences, date)]),
@@ -1598,7 +1630,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
         const hasOverflow = hiddenAbsenceCount > 0;
         return (
           <td
-            className={[matrixAbsenceCellClassName(date, props.today), hasOverflow ? "has-absence-overflow" : ""].filter(Boolean).join(" ")}
+            className={[matrixAbsenceCellClassName(date, props.today, props.holidayMap.get(date) ?? null), hasOverflow ? "has-absence-overflow" : ""].filter(Boolean).join(" ")}
             data-matrix-date={date}
             data-matrix-day-index={cellIndex}
             key={`absence-${date}`}
@@ -1675,7 +1707,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
   );
 }
 
-function MatrixTableGroup({ group, ...props }: MatrixTableProps & { group: MatrixRowGroup }) {
+function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { group: MatrixRowGroup }) {
   return (
     <>
       {group.showHeading && (
@@ -1690,7 +1722,7 @@ function MatrixTableGroup({ group, ...props }: MatrixTableProps & { group: Matri
   );
 }
 
-type MatrixTableRowProps = MatrixTableProps & { row: MatrixRow };
+type MatrixTableRowProps = MatrixTableCalendarProps & { row: MatrixRow };
 
 function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   return (
@@ -1737,6 +1769,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               props.today,
               isCellInCellRange(row.site.id, cellIndex, props.highlightedCellRange),
               isAssignmentDragTarget(row.site.id, cellIndex, props.assignmentDragTarget),
+              props.holidayMap.get(cell.date) ?? null,
             )}
             data-matrix-date={cell.date}
             data-matrix-day-index={cellIndex}
@@ -2134,6 +2167,29 @@ function matrixTableWidth(days: MatrixResponse["days"], isCompactView: boolean):
   return `${fixedWidth + daysWidth}px`;
 }
 
+function matrixHolidayMap(days: MatrixResponse["days"]): Map<string, HolidayInfo> {
+  return getLowerSaxonyPublicHolidayMap(days.map((day) => Number(day.date.slice(0, 4))));
+}
+
+function matrixWeekGroups(days: MatrixResponse["days"], isCompactView: boolean): CalendarWeekGroup[] {
+  return days.reduce<CalendarWeekGroup[]>((groups, day) => {
+    const isoWeek = getIsoWeekInfo(day.date);
+    const width = matrixColumnWidthForDate(day.date, isCompactView);
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.isoYear === isoWeek.isoYear && currentGroup.week === isoWeek.week) {
+      currentGroup.dayCount += 1;
+      currentGroup.width += width;
+      return groups;
+    }
+    groups.push({ isoYear: isoWeek.isoYear, week: isoWeek.week, dayCount: 1, width });
+    return groups;
+  }, []);
+}
+
+function matrixWeekCellStyle(width: number): CSSProperties {
+  return { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` };
+}
+
 function matrixScrollOffsetForDate(days: MatrixResponse["days"], targetDate: string, isCompactView: boolean): number {
   return days.reduce((offset, day) => {
     if (day.date >= targetDate) {
@@ -2238,10 +2294,11 @@ function typingPreviewTextForCell(preview: CellTypingPreview | null, siteId: num
   return preview && preview.siteId === siteId && preview.date === date ? preview.text : "";
 }
 
-function dayHeaderClassName(date: string, today: string): string {
+function dayHeaderClassName(date: string, today: string, holiday: HolidayInfo | null): string {
   return [
     "day-col",
     isWeekendDate(date) ? "weekend" : "",
+    holiday ? "is-holiday" : "",
     isWeekStartDate(date) ? "is-week-start" : "",
     date === today ? "today" : "",
   ].filter(Boolean).join(" ");
@@ -2252,10 +2309,12 @@ function matrixCellClassName(
   today: string,
   isRangeSelected: boolean,
   isDragTarget: boolean,
+  holiday: HolidayInfo | null,
 ): string {
   return [
     "matrix-cell",
     isWeekendDate(cell.date) ? "weekend" : "",
+    holiday ? "is-holiday" : "",
     isWeekStartDate(cell.date) ? "is-week-start" : "",
     cell.date === today ? "today" : "",
     cell.mark ? `mark-${cell.mark}` : "",
@@ -2496,11 +2555,12 @@ function absenceOverflowItemClassName(item: PlanningAbsenceItem): string {
   ].filter(Boolean).join(" ");
 }
 
-function matrixAbsenceCellClassName(date: string, today: string): string {
+function matrixAbsenceCellClassName(date: string, today: string, holiday: HolidayInfo | null): string {
   return [
     "matrix-cell",
     "matrix-absence-cell",
     isWeekendDate(date) ? "weekend" : "",
+    holiday ? "is-holiday" : "",
     isWeekStartDate(date) ? "is-week-start" : "",
     date === today ? "today" : "",
   ].filter(Boolean).join(" ");

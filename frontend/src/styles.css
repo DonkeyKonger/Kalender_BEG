@@ -539,6 +539,37 @@ button:disabled {
   z-index: 7;
 }
 
+.matrix-table thead .matrix-week-row th {
+  top: 0;
+  height: 22px;
+  padding: 2px 5px;
+  border-bottom: 1px solid #d7e2f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.matrix-table thead .matrix-week-row .sticky-col {
+  z-index: 8;
+  background: #f8fafc;
+}
+
+.matrix-table thead .matrix-day-row th {
+  top: 22px;
+}
+
+.matrix-week-fixed {
+  color: transparent;
+}
+
+.matrix-week-cell {
+  text-align: center;
+}
+
 .sticky-col {
   position: sticky;
   z-index: 3;
@@ -1452,6 +1483,32 @@ button.person-chip:focus-visible {
   background: #f8fbff;
 }
 
+.day-col.is-holiday,
+.matrix-table thead th.is-holiday {
+  background: #fff1c9;
+  color: #92400e;
+}
+
+.matrix-table td.is-holiday,
+.matrix-absence-row td.is-holiday {
+  background: #fff8df;
+}
+
+.matrix-table thead th.weekend.is-holiday,
+.matrix-table td.weekend.is-holiday,
+.matrix-absence-row td.weekend.is-holiday {
+  background: #faefd2;
+}
+
+.matrix-table thead th.today.is-holiday {
+  background: #fff4d6;
+  box-shadow: inset 0 3px 0 #d97706;
+}
+
+.matrix-cell.today.is-holiday {
+  background: #fffdf5;
+}
+
 .matrix-cell.mark-orange {
   background: #fff2d6;
   box-shadow: inset 0 0 0 2px rgb(245 158 11 / 32%);
@@ -1471,6 +1528,14 @@ button.person-chip:focus-visible {
 .matrix-absence-row th,
 .matrix-absence-row td {
   background: #fbfdff;
+}
+
+.matrix-absence-row td.is-holiday {
+  background: #fff8df;
+}
+
+.matrix-absence-row td.weekend.is-holiday {
+  background: #faefd2;
 }
 
 .matrix-absence-heading {
@@ -1777,6 +1842,16 @@ button.person-chip:focus-visible {
   height: 30px;
   font-size: 0.64rem;
   padding: 3px 4px;
+}
+
+.matrix-page.is-compact .matrix-table thead .matrix-week-row th {
+  height: 20px;
+  padding: 2px 4px;
+  font-size: 0.6rem;
+}
+
+.matrix-page.is-compact .matrix-table thead .matrix-day-row th {
+  top: 20px;
 }
 
 .matrix-page.is-compact .site-col {
