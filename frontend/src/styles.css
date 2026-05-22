@@ -1308,6 +1308,7 @@ button.entity-card:focus-visible {
 }
 
 .person-chip {
+  position: relative;
   border: 0;
   background: #e9f1fb;
   color: #143c6d;
@@ -1341,6 +1342,54 @@ button.entity-card:focus-visible {
   background: #fff1f1;
   color: #991b1b;
   box-shadow: 0 1px 0 rgb(153 27 27 / 8%);
+}
+
+.person-chip.is-resizing {
+  opacity: 0.86;
+  outline: 2px solid rgb(37 99 235 / 35%);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 10%);
+}
+
+.assignment-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 8px;
+  cursor: ew-resize;
+  opacity: 0;
+}
+
+.assignment-resize-handle.left {
+  left: 0;
+}
+
+.assignment-resize-handle.right {
+  right: 0;
+}
+
+.assignment-resize-handle::after {
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 38%);
+  content: "";
+}
+
+.assignment-resize-handle.left::after {
+  left: 2px;
+}
+
+.assignment-resize-handle.right::after {
+  right: 2px;
+}
+
+.person-chip:hover .assignment-resize-handle,
+.person-chip:focus-visible .assignment-resize-handle,
+.person-chip.is-resizing .assignment-resize-handle {
+  opacity: 1;
 }
 
 button.person-chip.is-absence-conflict:hover,
@@ -1477,6 +1526,10 @@ button.person-chip:focus-visible {
 
 .matrix-cell.is-drag-target {
   box-shadow: inset 0 0 0 2px rgb(29 92 153 / 28%);
+}
+
+.matrix-cell.is-resize-preview {
+  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 24%);
 }
 
 .matrix-cell.today {
