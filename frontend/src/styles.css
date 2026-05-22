@@ -3453,6 +3453,58 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
+.assignment-autocomplete {
+  position: fixed;
+  z-index: 5000;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 14%);
+  padding: 4px;
+}
+
+.assignment-autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #172033;
+  cursor: pointer;
+  padding: 7px 9px;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.assignment-autocomplete-item:hover,
+.assignment-autocomplete-item.is-active {
+  background: #eaf2ff;
+}
+
+.assignment-autocomplete-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.assignment-autocomplete-short {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 .matrix-cell-editor-popup {
   position: fixed;
   z-index: 120;

@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { MatrixCellEditor } from "../components/MatrixCellEditor";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Absence } from "../types/absence";
@@ -94,9 +93,8 @@ export function MatrixPage() {
   const [activeEditorRange, setActiveEditorRange] = useState<CellRange | null>(null);
   const [draftEntries, setDraftEntries] = useState<DraftEntry[]>([]);
   const [initialEntries, setInitialEntries] = useState<DraftEntry[]>([]);
-  const [selectedPersonId, setSelectedPersonId] = useState("");
-  const [externalName, setExternalName] = useState("");
   const [personSearchSeed, setPersonSearchSeed] = useState("");
+  const [highlightedPersonIndex, setHighlightedPersonIndex] = useState(-1);
   const [activeAbsenceCell, setActiveAbsenceCell] = useState<ActiveAbsenceCell | null>(null);
   const [absenceEditorAnchor, setAbsenceEditorAnchor] = useState<EditorAnchor | null>(null);
   const [selectedAbsencePersonId, setSelectedAbsencePersonId] = useState("");
@@ -132,12 +130,19 @@ export function MatrixPage() {
   const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
   const isDraggingAssignment = assignmentDrag !== null;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
-  const activeEditorContext = useMemo(() => {
-    if (!matrix || !activeCell) {
-      return null;
+  const assignmentSuggestions = useMemo(() => {
+    const query = personSearchSeed.trim().toLowerCase();
+    if (!query) {
+      return [];
     }
-    return matrixEditorContext(matrix, activeCell);
-  }, [activeCell, matrix]);
+    const assignedKeys = new Set(draftEntries.map((entry) => entry.key));
+    return people
+      .filter((person) => person.is_active && person.person_type === "internal")
+      .filter((person) => !assignedKeys.has(`p-${person.id}`))
+      .filter((person) => [person.display_name, person.first_name, person.last_name, person.short_code]
+        .some((value) => value.toLowerCase().includes(query)))
+      .slice(0, 8);
+  }, [draftEntries, people, personSearchSeed]);
 
   const loadMatrix = useCallback(async () => {
     setIsLoading(true);
@@ -263,6 +268,14 @@ export function MatrixPage() {
   }, [draftEntries]);
 
   useEffect(() => {
+    if (!editorAnchor) {
+      setHighlightedPersonIndex(-1);
+      return;
+    }
+    setHighlightedPersonIndex(assignmentSuggestions.length === 1 ? 0 : -1);
+  }, [assignmentSuggestions.length, editorAnchor, personSearchSeed]);
+
+  useEffect(() => {
     function handleMatrixKeyboard(event: KeyboardEvent) {
       if (!isEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
         return;
@@ -274,16 +287,47 @@ export function MatrixPage() {
         return;
       }
       if (event.key === "Escape") {
+        event.preventDefault();
         if (editorAnchor) {
-          event.preventDefault();
           closeKeyboardEntry();
         } else {
-          event.preventDefault();
           closeActiveEditor();
         }
         return;
       }
-      if (editorAnchor || !isSearchStartKey(event)) {
+      if (editorAnchor) {
+        if (event.key === "ArrowDown" && assignmentSuggestions.length > 0) {
+          event.preventDefault();
+          setHighlightedPersonIndex((current) => (current < 0 ? 0 : (current + 1) % assignmentSuggestions.length));
+          return;
+        }
+        if (event.key === "ArrowUp" && assignmentSuggestions.length > 0) {
+          event.preventDefault();
+          setHighlightedPersonIndex((current) => (current < 0 ? assignmentSuggestions.length - 1 : current <= 0 ? assignmentSuggestions.length - 1 : current - 1));
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const selectedPerson = highlightedPersonIndex >= 0
+            ? assignmentSuggestions[highlightedPersonIndex]
+            : assignmentSuggestions.length === 1 ? assignmentSuggestions[0] : null;
+          if (selectedPerson) {
+            addSelectedPersonAndSave(String(selectedPerson.id));
+          }
+          return;
+        }
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          setPersonSearchSeed((current) => current.slice(0, -1));
+          return;
+        }
+        if (isSearchStartKey(event)) {
+          event.preventDefault();
+          setPersonSearchSeed((current) => current + event.key);
+        }
+        return;
+      }
+      if (!isSearchStartKey(event)) {
         return;
       }
       event.preventDefault();
@@ -293,26 +337,13 @@ export function MatrixPage() {
 
     document.addEventListener("keydown", handleMatrixKeyboard);
     return () => document.removeEventListener("keydown", handleMatrixKeyboard);
-  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, editorAnchor, isEditable, isSelecting]);
+  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, assignmentSuggestions, editorAnchor, highlightedPersonIndex, isEditable, isSelecting]);
 
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
     if (user) {
       localStorage.setItem(matrixCompactPreferenceKey(user.id), String(value));
     }
-  }
-
-  function openCell(row: MatrixRow, cell: MatrixCell, extendRange = false, anchor?: EditorAnchor) {
-    if (!isEditable) {
-      return;
-    }
-    if (extendRange && activeCell?.siteId === row.site.id) {
-      const [startDate, endDate] = sortDates(activeCell.date, cell.date);
-      const range = rangeFromDates(row.site.id, startDate, endDate, matrix?.days ?? []);
-      openEditorForRange(row, cell, range, anchor);
-      return;
-    }
-    openEditorForRange(row, cell, singleCellRange(row.site.id, cell.date, matrix?.days ?? []), anchor);
   }
 
   function openEditorForRange(row: MatrixRow, cell: MatrixCell, range: CellRange, anchor?: EditorAnchor) {
@@ -325,29 +356,15 @@ export function MatrixPage() {
     setActiveEditorRange(range);
     setEditorAnchor(null);
     setPersonSearchSeed("");
+    setHighlightedPersonIndex(-1);
     setDraftEntries(entries);
     setInitialEntries(entries);
-    setSelectedPersonId("");
-    setExternalName("");
     if (range.startDate !== range.endDate) {
       setCellMessage((current) => ({
         ...current,
         [key]: "Zeitraum gewaehlt - Namen tippen zum Einplanen",
       }));
     }
-  }
-
-  function addSelectedPerson(personId = selectedPersonId) {
-    const person = people.find((item) => item.id === Number(personId));
-    if (!person) {
-      return;
-    }
-    setDraftEntries((current) => addDraftEntry(current, {
-      key: `p-${person.id}`,
-      label: calendarPersonCode(person),
-      person_id: person.id,
-    }));
-    setSelectedPersonId("");
   }
 
   function addSelectedPersonAndSave(personId: string) {
@@ -362,24 +379,10 @@ export function MatrixPage() {
     });
     skipNextDraftAutosaveRef.current = true;
     setDraftEntries(nextEntries);
-    setSelectedPersonId("");
     setPersonSearchSeed("");
+    setHighlightedPersonIndex(-1);
     void saveActiveCell({ closeOnSuccess: true }, nextEntries);
   }
-
-  function addExternalPerson() {
-    const cleaned = externalName.trim();
-    if (!cleaned) {
-      return;
-    }
-    setDraftEntries((current) => addDraftEntry(current, {
-      key: `x-${cleaned.toLowerCase()}`,
-      label: cleaned,
-      external_name: cleaned,
-    }));
-    setExternalName("");
-  }
-
   function openAbsenceCell(date: string, anchor: EditorAnchor) {
     if (!isEditable) {
       return;
@@ -467,16 +470,14 @@ export function MatrixPage() {
     setEditorAnchor(null);
     setActiveEditorRange(null);
     setPersonSearchSeed("");
+    setHighlightedPersonIndex(-1);
     clearSelection();
-    setSelectedPersonId("");
-    setExternalName("");
   }
 
   function closeKeyboardEntry() {
     setEditorAnchor(null);
     setPersonSearchSeed("");
-    setSelectedPersonId("");
-    setExternalName("");
+    setHighlightedPersonIndex(-1);
   }
 
   function closeOrSaveActiveEditor() {
@@ -892,7 +893,7 @@ export function MatrixPage() {
 
   function handleMatrixContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest(".person-chip") || target?.closest(".matrix-cell-editor-popup")) {
+    if (target?.closest(".person-chip") || target?.closest(".matrix-cell-editor-popup") || target?.closest(".assignment-autocomplete")) {
       return;
     }
     event.preventDefault();
@@ -1078,10 +1079,8 @@ export function MatrixPage() {
         <>
           <MatrixTable
             absences={absences}
-            activeCell={activeCell}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
-            draftEntries={draftEntries}
             isCompactView={isCompactView}
             isEditable={isEditable}
             assignmentDragTarget={assignmentDrag?.target ?? null}
@@ -1097,60 +1096,27 @@ export function MatrixPage() {
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
             onInfoSave={(siteId) => void saveSiteInfo(siteId)}
             onStatusChange={(siteId, status) => void saveSiteStatus(siteId, status)}
-            onAddExternal={addExternalPerson}
-            onAddPerson={addSelectedPerson}
-            onEndDateChange={(endDate) => {
-              if (activeCell) {
-                setActiveCell({ ...activeCell, endDate });
-              }
-            }}
-            onExternalNameChange={setExternalName}
             highlightedCellRange={highlightedCellRange}
             onCellMouseDown={startCellSelection}
             onCellMouseEnter={extendCellSelection}
             onCellMouseUp={finishCellSelection}
             onOpenAbsenceCell={openAbsenceCell}
-            onOpenCell={openCell}
-            onRemoveEntry={(key) =>
-              setDraftEntries((items) => items.filter((item) => item.key !== key))
-            }
-            onSave={() => void saveActiveCell()}
-            onSelectedPersonChange={setSelectedPersonId}
-            people={people}
             saveStatus={saveStatus}
             savingInfoSiteId={savingInfoSiteId}
             savingStatusSiteId={savingStatusSiteId}
-            selectedPersonId={selectedPersonId}
             siteInfoDrafts={siteInfoDrafts}
             today={today}
             visibleRowGroups={visibleRowGroups}
-            externalName={externalName}
           />
 
-          {activeCell && editorAnchor && activeEditorContext && (
-            <MatrixCellEditorPopup
-              activeCell={activeCell}
+          {editorAnchor && assignmentSuggestions.length > 0 && (
+            <AssignmentAutocompleteDropdown
               anchor={editorAnchor}
-              cellMessage={cellMessage[activeCell.key]}
-              context={activeEditorContext}
-              draftEntries={draftEntries}
-              externalName={externalName}
-              onAddExternal={addExternalPerson}
-              initialPersonQuery={personSearchSeed}
-              onAddPerson={addSelectedPerson}
-              onClose={closeOrSaveActiveEditor}
-              onDismiss={closeKeyboardEntry}
-              onPersonChosen={addSelectedPersonAndSave}
-              onEndDateChange={(endDate) => setActiveCell({ ...activeCell, endDate })}
-              onExternalNameChange={setExternalName}
-              onRemoveEntry={(key) =>
-                setDraftEntries((items) => items.filter((item) => item.key !== key))
-              }
-              onSave={() => void saveActiveCell()}
-              onSelectedPersonChange={setSelectedPersonId}
-              people={people}
-              saveStatus={saveStatus[activeCell.key]}
-              selectedPersonId={selectedPersonId}
+              highlightedIndex={highlightedPersonIndex}
+              items={assignmentSuggestions}
+              onClose={closeKeyboardEntry}
+              onHighlight={setHighlightedPersonIndex}
+              onSelect={(person) => addSelectedPersonAndSave(String(person.id))}
             />
           )}
 
@@ -1190,113 +1156,67 @@ export function MatrixPage() {
   );
 }
 
-type MatrixCellEditorPopupProps = {
-  activeCell: ActiveCell;
+type AssignmentAutocompleteDropdownProps = {
   anchor: EditorAnchor;
-  cellMessage?: string;
-  context: MatrixEditorContext;
-  draftEntries: DraftEntry[];
-  externalName: string;
-  initialPersonQuery: string;
-  onAddExternal: () => void;
-  onAddPerson: (personId?: string) => void;
+  highlightedIndex: number;
+  items: Person[];
   onClose: () => void;
-  onDismiss: () => void;
-  onPersonChosen?: (personId: string) => void;
-  onEndDateChange: (date: string) => void;
-  onExternalNameChange: (value: string) => void;
-  onRemoveEntry: (key: string) => void;
-  onSave: () => void;
-  onSelectedPersonChange: (value: string) => void;
-  people: Person[];
-  saveStatus?: SaveStatus;
-  selectedPersonId: string;
+  onHighlight: (index: number) => void;
+  onSelect: (person: Person) => void;
 };
 
-function MatrixCellEditorPopup({
-  activeCell,
+function AssignmentAutocompleteDropdown({
   anchor,
-  cellMessage,
-  context,
-  draftEntries,
-  externalName,
-  initialPersonQuery,
-  onAddExternal,
-  onAddPerson,
+  highlightedIndex,
+  items,
   onClose,
-  onDismiss,
-  onPersonChosen,
-  onEndDateChange,
-  onExternalNameChange,
-  onRemoveEntry,
-  onSave,
-  onSelectedPersonChange,
-  people,
-  saveStatus,
-  selectedPersonId,
-}: MatrixCellEditorPopupProps) {
-  const popupRef = useRef<HTMLDivElement | null>(null);
+  onHighlight,
+  onSelect,
+}: AssignmentAutocompleteDropdownProps) {
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
-      if (popupRef.current?.contains(event.target as Node)) {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || dropdownRef.current?.contains(target)) {
         return;
       }
-      onDismiss();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onDismiss();
-      }
+      onClose();
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onDismiss]);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [onClose]);
 
   if (typeof document === "undefined") {
     return null;
   }
 
-  const position = editorPopupPosition(anchor);
-
   return createPortal(
     <div
-      className="matrix-cell-editor-popup"
-      ref={popupRef}
-      style={{ left: position.left, top: position.top }}
-      onClick={(event) => event.stopPropagation()}
+      className="assignment-autocomplete"
+      ref={dropdownRef}
+      role="listbox"
+      style={autocompleteDropdownPosition(anchor)}
     >
-      <MatrixCellEditor
-        activeCell={activeCell}
-        cellMessage={cellMessage}
-        context={context}
-        draftEntries={draftEntries}
-        externalName={externalName}
-        initialPersonQuery={initialPersonQuery}
-        onAddExternal={onAddExternal}
-        onAddPerson={onAddPerson}
-        onClose={onClose}
-        onEndDateChange={onEndDateChange}
-        onPersonChosen={onPersonChosen}
-        onExternalNameChange={onExternalNameChange}
-        onRemoveEntry={onRemoveEntry}
-        onSave={onSave}
-        onSelectedPersonChange={onSelectedPersonChange}
-        people={people}
-        saveStatus={saveStatus}
-        selectedPersonId={selectedPersonId}
-      />
+      {items.map((person, index) => (
+        <button
+          aria-selected={highlightedIndex === index}
+          className={highlightedIndex === index ? "assignment-autocomplete-item is-active" : "assignment-autocomplete-item"}
+          key={person.id}
+          role="option"
+          type="button"
+          onClick={() => onSelect(person)}
+          onMouseEnter={() => onHighlight(index)}
+        >
+          <span className="assignment-autocomplete-name">{person.display_name}</span>
+          {person.short_code && <span className="assignment-autocomplete-short">{person.short_code}</span>}
+        </button>
+      ))}
     </div>,
     document.body,
   );
 }
-
 type AbsenceCellEditorPopupProps = {
   activeCell: ActiveAbsenceCell;
   anchor: EditorAnchor;
@@ -1542,26 +1462,19 @@ function AbsenceCellEditor({
 
 type MatrixTableProps = {
   absences: Absence[];
-  activeCell: ActiveCell | null;
   cellMessage: Record<CellKey, string>;
   dayColumnWidth: number;
   highlightedCellRange: CellRange | null;
-  draftEntries: DraftEntry[];
-  externalName: string;
   isCompactView: boolean;
   isEditable: boolean;
   assignmentDragTarget: AssignmentDragTarget | null;
   matrix: MatrixResponse;
   matrixScrollRef: RefObject<HTMLDivElement | null>;
   peopleById: Map<number, Person>;
-  onAddExternal: () => void;
   onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
-  onAddPerson: () => void;
-  onEndDateChange: (date: string) => void;
-  onExternalNameChange: (value: string) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
   onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
@@ -1571,15 +1484,9 @@ type MatrixTableProps = {
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onOpenAbsenceCell: (date: string, anchor: EditorAnchor) => void;
-  onOpenCell: (row: MatrixRow, cell: MatrixCell, extendRange?: boolean, anchor?: EditorAnchor) => void;
-  onRemoveEntry: (key: string) => void;
-  onSave: () => void;
-  onSelectedPersonChange: (value: string) => void;
-  people: Person[];
   saveStatus: Record<CellKey, SaveStatus>;
   savingInfoSiteId: number | null;
   savingStatusSiteId: number | null;
-  selectedPersonId: string;
   siteInfoDrafts: Record<number, string>;
   today: string;
   visibleRowGroups: MatrixRowGroup[];
@@ -2097,6 +2004,8 @@ const DAY_COLUMN_WIDTH = 104;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
+const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
+const ASSIGNMENT_AUTOCOMPLETE_WIDTH = 280;
 const STATUS_MENU_HEIGHT = 142;
 const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 538;
@@ -2108,48 +2017,12 @@ type ProjectManagerOption = {
   name: string;
   shortCode: string;
 };
-
-type MatrixEditorContext = {
-  siteName: string;
-  siteNumber: string | null;
-  location: string | null;
-  dateLabel: string;
-};
-
 type MatrixRowGroup = {
   key: string;
   label: string;
   rows: MatrixRow[];
   showHeading: boolean;
 };
-
-function matrixEditorContext(matrix: MatrixResponse, activeCell: ActiveCell): MatrixEditorContext {
-  const row = matrix.rows.find((item) => item.site.id === activeCell.siteId);
-  return {
-    siteName: row?.site.name ?? "Baustelle",
-    siteNumber: row?.site.site_number ?? null,
-    location: row?.site.location ?? null,
-    dateLabel: formatEditorDateRange(activeCell.date, activeCell.endDate),
-  };
-}
-
-function formatEditorDateRange(startDate: string, endDate: string): string {
-  if (startDate === endDate) {
-    return formatEditorDate(startDate);
-  }
-  return formatEditorDate(startDate) + " - " + formatEditorDate(endDate);
-}
-
-function formatEditorDate(value: string): string {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return new Intl.DateTimeFormat("de-DE", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
 
 function anchorFromRect(rect: DOMRect): EditorAnchor {
   return {
@@ -2201,6 +2074,21 @@ function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number 
     : belowTop;
 
   return { left, top };
+}
+
+function autocompleteDropdownPosition(anchor: EditorAnchor): CSSProperties {
+  const gap = 5;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const width = Math.max(220, Math.min(ASSIGNMENT_AUTOCOMPLETE_WIDTH, viewportWidth - 16));
+  const left = Math.max(8, Math.min(anchor.left, viewportWidth - width - 8));
+  const belowTop = anchor.bottom + gap;
+  const aboveTop = anchor.top - ASSIGNMENT_AUTOCOMPLETE_HEIGHT - gap;
+  const top = belowTop + ASSIGNMENT_AUTOCOMPLETE_HEIGHT > viewportHeight
+    ? Math.max(8, aboveTop)
+    : belowTop;
+
+  return { left, top, width };
 }
 
 function statusMenuPosition(anchor: EditorAnchor): CSSProperties {
