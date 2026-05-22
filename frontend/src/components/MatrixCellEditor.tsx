@@ -26,9 +26,11 @@ export type MatrixCellEditorProps = {
   context: MatrixCellEditorContext;
   draftEntries: MatrixCellEditorEntry[];
   externalName: string;
+  initialPersonQuery?: string;
   onAddExternal: () => void;
   onAddPerson: (personId?: string) => void;
   onClose: () => void;
+  onPersonChosen?: (personId: string) => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
   onRemoveEntry: (key: string) => void;
@@ -45,9 +47,11 @@ export function MatrixCellEditor({
   context,
   draftEntries,
   externalName,
+  initialPersonQuery = "",
   onAddExternal,
   onAddPerson,
   onClose,
+  onPersonChosen,
   onEndDateChange,
   onExternalNameChange,
   onRemoveEntry,
@@ -57,9 +61,10 @@ export function MatrixCellEditor({
   saveStatus,
   selectedPersonId,
 }: MatrixCellEditorProps) {
-  const [personQuery, setPersonQuery] = useState("");
+  const [personQuery, setPersonQuery] = useState(initialPersonQuery);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isExternalOpen, setIsExternalOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const assignedKeys = useMemo(() => new Set(draftEntries.map((entry) => entry.key)), [draftEntries]);
   const suggestions = useMemo(() => {
@@ -80,7 +85,13 @@ export function MatrixCellEditor({
   }, [assignedKeys, people, personQuery]);
 
   useEffect(() => {
-    setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
+    setPersonQuery(initialPersonQuery);
+    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialPersonQuery]);
+
+  useEffect(() => {
+    setHighlightedIndex(suggestions.length === 1 ? 0 : -1);
   }, [personQuery, suggestions.length]);
 
   useEffect(() => {
@@ -91,8 +102,12 @@ export function MatrixCellEditor({
   }, [highlightedIndex]);
 
   function addPerson(personId: string) {
-    onSelectedPersonChange(personId);
-    onAddPerson(personId);
+    if (onPersonChosen) {
+      onPersonChosen(personId);
+    } else {
+      onSelectedPersonChange(personId);
+      onAddPerson(personId);
+    }
     setPersonQuery("");
     setHighlightedIndex(-1);
   }
@@ -143,6 +158,7 @@ export function MatrixCellEditor({
           id="matrix-person-search"
           placeholder="Person suchen..."
           value={personQuery}
+          ref={inputRef}
           onChange={(event) => setPersonQuery(event.target.value)}
           aria-activedescendant={highlightedIndex >= 0 ? `matrix-person-suggestion-${suggestions[highlightedIndex]?.id}` : undefined}
           aria-controls="matrix-person-suggestions"
@@ -151,16 +167,16 @@ export function MatrixCellEditor({
           onKeyDown={(event) => {
             if (event.key === "ArrowDown" && suggestions.length > 0) {
               event.preventDefault();
-              setHighlightedIndex((current) => (current + 1) % suggestions.length);
+              setHighlightedIndex((current) => (current < 0 ? 0 : (current + 1) % suggestions.length));
               return;
             }
             if (event.key === "ArrowUp" && suggestions.length > 0) {
               event.preventDefault();
-              setHighlightedIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
+              setHighlightedIndex((current) => (current < 0 ? suggestions.length - 1 : current <= 0 ? suggestions.length - 1 : current - 1));
               return;
             }
             if (event.key === "Enter") {
-              const selectedSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : suggestions[0];
+              const selectedSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : suggestions.length === 1 ? suggestions[0] : null;
               if (selectedSuggestion) {
                 event.preventDefault();
                 addPerson(String(selectedSuggestion.id));

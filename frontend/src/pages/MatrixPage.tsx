@@ -96,6 +96,7 @@ export function MatrixPage() {
   const [initialEntries, setInitialEntries] = useState<DraftEntry[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [externalName, setExternalName] = useState("");
+  const [personSearchSeed, setPersonSearchSeed] = useState("");
   const [activeAbsenceCell, setActiveAbsenceCell] = useState<ActiveAbsenceCell | null>(null);
   const [absenceEditorAnchor, setAbsenceEditorAnchor] = useState<EditorAnchor | null>(null);
   const [selectedAbsencePersonId, setSelectedAbsencePersonId] = useState("");
@@ -261,6 +262,39 @@ export function MatrixPage() {
     };
   }, [draftEntries]);
 
+  useEffect(() => {
+    function handleMatrixKeyboard(event: KeyboardEvent) {
+      if (!isEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
+        return;
+      }
+      if (!activeCell || !activeEditorRange) {
+        return;
+      }
+      if (isKeyboardEventFromFormControl(event)) {
+        return;
+      }
+      if (event.key === "Escape") {
+        if (editorAnchor) {
+          event.preventDefault();
+          closeKeyboardEntry();
+        } else {
+          event.preventDefault();
+          closeActiveEditor();
+        }
+        return;
+      }
+      if (editorAnchor || !isSearchStartKey(event)) {
+        return;
+      }
+      event.preventDefault();
+      setPersonSearchSeed(event.key);
+      setEditorAnchor(selectionAnchorRef.current ?? fallbackEditorAnchor(matrixScrollRef.current));
+    }
+
+    document.addEventListener("keydown", handleMatrixKeyboard);
+    return () => document.removeEventListener("keydown", handleMatrixKeyboard);
+  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, editorAnchor, isEditable, isSelecting]);
+
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
     if (user) {
@@ -286,9 +320,11 @@ export function MatrixPage() {
     const key = cellKey(row.site.id, range.startDate);
     const entries = entriesFromCell(cell);
     skipNextDraftAutosaveRef.current = true;
+    selectionAnchorRef.current = anchor ?? selectionAnchorRef.current;
     setActiveCell({ siteId: row.site.id, date: range.startDate, endDate: range.endDate, key });
     setActiveEditorRange(range);
-    setEditorAnchor(anchor ?? null);
+    setEditorAnchor(null);
+    setPersonSearchSeed("");
     setDraftEntries(entries);
     setInitialEntries(entries);
     setSelectedPersonId("");
@@ -296,7 +332,7 @@ export function MatrixPage() {
     if (range.startDate !== range.endDate) {
       setCellMessage((current) => ({
         ...current,
-        [key]: "Zeitraum gewaehlt - mit Speichern bestaetigen",
+        [key]: "Zeitraum gewaehlt - Namen tippen zum Einplanen",
       }));
     }
   }
@@ -312,6 +348,23 @@ export function MatrixPage() {
       person_id: person.id,
     }));
     setSelectedPersonId("");
+  }
+
+  function addSelectedPersonAndSave(personId: string) {
+    const person = people.find((item) => item.id === Number(personId));
+    if (!person || !activeCell) {
+      return;
+    }
+    const nextEntries = addDraftEntry(draftEntries, {
+      key: `p-${person.id}`,
+      label: calendarPersonCode(person),
+      person_id: person.id,
+    });
+    skipNextDraftAutosaveRef.current = true;
+    setDraftEntries(nextEntries);
+    setSelectedPersonId("");
+    setPersonSearchSeed("");
+    void saveActiveCell({ closeOnSuccess: true }, nextEntries);
   }
 
   function addExternalPerson() {
@@ -413,7 +466,15 @@ export function MatrixPage() {
     setActiveCell(null);
     setEditorAnchor(null);
     setActiveEditorRange(null);
+    setPersonSearchSeed("");
     clearSelection();
+    setSelectedPersonId("");
+    setExternalName("");
+  }
+
+  function closeKeyboardEntry() {
+    setEditorAnchor(null);
+    setPersonSearchSeed("");
     setSelectedPersonId("");
     setExternalName("");
   }
@@ -430,7 +491,7 @@ export function MatrixPage() {
     void saveActiveCell({ closeOnSuccess: true });
   }
 
-  async function saveActiveCell(options: { closeOnSuccess?: boolean } = {}) {
+  async function saveActiveCell(options: { closeOnSuccess?: boolean } = {}, entriesForSave = draftEntries) {
     if (!activeCell) {
       return;
     }
@@ -438,7 +499,7 @@ export function MatrixPage() {
       window.clearTimeout(autosaveRef.current);
       autosaveRef.current = null;
     }
-    const unchanged = sameEntries(initialEntries, draftEntries);
+    const unchanged = sameEntries(initialEntries, entriesForSave);
     if (unchanged && activeCell.endDate === activeCell.date) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "idle" }));
       if (options.closeOnSuccess) {
@@ -446,7 +507,7 @@ export function MatrixPage() {
       }
       return;
     }
-    const entries = draftEntries.map(toMatrixEntryInput);
+    const entries = entriesForSave.map(toMatrixEntryInput);
     clearTemporaryCellFeedback(activeCell.key);
     setSaveStatus((current) => ({ ...current, [activeCell.key]: "saving" }));
     setCellMessage((current) => ({ ...current, [activeCell.key]: "" }));
@@ -464,7 +525,7 @@ export function MatrixPage() {
             endDate: activeCell.endDate,
             entries,
           });
-      if (!sameEntries(initialEntries, draftEntries)) {
+      if (!sameEntries(initialEntries, entriesForSave)) {
         setUndoStack((current) => [
           ...current,
           {
@@ -472,11 +533,11 @@ export function MatrixPage() {
             date: activeCell.date,
             endDate: activeCell.endDate,
             before: initialEntries,
-            after: draftEntries,
+            after: entriesForSave,
           },
         ]);
       }
-      setInitialEntries(draftEntries);
+      setInitialEntries(entriesForSave);
       setError(null);
       if (response.warnings[0]?.message) {
         setSaveStatus((current) => ({ ...current, [activeCell.key]: "saved" }));
@@ -1075,8 +1136,11 @@ export function MatrixPage() {
               draftEntries={draftEntries}
               externalName={externalName}
               onAddExternal={addExternalPerson}
+              initialPersonQuery={personSearchSeed}
               onAddPerson={addSelectedPerson}
               onClose={closeOrSaveActiveEditor}
+              onDismiss={closeKeyboardEntry}
+              onPersonChosen={addSelectedPersonAndSave}
               onEndDateChange={(endDate) => setActiveCell({ ...activeCell, endDate })}
               onExternalNameChange={setExternalName}
               onRemoveEntry={(key) =>
@@ -1133,9 +1197,12 @@ type MatrixCellEditorPopupProps = {
   context: MatrixEditorContext;
   draftEntries: DraftEntry[];
   externalName: string;
+  initialPersonQuery: string;
   onAddExternal: () => void;
   onAddPerson: (personId?: string) => void;
   onClose: () => void;
+  onDismiss: () => void;
+  onPersonChosen?: (personId: string) => void;
   onEndDateChange: (date: string) => void;
   onExternalNameChange: (value: string) => void;
   onRemoveEntry: (key: string) => void;
@@ -1153,9 +1220,12 @@ function MatrixCellEditorPopup({
   context,
   draftEntries,
   externalName,
+  initialPersonQuery,
   onAddExternal,
   onAddPerson,
   onClose,
+  onDismiss,
+  onPersonChosen,
   onEndDateChange,
   onExternalNameChange,
   onRemoveEntry,
@@ -1172,12 +1242,12 @@ function MatrixCellEditorPopup({
       if (popupRef.current?.contains(event.target as Node)) {
         return;
       }
-      onClose();
+      onDismiss();
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onDismiss();
       }
     }
 
@@ -1187,7 +1257,7 @@ function MatrixCellEditorPopup({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onDismiss]);
 
   if (typeof document === "undefined") {
     return null;
@@ -1208,10 +1278,12 @@ function MatrixCellEditorPopup({
         context={context}
         draftEntries={draftEntries}
         externalName={externalName}
+        initialPersonQuery={initialPersonQuery}
         onAddExternal={onAddExternal}
         onAddPerson={onAddPerson}
         onClose={onClose}
         onEndDateChange={onEndDateChange}
+        onPersonChosen={onPersonChosen}
         onExternalNameChange={onExternalNameChange}
         onRemoveEntry={onRemoveEntry}
         onSave={onSave}
@@ -2086,6 +2158,34 @@ function anchorFromRect(rect: DOMRect): EditorAnchor {
     top: rect.top,
     width: rect.width,
   };
+}
+
+function fallbackEditorAnchor(container: HTMLElement | null): EditorAnchor {
+  const rect = container?.getBoundingClientRect();
+  if (!rect) {
+    return { bottom: 160, left: 24, top: 120, width: 280 };
+  }
+  return {
+    bottom: rect.top + 104,
+    left: rect.left + 24,
+    top: rect.top + 72,
+    width: 280,
+  };
+}
+
+function isSearchStartKey(event: KeyboardEvent): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    return false;
+  }
+  return event.key.length === 1 && event.key.trim().length > 0;
+}
+
+function isKeyboardEventFromFormControl(event: KeyboardEvent): boolean {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) {
+    return false;
+  }
+  return Boolean(target.closest("input, textarea, select, button, a, [contenteditable='true'], .matrix-cell-editor-popup, .absence-cell-editor-popup"));
 }
 
 function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number } {
