@@ -2306,7 +2306,7 @@ function absencePersonLabel(person: Person | undefined): string {
     return "Person";
   }
   const lastName = person.last_name.trim() || person.display_name.split(/[.\s-]+/).filter(Boolean).at(-1) || person.short_code;
-  return lastName.length > 6 ? lastName.slice(0, 4) + "." : lastName;
+  return lastName.length > 8 ? lastName.slice(0, 7) + "." : lastName;
 }
 
 function absencePlanningBlockClassName(absence: Absence): string {
