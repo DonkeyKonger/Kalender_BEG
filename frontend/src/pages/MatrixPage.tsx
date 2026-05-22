@@ -368,16 +368,41 @@ export function MatrixPage() {
     }
   }
 
-  async function deleteAbsenceFromPlanning(absence: Absence) {
-    if (!isEditable) {
+  async function deleteAbsenceDayFromPlanning(absence: Absence, date: string) {
+    if (!isEditable || date < absence.start_date || date > absence.end_date) {
       return;
     }
     try {
-      await api.deleteAbsence(absence.id);
+      if (absence.start_date === absence.end_date) {
+        await api.deleteAbsence(absence.id);
+      } else if (date === absence.start_date) {
+        await api.updateAbsence(absence.id, { start_date: addIsoDays(date, 1) });
+      } else if (date === absence.end_date) {
+        await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
+      } else {
+        let rightAbsence: Absence | null = null;
+        try {
+          rightAbsence = await api.createAbsence({
+            person_id: absence.person_id,
+            absence_type: absence.absence_type,
+            start_date: addIsoDays(date, 1),
+            end_date: absence.end_date,
+            status: absence.status,
+            note: absence.note,
+          });
+          await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
+        } catch (splitError) {
+          if (rightAbsence) {
+            await api.deleteAbsence(rightAbsence.id).catch(() => undefined);
+          }
+          throw splitError;
+        }
+      }
       setError(null);
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
     } catch (requestError) {
-      setError(readApiError(requestError, "Fehlzeit konnte nicht geloescht werden."));
+      setError(readApiError(requestError, "Fehlzeit konnte nicht fuer diesen Tag entfernt werden."));
+      await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
     }
   }
 
@@ -999,7 +1024,7 @@ export function MatrixPage() {
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
             peopleById={peopleById}
-            onDeleteAbsence={deleteAbsenceFromPlanning}
+            onDeleteAbsence={deleteAbsenceDayFromPlanning}
             onDeleteAssignment={deleteAssignmentFromCell}
             onStartAssignmentDrag={startAssignmentDrag}
             onClearCellMark={clearCellMark}
@@ -1455,7 +1480,7 @@ type MatrixTableProps = {
   matrixScrollRef: RefObject<HTMLDivElement | null>;
   peopleById: Map<number, Person>;
   onAddExternal: () => void;
-  onDeleteAbsence: (absence: Absence) => void;
+  onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
@@ -1599,7 +1624,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                       }
                       event.preventDefault();
                       event.stopPropagation();
-                      props.onDeleteAbsence(absence);
+                      props.onDeleteAbsence(absence, date);
                     }}
                   >
                     <span>{absencePersonLabel(person)}</span>
@@ -2306,8 +2331,9 @@ function absencePersonLabel(person: Person | undefined): string {
     return "Person";
   }
   const lastName = person.last_name.trim() || person.display_name.split(/[.\s-]+/).filter(Boolean).at(-1) || person.short_code;
-  return lastName.length > 8 ? lastName.slice(0, 7) + "." : lastName;
+  return lastName.length > 9 ? lastName.slice(0, 7) + "." : lastName;
 }
+
 
 function absencePlanningBlockClassName(absence: Absence): string {
   return [

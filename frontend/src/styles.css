@@ -1501,6 +1501,15 @@ button.person-chip:focus-visible {
   text-overflow: clip;
 }
 
+.absence-planning-chip.absence-block-vacation,
+.absence-planning-chip.absence-block-sick,
+.absence-planning-chip.absence-block-school,
+.absence-planning-chip.absence-block-free,
+.absence-planning-chip.absence-block-other {
+  background: transparent;
+  color: #27354d;
+}
+
 .absence-planning-chip.absence-block-vacation {
   --absence-accent: #d97706;
 }
