@@ -64,6 +64,7 @@ type AssignmentDragState = {
   target: AssignmentDragTarget | null;
 };
 type PlanningAbsenceItem = { absence: Absence };
+type CellTypingPreview = { siteId: number; date: string; text: string };
 
 type UndoItem = {
   siteId: number;
@@ -128,6 +129,9 @@ export function MatrixPage() {
     return buildCellRange(selectionStartCell, selectionEndCell, matrix.days);
   }, [matrix, selectionEndCell, selectionStartCell]);
   const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
+  const typingPreview = activeCell && editorAnchor && personSearchSeed
+    ? { siteId: activeCell.siteId, date: activeCell.date, text: personSearchSeed }
+    : null;
   const isDraggingAssignment = assignmentDrag !== null;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const assignmentSuggestions = useMemo(() => {
@@ -208,13 +212,12 @@ export function MatrixPage() {
     if (!matrix || !matrixScrollRef.current || didScrollToTodayRef.current) {
       return;
     }
-    const todayIndex = matrix.days.findIndex((day) => day.date === today);
-    if (todayIndex < 0) {
+    if (!matrix.days.some((day) => day.date === today)) {
       return;
     }
     didScrollToTodayRef.current = true;
-    matrixScrollRef.current.scrollLeft = todayIndex * dayColumnWidth;
-  }, [dayColumnWidth, matrix, today]);
+    matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, today, isCompactView);
+  }, [isCompactView, matrix, today]);
 
   useEffect(() => {
     return () => {
@@ -1106,6 +1109,7 @@ export function MatrixPage() {
             savingStatusSiteId={savingStatusSiteId}
             siteInfoDrafts={siteInfoDrafts}
             today={today}
+            typingPreview={typingPreview}
             visibleRowGroups={visibleRowGroups}
           />
 
@@ -1489,13 +1493,15 @@ type MatrixTableProps = {
   savingStatusSiteId: number | null;
   siteInfoDrafts: Record<number, string>;
   today: string;
+  typingPreview: CellTypingPreview | null;
   visibleRowGroups: MatrixRowGroup[];
 };
 
 function MatrixTable(props: MatrixTableProps) {
-  const tableWidth = matrixTableWidth(props.matrix.days.length, props.isCompactView);
+  const tableWidth = matrixTableWidth(props.matrix.days, props.isCompactView);
   const matrixCssVars = {
     "--day-column-width": `${props.dayColumnWidth}px`,
+    "--weekend-column-width": `${matrixWeekendColumnWidth(props.isCompactView)}px`,
     "--fixed-columns-width": `${props.isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH}px`,
   } as CSSProperties;
   const tableStyle = {
@@ -1520,7 +1526,7 @@ function MatrixTable(props: MatrixTableProps) {
           <col className="info-col-width" />
           <col className="status-col-width" />
           {props.matrix.days.map((day) => (
-            <col className="day-col-width" key={day.date} />
+            <col className={dayColumnWidthClassName(day.date)} key={day.date} />
           ))}
         </colgroup>
         <thead>
@@ -1763,8 +1769,10 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             <CellDisplay
               cell={cell}
               cellIndex={cellIndex}
+              isCompactView={props.isCompactView}
               isEditable={props.isEditable}
               rowCells={row.cells}
+              typingPreviewText={typingPreviewTextForCell(props.typingPreview, row.site.id, cell.date)}
               onDeleteAssignment={(assignment) => props.onDeleteAssignment(row, cell, assignment)}
               onStartAssignmentDrag={(assignment, event) => props.onStartAssignmentDrag(row, cell, assignment, event)}
             />
@@ -1902,15 +1910,19 @@ function MatrixStatusPicker({
 function CellDisplay({
   cell,
   cellIndex,
+  isCompactView,
   isEditable,
   rowCells,
+  typingPreviewText,
   onDeleteAssignment,
   onStartAssignmentDrag,
 }: {
   cell: MatrixCell;
   cellIndex: number;
+  isCompactView: boolean;
   isEditable: boolean;
   rowCells: MatrixCell[];
+  typingPreviewText?: string;
   onDeleteAssignment: (assignment: MatrixAssignment) => void;
   onStartAssignmentDrag: (assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
@@ -1937,7 +1949,7 @@ function CellDisplay({
             style={{
               "--assignment-layer": layer,
               "--assignment-span": span,
-              width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
+              width: span > 1 ? `${assignmentRunWidth(rowCells, cellIndex, span, isCompactView) - 8}px` : undefined,
             } as CSSProperties}
             title={assignmentChipTitle(assignment, absenceConflict, isEditable)}
             type="button"
@@ -1956,6 +1968,11 @@ function CellDisplay({
           </button>
         );
       })}
+      {typingPreviewText && (
+        <span className="matrix-cell-typing-preview" title={typingPreviewText}>
+          {typingPreviewText}
+        </span>
+      )}
     </div>
   );
 }
@@ -1993,6 +2010,8 @@ function MatrixInfoEditor({
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DAY_COLUMN_WIDTH = 104;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
+const WEEKEND_DAY_COLUMN_WIDTH = 62;
+const COMPACT_WEEKEND_DAY_COLUMN_WIDTH = 53;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
 const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
@@ -2101,9 +2120,32 @@ function matrixDayColumnWidth(isCompactView: boolean): number {
   return isCompactView ? COMPACT_DAY_COLUMN_WIDTH : DAY_COLUMN_WIDTH;
 }
 
-function matrixTableWidth(dayCount: number, isCompactView: boolean): string {
+function matrixWeekendColumnWidth(isCompactView: boolean): number {
+  return isCompactView ? COMPACT_WEEKEND_DAY_COLUMN_WIDTH : WEEKEND_DAY_COLUMN_WIDTH;
+}
+
+function matrixColumnWidthForDate(date: string, isCompactView: boolean): number {
+  return isWeekendDate(date) ? matrixWeekendColumnWidth(isCompactView) : matrixDayColumnWidth(isCompactView);
+}
+
+function matrixTableWidth(days: MatrixResponse["days"], isCompactView: boolean): string {
   const fixedWidth = isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH;
-  return `${fixedWidth + dayCount * matrixDayColumnWidth(isCompactView)}px`;
+  const daysWidth = days.reduce((total, day) => total + matrixColumnWidthForDate(day.date, isCompactView), 0);
+  return `${fixedWidth + daysWidth}px`;
+}
+
+function matrixScrollOffsetForDate(days: MatrixResponse["days"], targetDate: string, isCompactView: boolean): number {
+  return days.reduce((offset, day) => {
+    if (day.date >= targetDate) {
+      return offset;
+    }
+    return offset + matrixColumnWidthForDate(day.date, isCompactView);
+  }, 0);
+}
+
+function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: number, isCompactView: boolean): number {
+  return cells.slice(startIndex, startIndex + span)
+    .reduce((width, cell) => width + matrixColumnWidthForDate(cell.date, isCompactView), 0);
 }
 
 function matrixCompactPreferenceKey(userId: number): string {
@@ -2183,6 +2225,17 @@ function parseSiteNumber(value: string | null): number | null {
 
 function siteInfoDraftsFromRows(rows: MatrixRow[]): Record<number, string> {
   return Object.fromEntries(rows.map((row) => [row.site.id, row.site.info ?? ""]));
+}
+
+function dayColumnWidthClassName(date: string): string {
+  return [
+    "day-col-width",
+    isWeekendDate(date) ? "weekend" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function typingPreviewTextForCell(preview: CellTypingPreview | null, siteId: number, date: string): string {
+  return preview && preview.siteId === siteId && preview.date === date ? preview.text : "";
 }
 
 function dayHeaderClassName(date: string, today: string): string {

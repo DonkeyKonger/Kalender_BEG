@@ -712,6 +712,14 @@ button:disabled {
   max-width: var(--day-column-width, 104px);
 }
 
+.day-col-width.weekend,
+.day-col.weekend,
+.matrix-cell.weekend {
+  width: var(--weekend-column-width, 62px);
+  min-width: var(--weekend-column-width, 62px);
+  max-width: var(--weekend-column-width, 62px);
+}
+
 .day-col {
   text-align: center;
 }
@@ -1274,6 +1282,25 @@ button.entity-card:focus-visible {
   color: #143c6d;
   cursor: grab;
 }
+
+.matrix-cell-typing-preview {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 18px;
+  overflow: hidden;
+  border: 1px solid rgb(37 99 235 / 18%);
+  border-radius: 6px;
+  background: rgb(37 99 235 / 8%);
+  color: #0f172a;
+  padding: 1px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 16px;
+}
+
 
 .person-chip:active {
   cursor: grabbing;
@@ -1905,6 +1932,14 @@ button.person-chip:focus-visible {
   border-radius: 5px;
   padding: 1px 4px;
   font-size: 0.6rem;
+}
+
+.matrix-page.is-compact .matrix-cell-typing-preview {
+  min-height: 15px;
+  border-radius: 5px;
+  padding: 1px 4px;
+  font-size: 0.6rem;
+  line-height: 14px;
 }
 
 .matrix-page.is-compact .person-chip.is-assignment-run {
