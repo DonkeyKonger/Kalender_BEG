@@ -64,6 +64,8 @@ type AssignmentDragState = {
   height: number;
   target: AssignmentDragTarget | null;
 };
+type PlanningAbsenceItem = { absence: Absence; hasConflict: boolean; conflictMessage: string | null };
+
 type UndoItem = {
   siteId: number;
   date: string;
@@ -1578,10 +1580,13 @@ function MatrixTable(props: MatrixTableProps) {
 
 function MatrixAbsencePlanningRow(props: MatrixTableProps) {
   const days = props.matrix.days.map((day) => day.date);
-  const absencesByDate = new Map(days.map((date) => [date, activeAbsencesForDay(props.absences, date)]));
+  const conflictPersonKeys = useMemo(() => buildAbsenceAssignmentConflictKeys(props.matrix), [props.matrix]);
+  const absenceItemsByDate = new Map(
+    days.map((date) => [date, absencePlanningItemsForDay(props.absences, date, conflictPersonKeys)]),
+  );
   const rowCount = Math.max(
     1,
-    ...Array.from(absencesByDate.values()).map((items) => {
+    ...Array.from(absenceItemsByDate.values()).map((items) => {
       if (items.length > MAX_VISIBLE_ABSENCES_PER_DAY) {
         return MAX_VISIBLE_ABSENCES_PER_DAY + 1;
       }
@@ -1603,9 +1608,9 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
       <td className="sticky-col status-col matrix-absence-empty" />
       {props.matrix.days.map((day, cellIndex) => {
         const date = day.date;
-        const dayAbsences = absencesByDate.get(date) ?? [];
-        const visibleAbsences = dayAbsences.slice(0, MAX_VISIBLE_ABSENCES_PER_DAY);
-        const hiddenAbsenceCount = Math.max(0, dayAbsences.length - visibleAbsences.length);
+        const dayAbsenceItems = absenceItemsByDate.get(date) ?? [];
+        const visibleAbsenceItems = dayAbsenceItems.slice(0, MAX_VISIBLE_ABSENCES_PER_DAY);
+        const hiddenAbsenceCount = Math.max(0, dayAbsenceItems.length - visibleAbsenceItems.length);
         const hasOverflow = hiddenAbsenceCount > 0;
         return (
           <td
@@ -1621,13 +1626,13 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
             }}
           >
             <div className="absence-planning-stack">
-              {visibleAbsences.map((absence) => {
-                const person = props.peopleById.get(absence.person_id);
+              {visibleAbsenceItems.map((item) => {
+                const person = props.peopleById.get(item.absence.person_id);
                 return (
                   <button
-                    className={absencePlanningBlockClassName(absence)}
-                    key={absence.id}
-                    title={`${person?.display_name ?? "Person"}: ${absenceTypeLabels[absence.absence_type]} ${formatAbsenceDateRange(absence)}`}
+                    className={absencePlanningBlockClassName(item)}
+                    key={item.absence.id}
+                    title={absencePlanningTitle(item, person)}
                     type="button"
                     onClick={(event) => event.stopPropagation()}
                     onContextMenu={(event) => {
@@ -1636,7 +1641,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                       }
                       event.preventDefault();
                       event.stopPropagation();
-                      props.onDeleteAbsence(absence, date);
+                      props.onDeleteAbsence(item.absence, date);
                     }}
                   >
                     <span>{absencePersonLabel(person)}</span>
@@ -1651,14 +1656,14 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                   <div className="absence-overflow-popover" role="tooltip" onClick={(event) => event.stopPropagation()}>
                     <strong>Fehlzeiten {formatDayNumber(date)}</strong>
                     <div className="absence-overflow-list">
-                      {dayAbsences.map((absence) => {
-                        const person = props.peopleById.get(absence.person_id);
+                      {dayAbsenceItems.map((item) => {
+                        const person = props.peopleById.get(item.absence.person_id);
                         return (
                           <button
-                            className={absenceOverflowItemClassName(absence)}
-                            key={absence.id}
+                            className={absenceOverflowItemClassName(item)}
+                            key={item.absence.id}
                             type="button"
-                            title="Rechtsklick entfernt nur diesen Tag"
+                            title={item.conflictMessage ?? "Rechtsklick entfernt nur diesen Tag"}
                             onClick={(event) => event.stopPropagation()}
                             onContextMenu={(event) => {
                               if (!props.isEditable) {
@@ -1666,11 +1671,11 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                               }
                               event.preventDefault();
                               event.stopPropagation();
-                              props.onDeleteAbsence(absence, date);
+                              props.onDeleteAbsence(item.absence, date);
                             }}
                           >
                             <span>{person?.display_name ?? "Person"}</span>
-                            <em>{absenceTypeLabels[absence.absence_type]}</em>
+                            <em>{item.hasConflict ? "Konflikt" : absenceTypeLabels[item.absence.absence_type]}</em>
                           </button>
                         );
                       })}
@@ -2373,24 +2378,82 @@ function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
     .sort(comparePlanningAbsences);
 }
 
+function absencePlanningItemsForDay(absences: Absence[], date: string, conflictPersonKeys: Set<string>): PlanningAbsenceItem[] {
+  const bestAbsenceByPerson = new Map<number, Absence>();
+  activeAbsencesForDay(absences, date).forEach((absence) => {
+    const current = bestAbsenceByPerson.get(absence.person_id);
+    if (!current || absenceTypeSortPriority(absence) < absenceTypeSortPriority(current)) {
+      bestAbsenceByPerson.set(absence.person_id, absence);
+    }
+  });
+  return Array.from(bestAbsenceByPerson.values())
+    .map((absence) => {
+      const hasConflict = conflictPersonKeys.has(absenceConflictKey(date, absence.person_id));
+      return {
+        absence,
+        hasConflict,
+        conflictMessage: hasConflict ? "Konflikt: Person ist trotz Abwesenheit eingeplant." : null,
+      };
+    })
+    .sort((left, right) => Number(right.hasConflict) - Number(left.hasConflict) || comparePlanningAbsences(left.absence, right.absence));
+}
+
+function buildAbsenceAssignmentConflictKeys(matrix: MatrixResponse): Set<string> {
+  const keys = new Set<string>();
+  matrix.rows.forEach((row) => {
+    row.cells.forEach((cell) => {
+      cell.assignments.forEach((assignment) => {
+        keys.add(absenceConflictKey(cell.date, assignment.person.id));
+      });
+    });
+  });
+  return keys;
+}
+
+function absenceConflictKey(date: string, personId: number): string {
+  return `${date}:${personId}`;
+}
+
+function absenceTypeSortPriority(absence: Absence): number {
+  if (absence.absence_type === "sick") {
+    return 0;
+  }
+  if (absence.absence_type === "vacation") {
+    return 1;
+  }
+  if (absence.absence_type === "school") {
+    return 2;
+  }
+  if (absence.absence_type === "free") {
+    return 3;
+  }
+  return 4;
+}
+
 function absencePersonLabel(person: Person | undefined): string {
   return person ? calendarPersonCode(person) : "Person";
 }
 
+function absencePlanningTitle(item: PlanningAbsenceItem, person: Person | undefined): string {
+  const baseTitle = `${person?.display_name ?? "Person"}: ${absenceTypeLabels[item.absence.absence_type]} ${formatAbsenceDateRange(item.absence)}`;
+  return item.conflictMessage ? `${baseTitle} - ${item.conflictMessage}` : baseTitle;
+}
 
-function absencePlanningBlockClassName(absence: Absence): string {
+function absencePlanningBlockClassName(item: PlanningAbsenceItem): string {
   return [
     "absence-planning-chip",
-    `absence-block-${absence.absence_type}`,
-    absence.status === "cancelled" ? "is-cancelled" : "",
+    `absence-block-${item.absence.absence_type}`,
+    item.hasConflict ? "is-conflict" : "",
+    item.absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
 }
 
-function absenceOverflowItemClassName(absence: Absence): string {
+function absenceOverflowItemClassName(item: PlanningAbsenceItem): string {
   return [
     "absence-overflow-item",
-    `absence-overflow-${absence.absence_type}`,
-    absence.status === "cancelled" ? "is-cancelled" : "",
+    `absence-overflow-${item.absence.absence_type}`,
+    item.hasConflict ? "is-conflict" : "",
+    item.absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
 }
 

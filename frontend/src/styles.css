@@ -1492,33 +1492,34 @@ button.person-chip:focus-visible {
 }
 
 .absence-planning-chip.absence-block-vacation {
-  border-color: #f8d8b4;
-  background: #fff4e8;
-  color: #8a4b0f;
+  border-color: #cdebd6;
+  background: #edf9f0;
+  color: #166534;
 }
 
 .absence-planning-chip.absence-block-sick {
+  border-color: #f4c7c7;
+  background: #fff1f1;
+  color: #991b1b;
+}
+
+.absence-planning-chip.absence-block-school {
   border-color: #cfe4ff;
   background: #eef7ff;
   color: #1d4f7a;
 }
 
-.absence-planning-chip.absence-block-school {
-  border-color: #ddd4ff;
-  background: #f3efff;
-  color: #4c3a8a;
-}
-
-.absence-planning-chip.absence-block-free {
-  border-color: #c9e8df;
-  background: #edf8f5;
-  color: #176257;
-}
-
+.absence-planning-chip.absence-block-free,
 .absence-planning-chip.absence-block-other {
   border-color: #dbe3ec;
   background: #f4f6f8;
   color: #475569;
+}
+
+.absence-planning-chip.is-conflict {
+  border-color: #f4c7c7;
+  background: #fff1f1;
+  color: #991b1b;
 }
 
 .absence-planning-chip:hover,
@@ -1613,23 +1614,24 @@ button.person-chip:focus-visible {
 }
 
 .absence-overflow-item.absence-overflow-vacation {
-  border-left-color: #d97706;
+  border-left-color: #22c55e;
 }
 
 .absence-overflow-item.absence-overflow-sick {
-  border-left-color: #2563eb;
+  border-left-color: #ef4444;
 }
 
 .absence-overflow-item.absence-overflow-school {
-  border-left-color: #7c3aed;
+  border-left-color: #3b82f6;
 }
 
-.absence-overflow-item.absence-overflow-free {
-  border-left-color: #0f766e;
-}
-
+.absence-overflow-item.absence-overflow-free,
 .absence-overflow-item.absence-overflow-other {
-  border-left-color: #64748b;
+  border-left-color: #94a3b8;
+}
+
+.absence-overflow-item.is-conflict {
+  border-left-color: #ef4444;
 }
 
 .absence-cell-editor-popup {
