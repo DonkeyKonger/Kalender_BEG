@@ -1792,8 +1792,13 @@ button.person-chip:focus-visible {
   border-bottom: 0;
 }
 
-.cell-editor-suggestions button:hover {
+.cell-editor-suggestions button:hover,
+.cell-editor-suggestions button.is-highlighted {
   background: #f1f6fc;
+}
+
+.cell-editor-suggestions button.is-highlighted {
+  color: #143c6d;
 }
 
 .cell-editor-suggestions small {
@@ -1867,10 +1872,13 @@ button.person-chip:focus-visible {
 }
 
 .save-dot {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin-top: 5px;
+  margin-top: 0;
   border-radius: 999px;
 }
 
@@ -1891,12 +1899,17 @@ button.person-chip:focus-visible {
 }
 
 .cell-message {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  left: 20px;
   display: block;
-  max-width: 180px;
-  margin-top: 4px;
+  max-width: calc(100% - 28px);
+  margin-top: 0;
   color: #65738a;
   font-size: 0.68rem;
   line-height: 1.25;
+  pointer-events: none;
   white-space: normal;
 }
 

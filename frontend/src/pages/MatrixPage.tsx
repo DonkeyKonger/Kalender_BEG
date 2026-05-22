@@ -100,6 +100,7 @@ export function MatrixPage() {
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
+  const didScrollToTodayRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
@@ -178,13 +179,14 @@ export function MatrixPage() {
   }, [matrix, user?.person_id]);
 
   useEffect(() => {
-    if (!matrix || !matrixScrollRef.current) {
+    if (!matrix || !matrixScrollRef.current || didScrollToTodayRef.current) {
       return;
     }
     const todayIndex = matrix.days.findIndex((day) => day.date === today);
     if (todayIndex < 0) {
       return;
     }
+    didScrollToTodayRef.current = true;
     matrixScrollRef.current.scrollLeft = todayIndex * dayColumnWidth;
   }, [dayColumnWidth, matrix, today]);
 

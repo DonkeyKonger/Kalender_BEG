@@ -1,5 +1,5 @@
 import { Save, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Person } from "../types/person";
 
@@ -58,7 +58,9 @@ export function MatrixCellEditor({
   selectedPersonId,
 }: MatrixCellEditorProps) {
   const [personQuery, setPersonQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isExternalOpen, setIsExternalOpen] = useState(false);
+  const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const assignedKeys = useMemo(() => new Set(draftEntries.map((entry) => entry.key)), [draftEntries]);
   const suggestions = useMemo(() => {
     const query = personQuery.trim().toLowerCase();
@@ -77,10 +79,22 @@ export function MatrixCellEditor({
       .slice(0, 6);
   }, [assignedKeys, people, personQuery]);
 
+  useEffect(() => {
+    setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
+  }, [personQuery, suggestions.length]);
+
+  useEffect(() => {
+    if (highlightedIndex < 0) {
+      return;
+    }
+    suggestionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex]);
+
   function addPerson(personId: string) {
     onSelectedPersonChange(personId);
     onAddPerson(personId);
     setPersonQuery("");
+    setHighlightedIndex(-1);
   }
 
   function addExternal() {
@@ -130,10 +144,34 @@ export function MatrixCellEditor({
           placeholder="Person suchen..."
           value={personQuery}
           onChange={(event) => setPersonQuery(event.target.value)}
+          aria-activedescendant={highlightedIndex >= 0 ? `matrix-person-suggestion-${suggestions[highlightedIndex]?.id}` : undefined}
+          aria-controls="matrix-person-suggestions"
+          aria-expanded={suggestions.length > 0}
+          role="combobox"
           onKeyDown={(event) => {
-            if (event.key === "Enter" && suggestions[0]) {
+            if (event.key === "ArrowDown" && suggestions.length > 0) {
               event.preventDefault();
-              addPerson(String(suggestions[0].id));
+              setHighlightedIndex((current) => (current + 1) % suggestions.length);
+              return;
+            }
+            if (event.key === "ArrowUp" && suggestions.length > 0) {
+              event.preventDefault();
+              setHighlightedIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
+              return;
+            }
+            if (event.key === "Enter") {
+              const selectedSuggestion = highlightedIndex >= 0 ? suggestions[highlightedIndex] : suggestions[0];
+              if (selectedSuggestion) {
+                event.preventDefault();
+                addPerson(String(selectedSuggestion.id));
+              }
+              return;
+            }
+            if (event.key === "Escape" && (personQuery || suggestions.length > 0)) {
+              event.preventDefault();
+              event.stopPropagation();
+              setPersonQuery("");
+              setHighlightedIndex(-1);
             }
           }}
         />
@@ -141,9 +179,26 @@ export function MatrixCellEditor({
           <p className="cell-editor-empty">Keine passende Person gefunden</p>
         )}
         {suggestions.length > 0 && (
-          <div className="cell-editor-suggestions" role="listbox" aria-label="Personenvorschlaege">
-            {suggestions.map((person) => (
-              <button key={person.id} type="button" onClick={() => addPerson(String(person.id))}>
+          <div
+            className="cell-editor-suggestions"
+            id="matrix-person-suggestions"
+            role="listbox"
+            aria-label="Personenvorschlaege"
+          >
+            {suggestions.map((person, index) => (
+              <button
+                aria-selected={highlightedIndex === index}
+                className={highlightedIndex === index ? "is-highlighted" : ""}
+                id={`matrix-person-suggestion-${person.id}`}
+                key={person.id}
+                ref={(element) => {
+                  suggestionRefs.current[index] = element;
+                }}
+                role="option"
+                type="button"
+                onClick={() => addPerson(String(person.id))}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
                 <span>{person.display_name}</span>
                 <small>{person.short_code}</small>
               </button>
