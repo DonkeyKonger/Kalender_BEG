@@ -1451,89 +1451,185 @@ button.person-chip:focus-visible {
 }
 
 .matrix-absence-cell {
-  height: calc(var(--absence-rows, 1) * 16px + 8px);
+  position: relative;
+  height: calc(var(--absence-rows, 1) * 20px + 9px);
+  overflow: visible;
   padding: 4px;
   vertical-align: top;
 }
 
 .absence-planning-stack {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 14px;
-  gap: 2px 5px;
-  align-content: start;
-  min-height: calc(var(--absence-rows, 1) * 16px);
+  display: flex;
+  min-height: calc(var(--absence-rows, 1) * 20px);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
 }
 
 .absence-planning-chip {
-  --absence-accent: #94a3b8;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  min-width: 0;
-  min-height: 14px;
+  width: 100%;
+  max-width: 92px;
+  min-height: 17px;
   overflow: hidden;
-  border: 0;
-  border-radius: 4px;
-  padding: 0 2px;
-  background: transparent;
-  color: #27354d;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 2px 5px;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.61rem;
-  font-weight: 780;
-  line-height: 1;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.1;
   cursor: pointer;
-}
-
-.absence-planning-chip::before {
-  width: 5px;
-  height: 5px;
-  flex: 0 0 5px;
-  border-radius: 999px;
-  background: var(--absence-accent);
-  content: "";
-  opacity: 0.82;
+  box-shadow: 0 1px 0 rgb(20 60 109 / 5%);
 }
 
 .absence-planning-chip span {
   min-width: 0;
   overflow: hidden;
-  text-overflow: clip;
-}
-
-.absence-planning-chip.absence-block-vacation,
-.absence-planning-chip.absence-block-sick,
-.absence-planning-chip.absence-block-school,
-.absence-planning-chip.absence-block-free,
-.absence-planning-chip.absence-block-other {
-  background: transparent;
-  color: #27354d;
+  text-overflow: ellipsis;
 }
 
 .absence-planning-chip.absence-block-vacation {
-  --absence-accent: #d97706;
+  border-color: #f8d8b4;
+  background: #fff4e8;
+  color: #8a4b0f;
 }
 
 .absence-planning-chip.absence-block-sick {
-  --absence-accent: #2563eb;
+  border-color: #cfe4ff;
+  background: #eef7ff;
+  color: #1d4f7a;
 }
 
 .absence-planning-chip.absence-block-school {
-  --absence-accent: #7c3aed;
+  border-color: #ddd4ff;
+  background: #f3efff;
+  color: #4c3a8a;
 }
 
 .absence-planning-chip.absence-block-free {
-  --absence-accent: #0f766e;
+  border-color: #c9e8df;
+  background: #edf8f5;
+  color: #176257;
 }
 
 .absence-planning-chip.absence-block-other {
-  --absence-accent: #64748b;
+  border-color: #dbe3ec;
+  background: #f4f6f8;
+  color: #475569;
 }
 
 .absence-planning-chip:hover,
 .absence-planning-chip:focus-visible {
-  background: rgb(248 250 252 / 86%);
+  outline: 2px solid rgb(29 92 153 / 18%);
+}
+
+.absence-planning-more {
+  width: 100%;
+  max-width: 92px;
+  min-height: 16px;
+  border: 0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: left;
+  cursor: help;
+}
+
+.absence-planning-more:hover,
+.absence-planning-more:focus-visible {
+  background: rgb(226 232 240 / 45%);
   outline: 1px solid rgb(100 116 139 / 20%);
+}
+
+.absence-overflow-popover {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 6px;
+  z-index: 180;
+  display: none;
+  width: max-content;
+  min-width: 210px;
+  max-width: 280px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 32px rgb(21 32 52 / 16%);
+}
+
+.matrix-absence-cell.has-absence-overflow:hover .absence-overflow-popover,
+.matrix-absence-cell.has-absence-overflow:focus-within .absence-overflow-popover {
+  display: block;
+}
+
+.absence-overflow-popover > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 0.68rem;
+}
+
+.absence-overflow-list {
+  display: grid;
+  gap: 3px;
+}
+
+.absence-overflow-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 5px;
+  padding: 4px 6px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 0.72rem;
+  font-weight: 760;
+  text-align: left;
+  cursor: context-menu;
+}
+
+.absence-overflow-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.absence-overflow-item em {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.absence-overflow-item.absence-overflow-vacation {
+  border-left-color: #d97706;
+}
+
+.absence-overflow-item.absence-overflow-sick {
+  border-left-color: #2563eb;
+}
+
+.absence-overflow-item.absence-overflow-school {
+  border-left-color: #7c3aed;
+}
+
+.absence-overflow-item.absence-overflow-free {
+  border-left-color: #0f766e;
+}
+
+.absence-overflow-item.absence-overflow-other {
+  border-left-color: #64748b;
 }
 
 .absence-cell-editor-popup {
@@ -1772,26 +1868,28 @@ button.person-chip:focus-visible {
   min-height: calc(var(--assignment-layers, 1) * 17px);
 }
 .matrix-page.is-compact .matrix-absence-cell {
-  height: calc(var(--absence-rows, 1) * 15px + 7px);
+  height: calc(var(--absence-rows, 1) * 17px + 7px);
   padding: 3px;
 }
 
 .matrix-page.is-compact .absence-planning-stack {
-  grid-auto-rows: 13px;
-  gap: 2px 4px;
-  min-height: calc(var(--absence-rows, 1) * 15px);
+  min-height: calc(var(--absence-rows, 1) * 17px);
+  gap: 2px;
 }
 
 .matrix-page.is-compact .absence-planning-chip {
-  min-height: 13px;
-  padding: 0 1px;
-  font-size: 0.56rem;
+  max-width: 80px;
+  min-height: 15px;
+  border-radius: 5px;
+  padding: 1px 4px;
+  font-size: 0.6rem;
 }
 
-.matrix-page.is-compact .absence-planning-chip::before {
-  width: 4px;
-  height: 4px;
-  flex-basis: 4px;
+.matrix-page.is-compact .absence-planning-more {
+  max-width: 80px;
+  min-height: 14px;
+  padding: 1px 4px;
+  font-size: 0.58rem;
 }
 
 

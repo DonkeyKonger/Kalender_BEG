@@ -74,6 +74,7 @@ type UndoItem = {
 
 const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
+const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
 
 export function MatrixPage() {
   const { user } = useAuth();
@@ -1578,7 +1579,15 @@ function MatrixTable(props: MatrixTableProps) {
 function MatrixAbsencePlanningRow(props: MatrixTableProps) {
   const days = props.matrix.days.map((day) => day.date);
   const absencesByDate = new Map(days.map((date) => [date, activeAbsencesForDay(props.absences, date)]));
-  const rowCount = Math.max(1, ...Array.from(absencesByDate.values()).map((items) => Math.ceil(items.length / 2)));
+  const rowCount = Math.max(
+    1,
+    ...Array.from(absencesByDate.values()).map((items) => {
+      if (items.length > MAX_VISIBLE_ABSENCES_PER_DAY) {
+        return MAX_VISIBLE_ABSENCES_PER_DAY + 1;
+      }
+      return items.length;
+    }),
+  );
   const rowStyle = { "--absence-rows": rowCount } as CSSProperties;
 
   return (
@@ -1595,9 +1604,12 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
       {props.matrix.days.map((day, cellIndex) => {
         const date = day.date;
         const dayAbsences = absencesByDate.get(date) ?? [];
+        const visibleAbsences = dayAbsences.slice(0, MAX_VISIBLE_ABSENCES_PER_DAY);
+        const hiddenAbsenceCount = Math.max(0, dayAbsences.length - visibleAbsences.length);
+        const hasOverflow = hiddenAbsenceCount > 0;
         return (
           <td
-            className={matrixAbsenceCellClassName(date, props.today)}
+            className={[matrixAbsenceCellClassName(date, props.today), hasOverflow ? "has-absence-overflow" : ""].filter(Boolean).join(" ")}
             data-matrix-date={date}
             data-matrix-day-index={cellIndex}
             key={`absence-${date}`}
@@ -1609,7 +1621,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
             }}
           >
             <div className="absence-planning-stack">
-              {dayAbsences.map((absence) => {
+              {visibleAbsences.map((absence) => {
                 const person = props.peopleById.get(absence.person_id);
                 return (
                   <button
@@ -1631,6 +1643,41 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                   </button>
                 );
               })}
+              {hasOverflow && (
+                <>
+                  <button className="absence-planning-more" type="button" onClick={(event) => event.stopPropagation()}>
+                    +{hiddenAbsenceCount} mehr
+                  </button>
+                  <div className="absence-overflow-popover" role="tooltip" onClick={(event) => event.stopPropagation()}>
+                    <strong>Fehlzeiten {formatDayNumber(date)}</strong>
+                    <div className="absence-overflow-list">
+                      {dayAbsences.map((absence) => {
+                        const person = props.peopleById.get(absence.person_id);
+                        return (
+                          <button
+                            className={absenceOverflowItemClassName(absence)}
+                            key={absence.id}
+                            type="button"
+                            title="Rechtsklick entfernt nur diesen Tag"
+                            onClick={(event) => event.stopPropagation()}
+                            onContextMenu={(event) => {
+                              if (!props.isEditable) {
+                                return;
+                              }
+                              event.preventDefault();
+                              event.stopPropagation();
+                              props.onDeleteAbsence(absence, date);
+                            }}
+                          >
+                            <span>{person?.display_name ?? "Person"}</span>
+                            <em>{absenceTypeLabels[absence.absence_type]}</em>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </td>
         );
@@ -2327,11 +2374,7 @@ function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
 }
 
 function absencePersonLabel(person: Person | undefined): string {
-  if (!person) {
-    return "Person";
-  }
-  const lastName = person.last_name.trim() || person.display_name.split(/[.\s-]+/).filter(Boolean).at(-1) || person.short_code;
-  return lastName.length > 9 ? lastName.slice(0, 7) + "." : lastName;
+  return person ? calendarPersonCode(person) : "Person";
 }
 
 
@@ -2339,6 +2382,14 @@ function absencePlanningBlockClassName(absence: Absence): string {
   return [
     "absence-planning-chip",
     `absence-block-${absence.absence_type}`,
+    absence.status === "cancelled" ? "is-cancelled" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function absenceOverflowItemClassName(absence: Absence): string {
+  return [
+    "absence-overflow-item",
+    `absence-overflow-${absence.absence_type}`,
     absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
 }
