@@ -1451,42 +1451,71 @@ button.person-chip:focus-visible {
 }
 
 .matrix-absence-cell {
-  height: calc(var(--absence-layers, 1) * 21px + 16px);
-  padding: 5px 4px;
+  height: calc(var(--absence-rows, 1) * 16px + 10px);
+  padding: 4px;
   vertical-align: top;
 }
 
 .absence-planning-stack {
-  position: relative;
-  min-height: calc(var(--absence-layers, 1) * 20px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  align-content: start;
+  min-height: calc(var(--absence-rows, 1) * 16px);
 }
 
 .absence-planning-chip {
-  position: absolute;
-  top: calc(var(--absence-layer) * 20px);
-  left: 0;
-  z-index: 2;
   display: inline-flex;
   align-items: center;
-  min-height: 17px;
-  max-width: none;
+  min-width: 0;
+  min-height: 14px;
   overflow: hidden;
   border: 0;
-  border-radius: 5px;
-  padding: 2px 5px;
-  color: #ffffff;
-  text-overflow: ellipsis;
+  border-radius: 4px;
+  padding: 1px 3px;
+  color: #26344d;
   white-space: nowrap;
-  font-size: 0.66rem;
+  font-size: 0.56rem;
   font-weight: 850;
-  line-height: 1.1;
+  line-height: 1;
   cursor: pointer;
-  box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
+  box-shadow: inset 2px 0 0 rgb(100 116 139 / 38%);
 }
 
 .absence-planning-chip span {
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+}
+
+.absence-planning-chip.absence-block-vacation {
+  background: #dcf8e8;
+  color: #166534;
+  box-shadow: inset 2px 0 0 #22c55e;
+}
+
+.absence-planning-chip.absence-block-sick {
+  background: #fde8e8;
+  color: #991b1b;
+  box-shadow: inset 2px 0 0 #ef4444;
+}
+
+.absence-planning-chip.absence-block-school {
+  background: #e2efff;
+  color: #1e3a8a;
+  box-shadow: inset 2px 0 0 #3b82f6;
+}
+
+.absence-planning-chip.absence-block-free {
+  background: #f0e9ff;
+  color: #5b21b6;
+  box-shadow: inset 2px 0 0 #8b5cf6;
+}
+
+.absence-planning-chip.absence-block-other {
+  background: #edf2f7;
+  color: #334155;
+  box-shadow: inset 2px 0 0 #94a3b8;
 }
 
 .absence-planning-chip:hover,
@@ -1730,20 +1759,19 @@ button.person-chip:focus-visible {
   min-height: calc(var(--assignment-layers, 1) * 17px);
 }
 .matrix-page.is-compact .matrix-absence-cell {
-  height: calc(var(--absence-layers, 1) * 18px + 10px);
-  padding: 3px 4px;
+  height: calc(var(--absence-rows, 1) * 14px + 8px);
+  padding: 3px;
 }
 
 .matrix-page.is-compact .absence-planning-stack {
-  min-height: calc(var(--absence-layers, 1) * 17px);
+  min-height: calc(var(--absence-rows, 1) * 14px);
 }
 
 .matrix-page.is-compact .absence-planning-chip {
-  top: calc(var(--absence-layer) * 17px);
-  min-height: 15px;
-  border-radius: 5px;
-  padding: 1px 4px;
-  font-size: 0.6rem;
+  min-height: 12px;
+  border-radius: 4px;
+  padding: 1px 2px;
+  font-size: 0.52rem;
 }
 
 

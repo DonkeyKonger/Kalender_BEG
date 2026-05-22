@@ -1553,8 +1553,8 @@ function MatrixTable(props: MatrixTableProps) {
 function MatrixAbsencePlanningRow(props: MatrixTableProps) {
   const days = props.matrix.days.map((day) => day.date);
   const absencesByDate = new Map(days.map((date) => [date, activeAbsencesForDay(props.absences, date)]));
-  const layerCount = Math.max(1, ...Array.from(absencesByDate.values()).map((items) => items.length));
-  const rowStyle = { "--absence-layers": layerCount } as CSSProperties;
+  const rowCount = Math.max(1, ...Array.from(absencesByDate.values()).map((items) => Math.ceil(items.length / 2)));
+  const rowStyle = { "--absence-rows": rowCount } as CSSProperties;
 
   return (
     <tr className="matrix-absence-row" style={rowStyle}>
@@ -1585,21 +1585,11 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
           >
             <div className="absence-planning-stack">
               {dayAbsences.map((absence) => {
-                const span = absenceVisibleSpan(days, cellIndex, absence);
-                if (span === 0) {
-                  return null;
-                }
                 const person = props.peopleById.get(absence.person_id);
-                const layer = absencePlanningLayer(dayAbsences, absence.id);
                 return (
                   <button
                     className={absencePlanningBlockClassName(absence)}
                     key={absence.id}
-                    style={{
-                      "--absence-layer": layer,
-                      "--absence-span": span,
-                      width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
-                    } as CSSProperties}
                     title={`${person?.display_name ?? "Person"}: ${absenceTypeLabels[absence.absence_type]} ${formatAbsenceDateRange(absence)}`}
                     type="button"
                     onClick={(event) => event.stopPropagation()}
@@ -1612,7 +1602,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                       props.onDeleteAbsence(absence);
                     }}
                   >
-                    <span>{person ? calendarPersonCode(person) : "Person"}</span>
+                    <span>{absencePersonLabel(person)}</span>
                   </button>
                 );
               })}
@@ -2311,24 +2301,12 @@ function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
     .sort(comparePlanningAbsences);
 }
 
-function absenceVisibleSpan(days: string[], cellIndex: number, absence: Absence): number {
-  const date = days[cellIndex];
-  const firstVisibleDate = days[0];
-  const lastVisibleDate = days.at(-1);
-  if (!date || !firstVisibleDate || !lastVisibleDate) {
-    return 0;
+function absencePersonLabel(person: Person | undefined): string {
+  if (!person) {
+    return "Person";
   }
-  const visibleStartDate = absence.start_date > firstVisibleDate ? absence.start_date : firstVisibleDate;
-  if (date !== visibleStartDate) {
-    return 0;
-  }
-  const visibleEndDate = absence.end_date < lastVisibleDate ? absence.end_date : lastVisibleDate;
-  const endIndex = days.findIndex((day) => day === visibleEndDate);
-  return endIndex >= cellIndex ? endIndex - cellIndex + 1 : 1;
-}
-
-function absencePlanningLayer(dayAbsences: Absence[], absenceId: number): number {
-  return Math.max(0, dayAbsences.findIndex((absence) => absence.id === absenceId));
+  const lastName = person.last_name.trim() || person.display_name.split(/[.\s-]+/).filter(Boolean).at(-1) || person.short_code;
+  return lastName.slice(0, 7);
 }
 
 function absencePlanningBlockClassName(absence: Absence): string {
