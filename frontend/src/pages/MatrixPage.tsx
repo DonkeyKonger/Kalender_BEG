@@ -63,7 +63,7 @@ type AssignmentDragState = {
   height: number;
   target: AssignmentDragTarget | null;
 };
-type PlanningAbsenceItem = { absence: Absence; hasConflict: boolean; conflictMessage: string | null };
+type PlanningAbsenceItem = { absence: Absence };
 
 type UndoItem = {
   siteId: number;
@@ -1559,9 +1559,8 @@ function MatrixTable(props: MatrixTableProps) {
 
 function MatrixAbsencePlanningRow(props: MatrixTableProps) {
   const days = props.matrix.days.map((day) => day.date);
-  const conflictPersonKeys = useMemo(() => buildAbsenceAssignmentConflictKeys(props.matrix), [props.matrix]);
   const absenceItemsByDate = new Map(
-    days.map((date) => [date, absencePlanningItemsForDay(props.absences, date, conflictPersonKeys)]),
+    days.map((date) => [date, absencePlanningItemsForDay(props.absences, date)]),
   );
   const rowCount = Math.max(
     1,
@@ -1642,7 +1641,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                             className={absenceOverflowItemClassName(item)}
                             key={item.absence.id}
                             type="button"
-                            title={item.conflictMessage ?? "Rechtsklick entfernt nur diesen Tag"}
+                            title="Rechtsklick entfernt nur diesen Tag"
                             onClick={(event) => event.stopPropagation()}
                             onContextMenu={(event) => {
                               if (!props.isEditable) {
@@ -1654,7 +1653,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableProps) {
                             }}
                           >
                             <span>{person?.display_name ?? "Person"}</span>
-                            <em>{item.hasConflict ? "Konflikt" : absenceTypeLabels[item.absence.absence_type]}</em>
+                            <em>{absenceTypeLabels[item.absence.absence_type]}</em>
                           </button>
                         );
                       })}
@@ -1930,16 +1929,17 @@ function CellDisplay({
           return null;
         }
         const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.id);
+        const absenceConflict = assignmentAbsenceConflict(cell, assignment);
         return (
           <button
-            className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
+            className={assignmentChipClassName(span, absenceConflict !== null)}
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
               "--assignment-span": span,
               width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
             } as CSSProperties}
-            title={isEditable ? `${assignment.person.display_name} - ziehen zum Verschieben, Shift+Ziehen kopiert, Rechtsklick entfernt den ganzen Einsatz` : assignment.person.display_name}
+            title={assignmentChipTitle(assignment, absenceConflict, isEditable)}
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => onStartAssignmentDrag(assignment, event)}
@@ -1956,15 +1956,6 @@ function CellDisplay({
           </button>
         );
       })}
-      {cell.absences.map((absence) => (
-        <span
-          className="absence-chip"
-          key={`${absence.person.id}-${absence.absence_type}-${cell.date}`}
-          title={`${absence.person.display_name}: ${absence.absence_type}`}
-        >
-          {absence.person.short_code}
-        </span>
-      ))}
     </div>
   );
 }
@@ -2298,6 +2289,39 @@ function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: Matri
     .length;
 }
 
+function assignmentAbsenceConflict(cell: MatrixCell, assignment: MatrixAssignment): MatrixCell["absences"][number] | null {
+  const matchingAbsences = cell.absences
+    .filter((absence) => absence.person.id === assignment.person.id)
+    .sort((left, right) => matrixAbsenceTypePriority(left.absence_type) - matrixAbsenceTypePriority(right.absence_type));
+  return matchingAbsences[0] ?? null;
+}
+
+function matrixAbsenceTypePriority(absenceType: AbsenceType): number {
+  if (absenceType === "sick" || absenceType === "vacation") {
+    return 0;
+  }
+  if (absenceType === "school" || absenceType === "free") {
+    return 1;
+  }
+  return 2;
+}
+
+function assignmentChipClassName(span: number, hasAbsenceConflict: boolean): string {
+  return [
+    "person-chip",
+    span > 1 ? "is-assignment-run" : "",
+    hasAbsenceConflict ? "is-absence-conflict" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function assignmentChipTitle(assignment: MatrixAssignment, absenceConflict: MatrixCell["absences"][number] | null, isEditable: boolean): string {
+  const actionHint = isEditable ? " - ziehen zum Verschieben, Shift+Ziehen kopiert, Rechtsklick entfernt den ganzen Einsatz" : "";
+  if (!absenceConflict) {
+    return `${assignment.person.display_name}${actionHint}`;
+  }
+  return `${assignment.person.display_name} - Konflikt: ${absenceTypeLabels[absenceConflict.absence_type]} am Einsatztag${actionHint}`;
+}
+
 function compactProjectManagerCode(person: MatrixPerson | null): string {
   if (!person) {
     return "";
@@ -2366,7 +2390,7 @@ function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
     .sort(comparePlanningAbsences);
 }
 
-function absencePlanningItemsForDay(absences: Absence[], date: string, conflictPersonKeys: Set<string>): PlanningAbsenceItem[] {
+function absencePlanningItemsForDay(absences: Absence[], date: string): PlanningAbsenceItem[] {
   const bestAbsenceByPerson = new Map<number, Absence>();
   activeAbsencesForDay(absences, date).forEach((absence) => {
     const current = bestAbsenceByPerson.get(absence.person_id);
@@ -2375,31 +2399,8 @@ function absencePlanningItemsForDay(absences: Absence[], date: string, conflictP
     }
   });
   return Array.from(bestAbsenceByPerson.values())
-    .map((absence) => {
-      const hasConflict = conflictPersonKeys.has(absenceConflictKey(date, absence.person_id));
-      return {
-        absence,
-        hasConflict,
-        conflictMessage: hasConflict ? "Konflikt: Person ist trotz Abwesenheit eingeplant." : null,
-      };
-    })
-    .sort((left, right) => Number(right.hasConflict) - Number(left.hasConflict) || comparePlanningAbsences(left.absence, right.absence));
-}
-
-function buildAbsenceAssignmentConflictKeys(matrix: MatrixResponse): Set<string> {
-  const keys = new Set<string>();
-  matrix.rows.forEach((row) => {
-    row.cells.forEach((cell) => {
-      cell.assignments.forEach((assignment) => {
-        keys.add(absenceConflictKey(cell.date, assignment.person.id));
-      });
-    });
-  });
-  return keys;
-}
-
-function absenceConflictKey(date: string, personId: number): string {
-  return `${date}:${personId}`;
+    .map((absence) => ({ absence }))
+    .sort((left, right) => comparePlanningAbsences(left.absence, right.absence));
 }
 
 function absenceTypeSortPriority(absence: Absence): number {
@@ -2423,15 +2424,13 @@ function absencePersonLabel(person: Person | undefined): string {
 }
 
 function absencePlanningTitle(item: PlanningAbsenceItem, person: Person | undefined): string {
-  const baseTitle = `${person?.display_name ?? "Person"}: ${absenceTypeLabels[item.absence.absence_type]} ${formatAbsenceDateRange(item.absence)}`;
-  return item.conflictMessage ? `${baseTitle} - ${item.conflictMessage}` : baseTitle;
+  return `${person?.display_name ?? "Person"}: ${absenceTypeLabels[item.absence.absence_type]} ${formatAbsenceDateRange(item.absence)}`;
 }
 
 function absencePlanningBlockClassName(item: PlanningAbsenceItem): string {
   return [
     "absence-planning-chip",
     `absence-block-${item.absence.absence_type}`,
-    item.hasConflict ? "is-conflict" : "",
     item.absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
 }
@@ -2440,7 +2439,6 @@ function absenceOverflowItemClassName(item: PlanningAbsenceItem): string {
   return [
     "absence-overflow-item",
     `absence-overflow-${item.absence.absence_type}`,
-    item.hasConflict ? "is-conflict" : "",
     item.absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
 }

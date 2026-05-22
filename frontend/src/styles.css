@@ -1279,6 +1279,17 @@ button.entity-card:focus-visible {
   cursor: grabbing;
 }
 
+.person-chip.is-absence-conflict {
+  background: #fff1f1;
+  color: #991b1b;
+  box-shadow: 0 1px 0 rgb(153 27 27 / 8%);
+}
+
+button.person-chip.is-absence-conflict:hover,
+button.person-chip.is-absence-conflict:focus-visible {
+  outline: 2px solid rgb(239 68 68 / 24%);
+}
+
 .assignment-drag-ghost {
   position: fixed;
   z-index: 220;
@@ -1516,11 +1527,6 @@ button.person-chip:focus-visible {
   color: #475569;
 }
 
-.absence-planning-chip.is-conflict {
-  border-color: #f4c7c7;
-  background: #fff1f1;
-  color: #991b1b;
-}
 
 .absence-planning-chip:hover,
 .absence-planning-chip:focus-visible {
@@ -1630,9 +1636,6 @@ button.person-chip:focus-visible {
   border-left-color: #94a3b8;
 }
 
-.absence-overflow-item.is-conflict {
-  border-left-color: #ef4444;
-}
 
 .absence-cell-editor-popup {
   width: min(380px, calc(100vw - 24px));
