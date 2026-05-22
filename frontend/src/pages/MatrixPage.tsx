@@ -548,11 +548,7 @@ export function MatrixPage() {
       setInitialEntries(entriesForSave);
       setError(null);
       if (response.warnings[0]?.message) {
-        setSaveStatus((current) => ({ ...current, [activeCell.key]: "saved" }));
-        setCellMessage((current) => ({
-          ...current,
-          [activeCell.key]: response.warnings[0].message,
-        }));
+        showTemporaryCellFeedback(activeCell.key, "");
       } else {
         showTemporaryCellFeedback(activeCell.key, "Gespeichert");
       }
@@ -2379,14 +2375,22 @@ function sortDates(left: string, right: string): [string, string] {
 }
 
 function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, assignmentId: number): number {
-  const previousHasAssignment = cells[cellIndex - 1]?.assignments.some((assignment) => assignment.id === assignmentId);
-  if (previousHasAssignment) {
+  const cell = cells[cellIndex];
+  const assignment = cell?.assignments.find((item) => item.id === assignmentId);
+  if (!cell || !assignment) {
+    return 0;
+  }
+  const signature = assignmentVisualSignature(cell, assignment);
+  const previousCell = cells[cellIndex - 1];
+  const previousAssignment = previousCell?.assignments.find((item) => item.id === assignmentId);
+  if (previousCell && previousAssignment && assignmentVisualSignature(previousCell, previousAssignment) === signature) {
     return 0;
   }
   let span = 1;
   for (let index = cellIndex + 1; index < cells.length; index += 1) {
-    const hasAssignment = cells[index].assignments.some((assignment) => assignment.id === assignmentId);
-    if (!hasAssignment) {
+    const nextCell = cells[index];
+    const nextAssignment = nextCell.assignments.find((item) => item.id === assignmentId);
+    if (!nextAssignment || assignmentVisualSignature(nextCell, nextAssignment) !== signature) {
       break;
     }
     span += 1;
@@ -2406,6 +2410,11 @@ function assignmentAbsenceConflict(cell: MatrixCell, assignment: MatrixAssignmen
     .filter((absence) => absence.person.id === assignment.person.id)
     .sort((left, right) => matrixAbsenceTypePriority(left.absence_type) - matrixAbsenceTypePriority(right.absence_type));
   return matchingAbsences[0] ?? null;
+}
+
+function assignmentVisualSignature(cell: MatrixCell, assignment: MatrixAssignment): string {
+  const absenceConflict = assignmentAbsenceConflict(cell, assignment);
+  return absenceConflict ? "absence-" + absenceConflict.absence_type : "normal";
 }
 
 function matrixAbsenceTypePriority(absenceType: AbsenceType): number {
