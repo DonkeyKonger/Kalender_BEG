@@ -1272,7 +1272,43 @@ button.entity-card:focus-visible {
   border: 0;
   background: #e9f1fb;
   color: #143c6d;
-  cursor: pointer;
+  cursor: grab;
+}
+
+.person-chip:active {
+  cursor: grabbing;
+}
+
+.assignment-drag-ghost {
+  position: fixed;
+  z-index: 220;
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border-radius: 6px;
+  background: rgb(233 241 251 / 92%);
+  color: #143c6d;
+  padding: 2px 7px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  pointer-events: none;
+  box-shadow: 0 12px 24px rgb(18 29 52 / 18%);
+  opacity: 0.92;
+}
+
+.assignment-drag-ghost.is-copy::after {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #1d5c99;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1;
 }
 
 button.person-chip:hover,
@@ -1303,6 +1339,7 @@ button.person-chip:focus-visible {
   left: calc(var(--fixed-columns-width, 552px) + 10px);
   max-width: min(140px, 100%);
 }
+
 
 .absence-chip {
   background: #fff1f0;
@@ -1367,6 +1404,10 @@ button.person-chip:focus-visible {
 .matrix-table thead th.today {
   background: #e5f0ff;
   box-shadow: inset 0 3px 0 #1d5c99;
+}
+
+.matrix-cell.is-drag-target {
+  box-shadow: inset 0 0 0 2px rgb(29 92 153 / 28%);
 }
 
 .matrix-cell.today {

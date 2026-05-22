@@ -1,13 +1,28 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { MatrixCellMark, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
+import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
+
+type AssignmentMutationApiResponse = {
+  assignment: { id: number };
+  warnings: MatrixConflictMessage[];
+  infos: MatrixConflictMessage[];
+};
+
+type AssignmentPayload = {
+  site_id?: number;
+  person_id?: number;
+  start_date?: string;
+  end_date?: string;
+  assignment_type?: AssignmentType;
+  note?: string | null;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -267,6 +282,24 @@ export const api = {
   async myAssignmentHistory(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`);
+  },
+
+  async createAssignment(payload: Required<Pick<AssignmentPayload, "site_id" | "person_id" | "start_date" | "end_date">> & AssignmentPayload): Promise<AssignmentMutationApiResponse> {
+    return request<AssignmentMutationApiResponse>("/assignments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateAssignment(assignmentId: number, payload: AssignmentPayload): Promise<AssignmentMutationApiResponse> {
+    return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteAssignment(assignmentId: number): Promise<void> {
+    return request<void>(`/assignments/${assignmentId}`, { method: "DELETE" });
   },
 
   async matrix(params: {

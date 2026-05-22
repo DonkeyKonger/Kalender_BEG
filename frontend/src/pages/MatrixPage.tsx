@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -8,6 +8,7 @@ import { MatrixCellEditor } from "../components/MatrixCellEditor";
 import { siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type {
+  MatrixAssignment,
   MatrixCell,
   MatrixCellMark,
   MatrixEntryInput,
@@ -41,6 +42,25 @@ type CellRange = {
   dates: string[];
 };
 type MatrixCellMouseEvent = ReactMouseEvent<HTMLTableCellElement>;
+type AssignmentDragMode = "move" | "copy";
+type AssignmentDragTarget = SelectionCell;
+type AssignmentDragState = {
+  assignment: MatrixAssignment;
+  sourceSiteId: number;
+  sourceStartDate: string;
+  sourceEndDate: string;
+  durationDays: number;
+  mode: AssignmentDragMode;
+  pointerOffsetX: number;
+  pointerOffsetY: number;
+  originX: number;
+  originY: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  target: AssignmentDragTarget | null;
+};
 type UndoItem = {
   siteId: number;
   date: string;
@@ -74,11 +94,13 @@ export function MatrixPage() {
   const skipNextDraftAutosaveRef = useRef(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
+  const assignmentDragRef = useRef<AssignmentDragState | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
+  const [assignmentDrag, setAssignmentDrag] = useState<AssignmentDragState | null>(null);
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
@@ -90,6 +112,7 @@ export function MatrixPage() {
     return buildCellRange(selectionStartCell, selectionEndCell, matrix.days);
   }, [matrix, selectionEndCell, selectionStartCell]);
   const highlightedCellRange = isSelecting ? selectedCellRange : activeEditorRange;
+  const isDraggingAssignment = assignmentDrag !== null;
   const activeEditorContext = useMemo(() => {
     if (!matrix || !activeCell) {
       return null;
@@ -117,6 +140,16 @@ export function MatrixPage() {
     } finally {
       setIsLoading(false);
     }
+  }, [defaultRange.end, defaultRange.start]);
+
+  const refreshMatrixOnly = useCallback(async () => {
+    const matrixData = await api.matrix({
+      start: defaultRange.start,
+      end: defaultRange.end,
+      includeWeekends: true,
+    });
+    setMatrix(matrixData);
+    setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
   }, [defaultRange.end, defaultRange.start]);
 
   useEffect(() => {
@@ -397,6 +430,61 @@ export function MatrixPage() {
     return () => document.removeEventListener("keydown", cancelSelection);
   }, [isSelecting]);
 
+  useEffect(() => {
+    if (!assignmentDrag) {
+      return undefined;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const current = assignmentDragRef.current;
+      if (!current) {
+        return;
+      }
+      event.preventDefault();
+      const left = event.clientX - current.pointerOffsetX;
+      const top = event.clientY - current.pointerOffsetY;
+      const target = findMatrixCellAtPoint(left + 4, event.clientY);
+      updateAssignmentDrag({
+        ...current,
+        left,
+        top,
+        mode: event.shiftKey ? "copy" : "move",
+        target,
+      });
+    }
+
+    function handlePointerUp(event: PointerEvent) {
+      const current = assignmentDragRef.current;
+      if (!current) {
+        return;
+      }
+      event.preventDefault();
+      updateAssignmentDrag(null);
+      void finishAssignmentDrag({
+        ...current,
+        mode: event.shiftKey ? "copy" : "move",
+        target: findMatrixCellAtPoint(current.left + 4, event.clientY) ?? current.target,
+      });
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        updateAssignmentDrag(null);
+      }
+    }
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("pointercancel", handlePointerUp);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+      document.removeEventListener("pointercancel", handlePointerUp);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDraggingAssignment]);
+
   async function undoLast() {
     const item = undoStack.at(-1);
     if (!item) {
@@ -443,31 +531,114 @@ export function MatrixPage() {
     });
   }
 
-  async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, personId: number) {
+  async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) {
     if (!isEditable) {
       return;
     }
     const key = cellKey(row.site.id, cell.date);
-    const before = entriesFromCell(cell);
-    const after = before.filter((entry) => entry.person_id !== personId);
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
-      const response = await api.patchMatrixCell({
-        siteId: row.site.id,
-        date: cell.date,
-        entries: after.map(toMatrixEntryInput),
-      });
-      setUndoStack((current) => [
-        ...current,
-        { siteId: row.site.id, date: cell.date, endDate: cell.date, before, after },
-      ]);
+      await api.deleteAssignment(assignment.id);
       setError(null);
-      showTemporaryCellFeedback(key, "Monteur entfernt");
-      replaceMatrixCells(row.site.id, response.updated_cells);
+      showTemporaryCellFeedback(key, assignment.start_date === assignment.end_date ? "Monteur entfernt" : "Einsatz entfernt");
+      await refreshMatrixOnly();
     } catch (requestError) {
-      const message = readApiError(requestError, "Monteur konnte nicht entfernt werden.");
+      const message = readApiError(requestError, "Einsatz konnte nicht entfernt werden.");
+      setError(message);
+      setSaveStatus((current) => ({ ...current, [key]: "error" }));
+      setCellMessage((current) => ({ ...current, [key]: message }));
+    }
+  }
+
+
+  function updateAssignmentDrag(nextDrag: AssignmentDragState | null) {
+    assignmentDragRef.current = nextDrag;
+    setAssignmentDrag(nextDrag);
+  }
+
+  function startAssignmentDrag(
+    row: MatrixRow,
+    cell: MatrixCell,
+    assignment: MatrixAssignment,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    if (!isEditable || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (activeCell) {
+      closeActiveEditor();
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nextDrag: AssignmentDragState = {
+      assignment,
+      sourceSiteId: row.site.id,
+      sourceStartDate: assignment.start_date,
+      sourceEndDate: assignment.end_date,
+      durationDays: inclusiveDateDistance(assignment.start_date, assignment.end_date),
+      mode: event.shiftKey ? "copy" : "move",
+      pointerOffsetX: event.clientX - rect.left,
+      pointerOffsetY: event.clientY - rect.top,
+      originX: event.clientX,
+      originY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      target: { siteId: row.site.id, date: cell.date, dayIndex: row.cells.findIndex((item) => item.date === cell.date) },
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateAssignmentDrag(nextDrag);
+  }
+
+  async function finishAssignmentDrag(drag: AssignmentDragState) {
+    const movedDistance = Math.abs(drag.left + drag.pointerOffsetX - drag.originX)
+      + Math.abs(drag.top + drag.pointerOffsetY - drag.originY);
+    if (movedDistance < 6 || !drag.target) {
+      return;
+    }
+    const targetStartDate = drag.target.date;
+    const targetEndDate = addIsoDays(targetStartDate, drag.durationDays - 1);
+    if (
+      drag.mode === "move"
+      && drag.target.siteId === drag.sourceSiteId
+      && targetStartDate === drag.sourceStartDate
+      && targetEndDate === drag.sourceEndDate
+    ) {
+      return;
+    }
+
+    const key = cellKey(drag.target.siteId, targetStartDate);
+    clearTemporaryCellFeedback(key);
+    setSaveStatus((current) => ({ ...current, [key]: "saving" }));
+    setCellMessage((current) => ({ ...current, [key]: "" }));
+    try {
+      if (drag.mode === "copy") {
+        await api.createAssignment({
+          site_id: drag.target.siteId,
+          person_id: drag.assignment.person.id,
+          start_date: targetStartDate,
+          end_date: targetEndDate,
+          assignment_type: drag.assignment.assignment_type,
+          note: drag.assignment.note,
+        });
+      } else {
+        await api.updateAssignment(drag.assignment.id, {
+          site_id: drag.target.siteId,
+          start_date: targetStartDate,
+          end_date: targetEndDate,
+        });
+      }
+      setError(null);
+      showTemporaryCellFeedback(key, drag.mode === "copy" ? "Einsatz kopiert" : "Einsatz verschoben");
+      await refreshMatrixOnly();
+    } catch (requestError) {
+      const message = readApiError(requestError, drag.mode === "copy"
+        ? "Einsatz konnte nicht kopiert werden."
+        : "Einsatz konnte nicht verschoben werden.");
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
       setCellMessage((current) => ({ ...current, [key]: message }));
@@ -705,9 +876,11 @@ export function MatrixPage() {
             draftEntries={draftEntries}
             isCompactView={isCompactView}
             isEditable={isEditable}
+            assignmentDragTarget={assignmentDrag?.target ?? null}
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
             onDeleteAssignment={deleteAssignmentFromCell}
+            onStartAssignmentDrag={startAssignmentDrag}
             onClearCellMark={clearCellMark}
             onCycleCellMark={cycleCellMark}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
@@ -764,6 +937,21 @@ export function MatrixPage() {
               saveStatus={saveStatus[activeCell.key]}
               selectedPersonId={selectedPersonId}
             />
+          )}
+
+          {assignmentDrag && typeof document !== "undefined" && createPortal(
+            <div
+              className={`assignment-drag-ghost ${assignmentDrag.mode === "copy" ? "is-copy" : "is-move"}`}
+              style={{
+                height: assignmentDrag.height,
+                left: assignmentDrag.left,
+                top: assignmentDrag.top,
+                width: assignmentDrag.width,
+              }}
+            >
+              <span className="person-chip-label">{assignmentDrag.assignment.person.short_code}</span>
+            </div>,
+            document.body,
           )}
         </>
       )}
@@ -879,10 +1067,11 @@ type MatrixTableProps = {
   externalName: string;
   isCompactView: boolean;
   isEditable: boolean;
+  assignmentDragTarget: AssignmentDragTarget | null;
   matrix: MatrixResponse;
   matrixScrollRef: RefObject<HTMLDivElement | null>;
   onAddExternal: () => void;
-  onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, personId: number) => void;
+  onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onAddPerson: () => void;
@@ -891,6 +1080,7 @@ type MatrixTableProps = {
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
+  onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
@@ -1028,7 +1218,15 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         const key = cellKey(row.site.id, cell.date);
         return (
           <td
-            className={matrixCellClassName(cell, props.today, isCellInCellRange(row.site.id, cellIndex, props.highlightedCellRange))}
+            className={matrixCellClassName(
+              cell,
+              props.today,
+              isCellInCellRange(row.site.id, cellIndex, props.highlightedCellRange),
+              isAssignmentDragTarget(row.site.id, cellIndex, props.assignmentDragTarget),
+            )}
+            data-matrix-date={cell.date}
+            data-matrix-day-index={cellIndex}
+            data-matrix-site-id={row.site.id}
             key={cell.date}
             onAuxClick={(event) => {
               if (event.button === 1) {
@@ -1060,7 +1258,8 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               cellIndex={cellIndex}
               isEditable={props.isEditable}
               rowCells={row.cells}
-              onDeleteAssignment={(personId) => props.onDeleteAssignment(row, cell, personId)}
+              onDeleteAssignment={(assignment) => props.onDeleteAssignment(row, cell, assignment)}
+              onStartAssignmentDrag={(assignment, event) => props.onStartAssignmentDrag(row, cell, assignment, event)}
             />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
             {props.cellMessage[key] && (
@@ -1199,15 +1398,17 @@ function CellDisplay({
   isEditable,
   rowCells,
   onDeleteAssignment,
+  onStartAssignmentDrag,
 }: {
   cell: MatrixCell;
   cellIndex: number;
   isEditable: boolean;
   rowCells: MatrixCell[];
-  onDeleteAssignment: (personId: number) => void;
+  onDeleteAssignment: (assignment: MatrixAssignment) => void;
+  onStartAssignmentDrag: (assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const visibleAssignmentCount = cell.assignments.filter(
-    (assignment) => assignmentRunSpan(rowCells, cellIndex, assignment.person.id) > 0,
+    (assignment) => assignmentRunSpan(rowCells, cellIndex, assignment.id) > 0,
   ).length;
 
   return (
@@ -1216,11 +1417,11 @@ function CellDisplay({
       style={{ "--assignment-layers": Math.max(1, visibleAssignmentCount) } as CSSProperties}
     >
       {cell.assignments.map((assignment) => {
-        const span = assignmentRunSpan(rowCells, cellIndex, assignment.person.id);
+        const span = assignmentRunSpan(rowCells, cellIndex, assignment.id);
         if (span === 0) {
           return null;
         }
-        const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.person.id);
+        const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.id);
         return (
           <button
             className={span > 1 ? "person-chip is-assignment-run" : "person-chip"}
@@ -1230,16 +1431,17 @@ function CellDisplay({
               "--assignment-span": span,
               width: span > 1 ? `calc(${span} * var(--day-column-width) - 8px)` : undefined,
             } as CSSProperties}
-            title={isEditable ? `${assignment.person.display_name} - Rechtsklick entfernt den Monteur am Starttag` : assignment.person.display_name}
+            title={isEditable ? `${assignment.person.display_name} - ziehen zum Verschieben, Shift+Ziehen kopiert, Rechtsklick entfernt den ganzen Einsatz` : assignment.person.display_name}
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => onStartAssignmentDrag(assignment, event)}
             onContextMenu={(event) => {
               if (!isEditable) {
                 return;
               }
               event.preventDefault();
               event.stopPropagation();
-              onDeleteAssignment(assignment.person.id);
+              onDeleteAssignment(assignment);
             }}
           >
             <span className="person-chip-label">{assignment.person.short_code}</span>
@@ -1289,6 +1491,7 @@ function MatrixInfoEditor({
   );
 }
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DAY_COLUMN_WIDTH = 104;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
 const EDITOR_POPUP_HEIGHT = 560;
@@ -1483,7 +1686,12 @@ function dayHeaderClassName(date: string, today: string): string {
   ].filter(Boolean).join(" ");
 }
 
-function matrixCellClassName(cell: MatrixCell, today: string, isRangeSelected: boolean): string {
+function matrixCellClassName(
+  cell: MatrixCell,
+  today: string,
+  isRangeSelected: boolean,
+  isDragTarget: boolean,
+): string {
   return [
     "matrix-cell",
     isWeekendDate(cell.date) ? "weekend" : "",
@@ -1491,6 +1699,7 @@ function matrixCellClassName(cell: MatrixCell, today: string, isRangeSelected: b
     cell.date === today ? "today" : "",
     cell.mark ? `mark-${cell.mark}` : "",
     isRangeSelected ? "is-range-selected" : "",
+    isDragTarget ? "is-drag-target" : "",
   ].filter(Boolean).join(" ");
 }
 
@@ -1506,6 +1715,10 @@ function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | nu
 
 function isCellInCellRange(siteId: number, dayIndex: number, range: CellRange | null): boolean {
   return Boolean(range && range.siteId === siteId && dayIndex >= range.startIndex && dayIndex <= range.endIndex);
+}
+
+function isAssignmentDragTarget(siteId: number, dayIndex: number, target: AssignmentDragTarget | null): boolean {
+  return Boolean(target && target.siteId === siteId && target.dayIndex === dayIndex);
 }
 
 function buildCellRange(start: SelectionCell, end: SelectionCell, visibleDays: MatrixResponse["days"]): CellRange {
@@ -1545,15 +1758,15 @@ function sortDates(left: string, right: string): [string, string] {
   return left <= right ? [left, right] : [right, left];
 }
 
-function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, personId: number): number {
-  const previousHasPerson = cells[cellIndex - 1]?.assignments.some((assignment) => assignment.person.id === personId);
-  if (previousHasPerson) {
+function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, assignmentId: number): number {
+  const previousHasAssignment = cells[cellIndex - 1]?.assignments.some((assignment) => assignment.id === assignmentId);
+  if (previousHasAssignment) {
     return 0;
   }
   let span = 1;
   for (let index = cellIndex + 1; index < cells.length; index += 1) {
-    const hasPerson = cells[index].assignments.some((assignment) => assignment.person.id === personId);
-    if (!hasPerson) {
+    const hasAssignment = cells[index].assignments.some((assignment) => assignment.id === assignmentId);
+    if (!hasAssignment) {
       break;
     }
     span += 1;
@@ -1561,10 +1774,10 @@ function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, personId: num
   return span;
 }
 
-function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: MatrixCell[], cellIndex: number, personId: number): number {
+function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: MatrixCell[], cellIndex: number, assignmentId: number): number {
   return assignments
-    .slice(0, assignments.findIndex((assignment) => assignment.person.id === personId))
-    .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.person.id) > 0)
+    .slice(0, assignments.findIndex((assignment) => assignment.id === assignmentId))
+    .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.id) > 0)
     .length;
 }
 
@@ -1604,6 +1817,35 @@ function matrixInfoTextClassName(value: string): string {
     return "info-text-long";
   }
   return "";
+}
+
+function findMatrixCellAtPoint(x: number, y: number): AssignmentDragTarget | null {
+  const element = document.elementsFromPoint(x, y).find((item): item is HTMLElement => {
+    return item instanceof HTMLElement && Boolean(item.dataset.matrixSiteId && item.dataset.matrixDate);
+  });
+  if (!element?.dataset.matrixSiteId || !element.dataset.matrixDate) {
+    return null;
+  }
+  return {
+    siteId: Number(element.dataset.matrixSiteId),
+    date: element.dataset.matrixDate,
+    dayIndex: Number(element.dataset.matrixDayIndex ?? 0),
+  };
+}
+
+function inclusiveDateDistance(startDate: string, endDate: string): number {
+  return Math.max(1, Math.round((isoDateToTime(endDate) - isoDateToTime(startDate)) / DAY_IN_MS) + 1);
+}
+
+function addIsoDays(value: string, days: number): string {
+  const date = new Date(isoDateToTime(value));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function isoDateToTime(value: string): number {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
 }
 
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
