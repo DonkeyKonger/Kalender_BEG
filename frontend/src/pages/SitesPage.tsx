@@ -1011,7 +1011,7 @@ function SiteColorSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = SITE_COLOR_OPTIONS.find((option) => option.value.toLowerCase() === value.toLowerCase());
-  const label = selectedOption?.name ?? "Aktuelle Farbe";
+  const label = selectedOption?.name ?? "Farbe";
 
   return (
     <div className="site-color-select-field site-field-color">

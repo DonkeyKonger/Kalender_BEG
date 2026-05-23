@@ -3206,6 +3206,7 @@ button.person-chip:focus-visible {
 }
 
 .site-form-grid {
+  --site-drawer-control-height: 38px;
   display: grid;
   gap: 11px;
 }
@@ -3226,13 +3227,19 @@ button.person-chip:focus-visible {
 .site-form-grid select,
 .site-form-grid textarea {
   width: 100%;
-  min-height: 34px;
+  min-height: 0;
   border: 1px solid #d7e1ee;
   border-radius: 8px;
-  background: #fbfdff;
+  background: #f7f9fc;
   color: #111827;
-  padding: 10px 11px;
+  padding: 0 10px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
+  font: inherit;
+}
+
+.site-form-grid input,
+.site-form-grid select {
+  height: var(--site-drawer-control-height);
 }
 
 .site-form-grid input:disabled,
@@ -3261,14 +3268,28 @@ button.person-chip:focus-visible {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 34px;
+  min-height: 0;
   border: 1px solid #d7e1ee;
-  border-radius: 7px;
-  background: #fbfdff;
+  border-radius: 8px;
+  background: #f7f9fc;
   color: #111827;
-  padding: 7px 9px;
+  padding: 0 10px;
   font: inherit;
   cursor: pointer;
+}
+
+.site-color-select-trigger {
+  height: var(--site-drawer-control-height);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.site-color-select-trigger > span:last-child,
+.site-color-menu button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .site-color-select-trigger:disabled {
@@ -3311,7 +3332,7 @@ button.person-chip:focus-visible {
 }
 
 .site-color-menu button {
-  min-height: 30px;
+  height: 30px;
   border-color: transparent;
   background: transparent;
 }
@@ -3323,6 +3344,8 @@ button.person-chip:focus-visible {
 
 .site-form-grid textarea {
   min-height: 68px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   line-height: 1.45;
   resize: vertical;
 }
