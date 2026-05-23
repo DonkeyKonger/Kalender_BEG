@@ -787,13 +787,15 @@ button:disabled {
 .row-heading-content {
   display: flex;
   gap: 6px;
-  align-items: center;
+  align-items: stretch;
+  height: 100%;
   min-width: 0;
 }
 
 .matrix-site-link {
   display: grid;
   gap: 2px;
+  align-self: center;
   min-width: 0;
 }
 
@@ -850,6 +852,15 @@ button:disabled {
   height: 23px;
   border-radius: 4px;
   vertical-align: middle;
+}
+
+.row-heading-content .site-color {
+  flex: 0 0 7px;
+  align-self: stretch;
+  height: auto;
+  min-height: 24px;
+  margin-block: 3px;
+  border-radius: 999px;
 }
 
 .compact-text {
@@ -1598,8 +1609,11 @@ button.person-chip:focus-visible {
 .matrix-absence-icon {
   width: 6px;
   align-self: stretch;
+  min-height: 24px;
+  margin-block: 3px;
   border-radius: 999px;
   background: #7fa0c8;
+  flex: 0 0 6px;
 }
 
 .matrix-absence-empty {
@@ -1954,6 +1968,17 @@ button.person-chip:focus-visible {
 .matrix-page.is-compact .site-color {
   width: 6px;
   height: 20px;
+}
+
+.matrix-page.is-compact .row-heading-content .site-color,
+.matrix-page.is-compact .row-heading-content .matrix-absence-icon {
+  height: auto;
+  min-height: 20px;
+  margin-block: 2px;
+}
+
+.matrix-page.is-compact .row-heading-content .site-color {
+  flex-basis: 6px;
 }
 
 .matrix-page.is-compact .matrix-site-link {
