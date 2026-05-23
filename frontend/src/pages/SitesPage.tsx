@@ -34,6 +34,8 @@ const emptySite: SiteCreate = {
 
 type EditableSite = SiteCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
+type ProjectManagerOption = { id: number; name: string; shortCode: string };
+type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
 
 export function SitesPage() {
   const { user } = useAuth();
@@ -47,6 +49,8 @@ export function SitesPage() {
   const [isEditingSite, setIsEditingSite] = useState(false);
   const [includeClosed, setIncludeClosed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [projectManagerFilter, setProjectManagerFilter] = useState("all");
+  const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
   const [checkingLocationSiteId, setCheckingLocationSiteId] = useState<number | null>(null);
@@ -76,6 +80,20 @@ export function SitesPage() {
     }
   }
 
+  useEffect(() => {
+    if (hasInitializedProjectManagerFilter || isLoading) {
+      return;
+    }
+    if (user?.role === "project_manager" && user.person_id && sites.some((site) => site.project_manager_person_id === user.person_id)) {
+      setProjectManagerFilter(String(user.person_id));
+    } else {
+      setProjectManagerFilter("all");
+    }
+    setHasInitializedProjectManagerFilter(true);
+  }, [hasInitializedProjectManagerFilter, isLoading, sites, user?.person_id, user?.role]);
+
+  const projectManagerOptions = useMemo(() => projectManagerOptionsFromSites(sites), [sites]);
+
   const filteredSites = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
     if (!needle) {
@@ -83,6 +101,9 @@ export function SitesPage() {
     }
     return sites.filter((site) => siteSearchText(site).includes(needle));
   }, [searchTerm, sites]);
+
+  const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
+  const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
 
   const selectedSite = drawer?.mode === "edit"
     ? sites.find((site) => site.id === drawer.siteId) ?? null
@@ -365,31 +386,55 @@ export function SitesPage() {
           />
           <span>Archiv zeigen</span>
         </label>
+        {projectManagerOptions.length > 0 && (
+          <div className="matrix-pm-filter site-pm-filter" aria-label="Projektleiter filtern">
+            <button
+              className={projectManagerFilter === "all" ? "is-active" : ""}
+              type="button"
+              onClick={() => setProjectManagerFilter("all")}
+            >
+              Alle
+            </button>
+            {projectManagerOptions.map((manager) => (
+              <button
+                className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
+                key={manager.id}
+                type="button"
+                onClick={() => setProjectManagerFilter(String(manager.id))}
+              >
+                {manager.shortCode || manager.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {isLoading && <div className="matrix-state">Baustellen werden geladen...</div>}
 
       {!isLoading && !error && (
-        <div className="entity-card-list" role="list">
-          {filteredSites.map((site) => (
-            <EntityCard
-              key={site.id}
-              title={site.name}
-              subtitle={[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}
-              meta={siteCardMeta(site)}
-              color={site.color ?? "#94a3b8"}
-              icon={<BriefcaseBusiness aria-hidden="true" size={17} />}
-              status={<SiteStatusBadge status={site.status} />}
-              isInactive={site.status === "closed" || site.status === "archived"}
-              onClick={() => openSiteDrawer(site.id)}
-            />
-          ))}
-          {!filteredSites.length && (
+        <>
+          {projectManagerFilter === "all" ? (
+            <div className="site-group-list" role="list">
+              {siteGroups.map((group) => (
+                <section className="site-group-section" key={group.key}>
+                  {group.showHeading && <h2>{group.label}</h2>}
+                  <div className="entity-card-list">
+                    {group.sites.map((site) => renderSiteCard(site, openSiteDrawer))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="entity-card-list" role="list">
+              {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, openSiteDrawer))}
+            </div>
+          )}
+          {!visibleSiteCount && (
             <div className="empty-panel">
               <p>{sites.length ? "Keine Treffer gefunden." : "Noch keine Baustellen vorhanden."}</p>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <EntityDetailDrawer
@@ -900,7 +945,88 @@ function parsePersonId(value: string): number | null {
 }
 
 function compareSites(left: Site, right: Site): number {
-  return left.name.localeCompare(right.name);
+  return compareSiteNumbers(left.site_number, right.site_number)
+    || left.name.localeCompare(right.name, "de")
+    || left.id - right.id;
+}
+
+function compareSiteNumbers(left: string | null, right: string | null): number {
+  const leftNumber = parseSiteNumber(left);
+  const rightNumber = parseSiteNumber(right);
+  if (leftNumber !== null && rightNumber !== null) {
+    return leftNumber - rightNumber;
+  }
+  if (leftNumber !== null) {
+    return -1;
+  }
+  if (rightNumber !== null) {
+    return 1;
+  }
+  return (left ?? "").localeCompare(right ?? "", "de");
+}
+
+function parseSiteNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const matches = value.match(/\d+/g);
+  return matches?.length ? Number(matches[matches.length - 1]) : null;
+}
+
+function renderSiteCard(site: Site, openSiteDrawer: (siteId: number) => void) {
+  return (
+    <EntityCard
+      key={site.id}
+      title={site.name}
+      subtitle={[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}
+      meta={siteCardMeta(site)}
+      color={site.color ?? "#94a3b8"}
+      icon={<BriefcaseBusiness aria-hidden="true" size={17} />}
+      status={<SiteStatusBadge status={site.status} />}
+      isInactive={site.status === "closed" || site.status === "archived"}
+      onClick={() => openSiteDrawer(site.id)}
+    />
+  );
+}
+
+function projectManagerOptionsFromSites(sites: Site[]): ProjectManagerOption[] {
+  const options = new Map<number, ProjectManagerOption>();
+  sites.forEach((site) => {
+    const manager = site.project_manager;
+    if (!manager) {
+      return;
+    }
+    options.set(manager.id, {
+      id: manager.id,
+      name: manager.display_name,
+      shortCode: manager.short_code,
+    });
+  });
+  return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, "de"));
+}
+
+function groupSites(sites: Site[], projectManagerFilter: string): SiteGroup[] {
+  const filteredSites = projectManagerFilter === "all"
+    ? sites
+    : sites.filter((site) => String(site.project_manager_person_id ?? "") === projectManagerFilter);
+  const sortedSites = filteredSites.slice().sort(compareSites);
+  if (projectManagerFilter !== "all") {
+    return [{ key: projectManagerFilter, label: "", sites: sortedSites, showHeading: false }];
+  }
+
+  const groups = new Map<string, SiteGroup>();
+  sortedSites.forEach((site) => {
+    const key = site.project_manager_person_id ? String(site.project_manager_person_id) : "unassigned";
+    const label = site.project_manager?.display_name ?? "Ohne Projektleiter";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.sites.push(site);
+      return;
+    }
+    groups.set(key, { key, label, sites: [site], showHeading: true });
+  });
+
+  return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, "de"));
 }
 
 function siteCardMeta(site: Site): string[] {

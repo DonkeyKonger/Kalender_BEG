@@ -3106,6 +3106,28 @@ button.person-chip:focus-visible {
   padding: 9px 10px;
 }
 
+.site-pm-filter {
+  justify-content: flex-start;
+}
+
+.site-group-list {
+  display: grid;
+  gap: 22px;
+}
+
+.site-group-section {
+  display: grid;
+  gap: 8px;
+}
+
+.site-group-section h2 {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
 .checkbox-field.inline {
   display: inline-flex;
   align-items: center;
