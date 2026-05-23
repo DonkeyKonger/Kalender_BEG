@@ -393,12 +393,6 @@ export function MatrixPage() {
     setHighlightedPersonIndex(-1);
     setDraftEntries(entries);
     setInitialEntries(entries);
-    if (range.startDate !== range.endDate) {
-      setCellMessage((current) => ({
-        ...current,
-        [key]: "Zeitraum gewaehlt - Namen tippen zum Einplanen",
-      }));
-    }
   }
 
   function addSelectedPersonAndSave(personId: string) {

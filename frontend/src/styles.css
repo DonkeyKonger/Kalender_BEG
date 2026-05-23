@@ -1604,6 +1604,12 @@ button.person-chip:focus-visible {
 
 .matrix-absence-heading {
   color: #26344d;
+  vertical-align: middle;
+}
+
+.matrix-absence-heading .row-heading-content {
+  align-items: center;
+  min-height: 100%;
 }
 
 .matrix-absence-icon {
