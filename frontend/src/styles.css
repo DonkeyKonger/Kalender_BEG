@@ -3093,7 +3093,19 @@ button.person-chip:focus-visible {
 .site-list-toolbar {
   display: grid;
   gap: 10px;
+  align-items: start;
+}
+
+.site-list-toolbar-left,
+.site-list-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
+}
+
+.site-list-toolbar-right {
+  justify-content: flex-start;
 }
 
 .site-list-toolbar input {
@@ -3106,8 +3118,13 @@ button.person-chip:focus-visible {
   padding: 9px 10px;
 }
 
-.site-pm-filter {
+.site-pm-filter,
+.site-status-filter {
   justify-content: flex-start;
+}
+
+.site-status-filter {
+  padding-left: 0;
 }
 
 .site-group-list {
@@ -3377,7 +3394,11 @@ button.person-chip:focus-visible {
 
 @media (min-width: 760px) {
   .site-list-toolbar {
-    grid-template-columns: minmax(220px, 360px) max-content;
+    grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
+  }
+
+  .site-list-toolbar-right {
+    justify-content: flex-end;
   }
 
   .site-row-header {

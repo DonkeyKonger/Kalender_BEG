@@ -37,6 +37,7 @@ type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
 type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
 type SiteColorOption = { name: string; value: string };
+type SiteStatusFilter = SiteStatus | "all";
 
 const SITE_COLOR_OPTIONS: SiteColorOption[] = [
   { name: "Blau", value: "#2563EB" },
@@ -64,6 +65,7 @@ export function SitesPage() {
   const [includeClosed, setIncludeClosed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("all");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
@@ -106,15 +108,24 @@ export function SitesPage() {
     setHasInitializedProjectManagerFilter(true);
   }, [hasInitializedProjectManagerFilter, isLoading, sites, user?.person_id, user?.role]);
 
+  useEffect(() => {
+    if (!includeClosed && (statusFilter === "closed" || statusFilter === "archived")) {
+      setStatusFilter("all");
+    }
+  }, [includeClosed, statusFilter]);
+
   const projectManagerOptions = useMemo(() => projectManagerOptionsFromSites(sites), [sites]);
+  const statusFilterOptions = useMemo(() => siteStatusFilterOptions(includeClosed), [includeClosed]);
 
   const filteredSites = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
-    if (!needle) {
-      return sites;
-    }
-    return sites.filter((site) => siteSearchText(site).includes(needle));
-  }, [searchTerm, sites]);
+    const searchFilteredSites = needle
+      ? sites.filter((site) => siteSearchText(site).includes(needle))
+      : sites;
+    return statusFilter === "all"
+      ? searchFilteredSites
+      : searchFilteredSites.filter((site) => site.status === statusFilter);
+  }, [searchTerm, sites, statusFilter]);
 
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
   const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
@@ -387,40 +398,56 @@ export function SitesPage() {
       {message && <p className="form-info">{message}</p>}
 
       <div className="site-list-toolbar">
-        <input
-          placeholder="Baustelle suchen"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-        />
-        <label className="checkbox-field inline">
+        <div className="site-list-toolbar-left">
           <input
-            checked={includeClosed}
-            type="checkbox"
-            onChange={(event) => setIncludeClosed(event.target.checked)}
+            placeholder="Baustelle suchen"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
-          <span>Archiv zeigen</span>
-        </label>
-        {projectManagerOptions.length > 0 && (
-          <div className="matrix-pm-filter site-pm-filter" aria-label="Projektleiter filtern">
-            <button
-              className={projectManagerFilter === "all" ? "is-active" : ""}
-              type="button"
-              onClick={() => setProjectManagerFilter("all")}
-            >
-              Alle
-            </button>
-            {projectManagerOptions.map((manager) => (
+          <label className="checkbox-field inline">
+            <input
+              checked={includeClosed}
+              type="checkbox"
+              onChange={(event) => setIncludeClosed(event.target.checked)}
+            />
+            <span>Archiv zeigen</span>
+          </label>
+        </div>
+        <div className="site-list-toolbar-right">
+          {projectManagerOptions.length > 0 && (
+            <div className="matrix-pm-filter site-pm-filter" aria-label="Projektleiter filtern">
               <button
-                className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
-                key={manager.id}
+                className={projectManagerFilter === "all" ? "is-active" : ""}
                 type="button"
-                onClick={() => setProjectManagerFilter(String(manager.id))}
+                onClick={() => setProjectManagerFilter("all")}
               >
-                {manager.shortCode || manager.name}
+                Alle
+              </button>
+              {projectManagerOptions.map((manager) => (
+                <button
+                  className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
+                  key={manager.id}
+                  type="button"
+                  onClick={() => setProjectManagerFilter(String(manager.id))}
+                >
+                  {compactProjectManagerFilterLabel(manager)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="matrix-pm-filter site-status-filter" aria-label="Status filtern">
+            {statusFilterOptions.map((option) => (
+              <button
+                className={statusFilter === option.value ? "is-active" : ""}
+                key={option.value}
+                type="button"
+                onClick={() => setStatusFilter(option.value)}
+              >
+                {option.label}
               </button>
             ))}
           </div>
-        )}
+        </div>
       </div>
 
       {isLoading && <div className="matrix-state">Baustellen werden geladen...</div>}
@@ -1044,6 +1071,34 @@ function renderSiteCard(site: Site, openSiteDrawer: (siteId: number) => void) {
       onClick={() => openSiteDrawer(site.id)}
     />
   );
+}
+
+function siteStatusFilterOptions(includeClosed: boolean): Array<{ value: SiteStatusFilter; label: string }> {
+  const options: Array<{ value: SiteStatusFilter; label: string }> = [
+    { value: "all", label: "Alle Status" },
+    { value: "active", label: siteStatusLabels.active },
+    { value: "paused", label: siteStatusLabels.paused },
+  ];
+  if (includeClosed) {
+    options.push(
+      { value: "closed", label: siteStatusLabels.closed },
+      { value: "archived", label: siteStatusLabels.archived },
+    );
+  }
+  return options;
+}
+
+function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
+  return compactCodeFromText(manager.shortCode || manager.name);
+}
+
+function compactCodeFromText(value: string): string {
+  const parts = value.split(/[.\s-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
+  }
+  const letters = value.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
+  return letters.slice(0, 2).toUpperCase();
 }
 
 function projectManagerOptionsFromSites(sites: Site[]): ProjectManagerOption[] {
