@@ -3118,13 +3118,46 @@ button.person-chip:focus-visible {
   padding: 9px 10px;
 }
 
-.site-pm-filter,
-.site-status-filter {
+.site-pm-filter {
   justify-content: flex-start;
 }
 
-.site-status-filter {
-  padding-left: 0;
+.site-archive-toggle,
+.site-status-select {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #26344d;
+  padding: 6px 9px;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.site-archive-toggle {
+  gap: 6px;
+}
+
+.site-archive-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #1d5c99;
+}
+
+.site-status-select {
+  gap: 5px;
+  padding-right: 7px;
+}
+
+.site-status-select select {
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: #143c6d;
+  font: inherit;
+  outline: none;
 }
 
 .site-group-list {

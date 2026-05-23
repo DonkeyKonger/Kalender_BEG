@@ -404,16 +404,16 @@ export function SitesPage() {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
-          <label className="checkbox-field inline">
+        </div>
+        <div className="site-list-toolbar-right">
+          <label className="site-archive-toggle">
             <input
               checked={includeClosed}
               type="checkbox"
               onChange={(event) => setIncludeClosed(event.target.checked)}
             />
-            <span>Archiv zeigen</span>
+            <span>Archiv</span>
           </label>
-        </div>
-        <div className="site-list-toolbar-right">
           {projectManagerOptions.length > 0 && (
             <div className="matrix-pm-filter site-pm-filter" aria-label="Projektleiter filtern">
               <button
@@ -435,18 +435,20 @@ export function SitesPage() {
               ))}
             </div>
           )}
-          <div className="matrix-pm-filter site-status-filter" aria-label="Status filtern">
-            {statusFilterOptions.map((option) => (
-              <button
-                className={statusFilter === option.value ? "is-active" : ""}
-                key={option.value}
-                type="button"
-                onClick={() => setStatusFilter(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <label className="site-status-select">
+            <span>Status:</span>
+            <select
+              aria-label="Status filtern"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as SiteStatusFilter)}
+            >
+              {statusFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -1075,7 +1077,7 @@ function renderSiteCard(site: Site, openSiteDrawer: (siteId: number) => void) {
 
 function siteStatusFilterOptions(includeClosed: boolean): Array<{ value: SiteStatusFilter; label: string }> {
   const options: Array<{ value: SiteStatusFilter; label: string }> = [
-    { value: "all", label: "Alle Status" },
+    { value: "all", label: "Alle" },
     { value: "active", label: siteStatusLabels.active },
     { value: "paused", label: siteStatusLabels.paused },
   ];
