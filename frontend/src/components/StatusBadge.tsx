@@ -7,8 +7,9 @@ export type StatusBadgeTone =
   | "active"
   | "inactive"
   | "paused"
-  | "closed"
-  | "archived"
+  | "planned"
+  | "completed"
+  | "deleted"
   | "warning"
   | "danger"
   | "neutral"
@@ -29,8 +30,9 @@ export type StatusBadgeProps = {
 export const siteStatusLabels: Record<SiteStatus, string> = {
   active: "Aktiv",
   paused: "Pause",
-  closed: "Zu",
-  archived: "Archiv",
+  planned: "Gepl.",
+  completed: "Abges.",
+  deleted: "Geloesch.",
 };
 
 export const roleLabels: Record<UserRole, string> = {
@@ -73,8 +75,11 @@ function siteStatusTone(status: SiteStatus): StatusBadgeTone {
   if (status === "paused") {
     return "paused";
   }
-  if (status === "closed") {
-    return "closed";
+  if (status === "planned") {
+    return "planned";
   }
-  return "archived";
+  if (status === "deleted") {
+    return "deleted";
+  }
+  return "completed";
 }

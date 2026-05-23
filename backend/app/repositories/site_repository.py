@@ -25,7 +25,7 @@ class SiteRepository:
         )
         if not include_closed:
             statement = statement.where(
-                Site.status.not_in([SiteStatus.CLOSED, SiteStatus.ARCHIVED])
+                Site.status.not_in([SiteStatus.COMPLETED, SiteStatus.DELETED])
             )
         return list(self.db.scalars(statement))
 

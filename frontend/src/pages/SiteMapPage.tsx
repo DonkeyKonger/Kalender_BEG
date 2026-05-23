@@ -417,6 +417,12 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
   if (site.status === "paused") {
     return "#d18b00";
   }
+  if (site.status === "planned") {
+    return "#2563eb";
+  }
+  if (site.status === "deleted") {
+    return "#b91c1c";
+  }
   return "#64748b";
 }
 

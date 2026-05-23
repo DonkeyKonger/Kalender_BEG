@@ -18,8 +18,8 @@ from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_sit
 
 
 OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
-CLOSED_STATUSES = {SiteStatus.CLOSED, SiteStatus.ARCHIVED}
-OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED}
+CLOSED_STATUSES = {SiteStatus.COMPLETED, SiteStatus.DELETED}
+OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED, SiteStatus.PLANNED}
 ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
 TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
 VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
@@ -64,36 +64,37 @@ class SiteService:
 
     def remove_plan(self, site_id: int) -> str:
         site = self.get_site(site_id)
-        return "archive" if self._site_has_dependencies(site) else "delete"
+        return "delete"
 
     def remove_site(self, site_id: int, user_id: int) -> tuple[str, Site | None]:
         site = self.get_site(site_id)
-        if self._site_has_dependencies(site):
-            return "archived", self.archive_site(site_id, user_id)
-
+        if site.status == SiteStatus.DELETED:
+            return "deleted", site
         old_value = site_snapshot(site)
+        site.status = SiteStatus.DELETED
+        self._apply_status_metadata(site, SiteStatus.DELETED, user_id)
         self.audit.record(
             user_id=user_id,
             action="site.deleted",
             entity_type="site",
             entity_id=site.id,
             old_value=old_value,
-            new_value=None,
+            new_value=site_snapshot(site),
         )
-        self.db.delete(site)
         self.db.commit()
-        return "deleted", None
+        self.db.refresh(site)
+        return "deleted", site
 
     def archive_site(self, site_id: int, user_id: int) -> Site:
         site = self.get_site(site_id)
-        if site.status == SiteStatus.ARCHIVED:
+        if site.status == SiteStatus.COMPLETED:
             return site
         old_value = site_snapshot(site)
-        site.status = SiteStatus.ARCHIVED
-        self._apply_status_metadata(site, SiteStatus.ARCHIVED, user_id)
+        site.status = SiteStatus.COMPLETED
+        self._apply_status_metadata(site, SiteStatus.COMPLETED, user_id)
         self.audit.record(
             user_id=user_id,
-            action="site.archived",
+            action="site.completed",
             entity_type="site",
             entity_id=site.id,
             old_value=old_value,
@@ -178,14 +179,14 @@ class SiteService:
 
     def close_site(self, site_id: int, user_id: int) -> Site:
         site = self.get_site(site_id)
-        if site.status == SiteStatus.CLOSED:
+        if site.status == SiteStatus.COMPLETED:
             return site
         old_value = site_snapshot(site)
-        site.status = SiteStatus.CLOSED
-        self._apply_status_metadata(site, SiteStatus.CLOSED, user_id)
+        site.status = SiteStatus.COMPLETED
+        self._apply_status_metadata(site, SiteStatus.COMPLETED, user_id)
         self.audit.record(
             user_id=user_id,
-            action="site.closed",
+            action="site.completed",
             entity_type="site",
             entity_id=site.id,
             old_value=old_value,

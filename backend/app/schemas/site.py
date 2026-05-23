@@ -108,9 +108,9 @@ class SiteGeocodeSearchResult(BaseModel):
 
 
 class SiteRemovePlan(BaseModel):
-    action: Literal["delete", "archive"]
+    action: Literal["delete"]
 
 
 class SiteRemoveResponse(BaseModel):
-    action: Literal["deleted", "archived"]
+    action: Literal["deleted"]
     site: SiteRead | None = None

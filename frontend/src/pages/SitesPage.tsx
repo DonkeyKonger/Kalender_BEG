@@ -2,7 +2,6 @@ import { ArchiveRestore, BriefcaseBusiness, ExternalLink, PlusCircle, Save, Tras
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
@@ -37,7 +36,10 @@ type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
 type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
 type SiteColorOption = { name: string; value: string };
-type SiteStatusFilter = SiteStatus | "all";
+type SiteStatusFilter = SiteStatus | "standard";
+
+const STANDARD_SITE_STATUSES: SiteStatus[] = ["active", "paused", "planned"];
+const INACTIVE_SITE_STATUSES: SiteStatus[] = ["completed", "deleted"];
 
 const SITE_COLOR_OPTIONS: SiteColorOption[] = [
   { name: "Blau", value: "#2563EB" },
@@ -62,28 +64,28 @@ export function SitesPage() {
   const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingSite, setIsEditingSite] = useState(false);
-  const [includeClosed, setIncludeClosed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
   const [checkingLocationSiteId, setCheckingLocationSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [removalPlans, setRemovalPlans] = useState<Record<number, "delete" | "archive">>({});
+
+  const includeInactiveSites = INACTIVE_SITE_STATUSES.includes(statusFilter as SiteStatus);
 
   useEffect(() => {
     void loadData();
-  }, [includeClosed]);
+  }, [includeInactiveSites]);
 
   async function loadData() {
     setIsLoading(true);
     setError(null);
     try {
       const [siteData, personData] = await Promise.all([
-        api.sites({ includeClosed }),
+        api.sites({ includeClosed: includeInactiveSites }),
         api.persons({ isActive: null }),
       ]);
       setSites(siteData);
@@ -108,23 +110,18 @@ export function SitesPage() {
     setHasInitializedProjectManagerFilter(true);
   }, [hasInitializedProjectManagerFilter, isLoading, sites, user?.person_id, user?.role]);
 
-  useEffect(() => {
-    if (!includeClosed && (statusFilter === "closed" || statusFilter === "archived")) {
-      setStatusFilter("all");
-    }
-  }, [includeClosed, statusFilter]);
-
   const projectManagerOptions = useMemo(() => projectManagerOptionsFromSites(sites), [sites]);
-  const statusFilterOptions = useMemo(() => siteStatusFilterOptions(includeClosed), [includeClosed]);
+  const statusFilterOptions = useMemo(() => siteStatusFilterOptions(), []);
 
   const filteredSites = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
     const searchFilteredSites = needle
       ? sites.filter((site) => siteSearchText(site).includes(needle))
       : sites;
-    return statusFilter === "all"
-      ? searchFilteredSites
-      : searchFilteredSites.filter((site) => site.status === statusFilter);
+    if (statusFilter === "standard") {
+      return searchFilteredSites.filter((site) => STANDARD_SITE_STATUSES.includes(site.status));
+    }
+    return searchFilteredSites.filter((site) => site.status === statusFilter);
   }, [searchTerm, sites, statusFilter]);
 
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
@@ -136,13 +133,6 @@ export function SitesPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedSite
     ? drafts[selectedSite.id] ?? toEditableSite(selectedSite)
     : null;
-
-  useEffect(() => {
-    if (!selectedSite || !isEditingSite || !canRemove || removalPlans[selectedSite.id]) {
-      return;
-    }
-    void loadSiteRemovalPlan(selectedSite.id);
-  }, [canRemove, isEditingSite, removalPlans, selectedSite]);
 
   async function createSite() {
     const validationError = validateSitePayload(createForm);
@@ -195,21 +185,9 @@ export function SitesPage() {
     }
   }
 
-  async function loadSiteRemovalPlan(siteId: number) {
-    try {
-      const plan = await api.siteRemovalPlan(siteId);
-      setRemovalPlans((current) => ({ ...current, [siteId]: plan.action }));
-    } catch {
-      setRemovalPlans((current) => ({ ...current, [siteId]: "archive" }));
-    }
-  }
-
   async function removeSite(siteId: number) {
-    const plan = removalPlans[siteId] ?? "archive";
     const confirmed = window.confirm(
-      plan === "delete"
-        ? "Dieser Baustellendatensatz hat keine abhaengigen Daten und kann endgueltig geloescht werden. Diese Aktion kann nicht rueckgaengig gemacht werden. Fortfahren?"
-        : "Diese Baustelle wird archiviert und aus der Standardansicht ausgeblendet. Historische Planungen bleiben erhalten. Fortfahren?",
+      "Diese Baustelle wird als geloescht markiert und aus der Standardansicht ausgeblendet. Historische Daten bleiben erhalten. Fortfahren?",
     );
     if (!confirmed) {
       return;
@@ -220,18 +198,10 @@ export function SitesPage() {
     setMessage(null);
     try {
       const result = await api.removeSite(siteId);
-      if (result.action === "deleted") {
-        setSites((current) => current.filter((site) => site.id !== siteId));
-        setDrafts((current) => {
-          const next = { ...current };
-          delete next[siteId];
-          return next;
-        });
-        setMessage("Baustelle geloescht.");
-      } else if (result.site) {
+      if (result.site) {
         replaceSite(result.site);
-        setMessage("Baustelle archiviert.");
       }
+      setMessage("Baustelle geloescht.");
       setDrawer(null);
       setIsEditingSite(false);
     } catch (requestError) {
@@ -248,12 +218,12 @@ export function SitesPage() {
     try {
       const updated = await api.closeSite(siteId);
       replaceSite(updated);
-      if (!includeClosed) {
+      if (!includeInactiveSites) {
         setDrawer(null);
       }
-      setMessage("Baustelle geschlossen.");
+      setMessage("Baustelle abgeschlossen.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht geschlossen werden."));
+      setError(readApiError(requestError, "Baustelle konnte nicht abgeschlossen werden."));
     } finally {
       setSavingSiteId(null);
     }
@@ -327,9 +297,28 @@ export function SitesPage() {
     }
   }
 
+  async function updateSiteStatus(site: Site, nextStatus: SiteStatus) {
+    if (!canEdit || site.status === nextStatus) {
+      return;
+    }
+    const nextDraft = { ...toEditableSite(site), status: nextStatus };
+    setSavingSiteId(site.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updateSite(site.id, normalizeSitePayload(nextDraft));
+      replaceSite(updated);
+      setMessage(`Status aktualisiert: ${siteStatusLabels[updated.status]}.`);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
+    } finally {
+      setSavingSiteId(null);
+    }
+  }
+
   function replaceSite(updated: Site) {
     setSites((current) => {
-      const shouldHide = !includeClosed && ["closed", "archived"].includes(updated.status);
+      const shouldHide = !includeInactiveSites && INACTIVE_SITE_STATUSES.includes(updated.status);
       if (shouldHide) {
         return current.filter((site) => site.id !== updated.id);
       }
@@ -406,14 +395,6 @@ export function SitesPage() {
           />
         </div>
         <div className="site-list-toolbar-right">
-          <label className="site-archive-toggle">
-            <input
-              checked={includeClosed}
-              type="checkbox"
-              onChange={(event) => setIncludeClosed(event.target.checked)}
-            />
-            <span>Archiv</span>
-          </label>
           {projectManagerOptions.length > 0 && (
             <div className="matrix-pm-filter site-pm-filter" aria-label="Projektleiter filtern">
               <button
@@ -462,14 +443,14 @@ export function SitesPage() {
                 <section className="site-group-section" key={group.key}>
                   {group.showHeading && <h2>{group.label}</h2>}
                   <div className="entity-card-list">
-                    {group.sites.map((site) => renderSiteCard(site, openSiteDrawer))}
+                    {group.sites.map((site) => renderSiteCard(site, openSiteDrawer, canEdit, savingSiteId === site.id, updateSiteStatus))}
                   </div>
                 </section>
               ))}
             </div>
           ) : (
             <div className="entity-card-list" role="list">
-              {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, openSiteDrawer))}
+              {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, openSiteDrawer, canEdit, savingSiteId === site.id, updateSiteStatus))}
             </div>
           )}
           {!visibleSiteCount && (
@@ -521,7 +502,7 @@ export function SitesPage() {
                   onClick={() => void removeSite(selectedSite.id)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{removalPlans[selectedSite.id] === "delete" ? "Baustelle loeschen" : "Baustelle archivieren"}</span>
+                  <span>Baustelle loeschen</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingSiteId === selectedSite.id} type="button" onClick={cancelSiteEdit}>
@@ -542,7 +523,7 @@ export function SitesPage() {
                 <Save aria-hidden="true" size={16} />
                 <span>Speichern</span>
               </button>
-              {selectedSite.status === "closed" || selectedSite.status === "archived" ? (
+              {INACTIVE_SITE_STATUSES.includes(selectedSite.status) ? (
                 <button
                   className="icon-button secondary"
                   disabled={savingSiteId === selectedSite.id}
@@ -559,7 +540,7 @@ export function SitesPage() {
                   type="button"
                   onClick={() => void closeSite(selectedSite.id)}
                 >
-                  <span>Schliessen</span>
+                  <span>Abschliessen</span>
                 </button>
               )}
             </>
@@ -1059,35 +1040,64 @@ function SiteColorSelect({
   );
 }
 
-function renderSiteCard(site: Site, openSiteDrawer: (siteId: number) => void) {
+function renderSiteCard(
+  site: Site,
+  openSiteDrawer: (siteId: number) => void,
+  canEdit: boolean,
+  isSaving: boolean,
+  onStatusChange: (site: Site, status: SiteStatus) => void,
+) {
+  const classes = ["entity-card", "site-card", INACTIVE_SITE_STATUSES.includes(site.status) ? "is-inactive" : ""].filter(Boolean).join(" ");
   return (
-    <EntityCard
-      key={site.id}
-      title={site.name}
-      subtitle={[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}
-      meta={siteCardMeta(site)}
-      color={site.color ?? "#94a3b8"}
-      icon={<BriefcaseBusiness aria-hidden="true" size={17} />}
-      status={<SiteStatusBadge status={site.status} />}
-      isInactive={site.status === "closed" || site.status === "archived"}
-      onClick={() => openSiteDrawer(site.id)}
-    />
+    <article className={classes} key={site.id}>
+      <button className="site-card-main" type="button" onClick={() => openSiteDrawer(site.id)}>
+        <span className="entity-card-color" style={{ backgroundColor: site.color ?? "#94a3b8" }} aria-hidden="true" />
+        <span className="entity-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
+        <span className="entity-card-body">
+          <span className="entity-card-title">{site.name}</span>
+          <span className="entity-card-subtitle">{[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</span>
+          <span className="site-card-meta-grid">
+            <span><strong>PL</strong><span>{siteProjectManagerLabel(site)}</span></span>
+            <span><strong>Kunde</strong><span>{site.customer || "—"}</span></span>
+          </span>
+        </span>
+      </button>
+      <span className="entity-card-status site-card-status-control" onClick={(event) => event.stopPropagation()}>
+        {canEdit ? (
+          <select
+            aria-label={`Status fuer ${site.name} aendern`}
+            className={`site-card-status-select status-badge-${site.status}`}
+            disabled={isSaving}
+            value={site.status}
+            onChange={(event) => onStatusChange(site, event.target.value as SiteStatus)}
+          >
+            {siteStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <SiteStatusBadge status={site.status} />
+        )}
+      </span>
+    </article>
   );
 }
 
-function siteStatusFilterOptions(includeClosed: boolean): Array<{ value: SiteStatusFilter; label: string }> {
-  const options: Array<{ value: SiteStatusFilter; label: string }> = [
-    { value: "all", label: "Alle" },
-    { value: "active", label: siteStatusLabels.active },
-    { value: "paused", label: siteStatusLabels.paused },
+const siteStatusOptions: Array<{ value: SiteStatus; label: string }> = [
+  { value: "active", label: siteStatusLabels.active },
+  { value: "paused", label: siteStatusLabels.paused },
+  { value: "planned", label: siteStatusLabels.planned },
+  { value: "completed", label: siteStatusLabels.completed },
+  { value: "deleted", label: siteStatusLabels.deleted },
+];
+
+function siteStatusFilterOptions(): Array<{ value: SiteStatusFilter; label: string }> {
+  return [
+    { value: "standard", label: "Offen" },
+    ...siteStatusOptions,
   ];
-  if (includeClosed) {
-    options.push(
-      { value: "closed", label: siteStatusLabels.closed },
-      { value: "archived", label: siteStatusLabels.archived },
-    );
-  }
-  return options;
 }
 
 function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
@@ -1143,11 +1153,8 @@ function groupSites(sites: Site[], projectManagerFilter: string): SiteGroup[] {
   return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, "de"));
 }
 
-function siteCardMeta(site: Site): string[] {
-  return [
-    site.project_manager ? `PL: ${site.project_manager.short_code || site.project_manager.display_name}` : "PL: offen",
-    site.customer ? `Kunde: ${site.customer}` : "",
-  ].filter(Boolean);
+function siteProjectManagerLabel(site: Site): string {
+  return site.project_manager?.short_code || site.project_manager?.display_name || "offen";
 }
 
 function siteSearchText(site: Site): string {

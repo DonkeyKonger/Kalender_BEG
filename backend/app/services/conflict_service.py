@@ -16,7 +16,7 @@ ConflictSeverity = Literal["info", "warning", "hard"]
 
 HARD_ABSENCE_TYPES = {AbsenceType.VACATION, AbsenceType.SICK}
 WARNING_ABSENCE_TYPES = {AbsenceType.SCHOOL, AbsenceType.FREE, AbsenceType.OTHER}
-BLOCKED_SITE_STATUSES = {SiteStatus.CLOSED, SiteStatus.ARCHIVED}
+BLOCKED_SITE_STATUSES = {SiteStatus.COMPLETED, SiteStatus.DELETED}
 
 
 @dataclass(frozen=True)
@@ -89,8 +89,8 @@ class ConflictService:
             blockers.append(
                 ConflictMessage(
                     "hard",
-                    "site_closed_or_archived",
-                    "Geschlossene oder archivierte Baustellen duerfen nicht beplant werden.",
+                    "site_completed_or_deleted",
+                    "Abgeschlossene oder geloeschte Baustellen duerfen nicht beplant werden.",
                 )
             )
 

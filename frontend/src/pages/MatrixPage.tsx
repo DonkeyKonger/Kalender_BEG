@@ -1111,7 +1111,7 @@ export function MatrixPage() {
       const updated = await api.updateSite(siteId, { status });
       setError(null);
       updateMatrixSiteStatus(updated.id, updated.status);
-      if (updated.status === "closed" || updated.status === "archived") {
+      if (updated.status === "completed" || updated.status === "deleted") {
         void loadMatrix();
       }
     } catch (requestError) {
@@ -2219,7 +2219,7 @@ const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 538;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
-const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "closed", "archived"];
+const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "planned", "completed", "deleted"];
 type ProjectManagerOption = {
   id: number;
   name: string;
@@ -2883,8 +2883,8 @@ function humanConflictMessage(item: Record<string, unknown>): string {
   if (item.code === "person_inactive") {
     return "Diese Person ist deaktiviert und darf nicht eingeplant werden.";
   }
-  if (item.code === "site_closed_or_archived") {
-    return "Diese Baustelle ist geschlossen oder archiviert.";
+  if (item.code === "site_completed_or_deleted") {
+    return "Diese Baustelle ist abgeschlossen oder geloescht.";
   }
   return String(item.message);
 }

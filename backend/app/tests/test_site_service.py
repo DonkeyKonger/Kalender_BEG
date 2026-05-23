@@ -48,7 +48,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
         location_status=SiteLocationStatus.GEOCODED,
         customer="Badener Elektro",
         project_manager_person_id=3,
-        status=SiteStatus.CLOSED,
+        status=SiteStatus.COMPLETED,
         info=None,
         color="#1d5c99",
         closed_at=closed_at,
@@ -57,7 +57,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
 
     snapshot = site_snapshot(site)
 
-    assert snapshot["status"] == "closed"
+    assert snapshot["status"] == "completed"
     assert snapshot["location_status"] == "geocoded"
     assert snapshot["geofence_radius_m"] == 5000
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"

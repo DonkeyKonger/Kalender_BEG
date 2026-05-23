@@ -98,10 +98,10 @@ export type SiteGeocodeSearchResult = {
 };
 
 export type SiteRemovePlan = {
-  action: "delete" | "archive";
+  action: "delete";
 };
 
 export type SiteRemoveResponse = {
-  action: "deleted" | "archived";
+  action: "deleted";
   site: Site | null;
 };

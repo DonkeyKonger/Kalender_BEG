@@ -548,11 +548,11 @@ function getDashboardConflicts(rows: MatrixRow[], start: string, end: string): D
         }
       });
 
-      if ((row.site.status === "closed" || row.site.status === "archived") && cell.assignments.length > 0) {
-        const key = "closed:" + row.site.id + ":" + cell.date;
+      if ((row.site.status === "completed" || row.site.status === "deleted") && cell.assignments.length > 0) {
+        const key = "inactive:" + row.site.id + ":" + cell.date;
         conflicts.set(key, {
           key,
-          title: "Geschlossene Baustelle belegt",
+          title: "Abgeschlossene Baustelle belegt",
           detail: row.site.name,
           severity: "hard",
           date: cell.date,

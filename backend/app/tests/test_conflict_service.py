@@ -151,15 +151,15 @@ def test_school_returns_warning():
     assert check.warnings[0].code == "absence_school"
 
 
-def test_closed_site_is_blocked():
-    check = service_with(person=person(), site=site(SiteStatus.CLOSED)).check_assignment(
+def test_completed_site_is_blocked():
+    check = service_with(person=person(), site=site(SiteStatus.COMPLETED)).check_assignment(
         person_id=1,
         site_id=1,
         start_date=date(2027, 1, 4),
         end_date=date(2027, 1, 4),
     )
 
-    assert check.blockers[0].code == "site_closed_or_archived"
+    assert check.blockers[0].code == "site_completed_or_deleted"
 
 
 def test_inactive_person_is_blocked():

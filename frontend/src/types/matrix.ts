@@ -1,6 +1,6 @@
 export type AssignmentType = "regular" | "support" | "emergency";
 export type AbsenceType = "vacation" | "sick" | "school" | "free" | "other";
-export type SiteStatus = "active" | "paused" | "closed" | "archived";
+export type SiteStatus = "active" | "paused" | "planned" | "completed" | "deleted";
 export type MatrixCellMark = "orange" | "red" | "blue";
 
 export type MatrixDay = {

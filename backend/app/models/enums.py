@@ -21,8 +21,9 @@ class PersonType(StrEnum):
 class SiteStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
-    CLOSED = "closed"
-    ARCHIVED = "archived"
+    PLANNED = "planned"
+    COMPLETED = "completed"
+    DELETED = "deleted"
 
 
 class SiteLocationStatus(StrEnum):

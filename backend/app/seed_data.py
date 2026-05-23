@@ -133,7 +133,7 @@ def get_or_create_site(
         status=status,
         info=info,
         color=color,
-        closed_at=datetime.now(UTC) if status in {SiteStatus.CLOSED, SiteStatus.ARCHIVED} else None,
+        closed_at=datetime.now(UTC) if status in {SiteStatus.COMPLETED, SiteStatus.DELETED} else None,
         closed_by_user_id=closed_by_user_id,
     )
     db.add(site)
@@ -465,8 +465,8 @@ def seed_demo_data(db: Session) -> None:
         address="Deisterstrasse 45, 30449 Hannover",
         customer="Hausverwaltung Lindenhof",
         project_manager=pm_lena,
-        status=SiteStatus.CLOSED,
-        info="Geschlossen, bleibt fuer Archivsuche erhalten.",
+        status=SiteStatus.COMPLETED,
+        info="Abgeschlossen, bleibt fuer historische Suche erhalten.",
         color="#6b7280",
         closed_by_user_id=admin.id,
     )
@@ -644,7 +644,7 @@ def seed_demo_data(db: Session) -> None:
         action="assignment.rejected.seed.closed_site",
         entity_type="assignment",
         new_value_json={
-            "reason": "Geschlossene Baustellen duerfen nicht normal beplant werden.",
+            "reason": "Abgeschlossene Baustellen duerfen nicht normal beplant werden.",
             "site_number": closed_site.site_number,
             "person_short_code": monteurs["noah"].short_code,
             "date": next_monday.isoformat(),
