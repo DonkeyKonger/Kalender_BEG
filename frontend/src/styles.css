@@ -3190,12 +3190,12 @@ button.person-chip:focus-visible {
 
 .site-form-grid {
   display: grid;
-  gap: 14px;
+  gap: 11px;
 }
 
 .site-form-grid label {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   color: #42526a;
   font-size: 0.78rem;
   font-weight: 800;
@@ -3209,7 +3209,7 @@ button.person-chip:focus-visible {
 .site-form-grid select,
 .site-form-grid textarea {
   width: 100%;
-  min-height: 42px;
+  min-height: 34px;
   border: 1px solid #d7e1ee;
   border-radius: 8px;
   background: #fbfdff;
@@ -3225,13 +3225,87 @@ button.person-chip:focus-visible {
   color: #64748b;
 }
 
-.site-form-grid input[type="color"] {
-  min-height: 42px;
-  padding: 5px;
+.site-color-select-field {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.site-color-select {
+  position: relative;
+}
+
+.site-color-select-trigger,
+.site-color-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #d7e1ee;
+  border-radius: 7px;
+  background: #fbfdff;
+  color: #111827;
+  padding: 7px 9px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.site-color-select-trigger:disabled {
+  background: #f3f6fa;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.site-color-select-trigger:focus-visible,
+.site-color-menu button:focus-visible {
+  border-color: #7aa2d2;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.site-color-swatch {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(15 23 42 / 16%);
+  border-radius: 999px;
+}
+
+.site-color-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #d7e1ee;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 12%);
+  padding: 4px;
+}
+
+.site-color-menu button {
+  min-height: 30px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.site-color-menu button:hover,
+.site-color-menu button[aria-selected="true"] {
+  background: #eef4fb;
 }
 
 .site-form-grid textarea {
-  min-height: 86px;
+  min-height: 68px;
   line-height: 1.45;
   resize: vertical;
 }
@@ -3260,18 +3334,18 @@ button.person-chip:focus-visible {
 
 .site-location-section {
   display: grid;
-  gap: 14px;
+  gap: 11px;
   border: 1px solid #dce6f2;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #f8fafc;
-  padding: 16px;
+  padding: 13px;
   box-shadow: 0 10px 24px rgb(15 23 42 / 5%);
 }
 
 .site-location-section h3 {
   margin: 0 0 4px;
   color: #172033;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 850;
 }
 

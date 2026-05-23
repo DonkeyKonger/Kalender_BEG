@@ -36,6 +36,20 @@ type EditableSite = SiteCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
 type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
+type SiteColorOption = { name: string; value: string };
+
+const SITE_COLOR_OPTIONS: SiteColorOption[] = [
+  { name: "Blau", value: "#2563EB" },
+  { name: "Dunkelblau", value: "#1E40AF" },
+  { name: "Gruen", value: "#16A34A" },
+  { name: "Rot", value: "#DC2626" },
+  { name: "Orange", value: "#F97316" },
+  { name: "Ocker", value: "#D97706" },
+  { name: "Tuerkis", value: "#0891B2" },
+  { name: "Violett", value: "#7C3AED" },
+  { name: "Magenta", value: "#DB2777" },
+  { name: "Grau", value: "#64748B" },
+];
 
 export function SitesPage() {
   const { user } = useAuth();
@@ -460,7 +474,7 @@ export function SitesPage() {
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedSite && selectedDraft)}
         title={selectedSite ? isEditingSite ? "Baustelle bearbeiten" : "Baustelle" : "Baustelle"}
-        subtitle={selectedSite ? [selectedSite.site_number, selectedSite.location].filter(Boolean).join(" · ") : undefined}
+        subtitle={selectedSite ? [selectedSite.site_number, selectedSite.name].filter(Boolean).join(" · ") : undefined}
         onClose={closeDrawer}
         actions={selectedSite && canEdit && !isEditingSite ? (
           <button className="icon-button secondary" type="button" onClick={() => setIsEditingSite(true)}>
@@ -764,15 +778,11 @@ function SiteFields({
           ))}
         </select>
       </label>
-      <label>
-        <span>Farbe</span>
-        <input
-          disabled={disabled}
-          type="color"
-          value={draft.color ?? "#94a3b8"}
-          onChange={(event) => onChange({ color: event.target.value })}
-        />
-      </label>
+      <SiteColorSelect
+        disabled={disabled}
+        value={draft.color ?? "#64748B"}
+        onChange={(color) => onChange({ color })}
+      />
       <section className="site-location-section">
         <div>
           <h3>Standort / GPS</h3>
@@ -973,6 +983,63 @@ function parseSiteNumber(value: string | null): number | null {
   }
   const matches = value.match(/\d+/g);
   return matches?.length ? Number(matches[matches.length - 1]) : null;
+}
+
+function SiteColorSelect({
+  disabled,
+  value,
+  onChange,
+}: {
+  disabled?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = SITE_COLOR_OPTIONS.find((option) => option.value.toLowerCase() === value.toLowerCase());
+  const label = selectedOption?.name ?? "Aktuelle Farbe";
+
+  return (
+    <div className="site-color-select-field">
+      <span>Farbe</span>
+      <div className="site-color-select">
+        <button
+          aria-expanded={isOpen}
+          className="site-color-select-trigger"
+          disabled={disabled}
+          type="button"
+          onBlur={(event) => {
+            if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) {
+              setIsOpen(false);
+            }
+          }}
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          <span className="site-color-swatch" style={{ backgroundColor: value }} />
+          <span>{label}</span>
+        </button>
+        {isOpen && !disabled && (
+          <div className="site-color-menu" role="listbox">
+            {SITE_COLOR_OPTIONS.map((option) => (
+              <button
+                aria-selected={option.value.toLowerCase() === value.toLowerCase()}
+                key={option.value}
+                role="option"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+              >
+                <span className="site-color-swatch" style={{ backgroundColor: option.value }} />
+                <span>{option.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function renderSiteCard(site: Site, openSiteDrawer: (siteId: number) => void) {
