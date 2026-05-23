@@ -3389,6 +3389,19 @@ button.person-chip:focus-visible {
     align-items: end;
   }
 
+  .site-field-name,
+  .site-field-location,
+  .site-field-number,
+  .site-field-customer,
+  .site-field-manager {
+    grid-column: span 2;
+  }
+
+  .site-field-status,
+  .site-field-color {
+    grid-column: span 1;
+  }
+
   .site-location-section {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: end;

@@ -592,7 +592,6 @@ function SiteReadView({ site }: { site: Site }) {
         <div className={`detail-address-card ${addressText ? "has-address" : "is-empty"}`}>
           <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
           {addressText ? <strong>{addressText}</strong> : null}
-          <small>Geofence-Radius: {site.geofence_radius_m.toLocaleString("de-DE")} m</small>
         </div>
       </section>
 
@@ -721,11 +720,11 @@ function SiteFields({
 
   return (
     <div className="site-form-grid">
-      <label>
+      <label className="site-field-name">
         <span>Baustelle</span>
         <input disabled={disabled} value={draft.name} onChange={(event) => onChange({ name: event.target.value })} />
       </label>
-      <label>
+      <label className="site-field-number">
         <span>Nummer</span>
         <input
           disabled={disabled}
@@ -733,7 +732,7 @@ function SiteFields({
           onChange={(event) => onChange({ site_number: event.target.value || null })}
         />
       </label>
-      <label>
+      <label className="site-field-location">
         <span>Ort</span>
         <input
           disabled={disabled}
@@ -741,7 +740,7 @@ function SiteFields({
           onChange={(event) => onChange({ location: event.target.value || null })}
         />
       </label>
-      <label>
+      <label className="site-field-customer">
         <span>Kunde</span>
         <input
           disabled={disabled}
@@ -749,7 +748,7 @@ function SiteFields({
           onChange={(event) => onChange({ customer: event.target.value || null })}
         />
       </label>
-      <label>
+      <label className="site-field-manager">
         <span>Projektleiter</span>
         <select
           disabled={disabled}
@@ -764,7 +763,7 @@ function SiteFields({
           ))}
         </select>
       </label>
-      <label>
+      <label className="site-field-status">
         <span>Status</span>
         <select
           disabled={disabled}
@@ -854,17 +853,6 @@ function SiteFields({
             disabled={disabled}
             value={draft.address_extra ?? ""}
             onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
-          />
-        </label>
-        <label>
-          <span>Geofence-Radius</span>
-          <input
-            disabled={disabled}
-            inputMode="numeric"
-            min={1}
-            type="number"
-            value={draft.geofence_radius_m}
-            onChange={(event) => onChange({ geofence_radius_m: parsePositiveInt(event.target.value) ?? 5000 })}
           />
         </label>
         {draft.location_status !== "geocoded" && (
@@ -999,7 +987,7 @@ function SiteColorSelect({
   const label = selectedOption?.name ?? "Aktuelle Farbe";
 
   return (
-    <div className="site-color-select-field">
+    <div className="site-color-select-field site-field-color">
       <span>Farbe</span>
       <div className="site-color-select">
         <button
