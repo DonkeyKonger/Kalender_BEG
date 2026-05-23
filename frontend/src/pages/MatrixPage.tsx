@@ -55,6 +55,8 @@ type AssignmentDragState = {
   sourceSiteId: number;
   sourceStartDate: string;
   sourceEndDate: string;
+  segmentStartDate: string;
+  segmentEndDate: string;
   durationDays: number;
   mode: AssignmentDragMode;
   pointerOffsetX: number;
@@ -834,6 +836,8 @@ export function MatrixPage() {
     row: MatrixRow,
     cell: MatrixCell,
     assignment: MatrixAssignment,
+    segmentStartDate: string,
+    segmentEndDate: string,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) {
     if (!isEditable || event.button !== 0) {
@@ -848,9 +852,11 @@ export function MatrixPage() {
     const nextDrag: AssignmentDragState = {
       assignment,
       sourceSiteId: row.site.id,
-      sourceStartDate: assignment.start_date,
-      sourceEndDate: assignment.end_date,
-      durationDays: inclusiveDateDistance(assignment.start_date, assignment.end_date),
+      sourceStartDate: segmentStartDate,
+      sourceEndDate: segmentEndDate,
+      segmentStartDate,
+      segmentEndDate,
+      durationDays: inclusiveDateDistance(segmentStartDate, segmentEndDate),
       mode: event.shiftKey ? "copy" : "move",
       pointerOffsetX: event.clientX - rect.left,
       pointerOffsetY: event.clientY - rect.top,
@@ -928,11 +934,18 @@ export function MatrixPage() {
           assignment_type: drag.assignment.assignment_type,
           note: drag.assignment.note,
         });
-      } else {
+      } else if (isFullAssignmentDrag(drag)) {
         await api.updateAssignment(drag.assignment.id, {
           site_id: drag.target.siteId,
           start_date: targetStartDate,
           end_date: targetEndDate,
+        });
+      } else {
+        await api.moveAssignmentSegment(drag.assignment.id, {
+          segment_start_date: drag.segmentStartDate,
+          segment_end_date: drag.segmentEndDate,
+          target_site_id: drag.target.siteId,
+          target_start_date: targetStartDate,
         });
       }
       setError(null);
@@ -1618,7 +1631,7 @@ type MatrixTableProps = {
   onInfoSave: (siteId: number) => void;
   onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
-  onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (row: MatrixRow, assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
   onCellMouseDown: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
@@ -1941,7 +1954,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               assignmentResize={props.assignmentResize}
               typingPreviewText={typingPreviewTextForCell(props.typingPreview, row.site.id, cell.date)}
               onDeleteAssignment={(assignment) => props.onDeleteAssignment(row, cell, assignment)}
-              onStartAssignmentDrag={(assignment, event) => props.onStartAssignmentDrag(row, cell, assignment, event)}
+              onStartAssignmentDrag={(assignment, segmentStartDate, segmentEndDate, event) => props.onStartAssignmentDrag(row, cell, assignment, segmentStartDate, segmentEndDate, event)}
               onStartAssignmentResize={(assignment, edge, event) => props.onStartAssignmentResize(row, assignment, edge, event)}
             />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
@@ -2095,7 +2108,7 @@ function CellDisplay({
   rowCells: MatrixCell[];
   typingPreviewText?: string;
   onDeleteAssignment: (assignment: MatrixAssignment) => void;
-  onStartAssignmentDrag: (assignment: MatrixAssignment, event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onStartAssignmentDrag: (assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
 }) {
   const visibleAssignmentCount = cell.assignments.filter(
@@ -2113,6 +2126,8 @@ function CellDisplay({
           return null;
         }
         const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.id);
+        const segmentStartDate = cell.date;
+        const segmentEndDate = rowCells[cellIndex + span - 1]?.date ?? cell.date;
         const absenceConflict = assignmentAbsenceConflict(cell, assignment);
         const isResizing = assignmentResize?.assignment.id === assignment.id;
         const canResizeStart = isEditable && isAssignmentResizeEdgeVisible(rowCells, cellIndex, assignment, span, "start");
@@ -2129,7 +2144,7 @@ function CellDisplay({
             title={assignmentChipTitle(assignment, absenceConflict, isEditable)}
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => onStartAssignmentDrag(assignment, event)}
+            onPointerDown={(event) => onStartAssignmentDrag(assignment, segmentStartDate, segmentEndDate, event)}
             onContextMenu={(event) => {
               if (!isEditable) {
                 return;
@@ -2565,6 +2580,10 @@ function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: Matri
     .slice(0, assignments.findIndex((assignment) => assignment.id === assignmentId))
     .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.id) > 0)
     .length;
+}
+
+function isFullAssignmentDrag(drag: AssignmentDragState): boolean {
+  return drag.segmentStartDate === drag.assignment.start_date && drag.segmentEndDate === drag.assignment.end_date;
 }
 
 function resizeStateForTarget(resize: AssignmentResizeState, target: AssignmentDragTarget | null): AssignmentResizeState {

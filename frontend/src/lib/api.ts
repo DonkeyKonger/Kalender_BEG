@@ -24,6 +24,13 @@ type AssignmentPayload = {
   note?: string | null;
 };
 
+type AssignmentSegmentMovePayload = {
+  segment_start_date: string;
+  segment_end_date: string;
+  target_site_id: number;
+  target_start_date: string;
+};
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -294,6 +301,13 @@ export const api = {
   async updateAssignment(assignmentId: number, payload: AssignmentPayload): Promise<AssignmentMutationApiResponse> {
     return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async moveAssignmentSegment(assignmentId: number, payload: AssignmentSegmentMovePayload): Promise<AssignmentMutationApiResponse> {
+    return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}/move-segment`, {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   },

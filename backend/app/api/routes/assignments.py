@@ -11,6 +11,7 @@ from app.schemas.assignment import (
     AssignmentCreate,
     AssignmentMutationResponse,
     AssignmentRead,
+    AssignmentSegmentMove,
     AssignmentUpdate,
     ConflictMessageRead,
 )
@@ -58,6 +59,17 @@ def update_assignment(
     db: Session = Depends(get_db),
 ) -> AssignmentMutationResponse:
     result = AssignmentService(db).update_assignment(assignment_id, payload, current_user.id)
+    return _mutation_response(result)
+
+
+@router.post("/{assignment_id}/move-segment", response_model=AssignmentMutationResponse)
+def move_assignment_segment(
+    assignment_id: int,
+    payload: AssignmentSegmentMove,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> AssignmentMutationResponse:
+    result = AssignmentService(db).move_assignment_segment(assignment_id, payload, current_user.id)
     return _mutation_response(result)
 
 

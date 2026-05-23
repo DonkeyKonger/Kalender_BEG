@@ -40,6 +40,19 @@ class AssignmentUpdate(BaseModel):
         return self
 
 
+class AssignmentSegmentMove(BaseModel):
+    segment_start_date: Date
+    segment_end_date: Date
+    target_site_id: int
+    target_start_date: Date
+
+    @model_validator(mode="after")
+    def validate_segment_range(self):
+        if self.segment_end_date < self.segment_start_date:
+            raise ValueError("segment_end_date darf nicht vor segment_start_date liegen.")
+        return self
+
+
 class ConflictMessageRead(BaseModel):
     severity: str
     code: str
