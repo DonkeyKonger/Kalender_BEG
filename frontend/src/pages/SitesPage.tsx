@@ -857,14 +857,16 @@ function SiteFields({
             onChange={(event) => onChange({ geofence_radius_m: parsePositiveInt(event.target.value) ?? 5000 })}
           />
         </label>
-        <button
-          className="icon-button secondary"
-          disabled={disabled || !onCheckLocation || isCheckingLocation || draft.location_status === "geocoded"}
-          type="button"
-          onClick={onCheckLocation}
-        >
-          {draft.location_status === "geocoded" ? "Standort geprueft" : isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
-        </button>
+        {draft.location_status !== "geocoded" && (
+          <button
+            className="icon-button secondary"
+            disabled={disabled || !onCheckLocation || isCheckingLocation}
+            type="button"
+            onClick={onCheckLocation}
+          >
+            {isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
+          </button>
+        )}
       </section>
 
       <label className="site-info-field">
