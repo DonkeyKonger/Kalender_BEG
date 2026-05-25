@@ -87,14 +87,12 @@ async function requestBlob(path: string): Promise<Blob> {
       ? await response.json()
       : await response.text();
     const detail = payload.detail ?? payload;
-    if (import.meta.env.DEV) {
-      console.error("API blob request failed", {
-        method: "GET",
-        path,
-        status: response.status,
-        responseBody: payload,
-      });
-    }
+    console.error("API blob request failed", {
+      method: "GET",
+      url: `${API_BASE_URL}${path}`,
+      status: response.status,
+      responseBody: payload,
+    });
     throw new ApiError(response.status, detail);
   }
   return response.blob();
@@ -127,15 +125,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const detail = payload.detail ?? payload;
-    if (import.meta.env.DEV) {
-      console.error("API request failed", {
-        method: options.method ?? "GET",
-        path,
-        requestBody: options.body,
-        status: response.status,
-        responseBody: payload,
-      });
-    }
+    console.error("API request failed", {
+      method: options.method ?? "GET",
+      url: `${API_BASE_URL}${path}`,
+      requestBody: options.body,
+      status: response.status,
+      responseBody: payload,
+    });
     throw new ApiError(response.status, detail);
   }
 
