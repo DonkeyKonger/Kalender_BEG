@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { ProjectFolder, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -277,6 +277,10 @@ export const api = {
 
   async siteRemovalPlan(siteId: number): Promise<SiteRemovePlan> {
     return request<SiteRemovePlan>(`/sites/${siteId}/removal-plan`);
+  },
+
+  async projectFolders(siteId: number): Promise<ProjectFolder[]> {
+    return request<ProjectFolder[]>(`/sites/${siteId}/project-folders`);
   },
 
   async removeSite(siteId: number): Promise<SiteRemoveResponse> {

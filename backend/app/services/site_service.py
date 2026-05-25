@@ -15,6 +15,7 @@ from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdate
 from app.services.audit_service import AuditService
 from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address, has_valid_coordinates
+from app.services.project_folder_service import ProjectFolderService
 
 
 OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
@@ -139,6 +140,7 @@ class SiteService:
             old_value=None,
             new_value=site_snapshot(site),
         )
+        ProjectFolderService(self.db).create_default_project_folders_for_site(site.id)
         self.db.commit()
         self.db.refresh(site)
         return site

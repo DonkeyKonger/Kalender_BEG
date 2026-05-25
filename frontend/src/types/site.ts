@@ -105,3 +105,18 @@ export type SiteRemoveResponse = {
   action: "deleted";
   site: Site | null;
 };
+
+export type ProjectFolder = {
+  id: number;
+  site_id: number;
+  sort_order: number;
+  name: string;
+  folder_key: string;
+  is_active: boolean;
+  external_provider: string | null;
+  external_drive_id: string | null;
+  external_item_id: string | null;
+  external_web_url: string | null;
+  created_at: string;
+  updated_at: string;
+};

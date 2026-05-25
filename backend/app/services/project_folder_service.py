@@ -1,0 +1,71 @@
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.enums import UserRole
+from app.models.project_folder import ProjectFolder
+from app.models.site import Site
+from app.models.user import User
+from app.services.project_folder_template import PROJECT_FOLDER_TEMPLATE, PROJECT_FOLDER_TEMPLATE_BY_KEY
+
+FULL_ACCESS_ROLES = {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}
+
+
+class ProjectFolderService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def create_default_project_folders_for_site(self, site_id: int) -> list[ProjectFolder]:
+        self._ensure_site_exists(site_id)
+        existing = self.db.scalars(
+            select(ProjectFolder).where(ProjectFolder.site_id == site_id)
+        ).all()
+        existing_keys = {folder.folder_key for folder in existing}
+        created = []
+        for template in PROJECT_FOLDER_TEMPLATE:
+            if template["folder_key"] in existing_keys:
+                continue
+            folder = ProjectFolder(
+                site_id=site_id,
+                sort_order=template["sort_order"],
+                name=template["name"],
+                folder_key=template["folder_key"],
+                is_active=True,
+            )
+            self.db.add(folder)
+            created.append(folder)
+        if created:
+            self.db.flush()
+        return [*existing, *created]
+
+    def get_visible_project_folders_for_site(self, site_id: int, current_user: User) -> list[ProjectFolder]:
+        self.create_default_project_folders_for_site(site_id)
+        folders = self.db.scalars(
+            select(ProjectFolder)
+            .where(ProjectFolder.site_id == site_id, ProjectFolder.is_active.is_(True))
+            .order_by(ProjectFolder.sort_order, ProjectFolder.id)
+        ).all()
+        return [folder for folder in folders if user_can_access_project_folder(current_user, folder)]
+
+    def get_project_folder(self, folder_id: int, current_user: User) -> ProjectFolder:
+        folder = self.db.get(ProjectFolder, folder_id)
+        if folder is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Projektordner nicht gefunden.")
+        if not user_can_access_project_folder(current_user, folder):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diesen Projektordner.")
+        return folder
+
+    def _ensure_site_exists(self, site_id: int) -> None:
+        if self.db.get(Site, site_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
+
+
+def user_can_access_project_folder(user: User, project_folder: ProjectFolder) -> bool:
+    if not project_folder.is_active:
+        return False
+    if user.role in FULL_ACCESS_ROLES:
+        return True
+    template = PROJECT_FOLDER_TEMPLATE_BY_KEY.get(project_folder.folder_key)
+    if template is None:
+        return False
+    return user.role.value in template["visible_for_roles"]

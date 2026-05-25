@@ -5,6 +5,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.project_folder import ProjectFolderRead
 from app.schemas.site import (
     SiteCreate,
     SiteGeocodeSearchResult,
@@ -15,11 +16,13 @@ from app.schemas.site import (
     SiteUpdate,
 )
 from app.services.geo_service import search_geocoding_candidates
+from app.services.project_folder_service import ProjectFolderService
 from app.services.site_service import SiteService
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_FOLDER_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 
@@ -72,6 +75,16 @@ def get_site(
 ) -> SiteRead:
     site = SiteService(db).get_site(site_id)
     return SiteRead.model_validate(site)
+
+
+@router.get("/{site_id}/project-folders", response_model=list[ProjectFolderRead])
+def list_project_folders(
+    site_id: int,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> list[ProjectFolderRead]:
+    folders = ProjectFolderService(db).get_visible_project_folders_for_site(site_id, current_user)
+    return [ProjectFolderRead.model_validate(folder) for folder in folders]
 
 
 @router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)
