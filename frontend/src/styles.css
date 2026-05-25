@@ -1053,27 +1053,27 @@ button.entity-card:focus-visible,
 
 .site-card-meta-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
   color: #65738a;
   font-size: 0.82rem;
   line-height: 1.35;
 }
 
 .site-card-meta-grid > span {
-  display: grid;
-  gap: 1px;
+  display: flex;
+  gap: 4px;
   min-width: 0;
 }
 
 .site-card-meta-grid strong {
+  flex: 0 0 auto;
   color: #94a3b8;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .site-card-meta-grid span span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

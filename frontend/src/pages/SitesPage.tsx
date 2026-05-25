@@ -1057,8 +1057,8 @@ function renderSiteCard(
           <span className="entity-card-title">{site.name}</span>
           <span className="entity-card-subtitle">{[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</span>
           <span className="site-card-meta-grid">
-            <span><strong>PL</strong><span>{siteProjectManagerLabel(site)}</span></span>
-            <span><strong>Kunde</strong><span>{site.customer || "—"}</span></span>
+            <span><strong>PL:</strong><span>{siteProjectManagerLabel(site)}</span></span>
+            <span><strong>Kunde:</strong><span>{site.customer || "—"}</span></span>
           </span>
         </span>
       </button>
