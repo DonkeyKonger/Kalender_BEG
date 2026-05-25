@@ -36,10 +36,40 @@ export class ApiError extends Error {
   detail: unknown;
 
   constructor(status: number, detail: unknown) {
-    super(typeof detail === "string" ? detail : "API-Anfrage fehlgeschlagen.");
+    super(formatApiErrorDetail(detail));
     this.status = status;
     this.detail = detail;
   }
+}
+
+function formatApiErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail.map(formatApiErrorDetail).filter(Boolean).join(" ") || "API-Anfrage fehlgeschlagen.";
+  }
+  if (isRecord(detail)) {
+    if (typeof detail.msg === "string") {
+      return detail.msg;
+    }
+    if (typeof detail.message === "string") {
+      return detail.message;
+    }
+    if (typeof detail.detail === "string") {
+      return detail.detail;
+    }
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return "API-Anfrage fehlgeschlagen.";
+    }
+  }
+  return "API-Anfrage fehlgeschlagen.";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function requestBlob(path: string): Promise<Blob> {
@@ -56,7 +86,16 @@ async function requestBlob(path: string): Promise<Blob> {
     const payload = contentType.includes("application/json")
       ? await response.json()
       : await response.text();
-    throw new ApiError(response.status, payload.detail ?? payload);
+    const detail = payload.detail ?? payload;
+    if (import.meta.env.DEV) {
+      console.error("API blob request failed", {
+        method: "GET",
+        path,
+        status: response.status,
+        responseBody: payload,
+      });
+    }
+    throw new ApiError(response.status, detail);
   }
   return response.blob();
 }
@@ -87,7 +126,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     : await response.text();
 
   if (!response.ok) {
-    throw new ApiError(response.status, payload.detail ?? payload);
+    const detail = payload.detail ?? payload;
+    if (import.meta.env.DEV) {
+      console.error("API request failed", {
+        method: options.method ?? "GET",
+        path,
+        requestBody: options.body,
+        status: response.status,
+        responseBody: payload,
+      });
+    }
+    throw new ApiError(response.status, detail);
   }
 
   return payload as T;

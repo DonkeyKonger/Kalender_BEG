@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
@@ -15,8 +16,22 @@ from app.api.routes import (
     users,
 )
 from app.core.config import settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 from app.seed_admin import seed_admin
+
+
+def ensure_site_status_enum_values() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+    statements = [
+        "ALTER TYPE site_status ADD VALUE IF NOT EXISTS 'planned'",
+        "ALTER TYPE site_status ADD VALUE IF NOT EXISTS 'completed'",
+        "ALTER TYPE site_status ADD VALUE IF NOT EXISTS 'deleted'",
+        "UPDATE sites SET status = 'completed' WHERE status IN ('closed', 'archived')",
+    ]
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def create_app() -> FastAPI:
@@ -43,7 +58,8 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix="/api")
 
     @app.on_event("startup")
-    def ensure_admin_user() -> None:
+    def ensure_startup_state() -> None:
+        ensure_site_status_enum_values()
         if not settings.admin_username or not settings.admin_password:
             return
         with SessionLocal() as db:
