@@ -41,6 +41,50 @@ Healthcheck:
 
 - http://localhost:8000/api/health
 
+## Microsoft Graph Verbindungstest
+
+Die SharePoint-/OneDrive-Anbindung ist als sicherer Backend-Test vorbereitet. Es werden noch keine produktiven Baustellenordner automatisch erstellt und keine Dateien hochgeladen. Alle Werte gehoeren in `.env` oder Azure App Settings, niemals ins Repo.
+
+Benötigte App Settings / `.env`-Werte:
+
+```env
+MS_GRAPH_ENABLED=false
+MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED=false
+MS_TENANT_ID=
+MS_CLIENT_ID=
+MS_CLIENT_SECRET=
+MS_PROJECT_SITE_ID=
+MS_PROJECT_DRIVE_ID=
+MS_PROJECT_ROOT_FOLDER_ID=
+MS_GRAPH_TIMEOUT_SECONDS=15
+MS_GRAPH_BASE_URL=https://graph.microsoft.com/v1.0
+```
+
+Admin-Test-Endpunkte:
+
+- `GET /api/admin/integrations/microsoft-graph/test` prueft Token, Drive und Root-Ordner.
+- `POST /api/admin/integrations/microsoft-graph/create-test-project-folder` erstellt nur bei `MS_GRAPH_ENABLED=true` und `MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED=true` einen Testordner mit 15 Unterordnern.
+
+Lokale Pruefung:
+
+1. `.env` mit `MS_GRAPH_ENABLED=false` starten.
+2. Als Admin `GET /api/admin/integrations/microsoft-graph/test` aufrufen. Erwartung: `graph_enabled=false`.
+3. Echte Entra-/Graph-Werte in `.env` setzen und `MS_GRAPH_ENABLED=true` aktivieren.
+4. Backend neu starten und den Test-Endpunkt erneut aufrufen. Erwartung: `connected=true`, Drive und Root-Ordner werden angezeigt.
+5. `MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED=false` lassen und den Testordner-Endpunkt aufrufen. Erwartung: blockiert.
+6. Flag kurz auf `true` setzen, Backend neu starten und den Testordner-Endpunkt aufrufen. Danach in SharePoint den Testordner pruefen.
+7. Flag wieder auf `false` setzen.
+
+Azure-Pruefung:
+
+1. App Service → Configuration / Environment variables oeffnen.
+2. Alle `MS_GRAPH_*` Werte setzen.
+3. Speichern und App Service neu starten.
+4. Als Admin den Test-Endpunkt pruefen.
+5. Logs pruefen: keine Secrets, keine Tokens, keine Authorization Header.
+
+Empfehlung fuer produktive Berechtigungen: moeglichst eingeschraenkte App-Berechtigung, idealerweise `Sites.Selected` beziehungsweise Zugriff nur auf die konkrete SharePoint-Site/Bibliothek.
+
 ## Architekturregeln
 
 - Keine Excel-Datei als Datenquelle.
