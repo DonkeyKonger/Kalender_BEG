@@ -19,6 +19,20 @@ class Settings(BaseSettings):
     company_location_lon: float = Field(default=9.0263, alias="COMPANY_LOCATION_LON")
     weather_cache_ttl_minutes: int = Field(default=45, alias="WEATHER_CACHE_TTL_MINUTES")
     weather_request_timeout_seconds: float = Field(default=5.0, alias="WEATHER_REQUEST_TIMEOUT_SECONDS")
+    ms_graph_enabled: bool = Field(default=False, alias="MS_GRAPH_ENABLED")
+    ms_graph_create_test_folders_enabled: bool = Field(
+        default=False, alias="MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED"
+    )
+    ms_tenant_id: str | None = Field(default=None, alias="MS_TENANT_ID")
+    ms_client_id: str | None = Field(default=None, alias="MS_CLIENT_ID")
+    ms_client_secret: str | None = Field(default=None, alias="MS_CLIENT_SECRET")
+    ms_project_site_id: str | None = Field(default=None, alias="MS_PROJECT_SITE_ID")
+    ms_project_drive_id: str | None = Field(default=None, alias="MS_PROJECT_DRIVE_ID")
+    ms_project_root_folder_id: str | None = Field(default=None, alias="MS_PROJECT_ROOT_FOLDER_ID")
+    ms_graph_timeout_seconds: float = Field(default=15.0, alias="MS_GRAPH_TIMEOUT_SECONDS")
+    ms_graph_base_url: str = Field(
+        default="https://graph.microsoft.com/v1.0", alias="MS_GRAPH_BASE_URL"
+    )
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
