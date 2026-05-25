@@ -63,7 +63,7 @@ class SiteService:
         return site
 
     def remove_plan(self, site_id: int) -> str:
-        site = self.get_site(site_id)
+        self.get_site(site_id)
         return "delete"
 
     def remove_site(self, site_id: int, user_id: int) -> tuple[str, Site | None]:
