@@ -2966,6 +2966,11 @@ button.person-chip:focus-visible {
   padding: 10px 12px;
 }
 
+.project-folder-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .project-folder-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

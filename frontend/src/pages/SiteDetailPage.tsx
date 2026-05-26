@@ -141,7 +141,7 @@ export function SiteDetailPage() {
   }, [activeTab, folderDocumentsReloadKey, selectedFolder, site]);
 
   async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
-    if (!site) {
+    if (!site || uploadingFolderKey) {
       return;
     }
     const fileList = Array.from(files);
@@ -151,23 +151,45 @@ export function SiteDetailPage() {
       setUploadError("Für diese Baustelle ist noch kein SharePoint-Projektordner vorhanden.");
       return;
     }
-    if (fileList.length !== 1) {
-      setUploadError("Bitte genau eine Datei hochladen.");
+    if (fileList.length === 0) {
+      setUploadError("Keine Datei zum Hochladen gefunden.");
       return;
     }
 
     setUploadingFolderKey(folder.folder_key);
-    try {
-      await api.uploadProjectFolderDocument(site.id, folder.folder_key, fileList[0]);
-      setSelectedFolder(folder);
-      setUploadMessage(`${fileList[0].name} wurde hochgeladen.`);
-      setFolderDocumentsReloadKey((value) => value + 1);
-    } catch (requestError) {
-      setUploadError(readApiError(requestError, "Datei konnte nicht hochgeladen werden."));
-    } finally {
-      setUploadingFolderKey(null);
-      setDragOverFolderKey(null);
+    setSelectedFolder(folder);
+    setUploadMessage(
+      fileList.length === 1 ? "Datei wird hochgeladen..." : `${fileList.length} Dateien werden hochgeladen...`,
+    );
+
+    let uploadedCount = 0;
+    const failedFiles: string[] = [];
+    for (const file of fileList) {
+      try {
+        await api.uploadProjectFolderDocument(site.id, folder.folder_key, file);
+        uploadedCount += 1;
+      } catch {
+        failedFiles.push(file.name);
+      }
     }
+
+    if (uploadedCount > 0) {
+      setFolderDocumentsReloadKey((value) => value + 1);
+    }
+    if (failedFiles.length === 0) {
+      setUploadMessage(
+        uploadedCount === 1 ? "1 Datei wurde hochgeladen." : `${uploadedCount} Dateien wurden hochgeladen.`,
+      );
+      setUploadError(null);
+    } else if (uploadedCount > 0) {
+      setUploadMessage(`${uploadedCount} von ${fileList.length} Dateien wurden hochgeladen.`);
+      setUploadError(`Fehler bei: ${failedFiles.join(", ")}`);
+    } else {
+      setUploadMessage(null);
+      setUploadError(`Keine Datei wurde hochgeladen. Fehler bei: ${failedFiles.join(", ")}`);
+    }
+    setUploadingFolderKey(null);
+    setDragOverFolderKey(null);
   }
 
   if (isLoading) {
@@ -387,12 +409,8 @@ function ProjectFoldersPanel({
 
   return (
     <div className="project-record-tab-panel">
-      <div className="project-record-toolbar">
-        <div>
-          <h2>Ordnerstruktur</h2>
-          <p>Logische Projektordner für diese Baustelle. Dateiablage läuft über SharePoint, sobald ein Projektordner vorhanden ist.</p>
-        </div>
-        {site.project_folder_web_url ? (
+      {site.project_folder_web_url ? (
+        <div className="project-folder-actions">
           <a
             className="secondary-action"
             href={site.project_folder_web_url}
@@ -401,8 +419,8 @@ function ProjectFoldersPanel({
           >
             Projektordner in SharePoint öffnen
           </a>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {site.project_folder_status === "error" && site.project_folder_error ? (
         <div className="project-record-empty-state is-error">{site.project_folder_error}</div>
@@ -427,6 +445,7 @@ function ProjectFoldersPanel({
                 onDragLeave={() => onDragOverFolder(null)}
                 onDrop={(event) => {
                   event.preventDefault();
+                  event.stopPropagation();
                   onDragOverFolder(null);
                   onUploadFiles(folder, event.dataTransfer.files);
                 }}
