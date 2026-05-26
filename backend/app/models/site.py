@@ -53,3 +53,6 @@ class Site(TimestampMixin, Base):
     project_manager = relationship("Person")
     assignments = relationship("Assignment", back_populates="site")
     project_folders = relationship("ProjectFolder", back_populates="site", cascade="all, delete-orphan")
+    measurement_items = relationship(
+        "SiteMeasurementItem", back_populates="site", cascade="all, delete-orphan"
+    )

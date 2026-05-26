@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementImportResponse, MeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -324,6 +324,20 @@ export const api = {
         body: formData,
       },
     );
+  },
+
+
+  async measurementItems(siteId: number): Promise<MeasurementItem[]> {
+    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items`);
+  },
+
+  async importMeasurementTimesheet(siteId: number, file: File): Promise<MeasurementImportResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<MeasurementImportResponse>(`/sites/${siteId}/measurement-timesheet/import`, {
+      method: "POST",
+      body: formData,
+    });
   },
 
   async removeSite(siteId: number): Promise<SiteRemoveResponse> {

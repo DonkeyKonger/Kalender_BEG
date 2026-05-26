@@ -6,7 +6,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
+import type { MeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 
@@ -38,6 +38,13 @@ export function SiteDetailPage() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
+  const [measurementItems, setMeasurementItems] = useState<MeasurementItem[]>([]);
+  const [measurementLoading, setMeasurementLoading] = useState(false);
+  const [measurementLoaded, setMeasurementLoaded] = useState(false);
+  const [measurementError, setMeasurementError] = useState<string | null>(null);
+  const [measurementImporting, setMeasurementImporting] = useState(false);
+  const [measurementImportMessage, setMeasurementImportMessage] = useState<string | null>(null);
+  const [measurementImportError, setMeasurementImportError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -77,6 +84,13 @@ export function SiteDetailPage() {
     setUploadMessage(null);
     setUploadError(null);
     setDragOverFolderKey(null);
+    setMeasurementItems([]);
+    setMeasurementLoading(false);
+    setMeasurementLoaded(false);
+    setMeasurementError(null);
+    setMeasurementImporting(false);
+    setMeasurementImportMessage(null);
+    setMeasurementImportError(null);
   }, [site?.id]);
 
   useEffect(() => {
@@ -151,6 +165,49 @@ export function SiteDetailPage() {
       isCurrent = false;
     };
   }, [activeTab, folderDocumentsReloadKey, selectedFolder, site]);
+
+  useEffect(() => {
+    if (!site || activeTab !== "measurement" || measurementLoaded || measurementLoading) {
+      return;
+    }
+
+    async function loadMeasurementItems() {
+      if (!site) {
+        return;
+      }
+      setMeasurementLoading(true);
+      setMeasurementError(null);
+      try {
+        setMeasurementItems(await api.measurementItems(site.id));
+        setMeasurementLoaded(true);
+      } catch (requestError) {
+        setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
+      } finally {
+        setMeasurementLoading(false);
+      }
+    }
+
+    void loadMeasurementItems();
+  }, [activeTab, measurementLoaded, measurementLoading, site]);
+
+  async function importMeasurementTimesheet(file: File): Promise<void> {
+    if (!site || measurementImporting) {
+      return;
+    }
+    setMeasurementImporting(true);
+    setMeasurementImportMessage(null);
+    setMeasurementImportError(null);
+    try {
+      const result = await api.importMeasurementTimesheet(site.id, file);
+      setMeasurementItems(await api.measurementItems(site.id));
+      setMeasurementLoaded(true);
+      setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen erkannt.`);
+    } catch (requestError) {
+      setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
+    } finally {
+      setMeasurementImporting(false);
+    }
+  }
 
   async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
     if (!site || uploadingFolderKey) {
@@ -268,13 +325,18 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "measurement" ? (
-        <PlaceholderTab
-          icon={Ruler}
-          title="Aufmaß"
-          description="Aufmaße werden später aus LV-Positionen, Montagezeiten und mobilen Rückmeldungen erzeugt."
-          emptyText="Noch kein Aufmaß vorhanden."
-          sections={["PDF/LV-Import", "Aufmaßpositionen", "mobile Bearbeitung", "PDF-Ausgabe", "Rechnungsanhang"]}
-          disabledActions={["PDF importieren", "Aufmaß erstellen", "PDF ausgeben"]}
+        <MeasurementTab
+          items={measurementItems}
+          isLoading={measurementLoading}
+          error={measurementError}
+          isImporting={measurementImporting}
+          importMessage={measurementImportMessage}
+          importError={measurementImportError}
+          onImport={(file) => void importMeasurementTimesheet(file)}
+          onRetry={() => {
+            setMeasurementLoaded(false);
+            setMeasurementError(null);
+          }}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -645,6 +707,110 @@ function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
 }
 
 
+function MeasurementTab({
+  items,
+  isLoading,
+  error,
+  isImporting,
+  importMessage,
+  importError,
+  onImport,
+  onRetry,
+}: {
+  items: MeasurementItem[];
+  isLoading: boolean;
+  error: string | null;
+  isImporting: boolean;
+  importMessage: string | null;
+  importError: string | null;
+  onImport: (file: File) => void;
+  onRetry: () => void;
+}) {
+  const latestImport = items[0];
+
+  return (
+    <div className="project-record-tab-panel">
+      <div className="project-record-toolbar">
+        <div>
+          <h2><Ruler aria-hidden="true" size={18} />Aufmaß</h2>
+          <p>Zeitenliste als PDF importieren und die erkannten Aufmaß-Vorlagenpositionen prüfen.</p>
+        </div>
+        <label className={`secondary-action project-upload-action${isImporting ? " is-disabled" : ""}`}>
+          <UploadCloud aria-hidden="true" size={15} />
+          <span>{isImporting ? "Wird importiert..." : "Zeitenliste-PDF importieren"}</span>
+          <input
+            className="project-upload-input"
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={isImporting}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                onImport(file);
+                event.target.value = "";
+              }
+            }}
+          />
+        </label>
+      </div>
+
+      <div className="measurement-import-card">
+        <div>
+          <strong>Zeitenliste-PDF</strong>
+          <span>Importiert werden alle echten Positionszeilen, auch mit Menge 0,00.</span>
+        </div>
+        {latestImport?.source_invoice_number ? (
+          <small>Letzte Rechnung: {latestImport.source_invoice_number}</small>
+        ) : null}
+      </div>
+
+      {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
+      {importError ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
+
+      {isLoading ? <div className="matrix-state">Aufmaßpositionen werden geladen...</div> : null}
+      {error ? (
+        <div className="project-record-empty-state is-error">
+          <strong>{error}</strong>
+          <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+        </div>
+      ) : null}
+      {!isLoading && !error && items.length === 0 ? (
+        <div className="project-record-empty-state">Noch keine Aufmaßpositionen importiert.</div>
+      ) : null}
+      {!isLoading && !error && items.length > 0 ? (
+        <div className="measurement-table-wrap">
+          <table className="measurement-table">
+            <thead>
+              <tr>
+                <th>Position</th>
+                <th>Bezeichnung</th>
+                <th>Menge Liste</th>
+                <th>Einheit</th>
+                <th>Min/Einh.</th>
+                <th>Minuten gesamt</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td><strong>{item.position}</strong></td>
+                  <td>{item.description}</td>
+                  <td>{formatMeasurementNumber(item.list_quantity)}</td>
+                  <td>{item.unit ?? "-"}</td>
+                  <td>{formatMeasurementNumber(item.minutes_per_unit)}</td>
+                  <td>{item.is_nep ? "NEP" : formatMeasurementNumber(item.list_minutes_total)}</td>
+                  <td><span className={`measurement-status${item.is_nep ? " is-nep" : ""}`}>{item.is_nep ? "NEP" : "Importiert"}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PlaceholderTab({
   icon: Icon,
   title,
@@ -749,6 +915,20 @@ function formatFileSize(size: number | null): string | null {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+
+function formatMeasurementNumber(value: string | number | null): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return String(value);
+  }
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
 
 function formatLocationStatus(status: Site["location_status"]): string {
   const labels: Record<Site["location_status"], string> = {

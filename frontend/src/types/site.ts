@@ -143,3 +143,33 @@ export type ProjectFolderDocumentList = {
   folder_name: string;
   items: ProjectFolderDocumentItem[];
 };
+
+
+export type MeasurementNumericValue = string | number | null;
+
+export type MeasurementItem = {
+  id: number;
+  site_id: number;
+  source_file_name: string | null;
+  source_project_number: string | null;
+  source_invoice_number: string | null;
+  source_customer_name: string | null;
+  position: string;
+  description: string;
+  list_quantity: MeasurementNumericValue;
+  unit: string | null;
+  minutes_per_unit: MeasurementNumericValue;
+  list_minutes_total: MeasurementNumericValue;
+  is_nep: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeasurementImportResponse = {
+  imported_count: number;
+  source_project_number: string | null;
+  source_invoice_number: string | null;
+  source_customer_name: string | null;
+  items: MeasurementItem[];
+};

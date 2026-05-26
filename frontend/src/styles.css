@@ -3238,6 +3238,91 @@ button.person-chip:focus-visible {
   min-width: 96px;
 }
 
+
+.measurement-import-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #dbe7f5;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #52627a;
+  padding: 14px;
+}
+
+.measurement-import-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.measurement-import-card strong {
+  color: #172033;
+}
+
+.measurement-import-card span,
+.measurement-import-card small {
+  color: #65738a;
+  font-size: 0.88rem;
+}
+
+.measurement-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #d9e3ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.measurement-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  color: #172033;
+  font-size: 0.88rem;
+}
+
+.measurement-table th,
+.measurement-table td {
+  border-bottom: 1px solid #e5edf7;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.measurement-table th {
+  background: #f8fafc;
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.measurement-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.measurement-table td:nth-child(2) {
+  min-width: 320px;
+}
+
+.measurement-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: #166534;
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 3px 8px;
+}
+
+.measurement-status.is-nep {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .project-placeholder-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

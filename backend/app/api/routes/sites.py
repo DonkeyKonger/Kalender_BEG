@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.measurement import MeasurementImportResponse, MeasurementItemRead
 from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
@@ -20,6 +21,7 @@ from app.schemas.site import (
     SiteUpdate,
 )
 from app.services.geo_service import search_geocoding_candidates
+from app.services.measurement_service import MeasurementService
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
@@ -139,6 +141,38 @@ async def upload_project_folder_document(
     )
     return ProjectFolderDocumentItem.model_validate(uploaded)
 
+
+@router.get("/{site_id}/measurement-items", response_model=list[MeasurementItemRead])
+def list_measurement_items(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[MeasurementItemRead]:
+    items = MeasurementService(db).list_items(site_id)
+    return [MeasurementItemRead.model_validate(item) for item in items]
+
+
+@router.post(
+    "/{site_id}/measurement-timesheet/import",
+    response_model=MeasurementImportResponse,
+)
+async def import_measurement_timesheet(
+    site_id: int,
+    file: UploadFile = File(...),
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MeasurementImportResponse:
+    file_name = file.filename or "zeitenliste.pdf"
+    if not file_name.lower().endswith(".pdf"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine PDF-Datei hochladen.")
+
+    summary, items = MeasurementService(db).import_timesheet(
+        site_id, file_name=file_name, pdf_content=await file.read()
+    )
+    return MeasurementImportResponse(
+        **summary,
+        items=[MeasurementItemRead.model_validate(item) for item in items],
+    )
 
 @router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)
 def site_removal_plan(
