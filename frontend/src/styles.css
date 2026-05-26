@@ -5751,18 +5751,19 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-list {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
 .mobile-measurement-card {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
+  min-height: 78px;
   border: 1px solid #dce3ee;
   border-radius: 8px;
   background: #ffffff;
   color: #172033;
-  padding: 12px;
+  padding: 9px 10px;
   text-align: left;
 }
 
@@ -5775,10 +5776,42 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-card span:not(.measurement-status),
-.mobile-measurement-card small,
 .mobile-measurement-detail-head p,
 .mobile-measurement-entry small {
   color: #65738a;
+}
+
+.mobile-measurement-row-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-measurement-row-top .measurement-status {
+  min-height: 20px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+}
+
+.mobile-measurement-row-quantity {
+  justify-self: end;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.mobile-measurement-row-position {
+  font-size: 0.86rem;
+  line-height: 1.15;
+}
+
+.mobile-measurement-row-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .mobile-measurement-detail {

@@ -440,12 +440,12 @@ function MeasurementBatchDetail({
         <div className="mobile-measurement-list">
           {items.map((item) => (
             <button className="mobile-measurement-card" key={item.id} type="button" onClick={() => onSelectItem(item)}>
-              <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
-              <strong>{item.position}</strong>
-              <span>{item.description}</span>
-              <small>
-                Einheit: {item.unit ?? "-"} · Min/Einh.: {formatMeasurementNumber(item.minutes_per_unit)} · Gemeldet: {formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}
-              </small>
+              <div className="mobile-measurement-row-top">
+                <span className={`measurement-status ${mobilePositionStatusClass(item)}`}>{mobilePositionStatusLabel(item)}</span>
+                <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
+              </div>
+              <strong className="mobile-measurement-row-position">{item.position}</strong>
+              <span className="mobile-measurement-row-description">{item.description}</span>
             </button>
           ))}
         </div>
@@ -629,11 +629,21 @@ function batchStatusLabel(status: string): string {
 }
 
 function mobileStatusLabel(status: string): string {
-  if (status === "approved") {
-    return "Freigegeben";
-  }
-  if (status === "edited") {
-    return "Bearbeitet";
+  if (["approved", "billed", "edited"].includes(status)) {
+    return "Erfasst";
   }
   return "Offen";
+}
+
+function mobilePositionStatusLabel(item: MobileMeasurementItem): string {
+  return isMobileMeasurementItemCaptured(item) ? "Erfasst" : "Offen";
+}
+
+function mobilePositionStatusClass(item: MobileMeasurementItem): string {
+  return isMobileMeasurementItemCaptured(item) ? "mobile-status-edited" : "mobile-status-open";
+}
+
+function isMobileMeasurementItemCaptured(item: MobileMeasurementItem): boolean {
+  const reportedQuantity = Number(item.reported_quantity);
+  return item.entries.length > 0 || (Number.isFinite(reportedQuantity) && reportedQuantity > 0);
 }
