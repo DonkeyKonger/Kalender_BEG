@@ -5348,3 +5348,92 @@ button.person-chip:focus-visible {
   font-size: 0.76rem;
   font-weight: 650;
 }
+
+.assignment-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.assignment-card-link:focus-visible,
+.assignment-card-link:hover {
+  border-color: #9db7d6;
+  box-shadow: 0 12px 28px rgb(18 29 52 / 10%);
+  outline: none;
+}
+
+.mobile-detail-page {
+  padding-bottom: 24px;
+}
+
+.mobile-back-button {
+  width: fit-content;
+}
+
+.mobile-detail-hero h1,
+.mobile-detail-panel h2,
+.mobile-detail-panel p {
+  margin: 0;
+}
+
+.mobile-detail-hero h1 {
+  color: #111827;
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.mobile-detail-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.mobile-detail-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-detail-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #42526b;
+  padding: 0 12px;
+  font-weight: 800;
+}
+
+.mobile-detail-tabs button.active {
+  border-color: #143c6d;
+  background: #143c6d;
+  color: #ffffff;
+}
+
+.mobile-detail-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+}
+
+.mobile-detail-panel h2 {
+  color: #111827;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.mobile-placeholder-panel {
+  align-items: center;
+  color: #42526b;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 92px;
+  font-weight: 750;
+}

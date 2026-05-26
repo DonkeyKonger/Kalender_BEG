@@ -9,6 +9,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MatrixPage } from "./pages/MatrixPage";
+import { MobileAssignmentDetailPage } from "./pages/MobileAssignmentDetailPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import { SiteDetailPage } from "./pages/SiteDetailPage";
@@ -50,6 +51,7 @@ export function App() {
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
             <Route path="me/assignments" element={<MyAssignmentsPage />} />
+            <Route path="me/assignments/:assignmentId" element={<MobileAssignmentDetailPage />} />
           </Route>
         </Route>
       </Route>

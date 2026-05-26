@@ -1,5 +1,6 @@
 import { CalendarClock, History, MapPin, Phone, RefreshCcw, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
@@ -137,7 +138,7 @@ function AssignmentSection({
 
 function AssignmentCard({ assignment }: { assignment: MobileAssignment }) {
   return (
-    <article className="assignment-card">
+    <Link className="assignment-card assignment-card-link" to={`/me/assignments/${assignment.id}`} state={{ assignment }}>
       <div className="assignment-card-main">
         <div>
           <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</p>
@@ -161,7 +162,7 @@ function AssignmentCard({ assignment }: { assignment: MobileAssignment }) {
 
       {assignment.site.info && <p className="assignment-note">{assignment.site.info}</p>}
       {assignment.note && <p className="assignment-note">{assignment.note}</p>}
-    </article>
+    </Link>
   );
 }
 
