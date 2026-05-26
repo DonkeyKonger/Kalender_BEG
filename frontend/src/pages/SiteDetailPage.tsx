@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -10,6 +10,9 @@ import type { MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, Pr
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis";
+type MeasurementViewMode = "list" | "table";
+
+const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Zeitenliste" },
@@ -1201,6 +1204,7 @@ function MeasurementReviewPanel({
   const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -1225,6 +1229,11 @@ function MeasurementReviewPanel({
   useEffect(() => {
     setUndoStack([]);
   }, [selectedBatch?.id]);
+
+  function updateViewMode(mode: MeasurementViewMode): void {
+    setViewMode(mode);
+    persistMeasurementViewMode(mode);
+  }
 
   const sortedBatches = [...batches].sort((left, right) => {
     const rightTime = getMeasurementBatchSortTime(right);
@@ -1373,6 +1382,7 @@ function MeasurementReviewPanel({
             <h2>{displayTitle}</h2>
           </div>
           <div className="measurement-review-actions">
+            <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
             <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
             <button
               type="button"
@@ -1411,7 +1421,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
         ) : null}
-        {!batchItemsLoading && itemsWithEntries.length > 0 ? (
+        {!batchItemsLoading && itemsWithEntries.length > 0 && viewMode === "list" ? (
           <div className="measurement-review-positions">
             {itemsWithEntries.map((item) => (
               <section className="measurement-review-position" key={item.id}>
@@ -1473,6 +1483,18 @@ function MeasurementReviewPanel({
             ))}
           </div>
         ) : null}
+        {!batchItemsLoading && itemsWithEntries.length > 0 && viewMode === "table" ? (
+          <MeasurementReviewTable
+            items={itemsWithEntries}
+            entryDrafts={entryDrafts}
+            canEditRows={canEditRows}
+            reviewActionLoading={reviewActionLoading}
+            savingEntryId={savingEntryId}
+            onDraftChange={updateEntryDraft}
+            onDraftSave={(entry, draft) => void saveEntryDraft(selectedBatch, entry, draft)}
+            onDraftReset={resetEntryDraft}
+          />
+        ) : null}
       </div>
     );
   }
@@ -1518,6 +1540,137 @@ function MeasurementReviewPanel({
         </div>
       ) : null}
     </>
+  );
+}
+
+function MeasurementViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: MeasurementViewMode;
+  onChange: (mode: MeasurementViewMode) => void;
+}) {
+  return (
+    <div className="measurement-view-toggle" role="group" aria-label="Aufmaß Ansicht">
+      <button className={viewMode === "list" ? "is-active" : ""} type="button" onClick={() => onChange("list")}>Liste</button>
+      <button className={viewMode === "table" ? "is-active" : ""} type="button" onClick={() => onChange("table")}>Tabelle</button>
+    </div>
+  );
+}
+
+function MeasurementReviewTable({
+  items,
+  entryDrafts,
+  canEditRows,
+  reviewActionLoading,
+  savingEntryId,
+  onDraftChange,
+  onDraftSave,
+  onDraftReset,
+}: {
+  items: MobileMeasurementItem[];
+  entryDrafts: Record<number, MeasurementEntryDraft>;
+  canEditRows: boolean;
+  reviewActionLoading: boolean;
+  savingEntryId: number | null;
+  onDraftChange: (entryId: number, field: keyof MeasurementEntryDraft, value: string) => void;
+  onDraftSave: (entry: MobileMeasurementItem["entries"][number], draft: MeasurementEntryDraft | undefined) => void;
+  onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
+}) {
+  const maxAreas = Math.max(0, ...items.map((item) => item.entries.length));
+  const areaColumns = Array.from({ length: maxAreas }, (_, index) => index);
+
+  return (
+    <div className="measurement-review-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
+      <table className="measurement-table-view measurement-review-table">
+        <thead>
+          <tr>
+            <th>Pos.-Nr.</th>
+            <th>Beschreibung</th>
+            <th>Einheit</th>
+            {areaColumns.map((index) => (
+              <Fragment key={index}>
+                <th>Bereich {index + 1}</th>
+                <th>Menge {index + 1}</th>
+              </Fragment>
+            ))}
+            <th>Summe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td><strong>{item.position}</strong></td>
+              <td className="measurement-table-description">{item.description}</td>
+              <td>{item.unit ?? "-"}</td>
+              {areaColumns.map((index) => {
+                const entry = item.entries[index];
+                if (!entry) {
+                  return (
+                    <Fragment key={index}>
+                      <td />
+                      <td />
+                    </Fragment>
+                  );
+                }
+                const draft = entryDrafts[entry.id] ?? {
+                  area_or_comment: entry.area_or_comment,
+                  quantity: formatMeasurementDraftQuantity(entry.quantity),
+                };
+                const isSaving = savingEntryId === entry.id;
+                return (
+                  <Fragment key={entry.id}>
+                    <td>
+                      <input
+                        className="measurement-table-input"
+                        value={draft.area_or_comment}
+                        disabled={!canEditRows || reviewActionLoading || isSaving}
+                        aria-label={`Bereich für ${item.position}`}
+                        onChange={(event) => onDraftChange(entry.id, "area_or_comment", event.target.value)}
+                        onBlur={() => onDraftSave(entry, draft)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            onDraftSave(entry, draft);
+                          }
+                          if (event.key === "Escape") {
+                            onDraftReset(entry);
+                          }
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <div className="measurement-table-quantity-cell">
+                        <input
+                          className="measurement-table-input is-quantity"
+                          value={draft.quantity}
+                          disabled={!canEditRows || reviewActionLoading || isSaving}
+                          inputMode="decimal"
+                          aria-label={`Menge für ${item.position}`}
+                          onChange={(event) => onDraftChange(entry.id, "quantity", event.target.value)}
+                          onBlur={() => onDraftSave(entry, draft)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              onDraftSave(entry, draft);
+                            }
+                            if (event.key === "Escape") {
+                              onDraftReset(entry);
+                            }
+                          }}
+                        />
+                        <span>{item.unit ?? ""}</span>
+                      </div>
+                    </td>
+                  </Fragment>
+                );
+              })}
+              <td><strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1615,6 +1768,20 @@ function DetailItem({
       <strong>{Icon && value ? <Icon aria-hidden="true" size={14} /> : null}{value || "-"}</strong>
     </p>
   );
+}
+
+function readMeasurementViewMode(): MeasurementViewMode {
+  if (typeof window === "undefined") {
+    return "list";
+  }
+  return window.localStorage.getItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "list";
+}
+
+function persistMeasurementViewMode(mode: MeasurementViewMode): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 function formatCoordinates(latitude: number | null, longitude: number | null): string | null {

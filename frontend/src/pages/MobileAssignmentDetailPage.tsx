@@ -12,7 +12,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -25,6 +25,9 @@ const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
 type MobileDetailTab = "overview" | "time" | "folders" | "measurement" | "tools";
 type MeasurementFilter = "all" | "open" | "edited" | "mine" | "approved";
+type MeasurementViewMode = "list" | "table";
+
+const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 
 type LocationState = {
   assignment?: MobileAssignment;
@@ -153,6 +156,7 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
   const [formComment, setFormComment] = useState("");
   const [formQuantity, setFormQuantity] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
 
   async function loadBatches(selectBatchId?: number): Promise<void> {
     setIsLoading(true);
@@ -191,6 +195,11 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
     void loadBatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment.id]);
+
+  function updateViewMode(mode: MeasurementViewMode): void {
+    setViewMode(mode);
+    persistMeasurementViewMode(mode);
+  }
 
   const filteredItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -275,6 +284,8 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
           setItems([]);
           setError(null);
         }}
+        viewMode={viewMode}
+        onViewModeChange={updateViewMode}
         onSearchChange={setSearchTerm}
         onFilterChange={setFilter}
         onSelectItem={setSelectedItem}
@@ -362,7 +373,9 @@ function MeasurementBatchDetail({
   searchTerm,
   filter,
   isSaving,
+  viewMode,
   onBack,
+  onViewModeChange,
   onSearchChange,
   onFilterChange,
   onSelectItem,
@@ -376,7 +389,9 @@ function MeasurementBatchDetail({
   searchTerm: string;
   filter: MeasurementFilter;
   isSaving: boolean;
+  viewMode: MeasurementViewMode;
   onBack: () => void;
+  onViewModeChange: (mode: MeasurementViewMode) => void;
   onSearchChange: (value: string) => void;
   onFilterChange: (value: MeasurementFilter) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
@@ -428,6 +443,8 @@ function MeasurementBatchDetail({
         ))}
       </div>
 
+      <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
       {!isItemsLoading && !error && allItems.length === 0 ? (
@@ -436,7 +453,7 @@ function MeasurementBatchDetail({
       {!isItemsLoading && !error && allItems.length > 0 && items.length === 0 ? (
         <div className="empty-panel">Keine Aufmaßposition gefunden.</div>
       ) : null}
-      {!isItemsLoading && !error && items.length > 0 ? (
+      {!isItemsLoading && !error && items.length > 0 && viewMode === "list" ? (
         <div className="mobile-measurement-list">
           {items.map((item) => (
             <button className="mobile-measurement-card" key={item.id} type="button" onClick={() => onSelectItem(item)}>
@@ -450,6 +467,86 @@ function MeasurementBatchDetail({
           ))}
         </div>
       ) : null}
+      {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
+        <MobileMeasurementTable items={items} onSelectItem={onSelectItem} />
+      ) : null}
+    </div>
+  );
+}
+
+function MeasurementViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: MeasurementViewMode;
+  onChange: (mode: MeasurementViewMode) => void;
+}) {
+  return (
+    <div className="measurement-view-toggle" role="group" aria-label="Aufmaß Ansicht">
+      <button className={viewMode === "list" ? "is-active" : ""} type="button" onClick={() => onChange("list")}>Liste</button>
+      <button className={viewMode === "table" ? "is-active" : ""} type="button" onClick={() => onChange("table")}>Tabelle</button>
+    </div>
+  );
+}
+
+function MobileMeasurementTable({
+  items,
+  onSelectItem,
+}: {
+  items: MobileMeasurementItem[];
+  onSelectItem: (item: MobileMeasurementItem) => void;
+}) {
+  const maxAreas = Math.max(0, ...items.map((item) => item.entries.length));
+  const areaColumns = Array.from({ length: maxAreas }, (_, index) => index);
+
+  return (
+    <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
+      <table className="measurement-table-view mobile-measurement-table">
+        <thead>
+          <tr>
+            <th>Pos.-Nr.</th>
+            <th>Beschreibung</th>
+            <th>Einheit</th>
+            {areaColumns.map((index) => (
+              <Fragment key={index}>
+                <th>Bereich {index + 1}</th>
+                <th>Menge {index + 1}</th>
+              </Fragment>
+            ))}
+            <th>Summe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectItem(item)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectItem(item);
+                }
+              }}
+            >
+              <td><strong>{item.position}</strong></td>
+              <td>{item.description}</td>
+              <td>{item.unit ?? "-"}</td>
+              {areaColumns.map((index) => {
+                const entry = item.entries[index];
+                return (
+                  <Fragment key={index}>
+                    <td>{entry?.area_or_comment ?? ""}</td>
+                    <td>{entry ? `${formatMeasurementNumber(entry.quantity)} ${item.unit ?? ""}` : ""}</td>
+                  </Fragment>
+                );
+              })}
+              <td><strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -585,6 +682,20 @@ function readApiError(error: unknown, fallback: string): string {
 
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${date}T00:00:00`));
+}
+
+function readMeasurementViewMode(): MeasurementViewMode {
+  if (typeof window === "undefined") {
+    return "list";
+  }
+  return window.localStorage.getItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "list";
+}
+
+function persistMeasurementViewMode(mode: MeasurementViewMode): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 function formatDateTime(value: string): string {
