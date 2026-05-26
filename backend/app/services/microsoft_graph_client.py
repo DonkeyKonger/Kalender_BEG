@@ -102,6 +102,50 @@ class MicrosoftGraphClient:
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", path, payload=payload)
 
+    def put_content(self, path: str, content: bytes, content_type: str | None = None) -> dict[str, Any]:
+        token = self.get_access_token()
+        url = f"{self.config.ms_graph_base_url.rstrip('/')}/{path.lstrip('/')}"
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        if content_type:
+            headers["Content-Type"] = content_type
+        self.last_request_diagnostics = _request_diagnostics(
+            method="PUT",
+            url=url,
+            headers=headers,
+            graph_base_url=self.config.ms_graph_base_url,
+        )
+        try:
+            response = httpx.put(
+                url,
+                content=content,
+                headers=headers,
+                timeout=self.config.ms_graph_timeout_seconds,
+            )
+        except httpx.TimeoutException as error:
+            raise MicrosoftGraphRequestError(
+                None,
+                "Microsoft Graph request timed out.",
+                diagnostics=self.last_request_diagnostics,
+            ) from error
+        except httpx.HTTPError as error:
+            raise MicrosoftGraphRequestError(
+                None,
+                "Microsoft Graph request failed.",
+                diagnostics=self.last_request_diagnostics,
+            ) from error
+
+        data = _safe_json(response)
+        if response.status_code >= 400:
+            raise MicrosoftGraphRequestError(
+                response.status_code,
+                f"Microsoft Graph request failed with status {response.status_code}.",
+                error_code=_safe_error_code(data)
+                or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
+                error_message_short=_safe_error_message_short(data),
+                diagnostics=self.last_request_diagnostics,
+            )
+        return data if isinstance(data, dict) else {}
+
     def _request(
         self,
         method: str,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import HTTPException, status
 
@@ -245,6 +246,37 @@ class ProjectStorageService:
             return []
         return [_document_item(item) for item in items if isinstance(item, dict)]
 
+    def upload_file_to_folder(
+        self,
+        *,
+        drive_id: str | None,
+        folder_item_id: str | None,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+        safe_filename = _safe_upload_filename(filename)
+        if not safe_filename:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Dateiname fehlt.")
+
+        encoded_filename = quote(safe_filename, safe="")
+        try:
+            response = self.graph_client.put_content(
+                f"/drives/{drive_id}/items/{folder_item_id}:/{encoded_filename}:/content",
+                content,
+                content_type=content_type,
+            )
+        except MicrosoftGraphRequestError as error:
+            raise _safe_graph_files_exception(error) from error
+        return _document_item(response)
+
     def _create_folder(self, parent_item_id: str, name: str) -> dict[str, Any]:
         payload = {
             "name": name,
@@ -336,6 +368,13 @@ def _file_extension(name: str) -> str | None:
         return None
     extension = name.rsplit(".", 1)[-1].strip().lower()
     return extension or None
+
+
+def _safe_upload_filename(filename: str | None) -> str:
+    if not filename:
+        return ""
+    sanitized = filename.replace("\\", "/").split("/")[-1].strip(" .")
+    return sanitized[:180].strip(" .")
 
 
 def _safe_graph_files_exception(error: MicrosoftGraphRequestError) -> HTTPException:

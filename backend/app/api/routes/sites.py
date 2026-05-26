@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.project_folder import ProjectFolderDocumentList, ProjectFolderRead
+from app.schemas.project_folder import (
+    ProjectFolderDocumentItem,
+    ProjectFolderDocumentList,
+    ProjectFolderRead,
+)
 from app.schemas.site import (
     SiteCreate,
     SiteGeocodeSearchResult,
@@ -110,6 +114,30 @@ def list_project_folder_documents(
         folder_name=folder.name,
         items=items,
     )
+
+
+@router.post(
+    "/{site_id}/documents/folders/{folder_key}/upload",
+    response_model=ProjectFolderDocumentItem,
+)
+async def upload_project_folder_document(
+    site_id: int,
+    folder_key: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentItem:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+        site_id, folder_key, current_user
+    )
+    uploaded = ProjectStorageService().upload_file_to_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        filename=file.filename,
+        content=await file.read(),
+        content_type=file.content_type,
+    )
+    return ProjectFolderDocumentItem.model_validate(uploaded)
 
 
 @router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)

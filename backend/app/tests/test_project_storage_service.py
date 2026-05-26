@@ -28,6 +28,7 @@ def graph_config(**overrides):
 class FakeGraphClient:
     def __init__(self):
         self.posts = []
+        self.puts = []
 
     def get_access_token(self):
         return "token-not-returned"
@@ -74,6 +75,17 @@ class FakeGraphClient:
             "id": f"folder-{index}",
             "name": payload["name"],
             "webUrl": f"https://example.invalid/folder-{index}",
+        }
+
+    def put_content(self, path, content, content_type=None):
+        self.puts.append((path, content, content_type))
+        return {
+            "id": "uploaded-1",
+            "name": "Upload.pdf",
+            "webUrl": "https://example.invalid/upload",
+            "size": len(content),
+            "lastModifiedDateTime": "2026-05-26T09:15:00Z",
+            "file": {"mimeType": content_type},
         }
 
 
@@ -284,6 +296,36 @@ def test_list_folder_children_returns_safe_document_items():
     assert result[1]["name"] == "Unterlagen"
     assert result[1]["is_folder"] is True
     assert result[1]["file_extension"] is None
+    assert "super-secret-value" not in str(result)
+
+
+def test_upload_file_to_folder_uses_encoded_filename_and_returns_document_item():
+    graph = FakeGraphClient()
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=graph,
+    )
+
+    result = service.upload_file_to_folder(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        filename="Angebot Müller.pdf",
+        content=b"pdf-bytes",
+        content_type="application/pdf",
+    )
+
+    assert graph.puts == [
+        (
+            "/drives/drive-1/items/folder-1:/Angebot%20M%C3%BCller.pdf:/content",
+            b"pdf-bytes",
+            "application/pdf",
+        )
+    ]
+    assert result["id"] == "uploaded-1"
+    assert result["name"] == "Upload.pdf"
+    assert result["file_extension"] == "pdf"
+    assert result["mime_type"] == "application/pdf"
+    assert result["is_folder"] is False
     assert "super-secret-value" not in str(result)
 
 

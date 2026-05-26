@@ -3021,6 +3021,12 @@ button.person-chip:focus-visible {
   box-shadow: inset 0 0 0 1px rgba(43, 96, 157, 0.16);
 }
 
+.project-folder-card.is-drag-over {
+  border-color: #2563eb;
+  background: #eaf3ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
 .project-folder-placeholder,
 .project-document-browser,
 .project-record-empty-state {
@@ -3039,6 +3045,12 @@ button.person-chip:focus-visible {
   border-color: #f3c7c7;
   background: #fff5f5;
   color: #9f2a2a;
+}
+
+.project-record-empty-state.is-success {
+  border-color: #bfe7ca;
+  background: #f1fbf4;
+  color: #166534;
 }
 
 .project-folder-placeholder {
@@ -3095,6 +3107,26 @@ button.person-chip:focus-visible {
   flex: 0 0 auto;
 }
 
+.project-document-item svg.is-pdf {
+  color: #dc2626;
+}
+
+.project-document-item svg.is-word {
+  color: #2563eb;
+}
+
+.project-document-item svg.is-excel {
+  color: #16a34a;
+}
+
+.project-document-item svg.is-image {
+  color: #db2777;
+}
+
+.project-document-item svg.is-mail {
+  color: #d97706;
+}
+
 .project-document-browser h3,
 .project-document-browser p,
 .project-document-item strong,
@@ -3120,6 +3152,57 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
+.project-upload-action {
+  position: relative;
+  overflow: hidden;
+}
+
+.project-upload-action.is-disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.project-upload-input {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.project-upload-input:disabled {
+  cursor: wait;
+}
+
+.project-document-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-document-search {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  width: min(360px, 100%);
+  border: 1px solid #cbd8e8;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #64748b;
+  padding: 0 10px;
+}
+
+.project-document-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #172033;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  padding: 7px 0 7px 8px;
+}
+
 .project-document-list {
   display: grid;
   gap: 8px;
@@ -3143,6 +3226,11 @@ button.person-chip:focus-visible {
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-document-open-action {
+  gap: 6px;
+  min-width: 96px;
 }
 
 .project-placeholder-grid {

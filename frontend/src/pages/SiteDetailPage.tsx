@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, ExternalLink, FileText, Folder, FolderOpen, MapPin, Phone, Ruler, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -34,6 +34,10 @@ export function SiteDetailPage() {
   const [folderDocumentsLoading, setFolderDocumentsLoading] = useState(false);
   const [folderDocumentsError, setFolderDocumentsError] = useState<string | null>(null);
   const [folderDocumentsReloadKey, setFolderDocumentsReloadKey] = useState(0);
+  const [uploadingFolderKey, setUploadingFolderKey] = useState<string | null>(null);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -69,6 +73,10 @@ export function SiteDetailPage() {
     setFolderDocumentsLoading(false);
     setFolderDocumentsError(null);
     setFolderDocumentsReloadKey(0);
+    setUploadingFolderKey(null);
+    setUploadMessage(null);
+    setUploadError(null);
+    setDragOverFolderKey(null);
   }, [site?.id]);
 
   useEffect(() => {
@@ -132,6 +140,36 @@ export function SiteDetailPage() {
     };
   }, [activeTab, folderDocumentsReloadKey, selectedFolder, site]);
 
+  async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
+    if (!site) {
+      return;
+    }
+    const fileList = Array.from(files);
+    setUploadMessage(null);
+    setUploadError(null);
+    if (!site.project_folder_web_url) {
+      setUploadError("Für diese Baustelle ist noch kein SharePoint-Projektordner vorhanden.");
+      return;
+    }
+    if (fileList.length !== 1) {
+      setUploadError("Bitte genau eine Datei hochladen.");
+      return;
+    }
+
+    setUploadingFolderKey(folder.folder_key);
+    try {
+      await api.uploadProjectFolderDocument(site.id, folder.folder_key, fileList[0]);
+      setSelectedFolder(folder);
+      setUploadMessage(`${fileList[0].name} wurde hochgeladen.`);
+      setFolderDocumentsReloadKey((value) => value + 1);
+    } catch (requestError) {
+      setUploadError(readApiError(requestError, "Datei konnte nicht hochgeladen werden."));
+    } finally {
+      setUploadingFolderKey(null);
+      setDragOverFolderKey(null);
+    }
+  }
+
   if (isLoading) {
     return <div className="matrix-state">Projektakte wird geladen...</div>;
   }
@@ -172,7 +210,13 @@ export function SiteDetailPage() {
           documents={folderDocuments}
           documentsLoading={folderDocumentsLoading}
           documentsError={folderDocumentsError}
+          uploadingFolderKey={uploadingFolderKey}
+          uploadMessage={uploadMessage}
+          uploadError={uploadError}
+          dragOverFolderKey={dragOverFolderKey}
           onSelectFolder={setSelectedFolder}
+          onUploadFiles={(folder, files) => void uploadFilesToFolder(folder, files)}
+          onDragOverFolder={setDragOverFolderKey}
           onRetry={() => {
             setFoldersLoaded(false);
             setFoldersError(null);
@@ -300,7 +344,13 @@ function ProjectFoldersPanel({
   documents,
   documentsLoading,
   documentsError,
+  uploadingFolderKey,
+  uploadMessage,
+  uploadError,
+  dragOverFolderKey,
   onSelectFolder,
+  onUploadFiles,
+  onDragOverFolder,
   onRetry,
   onRetryDocuments,
 }: {
@@ -312,7 +362,13 @@ function ProjectFoldersPanel({
   documents: ProjectFolderDocumentList | null;
   documentsLoading: boolean;
   documentsError: string | null;
+  uploadingFolderKey: string | null;
+  uploadMessage: string | null;
+  uploadError: string | null;
+  dragOverFolderKey: string | null;
   onSelectFolder: (folder: ProjectFolder | null) => void;
+  onUploadFiles: (folder: ProjectFolder, files: FileList | File[]) => void;
+  onDragOverFolder: (folderKey: string | null) => void;
   onRetry: () => void;
   onRetryDocuments: () => void;
 }) {
@@ -362,13 +418,23 @@ function ProjectFoldersPanel({
               <button
                 key={folder.id}
                 type="button"
-                className={`project-folder-card${isSelected ? " is-selected" : ""}`}
+                className={`project-folder-card${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
                 onClick={() => onSelectFolder(folder)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  onDragOverFolder(folder.folder_key);
+                }}
+                onDragLeave={() => onDragOverFolder(null)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  onDragOverFolder(null);
+                  onUploadFiles(folder, event.dataTransfer.files);
+                }}
                 title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
               >
                 <Folder aria-hidden="true" size={18} />
                 <span>{folder.sort_order}.</span>
-                <strong>{folder.name}</strong>
+                <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
               </button>
             );
           })}
@@ -382,6 +448,10 @@ function ProjectFoldersPanel({
           documents={documents}
           isLoading={documentsLoading}
           error={documentsError}
+          isUploading={uploadingFolderKey === selectedFolder.folder_key}
+          uploadMessage={uploadMessage}
+          uploadError={uploadError}
+          onUpload={(files) => onUploadFiles(selectedFolder, files)}
           onClose={() => onSelectFolder(null)}
           onRetry={onRetryDocuments}
         />
@@ -396,6 +466,10 @@ function ProjectFolderDocumentBrowser({
   documents,
   isLoading,
   error,
+  isUploading,
+  uploadMessage,
+  uploadError,
+  onUpload,
   onClose,
   onRetry,
 }: {
@@ -404,9 +478,30 @@ function ProjectFolderDocumentBrowser({
   documents: ProjectFolderDocumentList | null;
   isLoading: boolean;
   error: string | null;
+  isUploading: boolean;
+  uploadMessage: string | null;
+  uploadError: string | null;
+  onUpload: (files: FileList | File[]) => void;
   onClose: () => void;
   onRetry: () => void;
 }) {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setQuery("");
+  }, [folder.id]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleItems = documents?.items.filter((item) => {
+    if (!normalizedQuery) {
+      return true;
+    }
+    return [item.name, item.file_extension, item.mime_type]
+      .filter(Boolean)
+      .some((value) => value?.toLowerCase().includes(normalizedQuery));
+  }) ?? [];
+  const hasLoadedItems = Boolean(documents && documents.items.length > 0);
+
   return (
     <aside className="project-document-browser" aria-live="polite">
       <div className="project-document-browser-header">
@@ -418,8 +513,25 @@ function ProjectFolderDocumentBrowser({
           </div>
         </div>
         <div className="project-document-browser-actions">
+          {hasSharePointFolder ? (
+            <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
+              <UploadCloud aria-hidden="true" size={15} />
+              <span>{isUploading ? "Wird hochgeladen..." : "Datei hochladen"}</span>
+              <input
+                className="project-upload-input"
+                type="file"
+                disabled={isUploading}
+                onChange={(event) => {
+                  if (event.target.files) {
+                    onUpload(event.target.files);
+                    event.target.value = "";
+                  }
+                }}
+              />
+            </label>
+          ) : null}
           {folder.external_web_url ? (
-            <a className="secondary-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
+            <a className="secondary-action project-document-open-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
               <ExternalLink aria-hidden="true" size={15} />
               <span>Ordner öffnen</span>
             </a>
@@ -428,8 +540,24 @@ function ProjectFolderDocumentBrowser({
         </div>
       </div>
 
+      {uploadMessage ? <div className="project-record-empty-state is-success">{uploadMessage}</div> : null}
+      {uploadError ? <div className="project-record-empty-state is-error"><strong>{uploadError}</strong></div> : null}
+
       {!hasSharePointFolder ? (
         <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
+      ) : null}
+      {hasSharePointFolder ? (
+        <div className="project-document-filter-row">
+          <label className="project-document-search">
+            <Search aria-hidden="true" size={16} />
+            <input
+              type="search"
+              value={query}
+              placeholder="Dateien suchen..."
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
       ) : null}
       {hasSharePointFolder && isLoading ? (
         <div className="project-record-empty-state">Dateien werden geladen...</div>
@@ -441,21 +569,24 @@ function ProjectFolderDocumentBrowser({
         </div>
       ) : null}
       {hasSharePointFolder && !isLoading && !error && documents?.items.length === 0 ? (
-        <div className="project-record-empty-state">Noch keine Dateien in diesem Ordner.</div>
+        <div className="project-record-empty-state">Noch keine Dateien in diesem Ordner. Datei hochladen oder per Drag & Drop auf den Ordner ziehen.</div>
       ) : null}
-      {hasSharePointFolder && !isLoading && !error && documents && documents.items.length > 0 ? (
+      {hasSharePointFolder && !isLoading && !error && hasLoadedItems && visibleItems.length === 0 ? (
+        <div className="project-record-empty-state">Keine Dateien gefunden.</div>
+      ) : null}
+      {hasSharePointFolder && !isLoading && !error && visibleItems.length > 0 ? (
         <ul className="project-document-list">
-          {documents.items.map((item) => (
+          {visibleItems.map((item) => (
             <li key={item.id || item.name} className="project-document-item">
               <div>
-                <FileText aria-hidden="true" size={19} />
+                <DocumentTypeIcon item={item} />
                 <div>
                   <strong>{item.name}</strong>
                   <span>{formatDocumentMeta(item)}</span>
                 </div>
               </div>
               {item.web_url ? (
-                <a className="secondary-action" href={item.web_url} target="_blank" rel="noreferrer">
+                <a className="secondary-action project-document-open-action" href={item.web_url} target="_blank" rel="noreferrer">
                   <ExternalLink aria-hidden="true" size={15} />
                   <span>Öffnen</span>
                 </a>
@@ -466,6 +597,27 @@ function ProjectFolderDocumentBrowser({
       ) : null}
     </aside>
   );
+}
+
+function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
+  const extension = item.file_extension?.toLowerCase();
+  const mimeType = item.mime_type?.toLowerCase() ?? "";
+  if (extension === "pdf" || mimeType.includes("pdf")) {
+    return <FileText aria-hidden="true" className="is-pdf" size={20} />;
+  }
+  if (["doc", "docx"].includes(extension ?? "") || mimeType.includes("word")) {
+    return <FileText aria-hidden="true" className="is-word" size={20} />;
+  }
+  if (["xls", "xlsx", "xlsm", "csv"].includes(extension ?? "") || mimeType.includes("spreadsheet") || mimeType.includes("excel")) {
+    return <FileSpreadsheet aria-hidden="true" className="is-excel" size={20} />;
+  }
+  if (["jpg", "jpeg", "png", "webp"].includes(extension ?? "") || mimeType.startsWith("image/")) {
+    return <FileImage aria-hidden="true" className="is-image" size={20} />;
+  }
+  if (["msg", "eml"].includes(extension ?? "") || mimeType.includes("message")) {
+    return <Mail aria-hidden="true" className="is-mail" size={20} />;
+  }
+  return <FileIcon aria-hidden="true" size={20} />;
 }
 
 

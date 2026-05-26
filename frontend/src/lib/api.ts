@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { ProjectFolder, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -103,7 +103,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("kb_access_token");
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
@@ -306,6 +307,22 @@ export const api = {
   async projectFolderDocuments(siteId: number, folderKey: string): Promise<ProjectFolderDocumentList> {
     return request<ProjectFolderDocumentList>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/children`,
+    );
+  },
+
+  async uploadProjectFolderDocument(
+    siteId: number,
+    folderKey: string,
+    file: File,
+  ): Promise<ProjectFolderDocumentItem> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<ProjectFolderDocumentItem>(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/upload`,
+      {
+        method: "POST",
+        body: formData,
+      },
     );
   },
 
