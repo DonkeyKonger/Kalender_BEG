@@ -7,7 +7,7 @@ import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
-import type { MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
+import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 
 type EditableUser = {
@@ -47,8 +47,11 @@ export function AdminUsersPage() {
   const [graphTestError, setGraphTestError] = useState<string | null>(null);
   const [graphFolderResult, setGraphFolderResult] = useState<MicrosoftGraphCreateTestFolderResponse | null>(null);
   const [graphFolderError, setGraphFolderError] = useState<string | null>(null);
+  const [graphBackfillResult, setGraphBackfillResult] = useState<MicrosoftGraphBackfillProjectFoldersResponse | null>(null);
+  const [graphBackfillError, setGraphBackfillError] = useState<string | null>(null);
   const [isTestingGraph, setIsTestingGraph] = useState(false);
   const [isCreatingGraphFolder, setIsCreatingGraphFolder] = useState(false);
+  const [isBackfillingGraphFolders, setIsBackfillingGraphFolders] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -195,6 +198,8 @@ export function AdminUsersPage() {
     try {
       setGraphFolderResult(null);
       setGraphFolderError(null);
+      setGraphBackfillResult(null);
+      setGraphBackfillError(null);
       setGraphTestResult(await api.testMicrosoftGraphConnection());
     } catch (requestError) {
       setGraphTestError(readApiError(requestError, "Microsoft Graph konnte nicht getestet werden."));
@@ -213,6 +218,25 @@ export function AdminUsersPage() {
       setGraphFolderError(readApiError(requestError, "Testordner konnte nicht erstellt werden."));
     } finally {
       setIsCreatingGraphFolder(false);
+    }
+  }
+
+  async function backfillMicrosoftGraphProjectFolders() {
+    const confirmed = window.confirm(
+      "Es werden für bestehende Baustellen ohne Projektordner SharePoint-Ordner erstellt. Fortfahren?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setIsBackfillingGraphFolders(true);
+    setGraphBackfillError(null);
+    setGraphBackfillResult(null);
+    try {
+      setGraphBackfillResult(await api.backfillMicrosoftGraphProjectFolders());
+    } catch (requestError) {
+      setGraphBackfillError(readApiError(requestError, "Projektordner konnten nicht erstellt werden."));
+    } finally {
+      setIsBackfillingGraphFolders(false);
     }
   }
 
@@ -237,10 +261,14 @@ export function AdminUsersPage() {
         error={graphTestError}
         folderResult={graphFolderResult}
         folderError={graphFolderError}
+        backfillResult={graphBackfillResult}
+        backfillError={graphBackfillError}
         isLoading={isTestingGraph}
         isCreatingFolder={isCreatingGraphFolder}
+        isBackfilling={isBackfillingGraphFolders}
         onTest={() => void testMicrosoftGraphConnection()}
         onCreateFolder={() => void createMicrosoftGraphTestFolder()}
+        onBackfill={() => void backfillMicrosoftGraphProjectFolders()}
       />
 
       <input
@@ -367,19 +395,27 @@ function MicrosoftGraphTestPanel({
   error,
   folderResult,
   folderError,
+  backfillResult,
+  backfillError,
   isLoading,
   isCreatingFolder,
+  isBackfilling,
   onTest,
   onCreateFolder,
+  onBackfill,
 }: {
   result: MicrosoftGraphConnectionTestResponse | null;
   error: string | null;
   folderResult: MicrosoftGraphCreateTestFolderResponse | null;
   folderError: string | null;
+  backfillResult: MicrosoftGraphBackfillProjectFoldersResponse | null;
+  backfillError: string | null;
   isLoading: boolean;
   isCreatingFolder: boolean;
+  isBackfilling: boolean;
   onTest: () => void;
   onCreateFolder: () => void;
+  onBackfill: () => void;
 }) {
   return (
     <section className="admin-integration-panel">
@@ -389,27 +425,39 @@ function MicrosoftGraphTestPanel({
           <p>Prüft die konfigurierte Graph-Verbindung. Ein Testordner wird nur per Klick erstellt.</p>
         </div>
         <div className="admin-integration-actions">
-          <button className="icon-button secondary" disabled={isLoading || isCreatingFolder} type="button" onClick={onTest}>
+          <button className="icon-button secondary" disabled={isLoading || isCreatingFolder || isBackfilling} type="button" onClick={onTest}>
             <PlugZap aria-hidden="true" size={16} />
             <span>{isLoading ? "Teste..." : "Microsoft Graph testen"}</span>
           </button>
           {result?.connected ? (
-            <button
-              className="icon-button secondary"
-              disabled={isLoading || isCreatingFolder}
-              type="button"
-              onClick={onCreateFolder}
-            >
-              <span>{isCreatingFolder ? "Erstelle..." : "Testordner erstellen"}</span>
-            </button>
+            <>
+              <button
+                className="icon-button secondary"
+                disabled={isLoading || isCreatingFolder || isBackfilling}
+                type="button"
+                onClick={onCreateFolder}
+              >
+                <span>{isCreatingFolder ? "Erstelle..." : "Testordner erstellen"}</span>
+              </button>
+              <button
+                className="icon-button secondary"
+                disabled={isLoading || isCreatingFolder || isBackfilling}
+                type="button"
+                onClick={onBackfill}
+              >
+                <span>{isBackfilling ? "Erstelle..." : "Projektordner für bestehende Baustellen erstellen"}</span>
+              </button>
+            </>
           ) : null}
         </div>
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
       {folderError ? <p className="form-error">{folderError}</p> : null}
+      {backfillError ? <p className="form-error">{backfillError}</p> : null}
       {result ? <MicrosoftGraphTestResult result={result} /> : null}
       {folderResult ? <MicrosoftGraphFolderResult result={folderResult} /> : null}
+      {backfillResult ? <MicrosoftGraphBackfillResult result={backfillResult} /> : null}
     </section>
   );
 }
@@ -431,6 +479,49 @@ function MicrosoftGraphFolderResult({ result }: { result: MicrosoftGraphCreateTe
         <div className="is-wide">
           <span>Erstellte Unterordner</span>
           <strong>{result.subfolders.map((folder) => folder.name).join(", ")}</strong>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MicrosoftGraphBackfillResult({ result }: { result: MicrosoftGraphBackfillProjectFoldersResponse }) {
+  return (
+    <div className={`admin-integration-result ${result.error_count ? "is-disconnected" : "is-connected"}`}>
+      <div>
+        <span>Kandidaten</span>
+        <strong>{result.total_candidates}</strong>
+      </div>
+      <div>
+        <span>Erstellt</span>
+        <strong>{result.created_count}</strong>
+      </div>
+      <div>
+        <span>Übersprungen</span>
+        <strong>{result.skipped_count}</strong>
+      </div>
+      <div>
+        <span>Fehler</span>
+        <strong>{result.error_count}</strong>
+      </div>
+      {result.created.length ? (
+        <div className="is-wide">
+          <span>Erstellte Projektordner</span>
+          <strong>
+            {result.created.map((site) => site.web_url ? (
+              <a key={site.site_id} href={site.web_url} target="_blank" rel="noreferrer">
+                {[site.site_number, site.site_name].filter(Boolean).join(" · ")}
+              </a>
+            ) : (
+              <span key={site.site_id}>{[site.site_number, site.site_name].filter(Boolean).join(" · ")}</span>
+            ))}
+          </strong>
+        </div>
+      ) : null}
+      {result.errors.length ? (
+        <div className="is-wide">
+          <span>Fehlerdetails</span>
+          <strong>{result.errors.map((item) => `${item.site_number ?? item.site_id}: ${item.safe_error}`).join(" | ")}</strong>
         </div>
       ) : null}
     </div>

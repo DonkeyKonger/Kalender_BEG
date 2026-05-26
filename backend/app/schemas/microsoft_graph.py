@@ -51,3 +51,35 @@ class MicrosoftGraphCreateTestFolderResponse(BaseModel):
     created: bool
     root_folder: MicrosoftGraphResource
     subfolders: list[MicrosoftGraphCreatedSubfolder]
+
+
+class MicrosoftGraphBackfillCreatedSite(BaseModel):
+    site_id: int
+    site_number: str | None = None
+    site_name: str
+    folder_name: str | None = None
+    web_url: str | None = None
+
+
+class MicrosoftGraphBackfillSkippedSite(BaseModel):
+    site_id: int
+    site_number: str | None = None
+    site_name: str
+    reason: str
+
+
+class MicrosoftGraphBackfillErrorSite(BaseModel):
+    site_id: int
+    site_number: str | None = None
+    site_name: str
+    safe_error: str
+
+
+class MicrosoftGraphBackfillProjectFoldersResponse(BaseModel):
+    total_candidates: int
+    created_count: int
+    skipped_count: int
+    error_count: int
+    created: list[MicrosoftGraphBackfillCreatedSite]
+    skipped: list[MicrosoftGraphBackfillSkippedSite]
+    errors: list[MicrosoftGraphBackfillErrorSite]

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_current_user
+from app.api.routes import admin_integrations
 from app.main import create_app
 from app.models.enums import UserRole
 
@@ -30,7 +31,16 @@ def test_microsoft_graph_test_endpoint_requires_admin_role():
     app.dependency_overrides.clear()
 
 
-def test_microsoft_graph_test_endpoint_returns_disabled_state_for_admin():
+def test_microsoft_graph_test_endpoint_returns_disabled_state_for_admin(monkeypatch):
+    class DisabledProjectStorageService:
+        def test_project_storage_connection(self):
+            return {
+                "connected": False,
+                "graph_enabled": False,
+                "reason": "MS_GRAPH_ENABLED is false",
+            }
+
+    monkeypatch.setattr(admin_integrations, "ProjectStorageService", DisabledProjectStorageService)
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id=1,
@@ -55,4 +65,19 @@ def test_microsoft_graph_test_endpoint_returns_disabled_state_for_admin():
     assert payload["drive"] is None
     assert payload["root_folder"] is None
     assert payload["site"] is None
+    app.dependency_overrides.clear()
+
+
+def test_microsoft_graph_backfill_endpoint_requires_admin_role():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id=2,
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    client = TestClient(app)
+
+    response = client.post("/api/admin/integrations/microsoft-graph/backfill-project-folders")
+
+    assert response.status_code == 403
     app.dependency_overrides.clear()

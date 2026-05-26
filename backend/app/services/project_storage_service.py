@@ -219,6 +219,7 @@ class ProjectStorageService:
             "folder_id": root_folder.get("id"),
             "folder_name": root_folder.get("name"),
             "web_url": root_folder.get("webUrl"),
+            "drive_id": self.config.ms_project_drive_id,
             "subfolders": subfolders,
         }
 

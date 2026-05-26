@@ -36,7 +36,11 @@ class FakeGraphClient:
         if path == "/drives/drive-1":
             return {"id": "drive-1", "name": "Projekte"}
         if path == "/drives/drive-1/items/root-1":
-            return {"id": "root-1", "name": "Projektbasis", "webUrl": "https://example.invalid/root"}
+            return {
+                "id": "root-1",
+                "name": "Projektbasis",
+                "webUrl": "https://example.invalid/root",
+            }
         if path == "/sites/site-1":
             return {"id": "site-1", "displayName": "SharePoint Site"}
         raise AssertionError(f"unexpected get path: {path}")
@@ -53,7 +57,11 @@ class FakeGraphClient:
 
 class FailingTokenGraphClient:
     def get_access_token(self):
-        raise MicrosoftGraphRequestError(401, "Microsoft Graph token request failed with status 401.", error_code="invalid_client")
+        raise MicrosoftGraphRequestError(
+            401,
+            "Microsoft Graph token request failed with status 401.",
+            error_code="invalid_client",
+        )
 
 
 class FailingDriveGraphClient:
@@ -75,7 +83,6 @@ class FailingDriveGraphClient:
                 },
             )
         raise AssertionError(f"unexpected get path: {path}")
-
 
 
 def enabled_config(**overrides):
@@ -101,7 +108,9 @@ def test_connection_test_is_inert_when_graph_is_disabled():
 
 
 def test_connection_test_reports_missing_config_without_secret_values():
-    result = ProjectStorageService(config=graph_config(ms_graph_enabled=True)).test_project_storage_connection()
+    result = ProjectStorageService(
+        config=graph_config(ms_graph_enabled=True)
+    ).test_project_storage_connection()
 
     assert result["connected"] is False
     assert result["graph_enabled"] is True
@@ -224,6 +233,7 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
     assert result["folder_name"] == "8007_Schuechtermann_Klinik"
     assert result["folder_id"] == "folder-1"
     assert result["web_url"] == "https://example.invalid/folder-1"
+    assert result["drive_id"] == "drive-1"
     assert len(result["subfolders"]) == 15
     assert graph.posts[0][1]["name"] == "8007_Schuechtermann_Klinik"
     assert graph.posts[1][1]["name"] == "01_Angebote"

@@ -1,6 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
-import type { MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
+import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
@@ -188,6 +188,14 @@ export const api = {
   async createMicrosoftGraphTestProjectFolder(): Promise<MicrosoftGraphCreateTestFolderResponse> {
     return request<MicrosoftGraphCreateTestFolderResponse>(
       "/admin/integrations/microsoft-graph/create-test-project-folder",
+      { method: "POST" },
+    );
+  },
+
+  async backfillMicrosoftGraphProjectFolders(limit = 10): Promise<MicrosoftGraphBackfillProjectFoldersResponse> {
+    const search = new URLSearchParams({ limit: String(limit) });
+    return request<MicrosoftGraphBackfillProjectFoldersResponse>(
+      `/admin/integrations/microsoft-graph/backfill-project-folders?${search.toString()}`,
       { method: "POST" },
     );
   },

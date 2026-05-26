@@ -14,14 +14,36 @@ from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdate
 from app.services.audit_service import AuditService
-from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address, has_valid_coordinates
+from app.services.geo_service import (
+    DEFAULT_SITE_GEOFENCE_RADIUS_M,
+    geocode_site_address,
+    has_valid_coordinates,
+)
 from app.services.project_folder_service import ProjectFolderService
-from app.services.project_storage_service import ProjectStorageService
+from app.services.project_storage_service import (
+    PROJECT_FOLDER_STATUS_CREATED,
+    PROJECT_FOLDER_STATUS_DISABLED,
+    ProjectStorageService,
+)
 
 
-OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
+OPTIONAL_TEXT_FIELDS = [
+    "site_number",
+    "location",
+    "address",
+    "postal_code",
+    "city",
+    "street",
+    "house_number",
+    "address_extra",
+    "customer",
+    "info",
+    "color",
+]
 CLOSED_STATUSES = {SiteStatus.COMPLETED, SiteStatus.DELETED}
 OPEN_STATUSES = {SiteStatus.ACTIVE, SiteStatus.PAUSED, SiteStatus.PLANNED}
+PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT = 10
+PROJECT_FOLDER_BACKFILL_MAX_LIMIT = 25
 ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
 TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
 VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
@@ -108,7 +130,10 @@ class SiteService:
         return site
 
     def _site_has_dependencies(self, site: Site) -> bool:
-        if any(getattr(site, field, None) not in (None, "") for field in SITE_LOCATION_DEPENDENCY_FIELDS):
+        if any(
+            getattr(site, field, None) not in (None, "")
+            for field in SITE_LOCATION_DEPENDENCY_FIELDS
+        ):
             return True
         return (
             self._has_row(Assignment, Assignment.site_id == site.id)
@@ -148,6 +173,51 @@ class SiteService:
         self.db.refresh(site)
         return site
 
+    def backfill_project_folders(self, limit: int = PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT) -> dict:
+        self._ensure_project_folder_creation_enabled()
+        safe_limit = max(1, min(limit, PROJECT_FOLDER_BACKFILL_MAX_LIMIT))
+        open_sites = self.db.scalars(
+            select(Site).where(Site.status.in_(tuple(OPEN_STATUSES))).order_by(Site.id)
+        ).all()
+
+        candidates = []
+        skipped = []
+        for site in open_sites:
+            if site.project_folder_id or site.project_folder_web_url:
+                skipped.append(backfill_site_result(site, reason="existing_project_folder"))
+            else:
+                candidates.append(site)
+
+        created = []
+        errors = []
+        for site in candidates[:safe_limit]:
+            self._create_project_folder_for_new_site(site)
+            if site.project_folder_status == PROJECT_FOLDER_STATUS_CREATED:
+                created.append(backfill_site_result(site))
+            elif site.project_folder_status == PROJECT_FOLDER_STATUS_DISABLED:
+                skipped.append(backfill_site_result(site, reason="disabled"))
+            else:
+                errors.append(
+                    backfill_site_result(
+                        site,
+                        safe_error=site.project_folder_error or "Project folder creation failed.",
+                    )
+                )
+
+        for site in candidates[safe_limit:]:
+            skipped.append(backfill_site_result(site, reason="limit_reached"))
+
+        self.db.commit()
+        return {
+            "total_candidates": len(candidates),
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "error_count": len(errors),
+            "created": created,
+            "skipped": skipped,
+            "errors": errors,
+        }
+
     def update_site(self, site_id: int, payload: SiteUpdate, user_id: int) -> Site:
         site = self.sites.get(site_id)
         if site is None:
@@ -157,8 +227,7 @@ class SiteService:
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
         old_value = site_snapshot(site)
         address_changed = any(
-            field in values and getattr(site, field) != values[field]
-            for field in ADDRESS_FIELDS
+            field in values and getattr(site, field) != values[field] for field in ADDRESS_FIELDS
         )
         selected_geocode = apply_selected_geocode(values)
         status_value = values.get("status")
@@ -256,17 +325,39 @@ class SiteService:
             site.closed_at = None
             site.closed_by_user_id = None
 
-    def _create_project_folder_for_new_site(self, site: Site) -> None:
+    def _ensure_project_folder_creation_enabled(self) -> None:
+        if not self.project_storage.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not self.project_storage.config.ms_graph_create_project_folders_enabled:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED is false."
+            )
+
+    def _create_project_folder_for_new_site(self, site: Site) -> dict:
         result = self.project_storage.create_project_folder_for_site(
             site_id=site.id,
             site_number=site.site_number,
             site_name=site.name,
         )
+        self._apply_project_folder_result(site, result)
+        return result
+
+    def _apply_project_folder_result(self, site: Site, result: dict) -> None:
         site.project_folder_status = result.get("status") or "not_configured"
         site.project_folder_id = result.get("folder_id")
         site.project_folder_web_url = result.get("web_url")
         site.project_folder_name = result.get("folder_name")
         site.project_folder_error = result.get("error")
+        if site.project_folder_status != PROJECT_FOLDER_STATUS_CREATED:
+            return
+        subfolders = result.get("subfolders")
+        if not isinstance(subfolders, list):
+            return
+        ProjectFolderService(self.db).attach_external_subfolders_for_site(
+            site.id,
+            subfolders,
+            drive_id=result.get("drive_id"),
+        )
 
     def _ensure_project_manager_exists(self, person_id: int | None) -> None:
         if person_id is not None and self.people.get(person_id) is None:
@@ -285,6 +376,25 @@ def clean_site_values(values: dict) -> dict:
     if "name" in cleaned and not cleaned.get("name"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustellenname darf nicht leer sein.")
     return cleaned
+
+
+def backfill_site_result(
+    site: Site, *, reason: str | None = None, safe_error: str | None = None
+) -> dict:
+    result = {
+        "site_id": site.id,
+        "site_number": site.site_number,
+        "site_name": site.name,
+    }
+    if reason is not None:
+        result["reason"] = reason
+    if safe_error is not None:
+        result["safe_error"] = safe_error[:240]
+    if site.project_folder_name is not None:
+        result["folder_name"] = site.project_folder_name
+    if site.project_folder_web_url is not None:
+        result["web_url"] = site.project_folder_web_url
+    return result
 
 
 def site_snapshot(site: Site) -> dict:

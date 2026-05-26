@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +8,10 @@ from app.models.enums import UserRole
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
 from app.models.user import User
-from app.services.project_folder_template import PROJECT_FOLDER_TEMPLATE, PROJECT_FOLDER_TEMPLATE_BY_KEY
+from app.services.project_folder_template import (
+    PROJECT_FOLDER_TEMPLATE,
+    PROJECT_FOLDER_TEMPLATE_BY_KEY,
+)
 
 FULL_ACCESS_ROLES = {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}
 
@@ -38,21 +43,49 @@ class ProjectFolderService:
             self.db.flush()
         return [*existing, *created]
 
-    def get_visible_project_folders_for_site(self, site_id: int, current_user: User) -> list[ProjectFolder]:
+    def attach_external_subfolders_for_site(
+        self,
+        site_id: int,
+        subfolders: list[dict[str, Any]],
+        *,
+        drive_id: str | None,
+    ) -> None:
+        folders = self.create_default_project_folders_for_site(site_id)
+        folders_by_sort_order = {folder.sort_order: folder for folder in folders}
+        for subfolder in subfolders:
+            sort_order = subfolder.get("sort_order")
+            if not isinstance(sort_order, int):
+                continue
+            folder = folders_by_sort_order.get(sort_order)
+            if folder is None:
+                continue
+            folder.external_provider = "sharepoint"
+            folder.external_drive_id = drive_id
+            folder.external_item_id = subfolder.get("id")
+            folder.external_web_url = subfolder.get("web_url")
+        self.db.flush()
+
+    def get_visible_project_folders_for_site(
+        self, site_id: int, current_user: User
+    ) -> list[ProjectFolder]:
         self.create_default_project_folders_for_site(site_id)
         folders = self.db.scalars(
             select(ProjectFolder)
             .where(ProjectFolder.site_id == site_id, ProjectFolder.is_active.is_(True))
             .order_by(ProjectFolder.sort_order, ProjectFolder.id)
         ).all()
-        return [folder for folder in folders if user_can_access_project_folder(current_user, folder)]
+        return [
+            folder for folder in folders if user_can_access_project_folder(current_user, folder)
+        ]
 
     def get_project_folder(self, folder_id: int, current_user: User) -> ProjectFolder:
         folder = self.db.get(ProjectFolder, folder_id)
         if folder is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Projektordner nicht gefunden.")
         if not user_can_access_project_folder(current_user, folder):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diesen Projektordner.")
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diesen Projektordner."
+            )
         return folder
 
     def _ensure_site_exists(self, site_id: int) -> None:

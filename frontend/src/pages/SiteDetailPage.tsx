@@ -299,13 +299,32 @@ function ProjectFoldersPanel({
         <div className="project-record-empty-state">Keine Ordner vorhanden.</div>
       ) : (
         <div className="project-folder-grid">
-          {folders.map((folder) => (
-            <button key={folder.id} type="button" className="project-folder-card" onClick={() => onSelectFolder(folder)}>
-              <Folder aria-hidden="true" size={18} />
-              <span>{folder.sort_order}.</span>
-              <strong>{folder.name}</strong>
-            </button>
-          ))}
+          {folders.map((folder) => {
+            const sharePointUrl = site.project_folder_web_url ? folder.external_web_url : null;
+            const content = (
+              <>
+                <Folder aria-hidden="true" size={18} />
+                <span>{folder.sort_order}.</span>
+                <strong>{folder.name}</strong>
+              </>
+            );
+            return sharePointUrl ? (
+              <a
+                key={folder.id}
+                className="project-folder-card"
+                href={sharePointUrl}
+                target="_blank"
+                rel="noreferrer"
+                title={`${folder.sort_order}. ${folder.name} in SharePoint öffnen`}
+              >
+                {content}
+              </a>
+            ) : (
+              <button key={folder.id} type="button" className="project-folder-card" onClick={() => onSelectFolder(folder)}>
+                {content}
+              </button>
+            );
+          })}
         </div>
       )}
 

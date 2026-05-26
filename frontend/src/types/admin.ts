@@ -50,3 +50,35 @@ export type MicrosoftGraphCreateTestFolderResponse = {
   root_folder: MicrosoftGraphResource;
   subfolders: MicrosoftGraphCreatedSubfolder[];
 };
+
+export type MicrosoftGraphBackfillCreatedSite = {
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  folder_name: string | null;
+  web_url: string | null;
+};
+
+export type MicrosoftGraphBackfillSkippedSite = {
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  reason: string;
+};
+
+export type MicrosoftGraphBackfillErrorSite = {
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  safe_error: string;
+};
+
+export type MicrosoftGraphBackfillProjectFoldersResponse = {
+  total_candidates: number;
+  created_count: number;
+  skipped_count: number;
+  error_count: number;
+  created: MicrosoftGraphBackfillCreatedSite[];
+  skipped: MicrosoftGraphBackfillSkippedSite[];
+  errors: MicrosoftGraphBackfillErrorSite[];
+};

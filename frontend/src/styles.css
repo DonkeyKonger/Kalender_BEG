@@ -2986,6 +2986,7 @@ button.person-chip:focus-visible {
   font: inherit;
   padding: 11px 12px;
   text-align: left;
+  text-decoration: none;
 }
 
 .project-folder-card svg {
@@ -3278,12 +3279,19 @@ button.person-chip:focus-visible {
 }
 
 .admin-integration-result strong {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   overflow: hidden;
   color: #172033;
   font-size: 0.9rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-integration-result strong a {
+  color: #1d4ed8;
 }
 
 .admin-integration-result.is-connected > div:first-child,
