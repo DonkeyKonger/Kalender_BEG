@@ -5954,27 +5954,59 @@ button.person-chip:focus-visible {
   gap: 7px;
 }
 
-.mobile-measurement-facts {
+.mobile-measurement-quick-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.mobile-measurement-facts span {
+.mobile-measurement-quick-facts span {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   border: 1px solid #dce3ee;
   border-radius: 8px;
   background: #f8fafc;
-  padding: 9px;
+  padding: 8px 9px;
   color: #65738a;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.74rem;
+  font-weight: 750;
 }
 
-.mobile-measurement-facts strong {
+.mobile-measurement-quick-facts strong {
   color: #111827;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+}
+
+.mobile-measurement-secondary-details {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #42526b;
+  font-size: 0.78rem;
+}
+
+.mobile-measurement-secondary-details summary {
+  min-height: 34px;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-weight: 850;
+}
+
+.mobile-measurement-secondary-details div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  border-top: 1px solid #dce3ee;
+  padding: 9px 10px 10px;
+}
+
+.mobile-measurement-secondary-details span {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-measurement-secondary-details strong {
+  color: #111827;
 }
 
 .mobile-measurement-entries,
@@ -5990,21 +6022,82 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-entry {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   border: 1px solid #dce3ee;
   border-radius: 8px;
   background: #ffffff;
-  padding: 10px;
+  padding: 9px 10px;
+}
+
+.mobile-measurement-entry strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-measurement-entry span {
   color: #143c6d;
   font-weight: 850;
+  white-space: nowrap;
 }
 
 .mobile-measurement-form {
   border-top: 1px solid #dce3ee;
   padding-top: 12px;
+}
+
+.mobile-measurement-entry-form {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 11px;
+}
+
+.mobile-area-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mobile-area-tag {
+  min-height: 34px;
+  border: 1px solid #cbd7e6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #143c6d;
+  padding: 0 11px;
+  font-weight: 850;
+}
+
+.mobile-area-tag.is-selected {
+  border-color: #143c6d;
+  background: #eaf2fb;
+  color: #143c6d;
+}
+
+.mobile-area-tag-new {
+  border-style: dashed;
+  color: #42526b;
+}
+
+.mobile-measurement-form-grid {
+  display: grid;
+  gap: 9px;
+}
+
+.mobile-area-suggestion {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid #b7cbe4;
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #143c6d;
+  padding: 0 10px;
+  text-align: left;
+  font-weight: 850;
 }
 
 .mobile-measurement-form label {

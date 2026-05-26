@@ -12,7 +12,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -217,11 +217,14 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
     });
   }, [filter, items, searchTerm, user?.id]);
 
+  const areaTags = useMemo(() => collectMeasurementAreaTags(items), [items]);
+
   if (selectedBatch && selectedItem) {
     return (
       <MeasurementDetail
         batch={selectedBatch}
         item={selectedItem}
+        areaTags={areaTags}
         isSaving={isSaving}
         formComment={formComment}
         formQuantity={formQuantity}
@@ -239,11 +242,12 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
         }}
         onSave={async () => {
           const quantity = Number(formQuantity.replace(",", "."));
+          const normalizedArea = normalizeMeasurementArea(formComment);
           if (!Number.isFinite(quantity) || quantity <= 0) {
             setFormError("Bitte eine gültige Menge größer 0 eingeben.");
             return;
           }
-          if (!formComment.trim()) {
+          if (!normalizedArea) {
             setFormError("Bitte Bereich oder Kommentar angeben.");
             return;
           }
@@ -251,7 +255,7 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
           setFormError(null);
           try {
             await api.createMobileMeasurementEntry(assignment.id, selectedBatch.id, selectedItem.id, {
-              area_or_comment: formComment.trim(),
+              area_or_comment: normalizedArea,
               quantity,
             });
             setFormComment("");
@@ -288,7 +292,12 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
         onViewModeChange={updateViewMode}
         onSearchChange={setSearchTerm}
         onFilterChange={setFilter}
-        onSelectItem={setSelectedItem}
+        onSelectItem={(item) => {
+          setSelectedItem(item);
+          setFormComment("");
+          setFormQuantity("");
+          setFormError(null);
+        }}
         onSubmit={async () => {
           setIsSaving(true);
           setError(null);
@@ -554,6 +563,7 @@ function MobileMeasurementTable({
 function MeasurementDetail({
   batch,
   item,
+  areaTags,
   isSaving,
   formComment,
   formQuantity,
@@ -566,6 +576,7 @@ function MeasurementDetail({
 }: {
   batch: MobileMeasurementBatch;
   item: MobileMeasurementItem;
+  areaTags: string[];
   isSaving: boolean;
   formComment: string;
   formQuantity: string;
@@ -577,6 +588,10 @@ function MeasurementDetail({
   onSave: () => void;
 }) {
   const isDraft = batch.status === "draft";
+  const areaInputRef = useRef<HTMLInputElement>(null);
+  const selectedAreaKey = getMeasurementAreaKey(formComment);
+  const suggestedArea = findMeasurementAreaSuggestion(formComment, areaTags);
+
   return (
     <div className="mobile-detail-panel mobile-measurement-detail">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
@@ -590,48 +605,73 @@ function MeasurementDetail({
         <p>{item.description}</p>
       </div>
 
-      <div className="mobile-measurement-facts">
+      <div className="mobile-measurement-quick-facts" aria-label="Aufmaß Kurzinfo">
         <span>Einheit <strong>{item.unit ?? "-"}</strong></span>
-        <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
-        <span>Menge Liste <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
         <span>Gemeldet <strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></span>
-        <span>Minuten <strong>{formatMeasurementNumber(item.reported_minutes)}</strong></span>
-        <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
       </div>
 
-      <div className="mobile-measurement-entries">
-        <div className="mobile-panel-title-row">
-          <h3>Aufmaßzeilen</h3>
+      <details className="mobile-measurement-secondary-details">
+        <summary>Details</summary>
+        <div>
+          <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
+          <span>Menge Liste <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
+          <span>Minuten <strong>{formatMeasurementNumber(item.reported_minutes)}</strong></span>
+          <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
         </div>
-
-        {item.entries.length === 0 ? <p className="empty-inline">Noch keine Aufmaßzeilen erfasst.</p> : null}
-        {item.entries.map((entry) => (
-          <article className="mobile-measurement-entry" key={entry.id}>
-            <strong>{entry.area_or_comment}</strong>
-            <span>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</span>
-            <small>{[entry.created_by_name, formatDateTime(entry.created_at)].filter(Boolean).join(" · ")}</small>
-          </article>
-        ))}
-      </div>
+      </details>
 
       {isDraft ? (
-        <div className="mobile-measurement-form">
-          <h3>Aufmaßzeile hinzufügen</h3>
-          <label>
-            <span>Bereich / Kommentar</span>
-            <textarea value={formComment} onChange={(event) => onCommentChange(event.target.value)} rows={3} />
-          </label>
-          <label>
-            <span>Menge ({item.unit ?? "Einheit"})</span>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              value={formQuantity}
-              onChange={(event) => onQuantityChange(event.target.value)}
-            />
-          </label>
+        <div className="mobile-measurement-form mobile-measurement-entry-form">
+          <h3>Bereich wählen</h3>
+          <div className="mobile-area-tag-list" aria-label="Bisherige Bereiche">
+            {areaTags.map((tag) => (
+              <button
+                className={`mobile-area-tag ${selectedAreaKey === getMeasurementAreaKey(tag) ? "is-selected" : ""}`}
+                key={tag}
+                type="button"
+                onClick={() => onCommentChange(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+            <button
+              className="mobile-area-tag mobile-area-tag-new"
+              type="button"
+              onClick={() => areaInputRef.current?.focus()}
+            >
+              + Neuer Bereich
+            </button>
+          </div>
+
+          <div className="mobile-measurement-form-grid">
+            <label>
+              <span>Bereich</span>
+              <input
+                ref={areaInputRef}
+                value={formComment}
+                onChange={(event) => onCommentChange(event.target.value)}
+                placeholder="z. B. 1. OG"
+              />
+            </label>
+            <label>
+              <span>Menge ({item.unit ?? "Einheit"})</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                value={formQuantity}
+                onChange={(event) => onQuantityChange(event.target.value)}
+              />
+            </label>
+          </div>
+
+          {suggestedArea ? (
+            <button className="mobile-area-suggestion" type="button" onClick={() => onCommentChange(suggestedArea)}>
+              Vorhandenen Bereich übernehmen: {suggestedArea}
+            </button>
+          ) : null}
+
           {formError ? <p className="form-error">{formError}</p> : null}
           <div className="mobile-form-actions">
             <button className="secondary-action" type="button" onClick={onCancelForm} disabled={isSaving}>Leeren</button>
@@ -641,6 +681,20 @@ function MeasurementDetail({
       ) : (
         <p className="form-info">Dieses Aufmaß ist nicht mehr im Entwurf. Neue Aufmaßzeilen sind gesperrt.</p>
       )}
+
+      <div className="mobile-measurement-entries">
+        <div className="mobile-panel-title-row">
+          <h3>Bisher erfasst</h3>
+        </div>
+
+        {item.entries.length === 0 ? <p className="empty-inline">Noch keine Aufmaßzeilen erfasst.</p> : null}
+        {item.entries.map((entry) => (
+          <article className="mobile-measurement-entry" key={entry.id}>
+            <strong>{entry.area_or_comment}</strong>
+            <span>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</span>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
@@ -698,8 +752,62 @@ function persistMeasurementViewMode(mode: MeasurementViewMode): void {
   window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  items.forEach((item) => {
+    item.entries.forEach((entry) => {
+      const normalized = normalizeMeasurementArea(entry.area_or_comment);
+      const key = getMeasurementAreaKey(normalized);
+      if (!normalized || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      tags.push(normalized);
+    });
+  });
+
+  return tags;
+}
+
+function normalizeMeasurementArea(input: string): string {
+  const trimmed = input.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return "";
+  }
+
+  const upper = trimmed.toUpperCase();
+  if (["EG", "UG", "DG"].includes(upper)) {
+    return upper;
+  }
+  if (upper === "DACH") {
+    return "Dach";
+  }
+
+  const floorMatch = trimmed.match(/^(\d+)\s*\.?\s*og$/i);
+  if (floorMatch) {
+    return `${Number(floorMatch[1])}. OG`;
+  }
+
+  return trimmed;
+}
+
+function getMeasurementAreaKey(value: string): string {
+  return normalizeMeasurementArea(value).toLocaleLowerCase("de-DE");
+}
+
+function findMeasurementAreaSuggestion(input: string, tags: string[]): string | null {
+  const normalized = normalizeMeasurementArea(input);
+  if (!normalized) {
+    return null;
+  }
+  const normalizedKey = getMeasurementAreaKey(normalized);
+  const match = tags.find((tag) => getMeasurementAreaKey(tag) === normalizedKey);
+  if (!match || normalized === input.trim()) {
+    return null;
+  }
+  return match;
 }
 
 function formatRangeLabel(start: string, end: string): string {
