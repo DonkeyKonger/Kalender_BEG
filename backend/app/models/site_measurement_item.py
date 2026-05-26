@@ -74,6 +74,8 @@ class SiteMeasurementEntry(TimestampMixin, Base):
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     area_or_comment: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    submitted_area_or_comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="saved")
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True

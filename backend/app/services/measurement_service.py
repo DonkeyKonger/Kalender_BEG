@@ -51,7 +51,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries).selectinload(
                         SiteMeasurementEntry.measurement_item
                     ),
-                    selectinload(SiteMeasurementBatch.submitted_by),
+                    selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
                 .where(SiteMeasurementBatch.site_id == assignment.site_id)
                 .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
@@ -154,6 +154,10 @@ class MeasurementService:
                 "Ein Aufmaß ohne Aufmaßzeilen kann nicht gesendet werden.",
             )
 
+        for entry in batch.entries:
+            entry.submitted_area_or_comment = entry.area_or_comment
+            entry.submitted_quantity = entry.quantity
+
         batch.status = "submitted"
         batch.submitted_by_user_id = current_user.id
         batch.submitted_at = datetime.now(timezone.utc)
@@ -170,7 +174,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries).selectinload(
                         SiteMeasurementEntry.measurement_item
                     ),
-                    selectinload(SiteMeasurementBatch.submitted_by),
+                    selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
                 .where(SiteMeasurementBatch.site_id == site_id)
                 .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
@@ -259,6 +263,43 @@ class MeasurementService:
         self.db.refresh(entry)
         return self._build_entry(entry)
 
+    def reset_site_batch_to_submitted(
+        self, *, site_id: int, batch_id: int
+    ) -> list[MobileMeasurementItemRead]:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        if batch.status == "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Entwürfe haben noch keinen gespeicherten Monteurstand.",
+            )
+
+        entries = list(batch.entries)
+        if not entries:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Dieses Aufmaß enthält keine Aufmaßzeilen.",
+            )
+
+        missing_snapshot = any(
+            entry.submitted_area_or_comment is None or entry.submitted_quantity is None
+            for entry in entries
+        )
+        if missing_snapshot:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Der ursprüngliche Monteurstand ist für dieses Aufmaß nicht gespeichert.",
+            )
+
+        for entry in entries:
+            if entry.submitted_area_or_comment is not None:
+                entry.area_or_comment = entry.submitted_area_or_comment
+            if entry.submitted_quantity is not None:
+                entry.quantity = entry.submitted_quantity
+
+        self.db.commit()
+        return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
+
     def list_dashboard_submissions(
         self, *, limit: int = 6
     ) -> list[MeasurementDashboardSubmissionRead]:
@@ -268,7 +309,7 @@ class MeasurementService:
                 .options(
                     selectinload(SiteMeasurementBatch.site),
                     selectinload(SiteMeasurementBatch.entries),
-                    selectinload(SiteMeasurementBatch.submitted_by),
+                    selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
                 .where(SiteMeasurementBatch.status.in_(("submitted", "rejected")))
                 .order_by(
@@ -348,13 +389,20 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
-                selectinload(SiteMeasurementBatch.submitted_by),
+                selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
             )
             .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
         )
         if batch is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
         return batch
+
+    def _format_user_display_name(self, user: User | None) -> str | None:
+        if user is None:
+            return None
+        if user.person and user.person.display_name:
+            return user.person.display_name
+        return user.display_name
 
     def _build_mobile_batch(self, batch: SiteMeasurementBatch) -> MobileMeasurementBatchRead:
         position_ids = {entry.measurement_item_id for entry in batch.entries}
@@ -368,7 +416,7 @@ class MeasurementService:
             status=batch.status,
             created_by_user_id=batch.created_by_user_id,
             submitted_by_user_id=batch.submitted_by_user_id,
-            submitted_by_name=batch.submitted_by.display_name if batch.submitted_by else None,
+            submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
             created_at=batch.created_at,
             updated_at=batch.updated_at,
@@ -389,7 +437,7 @@ class MeasurementService:
             site_number=batch.site.site_number if batch.site else None,
             title=batch.title,
             status=batch.status,
-            submitted_by_name=batch.submitted_by.display_name if batch.submitted_by else None,
+            submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
             entry_count=len(batch.entries),
             position_count=len(position_ids),

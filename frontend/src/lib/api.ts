@@ -365,6 +365,12 @@ export const api = {
     });
   },
 
+  async resetSiteMeasurementBatchToSubmitted(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
+    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/reset-to-submitted`, {
+      method: "POST",
+    });
+  },
+
   async updateSiteMeasurementEntry(
     siteId: number,
     batchId: number,

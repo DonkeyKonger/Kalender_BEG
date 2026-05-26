@@ -321,6 +321,25 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage("Aufmaßzeile wurde aktualisiert.");
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden."));
+      throw requestError;
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
+  async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      setMeasurementBatchItems(await api.resetSiteMeasurementBatchToSubmitted(site.id, batch.id));
+      setMeasurementReviewMessage(`${formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)} wurde auf den Monteurstand zurückgesetzt.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Monteurstand konnte nicht wiederhergestellt werden."));
+      throw requestError;
     } finally {
       setMeasurementReviewActionLoading(false);
     }
@@ -503,7 +522,8 @@ export function SiteDetailPage() {
           }}
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
-          onUpdateEntry={(batch, entryId, payload) => void updateMeasurementEntry(batch, entryId, payload)}
+          onUpdateEntry={updateMeasurementEntry}
+          onResetToSubmitted={resetMeasurementBatchToSubmitted}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -934,6 +954,7 @@ function MeasurementTab({
   onMarkBilled,
   onMarkOpen,
   onUpdateEntry,
+  onResetToSubmitted,
 }: {
   siteNumber: string | null;
   activeSubtab: MeasurementSubtab;
@@ -960,7 +981,8 @@ function MeasurementTab({
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
-  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => void;
+  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
   const latestImport = items[0];
 
@@ -1013,6 +1035,7 @@ function MeasurementTab({
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onUpdateEntry={onUpdateEntry}
+          onResetToSubmitted={onResetToSubmitted}
         />
       ) : null}
 
@@ -1125,6 +1148,18 @@ function MeasurementTimesheetPanel({
   );
 }
 
+
+type MeasurementEntryDraft = {
+  area_or_comment: string;
+  quantity: string;
+};
+
+type MeasurementEntryUndoState = {
+  entryId: number;
+  area_or_comment: string;
+  quantity: string;
+};
+
 function MeasurementReviewPanel({
   siteNumber,
   batches,
@@ -1142,6 +1177,7 @@ function MeasurementReviewPanel({
   onMarkBilled,
   onMarkOpen,
   onUpdateEntry,
+  onResetToSubmitted,
 }: {
   siteNumber: string | null;
   batches: MobileMeasurementBatch[];
@@ -1158,16 +1194,175 @@ function MeasurementReviewPanel({
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
-  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => void;
+  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
-  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
-  const [editComment, setEditComment] = useState("");
-  const [editQuantity, setEditQuantity] = useState("");
+  const [entryDrafts, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
+  const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!selectedBatch) {
+      setEntryDrafts({});
+      setInlineError(null);
+      return;
+    }
+
+    const drafts: Record<number, MeasurementEntryDraft> = {};
+    for (const item of batchItems) {
+      for (const entry of item.entries) {
+        drafts[entry.id] = {
+          area_or_comment: entry.area_or_comment,
+          quantity: formatMeasurementDraftQuantity(entry.quantity),
+        };
+      }
+    }
+    setEntryDrafts(drafts);
+    setInlineError(null);
+  }, [batchItems, selectedBatch?.id]);
+
+  useEffect(() => {
+    setUndoStack([]);
+  }, [selectedBatch?.id]);
+
+  const sortedBatches = [...batches].sort((left, right) => {
+    const rightTime = getMeasurementBatchSortTime(right);
+    const leftTime = getMeasurementBatchSortTime(left);
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+    return right.number - left.number;
+  });
+
+  function updateEntryDraft(entryId: number, field: keyof MeasurementEntryDraft, value: string): void {
+    setEntryDrafts((current) => ({
+      ...current,
+      [entryId]: {
+        area_or_comment: current[entryId]?.area_or_comment ?? "",
+        quantity: current[entryId]?.quantity ?? "",
+        [field]: value,
+      },
+    }));
+  }
+
+  function resetEntryDraft(entry: MobileMeasurementItem["entries"][number]): void {
+    setEntryDrafts((current) => ({
+      ...current,
+      [entry.id]: {
+        area_or_comment: entry.area_or_comment,
+        quantity: formatMeasurementDraftQuantity(entry.quantity),
+      },
+    }));
+    setInlineError(null);
+  }
+
+  async function saveEntryDraft(
+    batch: MobileMeasurementBatch,
+    entry: MobileMeasurementItem["entries"][number],
+    draft: MeasurementEntryDraft | undefined,
+  ): Promise<void> {
+    if (!draft || savingEntryId === entry.id || reviewActionLoading) {
+      return;
+    }
+
+    const comment = draft.area_or_comment.trim();
+    const quantity = parseMeasurementQuantityInput(draft.quantity);
+    if (!comment) {
+      setInlineError("Bereich oder Kommentar darf nicht leer sein.");
+      resetEntryDraft(entry);
+      return;
+    }
+    if (quantity === null || quantity <= 0) {
+      setInlineError("Bitte eine gültige Menge größer 0 eingeben.");
+      resetEntryDraft(entry);
+      return;
+    }
+
+    const currentQuantity = Number(entry.quantity);
+    if (entry.area_or_comment === comment && Number.isFinite(currentQuantity) && currentQuantity === quantity) {
+      setEntryDrafts((current) => ({
+        ...current,
+        [entry.id]: { area_or_comment: comment, quantity: formatMeasurementDraftQuantity(quantity) },
+      }));
+      setInlineError(null);
+      return;
+    }
+
+    const previousState: MeasurementEntryUndoState = {
+      entryId: entry.id,
+      area_or_comment: entry.area_or_comment,
+      quantity: formatMeasurementDraftQuantity(entry.quantity),
+    };
+
+    setSavingEntryId(entry.id);
+    setInlineError(null);
+    try {
+      await onUpdateEntry(batch, entry.id, { area_or_comment: comment, quantity });
+      setUndoStack((current) => [...current, previousState].slice(-20));
+    } catch {
+      setInlineError("Änderung konnte nicht gespeichert werden.");
+      resetEntryDraft(entry);
+    } finally {
+      setSavingEntryId(null);
+    }
+  }
+
+  async function undoLastEntryChange(batch: MobileMeasurementBatch): Promise<void> {
+    const previousState = undoStack[undoStack.length - 1];
+    if (!previousState || savingEntryId !== null || reviewActionLoading) {
+      return;
+    }
+
+    const currentEntry = batchItems
+      .flatMap((item) => item.entries)
+      .find((entry) => entry.id === previousState.entryId);
+    const previousQuantity = parseMeasurementQuantityInput(previousState.quantity);
+    if (!currentEntry || previousQuantity === null) {
+      setInlineError("Die letzte Änderung kann nicht wiederhergestellt werden.");
+      return;
+    }
+
+    setSavingEntryId(previousState.entryId);
+    setInlineError(null);
+    try {
+      await onUpdateEntry(batch, previousState.entryId, {
+        area_or_comment: previousState.area_or_comment,
+        quantity: previousQuantity,
+      });
+      setUndoStack((current) => current.slice(0, -1));
+      setEntryDrafts((current) => ({
+        ...current,
+        [previousState.entryId]: {
+          area_or_comment: previousState.area_or_comment,
+          quantity: formatMeasurementDraftQuantity(previousQuantity),
+        },
+      }));
+    } catch {
+      setInlineError("Undo konnte nicht gespeichert werden.");
+    } finally {
+      setSavingEntryId(null);
+    }
+  }
+
+  async function resetToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
+    if (!window.confirm("Dieses Aufmaß wirklich auf den ursprünglichen Monteurstand zurücksetzen?")) {
+      return;
+    }
+    setInlineError(null);
+    try {
+      await onResetToSubmitted(batch);
+      setUndoStack([]);
+    } catch {
+      setInlineError("Monteurstand konnte nicht wiederhergestellt werden.");
+    }
+  }
 
   if (selectedBatch) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
+    const canEditRows = !isDraft;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
 
     return (
@@ -1179,6 +1374,22 @@ function MeasurementReviewPanel({
           </div>
           <div className="measurement-review-actions">
             <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={!canEditRows || undoStack.length === 0 || reviewActionLoading || savingEntryId !== null}
+              onClick={() => void undoLastEntryChange(selectedBatch)}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={!canEditRows || reviewActionLoading || savingEntryId !== null}
+              onClick={() => void resetToSubmitted(selectedBatch)}
+            >
+              Auf Monteurstand zurücksetzen
+            </button>
             {!isDraft ? (
               isBilled ? (
                 <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
@@ -1195,6 +1406,7 @@ function MeasurementReviewPanel({
 
         {reviewMessage ? <div className="project-record-empty-state is-success">{reviewMessage}</div> : null}
         {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
+        {inlineError ? <div className="project-record-empty-state is-error"><strong>{inlineError}</strong></div> : null}
         {batchItemsLoading ? <div className="matrix-state">Aufmaßzeilen werden geladen...</div> : null}
         {!batchItemsLoading && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
@@ -1208,58 +1420,51 @@ function MeasurementReviewPanel({
                 </div>
                 <div className="measurement-review-entry-list">
                   {item.entries.map((entry) => {
-                    const isEditing = editingEntryId === entry.id;
+                    const draft = entryDrafts[entry.id] ?? {
+                      area_or_comment: entry.area_or_comment,
+                      quantity: formatMeasurementDraftQuantity(entry.quantity),
+                    };
+                    const isSaving = savingEntryId === entry.id;
                     return (
                       <div className="measurement-review-entry" key={entry.id}>
-                        {isEditing ? (
-                          <div className="measurement-review-entry-edit">
-                            <label>
-                              Bereich / Kommentar
-                              <textarea value={editComment} onChange={(event) => setEditComment(event.target.value)} />
-                            </label>
-                            <label>
-                              Menge
-                              <input value={editQuantity} inputMode="decimal" onChange={(event) => setEditQuantity(event.target.value)} />
-                            </label>
-                            <div className="measurement-review-actions">
-                              <button type="button" className="secondary-action" onClick={() => setEditingEntryId(null)}>Abbrechen</button>
-                              <button
-                                type="button"
-                                className="primary-action"
-                                disabled={reviewActionLoading || !editComment.trim() || !Number.isFinite(Number(editQuantity.replace(",", "."))) || Number(editQuantity.replace(",", ".")) <= 0}
-                                onClick={() => {
-                                  onUpdateEntry(selectedBatch, entry.id, {
-                                    area_or_comment: editComment.trim(),
-                                    quantity: Number(editQuantity.replace(",", ".")),
-                                  });
-                                  setEditingEntryId(null);
-                                }}
-                              >
-                                Speichern
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="measurement-review-entry-content">
-                              <span>{entry.area_or_comment}</span>
-                              <strong>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</strong>
-                            </div>
-                            {!isDraft ? (
-                              <button
-                                type="button"
-                                className="secondary-action measurement-review-edit-action"
-                                onClick={() => {
-                                  setEditingEntryId(entry.id);
-                                  setEditComment(entry.area_or_comment);
-                                  setEditQuantity(String(entry.quantity).replace(".", ","));
-                                }}
-                              >
-                                Bearbeiten
-                              </button>
-                            ) : null}
-                          </>
-                        )}
+                        <input
+                          className="measurement-review-inline-input"
+                          value={draft.area_or_comment}
+                          disabled={!canEditRows || reviewActionLoading || isSaving}
+                          aria-label={`Bereich für ${item.position}`}
+                          onChange={(event) => updateEntryDraft(entry.id, "area_or_comment", event.target.value)}
+                          onBlur={() => void saveEntryDraft(selectedBatch, entry, draft)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void saveEntryDraft(selectedBatch, entry, draft);
+                            }
+                            if (event.key === "Escape") {
+                              resetEntryDraft(entry);
+                            }
+                          }}
+                        />
+                        <div className="measurement-review-quantity-group">
+                          <input
+                            className="measurement-review-inline-quantity"
+                            value={draft.quantity}
+                            disabled={!canEditRows || reviewActionLoading || isSaving}
+                            inputMode="decimal"
+                            aria-label={`Menge für ${item.position}`}
+                            onChange={(event) => updateEntryDraft(entry.id, "quantity", event.target.value)}
+                            onBlur={() => void saveEntryDraft(selectedBatch, entry, draft)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void saveEntryDraft(selectedBatch, entry, draft);
+                              }
+                              if (event.key === "Escape") {
+                                resetEntryDraft(entry);
+                              }
+                            }}
+                          />
+                          <span>{item.unit ?? ""}</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -1287,12 +1492,12 @@ function MeasurementReviewPanel({
           <button type="button" className="secondary-action" onClick={onRetryBatches}>Erneut laden</button>
         </div>
       ) : null}
-      {!batchesLoading && !batchesError && batches.length === 0 ? (
+      {!batchesLoading && !batchesError && sortedBatches.length === 0 ? (
         <div className="project-record-empty-state">Noch keine Aufmaßpakete vorhanden.</div>
       ) : null}
-      {!batchesLoading && !batchesError && batches.length > 0 ? (
+      {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
         <div className="measurement-review-list">
-          {batches.map((batch) => (
+          {sortedBatches.map((batch) => (
             <button
               key={batch.id}
               type="button"
@@ -1300,8 +1505,8 @@ function MeasurementReviewPanel({
               onClick={() => onSelectBatch(batch)}
             >
               <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
-              <div>
-                <strong>{batch.title}</strong>
+              <div className="measurement-review-card-main">
+                <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
                 <small>
                   {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
                   {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
@@ -1507,6 +1712,35 @@ function formatMeasurementNumber(value: string | number | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(numericValue);
+}
+
+function formatMeasurementDraftQuantity(value: string | number | null): string {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return String(value).replace(".", ",");
+  }
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
+
+function parseMeasurementQuantityInput(value: string): number | null {
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getMeasurementBatchSortTime(batch: MobileMeasurementBatch): number {
+  const value = batch.submitted_at ?? batch.created_at;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function formatLocationStatus(status: Site["location_status"]): string {

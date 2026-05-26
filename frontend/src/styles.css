@@ -3447,6 +3447,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-card strong,
+.measurement-review-card-main strong,
 .measurement-review-position strong,
 .measurement-review-entry strong,
 .measurement-evaluation-grid strong {
@@ -3454,6 +3455,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-card small,
+.measurement-review-card-main small,
 .measurement-review-card b,
 .measurement-review-position small,
 .measurement-review-position span,
@@ -3503,70 +3505,63 @@ button.person-chip:focus-visible {
   text-overflow: ellipsis;
 }
 
+.measurement-review-card-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .measurement-review-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(160px, 1fr) minmax(120px, auto);
   align-items: center;
   border-top: 1px solid #edf2f7;
   gap: 10px;
   padding-top: 7px;
 }
 
-.measurement-review-entry-content {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.measurement-review-entry-content span {
-  overflow: hidden;
-  color: #334155;
-  font-size: 0.9rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.measurement-review-entry-content strong {
-  color: #111827;
-  flex: 0 0 auto;
-  font-size: 0.9rem;
-}
-
-.measurement-review-edit-action {
-  min-height: 30px;
-  padding: 5px 9px;
-}
-
-.measurement-review-entry-edit {
-  display: grid;
-  gap: 10px;
+.measurement-review-inline-input,
+.measurement-review-inline-quantity {
   width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #172033;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 750;
+  padding: 7px 9px;
 }
 
-.measurement-review-entry-edit label {
+.measurement-review-inline-input:focus,
+.measurement-review-inline-quantity:focus {
+  border-color: #8bb4e8;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  outline: none;
+}
+
+.measurement-review-inline-input:disabled,
+.measurement-review-inline-quantity:disabled {
+  color: #64748b;
+  opacity: 1;
+}
+
+.measurement-review-quantity-group {
   display: grid;
-  gap: 5px;
-  color: #65738a;
-  font-size: 0.78rem;
+  grid-template-columns: minmax(86px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.measurement-review-quantity-group span {
+  color: #475569;
+  font-size: 0.86rem;
   font-weight: 850;
 }
 
-.measurement-review-entry-edit input,
-.measurement-review-entry-edit textarea {
-  width: 100%;
-  border: 1px solid #cbd8e8;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #172033;
-  font: inherit;
-  padding: 8px 10px;
-}
-
-.measurement-review-entry-edit textarea {
-  min-height: 72px;
-  resize: vertical;
+.measurement-review-inline-quantity {
+  text-align: right;
 }
 
 .measurement-review-entry:first-child {

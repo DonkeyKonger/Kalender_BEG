@@ -321,16 +321,24 @@ def test_site_measurement_billing_status_and_entry_update():
         billing_status="submitted",
     )
 
+    reset_items = service.reset_site_batch_to_submitted(site_id=site.id, batch_id=submitted.id)
+    reset_entry = reset_items[0].entries[0]
+
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     stored_entry = db.scalar(select(SiteMeasurementEntry).where(SiteMeasurementEntry.measurement_batch_id == batch.id))
     assert dashboard_messages[0].batch_id == batch.id
     assert dashboard_messages[0].site_id == site.id
+    assert dashboard_messages[0].submitted_by_name == "Max Monteur"
     assert updated_entry.area_or_comment == "2. OG Technik"
     assert updated_entry.quantity == Decimal("12.00")
+    assert reset_entry.area_or_comment == "1. OG Flur"
+    assert reset_entry.quantity == Decimal("10.00")
     assert billed.status == "billed"
     assert open_again.status == "submitted"
     assert stored_batch is not None
     assert stored_batch.status == "submitted"
     assert stored_entry is not None
     assert stored_entry.status == "submitted"
+    assert stored_entry.submitted_area_or_comment == "1. OG Flur"
+    assert stored_entry.submitted_quantity == Decimal("10.00")
 
