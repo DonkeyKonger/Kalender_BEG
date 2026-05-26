@@ -27,11 +27,12 @@ class MeasurementItemRead(BaseModel):
 
 class MeasurementEntryCreate(BaseModel):
     area_or_comment: str = Field(..., min_length=1, max_length=1000)
-    quantity: Decimal = Field(..., ge=0)
+    quantity: Decimal = Field(..., gt=0)
 
 
 class MeasurementEntryRead(BaseModel):
     id: int
+    measurement_batch_id: int
     measurement_item_id: int
     site_id: int
     quantity: Decimal
@@ -49,6 +50,24 @@ class MobileMeasurementItemRead(MeasurementItemRead):
     reported_minutes: Decimal | None
     reported_hours: Decimal | None
     mobile_status: str
+
+
+class MobileMeasurementBatchRead(BaseModel):
+    id: int
+    site_id: int
+    number: int
+    title: str
+    status: str
+    created_by_user_id: int | None
+    submitted_by_user_id: int | None
+    submitted_by_name: str | None
+    submitted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    position_count: int
+    entry_count: int
+    reported_minutes: Decimal | None
+    reported_hours: Decimal | None
 
 
 class MeasurementImportResponse(BaseModel):

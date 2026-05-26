@@ -5633,3 +5633,24 @@ button.person-chip:focus-visible {
     align-items: center;
   }
 }
+
+.mobile-status-draft {
+  background: #eef2f7;
+  color: #42526b;
+}
+
+.mobile-status-submitted,
+.mobile-status-in_review {
+  background: #fff4de;
+  color: #8a5a00;
+}
+
+.mobile-status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mobile-status-closed {
+  background: #e5e7eb;
+  color: #374151;
+}

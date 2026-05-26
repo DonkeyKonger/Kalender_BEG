@@ -1,14 +1,24 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementEntry, SiteMeasurementItem
+from app.models.site_measurement_item import (
+    SiteMeasurementBatch,
+    SiteMeasurementEntry,
+    SiteMeasurementItem,
+)
 from app.models.user import User
-from app.schemas.measurement import MeasurementEntryCreate, MeasurementEntryRead, MobileMeasurementItemRead
+from app.schemas.measurement import (
+    MeasurementEntryCreate,
+    MeasurementEntryRead,
+    MobileMeasurementBatchRead,
+    MobileMeasurementItemRead,
+)
 from app.services.measurement_timesheet_parser import (
     MeasurementTimesheetParseError,
     parse_measurement_timesheet_pdf,
@@ -29,11 +39,54 @@ class MeasurementService:
             ).all()
         )
 
-
-    def list_mobile_items(
+    def list_mobile_batches(
         self, *, assignment_id: int, current_user: User
+    ) -> list[MobileMeasurementBatchRead]:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batches = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch)
+                .options(
+                    selectinload(SiteMeasurementBatch.entries).selectinload(
+                        SiteMeasurementEntry.measurement_item
+                    ),
+                    selectinload(SiteMeasurementBatch.submitted_by),
+                )
+                .where(SiteMeasurementBatch.site_id == assignment.site_id)
+                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
+            ).all()
+        )
+        return [self._build_mobile_batch(batch) for batch in batches]
+
+    def create_mobile_batch(
+        self, *, assignment_id: int, current_user: User
+    ) -> MobileMeasurementBatchRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        next_number = (
+            self.db.scalar(
+                select(func.max(SiteMeasurementBatch.number)).where(
+                    SiteMeasurementBatch.site_id == assignment.site_id
+                )
+            )
+            or 0
+        ) + 1
+        batch = SiteMeasurementBatch(
+            site_id=assignment.site_id,
+            number=next_number,
+            title=f"Aufmaß {next_number}",
+            status="draft",
+            created_by_user_id=current_user.id,
+        )
+        self.db.add(batch)
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
+    def list_mobile_batch_items(
+        self, *, assignment_id: int, batch_id: int, current_user: User
     ) -> list[MobileMeasurementItemRead]:
         assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
         items = list(
             self.db.scalars(
                 select(SiteMeasurementItem)
@@ -42,21 +95,29 @@ class MeasurementService:
                         SiteMeasurementEntry.created_by
                     )
                 )
-                .where(SiteMeasurementItem.site_id == assignment.site_id)
+                .where(SiteMeasurementItem.site_id == batch.site_id)
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
         )
-        return [self._build_mobile_item(item) for item in items]
+        return [self._build_mobile_item(item, batch.id) for item in items]
 
     def create_mobile_entry(
         self,
         *,
         assignment_id: int,
+        batch_id: int,
         measurement_item_id: int,
         current_user: User,
         payload: MeasurementEntryCreate,
     ) -> MeasurementEntryRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.status != "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
+            )
+
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if item is None or item.site_id != assignment.site_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
@@ -66,6 +127,7 @@ class MeasurementService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
 
         entry = SiteMeasurementEntry(
+            measurement_batch_id=batch.id,
             measurement_item_id=item.id,
             site_id=item.site_id,
             quantity=payload.quantity,
@@ -77,6 +139,26 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(entry)
         return self._build_entry(entry)
+
+    def submit_mobile_batch(
+        self, *, assignment_id: int, batch_id: int, current_user: User
+    ) -> MobileMeasurementBatchRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.status != "draft":
+            raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Aufmaß ist kein Entwurf mehr.")
+        if not batch.entries:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Ein Aufmaß ohne Aufmaßzeilen kann nicht gesendet werden.",
+            )
+
+        batch.status = "submitted"
+        batch.submitted_by_user_id = current_user.id
+        batch.submitted_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
 
     def import_timesheet(
         self, site_id: int, *, file_name: str | None, pdf_content: bytes
@@ -123,7 +205,6 @@ class MeasurementService:
         }
         return summary, items
 
-
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
             raise HTTPException(
@@ -140,8 +221,50 @@ class MeasurementService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
         return assignment
 
-    def _build_mobile_item(self, item: SiteMeasurementItem) -> MobileMeasurementItemRead:
-        entries = sorted(item.entries, key=lambda entry: (entry.created_at, entry.id))
+    def _get_batch_for_site(self, batch_id: int, site_id: int) -> SiteMeasurementBatch:
+        batch = self.db.scalar(
+            select(SiteMeasurementBatch)
+            .options(
+                selectinload(SiteMeasurementBatch.entries).selectinload(
+                    SiteMeasurementEntry.measurement_item
+                ),
+                selectinload(SiteMeasurementBatch.submitted_by),
+            )
+            .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
+        )
+        if batch is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
+        return batch
+
+    def _build_mobile_batch(self, batch: SiteMeasurementBatch) -> MobileMeasurementBatchRead:
+        position_ids = {entry.measurement_item_id for entry in batch.entries}
+        reported_minutes = self._sum_reported_minutes(batch.entries)
+        reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
+        return MobileMeasurementBatchRead(
+            id=batch.id,
+            site_id=batch.site_id,
+            number=batch.number,
+            title=batch.title,
+            status=batch.status,
+            created_by_user_id=batch.created_by_user_id,
+            submitted_by_user_id=batch.submitted_by_user_id,
+            submitted_by_name=batch.submitted_by.display_name if batch.submitted_by else None,
+            submitted_at=batch.submitted_at,
+            created_at=batch.created_at,
+            updated_at=batch.updated_at,
+            position_count=len(position_ids),
+            entry_count=len(batch.entries),
+            reported_minutes=reported_minutes,
+            reported_hours=reported_hours,
+        )
+
+    def _build_mobile_item(
+        self, item: SiteMeasurementItem, batch_id: int
+    ) -> MobileMeasurementItemRead:
+        entries = sorted(
+            (entry for entry in item.entries if entry.measurement_batch_id == batch_id),
+            key=lambda entry: (entry.created_at, entry.id),
+        )
         reported_quantity = sum((entry.quantity for entry in entries), Decimal("0"))
         reported_minutes = (
             reported_quantity * item.minutes_per_unit
@@ -177,9 +300,22 @@ class MeasurementService:
             mobile_status=mobile_status,
         )
 
+    def _sum_reported_minutes(
+        self, entries: list[SiteMeasurementEntry]
+    ) -> Decimal | None:
+        total = Decimal("0")
+        has_minutes = False
+        for entry in entries:
+            if entry.measurement_item.minutes_per_unit is None:
+                continue
+            total += entry.quantity * entry.measurement_item.minutes_per_unit
+            has_minutes = True
+        return total if has_minutes else None
+
     def _build_entry(self, entry: SiteMeasurementEntry) -> MeasurementEntryRead:
         return MeasurementEntryRead(
             id=entry.id,
+            measurement_batch_id=entry.measurement_batch_id,
             measurement_item_id=entry.measurement_item_id,
             site_id=entry.site_id,
             quantity=entry.quantity,

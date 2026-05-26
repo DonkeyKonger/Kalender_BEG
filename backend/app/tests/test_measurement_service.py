@@ -85,7 +85,7 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     from app.models.assignment import Assignment
     from app.models.enums import AssignmentType, PersonType, UserRole
     from app.models.person import Person
-    from app.models.site_measurement_item import SiteMeasurementEntry
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
     from app.models.user import User
     from app.schemas.measurement import MeasurementEntryCreate
 
@@ -126,23 +126,113 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     db.add_all([user, assignment, item])
     db.commit()
 
-    entry = MeasurementService(db).create_mobile_entry(
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    entry = service.create_mobile_entry(
         assignment_id=assignment.id,
+        batch_id=batch.id,
         measurement_item_id=item.id,
         current_user=user,
         payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
     )
-    mobile_items = MeasurementService(db).list_mobile_items(
+    mobile_items = service.list_mobile_batch_items(
         assignment_id=assignment.id,
+        batch_id=batch.id,
         current_user=user,
     )
+    mobile_batches = service.list_mobile_batches(assignment_id=assignment.id, current_user=user)
 
     stored_item = db.get(SiteMeasurementItem, item.id)
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
     stored_entry = db.get(SiteMeasurementEntry, entry.id)
     assert stored_item is not None
     assert stored_item.list_quantity == Decimal("0.00")
+    assert stored_batch is not None
+    assert stored_batch.title == "Aufmaß 1"
+    assert stored_batch.status == "draft"
     assert stored_entry is not None
+    assert stored_entry.measurement_batch_id == batch.id
     assert stored_entry.area_or_comment == "1. OG Flur"
     assert mobile_items[0].reported_quantity == Decimal("10.00")
     assert mobile_items[0].reported_minutes == Decimal("198.0000")
     assert mobile_items[0].mobile_status == "edited"
+    assert mobile_batches[0].entry_count == 1
+    assert mobile_batches[0].position_count == 1
+    assert mobile_batches[0].reported_minutes == Decimal("198.0000")
+
+
+def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.user import User
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, item])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+
+    with pytest.raises(HTTPException) as empty_submit:
+        service.submit_mobile_batch(assignment_id=assignment.id, batch_id=batch.id, current_user=user)
+    assert empty_submit.value.status_code == 400
+
+    service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
+    )
+    submitted = service.submit_mobile_batch(assignment_id=assignment.id, batch_id=batch.id, current_user=user)
+
+    assert submitted.status == "submitted"
+    assert submitted.submitted_by_user_id == user.id
+    assert submitted.submitted_at is not None
+
+    with pytest.raises(HTTPException) as locked:
+        service.create_mobile_entry(
+            assignment_id=assignment.id,
+            batch_id=batch.id,
+            measurement_item_id=item.id,
+            current_user=user,
+            payload=MeasurementEntryCreate(area_or_comment="2. OG", quantity=Decimal("5.00")),
+        )
+    assert locked.value.status_code == 409

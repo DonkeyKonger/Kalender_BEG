@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementEntryRead,
+    MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
 from app.schemas.mobile import MobileAssignmentsResponse
@@ -48,26 +49,76 @@ def list_my_assignment_history(
 
 
 @router.get(
-    "/assignments/{assignment_id}/measurement-items",
-    response_model=list[MobileMeasurementItemRead],
+    "/assignments/{assignment_id}/measurement-batches",
+    response_model=list[MobileMeasurementBatchRead],
 )
-def list_my_assignment_measurement_items(
+def list_my_assignment_measurement_batches(
     assignment_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[MobileMeasurementItemRead]:
-    return MeasurementService(db).list_mobile_items(
+) -> list[MobileMeasurementBatchRead]:
+    return MeasurementService(db).list_mobile_batches(
         assignment_id=assignment_id,
         current_user=current_user,
     )
 
 
 @router.post(
-    "/assignments/{assignment_id}/measurement-items/{measurement_item_id}/entries",
+    "/assignments/{assignment_id}/measurement-batches",
+    response_model=MobileMeasurementBatchRead,
+)
+def create_my_assignment_measurement_batch(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).create_mobile_batch(
+        assignment_id=assignment_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/submit",
+    response_model=MobileMeasurementBatchRead,
+)
+def submit_my_assignment_measurement_batch(
+    assignment_id: int,
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).submit_mobile_batch(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/items",
+    response_model=list[MobileMeasurementItemRead],
+)
+def list_my_assignment_measurement_batch_items(
+    assignment_id: int,
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MobileMeasurementItemRead]:
+    return MeasurementService(db).list_mobile_batch_items(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/items/{measurement_item_id}/entries",
     response_model=MeasurementEntryRead,
 )
 def create_my_assignment_measurement_entry(
     assignment_id: int,
+    batch_id: int,
     measurement_item_id: int,
     payload: MeasurementEntryCreate,
     current_user: User = Depends(get_current_user),
@@ -75,6 +126,7 @@ def create_my_assignment_measurement_entry(
 ) -> MeasurementEntryRead:
     return MeasurementService(db).create_mobile_entry(
         assignment_id=assignment_id,
+        batch_id=batch_id,
         measurement_item_id=measurement_item_id,
         current_user=current_user,
         payload=payload,

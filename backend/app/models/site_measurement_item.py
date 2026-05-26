@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -32,10 +33,39 @@ class SiteMeasurementItem(TimestampMixin, Base):
     )
 
 
+class SiteMeasurementBatch(TimestampMixin, Base):
+    __tablename__ = "site_measurement_batches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    submitted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    site = relationship("Site", back_populates="measurement_batches")
+    entries = relationship(
+        "SiteMeasurementEntry", back_populates="measurement_batch", cascade="all, delete-orphan"
+    )
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
+
+
 class SiteMeasurementEntry(TimestampMixin, Base):
     __tablename__ = "site_measurement_entries"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    measurement_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     measurement_item_id: Mapped[int] = mapped_column(
         ForeignKey("site_measurement_items.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -49,6 +79,7 @@ class SiteMeasurementEntry(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
 
+    measurement_batch = relationship("SiteMeasurementBatch", back_populates="entries")
     measurement_item = relationship("SiteMeasurementItem", back_populates="entries")
     site = relationship("Site", back_populates="measurement_entries")
     created_by = relationship("User")

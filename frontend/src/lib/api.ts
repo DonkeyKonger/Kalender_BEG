@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -409,16 +409,36 @@ export const api = {
 
 
 
-  async mobileMeasurementItems(assignmentId: number): Promise<MobileMeasurementItem[]> {
-    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-items`);
+  async mobileMeasurementBatches(assignmentId: number): Promise<MobileMeasurementBatch[]> {
+    return request<MobileMeasurementBatch[]>(`/me/assignments/${assignmentId}/measurement-batches`);
+  },
+
+  async createMobileMeasurementBatch(assignmentId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/me/assignments/${assignmentId}/measurement-batches`, {
+      method: "POST",
+    });
+  },
+
+  async submitMobileMeasurementBatch(
+    assignmentId: number,
+    batchId: number,
+  ): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/submit`, {
+      method: "POST",
+    });
+  },
+
+  async mobileMeasurementBatchItems(assignmentId: number, batchId: number): Promise<MobileMeasurementItem[]> {
+    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`);
   },
 
   async createMobileMeasurementEntry(
     assignmentId: number,
+    batchId: number,
     measurementItemId: number,
     payload: MeasurementEntryPayload,
   ): Promise<MeasurementEntry> {
-    return request<MeasurementEntry>(`/me/assignments/${assignmentId}/measurement-items/${measurementItemId}/entries`, {
+    return request<MeasurementEntry>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items/${measurementItemId}/entries`, {
       method: "POST",
       body: JSON.stringify(payload),
     });

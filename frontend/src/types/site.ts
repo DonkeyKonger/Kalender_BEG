@@ -170,6 +170,7 @@ export type MeasurementItem = {
 
 export type MeasurementEntry = {
   id: number;
+  measurement_batch_id: number;
   measurement_item_id: number;
   site_id: number;
   quantity: MeasurementNumericValue;
@@ -184,6 +185,24 @@ export type MeasurementEntry = {
 export type MeasurementEntryPayload = {
   area_or_comment: string;
   quantity: number;
+};
+
+export type MobileMeasurementBatch = {
+  id: number;
+  site_id: number;
+  number: number;
+  title: string;
+  status: "draft" | "submitted" | "in_review" | "approved" | "rejected" | "closed" | string;
+  created_by_user_id: number | null;
+  submitted_by_user_id: number | null;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  position_count: number;
+  entry_count: number;
+  reported_minutes: MeasurementNumericValue;
+  reported_hours: MeasurementNumericValue;
 };
 
 export type MobileMeasurementItem = MeasurementItem & {

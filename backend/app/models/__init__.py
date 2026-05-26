@@ -7,7 +7,11 @@ from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementEntry, SiteMeasurementItem
+from app.models.site_measurement_item import (
+    SiteMeasurementBatch,
+    SiteMeasurementEntry,
+    SiteMeasurementItem,
+)
 from app.models.user import User
 from app.models.vehicle import SiteVehicleAssignment, Vehicle
 
@@ -21,6 +25,7 @@ __all__ = [
     "PlanningCellMark",
     "ProjectFolder",
     "Site",
+    "SiteMeasurementBatch",
     "SiteMeasurementEntry",
     "SiteMeasurementItem",
     "SiteVehicleAssignment",
