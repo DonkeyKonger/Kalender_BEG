@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import re
 from typing import Any
 
 import httpx
@@ -67,7 +68,8 @@ class MicrosoftGraphClient:
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph token request failed with status {response.status_code}.",
-                error_code=_safe_error_code(data),
+                error_code=_safe_error_code(data)
+                or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
             )
 
         access_token = data.get("access_token")
@@ -114,7 +116,8 @@ class MicrosoftGraphClient:
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph request failed with status {response.status_code}.",
-                error_code=_safe_error_code(data),
+                error_code=_safe_error_code(data)
+                or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
             )
         if response.status_code == 204 or not response.content:
             return {}
@@ -151,3 +154,10 @@ def _safe_error_code(data: dict[str, Any]) -> str | None:
         if isinstance(code, str):
             return code
     return None
+
+
+def _safe_www_authenticate_error(header: str | None) -> str | None:
+    if not header:
+        return None
+    match = re.search(r'error="?([^",\s]+)"?', header)
+    return match.group(1) if match else None
