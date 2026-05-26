@@ -102,6 +102,45 @@ class MeasurementService:
         )
         return [self._build_mobile_item(item, batch.id) for item in items]
 
+    def create_site_entry(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        measurement_item_id: int,
+        current_user: User,
+        payload: MeasurementEntryCreate,
+    ) -> MeasurementEntryRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        if batch.status == "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Entwürfe werden mobil bearbeitet.",
+            )
+
+        item = self.db.get(SiteMeasurementItem, measurement_item_id)
+        if item is None or item.site_id != site_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
+
+        comment = payload.area_or_comment.strip()
+        if not comment:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
+
+        entry = SiteMeasurementEntry(
+            measurement_batch_id=batch.id,
+            measurement_item_id=item.id,
+            site_id=item.site_id,
+            quantity=payload.quantity,
+            area_or_comment=comment,
+            status="saved",
+            created_by_user_id=current_user.id,
+        )
+        self.db.add(entry)
+        self.db.commit()
+        self.db.refresh(entry)
+        return self._build_entry(entry)
+
     def create_mobile_entry(
         self,
         *,

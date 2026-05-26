@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -330,6 +330,29 @@ export function SiteDetailPage() {
     }
   }
 
+  async function createMeasurementEntry(
+    batch: MobileMeasurementBatch,
+    measurementItemId: number,
+    payload: { area_or_comment: string; quantity: number },
+  ): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      await api.createSiteMeasurementEntry(site.id, batch.id, measurementItemId, payload);
+      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementReviewMessage("Aufmaßzeile wurde angelegt.");
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht angelegt werden."));
+      throw requestError;
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
   async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -526,6 +549,7 @@ export function SiteDetailPage() {
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
           onUpdateEntry={updateMeasurementEntry}
+          onCreateEntry={createMeasurementEntry}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
         />
       ) : null}
@@ -957,6 +981,7 @@ function MeasurementTab({
   onMarkBilled,
   onMarkOpen,
   onUpdateEntry,
+  onCreateEntry,
   onResetToSubmitted,
 }: {
   siteNumber: string | null;
@@ -985,6 +1010,7 @@ function MeasurementTab({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
   const latestImport = items[0];
@@ -1038,6 +1064,7 @@ function MeasurementTab({
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onUpdateEntry={onUpdateEntry}
+          onCreateEntry={onCreateEntry}
           onResetToSubmitted={onResetToSubmitted}
         />
       ) : null}
@@ -1163,6 +1190,94 @@ type MeasurementEntryUndoState = {
   quantity: string;
 };
 
+
+type MeasurementMatrixAreaRow = {
+  key: string;
+  label: string;
+  firstIndex: number;
+  sortRank: number;
+};
+
+function buildMeasurementMatrixAreaRows(items: MobileMeasurementItem[]): MeasurementMatrixAreaRow[] {
+  const rows: MeasurementMatrixAreaRow[] = [];
+  const seen = new Set<string>();
+  let firstIndex = 0;
+
+  for (const item of items) {
+    for (const entry of item.entries) {
+      const label = normalizeMeasurementAreaLabel(entry.area_or_comment);
+      const key = getMeasurementAreaKey(label);
+      if (!label || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      rows.push({ key, label, firstIndex, sortRank: getMeasurementAreaSortRank(label, firstIndex) });
+      firstIndex += 1;
+    }
+  }
+
+  return rows.sort((left, right) => left.sortRank - right.sortRank || left.firstIndex - right.firstIndex);
+}
+
+function normalizeMeasurementAreaLabel(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return "";
+  }
+  const upper = trimmed.toUpperCase();
+  if (["UG", "EG", "DG"].includes(upper)) {
+    return upper;
+  }
+  if (upper === "DACH") {
+    return "Dach";
+  }
+  const floorMatch = trimmed.match(/^(\d+)\s*\.?\s*og$/i);
+  if (floorMatch) {
+    return `${Number(floorMatch[1])}. OG`;
+  }
+  return trimmed;
+}
+
+function getMeasurementAreaKey(value: string): string {
+  return normalizeMeasurementAreaLabel(value).toLocaleLowerCase("de-DE");
+}
+
+function getMeasurementAreaSortRank(label: string, fallbackIndex: number): number {
+  const normalized = normalizeMeasurementAreaLabel(label);
+  const upper = normalized.toUpperCase();
+  if (upper === "UG") {
+    return 0;
+  }
+  if (upper === "EG") {
+    return 10;
+  }
+  const floorMatch = upper.match(/^(\d+)\. OG$/);
+  if (floorMatch) {
+    return 20 + Number(floorMatch[1]);
+  }
+  if (upper === "DG") {
+    return 900;
+  }
+  if (upper === "DACH") {
+    return 910;
+  }
+  if (upper.includes("AUSSEN") || upper.includes("AUßEN")) {
+    return 920;
+  }
+  return 1000 + fallbackIndex;
+}
+
+function getMeasurementCellEntries(item: MobileMeasurementItem, areaKey: string): MobileMeasurementItem["entries"] {
+  return item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
+}
+
+function getMeasurementCellQuantity(entries: MobileMeasurementItem["entries"]): number {
+  return entries.reduce((sum, entry) => {
+    const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
+    return Number.isFinite(quantity) ? sum + quantity : sum;
+  }, 0);
+}
+
 function MeasurementReviewPanel({
   siteNumber,
   batches,
@@ -1180,6 +1295,7 @@ function MeasurementReviewPanel({
   onMarkBilled,
   onMarkOpen,
   onUpdateEntry,
+  onCreateEntry,
   onResetToSubmitted,
 }: {
   siteNumber: string | null;
@@ -1198,6 +1314,7 @@ function MeasurementReviewPanel({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
   const [entryDrafts, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
@@ -1493,6 +1610,7 @@ function MeasurementReviewPanel({
             onDraftChange={updateEntryDraft}
             onDraftSave={(entry, draft) => void saveEntryDraft(selectedBatch, entry, draft)}
             onDraftReset={resetEntryDraft}
+            onCellCreate={(item, areaLabel, quantity) => onCreateEntry(selectedBatch, item.id, { area_or_comment: areaLabel, quantity })}
           />
         ) : null}
       </div>
@@ -1567,6 +1685,7 @@ function MeasurementReviewTable({
   onDraftChange,
   onDraftSave,
   onDraftReset,
+  onCellCreate,
 }: {
   items: MobileMeasurementItem[];
   entryDrafts: Record<number, MeasurementEntryDraft>;
@@ -1576,98 +1695,144 @@ function MeasurementReviewTable({
   onDraftChange: (entryId: number, field: keyof MeasurementEntryDraft, value: string) => void;
   onDraftSave: (entry: MobileMeasurementItem["entries"][number], draft: MeasurementEntryDraft | undefined) => void;
   onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
+  onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
 }) {
-  const maxAreas = Math.max(0, ...items.map((item) => item.entries.length));
-  const areaColumns = Array.from({ length: maxAreas }, (_, index) => index);
+  const areaRows = buildMeasurementMatrixAreaRows(items);
+  const [newCellDrafts, setNewCellDrafts] = useState<Record<string, string>>({});
+  const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+
+  function updateNewCellDraft(cellKey: string, value: string): void {
+    setNewCellDrafts((current) => ({ ...current, [cellKey]: value }));
+  }
+
+  async function saveNewCellDraft(item: MobileMeasurementItem, area: MeasurementMatrixAreaRow, value: string): Promise<void> {
+    const quantity = parseMeasurementQuantityInput(value);
+    if (value.trim() === "") {
+      return;
+    }
+    if (quantity === null || quantity <= 0 || savingCellKey) {
+      setNewCellDrafts((current) => ({ ...current, [`${area.key}-${item.id}`]: "" }));
+      return;
+    }
+
+    const cellKey = `${area.key}-${item.id}`;
+    setSavingCellKey(cellKey);
+    try {
+      await onCellCreate(item, area.label, quantity);
+      setNewCellDrafts((current) => ({ ...current, [cellKey]: "" }));
+    } finally {
+      setSavingCellKey(null);
+    }
+  }
 
   return (
     <div className="measurement-review-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-      <table className="measurement-table-view measurement-review-table">
+      <table className="measurement-table-view measurement-matrix-table measurement-review-table">
         <thead>
           <tr>
-            <th>Pos.-Nr.</th>
-            <th>Beschreibung</th>
-            <th>Einheit</th>
-            {areaColumns.map((index) => (
-              <Fragment key={index}>
-                <th>Bereich {index + 1}</th>
-                <th>Menge {index + 1}</th>
-              </Fragment>
+            <th className="measurement-matrix-axis">Pos.-Nr.</th>
+            {items.map((item) => (
+              <th className="measurement-matrix-position-heading" key={item.id}>
+                <strong>{item.position}</strong>
+              </th>
             ))}
-            <th>Summe</th>
+          </tr>
+          <tr>
+            <th className="measurement-matrix-axis">Beschreibung</th>
+            {items.map((item) => (
+              <th className="measurement-matrix-description-heading" key={item.id}>{item.description}</th>
+            ))}
+          </tr>
+          <tr>
+            <th className="measurement-matrix-axis">Einheit</th>
+            {items.map((item) => (
+              <th key={item.id}>{item.unit ?? "-"}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td><strong>{item.position}</strong></td>
-              <td className="measurement-table-description">{item.description}</td>
-              <td>{item.unit ?? "-"}</td>
-              {areaColumns.map((index) => {
-                const entry = item.entries[index];
-                if (!entry) {
+          <tr className="measurement-matrix-section-row">
+            <th className="measurement-matrix-axis">Bauteil / Ort</th>
+            {items.map((item) => <td key={item.id} />)}
+          </tr>
+          {areaRows.map((area) => (
+            <tr key={area.key}>
+              <th className="measurement-matrix-axis">{area.label}</th>
+              {items.map((item) => {
+                const entries = getMeasurementCellEntries(item, area.key);
+                if (entries.length === 0) {
+                  const cellKey = `${area.key}-${item.id}`;
+                  const draftValue = newCellDrafts[cellKey] ?? "";
+                  const isSaving = savingCellKey === cellKey;
                   return (
-                    <Fragment key={index}>
-                      <td />
-                      <td />
-                    </Fragment>
+                    <td className="measurement-matrix-empty-cell" key={item.id}>
+                      <input
+                        className="measurement-table-input is-quantity"
+                        value={draftValue}
+                        disabled={!canEditRows || reviewActionLoading || isSaving || savingCellKey !== null}
+                        inputMode="decimal"
+                        aria-label={`Neue Menge ${area.label} für ${item.position}`}
+                        onChange={(event) => updateNewCellDraft(cellKey, event.target.value)}
+                        onBlur={() => void saveNewCellDraft(item, area, draftValue)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void saveNewCellDraft(item, area, draftValue);
+                          }
+                          if (event.key === "Escape") {
+                            updateNewCellDraft(cellKey, "");
+                          }
+                        }}
+                      />
+                    </td>
                   );
                 }
+                if (entries.length > 1) {
+                  return (
+                    <td className="measurement-matrix-quantity-cell is-combined" key={item.id}>
+                      <strong>{formatMeasurementNumber(getMeasurementCellQuantity(entries))}</strong>
+                    </td>
+                  );
+                }
+                const entry = entries[0];
                 const draft = entryDrafts[entry.id] ?? {
                   area_or_comment: entry.area_or_comment,
                   quantity: formatMeasurementDraftQuantity(entry.quantity),
                 };
                 const isSaving = savingEntryId === entry.id;
                 return (
-                  <Fragment key={entry.id}>
-                    <td>
-                      <input
-                        className="measurement-table-input"
-                        value={draft.area_or_comment}
-                        disabled={!canEditRows || reviewActionLoading || isSaving}
-                        aria-label={`Bereich für ${item.position}`}
-                        onChange={(event) => onDraftChange(entry.id, "area_or_comment", event.target.value)}
-                        onBlur={() => onDraftSave(entry, draft)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            onDraftSave(entry, draft);
-                          }
-                          if (event.key === "Escape") {
-                            onDraftReset(entry);
-                          }
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <div className="measurement-table-quantity-cell">
-                        <input
-                          className="measurement-table-input is-quantity"
-                          value={draft.quantity}
-                          disabled={!canEditRows || reviewActionLoading || isSaving}
-                          inputMode="decimal"
-                          aria-label={`Menge für ${item.position}`}
-                          onChange={(event) => onDraftChange(entry.id, "quantity", event.target.value)}
-                          onBlur={() => onDraftSave(entry, draft)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              onDraftSave(entry, draft);
-                            }
-                            if (event.key === "Escape") {
-                              onDraftReset(entry);
-                            }
-                          }}
-                        />
-                        <span>{item.unit ?? ""}</span>
-                      </div>
-                    </td>
-                  </Fragment>
+                  <td className="measurement-matrix-quantity-cell" key={entry.id}>
+                    <input
+                      className="measurement-table-input is-quantity"
+                      value={draft.quantity}
+                      disabled={!canEditRows || reviewActionLoading || isSaving}
+                      inputMode="decimal"
+                      aria-label={`Menge ${area.label} für ${item.position}`}
+                      onChange={(event) => onDraftChange(entry.id, "quantity", event.target.value)}
+                      onBlur={() => onDraftSave(entry, draft)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          onDraftSave(entry, draft);
+                        }
+                        if (event.key === "Escape") {
+                          onDraftReset(entry);
+                        }
+                      }}
+                    />
+                  </td>
                 );
               })}
-              <td><strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></td>
             </tr>
           ))}
+          <tr className="measurement-matrix-total-row">
+            <th className="measurement-matrix-axis">Gesamt</th>
+            {items.map((item) => (
+              <td className="measurement-matrix-quantity-cell" key={item.id}>
+                <strong>{formatMeasurementNumber(getMeasurementCellQuantity(item.entries))}</strong>
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>

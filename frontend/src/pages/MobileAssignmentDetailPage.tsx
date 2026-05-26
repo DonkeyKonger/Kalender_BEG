@@ -12,7 +12,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -505,55 +505,65 @@ function MobileMeasurementTable({
   items: MobileMeasurementItem[];
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
-  const maxAreas = Math.max(0, ...items.map((item) => item.entries.length));
-  const areaColumns = Array.from({ length: maxAreas }, (_, index) => index);
+  const areaRows = collectMeasurementAreaTags(items);
 
   return (
     <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-      <table className="measurement-table-view mobile-measurement-table">
+      <table className="measurement-table-view measurement-matrix-table mobile-measurement-table">
         <thead>
           <tr>
-            <th>Pos.-Nr.</th>
-            <th>Beschreibung</th>
-            <th>Einheit</th>
-            {areaColumns.map((index) => (
-              <Fragment key={index}>
-                <th>Bereich {index + 1}</th>
-                <th>Menge {index + 1}</th>
-              </Fragment>
+            <th className="measurement-matrix-axis">Pos.-Nr.</th>
+            {items.map((item) => (
+              <th className="measurement-matrix-position-heading" key={item.id}>
+                <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
+                  {item.position}
+                </button>
+              </th>
             ))}
-            <th>Summe</th>
+          </tr>
+          <tr>
+            <th className="measurement-matrix-axis">Beschreibung</th>
+            {items.map((item) => (
+              <th className="measurement-matrix-description-heading" key={item.id}>{item.description}</th>
+            ))}
+          </tr>
+          <tr>
+            <th className="measurement-matrix-axis">Einheit</th>
+            {items.map((item) => (
+              <th key={item.id}>{item.unit ?? "-"}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr
-              key={item.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelectItem(item)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onSelectItem(item);
-                }
-              }}
-            >
-              <td><strong>{item.position}</strong></td>
-              <td>{item.description}</td>
-              <td>{item.unit ?? "-"}</td>
-              {areaColumns.map((index) => {
-                const entry = item.entries[index];
+          <tr className="measurement-matrix-section-row">
+            <th className="measurement-matrix-axis">Bauteil / Ort</th>
+            {items.map((item) => <td key={item.id} />)}
+          </tr>
+          {areaRows.map((area) => (
+            <tr key={area}>
+              <th className="measurement-matrix-axis">{area}</th>
+              {items.map((item) => {
+                const quantity = getMobileMeasurementAreaQuantity(item, area);
                 return (
-                  <Fragment key={index}>
-                    <td>{entry?.area_or_comment ?? ""}</td>
-                    <td>{entry ? `${formatMeasurementNumber(entry.quantity)} ${item.unit ?? ""}` : ""}</td>
-                  </Fragment>
+                  <td className={quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell"} key={item.id}>
+                    <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
+                      {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
+                    </button>
+                  </td>
                 );
               })}
-              <td><strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></td>
             </tr>
           ))}
+          <tr className="measurement-matrix-total-row">
+            <th className="measurement-matrix-axis">Gesamt</th>
+            {items.map((item) => (
+              <td className="measurement-matrix-quantity-cell" key={item.id}>
+                <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
+                  <strong>{formatMeasurementNumber(item.reported_quantity)}</strong>
+                </button>
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -768,7 +778,25 @@ function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
     });
   });
 
-  return tags;
+  return sortMeasurementAreaLabels(tags);
+}
+
+function sortMeasurementAreaLabels(labels: string[]): string[] {
+  return labels
+    .map((label, index) => ({ label, index, sortRank: getMeasurementAreaSortRank(label, index) }))
+    .sort((left, right) => left.sortRank - right.sortRank || left.index - right.index)
+    .map((item) => item.label);
+}
+
+function getMobileMeasurementAreaQuantity(item: MobileMeasurementItem, areaLabel: string): number {
+  const areaKey = getMeasurementAreaKey(areaLabel);
+  return item.entries.reduce((sum, entry) => {
+    if (getMeasurementAreaKey(entry.area_or_comment) !== areaKey) {
+      return sum;
+    }
+    const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
+    return Number.isFinite(quantity) ? sum + quantity : sum;
+  }, 0);
 }
 
 function normalizeMeasurementArea(input: string): string {
@@ -795,6 +823,31 @@ function normalizeMeasurementArea(input: string): string {
 
 function getMeasurementAreaKey(value: string): string {
   return normalizeMeasurementArea(value).toLocaleLowerCase("de-DE");
+}
+
+function getMeasurementAreaSortRank(label: string, fallbackIndex: number): number {
+  const normalized = normalizeMeasurementArea(label);
+  const upper = normalized.toUpperCase();
+  if (upper === "UG") {
+    return 0;
+  }
+  if (upper === "EG") {
+    return 10;
+  }
+  const floorMatch = upper.match(/^(\d+)\. OG$/);
+  if (floorMatch) {
+    return 20 + Number(floorMatch[1]);
+  }
+  if (upper === "DG") {
+    return 900;
+  }
+  if (upper === "DACH") {
+    return 910;
+  }
+  if (upper.includes("AUSSEN") || upper.includes("AUßEN")) {
+    return 920;
+  }
+  return 1000 + fallbackIndex;
 }
 
 function findMeasurementAreaSuggestion(input: string, tags: string[]): string | null {

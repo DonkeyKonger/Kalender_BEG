@@ -371,6 +371,18 @@ export const api = {
     });
   },
 
+  async createSiteMeasurementEntry(
+    siteId: number,
+    batchId: number,
+    measurementItemId: number,
+    payload: MeasurementEntryPayload,
+  ): Promise<MeasurementEntry> {
+    return request<MeasurementEntry>(`/sites/${siteId}/measurement-batches/${batchId}/items/${measurementItemId}/entries`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async updateSiteMeasurementEntry(
     siteId: number,
     batchId: number,

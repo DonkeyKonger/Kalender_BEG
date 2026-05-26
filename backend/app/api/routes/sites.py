@@ -254,6 +254,27 @@ def reset_measurement_batch_to_submitted(
     )
 
 
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/items/{measurement_item_id}/entries",
+    response_model=MeasurementEntryRead,
+)
+def create_measurement_entry(
+    site_id: int,
+    batch_id: int,
+    measurement_item_id: int,
+    payload: MeasurementEntryCreate,
+    user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MeasurementEntryRead:
+    return MeasurementService(db).create_site_entry(
+        site_id=site_id,
+        batch_id=batch_id,
+        measurement_item_id=measurement_item_id,
+        current_user=user,
+        payload=payload,
+    )
+
+
 @router.patch(
     "/{site_id}/measurement-batches/{batch_id}/entries/{entry_id}",
     response_model=MeasurementEntryRead,

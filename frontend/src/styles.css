@@ -3534,14 +3534,103 @@ button.person-chip:focus-visible {
   font-weight: 850;
 }
 
-.mobile-measurement-table tr[role="button"] {
-  cursor: pointer;
+.measurement-matrix-table {
+  table-layout: auto;
 }
 
-.mobile-measurement-table td:nth-child(2) {
-  max-width: 260px;
-  min-width: 220px;
-  line-height: 1.3;
+.measurement-matrix-table th,
+.measurement-matrix-table td {
+  min-width: 126px;
+  vertical-align: middle;
+}
+
+.measurement-matrix-table .measurement-matrix-axis {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 130px;
+  max-width: 170px;
+  background: #f8fafc;
+  color: #172033;
+  font-size: 0.78rem;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.measurement-matrix-table thead .measurement-matrix-axis {
+  z-index: 4;
+  background: #eef4fb;
+}
+
+.measurement-matrix-position-heading {
+  min-width: 150px;
+  background: #eef4fb !important;
+  color: #172033 !important;
+  font-size: 0.82rem !important;
+  text-transform: none !important;
+}
+
+.measurement-matrix-description-heading {
+  min-width: 180px;
+  max-width: 240px;
+  background: #f8fafc !important;
+  color: #172033 !important;
+  font-size: 0.74rem !important;
+  line-height: 1.25;
+  text-transform: none !important;
+  white-space: normal !important;
+}
+
+.measurement-matrix-section-row th,
+.measurement-matrix-section-row td {
+  background: #fbfdff;
+  color: #52627a;
+  font-weight: 900;
+}
+
+.measurement-matrix-quantity-cell {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.measurement-matrix-empty-cell {
+  background: #fbfdff;
+}
+
+.measurement-matrix-total-row th,
+.measurement-matrix-total-row td {
+  border-top: 2px solid #cbd7e6;
+  background: #f4f7fb;
+  font-weight: 900;
+}
+
+.measurement-matrix-total-row .measurement-matrix-axis {
+  background: #eaf2fb;
+}
+
+.measurement-matrix-header-button,
+.measurement-matrix-cell-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  padding: 0;
+  text-align: inherit;
+}
+
+.measurement-matrix-cell-button {
+  min-height: 28px;
+  text-align: right;
+}
+
+.measurement-matrix-cell-button:focus-visible,
+.measurement-matrix-header-button:focus-visible {
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  outline: none;
 }
 
 .measurement-review-list,
