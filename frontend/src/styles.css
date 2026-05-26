@@ -2959,6 +2959,34 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
+.primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid #1f3657;
+  border-radius: 8px;
+  background: #1f3657;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.primary-action:hover,
+.primary-action:focus-visible {
+  background: #152946;
+  outline: none;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .project-record-edit-note {
   border: 1px solid #dbe7f5;
   border-radius: 10px;
@@ -3333,6 +3361,170 @@ button.person-chip:focus-visible {
 .measurement-status.is-nep {
   background: #fff7ed;
   color: #c2410c;
+}
+
+.measurement-status.is-submitted {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.measurement-status.is-draft {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.measurement-status.is-approved {
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.measurement-status.is-rejected {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.project-record-subtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #d8e2ee;
+  border-radius: 999px;
+  background: #f3f7fb;
+  padding: 4px;
+}
+
+.project-record-subtabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #52627a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.project-record-subtabs button.is-active {
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.09);
+}
+
+.measurement-review-list,
+.measurement-review-positions,
+.measurement-review-entry-list {
+  display: grid;
+  gap: 10px;
+}
+
+.measurement-review-card,
+.measurement-review-position,
+.measurement-review-detail,
+.measurement-evaluation-grid > div {
+  border: 1px solid #dbe7f5;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.measurement-review-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: #172033;
+  cursor: pointer;
+  font: inherit;
+  padding: 12px;
+  text-align: left;
+}
+
+.measurement-review-card.is-submitted {
+  border-color: #9db7da;
+  background: #f8fbff;
+}
+
+.measurement-review-card strong,
+.measurement-review-position strong,
+.measurement-review-entry strong,
+.measurement-evaluation-grid strong {
+  color: #111827;
+}
+
+.measurement-review-card small,
+.measurement-review-card b,
+.measurement-review-position small,
+.measurement-review-position span,
+.measurement-review-entry span,
+.measurement-evaluation-grid span {
+  color: #65738a;
+  font-size: 0.88rem;
+}
+
+.measurement-review-detail {
+  display: grid;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.measurement-review-header,
+.measurement-review-position-head,
+.measurement-review-entry {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.measurement-review-header h2,
+.measurement-review-header p {
+  margin: 8px 0 0;
+}
+
+.measurement-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.measurement-review-position {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.measurement-review-position-head > div,
+.measurement-review-entry > div {
+  display: grid;
+  gap: 3px;
+}
+
+.measurement-review-entry {
+  border-top: 1px solid #e5edf7;
+  padding-top: 9px;
+}
+
+.measurement-review-entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.measurement-evaluation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.measurement-evaluation-grid > div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
 }
 
 .project-placeholder-grid {
@@ -4962,6 +5154,16 @@ button.person-chip:focus-visible {
   margin-top: 2px;
   color: #5f6f86;
   font-size: 0.88rem;
+}
+
+.dashboard-message-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-message-link:hover strong,
+.dashboard-message-link:focus-visible strong {
+  color: #1f3657;
 }
 
 .dashboard-alert-dot {

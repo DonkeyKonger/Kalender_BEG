@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { MeasurementDashboardSubmission } from "../types/site";
 import type { WeatherSummary } from "../types/weather";
 
 type DateRange = {
@@ -84,6 +85,7 @@ export function DashboardPage() {
   const [workerSearch, setWorkerSearch] = useState("");
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
 
@@ -99,15 +101,17 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [matrixData, personData] = await Promise.all([
+        const [matrixData, personData, measurementData] = await Promise.all([
           api.matrix({ start: range.historyStart, end: range.nextWeekEnd, includeWeekends: true }),
           api.persons({ isActive: true }),
+          api.dashboardMeasurementSubmissions().catch(() => [] as MeasurementDashboardSubmission[]),
         ]);
         if (!active) {
           return;
         }
         setMatrix(matrixData);
         setPeople(personData);
+        setMeasurementMessages(measurementData);
       } catch (loadError) {
         if (!active) {
           return;
@@ -259,10 +263,32 @@ export function DashboardPage() {
             </DashboardCard>
 
             <DashboardCard title="Eingang / Meldungen" icon={<Inbox aria-hidden="true" size={20} />}>
-              <div className="dashboard-message-box">
-                <strong>Keine neuen Meldungen</strong>
-                <p>Basisversion. Vorgesehen sind spaeter Monteurmeldungen, Bestellungen, Aufmasse und Rueckfragen.</p>
-              </div>
+              {measurementMessages.length > 0 ? (
+                <div className="dashboard-alert-list">
+                  {measurementMessages.map((message) => (
+                    <Link
+                      className="dashboard-alert-row dashboard-message-link"
+                      key={message.batch_id}
+                      to={`/sites/${message.site_id}?tab=measurement&measurementSubtab=review`}
+                    >
+                      <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
+                      <div>
+                        <strong>{message.title} für {message.site_name} wurde zur Prüfung eingereicht.</strong>
+                        <span>
+                          {message.submitted_by_name ? `Von ${message.submitted_by_name} · ` : ""}
+                          {message.submitted_at ? formatDashboardDateTime(message.submitted_at) : "Zeitpunkt unbekannt"}
+                          {message.site_number ? ` · ${message.site_number}` : ""}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="dashboard-message-box">
+                  <strong>Keine neuen Meldungen</strong>
+                  <p>Basisversion. Vorgesehen sind spaeter Monteurmeldungen, Bestellungen, Aufmasse und Rueckfragen.</p>
+                </div>
+              )}
             </DashboardCard>
           </div>
 
@@ -400,6 +426,10 @@ function DashboardNeedSection({ title, needs }: { title: string; needs: Staffing
 
 function EmptyDashboardText({ text }: { text: string }) {
   return <p className="dashboard-empty-text">{text}</p>;
+}
+
+function formatDashboardDateTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 function buildDashboardData(matrix: MatrixResponse, people: Person[], range: DateRange): DashboardData {

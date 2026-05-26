@@ -15,6 +15,7 @@ from app.models.site_measurement_item import (
 from app.models.user import User
 from app.schemas.measurement import (
     MeasurementEntryCreate,
+    MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
@@ -160,6 +161,84 @@ class MeasurementService:
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
 
+    def list_site_batches(self, site_id: int) -> list[MobileMeasurementBatchRead]:
+        self._get_site(site_id)
+        batches = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch)
+                .options(
+                    selectinload(SiteMeasurementBatch.entries).selectinload(
+                        SiteMeasurementEntry.measurement_item
+                    ),
+                    selectinload(SiteMeasurementBatch.submitted_by),
+                )
+                .where(SiteMeasurementBatch.site_id == site_id)
+                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
+            ).all()
+        )
+        return [self._build_mobile_batch(batch) for batch in batches]
+
+    def list_site_batch_items(
+        self, *, site_id: int, batch_id: int
+    ) -> list[MobileMeasurementItemRead]:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .options(
+                    selectinload(SiteMeasurementItem.entries).selectinload(
+                        SiteMeasurementEntry.created_by
+                    )
+                )
+                .where(SiteMeasurementItem.site_id == batch.site_id)
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            ).all()
+        )
+        return [self._build_mobile_item(item, batch.id) for item in items]
+
+    def review_site_batch(
+        self, *, site_id: int, batch_id: int, review_status: str
+    ) -> MobileMeasurementBatchRead:
+        if review_status not in {"approved", "rejected"}:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Prüfstatus.")
+
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        if batch.status != "submitted":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Nur eingereichte Aufmaße können geprüft werden.",
+            )
+
+        batch.status = review_status
+        for entry in batch.entries:
+            entry.status = review_status
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
+    def list_dashboard_submissions(
+        self, *, limit: int = 6
+    ) -> list[MeasurementDashboardSubmissionRead]:
+        batches = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch)
+                .options(
+                    selectinload(SiteMeasurementBatch.site),
+                    selectinload(SiteMeasurementBatch.entries),
+                    selectinload(SiteMeasurementBatch.submitted_by),
+                )
+                .where(SiteMeasurementBatch.status == "submitted")
+                .order_by(
+                    SiteMeasurementBatch.submitted_at.desc(),
+                    SiteMeasurementBatch.updated_at.desc(),
+                )
+                .limit(limit)
+            ).all()
+        )
+        return [self._build_dashboard_submission(batch) for batch in batches]
+
     def import_timesheet(
         self, site_id: int, *, file_name: str | None, pdf_content: bytes
     ) -> tuple[dict, list[SiteMeasurementItem]]:
@@ -256,6 +335,23 @@ class MeasurementService:
             entry_count=len(batch.entries),
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
+        )
+
+    def _build_dashboard_submission(
+        self, batch: SiteMeasurementBatch
+    ) -> MeasurementDashboardSubmissionRead:
+        position_ids = {entry.measurement_item_id for entry in batch.entries}
+        return MeasurementDashboardSubmissionRead(
+            batch_id=batch.id,
+            site_id=batch.site_id,
+            site_name=batch.site.name if batch.site else "Baustelle",
+            site_number=batch.site.site_number if batch.site else None,
+            title=batch.title,
+            status=batch.status,
+            submitted_by_name=batch.submitted_by.display_name if batch.submitted_by else None,
+            submitted_at=batch.submitted_at,
+            entry_count=len(batch.entries),
+            position_count=len(position_ids),
         )
 
     def _build_mobile_item(

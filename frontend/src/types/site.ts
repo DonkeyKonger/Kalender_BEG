@@ -220,3 +220,16 @@ export type MeasurementImportResponse = {
   source_customer_name: string | null;
   items: MeasurementItem[];
 };
+
+export type MeasurementDashboardSubmission = {
+  batch_id: number;
+  site_id: number;
+  site_name: string;
+  site_number: string | null;
+  title: string;
+  status: string;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+  entry_count: number;
+  position_count: number;
+};

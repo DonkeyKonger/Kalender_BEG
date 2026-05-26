@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -158,6 +158,10 @@ export const api = {
 
   async dashboardWeather(): Promise<WeatherSummary> {
     return request<WeatherSummary>("/dashboard/weather");
+  },
+
+  async dashboardMeasurementSubmissions(): Promise<MeasurementDashboardSubmission[]> {
+    return request<MeasurementDashboardSubmission[]>("/dashboard/measurement-submissions");
   },
 
   async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {
@@ -339,6 +343,26 @@ export const api = {
 
   async measurementItems(siteId: number): Promise<MeasurementItem[]> {
     return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items`);
+  },
+
+  async siteMeasurementBatches(siteId: number): Promise<MobileMeasurementBatch[]> {
+    return request<MobileMeasurementBatch[]>(`/sites/${siteId}/measurement-batches`);
+  },
+
+  async siteMeasurementBatchItems(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
+    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`);
+  },
+
+  async approveSiteMeasurementBatch(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/approve`, {
+      method: "POST",
+    });
+  },
+
+  async rejectSiteMeasurementBatch(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/reject`, {
+      method: "POST",
+    });
   },
 
   async importMeasurementTimesheet(siteId: number, file: File): Promise<MeasurementImportResponse> {

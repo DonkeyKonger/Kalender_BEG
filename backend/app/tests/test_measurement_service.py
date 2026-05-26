@@ -236,3 +236,87 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
             payload=MeasurementEntryCreate(area_or_comment="2. OG", quantity=Decimal("5.00")),
         )
     assert locked.value.status_code == 409
+
+
+def test_site_measurement_review_approves_only_submitted_batches():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
+    from app.models.user import User
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, item])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    with pytest.raises(HTTPException) as draft_review:
+        service.review_site_batch(site_id=site.id, batch_id=batch.id, review_status="approved")
+    assert draft_review.value.status_code == 409
+
+    service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
+    )
+    submitted = service.submit_mobile_batch(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+    )
+    dashboard_messages = service.list_dashboard_submissions(limit=5)
+    approved = service.review_site_batch(
+        site_id=site.id,
+        batch_id=submitted.id,
+        review_status="approved",
+    )
+
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    stored_entry = db.scalar(select(SiteMeasurementEntry).where(SiteMeasurementEntry.measurement_batch_id == batch.id))
+    assert dashboard_messages[0].batch_id == batch.id
+    assert dashboard_messages[0].site_id == site.id
+    assert approved.status == "approved"
+    assert stored_batch is not None
+    assert stored_batch.status == "approved"
+    assert stored_entry is not None
+    assert stored_entry.status == "approved"
+

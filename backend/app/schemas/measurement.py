@@ -70,6 +70,19 @@ class MobileMeasurementBatchRead(BaseModel):
     reported_hours: Decimal | None
 
 
+class MeasurementDashboardSubmissionRead(BaseModel):
+    batch_id: int
+    site_id: int
+    site_name: str
+    site_number: str | None
+    title: str
+    status: str
+    submitted_by_name: str | None
+    submitted_at: datetime | None
+    entry_count: int
+    position_count: int
+
+
 class MeasurementImportResponse(BaseModel):
     imported_count: int
     source_project_number: str | None

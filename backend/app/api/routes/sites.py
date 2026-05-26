@@ -8,7 +8,12 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.measurement import MeasurementImportResponse, MeasurementItemRead
+from app.schemas.measurement import (
+    MeasurementImportResponse,
+    MeasurementItemRead,
+    MobileMeasurementBatchRead,
+    MobileMeasurementItemRead,
+)
 from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
@@ -177,6 +182,58 @@ def list_measurement_items(
 ) -> list[MeasurementItemRead]:
     items = MeasurementService(db).list_items(site_id)
     return [MeasurementItemRead.model_validate(item) for item in items]
+
+
+@router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])
+def list_measurement_batches(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[MobileMeasurementBatchRead]:
+    return MeasurementService(db).list_site_batches(site_id)
+
+
+@router.get(
+    "/{site_id}/measurement-batches/{batch_id}/items",
+    response_model=list[MobileMeasurementItemRead],
+)
+def list_measurement_batch_items(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[MobileMeasurementItemRead]:
+    return MeasurementService(db).list_site_batch_items(site_id=site_id, batch_id=batch_id)
+
+
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/approve",
+    response_model=MobileMeasurementBatchRead,
+)
+def approve_measurement_batch(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).review_site_batch(
+        site_id=site_id, batch_id=batch_id, review_status="approved"
+    )
+
+
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/reject",
+    response_model=MobileMeasurementBatchRead,
+)
+def reject_measurement_batch(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).review_site_batch(
+        site_id=site_id, batch_id=batch_id, review_status="rejected"
+    )
 
 
 @router.post(

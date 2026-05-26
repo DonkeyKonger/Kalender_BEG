@@ -2,13 +2,20 @@ import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as Fi
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { MeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
+import type { MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
+type MeasurementSubtab = "timesheet" | "review" | "time-analysis";
+
+const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
+  { key: "timesheet", label: "Zeitenliste" },
+  { key: "review", label: "Prüfung" },
+  { key: "time-analysis", label: "Zeitauswertung" },
+];
 
 const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "overview", label: "Übersicht" },
@@ -20,6 +27,9 @@ const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
 
 export function SiteDetailPage() {
   const { siteId } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedProjectTab = searchParams.get("tab");
+  const requestedMeasurementSubtab = searchParams.get("measurementSubtab");
   const [site, setSite] = useState<Site | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +55,17 @@ export function SiteDetailPage() {
   const [measurementImporting, setMeasurementImporting] = useState(false);
   const [measurementImportMessage, setMeasurementImportMessage] = useState<string | null>(null);
   const [measurementImportError, setMeasurementImportError] = useState<string | null>(null);
+  const [measurementSubtab, setMeasurementSubtab] = useState<MeasurementSubtab>("timesheet");
+  const [measurementBatches, setMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
+  const [measurementBatchesLoading, setMeasurementBatchesLoading] = useState(false);
+  const [measurementBatchesLoaded, setMeasurementBatchesLoaded] = useState(false);
+  const [measurementBatchesError, setMeasurementBatchesError] = useState<string | null>(null);
+  const [selectedMeasurementBatch, setSelectedMeasurementBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [measurementBatchItems, setMeasurementBatchItems] = useState<MobileMeasurementItem[]>([]);
+  const [measurementBatchItemsLoading, setMeasurementBatchItemsLoading] = useState(false);
+  const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
+  const [measurementReviewError, setMeasurementReviewError] = useState<string | null>(null);
+  const [measurementReviewActionLoading, setMeasurementReviewActionLoading] = useState(false);
 
   useEffect(() => {
     async function loadSite() {
@@ -70,7 +91,8 @@ export function SiteDetailPage() {
   }, [siteId]);
 
   useEffect(() => {
-    setActiveTab("overview");
+    setActiveTab(requestedProjectTab === "measurement" ? "measurement" : "overview");
+    setMeasurementSubtab(requestedMeasurementSubtab === "review" ? "review" : "timesheet");
     setEditMode(false);
     setFolders([]);
     setFoldersLoaded(false);
@@ -91,7 +113,17 @@ export function SiteDetailPage() {
     setMeasurementImporting(false);
     setMeasurementImportMessage(null);
     setMeasurementImportError(null);
-  }, [site?.id]);
+    setMeasurementBatches([]);
+    setMeasurementBatchesLoading(false);
+    setMeasurementBatchesLoaded(false);
+    setMeasurementBatchesError(null);
+    setSelectedMeasurementBatch(null);
+    setMeasurementBatchItems([]);
+    setMeasurementBatchItemsLoading(false);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    setMeasurementReviewActionLoading(false);
+  }, [requestedMeasurementSubtab, requestedProjectTab, site?.id]);
 
   useEffect(() => {
     if (!uploadMessage || uploadingFolderKey) {
@@ -167,7 +199,13 @@ export function SiteDetailPage() {
   }, [activeTab, folderDocumentsReloadKey, selectedFolder, site]);
 
   useEffect(() => {
-    if (!site || activeTab !== "measurement" || measurementLoaded || measurementLoading) {
+    if (
+      !site
+      || activeTab !== "measurement"
+      || measurementSubtab !== "timesheet"
+      || measurementLoaded
+      || measurementLoading
+    ) {
       return;
     }
 
@@ -188,7 +226,83 @@ export function SiteDetailPage() {
     }
 
     void loadMeasurementItems();
-  }, [activeTab, measurementLoaded, measurementLoading, site]);
+  }, [activeTab, measurementLoaded, measurementLoading, measurementSubtab, site]);
+
+  useEffect(() => {
+    if (
+      !site
+      || activeTab !== "measurement"
+      || measurementSubtab !== "review"
+      || measurementBatchesLoaded
+      || measurementBatchesLoading
+    ) {
+      return;
+    }
+
+    void loadMeasurementBatches();
+  }, [activeTab, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
+
+  async function loadMeasurementBatches(): Promise<void> {
+    if (!site) {
+      return;
+    }
+    setMeasurementBatchesLoading(true);
+    setMeasurementBatchesError(null);
+    try {
+      setMeasurementBatches(await api.siteMeasurementBatches(site.id));
+      setMeasurementBatchesLoaded(true);
+    } catch (requestError) {
+      setMeasurementBatchesError(readApiError(requestError, "Aufmaßpakete konnten nicht geladen werden."));
+    } finally {
+      setMeasurementBatchesLoading(false);
+    }
+  }
+
+  async function selectMeasurementBatch(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site) {
+      return;
+    }
+    setSelectedMeasurementBatch(batch);
+    setMeasurementBatchItems([]);
+    setMeasurementBatchItemsLoading(true);
+    setMeasurementReviewError(null);
+    try {
+      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaßzeilen konnten nicht geladen werden."));
+    } finally {
+      setMeasurementBatchItemsLoading(false);
+    }
+  }
+
+  async function reviewMeasurementBatch(
+    batch: MobileMeasurementBatch,
+    reviewStatus: "approved" | "rejected",
+  ): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const updated = reviewStatus === "approved"
+        ? await api.approveSiteMeasurementBatch(site.id, batch.id)
+        : await api.rejectSiteMeasurementBatch(site.id, batch.id);
+      setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setSelectedMeasurementBatch(updated);
+      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementReviewMessage(
+        reviewStatus === "approved"
+          ? `${batch.title} wurde freigegeben.`
+          : `${batch.title} wurde zur Korrektur zurückgegeben.`,
+      );
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaßprüfung konnte nicht gespeichert werden."));
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
 
   async function importMeasurementTimesheet(file: File): Promise<void> {
     if (!site || measurementImporting) {
@@ -326,6 +440,13 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
+          activeSubtab={measurementSubtab}
+          onSubtabChange={(subtab) => {
+            setMeasurementSubtab(subtab);
+            setSelectedMeasurementBatch(null);
+            setMeasurementReviewMessage(null);
+            setMeasurementReviewError(null);
+          }}
           items={measurementItems}
           isLoading={measurementLoading}
           error={measurementError}
@@ -337,6 +458,28 @@ export function SiteDetailPage() {
             setMeasurementLoaded(false);
             setMeasurementError(null);
           }}
+          batches={measurementBatches}
+          batchesLoading={measurementBatchesLoading}
+          batchesError={measurementBatchesError}
+          selectedBatch={selectedMeasurementBatch}
+          batchItems={measurementBatchItems}
+          batchItemsLoading={measurementBatchItemsLoading}
+          reviewMessage={measurementReviewMessage}
+          reviewError={measurementReviewError}
+          reviewActionLoading={measurementReviewActionLoading}
+          onRetryBatches={() => {
+            setMeasurementBatchesLoaded(false);
+            setMeasurementBatchesError(null);
+          }}
+          onSelectBatch={(batch) => void selectMeasurementBatch(batch)}
+          onBackToBatchList={() => {
+            setSelectedMeasurementBatch(null);
+            setMeasurementBatchItems([]);
+            setMeasurementReviewMessage(null);
+            setMeasurementReviewError(null);
+          }}
+          onApproveBatch={(batch) => void reviewMeasurementBatch(batch, "approved")}
+          onRejectBatch={(batch) => void reviewMeasurementBatch(batch, "rejected")}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -741,7 +884,116 @@ function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
 
 
 function MeasurementTab({
+  activeSubtab,
+  onSubtabChange,
   items,
+  isLoading,
+  error,
+  isImporting,
+  importMessage,
+  importError,
+  onImport,
+  onRetry,
+  batches,
+  batchesLoading,
+  batchesError,
+  selectedBatch,
+  batchItems,
+  batchItemsLoading,
+  reviewMessage,
+  reviewError,
+  reviewActionLoading,
+  onRetryBatches,
+  onSelectBatch,
+  onBackToBatchList,
+  onApproveBatch,
+  onRejectBatch,
+}: {
+  activeSubtab: MeasurementSubtab;
+  onSubtabChange: (subtab: MeasurementSubtab) => void;
+  items: MeasurementItem[];
+  isLoading: boolean;
+  error: string | null;
+  isImporting: boolean;
+  importMessage: string | null;
+  importError: string | null;
+  onImport: (file: File) => void;
+  onRetry: () => void;
+  batches: MobileMeasurementBatch[];
+  batchesLoading: boolean;
+  batchesError: string | null;
+  selectedBatch: MobileMeasurementBatch | null;
+  batchItems: MobileMeasurementItem[];
+  batchItemsLoading: boolean;
+  reviewMessage: string | null;
+  reviewError: string | null;
+  reviewActionLoading: boolean;
+  onRetryBatches: () => void;
+  onSelectBatch: (batch: MobileMeasurementBatch) => void;
+  onBackToBatchList: () => void;
+  onApproveBatch: (batch: MobileMeasurementBatch) => void;
+  onRejectBatch: (batch: MobileMeasurementBatch) => void;
+}) {
+  const latestImport = items[0];
+
+  return (
+    <div className="project-record-tab-panel">
+      <div className="project-record-subtabs" role="tablist" aria-label="Aufmaß Bereiche">
+        {measurementSubtabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeSubtab === tab.key}
+            className={activeSubtab === tab.key ? "is-active" : ""}
+            onClick={() => onSubtabChange(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSubtab === "timesheet" ? (
+        <MeasurementTimesheetPanel
+          items={items}
+          latestImport={latestImport}
+          isLoading={isLoading}
+          error={error}
+          isImporting={isImporting}
+          importMessage={importMessage}
+          importError={importError}
+          onImport={onImport}
+          onRetry={onRetry}
+        />
+      ) : null}
+
+      {activeSubtab === "review" ? (
+        <MeasurementReviewPanel
+          batches={batches}
+          batchesLoading={batchesLoading}
+          batchesError={batchesError}
+          selectedBatch={selectedBatch}
+          batchItems={batchItems}
+          batchItemsLoading={batchItemsLoading}
+          reviewMessage={reviewMessage}
+          reviewError={reviewError}
+          reviewActionLoading={reviewActionLoading}
+          onRetryBatches={onRetryBatches}
+          onSelectBatch={onSelectBatch}
+          onBackToBatchList={onBackToBatchList}
+          onApproveBatch={onApproveBatch}
+          onRejectBatch={onRejectBatch}
+        />
+      ) : null}
+
+      {activeSubtab === "time-analysis" ? <MeasurementTimeAnalysisPanel /> : null}
+    </div>
+  );
+}
+
+function MeasurementTimesheetPanel({
+  items,
+  latestImport,
   isLoading,
   error,
   isImporting,
@@ -751,6 +1003,7 @@ function MeasurementTab({
   onRetry,
 }: {
   items: MeasurementItem[];
+  latestImport: MeasurementItem | undefined;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
@@ -759,13 +1012,11 @@ function MeasurementTab({
   onImport: (file: File) => void;
   onRetry: () => void;
 }) {
-  const latestImport = items[0];
-
   return (
-    <div className="project-record-tab-panel">
+    <>
       <div className="project-record-toolbar">
         <div>
-          <h2><Ruler aria-hidden="true" size={18} />Aufmaß</h2>
+          <h2><Ruler aria-hidden="true" size={18} />Zeitenliste</h2>
           <p>Zeitenliste als PDF importieren und die erkannten Aufmaß-Vorlagenpositionen prüfen.</p>
         </div>
         <label className={`secondary-action project-upload-action${isImporting ? " is-disabled" : ""}`}>
@@ -840,9 +1091,165 @@ function MeasurementTab({
           </table>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
+
+function MeasurementReviewPanel({
+  batches,
+  batchesLoading,
+  batchesError,
+  selectedBatch,
+  batchItems,
+  batchItemsLoading,
+  reviewMessage,
+  reviewError,
+  reviewActionLoading,
+  onRetryBatches,
+  onSelectBatch,
+  onBackToBatchList,
+  onApproveBatch,
+  onRejectBatch,
+}: {
+  batches: MobileMeasurementBatch[];
+  batchesLoading: boolean;
+  batchesError: string | null;
+  selectedBatch: MobileMeasurementBatch | null;
+  batchItems: MobileMeasurementItem[];
+  batchItemsLoading: boolean;
+  reviewMessage: string | null;
+  reviewError: string | null;
+  reviewActionLoading: boolean;
+  onRetryBatches: () => void;
+  onSelectBatch: (batch: MobileMeasurementBatch) => void;
+  onBackToBatchList: () => void;
+  onApproveBatch: (batch: MobileMeasurementBatch) => void;
+  onRejectBatch: (batch: MobileMeasurementBatch) => void;
+}) {
+  if (selectedBatch) {
+    const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
+    const canReview = selectedBatch.status === "submitted";
+
+    return (
+      <div className="measurement-review-detail">
+        <div className="measurement-review-header">
+          <div>
+            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zur Paketliste</button>
+            <h2>{selectedBatch.title}</h2>
+            <p>{getMeasurementBatchStatusLabel(selectedBatch.status)} · {selectedBatch.entry_count} Aufmaßzeilen · {selectedBatch.position_count} Positionen</p>
+          </div>
+          {canReview ? (
+            <div className="measurement-review-actions">
+              <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onRejectBatch(selectedBatch)}>
+                Zur Korrektur zurückgeben
+              </button>
+              <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onApproveBatch(selectedBatch)}>
+                Freigeben
+              </button>
+            </div>
+          ) : (
+            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
+          )}
+        </div>
+
+        {reviewMessage ? <div className="project-record-empty-state is-success">{reviewMessage}</div> : null}
+        {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
+        {batchItemsLoading ? <div className="matrix-state">Aufmaßzeilen werden geladen...</div> : null}
+        {!batchItemsLoading && itemsWithEntries.length === 0 ? (
+          <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
+        ) : null}
+        {!batchItemsLoading && itemsWithEntries.length > 0 ? (
+          <div className="measurement-review-positions">
+            {itemsWithEntries.map((item) => (
+              <section className="measurement-review-position" key={item.id}>
+                <div className="measurement-review-position-head">
+                  <div>
+                    <strong>{item.position}</strong>
+                    <span>{item.description}</span>
+                  </div>
+                  <small>{item.unit ?? "-"} · Min/Einh. {formatMeasurementNumber(item.minutes_per_unit)}</small>
+                </div>
+                <div className="measurement-review-entry-list">
+                  {item.entries.map((entry) => (
+                    <div className="measurement-review-entry" key={entry.id}>
+                      <div>
+                        <strong>{entry.area_or_comment}</strong>
+                        <span>{entry.created_by_name ?? "Unbekannt"} · {formatDateTime(entry.created_at)}</span>
+                      </div>
+                      <b>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</b>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="project-record-toolbar">
+        <div>
+          <h2><Ruler aria-hidden="true" size={18} />Prüfung</h2>
+          <p>Eingereichte Aufmaßpakete prüfen, freigeben oder zur Korrektur zurückgeben.</p>
+        </div>
+      </div>
+      {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
+      {batchesError ? (
+        <div className="project-record-empty-state is-error">
+          <strong>{batchesError}</strong>
+          <button type="button" className="secondary-action" onClick={onRetryBatches}>Erneut laden</button>
+        </div>
+      ) : null}
+      {!batchesLoading && !batchesError && batches.length === 0 ? (
+        <div className="project-record-empty-state">Noch keine Aufmaßpakete vorhanden.</div>
+      ) : null}
+      {!batchesLoading && !batchesError && batches.length > 0 ? (
+        <div className="measurement-review-list">
+          {batches.map((batch) => (
+            <button
+              key={batch.id}
+              type="button"
+              className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}`}
+              onClick={() => onSelectBatch(batch)}
+            >
+              <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
+              <div>
+                <strong>{batch.title}</strong>
+                <small>
+                  {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
+                  {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
+                </small>
+              </div>
+              <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function MeasurementTimeAnalysisPanel() {
+  return (
+    <>
+      <div className="project-record-toolbar">
+        <div>
+          <h2><Ruler aria-hidden="true" size={18} />Zeitauswertung</h2>
+          <p>Die Zeitauswertung wird später Aufmaß-Sollstunden mit tatsächlich erfassten Lohnstunden vergleichen.</p>
+        </div>
+      </div>
+      <div className="measurement-evaluation-grid">
+        <div><span>Sollstunden aus Aufmaß</span><strong>-</strong></div>
+        <div><span>Iststunden aus Lohnerfassung</span><strong>-</strong></div>
+        <div><span>Abweichung</span><strong>-</strong></div>
+      </div>
+    </>
+  );
+}
+
 
 function PlaceholderTab({
   icon: Icon,
@@ -959,6 +1366,22 @@ function formatFileSize(size: number | null): string | null {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+
+function getMeasurementBatchStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    draft: "Entwurf",
+    submitted: "Zur Prüfung",
+    in_review: "In Prüfung",
+    approved: "Freigegeben",
+    rejected: "Zur Korrektur",
+    closed: "Abgeschlossen",
+  };
+  return labels[status] ?? status;
+}
+
+function getMeasurementBatchStatusClass(status: string): string {
+  return ["measurement-status", `is-${status}`].join(" ");
+}
 
 function formatMeasurementNumber(value: string | number | null): string {
   if (value === null || value === undefined || value === "") {
