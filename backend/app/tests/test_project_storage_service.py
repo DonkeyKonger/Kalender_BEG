@@ -61,7 +61,18 @@ class FailingDriveGraphClient:
 
     def get(self, path):
         if path == "/drives/drive-1":
-            raise MicrosoftGraphRequestError(401, "Microsoft Graph request failed with status 401.", error_code="InvalidAuthenticationToken")
+            raise MicrosoftGraphRequestError(
+                401,
+                "Microsoft Graph request failed with status 401.",
+                error_code="generalException",
+                error_message_short="Drive request was unauthorized.",
+                diagnostics={
+                    "authorization_header_present": True,
+                    "authorization_header_scheme": "Bearer",
+                    "graph_base_url_used": "https://graph.microsoft.com/v1.0",
+                    "drive_url_shape": "GET https://graph.microsoft.com/v1.0/drives/{drive_id}",
+                },
+            )
         raise AssertionError(f"unexpected get path: {path}")
 
 
@@ -172,5 +183,11 @@ def test_connection_test_reports_drive_failure_step_without_secrets():
     assert result["drive_check_status"] is None
     assert result["failed_step"] == "drive"
     assert result["drive_error_status_code"] == 401
-    assert result["safe_error_code"] == "InvalidAuthenticationToken"
+    assert result["safe_error_code"] == "generalException"
+    assert result["microsoft_error_code"] == "generalException"
+    assert result["microsoft_error_message_short"] == "Drive request was unauthorized."
+    assert result["authorization_header_present"] is True
+    assert result["authorization_header_scheme"] == "Bearer"
+    assert result["graph_base_url_used"] == "https://graph.microsoft.com/v1.0"
+    assert result["drive_url_shape"] == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
     assert "super-secret-value" not in str(result)

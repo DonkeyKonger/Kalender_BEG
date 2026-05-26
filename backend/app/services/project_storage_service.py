@@ -32,6 +32,13 @@ class ProjectStorageService:
             "root_folder_check_status": None,
             "site_check_attempted": False,
             "site_check_status": None,
+            "token_audience": None,
+            "authorization_header_present": False,
+            "authorization_header_scheme": None,
+            "graph_base_url_used": self.config.ms_graph_base_url.rstrip("/"),
+            "drive_url_shape": None,
+            "microsoft_error_code": None,
+            "microsoft_error_message_short": None,
             "failed_step": None,
         }
         if not self.config.ms_graph_enabled:
@@ -54,8 +61,12 @@ class ProjectStorageService:
             diagnostics["token_request_attempted"] = True
             self.graph_client.get_access_token()
             diagnostics["token_acquired"] = True
+            diagnostics["token_audience"] = getattr(self.graph_client, "token_audience", None)
 
             diagnostics["drive_check_attempted"] = True
+            diagnostics["drive_url_shape"] = (
+                f"GET {self.config.ms_graph_base_url.rstrip('/')}/drives/{{drive_id}}"
+            )
             drive = self.graph_client.get(f"/drives/{self.config.ms_project_drive_id}")
             diagnostics["drive_check_status"] = 200
 
@@ -79,11 +90,16 @@ class ProjectStorageService:
             }
         except MicrosoftGraphRequestError as error:
             failed_step = _failed_step(diagnostics)
+            request_diagnostics = getattr(error, "diagnostics", {})
+            if isinstance(request_diagnostics, dict):
+                diagnostics.update(request_diagnostics)
             return {
                 **diagnostics,
                 "reason": str(error),
                 "status_code": error.status_code,
                 "safe_error_code": error.error_code,
+                "microsoft_error_code": error.error_code,
+                "microsoft_error_message_short": error.error_message_short,
                 "failed_step": failed_step,
                 f"{failed_step}_error_status_code": error.status_code,
             }

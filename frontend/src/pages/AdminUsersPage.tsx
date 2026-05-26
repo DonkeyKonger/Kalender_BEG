@@ -405,6 +405,18 @@ function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnection
           <strong>{result.safe_error_code}</strong>
         </div>
       ) : null}
+      {result.microsoft_error_code ? (
+        <div>
+          <span>Microsoft Fehlercode</span>
+          <strong>{result.microsoft_error_code}</strong>
+        </div>
+      ) : null}
+      {result.microsoft_error_message_short ? (
+        <div className="is-wide">
+          <span>Microsoft Hinweis</span>
+          <strong>{result.microsoft_error_message_short}</strong>
+        </div>
+      ) : null}
       {result.missing_config.length ? (
         <div className="is-wide">
           <span>Fehlende Konfiguration</span>
@@ -418,6 +430,13 @@ function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnection
         value={result.token_acquired}
         statusCode={result.token_error_status_code}
       />
+      {result.token_audience ? <GraphValue label="Token Audience" value={result.token_audience} /> : null}
+      <GraphDiagnostic label="Auth Header" value={result.authorization_header_present} />
+      {result.authorization_header_scheme ? (
+        <GraphValue label="Auth Schema" value={result.authorization_header_scheme} />
+      ) : null}
+      {result.graph_base_url_used ? <GraphValue label="Graph Base URL" value={result.graph_base_url_used} /> : null}
+      {result.drive_url_shape ? <GraphValue label="Drive URL" value={result.drive_url_shape} wide /> : null}
       <GraphDiagnostic
         label="Drive geprüft"
         value={result.drive_check_attempted}
@@ -437,6 +456,15 @@ function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnection
       ) : null}
       <GraphResource label="Drive" resource={result.drive} />
       <GraphResource label="Root-Ordner" resource={result.root_folder} />
+    </div>
+  );
+}
+
+function GraphValue({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={wide ? "is-wide" : undefined}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

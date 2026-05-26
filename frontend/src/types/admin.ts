@@ -25,6 +25,13 @@ export type MicrosoftGraphConnectionTestResponse = {
   site_check_attempted: boolean;
   site_check_status: number | null;
   site_error_status_code: number | null;
+  token_audience: string | null;
+  authorization_header_present: boolean;
+  authorization_header_scheme: string | null;
+  graph_base_url_used: string | null;
+  drive_url_shape: string | null;
+  microsoft_error_code: string | null;
+  microsoft_error_message_short: string | null;
   drive: MicrosoftGraphResource | null;
   root_folder: MicrosoftGraphResource | null;
   site: MicrosoftGraphResource | null;

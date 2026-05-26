@@ -28,6 +28,13 @@ class MicrosoftGraphConnectionTestResponse(BaseModel):
     site_check_attempted: bool = False
     site_check_status: int | None = None
     site_error_status_code: int | None = None
+    token_audience: str | None = None
+    authorization_header_present: bool = False
+    authorization_header_scheme: str | None = None
+    graph_base_url_used: str | None = None
+    drive_url_shape: str | None = None
+    microsoft_error_code: str | None = None
+    microsoft_error_message_short: str | None = None
     drive: MicrosoftGraphResource | None = None
     root_folder: MicrosoftGraphResource | None = None
     site: MicrosoftGraphResource | None = None
