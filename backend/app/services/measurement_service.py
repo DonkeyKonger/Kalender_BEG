@@ -197,26 +197,67 @@ class MeasurementService:
         )
         return [self._build_mobile_item(item, batch.id) for item in items]
 
-    def review_site_batch(
-        self, *, site_id: int, batch_id: int, review_status: str
+    def set_site_batch_billing_status(
+        self, *, site_id: int, batch_id: int, billing_status: str
     ) -> MobileMeasurementBatchRead:
-        if review_status not in {"approved", "rejected"}:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Prüfstatus.")
+        normalized_status = {
+            "open": "submitted",
+            "noch_offen": "submitted",
+            "rejected": "submitted",
+            "approved": "billed",
+            "abgerechnet": "billed",
+        }.get(billing_status, billing_status)
+        if normalized_status not in {"submitted", "billed"}:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Abrechnungsstatus.")
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status != "submitted":
+        if batch.status == "draft":
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Nur eingereichte Aufmaße können geprüft werden.",
+                "Entwürfe können noch nicht abgerechnet werden.",
             )
 
-        batch.status = review_status
+        batch.status = normalized_status
         for entry in batch.entries:
-            entry.status = review_status
+            entry.status = normalized_status
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
+
+    def update_site_entry(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        entry_id: int,
+        payload: MeasurementEntryCreate,
+    ) -> MeasurementEntryRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        if batch.status == "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Entwürfe werden mobil bearbeitet.",
+            )
+
+        entry = self.db.get(SiteMeasurementEntry, entry_id)
+        if (
+            entry is None
+            or entry.site_id != site_id
+            or entry.measurement_batch_id != batch.id
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßzeile nicht gefunden.")
+
+        comment = payload.area_or_comment.strip()
+        if not comment:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
+
+        entry.area_or_comment = comment
+        entry.quantity = payload.quantity
+        self.db.commit()
+        self.db.refresh(entry)
+        return self._build_entry(entry)
 
     def list_dashboard_submissions(
         self, *, limit: int = 6
@@ -229,7 +270,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries),
                     selectinload(SiteMeasurementBatch.submitted_by),
                 )
-                .where(SiteMeasurementBatch.status == "submitted")
+                .where(SiteMeasurementBatch.status.in_(("submitted", "rejected")))
                 .order_by(
                     SiteMeasurementBatch.submitted_at.desc(),
                     SiteMeasurementBatch.updated_at.desc(),
@@ -370,7 +411,7 @@ class MeasurementService:
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
         mobile_status = "open"
         if entries:
-            mobile_status = "approved" if all(entry.status == "approved" for entry in entries) else "edited"
+            mobile_status = "billed" if all(entry.status in {"billed", "approved"} for entry in entries) else "edited"
 
         return MobileMeasurementItemRead(
             id=item.id,

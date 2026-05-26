@@ -3363,9 +3363,11 @@ button.person-chip:focus-visible {
   color: #c2410c;
 }
 
-.measurement-status.is-submitted {
-  background: #dbeafe;
-  color: #1e40af;
+.measurement-status.is-open,
+.measurement-status.is-submitted,
+.measurement-status.is-rejected {
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .measurement-status.is-draft {
@@ -3373,14 +3375,10 @@ button.person-chip:focus-visible {
   color: #475569;
 }
 
+.measurement-status.is-billed,
 .measurement-status.is-approved {
   background: #ecfdf3;
   color: #166534;
-}
-
-.measurement-status.is-rejected {
-  background: #fef2f2;
-  color: #991b1b;
 }
 
 .project-record-subtabs {
@@ -3508,6 +3506,44 @@ button.person-chip:focus-visible {
 .measurement-review-entry {
   border-top: 1px solid #e5edf7;
   padding-top: 9px;
+}
+
+.measurement-review-entry-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.measurement-review-entry-edit {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.measurement-review-entry-edit label {
+  display: grid;
+  gap: 5px;
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.measurement-review-entry-edit input,
+.measurement-review-entry-edit textarea {
+  width: 100%;
+  border: 1px solid #cbd8e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.measurement-review-entry-edit textarea {
+  min-height: 72px;
+  resize: vertical;
 }
 
 .measurement-review-entry:first-child {

@@ -275,9 +275,9 @@ export function SiteDetailPage() {
     }
   }
 
-  async function reviewMeasurementBatch(
+  async function setMeasurementBatchBillingStatus(
     batch: MobileMeasurementBatch,
-    reviewStatus: "approved" | "rejected",
+    billingStatus: "submitted" | "billed",
   ): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -286,19 +286,41 @@ export function SiteDetailPage() {
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      const updated = reviewStatus === "approved"
-        ? await api.approveSiteMeasurementBatch(site.id, batch.id)
-        : await api.rejectSiteMeasurementBatch(site.id, batch.id);
+      const updated = billingStatus === "billed"
+        ? await api.markSiteMeasurementBatchBilled(site.id, batch.id)
+        : await api.markSiteMeasurementBatchOpen(site.id, batch.id);
       setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setSelectedMeasurementBatch(updated);
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
       setMeasurementReviewMessage(
-        reviewStatus === "approved"
-          ? `${batch.title} wurde freigegeben.`
-          : `${batch.title} wurde zur Korrektur zurückgegeben.`,
+        billingStatus === "billed"
+          ? `${batch.title} wurde als abgerechnet markiert.`
+          : `${batch.title} wurde wieder als noch offen markiert.`,
       );
     } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Aufmaßprüfung konnte nicht gespeichert werden."));
+      setMeasurementReviewError(readApiError(requestError, "Abrechnungsstatus konnte nicht gespeichert werden."));
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
+  async function updateMeasurementEntry(
+    batch: MobileMeasurementBatch,
+    entryId: number,
+    payload: { area_or_comment: string; quantity: number },
+  ): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      await api.updateSiteMeasurementEntry(site.id, batch.id, entryId, payload);
+      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementReviewMessage("Aufmaßzeile wurde aktualisiert.");
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden."));
     } finally {
       setMeasurementReviewActionLoading(false);
     }
@@ -478,8 +500,9 @@ export function SiteDetailPage() {
             setMeasurementReviewMessage(null);
             setMeasurementReviewError(null);
           }}
-          onApproveBatch={(batch) => void reviewMeasurementBatch(batch, "approved")}
-          onRejectBatch={(batch) => void reviewMeasurementBatch(batch, "rejected")}
+          onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
+          onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
+          onUpdateEntry={(batch, entryId, payload) => void updateMeasurementEntry(batch, entryId, payload)}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -906,8 +929,9 @@ function MeasurementTab({
   onRetryBatches,
   onSelectBatch,
   onBackToBatchList,
-  onApproveBatch,
-  onRejectBatch,
+  onMarkBilled,
+  onMarkOpen,
+  onUpdateEntry,
 }: {
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
@@ -931,8 +955,9 @@ function MeasurementTab({
   onRetryBatches: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
-  onApproveBatch: (batch: MobileMeasurementBatch) => void;
-  onRejectBatch: (batch: MobileMeasurementBatch) => void;
+  onMarkBilled: (batch: MobileMeasurementBatch) => void;
+  onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => void;
 }) {
   const latestImport = items[0];
 
@@ -981,8 +1006,9 @@ function MeasurementTab({
           onRetryBatches={onRetryBatches}
           onSelectBatch={onSelectBatch}
           onBackToBatchList={onBackToBatchList}
-          onApproveBatch={onApproveBatch}
-          onRejectBatch={onRejectBatch}
+          onMarkBilled={onMarkBilled}
+          onMarkOpen={onMarkOpen}
+          onUpdateEntry={onUpdateEntry}
         />
       ) : null}
 
@@ -1108,8 +1134,9 @@ function MeasurementReviewPanel({
   onRetryBatches,
   onSelectBatch,
   onBackToBatchList,
-  onApproveBatch,
-  onRejectBatch,
+  onMarkBilled,
+  onMarkOpen,
+  onUpdateEntry,
 }: {
   batches: MobileMeasurementBatch[];
   batchesLoading: boolean;
@@ -1123,12 +1150,18 @@ function MeasurementReviewPanel({
   onRetryBatches: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
-  onApproveBatch: (batch: MobileMeasurementBatch) => void;
-  onRejectBatch: (batch: MobileMeasurementBatch) => void;
+  onMarkBilled: (batch: MobileMeasurementBatch) => void;
+  onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => void;
 }) {
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [editComment, setEditComment] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+
   if (selectedBatch) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
-    const canReview = selectedBatch.status === "submitted";
+    const isBilled = isMeasurementBatchBilled(selectedBatch.status);
+    const isDraft = selectedBatch.status === "draft";
 
     return (
       <div className="measurement-review-detail">
@@ -1138,14 +1171,17 @@ function MeasurementReviewPanel({
             <h2>{selectedBatch.title}</h2>
             <p>{getMeasurementBatchStatusLabel(selectedBatch.status)} · {selectedBatch.entry_count} Aufmaßzeilen · {selectedBatch.position_count} Positionen</p>
           </div>
-          {canReview ? (
+          {!isDraft ? (
             <div className="measurement-review-actions">
-              <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onRejectBatch(selectedBatch)}>
-                Zur Korrektur zurückgeben
-              </button>
-              <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onApproveBatch(selectedBatch)}>
-                Freigeben
-              </button>
+              {isBilled ? (
+                <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
+                  Wieder auf noch offen setzen
+                </button>
+              ) : (
+                <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
+                  Als abgerechnet markieren
+                </button>
+              )}
             </div>
           ) : (
             <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
@@ -1170,15 +1206,65 @@ function MeasurementReviewPanel({
                   <small>{item.unit ?? "-"} · Min/Einh. {formatMeasurementNumber(item.minutes_per_unit)}</small>
                 </div>
                 <div className="measurement-review-entry-list">
-                  {item.entries.map((entry) => (
-                    <div className="measurement-review-entry" key={entry.id}>
-                      <div>
-                        <strong>{entry.area_or_comment}</strong>
-                        <span>{entry.created_by_name ?? "Unbekannt"} · {formatDateTime(entry.created_at)}</span>
+                  {item.entries.map((entry) => {
+                    const isEditing = editingEntryId === entry.id;
+                    return (
+                      <div className="measurement-review-entry" key={entry.id}>
+                        {isEditing ? (
+                          <div className="measurement-review-entry-edit">
+                            <label>
+                              Bereich / Kommentar
+                              <textarea value={editComment} onChange={(event) => setEditComment(event.target.value)} />
+                            </label>
+                            <label>
+                              Menge
+                              <input value={editQuantity} inputMode="decimal" onChange={(event) => setEditQuantity(event.target.value)} />
+                            </label>
+                            <div className="measurement-review-actions">
+                              <button type="button" className="secondary-action" onClick={() => setEditingEntryId(null)}>Abbrechen</button>
+                              <button
+                                type="button"
+                                className="primary-action"
+                                disabled={reviewActionLoading || !editComment.trim() || !Number.isFinite(Number(editQuantity.replace(",", "."))) || Number(editQuantity.replace(",", ".")) <= 0}
+                                onClick={() => {
+                                  onUpdateEntry(selectedBatch, entry.id, {
+                                    area_or_comment: editComment.trim(),
+                                    quantity: Number(editQuantity.replace(",", ".")),
+                                  });
+                                  setEditingEntryId(null);
+                                }}
+                              >
+                                Speichern
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div>
+                              <strong>{entry.area_or_comment}</strong>
+                              <span>{entry.created_by_name ?? "Unbekannt"} · {formatDateTime(entry.created_at)}</span>
+                            </div>
+                            <div className="measurement-review-entry-actions">
+                              <b>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</b>
+                              {!isDraft ? (
+                                <button
+                                  type="button"
+                                  className="secondary-action"
+                                  onClick={() => {
+                                    setEditingEntryId(entry.id);
+                                    setEditComment(entry.area_or_comment);
+                                    setEditQuantity(String(entry.quantity).replace(".", ","));
+                                  }}
+                                >
+                                  Bearbeiten
+                                </button>
+                              ) : null}
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <b>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</b>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ))}
@@ -1193,7 +1279,7 @@ function MeasurementReviewPanel({
       <div className="project-record-toolbar">
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Prüfung</h2>
-          <p>Eingereichte Aufmaßpakete prüfen, freigeben oder zur Korrektur zurückgeben.</p>
+          <p>Eingereichte Aufmaßpakete prüfen und als noch offen oder abgerechnet führen.</p>
         </div>
       </div>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
@@ -1368,19 +1454,35 @@ function formatFileSize(size: number | null): string | null {
 
 
 function getMeasurementBatchStatusLabel(status: string): string {
+  if (isMeasurementBatchBilled(status)) {
+    return "Abgerechnet";
+  }
+  if (isMeasurementBatchOpen(status)) {
+    return "Noch offen";
+  }
   const labels: Record<string, string> = {
     draft: "Entwurf",
-    submitted: "Zur Prüfung",
     in_review: "In Prüfung",
-    approved: "Freigegeben",
-    rejected: "Zur Korrektur",
     closed: "Abgeschlossen",
   };
   return labels[status] ?? status;
 }
 
 function getMeasurementBatchStatusClass(status: string): string {
-  return ["measurement-status", `is-${status}`].join(" ");
+  const normalizedStatus = isMeasurementBatchBilled(status)
+    ? "billed"
+    : isMeasurementBatchOpen(status)
+      ? "open"
+      : status;
+  return ["measurement-status", `is-${normalizedStatus}`].join(" ");
+}
+
+function isMeasurementBatchBilled(status: string): boolean {
+  return status === "billed" || status === "approved";
+}
+
+function isMeasurementBatchOpen(status: string): boolean {
+  return status === "submitted" || status === "rejected";
 }
 
 function formatMeasurementNumber(value: string | number | null): string {

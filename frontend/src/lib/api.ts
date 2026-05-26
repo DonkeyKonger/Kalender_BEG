@@ -353,15 +353,27 @@ export const api = {
     return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`);
   },
 
-  async approveSiteMeasurementBatch(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
-    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/approve`, {
+  async markSiteMeasurementBatchBilled(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-billed`, {
       method: "POST",
     });
   },
 
-  async rejectSiteMeasurementBatch(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
-    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/reject`, {
+  async markSiteMeasurementBatchOpen(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-open`, {
       method: "POST",
+    });
+  },
+
+  async updateSiteMeasurementEntry(
+    siteId: number,
+    batchId: number,
+    entryId: number,
+    payload: MeasurementEntryPayload,
+  ): Promise<MeasurementEntry> {
+    return request<MeasurementEntry>(`/sites/${siteId}/measurement-batches/${batchId}/entries/${entryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     });
   },
 

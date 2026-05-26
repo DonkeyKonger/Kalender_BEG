@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.measurement import (
+    MeasurementEntryCreate,
+    MeasurementEntryRead,
     MeasurementImportResponse,
     MeasurementItemRead,
     MobileMeasurementBatchRead,
@@ -207,32 +209,52 @@ def list_measurement_batch_items(
 
 
 @router.post(
-    "/{site_id}/measurement-batches/{batch_id}/approve",
+    "/{site_id}/measurement-batches/{batch_id}/mark-billed",
     response_model=MobileMeasurementBatchRead,
 )
-def approve_measurement_batch(
+def mark_measurement_batch_billed(
     site_id: int,
     batch_id: int,
     _user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
-    return MeasurementService(db).review_site_batch(
-        site_id=site_id, batch_id=batch_id, review_status="approved"
+    return MeasurementService(db).set_site_batch_billing_status(
+        site_id=site_id, batch_id=batch_id, billing_status="billed"
     )
 
 
 @router.post(
-    "/{site_id}/measurement-batches/{batch_id}/reject",
+    "/{site_id}/measurement-batches/{batch_id}/mark-open",
     response_model=MobileMeasurementBatchRead,
 )
-def reject_measurement_batch(
+def mark_measurement_batch_open(
     site_id: int,
     batch_id: int,
     _user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
-    return MeasurementService(db).review_site_batch(
-        site_id=site_id, batch_id=batch_id, review_status="rejected"
+    return MeasurementService(db).set_site_batch_billing_status(
+        site_id=site_id, batch_id=batch_id, billing_status="submitted"
+    )
+
+
+@router.patch(
+    "/{site_id}/measurement-batches/{batch_id}/entries/{entry_id}",
+    response_model=MeasurementEntryRead,
+)
+def update_measurement_entry(
+    site_id: int,
+    batch_id: int,
+    entry_id: int,
+    payload: MeasurementEntryCreate,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MeasurementEntryRead:
+    return MeasurementService(db).update_site_entry(
+        site_id=site_id,
+        batch_id=batch_id,
+        entry_id=entry_id,
+        payload=payload,
     )
 
 

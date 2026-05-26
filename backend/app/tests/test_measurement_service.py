@@ -238,7 +238,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
     assert locked.value.status_code == 409
 
 
-def test_site_measurement_review_approves_only_submitted_batches():
+def test_site_measurement_billing_status_and_entry_update():
     from datetime import date
 
     from app.models.assignment import Assignment
@@ -288,7 +288,7 @@ def test_site_measurement_review_approves_only_submitted_batches():
     service = MeasurementService(db)
     batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
     with pytest.raises(HTTPException) as draft_review:
-        service.review_site_batch(site_id=site.id, batch_id=batch.id, review_status="approved")
+        service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="billed")
     assert draft_review.value.status_code == 409
 
     service.create_mobile_entry(
@@ -304,19 +304,33 @@ def test_site_measurement_review_approves_only_submitted_batches():
         current_user=user,
     )
     dashboard_messages = service.list_dashboard_submissions(limit=5)
-    approved = service.review_site_batch(
+    updated_entry = service.update_site_entry(
         site_id=site.id,
         batch_id=submitted.id,
-        review_status="approved",
+        entry_id=service.list_site_batch_items(site_id=site.id, batch_id=submitted.id)[0].entries[0].id,
+        payload=MeasurementEntryCreate(area_or_comment="2. OG Technik", quantity=Decimal("12.00")),
+    )
+    billed = service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=submitted.id,
+        billing_status="billed",
+    )
+    open_again = service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=submitted.id,
+        billing_status="submitted",
     )
 
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     stored_entry = db.scalar(select(SiteMeasurementEntry).where(SiteMeasurementEntry.measurement_batch_id == batch.id))
     assert dashboard_messages[0].batch_id == batch.id
     assert dashboard_messages[0].site_id == site.id
-    assert approved.status == "approved"
+    assert updated_entry.area_or_comment == "2. OG Technik"
+    assert updated_entry.quantity == Decimal("12.00")
+    assert billed.status == "billed"
+    assert open_again.status == "submitted"
     assert stored_batch is not None
-    assert stored_batch.status == "approved"
+    assert stored_batch.status == "submitted"
     assert stored_entry is not None
-    assert stored_entry.status == "approved"
+    assert stored_entry.status == "submitted"
 
