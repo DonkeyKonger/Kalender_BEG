@@ -11,6 +11,7 @@ def graph_config(**overrides):
     defaults = {
         "ms_graph_enabled": False,
         "ms_graph_create_test_folders_enabled": False,
+        "ms_graph_create_project_folders_enabled": False,
         "ms_tenant_id": None,
         "ms_client_id": None,
         "ms_client_secret": None,
@@ -190,4 +191,66 @@ def test_connection_test_reports_drive_failure_step_without_secrets():
     assert result["authorization_header_scheme"] == "Bearer"
     assert result["graph_base_url_used"] == "https://graph.microsoft.com/v1.0"
     assert result["drive_url_shape"] == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
+    assert "super-secret-value" not in str(result)
+
+
+def test_create_project_folder_for_site_is_blocked_without_project_feature_flag():
+    graph = FakeGraphClient()
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=False),
+        graph_client=graph,
+    ).create_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+    )
+
+    assert result == {"status": "disabled"}
+    assert graph.posts == []
+
+
+def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
+    graph = FakeGraphClient()
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=graph,
+    ).create_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+    )
+
+    assert result["status"] == "created"
+    assert result["folder_name"] == "8007_Schuechtermann_Klinik"
+    assert result["folder_id"] == "folder-1"
+    assert result["web_url"] == "https://example.invalid/folder-1"
+    assert len(result["subfolders"]) == 15
+    assert graph.posts[0][1]["name"] == "8007_Schuechtermann_Klinik"
+    assert graph.posts[1][1]["name"] == "01_Angebote"
+    assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert "super-secret-value" not in str(result)
+
+
+def test_create_project_folder_for_site_returns_error_without_raising():
+    class FailingPostGraphClient(FakeGraphClient):
+        def post(self, path, payload):
+            raise MicrosoftGraphRequestError(
+                403,
+                "Microsoft Graph request failed with status 403.",
+                error_code="accessDenied",
+                error_message_short="Access denied.",
+            )
+
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=FailingPostGraphClient(),
+    ).create_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+    )
+
+    assert result["status"] == "error"
+    assert result["folder_name"] == "8007_Schuechtermann_Klinik"
+    assert "accessDenied" in result["error"]
     assert "super-secret-value" not in str(result)

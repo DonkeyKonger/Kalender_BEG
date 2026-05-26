@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     ms_graph_create_test_folders_enabled: bool = Field(
         default=False, alias="MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED"
     )
+    ms_graph_create_project_folders_enabled: bool = Field(
+        default=False, alias="MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED"
+    )
     ms_tenant_id: str | None = Field(default=None, alias="MS_TENANT_ID")
     ms_client_id: str | None = Field(default=None, alias="MS_CLIENT_ID")
     ms_client_secret: str | None = Field(default=None, alias="MS_CLIENT_SECRET")

@@ -65,6 +65,11 @@ class SiteUpdate(BaseModel):
 class SiteRead(SiteBase):
     id: int
     project_manager: SitePersonRead | None = None
+    project_folder_id: str | None = None
+    project_folder_web_url: str | None = None
+    project_folder_name: str | None = None
+    project_folder_status: str = "not_configured"
+    project_folder_error: str | None = None
     closed_at: datetime | None = None
     closed_by_user_id: int | None = None
     created_at: datetime

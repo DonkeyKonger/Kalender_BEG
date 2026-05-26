@@ -40,6 +40,11 @@ class Site(TimestampMixin, Base):
     )
     info: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str | None] = mapped_column(String(30))
+    project_folder_id: Mapped[str | None] = mapped_column(String(200))
+    project_folder_web_url: Mapped[str | None] = mapped_column(String(500))
+    project_folder_name: Mapped[str | None] = mapped_column(String(200))
+    project_folder_status: Mapped[str] = mapped_column(String(40), nullable=False, default="not_configured")
+    project_folder_error: Mapped[str | None] = mapped_column(Text)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")

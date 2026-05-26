@@ -16,6 +16,7 @@ from app.schemas.site import SiteCreate, SiteMapItem, SiteMapResponse, SiteUpdat
 from app.services.audit_service import AuditService
 from app.services.geo_service import DEFAULT_SITE_GEOFENCE_RADIUS_M, geocode_site_address, has_valid_coordinates
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_storage_service import ProjectStorageService
 
 
 OPTIONAL_TEXT_FIELDS = ["site_number", "location", "address", "postal_code", "city", "street", "house_number", "address_extra", "customer", "info", "color"]
@@ -38,11 +39,12 @@ SITE_LOCATION_DEPENDENCY_FIELDS = (
 
 
 class SiteService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, project_storage: ProjectStorageService | None = None) -> None:
         self.db = db
         self.sites = SiteRepository(db)
         self.people = PersonRepository(db)
         self.audit = AuditService(db)
+        self.project_storage = project_storage or ProjectStorageService()
 
     def list_sites(self, include_closed: bool = False) -> list[Site]:
         return self.sites.list(include_closed=include_closed)
@@ -132,6 +134,8 @@ class SiteService:
         self._apply_status_metadata(site, site.status, user_id)
         self.sites.add(site)
         self.db.flush()
+        ProjectFolderService(self.db).create_default_project_folders_for_site(site.id)
+        self._create_project_folder_for_new_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.created",
@@ -140,7 +144,6 @@ class SiteService:
             old_value=None,
             new_value=site_snapshot(site),
         )
-        ProjectFolderService(self.db).create_default_project_folders_for_site(site.id)
         self.db.commit()
         self.db.refresh(site)
         return site
@@ -253,6 +256,18 @@ class SiteService:
             site.closed_at = None
             site.closed_by_user_id = None
 
+    def _create_project_folder_for_new_site(self, site: Site) -> None:
+        result = self.project_storage.create_project_folder_for_site(
+            site_id=site.id,
+            site_number=site.site_number,
+            site_name=site.name,
+        )
+        site.project_folder_status = result.get("status") or "not_configured"
+        site.project_folder_id = result.get("folder_id")
+        site.project_folder_web_url = result.get("web_url")
+        site.project_folder_name = result.get("folder_name")
+        site.project_folder_error = result.get("error")
+
     def _ensure_project_manager_exists(self, person_id: int | None) -> None:
         if person_id is not None and self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Projektleiter-Person nicht gefunden.")
@@ -293,6 +308,11 @@ def site_snapshot(site: Site) -> dict:
         "status": site.status.value,
         "info": site.info,
         "color": site.color,
+        "project_folder_id": getattr(site, "project_folder_id", None),
+        "project_folder_web_url": getattr(site, "project_folder_web_url", None),
+        "project_folder_name": getattr(site, "project_folder_name", None),
+        "project_folder_status": getattr(site, "project_folder_status", "not_configured"),
+        "project_folder_error": getattr(site, "project_folder_error", None),
         "closed_at": site.closed_at.isoformat() if site.closed_at else None,
         "closed_by_user_id": site.closed_by_user_id,
     }

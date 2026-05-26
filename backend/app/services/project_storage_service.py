@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +13,11 @@ from app.services.microsoft_graph_client import (
     MicrosoftGraphRequestError,
 )
 from app.services.project_folder_template import PROJECT_FOLDER_TEMPLATE
+
+PROJECT_FOLDER_STATUS_DISABLED = "disabled"
+PROJECT_FOLDER_STATUS_CREATED = "created"
+PROJECT_FOLDER_STATUS_ERROR = "error"
+MAX_PROJECT_FOLDER_NAME_LENGTH = 120
 
 
 class ProjectStorageService:
@@ -137,7 +143,7 @@ class ProjectStorageService:
 
         subfolders = []
         for template in PROJECT_FOLDER_TEMPLATE:
-            folder_name = f"{template['sort_order']:02d}_{template['name']}"
+            folder_name = _project_subfolder_name(template)
             created = self._create_folder(root_folder_id, folder_name)
             subfolders.append(
                 {
@@ -158,6 +164,64 @@ class ProjectStorageService:
             "subfolders": subfolders,
         }
 
+    def create_project_folder_for_site(
+        self,
+        *,
+        site_id: int,
+        site_number: str | None,
+        site_name: str | None,
+    ) -> dict[str, Any]:
+        if not self.config.ms_graph_enabled or not self.config.ms_graph_create_project_folders_enabled:
+            return {"status": PROJECT_FOLDER_STATUS_DISABLED}
+
+        missing = self._missing_project_config()
+        if missing:
+            return {
+                "status": PROJECT_FOLDER_STATUS_ERROR,
+                "error": f"Missing Microsoft Graph configuration: {', '.join(missing)}",
+            }
+
+        folder_name = make_project_folder_name(
+            site_id=site_id,
+            site_number=site_number,
+            site_name=site_name,
+        )
+        root_folder: dict[str, Any] | None = None
+        try:
+            root_folder = self._create_folder(self.config.ms_project_root_folder_id, folder_name)
+            root_folder_id = root_folder.get("id")
+            if not isinstance(root_folder_id, str) or not root_folder_id:
+                raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Microsoft Graph did not return folder id.")
+
+            subfolders = []
+            for template in PROJECT_FOLDER_TEMPLATE:
+                subfolder_name = _project_subfolder_name(template)
+                created = self._create_folder(root_folder_id, subfolder_name)
+                subfolders.append(
+                    {
+                        "sort_order": template["sort_order"],
+                        "name": subfolder_name,
+                        "id": created.get("id"),
+                        "web_url": created.get("webUrl"),
+                    }
+                )
+        except HTTPException as error:
+            return {
+                "status": PROJECT_FOLDER_STATUS_ERROR,
+                "folder_id": root_folder.get("id") if root_folder else None,
+                "folder_name": root_folder.get("name") if root_folder else folder_name,
+                "web_url": root_folder.get("webUrl") if root_folder else None,
+                "error": _safe_http_error_detail(error),
+            }
+
+        return {
+            "status": PROJECT_FOLDER_STATUS_CREATED,
+            "folder_id": root_folder.get("id"),
+            "folder_name": root_folder.get("name"),
+            "web_url": root_folder.get("webUrl"),
+            "subfolders": subfolders,
+        }
+
     def _create_folder(self, parent_item_id: str, name: str) -> dict[str, Any]:
         payload = {
             "name": name,
@@ -170,10 +234,12 @@ class ProjectStorageService:
                 payload,
             )
         except MicrosoftGraphRequestError as error:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                f"Microsoft Graph folder creation failed: {error}",
-            ) from error
+            message = f"Microsoft Graph folder creation failed with status {error.status_code}."
+            if error.error_code:
+                message = f"{message} Code: {error.error_code}."
+            if error.error_message_short:
+                message = f"{message} {error.error_message_short}"
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, message) from error
 
     def _missing_project_config(self) -> list[str]:
         missing = [
@@ -188,6 +254,34 @@ class ProjectStorageService:
             if not value
         ]
         return missing
+
+
+def make_project_folder_name(*, site_id: int, site_number: str | None, site_name: str | None) -> str:
+    parts = [part for part in [site_number, site_name] if part]
+    raw_name = "_".join(parts) if parts else f"Baustelle_{site_id}"
+    normalized = _normalize_sharepoint_folder_name(raw_name)
+    return normalized or f"Baustelle_{site_id}"
+
+
+def _normalize_sharepoint_folder_name(value: str) -> str:
+    replacements = str.maketrans({
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "Ä": "Ae",
+        "Ö": "Oe",
+        "Ü": "Ue",
+        "ß": "ss",
+    })
+    normalized = value.translate(replacements)
+    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", normalized)
+    normalized = re.sub(r"[_.-]{2,}", "_", normalized)
+    normalized = normalized.strip(" ._")
+    return normalized[:MAX_PROJECT_FOLDER_NAME_LENGTH].strip(" ._")
+
+
+def _project_subfolder_name(template: dict[str, Any]) -> str:
+    return f"{template['sort_order']:02d}_{template['name']}"
 
 
 def _resource_summary(resource: dict[str, Any]) -> dict[str, Any]:
@@ -208,3 +302,8 @@ def _failed_step(diagnostics: dict[str, Any]) -> str:
     if diagnostics["site_check_attempted"] and diagnostics["site_check_status"] is None:
         return "site"
     return "unknown"
+
+
+def _safe_http_error_detail(error: HTTPException) -> str:
+    detail = error.detail if isinstance(error.detail, str) else "Microsoft Graph folder creation failed."
+    return detail[:240]

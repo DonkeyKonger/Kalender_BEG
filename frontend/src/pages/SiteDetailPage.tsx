@@ -119,6 +119,7 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "folders" ? (
         <ProjectFoldersPanel
+          site={site}
           folders={folders}
           isLoading={foldersLoading}
           error={foldersError}
@@ -242,6 +243,7 @@ function OverviewTab({ site, editMode, onToggleEdit }: { site: Site; editMode: b
 }
 
 function ProjectFoldersPanel({
+  site,
   folders,
   isLoading,
   error,
@@ -249,6 +251,7 @@ function ProjectFoldersPanel({
   onSelectFolder,
   onRetry,
 }: {
+  site: Site;
   folders: ProjectFolder[];
   isLoading: boolean;
   error: string | null;
@@ -274,9 +277,23 @@ function ProjectFoldersPanel({
       <div className="project-record-toolbar">
         <div>
           <h2>Ordnerstruktur</h2>
-          <p>Logische Projektordner für diese Baustelle. Dateiablage und Microsoft-Anbindung folgen später.</p>
+          <p>Logische Projektordner für diese Baustelle. Dateiablage läuft über SharePoint, sobald ein Projektordner vorhanden ist.</p>
         </div>
+        {site.project_folder_web_url ? (
+          <a
+            className="secondary-action"
+            href={site.project_folder_web_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Projektordner in SharePoint öffnen
+          </a>
+        ) : null}
       </div>
+
+      {site.project_folder_status === "error" && site.project_folder_error ? (
+        <div className="project-record-empty-state is-error">{site.project_folder_error}</div>
+      ) : null}
 
       {folders.length === 0 ? (
         <div className="project-record-empty-state">Keine Ordner vorhanden.</div>

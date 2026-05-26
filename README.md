@@ -50,6 +50,7 @@ Benötigte App Settings / `.env`-Werte:
 ```env
 MS_GRAPH_ENABLED=false
 MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED=false
+MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED=false
 MS_TENANT_ID=
 MS_CLIENT_ID=
 MS_CLIENT_SECRET=
@@ -64,6 +65,7 @@ Admin-Test-Endpunkte:
 
 - `GET /api/admin/integrations/microsoft-graph/test` prueft Token, Drive und Root-Ordner.
 - `POST /api/admin/integrations/microsoft-graph/create-test-project-folder` erstellt nur bei `MS_GRAPH_ENABLED=true` und `MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED=true` einen Testordner mit 15 Unterordnern.
+- Produktive Projektordner fuer neue Baustellen werden nur bei `MS_GRAPH_ENABLED=true` und `MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED=true` erstellt. Bestehende Baustellen werden nicht automatisch nachgeruestet.
 
 Lokale Pruefung:
 

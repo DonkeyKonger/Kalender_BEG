@@ -31,6 +31,11 @@ export type Site = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  project_folder_id: string | null;
+  project_folder_web_url: string | null;
+  project_folder_name: string | null;
+  project_folder_status: string;
+  project_folder_error: string | null;
   closed_at: string | null;
   closed_by_user_id: number | null;
   created_at: string;
