@@ -393,16 +393,72 @@ function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnection
           <strong>{result.status_code}</strong>
         </div>
       ) : null}
+      {result.failed_step ? (
+        <div>
+          <span>Fehlgeschlagen bei</span>
+          <strong>{formatGraphStep(result.failed_step)}</strong>
+        </div>
+      ) : null}
+      {result.safe_error_code ? (
+        <div>
+          <span>Sicherer Fehlercode</span>
+          <strong>{result.safe_error_code}</strong>
+        </div>
+      ) : null}
       {result.missing_config.length ? (
         <div className="is-wide">
           <span>Fehlende Konfiguration</span>
           <strong>{result.missing_config.join(", ")}</strong>
         </div>
       ) : null}
+      <GraphDiagnostic label="Konfiguration geladen" value={result.config_loaded} />
+      <GraphDiagnostic label="Token angefragt" value={result.token_request_attempted} />
+      <GraphDiagnostic
+        label="Token erhalten"
+        value={result.token_acquired}
+        statusCode={result.token_error_status_code}
+      />
+      <GraphDiagnostic
+        label="Drive geprüft"
+        value={result.drive_check_attempted}
+        statusCode={result.drive_check_status ?? result.drive_error_status_code}
+      />
+      <GraphDiagnostic
+        label="Root-Ordner geprüft"
+        value={result.root_folder_check_attempted}
+        statusCode={result.root_folder_check_status ?? result.root_folder_error_status_code}
+      />
+      {result.site_check_attempted ? (
+        <GraphDiagnostic
+          label="Site geprüft"
+          value={result.site_check_attempted}
+          statusCode={result.site_check_status ?? result.site_error_status_code}
+        />
+      ) : null}
       <GraphResource label="Drive" resource={result.drive} />
       <GraphResource label="Root-Ordner" resource={result.root_folder} />
     </div>
   );
+}
+
+function GraphDiagnostic({ label, value, statusCode }: { label: string; value: boolean; statusCode?: number | null }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value ? `Ja${statusCode ? ` · ${statusCode}` : ""}` : "Nein"}</strong>
+    </div>
+  );
+}
+
+function formatGraphStep(step: string) {
+  const labels: Record<string, string> = {
+    config: "Konfiguration",
+    token: "Token",
+    drive: "Drive",
+    root_folder: "Root-Ordner",
+    site: "Site",
+  };
+  return labels[step] ?? step;
 }
 
 function GraphResource({ label, resource }: { label: string; resource: MicrosoftGraphConnectionTestResponse["drive"] }) {

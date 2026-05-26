@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from app.services.microsoft_graph_client import MicrosoftGraphRequestError
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -49,6 +50,22 @@ class FakeGraphClient:
         }
 
 
+class FailingTokenGraphClient:
+    def get_access_token(self):
+        raise MicrosoftGraphRequestError(401, "Microsoft Graph token request failed with status 401.", error_code="invalid_client")
+
+
+class FailingDriveGraphClient:
+    def get_access_token(self):
+        return "token-not-returned"
+
+    def get(self, path):
+        if path == "/drives/drive-1":
+            raise MicrosoftGraphRequestError(401, "Microsoft Graph request failed with status 401.", error_code="InvalidAuthenticationToken")
+        raise AssertionError(f"unexpected get path: {path}")
+
+
+
 def enabled_config(**overrides):
     return graph_config(
         ms_graph_enabled=True,
@@ -65,11 +82,10 @@ def enabled_config(**overrides):
 def test_connection_test_is_inert_when_graph_is_disabled():
     result = ProjectStorageService(config=graph_config()).test_project_storage_connection()
 
-    assert result == {
-        "connected": False,
-        "graph_enabled": False,
-        "reason": "MS_GRAPH_ENABLED is false",
-    }
+    assert result["connected"] is False
+    assert result["graph_enabled"] is False
+    assert result["reason"] == "MS_GRAPH_ENABLED is false"
+    assert result["token_request_attempted"] is False
 
 
 def test_connection_test_reports_missing_config_without_secret_values():
@@ -77,6 +93,7 @@ def test_connection_test_reports_missing_config_without_secret_values():
 
     assert result["connected"] is False
     assert result["graph_enabled"] is True
+    assert result["config_loaded"] is False
     assert "MS_CLIENT_SECRET" in result["missing_config"]
     assert "super-secret-value" not in str(result)
 
@@ -88,6 +105,12 @@ def test_connection_test_reads_drive_root_and_optional_site():
     ).test_project_storage_connection()
 
     assert result["connected"] is True
+    assert result["config_loaded"] is True
+    assert result["token_request_attempted"] is True
+    assert result["token_acquired"] is True
+    assert result["drive_check_status"] == 200
+    assert result["root_folder_check_status"] == 200
+    assert result["site_check_status"] == 200
     assert result["drive"]["name"] == "Projekte"
     assert result["root_folder"]["name"] == "Projektbasis"
     assert result["site"]["name"] == "SharePoint Site"
@@ -118,4 +141,36 @@ def test_create_test_project_folder_creates_root_and_15_subfolders():
     assert result["subfolders"][0]["name"] == "01_Angebote"
     assert result["subfolders"][-1]["name"] == "15_Mails"
     assert len(graph.posts) == 16
+    assert "super-secret-value" not in str(result)
+
+
+def test_connection_test_reports_token_failure_step_without_secrets():
+    result = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FailingTokenGraphClient(),
+    ).test_project_storage_connection()
+
+    assert result["connected"] is False
+    assert result["config_loaded"] is True
+    assert result["token_request_attempted"] is True
+    assert result["token_acquired"] is False
+    assert result["failed_step"] == "token"
+    assert result["token_error_status_code"] == 401
+    assert result["safe_error_code"] == "invalid_client"
+    assert "super-secret-value" not in str(result)
+
+
+def test_connection_test_reports_drive_failure_step_without_secrets():
+    result = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FailingDriveGraphClient(),
+    ).test_project_storage_connection()
+
+    assert result["connected"] is False
+    assert result["token_acquired"] is True
+    assert result["drive_check_attempted"] is True
+    assert result["drive_check_status"] is None
+    assert result["failed_step"] == "drive"
+    assert result["drive_error_status_code"] == 401
+    assert result["safe_error_code"] == "InvalidAuthenticationToken"
     assert "super-secret-value" not in str(result)

@@ -12,7 +12,22 @@ class MicrosoftGraphConnectionTestResponse(BaseModel):
     graph_enabled: bool
     reason: str | None = None
     status_code: int | None = None
+    safe_error_code: str | None = None
+    failed_step: str | None = None
     missing_config: list[str] = Field(default_factory=list)
+    config_loaded: bool = False
+    token_request_attempted: bool = False
+    token_acquired: bool = False
+    token_error_status_code: int | None = None
+    drive_check_attempted: bool = False
+    drive_check_status: int | None = None
+    drive_error_status_code: int | None = None
+    root_folder_check_attempted: bool = False
+    root_folder_check_status: int | None = None
+    root_folder_error_status_code: int | None = None
+    site_check_attempted: bool = False
+    site_check_status: int | None = None
+    site_error_status_code: int | None = None
     drive: MicrosoftGraphResource | None = None
     root_folder: MicrosoftGraphResource | None = None
     site: MicrosoftGraphResource | None = None

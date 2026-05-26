@@ -17,8 +17,15 @@ class MicrosoftGraphConfigError(Exception):
 
 
 class MicrosoftGraphRequestError(Exception):
-    def __init__(self, status_code: int | None, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int | None,
+        message: str,
+        *,
+        error_code: str | None = None,
+    ) -> None:
         self.status_code = status_code
+        self.error_code = error_code
         super().__init__(message)
 
 
@@ -55,13 +62,14 @@ class MicrosoftGraphClient:
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(None, "Microsoft Graph token request failed.") from error
 
+        data = _safe_json(response)
         if response.status_code >= 400:
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph token request failed with status {response.status_code}.",
+                error_code=_safe_error_code(data),
             )
 
-        data = response.json()
         access_token = data.get("access_token")
         if not isinstance(access_token, str) or not access_token:
             raise MicrosoftGraphRequestError(response.status_code, "Microsoft Graph token missing.")
@@ -101,14 +109,15 @@ class MicrosoftGraphClient:
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(None, "Microsoft Graph request failed.") from error
 
+        data = _safe_json(response)
         if response.status_code >= 400:
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph request failed with status {response.status_code}.",
+                error_code=_safe_error_code(data),
             )
         if response.status_code == 204 or not response.content:
             return {}
-        data = response.json()
         return data if isinstance(data, dict) else {"value": data}
 
     def _ensure_auth_config(self) -> None:
@@ -123,3 +132,22 @@ class MicrosoftGraphClient:
         ]
         if missing:
             raise MicrosoftGraphConfigError(missing)
+
+
+def _safe_json(response: httpx.Response) -> dict[str, Any]:
+    try:
+        data = response.json()
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _safe_error_code(data: dict[str, Any]) -> str | None:
+    error = data.get("error")
+    if isinstance(error, str):
+        return error
+    if isinstance(error, dict):
+        code = error.get("code")
+        if isinstance(code, str):
+            return code
+    return None

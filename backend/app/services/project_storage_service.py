@@ -20,49 +20,77 @@ class ProjectStorageService:
         self.graph_client = graph_client or MicrosoftGraphClient(config=config)
 
     def test_project_storage_connection(self) -> dict[str, Any]:
+        diagnostics: dict[str, Any] = {
+            "connected": False,
+            "graph_enabled": self.config.ms_graph_enabled,
+            "config_loaded": False,
+            "token_request_attempted": False,
+            "token_acquired": False,
+            "drive_check_attempted": False,
+            "drive_check_status": None,
+            "root_folder_check_attempted": False,
+            "root_folder_check_status": None,
+            "site_check_attempted": False,
+            "site_check_status": None,
+            "failed_step": None,
+        }
         if not self.config.ms_graph_enabled:
             return {
-                "connected": False,
-                "graph_enabled": False,
+                **diagnostics,
                 "reason": "MS_GRAPH_ENABLED is false",
             }
 
         missing = self._missing_project_config()
         if missing:
             return {
-                "connected": False,
-                "graph_enabled": True,
+                **diagnostics,
+                "config_loaded": False,
                 "reason": "Missing Microsoft Graph configuration.",
                 "missing_config": missing,
             }
+        diagnostics["config_loaded"] = True
 
         try:
+            diagnostics["token_request_attempted"] = True
             self.graph_client.get_access_token()
+            diagnostics["token_acquired"] = True
+
+            diagnostics["drive_check_attempted"] = True
             drive = self.graph_client.get(f"/drives/{self.config.ms_project_drive_id}")
+            diagnostics["drive_check_status"] = 200
+
+            diagnostics["root_folder_check_attempted"] = True
             root_folder = self.graph_client.get(
                 f"/drives/{self.config.ms_project_drive_id}/items/{self.config.ms_project_root_folder_id}"
             )
+            diagnostics["root_folder_check_status"] = 200
+
             site = None
             if self.config.ms_project_site_id:
+                diagnostics["site_check_attempted"] = True
                 site = self.graph_client.get(f"/sites/{self.config.ms_project_site_id}")
+                diagnostics["site_check_status"] = 200
         except MicrosoftGraphConfigError as error:
             return {
-                "connected": False,
-                "graph_enabled": True,
+                **diagnostics,
                 "reason": "Missing Microsoft Graph configuration.",
                 "missing_config": error.missing_config,
+                "failed_step": "config",
             }
         except MicrosoftGraphRequestError as error:
+            failed_step = _failed_step(diagnostics)
             return {
-                "connected": False,
-                "graph_enabled": True,
+                **diagnostics,
                 "reason": str(error),
                 "status_code": error.status_code,
+                "safe_error_code": error.error_code,
+                "failed_step": failed_step,
+                f"{failed_step}_error_status_code": error.status_code,
             }
 
         return {
+            **diagnostics,
             "connected": True,
-            "graph_enabled": True,
             "drive": _resource_summary(drive),
             "root_folder": _resource_summary(root_folder),
             "site": _resource_summary(site) if site else None,
@@ -152,3 +180,15 @@ def _resource_summary(resource: dict[str, Any]) -> dict[str, Any]:
         "name": resource.get("name") or resource.get("displayName"),
         "web_url": resource.get("webUrl"),
     }
+
+
+def _failed_step(diagnostics: dict[str, Any]) -> str:
+    if diagnostics["token_request_attempted"] and not diagnostics["token_acquired"]:
+        return "token"
+    if diagnostics["drive_check_attempted"] and diagnostics["drive_check_status"] is None:
+        return "drive"
+    if diagnostics["root_folder_check_attempted"] and diagnostics["root_folder_check_status"] is None:
+        return "root_folder"
+    if diagnostics["site_check_attempted"] and diagnostics["site_check_status"] is None:
+        return "site"
+    return "unknown"
