@@ -22,3 +22,7 @@ def test_calendar_short_code_uses_display_name_last_token_for_external_temp_peop
 
 def test_calendar_short_code_handles_single_name_external_temp_people():
     assert calendar_short_code(person("Leihmann", "Leihmann", "Leihmann")) == "L.Leihmann"
+
+
+def test_calendar_short_code_prefers_unicode_display_name_for_visible_label():
+    assert calendar_short_code(person("Juergen", "Mueller", "Jürgen Müller")) == "J.Müller"
