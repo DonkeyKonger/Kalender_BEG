@@ -166,6 +166,34 @@ export type MeasurementItem = {
   updated_at: string;
 };
 
+
+
+export type MeasurementEntry = {
+  id: number;
+  measurement_item_id: number;
+  site_id: number;
+  quantity: MeasurementNumericValue;
+  area_or_comment: string;
+  status: string;
+  created_by_user_id: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeasurementEntryPayload = {
+  area_or_comment: string;
+  quantity: number;
+};
+
+export type MobileMeasurementItem = MeasurementItem & {
+  entries: MeasurementEntry[];
+  reported_quantity: MeasurementNumericValue;
+  reported_minutes: MeasurementNumericValue;
+  reported_hours: MeasurementNumericValue;
+  mobile_status: "open" | "edited" | "approved" | string;
+};
+
 export type MeasurementImportResponse = {
   imported_count: number;
   source_project_number: string | null;

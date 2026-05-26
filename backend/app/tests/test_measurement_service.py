@@ -77,3 +77,72 @@ def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypat
         MeasurementService(db).import_timesheet(site.id, file_name="Zeitvorgabe.pdf", pdf_content=b"pdf")
 
     assert error.value.status_code == 409
+
+
+def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementEntry
+    from app.models.user import User
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, item])
+    db.commit()
+
+    entry = MeasurementService(db).create_mobile_entry(
+        assignment_id=assignment.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
+    )
+    mobile_items = MeasurementService(db).list_mobile_items(
+        assignment_id=assignment.id,
+        current_user=user,
+    )
+
+    stored_item = db.get(SiteMeasurementItem, item.id)
+    stored_entry = db.get(SiteMeasurementEntry, entry.id)
+    assert stored_item is not None
+    assert stored_item.list_quantity == Decimal("0.00")
+    assert stored_entry is not None
+    assert stored_entry.area_or_comment == "1. OG Flur"
+    assert mobile_items[0].reported_quantity == Decimal("10.00")
+    assert mobile_items[0].reported_minutes == Decimal("198.0000")
+    assert mobile_items[0].mobile_status == "edited"

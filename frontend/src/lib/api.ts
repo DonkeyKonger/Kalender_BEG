@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementImportResponse, MeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -405,6 +405,23 @@ export const api = {
   async myAssignmentHistory(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`);
+  },
+
+
+
+  async mobileMeasurementItems(assignmentId: number): Promise<MobileMeasurementItem[]> {
+    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-items`);
+  },
+
+  async createMobileMeasurementEntry(
+    assignmentId: number,
+    measurementItemId: number,
+    payload: MeasurementEntryPayload,
+  ): Promise<MeasurementEntry> {
+    return request<MeasurementEntry>(`/me/assignments/${assignmentId}/measurement-items/${measurementItemId}/entries`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
   async createAssignment(payload: Required<Pick<AssignmentPayload, "site_id" | "person_id" | "start_date" | "end_date">> & AssignmentPayload): Promise<AssignmentMutationApiResponse> {

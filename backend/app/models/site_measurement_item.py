@@ -27,3 +27,28 @@ class SiteMeasurementItem(TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     site = relationship("Site", back_populates="measurement_items")
+    entries = relationship(
+        "SiteMeasurementEntry", back_populates="measurement_item", cascade="all, delete-orphan"
+    )
+
+
+class SiteMeasurementEntry(TimestampMixin, Base):
+    __tablename__ = "site_measurement_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    measurement_item_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    area_or_comment: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="saved")
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+    measurement_item = relationship("SiteMeasurementItem", back_populates="entries")
+    site = relationship("Site", back_populates="measurement_entries")
+    created_by = relationship("User")

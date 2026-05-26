@@ -56,3 +56,6 @@ class Site(TimestampMixin, Base):
     measurement_items = relationship(
         "SiteMeasurementItem", back_populates="site", cascade="all, delete-orphan"
     )
+    measurement_entries = relationship(
+        "SiteMeasurementEntry", back_populates="site", cascade="all, delete-orphan"
+    )

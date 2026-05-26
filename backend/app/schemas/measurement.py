@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MeasurementItemRead(BaseModel):
@@ -23,6 +23,32 @@ class MeasurementItemRead(BaseModel):
     sort_order: int
     created_at: datetime
     updated_at: datetime
+
+
+class MeasurementEntryCreate(BaseModel):
+    area_or_comment: str = Field(..., min_length=1, max_length=1000)
+    quantity: Decimal = Field(..., ge=0)
+
+
+class MeasurementEntryRead(BaseModel):
+    id: int
+    measurement_item_id: int
+    site_id: int
+    quantity: Decimal
+    area_or_comment: str
+    status: str
+    created_by_user_id: int | None
+    created_by_name: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MobileMeasurementItemRead(MeasurementItemRead):
+    entries: list[MeasurementEntryRead]
+    reported_quantity: Decimal
+    reported_minutes: Decimal | None
+    reported_hours: Decimal | None
+    mobile_status: str
 
 
 class MeasurementImportResponse(BaseModel):
