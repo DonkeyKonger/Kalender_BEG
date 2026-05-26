@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Folder, FolderOpen, MapPin, Phone, Ruler, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, ExternalLink, FileText, Folder, FolderOpen, MapPin, Phone, Ruler, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -6,7 +6,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { ProjectFolder, Site } from "../types/site";
+import type { ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 
@@ -30,6 +30,10 @@ export function SiteDetailPage() {
   const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [foldersError, setFoldersError] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<ProjectFolder | null>(null);
+  const [folderDocuments, setFolderDocuments] = useState<ProjectFolderDocumentList | null>(null);
+  const [folderDocumentsLoading, setFolderDocumentsLoading] = useState(false);
+  const [folderDocumentsError, setFolderDocumentsError] = useState<string | null>(null);
+  const [folderDocumentsReloadKey, setFolderDocumentsReloadKey] = useState(0);
 
   useEffect(() => {
     async function loadSite() {
@@ -61,6 +65,10 @@ export function SiteDetailPage() {
     setFoldersLoaded(false);
     setFoldersError(null);
     setSelectedFolder(null);
+    setFolderDocuments(null);
+    setFolderDocumentsLoading(false);
+    setFolderDocumentsError(null);
+    setFolderDocumentsReloadKey(0);
   }, [site?.id]);
 
   useEffect(() => {
@@ -86,6 +94,43 @@ export function SiteDetailPage() {
 
     void loadFolders();
   }, [activeTab, foldersLoaded, foldersLoading, site]);
+
+  useEffect(() => {
+    setFolderDocuments(null);
+    setFolderDocumentsError(null);
+    setFolderDocumentsLoading(false);
+
+    if (!site || activeTab !== "folders" || !selectedFolder || !site.project_folder_web_url) {
+      return;
+    }
+
+    let isCurrent = true;
+    async function loadFolderDocuments() {
+      if (!site || !selectedFolder) {
+        return;
+      }
+      setFolderDocumentsLoading(true);
+      try {
+        const documents = await api.projectFolderDocuments(site.id, selectedFolder.folder_key);
+        if (isCurrent) {
+          setFolderDocuments(documents);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setFolderDocumentsError(readApiError(requestError, "Dateien konnten nicht geladen werden."));
+        }
+      } finally {
+        if (isCurrent) {
+          setFolderDocumentsLoading(false);
+        }
+      }
+    }
+
+    void loadFolderDocuments();
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeTab, folderDocumentsReloadKey, selectedFolder, site]);
 
   if (isLoading) {
     return <div className="matrix-state">Projektakte wird geladen...</div>;
@@ -124,11 +169,15 @@ export function SiteDetailPage() {
           isLoading={foldersLoading}
           error={foldersError}
           selectedFolder={selectedFolder}
+          documents={folderDocuments}
+          documentsLoading={folderDocumentsLoading}
+          documentsError={folderDocumentsError}
           onSelectFolder={setSelectedFolder}
           onRetry={() => {
             setFoldersLoaded(false);
             setFoldersError(null);
           }}
+          onRetryDocuments={() => setFolderDocumentsReloadKey((value) => value + 1)}
         />
       ) : null}
       {activeTab === "assembly-times" ? (
@@ -248,16 +297,24 @@ function ProjectFoldersPanel({
   isLoading,
   error,
   selectedFolder,
+  documents,
+  documentsLoading,
+  documentsError,
   onSelectFolder,
   onRetry,
+  onRetryDocuments,
 }: {
   site: Site;
   folders: ProjectFolder[];
   isLoading: boolean;
   error: string | null;
   selectedFolder: ProjectFolder | null;
+  documents: ProjectFolderDocumentList | null;
+  documentsLoading: boolean;
+  documentsError: string | null;
   onSelectFolder: (folder: ProjectFolder | null) => void;
   onRetry: () => void;
+  onRetryDocuments: () => void;
 }) {
   if (isLoading) {
     return <div className="matrix-state">Ordnerstruktur wird geladen...</div>;
@@ -300,28 +357,18 @@ function ProjectFoldersPanel({
       ) : (
         <div className="project-folder-grid">
           {folders.map((folder) => {
-            const sharePointUrl = site.project_folder_web_url ? folder.external_web_url : null;
-            const content = (
-              <>
+            const isSelected = selectedFolder?.id === folder.id;
+            return (
+              <button
+                key={folder.id}
+                type="button"
+                className={`project-folder-card${isSelected ? " is-selected" : ""}`}
+                onClick={() => onSelectFolder(folder)}
+                title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
+              >
                 <Folder aria-hidden="true" size={18} />
                 <span>{folder.sort_order}.</span>
                 <strong>{folder.name}</strong>
-              </>
-            );
-            return sharePointUrl ? (
-              <a
-                key={folder.id}
-                className="project-folder-card"
-                href={sharePointUrl}
-                target="_blank"
-                rel="noreferrer"
-                title={`${folder.sort_order}. ${folder.name} in SharePoint öffnen`}
-              >
-                {content}
-              </a>
-            ) : (
-              <button key={folder.id} type="button" className="project-folder-card" onClick={() => onSelectFolder(folder)}>
-                {content}
               </button>
             );
           })}
@@ -329,20 +376,98 @@ function ProjectFoldersPanel({
       )}
 
       {selectedFolder ? (
-        <aside className="project-folder-placeholder" aria-live="polite">
-          <div>
-            <FolderOpen aria-hidden="true" size={20} />
-            <div>
-              <h3>{selectedFolder.sort_order}. {selectedFolder.name}</h3>
-              <p>Dateiablage für diesen Ordner wird später angebunden.</p>
-            </div>
-          </div>
-          <button type="button" className="secondary-action" onClick={() => onSelectFolder(null)}>Schließen</button>
-        </aside>
+        <ProjectFolderDocumentBrowser
+          folder={selectedFolder}
+          hasSharePointFolder={Boolean(site.project_folder_web_url)}
+          documents={documents}
+          isLoading={documentsLoading}
+          error={documentsError}
+          onClose={() => onSelectFolder(null)}
+          onRetry={onRetryDocuments}
+        />
       ) : null}
     </div>
   );
 }
+
+function ProjectFolderDocumentBrowser({
+  folder,
+  hasSharePointFolder,
+  documents,
+  isLoading,
+  error,
+  onClose,
+  onRetry,
+}: {
+  folder: ProjectFolder;
+  hasSharePointFolder: boolean;
+  documents: ProjectFolderDocumentList | null;
+  isLoading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  return (
+    <aside className="project-document-browser" aria-live="polite">
+      <div className="project-document-browser-header">
+        <div>
+          <FolderOpen aria-hidden="true" size={20} />
+          <div>
+            <h3>Dateien in: {folder.sort_order}. {folder.name}</h3>
+            <p>{hasSharePointFolder ? "Dateien aus dem SharePoint-Unterordner." : "Dateiablage läuft über SharePoint, sobald ein Projektordner vorhanden ist."}</p>
+          </div>
+        </div>
+        <div className="project-document-browser-actions">
+          {folder.external_web_url ? (
+            <a className="secondary-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden="true" size={15} />
+              <span>Ordner öffnen</span>
+            </a>
+          ) : null}
+          <button type="button" className="secondary-action" onClick={onClose}>Schließen</button>
+        </div>
+      </div>
+
+      {!hasSharePointFolder ? (
+        <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
+      ) : null}
+      {hasSharePointFolder && isLoading ? (
+        <div className="project-record-empty-state">Dateien werden geladen...</div>
+      ) : null}
+      {hasSharePointFolder && error ? (
+        <div className="project-record-empty-state is-error">
+          <strong>{error}</strong>
+          <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+        </div>
+      ) : null}
+      {hasSharePointFolder && !isLoading && !error && documents?.items.length === 0 ? (
+        <div className="project-record-empty-state">Noch keine Dateien in diesem Ordner.</div>
+      ) : null}
+      {hasSharePointFolder && !isLoading && !error && documents && documents.items.length > 0 ? (
+        <ul className="project-document-list">
+          {documents.items.map((item) => (
+            <li key={item.id || item.name} className="project-document-item">
+              <div>
+                <FileText aria-hidden="true" size={19} />
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{formatDocumentMeta(item)}</span>
+                </div>
+              </div>
+              {item.web_url ? (
+                <a className="secondary-action" href={item.web_url} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" size={15} />
+                  <span>Öffnen</span>
+                </a>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </aside>
+  );
+}
+
 
 function PlaceholderTab({
   icon: Icon,
@@ -427,6 +552,27 @@ function formatCoordinates(latitude: number | null, longitude: number | null): s
   }
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
+
+function formatDocumentMeta(item: ProjectFolderDocumentItem): string {
+  const type = item.is_folder ? "Ordner" : item.file_extension?.toUpperCase() ?? item.mime_type ?? "Datei";
+  const changed = item.last_modified_date_time ? `Geändert ${formatDateTime(item.last_modified_date_time)}` : null;
+  const size = item.is_folder ? null : formatFileSize(item.size);
+  return [type, changed, size].filter(Boolean).join(" · ");
+}
+
+function formatFileSize(size: number | null): string | null {
+  if (typeof size !== "number") {
+    return null;
+  }
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 
 function formatLocationStatus(status: Site["location_status"]): string {
   const labels: Record<Site["location_status"], string> = {

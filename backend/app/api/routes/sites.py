@@ -5,7 +5,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.project_folder import ProjectFolderRead
+from app.schemas.project_folder import ProjectFolderDocumentList, ProjectFolderRead
 from app.schemas.site import (
     SiteCreate,
     SiteGeocodeSearchResult,
@@ -17,6 +17,7 @@ from app.schemas.site import (
 )
 from app.services.geo_service import search_geocoding_candidates
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
 
 router = APIRouter(prefix="/sites", tags=["sites"])
@@ -85,6 +86,30 @@ def list_project_folders(
 ) -> list[ProjectFolderRead]:
     folders = ProjectFolderService(db).get_visible_project_folders_for_site(site_id, current_user)
     return [ProjectFolderRead.model_validate(folder) for folder in folders]
+
+
+@router.get(
+    "/{site_id}/documents/folders/{folder_key}/children",
+    response_model=ProjectFolderDocumentList,
+)
+def list_project_folder_documents(
+    site_id: int,
+    folder_key: str,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentList:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+        site_id, folder_key, current_user
+    )
+    items = ProjectStorageService().list_folder_children(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+    )
+    return ProjectFolderDocumentList(
+        folder_key=folder.folder_key,
+        folder_name=folder.name,
+        items=items,
+    )
 
 
 @router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)

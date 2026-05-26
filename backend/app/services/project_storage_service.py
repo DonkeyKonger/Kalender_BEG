@@ -223,6 +223,28 @@ class ProjectStorageService:
             "subfolders": subfolders,
         }
 
+    def list_folder_children(self, *, drive_id: str | None, folder_item_id: str | None) -> list[dict[str, Any]]:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+
+        try:
+            response = self.graph_client.get(
+                f"/drives/{drive_id}/items/{folder_item_id}/children"
+                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+            )
+        except MicrosoftGraphRequestError as error:
+            raise _safe_graph_files_exception(error) from error
+
+        items = response.get("value")
+        if not isinstance(items, list):
+            return []
+        return [_document_item(item) for item in items if isinstance(item, dict)]
+
     def _create_folder(self, parent_item_id: str, name: str) -> dict[str, Any]:
         payload = {
             "name": name,
@@ -291,6 +313,41 @@ def _resource_summary(resource: dict[str, Any]) -> dict[str, Any]:
         "name": resource.get("name") or resource.get("displayName"),
         "web_url": resource.get("webUrl"),
     }
+
+
+def _document_item(item: dict[str, Any]) -> dict[str, Any]:
+    name = item.get("name")
+    file_info = item.get("file") if isinstance(item.get("file"), dict) else {}
+    is_folder = isinstance(item.get("folder"), dict)
+    return {
+        "id": item.get("id") or "",
+        "name": name or "Unbenannte Datei",
+        "web_url": item.get("webUrl"),
+        "size": item.get("size") if isinstance(item.get("size"), int) else None,
+        "last_modified_date_time": item.get("lastModifiedDateTime"),
+        "mime_type": file_info.get("mimeType"),
+        "file_extension": _file_extension(name) if isinstance(name, str) and not is_folder else None,
+        "is_folder": is_folder,
+    }
+
+
+def _file_extension(name: str) -> str | None:
+    if "." not in name:
+        return None
+    extension = name.rsplit(".", 1)[-1].strip().lower()
+    return extension or None
+
+
+def _safe_graph_files_exception(error: MicrosoftGraphRequestError) -> HTTPException:
+    status_code = status.HTTP_404_NOT_FOUND if error.status_code == 404 else status.HTTP_502_BAD_GATEWAY
+    message = "SharePoint-Dateien konnten nicht geladen werden."
+    if error.status_code:
+        message = f"{message} Graph-Status: {error.status_code}."
+    if error.error_code:
+        message = f"{message} Code: {error.error_code}."
+    if error.error_message_short:
+        message = f"{message} {error.error_message_short}"
+    return HTTPException(status_code, message[:240])
 
 
 def _failed_step(diagnostics: dict[str, Any]) -> str:

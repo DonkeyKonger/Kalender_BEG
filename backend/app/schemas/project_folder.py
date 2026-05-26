@@ -18,3 +18,20 @@ class ProjectFolderRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ProjectFolderDocumentItem(BaseModel):
+    id: str
+    name: str
+    web_url: str | None = None
+    size: int | None = None
+    last_modified_date_time: str | None = None
+    mime_type: str | None = None
+    file_extension: str | None = None
+    is_folder: bool = False
+
+
+class ProjectFolderDocumentList(BaseModel):
+    folder_key: str
+    folder_name: str
+    items: list[ProjectFolderDocumentItem]

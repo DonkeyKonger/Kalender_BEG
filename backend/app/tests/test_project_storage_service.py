@@ -43,6 +43,28 @@ class FakeGraphClient:
             }
         if path == "/sites/site-1":
             return {"id": "site-1", "displayName": "SharePoint Site"}
+        if path == (
+            "/drives/drive-1/items/folder-1/children"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+        ):
+            return {
+                "value": [
+                    {
+                        "id": "file-1",
+                        "name": "Angebot.pdf",
+                        "webUrl": "https://example.invalid/angebot",
+                        "size": 123456,
+                        "lastModifiedDateTime": "2026-05-26T08:30:00Z",
+                        "file": {"mimeType": "application/pdf"},
+                    },
+                    {
+                        "id": "folder-2",
+                        "name": "Unterlagen",
+                        "webUrl": "https://example.invalid/unterlagen",
+                        "folder": {},
+                    },
+                ]
+            }
         raise AssertionError(f"unexpected get path: {path}")
 
     def post(self, path, payload):
@@ -238,6 +260,30 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
     assert graph.posts[0][1]["name"] == "8007_Schuechtermann_Klinik"
     assert graph.posts[1][1]["name"] == "01_Angebote"
     assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert "super-secret-value" not in str(result)
+
+
+def test_list_folder_children_returns_safe_document_items():
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FakeGraphClient(),
+    )
+
+    result = service.list_folder_children(drive_id="drive-1", folder_item_id="folder-1")
+
+    assert result[0] == {
+        "id": "file-1",
+        "name": "Angebot.pdf",
+        "web_url": "https://example.invalid/angebot",
+        "size": 123456,
+        "last_modified_date_time": "2026-05-26T08:30:00Z",
+        "mime_type": "application/pdf",
+        "file_extension": "pdf",
+        "is_folder": False,
+    }
+    assert result[1]["name"] == "Unterlagen"
+    assert result[1]["is_folder"] is True
+    assert result[1]["file_extension"] is None
     assert "super-secret-value" not in str(result)
 
 

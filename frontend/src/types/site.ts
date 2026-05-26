@@ -125,3 +125,21 @@ export type ProjectFolder = {
   created_at: string;
   updated_at: string;
 };
+
+
+export type ProjectFolderDocumentItem = {
+  id: string;
+  name: string;
+  web_url: string | null;
+  size: number | null;
+  last_modified_date_time: string | null;
+  mime_type: string | null;
+  file_extension: string | null;
+  is_folder: boolean;
+};
+
+export type ProjectFolderDocumentList = {
+  folder_key: string;
+  folder_name: string;
+  items: ProjectFolderDocumentItem[];
+};

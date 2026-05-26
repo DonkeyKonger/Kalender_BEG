@@ -88,6 +88,25 @@ class ProjectFolderService:
             )
         return folder
 
+    def get_project_folder_for_site_by_key(
+        self, site_id: int, folder_key: str, current_user: User
+    ) -> ProjectFolder:
+        self.create_default_project_folders_for_site(site_id)
+        folder = self.db.scalar(
+            select(ProjectFolder).where(
+                ProjectFolder.site_id == site_id,
+                ProjectFolder.folder_key == folder_key,
+                ProjectFolder.is_active.is_(True),
+            )
+        )
+        if folder is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Projektordner nicht gefunden.")
+        if not user_can_access_project_folder(current_user, folder):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diesen Projektordner."
+            )
+        return folder
+
     def _ensure_site_exists(self, site_id: int) -> None:
         if self.db.get(Site, site_id) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
