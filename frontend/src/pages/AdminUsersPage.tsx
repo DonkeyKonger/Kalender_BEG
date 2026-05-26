@@ -1,4 +1,4 @@
-import { KeyRound, Save, UserCog, UserPlus } from "lucide-react";
+import { KeyRound, PlugZap, Save, UserCog, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
@@ -7,6 +7,7 @@ import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
+import type { MicrosoftGraphConnectionTestResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 
 type EditableUser = {
@@ -42,6 +43,9 @@ export function AdminUsersPage() {
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [graphTestResult, setGraphTestResult] = useState<MicrosoftGraphConnectionTestResponse | null>(null);
+  const [graphTestError, setGraphTestError] = useState<string | null>(null);
+  const [isTestingGraph, setIsTestingGraph] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -181,6 +185,19 @@ export function AdminUsersPage() {
     setDrawer(null);
   }
 
+  async function testMicrosoftGraphConnection() {
+    setIsTestingGraph(true);
+    setGraphTestError(null);
+    setGraphTestResult(null);
+    try {
+      setGraphTestResult(await api.testMicrosoftGraphConnection());
+    } catch (requestError) {
+      setGraphTestError(readApiError(requestError, "Microsoft Graph konnte nicht getestet werden."));
+    } finally {
+      setIsTestingGraph(false);
+    }
+  }
+
   return (
     <section className="admin-users-page">
       <div className="page-header entity-page-header">
@@ -196,6 +213,13 @@ export function AdminUsersPage() {
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
+
+      <MicrosoftGraphTestPanel
+        result={graphTestResult}
+        error={graphTestError}
+        isLoading={isTestingGraph}
+        onTest={() => void testMicrosoftGraphConnection()}
+      />
 
       <input
         className="entity-search"
@@ -313,6 +337,83 @@ export function AdminUsersPage() {
         )}
       </EntityDetailDrawer>
     </section>
+  );
+}
+
+function MicrosoftGraphTestPanel({
+  result,
+  error,
+  isLoading,
+  onTest,
+}: {
+  result: MicrosoftGraphConnectionTestResponse | null;
+  error: string | null;
+  isLoading: boolean;
+  onTest: () => void;
+}) {
+  return (
+    <section className="admin-integration-panel">
+      <div className="admin-integration-panel-header">
+        <div>
+          <h2>Microsoft 365 Verbindung</h2>
+          <p>Prüft die konfigurierte Graph-Verbindung über das Backend. Es werden keine Ordner erstellt.</p>
+        </div>
+        <button className="icon-button secondary" disabled={isLoading} type="button" onClick={onTest}>
+          <PlugZap aria-hidden="true" size={16} />
+          <span>{isLoading ? "Teste..." : "Microsoft Graph testen"}</span>
+        </button>
+      </div>
+
+      {error ? <p className="form-error">{error}</p> : null}
+      {result ? <MicrosoftGraphTestResult result={result} /> : null}
+    </section>
+  );
+}
+
+function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnectionTestResponse }) {
+  return (
+    <div className={`admin-integration-result ${result.connected ? "is-connected" : "is-disconnected"}`}>
+      <div>
+        <span>Graph aktiviert</span>
+        <strong>{result.graph_enabled ? "Ja" : "Nein"}</strong>
+      </div>
+      <div>
+        <span>Verbunden</span>
+        <strong>{result.connected ? "Ja" : "Nein"}</strong>
+      </div>
+      {result.reason ? (
+        <div className="is-wide">
+          <span>Hinweis</span>
+          <strong>{result.reason}</strong>
+        </div>
+      ) : null}
+      {result.status_code ? (
+        <div>
+          <span>Statuscode</span>
+          <strong>{result.status_code}</strong>
+        </div>
+      ) : null}
+      {result.missing_config.length ? (
+        <div className="is-wide">
+          <span>Fehlende Konfiguration</span>
+          <strong>{result.missing_config.join(", ")}</strong>
+        </div>
+      ) : null}
+      <GraphResource label="Drive" resource={result.drive} />
+      <GraphResource label="Root-Ordner" resource={result.root_folder} />
+    </div>
+  );
+}
+
+function GraphResource({ label, resource }: { label: string; resource: MicrosoftGraphConnectionTestResponse["drive"] }) {
+  if (!resource) {
+    return null;
+  }
+  return (
+    <div className="is-wide">
+      <span>{label}</span>
+      <strong>{[resource.name, resource.id].filter(Boolean).join(" · ") || "Gefunden"}</strong>
+    </div>
   );
 }
 

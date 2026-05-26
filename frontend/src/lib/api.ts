@@ -1,5 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
+import type { MicrosoftGraphConnectionTestResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
@@ -178,6 +179,10 @@ export const api = {
 
   async users(): Promise<AdminUser[]> {
     return request<AdminUser[]>("/users");
+  },
+
+  async testMicrosoftGraphConnection(): Promise<MicrosoftGraphConnectionTestResponse> {
+    return request<MicrosoftGraphConnectionTestResponse>("/admin/integrations/microsoft-graph/test");
   },
 
   async createPerson(payload: PersonCreate): Promise<Person> {
