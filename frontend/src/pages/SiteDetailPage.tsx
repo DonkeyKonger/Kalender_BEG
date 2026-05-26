@@ -80,6 +80,18 @@ export function SiteDetailPage() {
   }, [site?.id]);
 
   useEffect(() => {
+    if (!uploadMessage || uploadingFolderKey) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUploadMessage(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [uploadMessage, uploadingFolderKey]);
+
+  useEffect(() => {
     if (!site || activeTab !== "folders" || foldersLoaded || foldersLoading) {
       return;
     }
@@ -524,13 +536,6 @@ function ProjectFolderDocumentBrowser({
   return (
     <aside className="project-document-browser" aria-live="polite">
       <div className="project-document-browser-header">
-        <div>
-          <FolderOpen aria-hidden="true" size={20} />
-          <div>
-            <h3>Dateien in: {folder.sort_order}. {folder.name}</h3>
-            <p>{hasSharePointFolder ? "Dateien aus dem SharePoint-Unterordner." : "Dateiablage läuft über SharePoint, sobald ein Projektordner vorhanden ist."}</p>
-          </div>
-        </div>
         <div className="project-document-browser-actions">
           {hasSharePointFolder ? (
             <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
