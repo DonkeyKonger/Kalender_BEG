@@ -3417,7 +3417,7 @@ button.person-chip:focus-visible {
 .measurement-review-positions,
 .measurement-review-entry-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .measurement-review-card,
@@ -3493,27 +3493,50 @@ button.person-chip:focus-visible {
 
 .measurement-review-position {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 7px;
+  padding: 10px 12px;
 }
 
-.measurement-review-position-head > div,
-.measurement-review-entry > div {
-  display: grid;
-  gap: 3px;
+.measurement-review-position-title {
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
 }
 
 .measurement-review-entry {
-  border-top: 1px solid #e5edf7;
-  padding-top: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  gap: 10px;
+  padding-top: 7px;
 }
 
-.measurement-review-entry-actions {
+.measurement-review-entry-content {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.measurement-review-entry-content span {
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.measurement-review-entry-content strong {
+  color: #111827;
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+
+.measurement-review-edit-action {
+  min-height: 30px;
+  padding: 5px 9px;
 }
 
 .measurement-review-entry-edit {

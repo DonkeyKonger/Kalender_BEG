@@ -462,6 +462,7 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
+          siteNumber={site.site_number}
           activeSubtab={measurementSubtab}
           onSubtabChange={(subtab) => {
             setMeasurementSubtab(subtab);
@@ -907,6 +908,7 @@ function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
 
 
 function MeasurementTab({
+  siteNumber,
   activeSubtab,
   onSubtabChange,
   items,
@@ -933,6 +935,7 @@ function MeasurementTab({
   onMarkOpen,
   onUpdateEntry,
 }: {
+  siteNumber: string | null;
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   items: MeasurementItem[];
@@ -994,6 +997,7 @@ function MeasurementTab({
 
       {activeSubtab === "review" ? (
         <MeasurementReviewPanel
+          siteNumber={siteNumber}
           batches={batches}
           batchesLoading={batchesLoading}
           batchesError={batchesError}
@@ -1122,6 +1126,7 @@ function MeasurementTimesheetPanel({
 }
 
 function MeasurementReviewPanel({
+  siteNumber,
   batches,
   batchesLoading,
   batchesError,
@@ -1138,6 +1143,7 @@ function MeasurementReviewPanel({
   onMarkOpen,
   onUpdateEntry,
 }: {
+  siteNumber: string | null;
   batches: MobileMeasurementBatch[];
   batchesLoading: boolean;
   batchesError: string | null;
@@ -1162,18 +1168,19 @@ function MeasurementReviewPanel({
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
+    const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
 
     return (
       <div className="measurement-review-detail">
         <div className="measurement-review-header">
           <div>
-            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zur Paketliste</button>
-            <h2>{selectedBatch.title}</h2>
-            <p>{getMeasurementBatchStatusLabel(selectedBatch.status)} · {selectedBatch.entry_count} Aufmaßzeilen · {selectedBatch.position_count} Positionen</p>
+            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
+            <h2>{displayTitle}</h2>
           </div>
-          {!isDraft ? (
-            <div className="measurement-review-actions">
-              {isBilled ? (
+          <div className="measurement-review-actions">
+            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
+            {!isDraft ? (
+              isBilled ? (
                 <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
                   Wieder auf noch offen setzen
                 </button>
@@ -1181,11 +1188,9 @@ function MeasurementReviewPanel({
                 <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
                   Als abgerechnet markieren
                 </button>
-              )}
-            </div>
-          ) : (
-            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
-          )}
+              )
+            ) : null}
+          </div>
         </div>
 
         {reviewMessage ? <div className="project-record-empty-state is-success">{reviewMessage}</div> : null}
@@ -1199,11 +1204,7 @@ function MeasurementReviewPanel({
             {itemsWithEntries.map((item) => (
               <section className="measurement-review-position" key={item.id}>
                 <div className="measurement-review-position-head">
-                  <div>
-                    <strong>{item.position}</strong>
-                    <span>{item.description}</span>
-                  </div>
-                  <small>{item.unit ?? "-"} · Min/Einh. {formatMeasurementNumber(item.minutes_per_unit)}</small>
+                  <strong className="measurement-review-position-title">{item.position} {item.description}</strong>
                 </div>
                 <div className="measurement-review-entry-list">
                   {item.entries.map((entry) => {
@@ -1240,26 +1241,23 @@ function MeasurementReviewPanel({
                           </div>
                         ) : (
                           <>
-                            <div>
-                              <strong>{entry.area_or_comment}</strong>
-                              <span>{entry.created_by_name ?? "Unbekannt"} · {formatDateTime(entry.created_at)}</span>
+                            <div className="measurement-review-entry-content">
+                              <span>{entry.area_or_comment}</span>
+                              <strong>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</strong>
                             </div>
-                            <div className="measurement-review-entry-actions">
-                              <b>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</b>
-                              {!isDraft ? (
-                                <button
-                                  type="button"
-                                  className="secondary-action"
-                                  onClick={() => {
-                                    setEditingEntryId(entry.id);
-                                    setEditComment(entry.area_or_comment);
-                                    setEditQuantity(String(entry.quantity).replace(".", ","));
-                                  }}
-                                >
-                                  Bearbeiten
-                                </button>
-                              ) : null}
-                            </div>
+                            {!isDraft ? (
+                              <button
+                                type="button"
+                                className="secondary-action measurement-review-edit-action"
+                                onClick={() => {
+                                  setEditingEntryId(entry.id);
+                                  setEditComment(entry.area_or_comment);
+                                  setEditQuantity(String(entry.quantity).replace(".", ","));
+                                }}
+                              >
+                                Bearbeiten
+                              </button>
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -1452,6 +1450,18 @@ function formatFileSize(size: number | null): string | null {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+
+function formatMeasurementPackageNumber(
+  siteNumber: string | null,
+  packageNumber: number,
+  fallbackTitle: string,
+): string {
+  const cleanSiteNumber = siteNumber?.trim();
+  if (!cleanSiteNumber) {
+    return fallbackTitle;
+  }
+  return `Aufmaß ${cleanSiteNumber}.${String(packageNumber).padStart(2, "0")}`;
+}
 
 function getMeasurementBatchStatusLabel(status: string): string {
   if (isMeasurementBatchBilled(status)) {
