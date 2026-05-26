@@ -1,6 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
-import type { MicrosoftGraphConnectionTestResponse } from "../types/admin";
+import type { MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
@@ -183,6 +183,13 @@ export const api = {
 
   async testMicrosoftGraphConnection(): Promise<MicrosoftGraphConnectionTestResponse> {
     return request<MicrosoftGraphConnectionTestResponse>("/admin/integrations/microsoft-graph/test");
+  },
+
+  async createMicrosoftGraphTestProjectFolder(): Promise<MicrosoftGraphCreateTestFolderResponse> {
+    return request<MicrosoftGraphCreateTestFolderResponse>(
+      "/admin/integrations/microsoft-graph/create-test-project-folder",
+      { method: "POST" },
+    );
   },
 
   async createPerson(payload: PersonCreate): Promise<Person> {

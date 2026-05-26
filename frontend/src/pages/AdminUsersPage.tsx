@@ -7,7 +7,7 @@ import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
-import type { MicrosoftGraphConnectionTestResponse } from "../types/admin";
+import type { MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 
 type EditableUser = {
@@ -45,7 +45,10 @@ export function AdminUsersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [graphTestResult, setGraphTestResult] = useState<MicrosoftGraphConnectionTestResponse | null>(null);
   const [graphTestError, setGraphTestError] = useState<string | null>(null);
+  const [graphFolderResult, setGraphFolderResult] = useState<MicrosoftGraphCreateTestFolderResponse | null>(null);
+  const [graphFolderError, setGraphFolderError] = useState<string | null>(null);
   const [isTestingGraph, setIsTestingGraph] = useState(false);
+  const [isCreatingGraphFolder, setIsCreatingGraphFolder] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -190,11 +193,26 @@ export function AdminUsersPage() {
     setGraphTestError(null);
     setGraphTestResult(null);
     try {
+      setGraphFolderResult(null);
+      setGraphFolderError(null);
       setGraphTestResult(await api.testMicrosoftGraphConnection());
     } catch (requestError) {
       setGraphTestError(readApiError(requestError, "Microsoft Graph konnte nicht getestet werden."));
     } finally {
       setIsTestingGraph(false);
+    }
+  }
+
+  async function createMicrosoftGraphTestFolder() {
+    setIsCreatingGraphFolder(true);
+    setGraphFolderError(null);
+    setGraphFolderResult(null);
+    try {
+      setGraphFolderResult(await api.createMicrosoftGraphTestProjectFolder());
+    } catch (requestError) {
+      setGraphFolderError(readApiError(requestError, "Testordner konnte nicht erstellt werden."));
+    } finally {
+      setIsCreatingGraphFolder(false);
     }
   }
 
@@ -217,8 +235,12 @@ export function AdminUsersPage() {
       <MicrosoftGraphTestPanel
         result={graphTestResult}
         error={graphTestError}
+        folderResult={graphFolderResult}
+        folderError={graphFolderError}
         isLoading={isTestingGraph}
+        isCreatingFolder={isCreatingGraphFolder}
         onTest={() => void testMicrosoftGraphConnection()}
+        onCreateFolder={() => void createMicrosoftGraphTestFolder()}
       />
 
       <input
@@ -343,30 +365,75 @@ export function AdminUsersPage() {
 function MicrosoftGraphTestPanel({
   result,
   error,
+  folderResult,
+  folderError,
   isLoading,
+  isCreatingFolder,
   onTest,
+  onCreateFolder,
 }: {
   result: MicrosoftGraphConnectionTestResponse | null;
   error: string | null;
+  folderResult: MicrosoftGraphCreateTestFolderResponse | null;
+  folderError: string | null;
   isLoading: boolean;
+  isCreatingFolder: boolean;
   onTest: () => void;
+  onCreateFolder: () => void;
 }) {
   return (
     <section className="admin-integration-panel">
       <div className="admin-integration-panel-header">
         <div>
           <h2>Microsoft 365 Verbindung</h2>
-          <p>Prüft die konfigurierte Graph-Verbindung über das Backend. Es werden keine Ordner erstellt.</p>
+          <p>Prüft die konfigurierte Graph-Verbindung. Ein Testordner wird nur per Klick erstellt.</p>
         </div>
-        <button className="icon-button secondary" disabled={isLoading} type="button" onClick={onTest}>
-          <PlugZap aria-hidden="true" size={16} />
-          <span>{isLoading ? "Teste..." : "Microsoft Graph testen"}</span>
-        </button>
+        <div className="admin-integration-actions">
+          <button className="icon-button secondary" disabled={isLoading || isCreatingFolder} type="button" onClick={onTest}>
+            <PlugZap aria-hidden="true" size={16} />
+            <span>{isLoading ? "Teste..." : "Microsoft Graph testen"}</span>
+          </button>
+          {result?.connected ? (
+            <button
+              className="icon-button secondary"
+              disabled={isLoading || isCreatingFolder}
+              type="button"
+              onClick={onCreateFolder}
+            >
+              <span>{isCreatingFolder ? "Erstelle..." : "Testordner erstellen"}</span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
+      {folderError ? <p className="form-error">{folderError}</p> : null}
       {result ? <MicrosoftGraphTestResult result={result} /> : null}
+      {folderResult ? <MicrosoftGraphFolderResult result={folderResult} /> : null}
     </section>
+  );
+}
+
+function MicrosoftGraphFolderResult({ result }: { result: MicrosoftGraphCreateTestFolderResponse }) {
+  return (
+    <div className="admin-integration-result is-connected">
+      <div>
+        <span>Testordner erstellt</span>
+        <strong>{result.created ? "Ja" : "Nein"}</strong>
+      </div>
+      <GraphResource label="Ordner" resource={result.root_folder} />
+      {result.root_folder.web_url ? <GraphValue label="Web URL" value={result.root_folder.web_url} wide /> : null}
+      <div>
+        <span>Unterordner</span>
+        <strong>{result.subfolders.length}</strong>
+      </div>
+      {result.subfolders.length ? (
+        <div className="is-wide">
+          <span>Erstellte Unterordner</span>
+          <strong>{result.subfolders.map((folder) => folder.name).join(", ")}</strong>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

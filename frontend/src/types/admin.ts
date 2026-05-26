@@ -36,3 +36,17 @@ export type MicrosoftGraphConnectionTestResponse = {
   root_folder: MicrosoftGraphResource | null;
   site: MicrosoftGraphResource | null;
 };
+
+
+export type MicrosoftGraphCreatedSubfolder = {
+  sort_order: number;
+  name: string;
+  id: string | null;
+  web_url: string | null;
+};
+
+export type MicrosoftGraphCreateTestFolderResponse = {
+  created: boolean;
+  root_folder: MicrosoftGraphResource;
+  subfolders: MicrosoftGraphCreatedSubfolder[];
+};

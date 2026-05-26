@@ -3225,6 +3225,13 @@ button.person-chip:focus-visible {
   gap: 14px;
 }
 
+.admin-integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-integration-panel h2,
 .admin-integration-panel p {
   margin: 0;
