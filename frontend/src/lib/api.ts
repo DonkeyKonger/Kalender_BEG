@@ -76,7 +76,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function requestBlob(path: string): Promise<Blob> {
   const token = localStorage.getItem("kb_access_token");
   const headers = new Headers();
-  headers.set("Accept", "application/pdf");
+  headers.set("Accept", "*/*");
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -307,6 +307,16 @@ export const api = {
   async projectFolderDocuments(siteId: number, folderKey: string): Promise<ProjectFolderDocumentList> {
     return request<ProjectFolderDocumentList>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/children`,
+    );
+  },
+
+  async downloadProjectFolderDocument(
+    siteId: number,
+    folderKey: string,
+    itemId: string,
+  ): Promise<Blob> {
+    return requestBlob(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}/download`,
     );
   },
 

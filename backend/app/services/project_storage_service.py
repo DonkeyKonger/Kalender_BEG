@@ -246,6 +246,42 @@ class ProjectStorageService:
             return []
         return [_document_item(item) for item in items if isinstance(item, dict)]
 
+    def download_file_from_folder(
+        self,
+        *,
+        drive_id: str | None,
+        folder_item_id: str | None,
+        item_id: str,
+    ) -> dict[str, Any]:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+
+        folder_items = self.list_folder_children(drive_id=drive_id, folder_item_id=folder_item_id)
+        document = next((item for item in folder_items if item.get("id") == item_id), None)
+        if document is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei nicht gefunden.")
+        if document.get("is_folder"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
+
+        encoded_item_id = quote(item_id, safe="")
+        try:
+            content, content_type = self.graph_client.get_content(
+                f"/drives/{drive_id}/items/{encoded_item_id}/content"
+            )
+        except MicrosoftGraphRequestError as error:
+            raise _safe_graph_files_exception(error) from error
+
+        return {
+            "content": content,
+            "content_type": content_type or document.get("mime_type") or "application/octet-stream",
+            "filename": document.get("name") or "download",
+        }
+
     def upload_file_to_folder(
         self,
         *,

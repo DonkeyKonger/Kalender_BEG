@@ -29,6 +29,7 @@ class FakeGraphClient:
     def __init__(self):
         self.posts = []
         self.puts = []
+        self.downloads = []
 
     def get_access_token(self):
         return "token-not-returned"
@@ -87,6 +88,10 @@ class FakeGraphClient:
             "lastModifiedDateTime": "2026-05-26T09:15:00Z",
             "file": {"mimeType": content_type},
         }
+
+    def get_content(self, path):
+        self.downloads.append(path)
+        return b"pdf-bytes", "application/pdf"
 
 
 class FailingTokenGraphClient:
@@ -297,6 +302,44 @@ def test_list_folder_children_returns_safe_document_items():
     assert result[1]["is_folder"] is True
     assert result[1]["file_extension"] is None
     assert "super-secret-value" not in str(result)
+
+
+def test_download_file_from_folder_verifies_child_and_returns_content():
+    graph = FakeGraphClient()
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=graph,
+    )
+
+    result = service.download_file_from_folder(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        item_id="file-1",
+    )
+
+    assert graph.downloads == ["/drives/drive-1/items/file-1/content"]
+    assert result == {
+        "content": b"pdf-bytes",
+        "content_type": "application/pdf",
+        "filename": "Angebot.pdf",
+    }
+    assert "super-secret-value" not in str(result)
+
+
+def test_download_file_from_folder_rejects_subfolder_item():
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FakeGraphClient(),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service.download_file_from_folder(
+            drive_id="drive-1",
+            folder_item_id="folder-1",
+            item_id="folder-2",
+        )
+
+    assert error.value.status_code == 400
 
 
 def test_upload_file_to_folder_uses_encoded_filename_and_returns_document_item():

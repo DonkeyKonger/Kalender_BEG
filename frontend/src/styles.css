@@ -3233,9 +3233,21 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
+.project-document-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .project-document-open-action {
   gap: 6px;
   min-width: 96px;
+}
+
+.project-document-open-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -536,6 +536,7 @@ function ProjectFoldersPanel({
 
       {selectedFolder ? (
         <ProjectFolderDocumentBrowser
+          siteId={site.id}
           folder={selectedFolder}
           hasSharePointFolder={Boolean(site.project_folder_web_url)}
           documents={documents}
@@ -554,6 +555,7 @@ function ProjectFoldersPanel({
 }
 
 function ProjectFolderDocumentBrowser({
+  siteId,
   folder,
   hasSharePointFolder,
   documents,
@@ -566,6 +568,7 @@ function ProjectFolderDocumentBrowser({
   onClose,
   onRetry,
 }: {
+  siteId: number;
   folder: ProjectFolder;
   hasSharePointFolder: boolean;
   documents: ProjectFolderDocumentList | null;
@@ -579,10 +582,26 @@ function ProjectFolderDocumentBrowser({
   onRetry: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     setQuery("");
+    setDownloadError(null);
   }, [folder.id]);
+
+  async function handleDownload(item: ProjectFolderDocumentItem): Promise<void> {
+    setDownloadError(null);
+    setDownloadingItemId(item.id);
+    try {
+      const blob = await api.downloadProjectFolderDocument(siteId, folder.folder_key, item.id);
+      triggerBrowserDownload(blob, item.name);
+    } catch (requestError) {
+      setDownloadError(readApiError(requestError, "Datei konnte nicht heruntergeladen werden."));
+    } finally {
+      setDownloadingItemId(null);
+    }
+  }
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleItems = documents?.items.filter((item) => {
@@ -628,6 +647,7 @@ function ProjectFolderDocumentBrowser({
 
       {uploadMessage ? <div className="project-record-empty-state is-success">{uploadMessage}</div> : null}
       {uploadError ? <div className="project-record-empty-state is-error"><strong>{uploadError}</strong></div> : null}
+      {downloadError ? <div className="project-record-empty-state is-error"><strong>{downloadError}</strong></div> : null}
 
       {!hasSharePointFolder ? (
         <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
@@ -671,12 +691,25 @@ function ProjectFolderDocumentBrowser({
                   <span>{formatDocumentMeta(item)}</span>
                 </div>
               </div>
-              {item.web_url ? (
-                <a className="secondary-action project-document-open-action" href={item.web_url} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" size={15} />
-                  <span>Öffnen</span>
-                </a>
-              ) : null}
+              <div className="project-document-item-actions">
+                {!item.is_folder ? (
+                  <button
+                    type="button"
+                    className="secondary-action project-document-open-action"
+                    disabled={downloadingItemId === item.id}
+                    onClick={() => void handleDownload(item)}
+                  >
+                    <Download aria-hidden="true" size={15} />
+                    <span>{downloadingItemId === item.id ? "Lädt..." : "Download"}</span>
+                  </button>
+                ) : null}
+                {item.web_url ? (
+                  <a className="secondary-action project-document-open-action" href={item.web_url} target="_blank" rel="noreferrer">
+                    <ExternalLink aria-hidden="true" size={15} />
+                    <span>Öffnen</span>
+                  </a>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
@@ -893,6 +926,17 @@ function formatCoordinates(latitude: number | null, longitude: number | null): s
     return null;
   }
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "download";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function formatDocumentMeta(item: ProjectFolderDocumentItem): string {
