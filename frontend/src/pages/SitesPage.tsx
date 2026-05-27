@@ -1,6 +1,6 @@
-import { ArchiveRestore, BriefcaseBusiness, ExternalLink, PlusCircle, Save, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, PlusCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteLocationStatus } from "../types/site";
+import type { Site, SiteCreate, SiteGeocodeSearchResult } from "../types/site";
 
 const emptySite: SiteCreate = {
   site_number: null,
@@ -32,7 +32,6 @@ const emptySite: SiteCreate = {
 };
 
 export type EditableSite = SiteCreate & { id: number };
-type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
 type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
 type SiteColorOption = { name: string; value: string };
@@ -58,20 +57,16 @@ export function SitesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
-  const canRemove = user?.role === "admin";
   const [sites, setSites] = useState<Site[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, EditableSite>>({});
   const [people, setPeople] = useState<Person[]>([]);
   const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
-  const [drawer, setDrawer] = useState<DrawerState>(null);
-  const [isEditingSite, setIsEditingSite] = useState(false);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
-  const [checkingLocationSiteId, setCheckingLocationSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -90,7 +85,6 @@ export function SitesPage() {
         api.persons({ isActive: null }),
       ]);
       setSites(siteData);
-      setDrafts(toEditableSites(siteData));
       setPeople(personData);
     } catch (requestError) {
       setError(readApiError(requestError, "Baustellen konnten nicht geladen werden."));
@@ -128,13 +122,6 @@ export function SitesPage() {
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
   const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
 
-  const selectedSite = drawer?.mode === "edit"
-    ? sites.find((site) => site.id === drawer.siteId) ?? null
-    : null;
-  const selectedDraft = drawer?.mode === "edit" && selectedSite
-    ? drafts[selectedSite.id] ?? toEditableSite(selectedSite)
-    : null;
-
   async function createSite() {
     const validationError = validateSitePayload(createForm);
     if (validationError) {
@@ -148,151 +135,11 @@ export function SitesPage() {
     try {
       const created = await api.createSite(normalizeSitePayload(createForm));
       setSites((current) => [...current, created].sort(compareSites));
-      setDrafts((current) => ({ ...current, [created.id]: toEditableSite(created) }));
       setCreateForm(emptySite);
-      setDrawer(null);
+      setIsCreateDrawerOpen(false);
       setMessage("Baustelle angelegt.");
     } catch (requestError) {
       setError(readApiError(requestError, "Baustelle konnte nicht angelegt werden."));
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
-  async function saveSite(siteId: number): Promise<boolean> {
-    const draft = drafts[siteId];
-    if (!draft) {
-      return false;
-    }
-    const validationError = validateSitePayload(draft);
-    if (validationError) {
-      setError(validationError);
-      setMessage(null);
-      return false;
-    }
-    setSavingSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    try {
-      const updated = await api.updateSite(siteId, normalizeSitePayload(draft));
-      replaceSite(updated);
-      setMessage("Baustelle gespeichert.");
-      return true;
-    } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht gespeichert werden."));
-      return false;
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
-  async function removeSite(siteId: number) {
-    const confirmed = window.confirm(
-      "Diese Baustelle wird als geloescht markiert und aus der Standardansicht ausgeblendet. Historische Daten bleiben erhalten. Fortfahren?",
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setSavingSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    try {
-      const result = await api.removeSite(siteId);
-      if (result.site) {
-        replaceSite(result.site);
-      }
-      setMessage("Baustelle geloescht.");
-      setDrawer(null);
-      setIsEditingSite(false);
-    } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht entfernt werden."));
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
-  async function closeSite(siteId: number) {
-    setSavingSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    try {
-      const updated = await api.closeSite(siteId);
-      replaceSite(updated);
-      if (!includeInactiveSites) {
-        setDrawer(null);
-      }
-      setMessage("Baustelle abgeschlossen.");
-    } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht abgeschlossen werden."));
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
-  async function applyGeocodedSite(siteId: number, values: Partial<SiteCreate>) {
-    const draft = drafts[siteId];
-    if (!draft) {
-      return;
-    }
-    const nextDraft = { ...draft, ...values };
-    setSavingSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    updateDraft(siteId, values as Partial<EditableSite>);
-    try {
-      const updated = await api.updateSite(siteId, normalizeSitePayload(nextDraft));
-      replaceSite(updated);
-      setMessage("Standort aus Vorschlag uebernommen und gespeichert.");
-    } catch (requestError) {
-      setError(readApiError(requestError, "Standort konnte nicht gespeichert werden."));
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
-  async function checkSiteLocation(siteId: number) {
-    const draft = drafts[siteId];
-    if (!draft) {
-      return;
-    }
-    const validationError = validateSitePayload(draft);
-    if (validationError) {
-      setError(validationError);
-      setMessage(null);
-      return;
-    }
-    setCheckingLocationSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    try {
-      await api.updateSite(siteId, normalizeSitePayload(draft));
-      const updated = await api.checkSiteLocation(siteId);
-      replaceSite(updated);
-      if (updated.location_status === "geocoded") {
-        setMessage("Standort wurde geprueft und Koordinaten wurden gespeichert.");
-      } else if (updated.location_status === "ambiguous") {
-        setError("Standort ist nicht eindeutig. Bitte Adresse genauer erfassen.");
-      } else {
-        setError("Standort konnte nicht geprueft werden. Bitte Adresse pruefen.");
-      }
-    } catch (requestError) {
-      setError(readApiError(requestError, "Standort konnte nicht geprueft werden."));
-    } finally {
-      setCheckingLocationSiteId(null);
-    }
-  }
-
-  async function reactivateSite(siteId: number) {
-    setSavingSiteId(siteId);
-    setError(null);
-    setMessage(null);
-    try {
-      const updated = await api.reactivateSite(siteId);
-      replaceSite(updated);
-      setMessage("Baustelle reaktiviert.");
-    } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht reaktiviert werden."));
     } finally {
       setSavingSiteId(null);
     }
@@ -329,39 +176,17 @@ export function SitesPage() {
         : [...current, updated];
       return next.sort(compareSites);
     });
-    setDrafts((current) => ({ ...current, [updated.id]: toEditableSite(updated) }));
   }
 
-  function updateDraft(siteId: number, values: Partial<EditableSite>) {
-    setDrafts((current) => ({
-      ...current,
-      [siteId]: { ...current[siteId], ...values },
-    }));
-  }
 
   function openNewSiteDrawer() {
     setCreateForm(emptySite);
-    setIsEditingSite(false);
-    setDrawer({ mode: "new" });
-  }
-
-  function cancelSiteEdit() {
-    if (selectedSite) {
-      setDrafts((current) => ({ ...current, [selectedSite.id]: toEditableSite(selectedSite) }));
-    }
-    setIsEditingSite(false);
-    setError(null);
+    setIsCreateDrawerOpen(true);
   }
 
   function closeDrawer() {
-    if (drawer?.mode === "edit" && selectedSite) {
-      setDrafts((current) => ({ ...current, [selectedSite.id]: toEditableSite(selectedSite) }));
-    }
-    if (drawer?.mode === "new") {
-      setCreateForm(emptySite);
-    }
-    setIsEditingSite(false);
-    setDrawer(null);
+    setCreateForm(emptySite);
+    setIsCreateDrawerOpen(false);
   }
 
   return (
@@ -458,7 +283,7 @@ export function SitesPage() {
       )}
 
       <EntityDetailDrawer
-        isOpen={drawer?.mode === "new"}
+        isOpen={isCreateDrawerOpen}
         title="Neue Baustelle"
         subtitle="Stammdaten anlegen"
         onClose={closeDrawer}
@@ -476,147 +301,10 @@ export function SitesPage() {
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
-
-      <EntityDetailDrawer
-        isOpen={drawer?.mode === "edit" && Boolean(selectedSite && selectedDraft)}
-        title={selectedSite ? isEditingSite ? "Baustelle bearbeiten" : "Baustelle" : "Baustelle"}
-        subtitle={selectedSite ? [selectedSite.site_number, selectedSite.name].filter(Boolean).join(" · ") : undefined}
-        onClose={closeDrawer}
-        actions={selectedSite && canEdit && !isEditingSite ? (
-          <button className="icon-button secondary" type="button" onClick={() => setIsEditingSite(true)}>
-            <span>Bearbeiten</span>
-          </button>
-        ) : undefined}
-        footer={selectedSite && selectedDraft ? (
-          isEditingSite && canEdit ? (
-            <>
-              {canRemove && (
-                <button
-                  className="icon-button danger danger-action"
-                  disabled={savingSiteId === selectedSite.id}
-                  type="button"
-                  onClick={() => void removeSite(selectedSite.id)}
-                >
-                  <Trash2 aria-hidden="true" size={16} />
-                  <span>Baustelle loeschen</span>
-                </button>
-              )}
-              <button className="icon-button secondary" disabled={savingSiteId === selectedSite.id} type="button" onClick={cancelSiteEdit}>
-                <span>Abbrechen</span>
-              </button>
-              <button
-                className="icon-button secondary"
-                disabled={savingSiteId === selectedSite.id}
-                type="button"
-                onClick={() => {
-                  void saveSite(selectedSite.id).then((saved) => {
-                    if (saved) {
-                      setIsEditingSite(false);
-                    }
-                  });
-                }}
-              >
-                <Save aria-hidden="true" size={16} />
-                <span>Speichern</span>
-              </button>
-              {INACTIVE_SITE_STATUSES.includes(selectedSite.status) ? (
-                <button
-                  className="icon-button secondary"
-                  disabled={savingSiteId === selectedSite.id}
-                  type="button"
-                  onClick={() => void reactivateSite(selectedSite.id)}
-                >
-                  <ArchiveRestore aria-hidden="true" size={16} />
-                  <span>Reaktivieren</span>
-                </button>
-              ) : (
-                <button
-                  className="icon-button secondary"
-                  disabled={savingSiteId === selectedSite.id}
-                  type="button"
-                  onClick={() => void closeSite(selectedSite.id)}
-                >
-                  <span>Abschliessen</span>
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              <Link className="icon-button secondary" to={`/sites/${selectedSite.id}`}>
-                <ExternalLink aria-hidden="true" size={16} />
-                <span>Projektakte</span>
-              </Link>
-              <button className="icon-button secondary" type="button" onClick={closeDrawer}>
-                <span>Schliessen</span>
-              </button>
-            </>
-          )
-        ) : undefined}
-      >
-        {selectedSite && selectedDraft && (
-          isEditingSite ? (
-            <SiteFields
-              draft={selectedDraft}
-              people={people}
-              disabled={!canEdit}
-              isCheckingLocation={checkingLocationSiteId === selectedSite.id}
-              onChange={(values) => updateDraft(selectedSite.id, values)}
-              onCheckLocation={() => void checkSiteLocation(selectedSite.id)}
-              onGeocodeSelected={(values) => void applyGeocodedSite(selectedSite.id, values)}
-            />
-          ) : (
-            <SiteReadView site={selectedSite} />
-          )
-        )}
-      </EntityDetailDrawer>
     </section>
   );
 }
 
-function SiteReadView({ site }: { site: Site }) {
-  const projectManager = site.project_manager?.display_name || "Nicht zugeordnet";
-  const addressText = formatSiteAddress(site);
-  return (
-    <div className="detail-read-view">
-      <section className="detail-read-section">
-        <h3>Stammdaten</h3>
-        <div className="detail-read-grid">
-          <ReadItem label="Baustelle" value={site.name} />
-          <ReadItem label="Nummer" value={site.site_number || "-"} />
-          <ReadItem label="Ort" value={site.location || site.city || "-"} />
-          <ReadItem label="Kunde" value={site.customer || "-"} />
-          <ReadItem label="Projektleiter" value={projectManager} />
-          <div className="detail-read-item">
-            <span>Status</span>
-            <strong><SiteStatusBadge status={site.status} /></strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="detail-read-section">
-        <h3>Adresse / Standort</h3>
-        <div className={`detail-address-card ${addressText ? "has-address" : "is-empty"}`}>
-          <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
-          {addressText ? <strong>{addressText}</strong> : null}
-        </div>
-      </section>
-
-      <section className="detail-read-section">
-        <h3>Info / Notizen</h3>
-        <p className={site.info ? "detail-note" : "detail-empty"}>{site.info || "Keine Info hinterlegt."}</p>
-      </section>
-    </div>
-  );
-}
-
-function ReadItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="detail-read-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
 
 export function SiteFields({
   draft,
@@ -885,9 +573,6 @@ export function SiteFields({
   );
 }
 
-function toEditableSites(sites: Site[]): Record<string, EditableSite> {
-  return Object.fromEntries(sites.map((site) => [String(site.id), toEditableSite(site)]));
-}
 
 export function toEditableSite(site: Site): EditableSite {
   return {
@@ -1171,14 +856,6 @@ function siteSearchText(site: Site): string {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-function formatSiteAddress(site: Pick<Site, "address" | "postal_code" | "city" | "street" | "house_number" | "address_extra">): string {
-  if (site.address) {
-    return site.address;
-  }
-  const streetLine = [site.street, site.house_number].filter(Boolean).join(" ");
-  const cityLine = [site.postal_code, site.city].filter(Boolean).join(" ");
-  return [streetLine, site.address_extra, cityLine].filter(Boolean).join(", ");
-}
 
 function formatGeocodeMeta(result: SiteGeocodeSearchResult): string {
   const place = [result.postal_code, result.city].filter(Boolean).join(" ");
@@ -1186,20 +863,7 @@ function formatGeocodeMeta(result: SiteGeocodeSearchResult): string {
   return [place, precision].filter(Boolean).join(" · ");
 }
 
-const siteLocationStatusLabels: Record<SiteLocationStatus, string> = {
-  unchecked: "Ungeprueft",
-  geocoded: "Geprueft",
-  ambiguous: "Nicht eindeutig",
-  failed: "Fehler",
-};
 
-function parsePositiveInt(value: string): number | null {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
-}
 
 function readApiError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) {
