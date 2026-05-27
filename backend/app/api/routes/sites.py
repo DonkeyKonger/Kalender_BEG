@@ -29,6 +29,7 @@ from app.schemas.site import (
     SiteMapResponse,
     SiteRead,
     SiteRemovePlan,
+    SiteSummary,
     SiteRemoveResponse,
     SiteUpdate,
 )
@@ -54,6 +55,16 @@ def list_sites(
 ) -> list[SiteRead]:
     sites = SiteService(db).list_sites(include_closed=include_closed)
     return [SiteRead.model_validate(site) for site in sites]
+
+
+@router.get("/summary", response_model=list[SiteSummary])
+def list_site_summaries(
+    include_closed: bool = False,
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[SiteSummary]:
+    sites = SiteService(db).list_site_summaries(include_closed=include_closed)
+    return [SiteSummary.model_validate(site) for site in sites]
 
 
 @router.get("/map", response_model=SiteMapResponse)

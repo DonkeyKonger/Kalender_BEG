@@ -10,6 +10,26 @@ export type SitePerson = {
   phone: string | null;
 };
 
+
+export type SiteSummaryPerson = {
+  id: number;
+  display_name: string;
+  short_code: string;
+};
+
+export type SiteSummary = {
+  id: number;
+  site_number: string | null;
+  name: string;
+  location: string | null;
+  city: string | null;
+  customer: string | null;
+  project_manager_person_id: number | null;
+  project_manager: SiteSummaryPerson | null;
+  status: SiteStatus;
+  color: string | null;
+};
+
 export type Site = {
   id: number;
   site_number: string | null;

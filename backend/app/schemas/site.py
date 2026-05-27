@@ -62,6 +62,29 @@ class SiteUpdate(BaseModel):
     color: str | None = Field(default=None, max_length=30)
 
 
+class SitePersonSummary(BaseModel):
+    id: int
+    display_name: str
+    short_code: str
+
+    model_config = {"from_attributes": True}
+
+
+class SiteSummary(BaseModel):
+    id: int
+    site_number: str | None = None
+    name: str
+    location: str | None = None
+    city: str | None = None
+    customer: str | None = None
+    project_manager_person_id: int | None = None
+    project_manager: SitePersonSummary | None = None
+    status: SiteStatus
+    color: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class SiteRead(SiteBase):
     id: int
     project_manager: SitePersonRead | None = None

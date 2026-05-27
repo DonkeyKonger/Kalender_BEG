@@ -71,6 +71,9 @@ class SiteService:
     def list_sites(self, include_closed: bool = False) -> list[Site]:
         return self.sites.list(include_closed=include_closed)
 
+    def list_site_summaries(self, include_closed: bool = False) -> list[Site]:
+        return self.sites.list_summary(include_closed=include_closed)
+
     def site_map(self) -> SiteMapResponse:
         map_sites = []
         missing_location = 0

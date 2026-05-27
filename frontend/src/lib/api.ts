@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -250,6 +250,16 @@ export const api = {
 
   async disableUser(userId: number): Promise<AdminUser> {
     return request<AdminUser>(`/users/${userId}/disable`, { method: "POST" });
+  },
+
+
+  async siteSummaries(params: { includeClosed?: boolean } = {}): Promise<SiteSummary[]> {
+    const search = new URLSearchParams();
+    if (params.includeClosed) {
+      search.set("include_closed", "true");
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<SiteSummary[]>(`/sites/summary${suffix}`);
   },
 
   async sites(params: { includeClosed?: boolean } = {}): Promise<Site[]> {

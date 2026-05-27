@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult } from "../types/site";
+import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteSummary } from "../types/site";
 
 const emptySite: SiteCreate = {
   site_number: null,
@@ -33,7 +33,7 @@ const emptySite: SiteCreate = {
 
 export type EditableSite = SiteCreate & { id: number };
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
-type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
+type SiteGroup = { key: string; label: string; sites: SiteSummary[]; showHeading: boolean };
 type SiteColorOption = { name: string; value: string };
 type SiteStatusFilter = SiteStatus | "standard";
 
@@ -57,8 +57,10 @@ export function SitesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<SiteSummary[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
   const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -80,12 +82,7 @@ export function SitesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [siteData, personData] = await Promise.all([
-        api.sites({ includeClosed: includeInactiveSites }),
-        api.persons({ isActive: null }),
-      ]);
-      setSites(siteData);
-      setPeople(personData);
+      setSites(await api.siteSummaries({ includeClosed: includeInactiveSites }));
     } catch (requestError) {
       setError(readApiError(requestError, "Baustellen konnten nicht geladen werden."));
     } finally {
@@ -134,7 +131,7 @@ export function SitesPage() {
     setMessage(null);
     try {
       const created = await api.createSite(normalizeSitePayload(createForm));
-      setSites((current) => [...current, created].sort(compareSites));
+      setSites((current) => [...current, toSiteSummary(created)].sort(compareSites));
       setCreateForm(emptySite);
       setIsCreateDrawerOpen(false);
       setMessage("Baustelle angelegt.");
@@ -145,17 +142,16 @@ export function SitesPage() {
     }
   }
 
-  async function updateSiteStatus(site: Site, nextStatus: SiteStatus) {
+  async function updateSiteStatus(site: SiteSummary, nextStatus: SiteStatus) {
     if (!canEdit || site.status === nextStatus) {
       return;
     }
-    const nextDraft = { ...toEditableSite(site), status: nextStatus };
     setSavingSiteId(site.id);
     setError(null);
     setMessage(null);
     try {
-      const updated = await api.updateSite(site.id, normalizeSitePayload(nextDraft));
-      replaceSite(updated);
+      const updated = await api.updateSite(site.id, { status: nextStatus });
+      replaceSiteSummary(toSiteSummary(updated));
       setMessage(`Status aktualisiert: ${siteStatusLabels[updated.status]}.`);
     } catch (requestError) {
       setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
@@ -164,7 +160,7 @@ export function SitesPage() {
     }
   }
 
-  function replaceSite(updated: Site) {
+  function replaceSiteSummary(updated: SiteSummary) {
     setSites((current) => {
       const shouldHide = !includeInactiveSites && INACTIVE_SITE_STATUSES.includes(updated.status);
       if (shouldHide) {
@@ -182,6 +178,22 @@ export function SitesPage() {
   function openNewSiteDrawer() {
     setCreateForm(emptySite);
     setIsCreateDrawerOpen(true);
+    if (peopleLoaded === false && peopleLoading === false) {
+      void loadPeopleForSiteForm();
+    }
+  }
+
+  async function loadPeopleForSiteForm() {
+    setPeopleLoading(true);
+    setError(null);
+    try {
+      setPeople(await api.persons({ isActive: null }));
+      setPeopleLoaded(true);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Projektleiter konnten nicht geladen werden."));
+    } finally {
+      setPeopleLoading(false);
+    }
   }
 
   function closeDrawer() {
@@ -305,6 +317,28 @@ export function SitesPage() {
   );
 }
 
+
+
+function toSiteSummary(site: Site): SiteSummary {
+  return {
+    id: site.id,
+    site_number: site.site_number,
+    name: site.name,
+    location: site.location,
+    city: site.city,
+    customer: site.customer,
+    project_manager_person_id: site.project_manager_person_id,
+    project_manager: site.project_manager
+      ? {
+        id: site.project_manager.id,
+        display_name: site.project_manager.display_name,
+        short_code: site.project_manager.short_code,
+      }
+      : null,
+    status: site.status,
+    color: site.color,
+  };
+}
 
 export function SiteFields({
   draft,
@@ -635,7 +669,7 @@ function parsePersonId(value: string): number | null {
   return value ? Number(value) : null;
 }
 
-function compareSites(left: Site, right: Site): number {
+function compareSites(left: SiteSummary, right: SiteSummary): number {
   return compareSiteNumbers(left.site_number, right.site_number)
     || left.name.localeCompare(right.name, "de")
     || left.id - right.id;
@@ -722,11 +756,11 @@ function SiteColorSelect({
 }
 
 function renderSiteCard(
-  site: Site,
+  site: SiteSummary,
   openSiteDetail: (siteId: number) => void,
   canEdit: boolean,
   isSaving: boolean,
-  onStatusChange: (site: Site, status: SiteStatus) => void,
+  onStatusChange: (site: SiteSummary, status: SiteStatus) => void,
 ) {
   const classes = ["entity-card", "site-card", INACTIVE_SITE_STATUSES.includes(site.status) ? "is-inactive" : ""].filter(Boolean).join(" ");
   return (
@@ -794,7 +828,7 @@ function compactCodeFromText(value: string): string {
   return letters.slice(0, 2).toUpperCase();
 }
 
-function projectManagerOptionsFromSites(sites: Site[]): ProjectManagerOption[] {
+function projectManagerOptionsFromSites(sites: SiteSummary[]): ProjectManagerOption[] {
   const options = new Map<number, ProjectManagerOption>();
   sites.forEach((site) => {
     const manager = site.project_manager;
@@ -810,7 +844,7 @@ function projectManagerOptionsFromSites(sites: Site[]): ProjectManagerOption[] {
   return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, "de"));
 }
 
-function groupSites(sites: Site[], projectManagerFilter: string): SiteGroup[] {
+function groupSites(sites: SiteSummary[], projectManagerFilter: string): SiteGroup[] {
   const filteredSites = projectManagerFilter === "all"
     ? sites
     : sites.filter((site) => String(site.project_manager_person_id ?? "") === projectManagerFilter);
@@ -834,21 +868,16 @@ function groupSites(sites: Site[], projectManagerFilter: string): SiteGroup[] {
   return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, "de"));
 }
 
-function siteProjectManagerLabel(site: Site): string {
+function siteProjectManagerLabel(site: SiteSummary): string {
   return site.project_manager?.short_code || site.project_manager?.display_name || "offen";
 }
 
-function siteSearchText(site: Site): string {
+function siteSearchText(site: SiteSummary): string {
   return [
     site.name,
     site.site_number,
     site.location,
-    site.address,
-    site.postal_code,
     site.city,
-    site.street,
-    site.house_number,
-    site.address_extra,
     site.customer,
     site.project_manager?.display_name,
     site.project_manager?.short_code,
