@@ -3452,6 +3452,104 @@ button.person-chip:focus-visible {
   font-size: 0.88rem;
 }
 
+
+.measurement-base-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.measurement-base-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 86px;
+  border: 1px solid #d6d2ca;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2933;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.measurement-base-options label.is-selected {
+  border-color: #b9b2a7;
+  background: #f7f4ee;
+}
+
+.measurement-base-options label input[type="radio"] {
+  margin-top: 3px;
+}
+
+.measurement-base-options label span {
+  display: grid;
+  gap: 4px;
+}
+
+.measurement-base-options label small {
+  color: #667085;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.measurement-base-options select,
+.measurement-base-name-input {
+  min-height: 42px;
+  border: 1px solid #d6d2ca;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2933;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.measurement-base-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.measurement-base-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #d6d2ca;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2933;
+  padding: 10px 12px;
+}
+
+.measurement-base-card > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.measurement-base-card small {
+  color: #667085;
+  font-size: 0.82rem;
+}
+
+.measurement-base-card > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .measurement-base-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .measurement-base-card > div:last-child {
+    justify-content: flex-start;
+  }
+}
+
 .measurement-table-wrap {
   overflow-x: auto;
   border: 1px solid #d9e3ef;

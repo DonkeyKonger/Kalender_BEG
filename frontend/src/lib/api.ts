@@ -4,7 +4,7 @@ import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnec
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
 import type { WeatherSummary } from "../types/weather";
 
@@ -341,6 +341,17 @@ export const api = {
   },
 
 
+  async measurementBases(siteId: number): Promise<MeasurementBase[]> {
+    return request<MeasurementBase[]>(`/sites/${siteId}/measurement-bases`);
+  },
+
+  async updateMeasurementBase(siteId: number, baseId: number, payload: MeasurementBaseUpdate): Promise<MeasurementBase> {
+    return request<MeasurementBase>(`/sites/${siteId}/measurement-bases/${baseId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async measurementItems(siteId: number): Promise<MeasurementItem[]> {
     return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items`);
   },
@@ -395,9 +406,20 @@ export const api = {
     });
   },
 
-  async importMeasurementTimesheet(siteId: number, file: File): Promise<MeasurementImportResponse> {
+  async importMeasurementTimesheet(
+    siteId: number,
+    file: File,
+    options: MeasurementImportOptions,
+  ): Promise<MeasurementImportResponse> {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("import_mode", options.importMode);
+    if (options.measurementBaseId) {
+      formData.append("measurement_base_id", String(options.measurementBaseId));
+    }
+    if (options.measurementBaseName?.trim()) {
+      formData.append("measurement_base_name", options.measurementBaseName.trim());
+    }
     return request<MeasurementImportResponse>(`/sites/${siteId}/measurement-timesheet/import`, {
       method: "POST",
       body: formData,

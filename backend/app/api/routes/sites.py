@@ -1,6 +1,6 @@
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.measurement import (
+    MeasurementBaseRead,
+    MeasurementBaseUpdate,
     MeasurementEntryCreate,
     MeasurementEntryRead,
     MeasurementImportResponse,
@@ -176,6 +178,31 @@ async def upload_project_folder_document(
     return ProjectFolderDocumentItem.model_validate(uploaded)
 
 
+
+
+@router.get("/{site_id}/measurement-bases", response_model=list[MeasurementBaseRead])
+def list_measurement_bases(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[MeasurementBaseRead]:
+    return MeasurementService(db).list_measurement_bases(site_id)
+
+
+@router.patch("/{site_id}/measurement-bases/{measurement_base_id}", response_model=MeasurementBaseRead)
+def update_measurement_base(
+    site_id: int,
+    measurement_base_id: int,
+    payload: MeasurementBaseUpdate,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MeasurementBaseRead:
+    return MeasurementService(db).update_measurement_base(
+        site_id=site_id,
+        measurement_base_id=measurement_base_id,
+        payload=payload,
+    )
+
 @router.get("/{site_id}/measurement-items", response_model=list[MeasurementItemRead])
 def list_measurement_items(
     site_id: int,
@@ -302,6 +329,9 @@ def update_measurement_entry(
 async def import_measurement_timesheet(
     site_id: int,
     file: UploadFile = File(...),
+    import_mode: str = Form("existing"),
+    measurement_base_id: int | None = Form(None),
+    measurement_base_name: str | None = Form(None),
     _user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MeasurementImportResponse:
@@ -310,7 +340,12 @@ async def import_measurement_timesheet(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine PDF-Datei hochladen.")
 
     summary, items = MeasurementService(db).import_timesheet(
-        site_id, file_name=file_name, pdf_content=await file.read()
+        site_id,
+        file_name=file_name,
+        pdf_content=await file.read(),
+        import_mode=import_mode,
+        measurement_base_id=measurement_base_id,
+        measurement_base_name=measurement_base_name,
     )
     return MeasurementImportResponse(
         **summary,

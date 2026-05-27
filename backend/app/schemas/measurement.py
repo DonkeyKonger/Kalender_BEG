@@ -4,11 +4,36 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class MeasurementBaseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    site_id: int
+    name: str
+    base_type: str | None
+    status: str
+    released_to_mobile: bool
+    source_note: str | None
+    import_label: str | None
+    closed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MeasurementBaseUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    status: str | None = Field(default=None, pattern="^(draft|active|closed|archived)$")
+    released_to_mobile: bool | None = None
+    source_note: str | None = Field(default=None, max_length=1000)
+    import_label: str | None = Field(default=None, max_length=160)
+
+
 class MeasurementItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     site_id: int
+    measurement_base_id: int
     source_file_name: str | None
     source_project_number: str | None
     source_invoice_number: str | None
@@ -21,6 +46,7 @@ class MeasurementItemRead(BaseModel):
     list_minutes_total: Decimal | None
     is_nep: bool
     sort_order: int
+    measurement_base: MeasurementBaseRead | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -55,6 +81,8 @@ class MobileMeasurementItemRead(MeasurementItemRead):
 class MobileMeasurementBatchRead(BaseModel):
     id: int
     site_id: int
+    measurement_base_id: int
+    measurement_base_name: str | None
     number: int
     title: str
     status: str
@@ -85,6 +113,7 @@ class MeasurementDashboardSubmissionRead(BaseModel):
 
 class MeasurementImportResponse(BaseModel):
     imported_count: int
+    measurement_base: MeasurementBaseRead
     source_project_number: str | None
     source_invoice_number: str | None
     source_customer_name: str | None

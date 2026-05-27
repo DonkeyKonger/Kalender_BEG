@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementItem
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementItem
 from app.services.measurement_service import MeasurementService
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -31,6 +31,19 @@ def create_site(db: Session) -> Site:
     db.add(site)
     db.flush()
     return site
+
+
+def create_measurement_base(db: Session, site: Site) -> SiteMeasurementBase:
+    base = SiteMeasurementBase(
+        site=site,
+        name="Aufmaßbasis Bestand",
+        base_type="mixed",
+        status="active",
+        released_to_mobile=True,
+    )
+    db.add(base)
+    db.flush()
+    return base
 
 
 def parsed_timesheet() -> MeasurementTimesheetParseResult:
@@ -56,6 +69,7 @@ def parsed_timesheet() -> MeasurementTimesheetParseResult:
 def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypatch):
     db = db_session()
     site = create_site(db)
+    create_measurement_base(db, site)
     monkeypatch.setattr(
         "app.services.measurement_service.parse_measurement_timesheet_pdf",
         lambda _content: parsed_timesheet(),
@@ -79,6 +93,130 @@ def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypat
     assert error.value.status_code == 409
 
 
+def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypatch):
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda _content: parsed_timesheet(),
+    )
+
+    MeasurementService(db).import_timesheet(
+        site.id,
+        file_name="Hauptangebot 1.pdf",
+        pdf_content=b"pdf",
+        import_mode="existing",
+        measurement_base_id=base.id,
+    )
+
+    with pytest.raises(HTTPException) as same_base_error:
+        MeasurementService(db).import_timesheet(
+            site.id,
+            file_name="Nachtrag doppelt.pdf",
+            pdf_content=b"pdf",
+            import_mode="existing",
+            measurement_base_id=base.id,
+        )
+
+    summary, items = MeasurementService(db).import_timesheet(
+        site.id,
+        file_name="Hauptangebot 2.pdf",
+        pdf_content=b"pdf",
+        import_mode="new",
+        measurement_base_name="Hauptangebot 2",
+    )
+
+    all_items = list(db.scalars(select(SiteMeasurementItem).where(SiteMeasurementItem.site_id == site.id)).all())
+    assert same_base_error.value.status_code == 409
+    assert summary["measurement_base"].name == "Hauptangebot 2"
+    assert len(items) == 1
+    assert len(all_items) == 2
+    assert all_items[0].position == all_items[1].position
+    assert all_items[0].measurement_base_id != all_items[1].measurement_base_id
+
+
+def test_mobile_batch_uses_only_active_released_measurement_base():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.user import User
+
+    db = db_session()
+    site = create_site(db)
+    old_base = create_measurement_base(db, site)
+    old_base.status = "closed"
+    old_base.released_to_mobile = False
+    new_base = SiteMeasurementBase(
+        site=site,
+        name="Hauptangebot 2",
+        base_type="main_offer",
+        status="active",
+        released_to_mobile=True,
+    )
+    old_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=old_base,
+        position="1.01.05.10",
+        description="Alte Position",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    new_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=new_base,
+        position="1.01.05.10",
+        description="Neue Position",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add_all([new_base, old_item, new_item, user, assignment])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    mobile_items = service.list_mobile_batch_items(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+    )
+
+    assert batch.measurement_base_id == new_base.id
+    assert [item.id for item in mobile_items] == [new_item.id]
+    assert mobile_items[0].description == "Neue Position"
+
+
 def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     from datetime import date
 
@@ -91,6 +229,7 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
 
     db = db_session()
     site = create_site(db)
+    base = create_measurement_base(db, site)
     person = Person(
         first_name="Max",
         last_name="Monteur",
@@ -114,6 +253,7 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     )
     item = SiteMeasurementItem(
         site=site,
+        measurement_base=base,
         position="1.01.05.10",
         description="Kabelrinne liefern und montieren",
         list_quantity=Decimal("0.00"),
@@ -172,6 +312,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
 
     db = db_session()
     site = create_site(db)
+    base = create_measurement_base(db, site)
     person = Person(
         first_name="Max",
         last_name="Monteur",
@@ -195,6 +336,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
     )
     item = SiteMeasurementItem(
         site=site,
+        measurement_base=base,
         position="1.01.05.10",
         description="Kabelrinne liefern und montieren",
         list_quantity=Decimal("0.00"),
@@ -250,6 +392,7 @@ def test_site_measurement_billing_status_and_entry_update():
 
     db = db_session()
     site = create_site(db)
+    base = create_measurement_base(db, site)
     person = Person(
         first_name="Max",
         last_name="Monteur",
@@ -273,6 +416,7 @@ def test_site_measurement_billing_status_and_entry_update():
     )
     item = SiteMeasurementItem(
         site=site,
+        measurement_base=base,
         position="1.01.05.10",
         description="Kabelrinne liefern und montieren",
         list_quantity=Decimal("0.00"),

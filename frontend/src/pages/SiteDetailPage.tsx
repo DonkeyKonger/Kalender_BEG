@@ -6,7 +6,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
+import type { MeasurementBase, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis";
@@ -51,6 +51,7 @@ export function SiteDetailPage() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
+  const [measurementBases, setMeasurementBases] = useState<MeasurementBase[]>([]);
   const [measurementItems, setMeasurementItems] = useState<MeasurementItem[]>([]);
   const [measurementLoading, setMeasurementLoading] = useState(false);
   const [measurementLoaded, setMeasurementLoaded] = useState(false);
@@ -219,7 +220,9 @@ export function SiteDetailPage() {
       setMeasurementLoading(true);
       setMeasurementError(null);
       try {
-        setMeasurementItems(await api.measurementItems(site.id));
+        const [bases, items] = await Promise.all([api.measurementBases(site.id), api.measurementItems(site.id)]);
+        setMeasurementBases(bases);
+        setMeasurementItems(items);
         setMeasurementLoaded(true);
       } catch (requestError) {
         setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
@@ -369,7 +372,21 @@ export function SiteDetailPage() {
     }
   }
 
-  async function importMeasurementTimesheet(file: File): Promise<void> {
+
+  async function updateMeasurementBase(base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }): Promise<void> {
+    if (!site || measurementImporting) {
+      return;
+    }
+    setMeasurementImportError(null);
+    try {
+      const updated = await api.updateMeasurementBase(site.id, base.id, payload);
+      setMeasurementBases((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+    } catch (requestError) {
+      setMeasurementImportError(readApiError(requestError, "Aufmaßbasis konnte nicht aktualisiert werden."));
+    }
+  }
+
+  async function importMeasurementTimesheet(file: File, options: MeasurementImportOptions): Promise<void> {
     if (!site || measurementImporting) {
       return;
     }
@@ -377,10 +394,12 @@ export function SiteDetailPage() {
     setMeasurementImportMessage(null);
     setMeasurementImportError(null);
     try {
-      const result = await api.importMeasurementTimesheet(site.id, file);
-      setMeasurementItems(await api.measurementItems(site.id));
+      const result = await api.importMeasurementTimesheet(site.id, file, options);
+      const [bases, items] = await Promise.all([api.measurementBases(site.id), api.measurementItems(site.id)]);
+      setMeasurementBases(bases);
+      setMeasurementItems(items);
       setMeasurementLoaded(true);
-      setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen erkannt.`);
+      setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${result.measurement_base.name} erkannt.`);
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
     } finally {
@@ -513,13 +532,15 @@ export function SiteDetailPage() {
             setMeasurementReviewMessage(null);
             setMeasurementReviewError(null);
           }}
+          bases={measurementBases}
           items={measurementItems}
           isLoading={measurementLoading}
           error={measurementError}
           isImporting={measurementImporting}
           importMessage={measurementImportMessage}
           importError={measurementImportError}
-          onImport={(file) => void importMeasurementTimesheet(file)}
+          onImport={(file, options) => void importMeasurementTimesheet(file, options)}
+          onUpdateBase={(base, payload) => void updateMeasurementBase(base, payload)}
           onRetry={() => {
             setMeasurementLoaded(false);
             setMeasurementError(null);
@@ -956,6 +977,7 @@ function MeasurementTab({
   siteNumber,
   activeSubtab,
   onSubtabChange,
+  bases,
   items,
   isLoading,
   error,
@@ -963,6 +985,7 @@ function MeasurementTab({
   importMessage,
   importError,
   onImport,
+  onUpdateBase,
   onRetry,
   batches,
   batchesLoading,
@@ -985,13 +1008,15 @@ function MeasurementTab({
   siteNumber: string | null;
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
+  bases: MeasurementBase[];
   items: MeasurementItem[];
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
   importMessage: string | null;
   importError: string | null;
-  onImport: (file: File) => void;
+  onImport: (file: File, options: MeasurementImportOptions) => void;
+  onUpdateBase: (base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }) => void;
   onRetry: () => void;
   batches: MobileMeasurementBatch[];
   batchesLoading: boolean;
@@ -1032,6 +1057,7 @@ function MeasurementTab({
 
       {activeSubtab === "timesheet" ? (
         <MeasurementTimesheetPanel
+          bases={bases}
           items={items}
           latestImport={latestImport}
           isLoading={isLoading}
@@ -1040,6 +1066,7 @@ function MeasurementTab({
           importMessage={importMessage}
           importError={importError}
           onImport={onImport}
+          onUpdateBase={onUpdateBase}
           onRetry={onRetry}
         />
       ) : null}
@@ -1073,6 +1100,7 @@ function MeasurementTab({
 }
 
 function MeasurementTimesheetPanel({
+  bases,
   items,
   latestImport,
   isLoading,
@@ -1081,8 +1109,10 @@ function MeasurementTimesheetPanel({
   importMessage,
   importError,
   onImport,
+  onUpdateBase,
   onRetry,
 }: {
+  bases: MeasurementBase[];
   items: MeasurementItem[];
   latestImport: MeasurementItem | undefined;
   isLoading: boolean;
@@ -1090,9 +1120,29 @@ function MeasurementTimesheetPanel({
   isImporting: boolean;
   importMessage: string | null;
   importError: string | null;
-  onImport: (file: File) => void;
+  onImport: (file: File, options: MeasurementImportOptions) => void;
+  onUpdateBase: (base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }) => void;
   onRetry: () => void;
 }) {
+  const activeBases = bases.filter((base) => base.status !== "closed" && base.status !== "archived");
+  const defaultBaseId = activeBases[0]?.id ?? bases[0]?.id ?? null;
+  const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBaseId ? "existing" : "new");
+  const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBaseId);
+  const [newBaseName, setNewBaseName] = useState(`Hauptangebot ${new Date().toISOString().slice(0, 10)}`);
+
+  useEffect(() => {
+    if (selectedBaseId === null && defaultBaseId !== null) {
+      setSelectedBaseId(defaultBaseId);
+      setImportMode("existing");
+    }
+  }, [defaultBaseId, selectedBaseId]);
+
+  const importOptions: MeasurementImportOptions = {
+    importMode,
+    measurementBaseId: importMode === "existing" ? selectedBaseId : null,
+    measurementBaseName: importMode === "existing" ? null : newBaseName,
+  };
+
   return (
     <>
       <div className="project-record-toolbar">
@@ -1111,7 +1161,7 @@ function MeasurementTimesheetPanel({
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
-                onImport(file);
+                onImport(file, importOptions);
                 event.target.value = "";
               }
             }}
@@ -1121,13 +1171,98 @@ function MeasurementTimesheetPanel({
 
       <div className="measurement-import-card">
         <div>
-          <strong>Zeitenliste-PDF</strong>
-          <span>Importiert werden alle echten Positionszeilen, auch mit Menge 0,00.</span>
+          <strong>Wie soll diese Zeitenliste verwendet werden?</strong>
+          <span>Wähle, ob die PDF ein laufendes Aufmaß erweitert oder eine neue Aufmaßbasis startet.</span>
         </div>
         {latestImport?.source_invoice_number ? (
           <small>Letzte Rechnung: {latestImport.source_invoice_number}</small>
         ) : null}
       </div>
+
+      <div className="measurement-base-options">
+        <label className={importMode === "existing" ? "is-selected" : ""}>
+          <input
+            type="radio"
+            name="measurement-import-mode"
+            checked={importMode === "existing"}
+            disabled={activeBases.length === 0}
+            onChange={() => setImportMode("existing")}
+          />
+          <span>
+            <strong>Zur bestehenden Aufmaßbasis hinzufügen</strong>
+            <small>Geeignet für Nachträge oder Erweiterungen eines laufenden Projekts.</small>
+          </span>
+        </label>
+        {importMode === "existing" ? (
+          <select
+            value={selectedBaseId ?? ""}
+            disabled={activeBases.length === 0}
+            onChange={(event) => setSelectedBaseId(Number(event.target.value) || null)}
+          >
+            {activeBases.map((base) => (
+              <option key={base.id} value={base.id}>{base.name}</option>
+            ))}
+          </select>
+        ) : null}
+        <label className={importMode === "new" ? "is-selected" : ""}>
+          <input
+            type="radio"
+            name="measurement-import-mode"
+            checked={importMode === "new"}
+            onChange={() => setImportMode("new")}
+          />
+          <span>
+            <strong>Neue Aufmaßbasis erstellen</strong>
+            <small>Geeignet für neue Hauptangebote oder neue Arbeitsabschnitte.</small>
+          </span>
+        </label>
+        <label className={importMode === "draft" ? "is-selected" : ""}>
+          <input
+            type="radio"
+            name="measurement-import-mode"
+            checked={importMode === "draft"}
+            onChange={() => setImportMode("draft")}
+          />
+          <span>
+            <strong>Importieren, aber noch nicht freigeben</strong>
+            <small>Die Positionen werden gespeichert, sind mobil aber noch nicht sichtbar.</small>
+          </span>
+        </label>
+        {importMode !== "existing" ? (
+          <input
+            className="measurement-base-name-input"
+            value={newBaseName}
+            onChange={(event) => setNewBaseName(event.target.value)}
+            placeholder="Name der Aufmaßbasis"
+          />
+        ) : null}
+      </div>
+
+      {bases.length > 0 ? (
+        <div className="measurement-base-list">
+          {bases.map((base) => (
+            <div className="measurement-base-card" key={base.id}>
+              <div>
+                <strong>{base.name}</strong>
+                <small>{getMeasurementBaseStatusLabel(base.status)} · {base.released_to_mobile ? "mobil freigegeben" : "nicht mobil freigegeben"}</small>
+              </div>
+              <div>
+                {base.status !== "active" || !base.released_to_mobile ? (
+                  <button type="button" className="secondary-action" onClick={() => onUpdateBase(base, { status: "active", released_to_mobile: true })}>Mobil freigeben</button>
+                ) : (
+                  <button type="button" className="secondary-action" onClick={() => onUpdateBase(base, { released_to_mobile: false })}>Mobil sperren</button>
+                )}
+                {base.status !== "closed" && base.status !== "archived" ? (
+                  <button type="button" className="secondary-action" onClick={() => onUpdateBase(base, { status: "closed", released_to_mobile: false })}>Schließen</button>
+                ) : null}
+                {base.status !== "archived" ? (
+                  <button type="button" className="secondary-action" onClick={() => onUpdateBase(base, { status: "archived", released_to_mobile: false })}>Archivieren</button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
       {importError ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
@@ -1147,6 +1282,7 @@ function MeasurementTimesheetPanel({
           <table className="measurement-table">
             <thead>
               <tr>
+                <th>Aufmaßbasis</th>
                 <th>Position</th>
                 <th>Bezeichnung</th>
                 <th>Menge Liste</th>
@@ -1159,6 +1295,7 @@ function MeasurementTimesheetPanel({
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
+                  <td>{item.measurement_base?.name ?? "-"}</td>
                   <td><strong>{item.position}</strong></td>
                   <td>{item.description}</td>
                   <td>{formatMeasurementNumber(item.list_quantity)}</td>
@@ -1996,6 +2133,21 @@ function formatMeasurementPackageNumber(
     return fallbackTitle;
   }
   return `Aufmaß ${cleanSiteNumber}.${String(packageNumber).padStart(2, "0")}`;
+}
+
+function getMeasurementBaseStatusLabel(status: string): string {
+  switch (status) {
+    case "draft":
+      return "Entwurf";
+    case "active":
+      return "Aktiv";
+    case "closed":
+      return "Geschlossen";
+    case "archived":
+      return "Archiviert";
+    default:
+      return status;
+  }
 }
 
 function getMeasurementBatchStatusLabel(status: string): string {

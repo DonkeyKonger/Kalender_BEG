@@ -145,11 +145,41 @@ export type ProjectFolderDocumentList = {
 };
 
 
+
+export type MeasurementBase = {
+  id: number;
+  site_id: number;
+  name: string;
+  base_type: string | null;
+  status: "draft" | "active" | "closed" | "archived" | string;
+  released_to_mobile: boolean;
+  source_note: string | null;
+  import_label: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeasurementBaseUpdate = {
+  name?: string;
+  status?: "draft" | "active" | "closed" | "archived";
+  released_to_mobile?: boolean;
+  source_note?: string | null;
+  import_label?: string | null;
+};
+
+export type MeasurementImportOptions = {
+  importMode: "existing" | "new" | "draft";
+  measurementBaseId?: number | null;
+  measurementBaseName?: string | null;
+};
+
 export type MeasurementNumericValue = string | number | null;
 
 export type MeasurementItem = {
   id: number;
   site_id: number;
+  measurement_base_id: number;
   source_file_name: string | null;
   source_project_number: string | null;
   source_invoice_number: string | null;
@@ -162,6 +192,7 @@ export type MeasurementItem = {
   list_minutes_total: MeasurementNumericValue;
   is_nep: boolean;
   sort_order: number;
+  measurement_base: MeasurementBase | null;
   created_at: string;
   updated_at: string;
 };
@@ -190,6 +221,8 @@ export type MeasurementEntryPayload = {
 export type MobileMeasurementBatch = {
   id: number;
   site_id: number;
+  measurement_base_id: number;
+  measurement_base_name: string | null;
   number: number;
   title: string;
   status: "draft" | "submitted" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
@@ -215,6 +248,7 @@ export type MobileMeasurementItem = MeasurementItem & {
 
 export type MeasurementImportResponse = {
   imported_count: number;
+  measurement_base: MeasurementBase;
   source_project_number: string | null;
   source_invoice_number: string | null;
   source_customer_name: string | null;

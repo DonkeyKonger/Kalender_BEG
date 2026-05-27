@@ -7,12 +7,39 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 
+class SiteMeasurementBase(TimestampMixin, Base):
+    __tablename__ = "site_measurement_bases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    base_type: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="active", index=True)
+    released_to_mobile: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    source_note: Mapped[str | None] = mapped_column(Text)
+    import_label: Mapped[str | None] = mapped_column(String(160))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    site = relationship("Site", back_populates="measurement_bases")
+    items = relationship(
+        "SiteMeasurementItem", back_populates="measurement_base", cascade="all, delete-orphan"
+    )
+    batches = relationship(
+        "SiteMeasurementBatch", back_populates="measurement_base", cascade="all, delete-orphan"
+    )
+
+
 class SiteMeasurementItem(TimestampMixin, Base):
     __tablename__ = "site_measurement_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     site_id: Mapped[int] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    measurement_base_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=False, index=True
     )
     source_file_name: Mapped[str | None] = mapped_column(String(255))
     source_project_number: Mapped[str | None] = mapped_column(String(120))
@@ -28,6 +55,7 @@ class SiteMeasurementItem(TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     site = relationship("Site", back_populates="measurement_items")
+    measurement_base = relationship("SiteMeasurementBase", back_populates="items")
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_item", cascade="all, delete-orphan"
     )
@@ -39,6 +67,9 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     site_id: Mapped[int] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    measurement_base_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=False, index=True
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -52,6 +83,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     site = relationship("Site", back_populates="measurement_batches")
+    measurement_base = relationship("SiteMeasurementBase", back_populates="batches")
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_batch", cascade="all, delete-orphan"
     )
