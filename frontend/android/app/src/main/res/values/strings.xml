@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kalender Baustellen</string>
+    <string name="title_activity_main">Kalender Baustellen</string>
+    <string name="package_name">de.beg.kalenderbaustellen</string>
+    <string name="custom_url_scheme">de.beg.kalenderbaustellen</string>
+</resources>

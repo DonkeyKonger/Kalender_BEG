@@ -111,14 +111,14 @@ Falls Azure automatisch einen Workflow anlegt, kann dieser geloescht oder mit `.
 GitHub Actions Secret/Variable setzen:
 
 - Secret: `AZURE_STATIC_WEB_APPS_API_TOKEN_STAGING`
-- Variable: `VITE_API_BASE_URL_STAGING=https://kalender-beg-staging-api.azurewebsites.net/api`
+- Variable: `VITE_API_BASE_URL_STAGING=https://kalender-beg-staging-api-a0c2c9b2hna9bjf2.westeurope-01.azurewebsites.net/api`
 
 ## 6. Test nach Deployment
 
 Backend:
 
 ```text
-https://kalender-beg-staging-api.azurewebsites.net/api/health
+https://kalender-beg-staging-api-a0c2c9b2hna9bjf2.westeurope-01.azurewebsites.net/api/health
 ```
 
 Frontend:
