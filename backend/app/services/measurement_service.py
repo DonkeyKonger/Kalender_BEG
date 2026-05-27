@@ -53,8 +53,12 @@ class MeasurementService:
         if payload.status is not None:
             base.status = payload.status
             base.closed_at = datetime.now(timezone.utc) if payload.status in {"closed", "archived"} else None
+            if payload.status != "active":
+                base.released_to_mobile = False
         if payload.released_to_mobile is not None:
             base.released_to_mobile = payload.released_to_mobile
+        if base.status == "active" and base.released_to_mobile:
+            self._activate_measurement_base(base)
         if payload.source_note is not None:
             base.source_note = payload.source_note.strip() or None
         if payload.import_label is not None:
@@ -62,6 +66,34 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(base)
         return self._build_measurement_base(base)
+
+    def activate_measurement_base(self, *, site_id: int, measurement_base_id: int) -> list[MeasurementBaseRead]:
+        base = self._get_measurement_base_for_site(measurement_base_id, site_id)
+        self._activate_measurement_base(base)
+        self.db.commit()
+        return self.list_measurement_bases(site_id)
+
+    def delete_measurement_base(self, *, site_id: int, measurement_base_id: int) -> list[MeasurementBaseRead]:
+        base = self._get_measurement_base_for_site(measurement_base_id, site_id)
+        if base.status == "active" or base.released_to_mobile:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Aktive Aufmaßblätter können nicht gelöscht werden. Bitte zuerst ein anderes Aufmaßblatt aktivieren.",
+            )
+        batch_count = self.db.scalar(
+            select(func.count(SiteMeasurementBatch.id)).where(
+                SiteMeasurementBatch.site_id == site_id,
+                SiteMeasurementBatch.measurement_base_id == base.id,
+            )
+        ) or 0
+        if batch_count > 0:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaßblatt enthält bereits Aufmaßpakete oder Mengenmeldungen und kann nicht gelöscht werden.",
+            )
+        self.db.delete(base)
+        self.db.commit()
+        return self.list_measurement_bases(site_id)
 
     def list_items(self, site_id: int, measurement_base_id: int | None = None) -> list[SiteMeasurementItem]:
         self._get_site(site_id)
@@ -460,7 +492,7 @@ class MeasurementService:
         if parsed.source_invoice_number and self._invoice_already_imported(
             site_id, parsed.source_invoice_number, measurement_base.id
         ):
-            raise HTTPException(status.HTTP_409_CONFLICT, "Zeitenliste wurde für diese Aufmaßbasis bereits importiert.")
+            raise HTTPException(status.HTTP_409_CONFLICT, "Zeitenliste wurde für dieses Aufmaßblatt bereits importiert.")
 
         duplicate_position = self._find_duplicate_position_in_base(
             site_id=site_id,
@@ -470,7 +502,7 @@ class MeasurementService:
         if duplicate_position is not None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                f"Position {duplicate_position} existiert bereits in dieser Aufmaßbasis. Bitte eine neue Aufmaßbasis erstellen oder die bestehende prüfen.",
+                f"Position {duplicate_position} existiert bereits in diesem Aufmaßblatt. Bitte ein neues Aufmaßblatt erstellen oder das bestehende prüfen.",
             )
 
         sort_offset = (
@@ -525,14 +557,20 @@ class MeasurementService:
         source_project_number: str | None,
         source_invoice_number: str | None,
     ) -> SiteMeasurementBase:
-        normalized_mode = import_mode if import_mode in {"existing", "new", "draft"} else "existing"
+        normalized_mode = {
+            "append_existing": "existing",
+            "create_new": "new",
+            "existing": "existing",
+            "new": "new",
+            "draft": "draft",
+        }.get(import_mode, "existing")
         if normalized_mode == "existing":
             if measurement_base_id is not None:
                 base = self._get_measurement_base_for_site(measurement_base_id, site_id)
                 if base.status in {"closed", "archived"}:
                     raise HTTPException(
                         status.HTTP_409_CONFLICT,
-                        "Geschlossene oder archivierte Aufmaßbasen können nicht erweitert werden.",
+                        "Geschlossene oder archivierte Aufmaßblätter können nicht erweitert werden.",
                     )
                 return base
             return self._get_or_create_default_measurement_base(site_id)
@@ -540,9 +578,9 @@ class MeasurementService:
         name = (measurement_base_name or "").strip()
         if not name:
             if normalized_mode == "draft":
-                name = f"Aufmaßbasis Prüfung {date.today().isoformat()}"
+                name = f"Aufmaßblatt Prüfung {date.today().isoformat()}"
             else:
-                name = f"Hauptangebot {date.today().isoformat()}"
+                name = f"Aufmaßblatt {date.today().isoformat()}"
         base = SiteMeasurementBase(
             site_id=site_id,
             name=name,
@@ -554,7 +592,27 @@ class MeasurementService:
         )
         self.db.add(base)
         self.db.flush()
+        if normalized_mode == "new":
+            self._activate_measurement_base(base)
         return base
+
+    def _activate_measurement_base(self, active_base: SiteMeasurementBase) -> None:
+        other_bases = list(
+            self.db.scalars(
+                select(SiteMeasurementBase).where(
+                    SiteMeasurementBase.site_id == active_base.site_id,
+                    SiteMeasurementBase.id != active_base.id,
+                )
+            ).all()
+        )
+        for base in other_bases:
+            base.released_to_mobile = False
+            if base.status == "active":
+                base.status = "draft"
+                base.closed_at = None
+        active_base.status = "active"
+        active_base.released_to_mobile = True
+        active_base.closed_at = None
 
     def _get_or_create_default_measurement_base(self, site_id: int) -> SiteMeasurementBase:
         base = self.db.scalar(
@@ -569,7 +627,7 @@ class MeasurementService:
             return base
         base = SiteMeasurementBase(
             site_id=site_id,
-            name="Aufmaßbasis Bestand",
+            name="Aufmaßblatt Bestand",
             base_type="mixed",
             status="active",
             released_to_mobile=True,
@@ -591,7 +649,7 @@ class MeasurementService:
         if base is None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Für diese Baustelle ist keine aktive Aufmaßbasis für Monteure freigegeben.",
+                "Für diese Baustelle ist kein aktives Aufmaßblatt für Monteure freigegeben.",
             )
         return base
 
@@ -603,7 +661,7 @@ class MeasurementService:
             )
         )
         if base is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßbasis nicht gefunden.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßblatt nicht gefunden.")
         return base
 
     def _find_duplicate_position_in_base(
@@ -661,7 +719,14 @@ class MeasurementService:
         return user.display_name
 
     def _build_measurement_base(self, base: SiteMeasurementBase) -> MeasurementBaseRead:
-        return MeasurementBaseRead.model_validate(base)
+        result = MeasurementBaseRead.model_validate(base)
+        result.item_count = self.db.scalar(
+            select(func.count(SiteMeasurementItem.id)).where(SiteMeasurementItem.measurement_base_id == base.id)
+        ) or 0
+        result.batch_count = self.db.scalar(
+            select(func.count(SiteMeasurementBatch.id)).where(SiteMeasurementBatch.measurement_base_id == base.id)
+        ) or 0
+        return result
 
     def _build_mobile_batch(self, batch: SiteMeasurementBatch) -> MobileMeasurementBatchRead:
         position_ids = {entry.measurement_item_id for entry in batch.entries}

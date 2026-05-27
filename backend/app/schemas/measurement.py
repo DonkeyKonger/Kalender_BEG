@@ -16,6 +16,8 @@ class MeasurementBaseRead(BaseModel):
     source_note: str | None
     import_label: str | None
     closed_at: datetime | None
+    item_count: int = 0
+    batch_count: int = 0
     created_at: datetime
     updated_at: datetime
 

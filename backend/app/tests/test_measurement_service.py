@@ -136,6 +136,71 @@ def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypat
     assert all_items[0].measurement_base_id != all_items[1].measurement_base_id
 
 
+def test_new_measurement_base_import_becomes_only_active_base(monkeypatch):
+    db = db_session()
+    site = create_site(db)
+    old_base = create_measurement_base(db, site)
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda _content: parsed_timesheet(),
+    )
+
+    summary, _items = MeasurementService(db).import_timesheet(
+        site.id,
+        file_name="Hauptangebot 2.pdf",
+        pdf_content=b"pdf",
+        import_mode="create_new",
+        measurement_base_name="Aufmaßblatt 2",
+    )
+
+    db.refresh(old_base)
+    new_base = db.get(SiteMeasurementBase, summary["measurement_base"].id)
+    assert new_base is not None
+    assert new_base.status == "active"
+    assert new_base.released_to_mobile is True
+    assert old_base.status == "draft"
+    assert old_base.released_to_mobile is False
+
+
+def test_measurement_base_activate_and_delete_rules():
+    db = db_session()
+    site = create_site(db)
+    old_base = create_measurement_base(db, site)
+    new_base = SiteMeasurementBase(
+        site=site,
+        name="Aufmaßblatt 2",
+        base_type="main_offer",
+        status="draft",
+        released_to_mobile=False,
+    )
+    delete_base = SiteMeasurementBase(
+        site=site,
+        name="Leeres Aufmaßblatt",
+        base_type="main_offer",
+        status="draft",
+        released_to_mobile=False,
+    )
+    db.add_all([new_base, delete_base])
+    db.commit()
+
+    service = MeasurementService(db)
+    bases = service.activate_measurement_base(site_id=site.id, measurement_base_id=new_base.id)
+    db.refresh(old_base)
+    db.refresh(new_base)
+
+    with pytest.raises(HTTPException) as active_delete_error:
+        service.delete_measurement_base(site_id=site.id, measurement_base_id=new_base.id)
+    deleted_bases = service.delete_measurement_base(site_id=site.id, measurement_base_id=delete_base.id)
+
+    assert sum(1 for base in bases if base.status == "active" and base.released_to_mobile) == 1
+    assert old_base.status == "draft"
+    assert old_base.released_to_mobile is False
+    assert new_base.status == "active"
+    assert new_base.released_to_mobile is True
+    assert active_delete_error.value.status_code == 409
+    assert all(base.id != delete_base.id for base in deleted_bases)
+
+
 def test_mobile_batch_uses_only_active_released_measurement_base():
     from datetime import date
 

@@ -352,6 +352,18 @@ export const api = {
     });
   },
 
+  async activateMeasurementBase(siteId: number, baseId: number): Promise<MeasurementBase[]> {
+    return request<MeasurementBase[]>(`/sites/${siteId}/measurement-bases/${baseId}/activate`, {
+      method: "POST",
+    });
+  },
+
+  async deleteMeasurementBase(siteId: number, baseId: number): Promise<MeasurementBase[]> {
+    return request<MeasurementBase[]>(`/sites/${siteId}/measurement-bases/${baseId}`, {
+      method: "DELETE",
+    });
+  },
+
   async measurementItems(siteId: number): Promise<MeasurementItem[]> {
     return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items`);
   },

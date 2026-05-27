@@ -3452,56 +3452,63 @@ button.person-chip:focus-visible {
   font-size: 0.88rem;
 }
 
-
-.measurement-base-options {
+.measurement-import-compact {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 10px;
-  margin: 12px 0;
-}
-
-.measurement-base-options label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 86px;
+  margin: 0 0 14px;
   border: 1px solid #d6d2ca;
   border-radius: 8px;
   background: #ffffff;
   color: #1f2933;
   padding: 10px 12px;
+}
+
+.measurement-import-inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.measurement-import-inline-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid #d6d2ca;
+  border-radius: 6px;
+  background: #f7f4ee;
+  color: #1f2933;
+  font-size: 0.88rem;
+  font-weight: 800;
+  padding: 0 10px;
   cursor: pointer;
 }
 
-.measurement-base-options label.is-selected {
+.measurement-import-inline-options label.is-selected {
   border-color: #b9b2a7;
-  background: #f7f4ee;
+  background: #e8e0d3;
 }
 
-.measurement-base-options label input[type="radio"] {
-  margin-top: 3px;
-}
-
-.measurement-base-options label span {
-  display: grid;
-  gap: 4px;
-}
-
-.measurement-base-options label small {
-  color: #667085;
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
-.measurement-base-options select,
+.measurement-import-compact select,
 .measurement-base-name-input {
-  min-height: 42px;
+  max-width: 420px;
+  min-height: 36px;
   border: 1px solid #d6d2ca;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #ffffff;
   color: #1f2933;
   padding: 0 10px;
   font: inherit;
+}
+
+.measurement-import-compact small {
+  color: #667085;
+  font-size: 0.82rem;
+}
+
+.measurement-bases-panel {
+  display: grid;
+  gap: 12px;
 }
 
 .measurement-base-list {
@@ -3520,6 +3527,11 @@ button.person-chip:focus-visible {
   background: #ffffff;
   color: #1f2933;
   padding: 10px 12px;
+}
+
+.measurement-base-card.is-active {
+  border-color: #b9b2a7;
+  background: #f7f4ee;
 }
 
 .measurement-base-card > div:first-child {

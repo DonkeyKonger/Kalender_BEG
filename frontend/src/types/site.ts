@@ -156,6 +156,8 @@ export type MeasurementBase = {
   source_note: string | null;
   import_label: string | null;
   closed_at: string | null;
+  item_count: number;
+  batch_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -169,7 +171,7 @@ export type MeasurementBaseUpdate = {
 };
 
 export type MeasurementImportOptions = {
-  importMode: "existing" | "new" | "draft";
+  importMode: "append_existing" | "create_new";
   measurementBaseId?: number | null;
   measurementBaseName?: string | null;
 };

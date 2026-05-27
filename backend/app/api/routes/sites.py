@@ -203,6 +203,32 @@ def update_measurement_base(
         payload=payload,
     )
 
+
+@router.post("/{site_id}/measurement-bases/{measurement_base_id}/activate", response_model=list[MeasurementBaseRead])
+def activate_measurement_base(
+    site_id: int,
+    measurement_base_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> list[MeasurementBaseRead]:
+    return MeasurementService(db).activate_measurement_base(
+        site_id=site_id,
+        measurement_base_id=measurement_base_id,
+    )
+
+
+@router.delete("/{site_id}/measurement-bases/{measurement_base_id}", response_model=list[MeasurementBaseRead])
+def delete_measurement_base(
+    site_id: int,
+    measurement_base_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> list[MeasurementBaseRead]:
+    return MeasurementService(db).delete_measurement_base(
+        site_id=site_id,
+        measurement_base_id=measurement_base_id,
+    )
+
 @router.get("/{site_id}/measurement-items", response_model=list[MeasurementItemRead])
 def list_measurement_items(
     site_id: int,
