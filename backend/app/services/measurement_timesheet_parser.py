@@ -74,6 +74,7 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
     source_customer_name = _extract_source_customer_name(lines)
     items: list[ParsedMeasurementItem] = []
     current: dict | None = None
+    synthetic_position_counters: dict[str, int] = {}
 
     for raw_line in lines:
         line = _normalize_whitespace(raw_line)
@@ -93,7 +94,7 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
             finalized = _finalize_current_item(current, len(items) + 1)
             if finalized is not None:
                 items.append(finalized)
-            current = _start_item(row_match)
+            current = _start_item(row_match, synthetic_position_counters)
             continue
 
         if current is not None and not _is_non_position_table_line(line):
@@ -114,9 +115,13 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
     )
 
 
-def _start_item(row_match: re.Match[str]) -> dict:
+def _start_item(row_match: re.Match[str], synthetic_position_counters: dict[str, int]) -> dict:
     left = row_match.group("left")
     position, description, pending_base = _split_position_and_description(left)
+    if position is None and pending_base and _can_synthesize_position(pending_base):
+        synthetic_position_counters[pending_base] = synthetic_position_counters.get(pending_base, 0) + 1
+        position = _join_position(pending_base, str(synthetic_position_counters[pending_base]))
+        pending_base = None
     minutes_total = row_match.group("minutes_total")
     is_nep = minutes_total == "NEP"
     return {
@@ -153,6 +158,10 @@ def _split_position_and_description(left: str) -> tuple[str | None, str, str | N
 
 def _is_non_position_table_line(line: str) -> bool:
     return line.lower().startswith("gesamt:") or bool(_GROUP_HEADING_RE.match(line))
+
+
+def _can_synthesize_position(base: str) -> bool:
+    return bool(re.fullmatch(r"N?\d+\.", base))
 
 
 def _append_description_line(current: dict, line: str) -> None:

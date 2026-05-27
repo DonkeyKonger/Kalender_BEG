@@ -41,3 +41,48 @@ def test_parse_measurement_timesheet_lines_keeps_zero_quantities_and_split_posit
     assert result.items[1].is_nep is True
     assert result.items[1].list_minutes_total is None
     assert "Quertraverse bis 400 mm" in result.items[3].description
+
+
+def test_parse_measurement_timesheet_lines_synthesizes_repeated_simple_positions():
+    result = parse_measurement_timesheet_lines(
+        [
+            "Zeit-Vorgabeliste",
+            "Projekt = 8007 / P250092",
+            "Rechnung = 1260198",
+            "Name1 = ebm elektro-bau-montage GmbH",
+            "Position Bezeichnung Menge Minuten / Einheit Minuten gesamt",
+            "1 Nidax Verlegesysteme 1.395,00",
+            "1. U-Stiel bis 400 mm liefern und montieren 42,00 ST 16,00 672,00",
+            "1. Stielausleger 100 mm liefern und montieren 42,00 ST 4,00 168,00",
+            "1. Kabelrinne 100/60 mm liefern und montieren 60,00 m 8,00 480,00",
+            "1. 90° Rinnenbogen 100/60 mm liefern und montieren 5,00 ST 15,00 75,00",
+            "gesamt: 1.395,00",
+        ]
+    )
+
+    assert [item.position for item in result.items] == ["1.1", "1.2", "1.3", "1.4"]
+    assert [item.description for item in result.items] == [
+        "U-Stiel bis 400 mm liefern und montieren",
+        "Stielausleger 100 mm liefern und montieren",
+        "Kabelrinne 100/60 mm liefern und montieren",
+        "90° Rinnenbogen 100/60 mm liefern und montieren",
+    ]
+    assert [item.list_quantity for item in result.items] == [
+        Decimal("42.00"),
+        Decimal("42.00"),
+        Decimal("60.00"),
+        Decimal("5.00"),
+    ]
+    assert [item.unit for item in result.items] == ["ST", "ST", "m", "ST"]
+    assert [item.minutes_per_unit for item in result.items] == [
+        Decimal("16.00"),
+        Decimal("4.00"),
+        Decimal("8.00"),
+        Decimal("15.00"),
+    ]
+    assert [item.list_minutes_total for item in result.items] == [
+        Decimal("672.00"),
+        Decimal("168.00"),
+        Decimal("480.00"),
+        Decimal("75.00"),
+    ]
