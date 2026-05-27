@@ -440,6 +440,7 @@ export function SiteDetailPage() {
       setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`);
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
+      throw requestError;
     } finally {
       setMeasurementImporting(false);
     }
@@ -577,7 +578,7 @@ export function SiteDetailPage() {
           isImporting={measurementImporting}
           importMessage={measurementImportMessage}
           importError={measurementImportError}
-          onImport={(file, options) => void importMeasurementTimesheet(file, options)}
+          onImport={importMeasurementTimesheet}
           onUpdateBase={(base, payload) => void updateMeasurementBase(base, payload)}
           onActivateBase={(base) => void activateMeasurementBase(base)}
           onDeleteBase={(base) => void deleteMeasurementBase(base)}
@@ -1057,7 +1058,7 @@ function MeasurementTab({
   isImporting: boolean;
   importMessage: string | null;
   importError: string | null;
-  onImport: (file: File, options: MeasurementImportOptions) => void;
+  onImport: (file: File, options: MeasurementImportOptions) => Promise<void>;
   onUpdateBase: (base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }) => void;
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
@@ -1101,6 +1102,7 @@ function MeasurementTab({
 
       {activeSubtab === "timesheet" ? (
         <MeasurementTimesheetPanel
+          siteNumber={siteNumber}
           bases={bases}
           items={items}
           latestImport={latestImport}
@@ -1154,6 +1156,7 @@ function MeasurementTab({
 }
 
 function MeasurementTimesheetPanel({
+  siteNumber,
   bases,
   items,
   latestImport,
@@ -1165,6 +1168,7 @@ function MeasurementTimesheetPanel({
   onImport,
   onRetry,
 }: {
+  siteNumber: string | null;
   bases: MeasurementBase[];
   items: MeasurementItem[];
   latestImport: MeasurementItem | undefined;
@@ -1173,27 +1177,78 @@ function MeasurementTimesheetPanel({
   isImporting: boolean;
   importMessage: string | null;
   importError: string | null;
-  onImport: (file: File, options: MeasurementImportOptions) => void;
+  onImport: (file: File, options: MeasurementImportOptions) => Promise<void>;
   onRetry: () => void;
 }) {
   const selectableBases = bases.filter((base) => base.status !== "closed" && base.status !== "archived");
-  const defaultBaseId = selectableBases[0]?.id ?? null;
-  const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBaseId ? "append_existing" : "create_new");
-  const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBaseId);
-  const [newBaseName, setNewBaseName] = useState(`Aufmaßblatt ${new Date().toISOString().slice(0, 10)}`);
+  const defaultBase = selectableBases.find((base) => base.status === "active" && base.released_to_mobile) ?? selectableBases[0] ?? null;
+  const suggestedBaseName = getSuggestedMeasurementSheetName(siteNumber, bases.length + 1);
+  const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBase ? "append_existing" : "create_new");
+  const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBase?.id ?? null);
+  const [newBaseName, setNewBaseName] = useState(suggestedBaseName);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isDropTargetActive, setIsDropTargetActive] = useState(false);
+  const [fileSelectionError, setFileSelectionError] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedBaseId === null && defaultBaseId !== null) {
-      setSelectedBaseId(defaultBaseId);
+    if (defaultBase && selectedBaseId === null) {
+      setSelectedBaseId(defaultBase.id);
       setImportMode("append_existing");
     }
-  }, [defaultBaseId, selectedBaseId]);
+    if (!defaultBase && importMode === "append_existing") {
+      setImportMode("create_new");
+      setSelectedBaseId(null);
+    }
+  }, [defaultBase, importMode, selectedBaseId]);
 
-  const importOptions: MeasurementImportOptions = {
-    importMode,
-    measurementBaseId: importMode === "append_existing" ? selectedBaseId : null,
-    measurementBaseName: importMode === "append_existing" ? null : newBaseName,
-  };
+  function resetImportDialog() {
+    setPendingFile(null);
+    setIsImportDialogOpen(false);
+    setDialogError(null);
+    setFileSelectionError(null);
+    setIsDropTargetActive(false);
+  }
+
+  function openImportDialog(file: File) {
+    if (!isPdfFile(file)) {
+      setFileSelectionError("Bitte eine PDF-Datei auswählen oder ablegen.");
+      return;
+    }
+    setPendingFile(file);
+    setImportMode(defaultBase ? "append_existing" : "create_new");
+    setSelectedBaseId(defaultBase?.id ?? null);
+    setNewBaseName(getSuggestedMeasurementSheetName(siteNumber, bases.length + 1));
+    setDialogError(null);
+    setFileSelectionError(null);
+    setIsImportDialogOpen(true);
+  }
+
+  async function submitImport() {
+    if (!pendingFile || isImporting) {
+      return;
+    }
+    if (importMode === "append_existing" && selectedBaseId === null) {
+      setDialogError("Bitte ein Aufmaßblatt auswählen.");
+      return;
+    }
+    if (importMode === "create_new" && !newBaseName.trim()) {
+      setDialogError("Bitte einen Namen für das neue Aufmaßblatt eintragen.");
+      return;
+    }
+
+    try {
+      await onImport(pendingFile, {
+        importMode,
+        measurementBaseId: importMode === "append_existing" ? selectedBaseId : null,
+        measurementBaseName: importMode === "create_new" ? newBaseName : null,
+      });
+      resetImportDialog();
+    } catch {
+      setDialogError("Zeitenliste konnte nicht importiert werden. Bitte die Angaben prüfen.");
+    }
+  }
 
   return (
     <>
@@ -1201,19 +1256,47 @@ function MeasurementTimesheetPanel({
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Zeitenliste</h2>
           <p>Zeitenliste als PDF importieren und die erkannten Aufmaß-Vorlagenpositionen prüfen.</p>
+          {defaultBase ? <small>Aktives Aufmaßblatt: {formatMeasurementBaseName(defaultBase)}</small> : null}
         </div>
-        <label className={`secondary-action project-upload-action${isImporting ? " is-disabled" : ""}`}>
+        <label
+          className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isImporting) {
+              setIsDropTargetActive(true);
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsDropTargetActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsDropTargetActive(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file) {
+              openImportDialog(file);
+            }
+          }}
+        >
           <UploadCloud aria-hidden="true" size={15} />
-          <span>{isImporting ? "Wird importiert..." : "Zeitenliste-PDF importieren"}</span>
+          <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
           <input
             className="project-upload-input"
             type="file"
             accept="application/pdf,.pdf"
-            disabled={isImporting || (importMode === "append_existing" && selectedBaseId === null)}
+            disabled={isImporting}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
-                onImport(file, importOptions);
+                openImportDialog(file);
                 event.target.value = "";
               }
             }}
@@ -1221,54 +1304,9 @@ function MeasurementTimesheetPanel({
         </label>
       </div>
 
-      <div className="measurement-import-compact">
-        <strong>Wie soll diese Zeitenliste importiert werden?</strong>
-        <div className="measurement-import-inline-options">
-          <label className={importMode === "append_existing" ? "is-selected" : ""}>
-            <input
-              type="radio"
-              name="measurement-import-mode"
-              checked={importMode === "append_existing"}
-              disabled={selectableBases.length === 0}
-              onChange={() => setImportMode("append_existing")}
-            />
-            <span>An bestehendes Aufmaßblatt anhängen</span>
-          </label>
-          <label className={importMode === "create_new" ? "is-selected" : ""}>
-            <input
-              type="radio"
-              name="measurement-import-mode"
-              checked={importMode === "create_new"}
-              onChange={() => setImportMode("create_new")}
-            />
-            <span>Neues Aufmaßblatt erstellen</span>
-          </label>
-        </div>
-        {importMode === "append_existing" ? (
-          <select
-            value={selectedBaseId ?? ""}
-            disabled={selectableBases.length === 0}
-            onChange={(event) => setSelectedBaseId(Number(event.target.value) || null)}
-          >
-            {selectableBases.map((base) => (
-              <option key={base.id} value={base.id}>{formatMeasurementBaseName(base)}</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            className="measurement-base-name-input"
-            value={newBaseName}
-            onChange={(event) => setNewBaseName(event.target.value)}
-            placeholder="Name des Aufmaßblatts"
-          />
-        )}
-        {latestImport?.source_invoice_number ? (
-          <small>Letzte importierte Rechnung: {latestImport.source_invoice_number}</small>
-        ) : null}
-      </div>
-
+      {fileSelectionError ? <div className="project-record-empty-state is-error"><strong>{fileSelectionError}</strong></div> : null}
       {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
-      {importError ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
+      {importError && !isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
 
       {isLoading ? <div className="matrix-state">Aufmaßpositionen werden geladen...</div> : null}
       {error ? (
@@ -1310,6 +1348,96 @@ function MeasurementTimesheetPanel({
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {isImportDialogOpen && pendingFile ? (
+        <div className="measurement-import-modal-backdrop" role="presentation" onMouseDown={resetImportDialog}>
+          <section
+            className="measurement-import-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="measurement-import-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="measurement-import-modal-header">
+              <div>
+                <h3 id="measurement-import-dialog-title">Zeitenliste importieren</h3>
+                <p>Wähle, ob die PDF ein bestehendes Aufmaßblatt erweitert oder ein neues Aufmaßblatt erstellt.</p>
+              </div>
+              <button type="button" className="secondary-action" onClick={resetImportDialog}>Abbrechen</button>
+            </div>
+
+            <div className="measurement-import-file-row">
+              <FileText aria-hidden="true" size={18} />
+              <span>{pendingFile.name}</span>
+            </div>
+
+            <div className="measurement-import-modal-options">
+              <label className={importMode === "append_existing" ? "is-selected" : ""}>
+                <input
+                  type="radio"
+                  name="measurement-import-modal-mode"
+                  checked={importMode === "append_existing"}
+                  disabled={selectableBases.length === 0}
+                  onChange={() => setImportMode("append_existing")}
+                />
+                <span>
+                  <strong>An bestehendes Aufmaßblatt anhängen</strong>
+                  <small>Für Nachträge oder Ergänzungen eines laufenden Sammelaufmaßes.</small>
+                </span>
+              </label>
+              {importMode === "append_existing" ? (
+                selectableBases.length > 0 ? (
+                  <select value={selectedBaseId ?? ""} onChange={(event) => setSelectedBaseId(Number(event.target.value) || null)}>
+                    {selectableBases.map((base) => (
+                      <option key={base.id} value={base.id}>{formatMeasurementBaseName(base)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <small>Es gibt noch kein Aufmaßblatt zum Anhängen.</small>
+                )
+              ) : null}
+              <label className={importMode === "create_new" ? "is-selected" : ""}>
+                <input
+                  type="radio"
+                  name="measurement-import-modal-mode"
+                  checked={importMode === "create_new"}
+                  onChange={() => setImportMode("create_new")}
+                />
+                <span>
+                  <strong>Neues Aufmaßblatt erstellen</strong>
+                  <small>Für ein neues Hauptangebot oder ein getrenntes Einzelaufmaß.</small>
+                </span>
+              </label>
+              {importMode === "create_new" ? (
+                <>
+                  <input
+                    className="measurement-base-name-input"
+                    value={newBaseName}
+                    onChange={(event) => setNewBaseName(event.target.value)}
+                    placeholder="Name des Aufmaßblatts"
+                  />
+                  <small>Das neue Aufmaßblatt wird nach dem Import automatisch aktiviert.</small>
+                </>
+              ) : null}
+            </div>
+
+            {dialogError ? <div className="project-record-empty-state is-error"><strong>{dialogError}</strong></div> : null}
+            {importError && isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
+
+            <div className="measurement-import-modal-actions">
+              <button type="button" className="secondary-action" onClick={resetImportDialog}>Abbrechen</button>
+              <button
+                type="button"
+                className="primary-action"
+                disabled={isImporting || (importMode === "append_existing" && selectedBaseId === null) || (importMode === "create_new" && !newBaseName.trim())}
+                onClick={() => void submitImport()}
+              >
+                {isImporting ? "Importiert..." : "Importieren"}
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
     </>
@@ -2213,6 +2341,18 @@ function formatMeasurementPackageNumber(
     return fallbackTitle;
   }
   return `Aufmaß ${cleanSiteNumber}.${String(packageNumber).padStart(2, "0")}`;
+}
+
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function getSuggestedMeasurementSheetName(siteNumber: string | null, nextNumber: number): string {
+  const cleanSiteNumber = siteNumber?.trim();
+  if (cleanSiteNumber) {
+    return `Aufmaß ${cleanSiteNumber}.${String(nextNumber).padStart(2, "0")}`;
+  }
+  return `Aufmaßblatt ${new Date().toISOString().slice(0, 10)}`;
 }
 
 function formatMeasurementBaseName(base: MeasurementBase): string {
