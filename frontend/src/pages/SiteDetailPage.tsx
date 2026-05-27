@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
+import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import type { MeasurementBase, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site } from "../types/site";
+import type { Person } from "../types/person";
+import type { MeasurementBase, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
+import type { EditableSite } from "./SitesPage";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
@@ -30,15 +34,23 @@ const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
 ];
 
 export function SiteDetailPage() {
+  const { user } = useAuth();
+  const canEditSite = user?.role === "admin" || user?.role === "project_manager";
   const { siteId } = useParams();
   const [searchParams] = useSearchParams();
   const requestedProjectTab = searchParams.get("tab");
   const requestedMeasurementSubtab = searchParams.get("measurementSubtab");
   const [site, setSite] = useState<Site | null>(null);
+  const [siteDraft, setSiteDraft] = useState<EditableSite | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProjectRecordTab>("overview");
   const [editMode, setEditMode] = useState(false);
+  const [isSavingSite, setIsSavingSite] = useState(false);
+  const [isCheckingSiteLocation, setIsCheckingSiteLocation] = useState(false);
+  const [siteSaveError, setSiteSaveError] = useState<string | null>(null);
+  const [siteSaveMessage, setSiteSaveMessage] = useState<string | null>(null);
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
@@ -96,9 +108,41 @@ export function SiteDetailPage() {
   }, [siteId]);
 
   useEffect(() => {
+    setSiteDraft(site ? toEditableSite(site) : null);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+  }, [site?.id]);
+
+  useEffect(() => {
+    if (!canEditSite) {
+      return;
+    }
+
+    let isCurrent = true;
+    api
+      .persons({ isActive: null })
+      .then((personData) => {
+        if (isCurrent) {
+          setPeople(personData);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setPeople([]);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [canEditSite]);
+
+  useEffect(() => {
     setActiveTab(requestedProjectTab === "measurement" ? "measurement" : "overview");
     setMeasurementSubtab(requestedMeasurementSubtab === "review" ? "review" : "timesheet");
     setEditMode(false);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
     setFolders([]);
     setFoldersLoaded(false);
     setFoldersError(null);
@@ -446,6 +490,100 @@ export function SiteDetailPage() {
     }
   }
 
+  function updateSiteDraft(values: Partial<SiteCreate>): void {
+    setSiteDraft((current) => (current ? { ...current, ...values } : current));
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+  }
+
+  function cancelSiteEdit(): void {
+    setSiteDraft(site ? toEditableSite(site) : null);
+    setEditMode(false);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+  }
+
+  async function saveSiteDetails(): Promise<void> {
+    if (!site || !siteDraft || isSavingSite) {
+      return;
+    }
+    const validationError = validateSitePayload(siteDraft);
+    if (validationError) {
+      setSiteSaveError(validationError);
+      setSiteSaveMessage(null);
+      return;
+    }
+
+    setIsSavingSite(true);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+    try {
+      const updated = await api.updateSite(site.id, normalizeSitePayload(siteDraft));
+      setSite(updated);
+      setSiteDraft(toEditableSite(updated));
+      setEditMode(false);
+      setSiteSaveMessage("Baustelle gespeichert.");
+    } catch (requestError) {
+      setSiteSaveError(readApiError(requestError, "Baustelle konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSite(false);
+    }
+  }
+
+  async function applyGeocodedSite(values: Partial<SiteCreate>): Promise<void> {
+    if (!site || !siteDraft || isSavingSite) {
+      return;
+    }
+    const nextDraft = { ...siteDraft, ...values };
+    setSiteDraft(nextDraft);
+    setIsSavingSite(true);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+    try {
+      const updated = await api.updateSite(site.id, normalizeSitePayload(nextDraft));
+      setSite(updated);
+      setSiteDraft(toEditableSite(updated));
+      setSiteSaveMessage("Standort aus Vorschlag übernommen und gespeichert.");
+    } catch (requestError) {
+      setSiteSaveError(readApiError(requestError, "Standort konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSite(false);
+    }
+  }
+
+  async function checkSiteLocation(): Promise<void> {
+    if (!site || !siteDraft || isCheckingSiteLocation) {
+      return;
+    }
+    const validationError = validateSitePayload(siteDraft);
+    if (validationError) {
+      setSiteSaveError(validationError);
+      setSiteSaveMessage(null);
+      return;
+    }
+
+    setIsCheckingSiteLocation(true);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+    try {
+      await api.updateSite(site.id, normalizeSitePayload(siteDraft));
+      const updated = await api.checkSiteLocation(site.id);
+      setSite(updated);
+      setSiteDraft(toEditableSite(updated));
+      if (updated.location_status === "geocoded") {
+        setSiteSaveMessage("Standort wurde geprüft und Koordinaten wurden gespeichert.");
+      } else if (updated.location_status === "ambiguous") {
+        setSiteSaveError("Standort ist nicht eindeutig. Bitte Adresse genauer erfassen.");
+      } else {
+        setSiteSaveError("Standort konnte nicht geprüft werden. Bitte Adresse prüfen.");
+      }
+    } catch (requestError) {
+      setSiteSaveError(readApiError(requestError, "Standort konnte nicht geprüft werden."));
+    } finally {
+      setIsCheckingSiteLocation(false);
+    }
+  }
+
   async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
     if (!site || uploadingFolderKey) {
       return;
@@ -526,7 +664,28 @@ export function SiteDetailPage() {
       <ProjectRecordTabs activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === "overview" ? (
-        <OverviewTab site={site} editMode={editMode} onToggleEdit={() => setEditMode((value) => !value)} />
+        <OverviewTab
+          site={site}
+          draft={siteDraft}
+          people={people}
+          editMode={editMode}
+          canEdit={canEditSite}
+          isSaving={isSavingSite}
+          isCheckingLocation={isCheckingSiteLocation}
+          saveError={siteSaveError}
+          saveMessage={siteSaveMessage}
+          onToggleEdit={() => {
+            setSiteDraft(toEditableSite(site));
+            setSiteSaveError(null);
+            setSiteSaveMessage(null);
+            setEditMode((value) => !value);
+          }}
+          onCancelEdit={cancelSiteEdit}
+          onDraftChange={updateSiteDraft}
+          onSave={() => void saveSiteDetails()}
+          onCheckLocation={() => void checkSiteLocation()}
+          onGeocodeSelected={(values) => void applyGeocodedSite(values)}
+        />
       ) : null}
       {activeTab === "folders" ? (
         <ProjectFoldersPanel
@@ -651,7 +810,39 @@ function ProjectRecordTabs({
   );
 }
 
-function OverviewTab({ site, editMode, onToggleEdit }: { site: Site; editMode: boolean; onToggleEdit: () => void }) {
+function OverviewTab({
+  site,
+  draft,
+  people,
+  editMode,
+  canEdit,
+  isSaving,
+  isCheckingLocation,
+  saveError,
+  saveMessage,
+  onToggleEdit,
+  onCancelEdit,
+  onDraftChange,
+  onSave,
+  onCheckLocation,
+  onGeocodeSelected,
+}: {
+  site: Site;
+  draft: EditableSite | null;
+  people: Person[];
+  editMode: boolean;
+  canEdit: boolean;
+  isSaving: boolean;
+  isCheckingLocation: boolean;
+  saveError: string | null;
+  saveMessage: string | null;
+  onToggleEdit: () => void;
+  onCancelEdit: () => void;
+  onDraftChange: (values: Partial<SiteCreate>) => void;
+  onSave: () => void;
+  onCheckLocation: () => void;
+  onGeocodeSelected: (values: Partial<SiteCreate>) => void;
+}) {
   return (
     <div className="project-record-tab-panel">
       <div className="project-record-toolbar">
@@ -659,48 +850,74 @@ function OverviewTab({ site, editMode, onToggleEdit }: { site: Site; editMode: b
           <h2>Übersicht</h2>
           <p>Stammdaten und Standortinformationen zur Baustelle.</p>
         </div>
-        <button type="button" className="secondary-action" onClick={onToggleEdit}>
-          {editMode ? "Bearbeitung schließen" : "Bearbeiten"}
-        </button>
-      </div>
-      {editMode ? (
-        <p className="project-record-edit-note">Die Detailbearbeitung bleibt vorerst über den bestehenden Baustellen-Drawer in der Übersicht erreichbar.</p>
-      ) : null}
-
-      <div className="site-detail-grid">
-        <DetailSection title="Stammdaten" icon={Building2}>
-          <DetailItem label="Baustellennummer" value={site.site_number} />
-          <DetailItem label="Kunde" value={site.customer} />
-          <DetailItem label="Status" value={siteStatusLabels[site.status]} />
-          <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
-        </DetailSection>
-
-        <DetailSection title="Adresse / Standort" icon={MapPin}>
-          <DetailItem label="Ort" value={site.location} />
-          <DetailItem label="PLZ / Stadt" value={[site.postal_code, site.city].filter(Boolean).join(" ")} />
-          <DetailItem label="Strasse" value={[site.street, site.house_number].filter(Boolean).join(" ")} />
-          <DetailItem label="Adresszusatz" value={site.address_extra || site.address} />
-          <DetailItem label="Koordinaten" value={formatCoordinates(site.latitude, site.longitude)} />
-          <DetailItem label="Radius" value={`${site.geofence_radius_m} m`} />
-          <DetailItem label="Standortstatus" value={formatLocationStatus(site.location_status)} />
-        </DetailSection>
-
-        <DetailSection title="Projektleiter" icon={UserRound}>
-          <DetailItem label="Name" value={site.project_manager?.display_name} />
-          <DetailItem label="Kuerzel" value={site.project_manager?.short_code} />
-          <DetailItem label="Telefon" value={site.project_manager?.phone} icon={Phone} />
-        </DetailSection>
-
-        <DetailSection title="Planstatus" icon={CalendarClock}>
-          <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
-          <DetailItem label="Geschlossen" value={site.closed_at ? formatDateTime(site.closed_at) : null} />
-        </DetailSection>
+        {canEdit ? (
+          <button type="button" className="secondary-action" onClick={editMode ? onCancelEdit : onToggleEdit}>
+            {editMode ? "Bearbeitung schließen" : "Bearbeiten"}
+          </button>
+        ) : null}
       </div>
 
-      <section className="site-notes-section">
-        <h2>Notizen</h2>
-        <p>{site.info || "Keine Notizen hinterlegt."}</p>
-      </section>
+      {saveError ? <p className="form-error">{saveError}</p> : null}
+      {saveMessage ? <p className="form-info">{saveMessage}</p> : null}
+
+      {editMode && draft ? (
+        <div className="project-record-edit-panel">
+          <SiteFields
+            draft={draft}
+            people={people}
+            disabled={!canEdit || isSaving}
+            isCheckingLocation={isCheckingLocation}
+            onChange={onDraftChange}
+            onCheckLocation={onCheckLocation}
+            onGeocodeSelected={onGeocodeSelected}
+          />
+          <div className="project-record-edit-actions">
+            <button type="button" className="secondary-action" disabled={isSaving} onClick={onCancelEdit}>
+              Abbrechen
+            </button>
+            <button type="button" className="secondary-action primary-action" disabled={isSaving} onClick={onSave}>
+              {isSaving ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="site-detail-grid">
+            <DetailSection title="Stammdaten" icon={Building2}>
+              <DetailItem label="Baustellennummer" value={site.site_number} />
+              <DetailItem label="Kunde" value={site.customer} />
+              <DetailItem label="Status" value={siteStatusLabels[site.status]} />
+              <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
+            </DetailSection>
+
+            <DetailSection title="Adresse / Standort" icon={MapPin}>
+              <DetailItem label="Ort" value={site.location} />
+              <DetailItem label="PLZ / Stadt" value={[site.postal_code, site.city].filter(Boolean).join(" ")} />
+              <DetailItem label="Strasse" value={[site.street, site.house_number].filter(Boolean).join(" ")} />
+              <DetailItem label="Adresszusatz" value={site.address_extra || site.address} />
+              <DetailItem label="Koordinaten" value={formatCoordinates(site.latitude, site.longitude)} />
+              <DetailItem label="Radius" value={`${site.geofence_radius_m} m`} />
+              <DetailItem label="Standortstatus" value={formatLocationStatus(site.location_status)} />
+            </DetailSection>
+
+            <DetailSection title="Projektleiter" icon={UserRound}>
+              <DetailItem label="Name" value={site.project_manager?.display_name} />
+              <DetailItem label="Kuerzel" value={site.project_manager?.short_code} />
+              <DetailItem label="Telefon" value={site.project_manager?.phone} icon={Phone} />
+            </DetailSection>
+
+            <DetailSection title="Planstatus" icon={CalendarClock}>
+              <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
+              <DetailItem label="Geschlossen" value={site.closed_at ? formatDateTime(site.closed_at) : null} />
+            </DetailSection>
+          </div>
+
+          <section className="site-notes-section">
+            <h2>Notizen</h2>
+            <p>{site.info || "Keine Notizen hinterlegt."}</p>
+          </section>
+        </>
+      )}
     </div>
   );
 }

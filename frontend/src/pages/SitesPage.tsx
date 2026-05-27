@@ -1,6 +1,6 @@
 import { ArchiveRestore, BriefcaseBusiness, ExternalLink, PlusCircle, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
@@ -31,7 +31,7 @@ const emptySite: SiteCreate = {
   color: "#1d5c99",
 };
 
-type EditableSite = SiteCreate & { id: number };
+export type EditableSite = SiteCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; siteId: number } | null;
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
 type SiteGroup = { key: string; label: string; sites: Site[]; showHeading: boolean };
@@ -55,6 +55,7 @@ const SITE_COLOR_OPTIONS: SiteColorOption[] = [
 ];
 
 export function SitesPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const canRemove = user?.role === "admin";
@@ -344,11 +345,6 @@ export function SitesPage() {
     setDrawer({ mode: "new" });
   }
 
-  function openSiteDrawer(siteId: number) {
-    setIsEditingSite(false);
-    setDrawer({ mode: "edit", siteId });
-  }
-
   function cancelSiteEdit() {
     if (selectedSite) {
       setDrafts((current) => ({ ...current, [selectedSite.id]: toEditableSite(selectedSite) }));
@@ -443,14 +439,14 @@ export function SitesPage() {
                 <section className="site-group-section" key={group.key}>
                   {group.showHeading && <h2>{group.label}</h2>}
                   <div className="entity-card-list">
-                    {group.sites.map((site) => renderSiteCard(site, openSiteDrawer, canEdit, savingSiteId === site.id, updateSiteStatus))}
+                    {group.sites.map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
                   </div>
                 </section>
               ))}
             </div>
           ) : (
             <div className="entity-card-list" role="list">
-              {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, openSiteDrawer, canEdit, savingSiteId === site.id, updateSiteStatus))}
+              {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
             </div>
           )}
           {!visibleSiteCount && (
@@ -622,7 +618,7 @@ function ReadItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SiteFields({
+export function SiteFields({
   draft,
   people,
   disabled = false,
@@ -893,7 +889,7 @@ function toEditableSites(sites: Site[]): Record<string, EditableSite> {
   return Object.fromEntries(sites.map((site) => [String(site.id), toEditableSite(site)]));
 }
 
-function toEditableSite(site: Site): EditableSite {
+export function toEditableSite(site: Site): EditableSite {
   return {
     id: site.id,
     site_number: site.site_number,
@@ -917,14 +913,14 @@ function toEditableSite(site: Site): EditableSite {
   };
 }
 
-function validateSitePayload(site: SiteCreate): string | null {
+export function validateSitePayload(site: SiteCreate): string | null {
   if (!site.name.trim()) {
     return "Baustellenname ist Pflicht.";
   }
   return null;
 }
 
-function normalizeSitePayload(site: SiteCreate): SiteCreate {
+export function normalizeSitePayload(site: SiteCreate): SiteCreate {
   return {
     ...site,
     site_number: cleanOptionalText(site.site_number),
@@ -1042,7 +1038,7 @@ function SiteColorSelect({
 
 function renderSiteCard(
   site: Site,
-  openSiteDrawer: (siteId: number) => void,
+  openSiteDetail: (siteId: number) => void,
   canEdit: boolean,
   isSaving: boolean,
   onStatusChange: (site: Site, status: SiteStatus) => void,
@@ -1050,7 +1046,7 @@ function renderSiteCard(
   const classes = ["entity-card", "site-card", INACTIVE_SITE_STATUSES.includes(site.status) ? "is-inactive" : ""].filter(Boolean).join(" ");
   return (
     <article className={classes} key={site.id}>
-      <button className="site-card-main" type="button" onClick={() => openSiteDrawer(site.id)}>
+      <button className="site-card-main" type="button" onClick={() => openSiteDetail(site.id)}>
         <span className="entity-card-color" style={{ backgroundColor: site.color ?? "#94a3b8" }} aria-hidden="true" />
         <span className="entity-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
         <span className="entity-card-body">
@@ -1062,7 +1058,7 @@ function renderSiteCard(
           </span>
         </span>
       </button>
-      <span className="entity-card-status site-card-status-control" onClick={(event) => event.stopPropagation()}>
+      <span className="entity-card-status site-card-status-control" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
         {canEdit ? (
           <select
             aria-label={`Status fuer ${site.name} aendern`}
