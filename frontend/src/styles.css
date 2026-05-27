@@ -2855,6 +2855,152 @@ button.person-chip:focus-visible {
 }
 
 
+
+/* Warm project record surface: scoped to Baustellenakte/Projektakte, not the planning matrix. */
+.site-detail-page {
+  --project-bg: #f4f1eb;
+  --project-surface: #ffffff;
+  --project-surface-muted: #f7f4ee;
+  --project-border: #d6d2ca;
+  --project-border-strong: #b9b2a7;
+  --project-text: #1f2933;
+  --project-muted: #667085;
+  --project-primary: #1f2f46;
+  --project-warning: #d98a1f;
+  background: transparent;
+  color: var(--project-text);
+}
+
+.site-detail-page .site-detail-header,
+.site-detail-page .site-detail-section,
+.site-detail-page .site-notes-section,
+.site-detail-page .project-record-toolbar {
+  border-color: var(--project-border);
+}
+
+.site-detail-page .site-detail-header h1,
+.site-detail-page .site-detail-section h2,
+.site-detail-page .project-record-toolbar h2,
+.site-detail-page .project-folder-placeholder h3,
+.site-detail-page .project-placeholder-card span,
+.site-detail-page .detail-item strong {
+  color: var(--project-text);
+}
+
+.site-detail-page .site-detail-header p:not(.eyebrow),
+.site-detail-page .project-record-toolbar p,
+.site-detail-page .project-record-edit-note,
+.site-detail-page .project-folder-placeholder p,
+.site-detail-page .detail-item span,
+.site-detail-page .project-placeholder-card small {
+  color: var(--project-muted);
+}
+
+.site-detail-page .project-record-tabs,
+.site-detail-page .project-record-subtabs,
+.site-detail-page .measurement-view-toggle {
+  border-color: var(--project-border);
+  background: var(--project-surface-muted);
+}
+
+.site-detail-page .project-record-tabs button,
+.site-detail-page .project-record-subtabs button,
+.site-detail-page .measurement-view-toggle button {
+  color: var(--project-muted);
+}
+
+.site-detail-page .project-record-tabs button:hover,
+.site-detail-page .project-record-tabs button:focus-visible,
+.site-detail-page .project-record-subtabs button:hover,
+.site-detail-page .project-record-subtabs button:focus-visible,
+.site-detail-page .measurement-view-toggle button:hover,
+.site-detail-page .measurement-view-toggle button:focus-visible {
+  background: rgb(255 255 255 / 72%);
+  color: var(--project-primary);
+}
+
+.site-detail-page .project-record-tabs button.is-active,
+.site-detail-page .project-record-subtabs button.is-active,
+.site-detail-page .measurement-view-toggle button.is-active {
+  background: var(--project-surface);
+  color: var(--project-text);
+  box-shadow: inset 0 0 0 1px rgb(31 41 51 / 8%);
+}
+
+.site-detail-page .secondary-action {
+  border-color: var(--project-border);
+  background: var(--project-surface);
+  color: var(--project-primary);
+  border-radius: 6px;
+}
+
+.site-detail-page .secondary-action:hover,
+.site-detail-page .secondary-action:focus-visible {
+  border-color: var(--project-border-strong);
+  background: var(--project-surface-muted);
+}
+
+.site-detail-page .primary-action {
+  border-color: var(--project-primary);
+  background: var(--project-primary);
+  border-radius: 6px;
+}
+
+.site-detail-page .project-record-edit-note,
+.site-detail-page .project-folder-placeholder,
+.site-detail-page .project-document-browser,
+.site-detail-page .project-record-empty-state,
+.site-detail-page .project-placeholder-card,
+.site-detail-page .measurement-review-card,
+.site-detail-page .measurement-review-position,
+.site-detail-page .measurement-review-detail,
+.site-detail-page .measurement-evaluation-grid > div {
+  border-color: var(--project-border);
+  background: var(--project-surface-muted);
+}
+
+.site-detail-page .project-folder-card {
+  border-color: var(--project-border);
+  background: var(--project-surface);
+  border-radius: 8px;
+}
+
+.site-detail-page .project-folder-card svg,
+.site-detail-page .project-folder-placeholder svg {
+  color: var(--project-primary);
+}
+
+.site-detail-page .project-folder-card:hover,
+.site-detail-page .project-folder-card:focus-visible,
+.site-detail-page .project-folder-card.is-selected {
+  border-color: var(--project-border-strong);
+  background: #fffaf1;
+  box-shadow: inset 0 0 0 1px rgb(185 178 167 / 24%);
+}
+
+.site-detail-page .project-folder-card.is-drag-over {
+  border-color: var(--project-warning);
+  background: #fff6e8;
+  box-shadow: 0 0 0 3px rgb(217 138 31 / 12%);
+}
+
+.site-detail-page .project-record-empty-state.is-error {
+  border-color: #f0c2bd;
+  background: #fff1ef;
+  color: #9f2a2a;
+}
+
+.site-detail-page .project-record-empty-state.is-success {
+  border-color: #bfdfbd;
+  background: #f0faed;
+  color: #276738;
+}
+
+.site-detail-page .measurement-review-card.is-submitted {
+  border-color: var(--project-border-strong);
+  background: #fffaf1;
+}
+
 .project-record-tabs {
   display: inline-flex;
   align-items: center;
@@ -6391,29 +6537,29 @@ button.person-chip:focus-visible {
 
 /* Compact Technical UI: scoped first implementation for Aufmaßprüfung table mode. */
 .measurement-review-detail.is-table-view {
-  --ct-bg: #f4f5f2;
+  --ct-bg: #f4f1eb;
   --ct-surface: #ffffff;
-  --ct-surface-muted: #f7f7f4;
-  --ct-border: #d4d7d0;
-  --ct-border-strong: #aeb4aa;
-  --ct-text: #172033;
+  --ct-surface-muted: #f7f4ee;
+  --ct-border: #d6d2ca;
+  --ct-border-strong: #b9b2a7;
+  --ct-text: #1f2933;
   --ct-muted: #667085;
-  --ct-primary: #17233a;
+  --ct-primary: #1f2f46;
   --ct-primary-soft: #eef1f5;
-  --ct-warning: #c97918;
+  --ct-warning: #d98a1f;
   --ct-danger: #b42318;
-  --ct-success: #2f6f3e;
-  --ct-table-header: #e8eae4;
+  --ct-success: #276738;
+  --ct-table-header: #e6dfd3;
   --ct-table-cell: #ffffff;
-  --ct-table-muted: #f2f3ef;
-  --ct-focus: #17233a;
+  --ct-table-muted: #f0ebe2;
+  --ct-focus: #1f2f46;
   gap: 8px;
   border-color: var(--ct-border);
   border-radius: 6px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfbf8 100%);
+  background: var(--ct-surface);
   color: var(--ct-text);
   padding: 10px;
-  box-shadow: 0 1px 0 rgb(23 32 51 / 4%);
+  box-shadow: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-header {
@@ -6443,15 +6589,15 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .secondary-action {
-  border-color: #c9cec6;
-  background: #ffffff;
+  border-color: var(--ct-border);
+  background: var(--ct-surface-muted);
   color: var(--ct-text);
 }
 
 .measurement-review-detail.is-table-view .secondary-action:hover,
 .measurement-review-detail.is-table-view .secondary-action:focus-visible {
   border-color: var(--ct-border-strong);
-  background: #f6f7f4;
+  background: #ffffff;
 }
 
 .measurement-review-detail.is-table-view .primary-action {
@@ -6463,14 +6609,14 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-view-toggle {
   border-color: var(--ct-border);
   border-radius: 4px;
-  background: #eef0ec;
+  background: var(--ct-surface-muted);
   padding: 2px;
 }
 
 .measurement-review-detail.is-table-view .measurement-view-toggle button {
   min-height: 24px;
   border-radius: 3px;
-  color: #596575;
+  color: var(--ct-muted);
   font-size: 0.72rem;
   padding: 3px 8px;
 }
@@ -6478,17 +6624,17 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
   background: var(--ct-surface);
   color: var(--ct-text);
-  box-shadow: inset 0 0 0 1px rgb(23 32 51 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(31 41 51 / 8%);
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-open,
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
 .measurement-review-detail.is-table-view .measurement-status.is-rejected {
   min-height: 24px;
-  border: 1px solid rgb(201 121 24 / 28%);
+  border: 1px solid rgb(217 138 31 / 34%);
   border-radius: 4px;
-  background: #fff4e5;
-  color: #8a4a0a;
+  background: #fff6e8;
+  color: #8a4d0d;
   padding: 3px 8px;
   font-size: 0.72rem;
 }
@@ -6496,9 +6642,9 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-status.is-billed,
 .measurement-review-detail.is-table-view .measurement-status.is-approved {
   min-height: 24px;
-  border: 1px solid rgb(47 111 62 / 25%);
+  border: 1px solid rgb(39 103 56 / 28%);
   border-radius: 4px;
-  background: #eef7ec;
+  background: #edf7ee;
   color: var(--ct-success);
   padding: 3px 8px;
   font-size: 0.72rem;
@@ -6514,12 +6660,15 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-table-wrap {
   width: 100%;
   max-width: 100%;
-  max-height: calc(100vh - 292px);
+  min-height: 260px;
+  max-height: max(320px, calc(100vh - 276px));
   overflow: auto;
+  scrollbar-gutter: stable;
   border-color: var(--ct-border);
   border-radius: 4px;
   background: var(--ct-surface);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+  box-shadow: none;
+  padding-bottom: 16px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
@@ -6572,7 +6721,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-table thead .measurement-matrix-axis {
   z-index: 10;
-  background: #dde1da !important;
+  background: #e4ded3 !important;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-position-heading {
@@ -6632,30 +6781,30 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity:not(.has-value) {
-  background: #f7f8f5;
+  background: #faf9f6;
   color: transparent;
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:hover {
-  border-color: #b9c0b6;
+  border-color: #c7c1b8;
   background: #ffffff;
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:focus {
   border-color: var(--ct-focus);
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px rgb(23 35 58 / 24%);
+  box-shadow: inset 0 0 0 1px rgb(31 47 70 / 28%);
   outline: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
   border-top: 2px solid var(--ct-border-strong);
-  background: #e8ece4 !important;
+  background: #e8e0d3 !important;
   font-size: 0.68rem;
   font-weight: 900;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
-  background: #dfe4dc !important;
+  background: #dfd8cd !important;
 }
