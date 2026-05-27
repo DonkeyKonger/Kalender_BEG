@@ -1492,7 +1492,7 @@ function MeasurementReviewPanel({
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
 
     return (
-      <div className="measurement-review-detail">
+      <div className={`measurement-review-detail${viewMode === "table" ? " is-table-view" : ""}`}>
         <div className="measurement-review-header">
           <div>
             <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>

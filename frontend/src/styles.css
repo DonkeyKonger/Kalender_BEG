@@ -6387,3 +6387,265 @@ button.person-chip:focus-visible {
 .measurement-review-table .measurement-matrix-total-row .measurement-matrix-axis {
   background: #e2ebf6;
 }
+
+
+/* Compact Technical UI: scoped first implementation for Aufmaßprüfung table mode. */
+.measurement-review-detail.is-table-view {
+  --ct-bg: #f4f1eb;
+  --ct-surface: #ffffff;
+  --ct-surface-muted: #f7f6f2;
+  --ct-border: #d6d2ca;
+  --ct-border-strong: #b9b2a7;
+  --ct-text: #1f2933;
+  --ct-muted: #667085;
+  --ct-primary: #1f2f46;
+  --ct-primary-soft: #eef1f5;
+  --ct-warning: #d98a1f;
+  --ct-danger: #b42318;
+  --ct-success: #276738;
+  --ct-table-header: #ebe7df;
+  --ct-table-cell: #ffffff;
+  --ct-table-muted: #f5f3ee;
+  --ct-focus: #1f2f46;
+  gap: 8px;
+  border-color: var(--ct-border);
+  border-radius: 6px;
+  background: var(--ct-surface);
+  color: var(--ct-text);
+  padding: 10px;
+  box-shadow: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-header {
+  align-items: start;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-header h2 {
+  color: var(--ct-text);
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-actions {
+  gap: 6px;
+}
+
+.measurement-review-detail.is-table-view .secondary-action,
+.measurement-review-detail.is-table-view .primary-action {
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.measurement-review-detail.is-table-view .secondary-action {
+  border-color: var(--ct-border);
+  background: var(--ct-surface-muted);
+  color: var(--ct-text);
+}
+
+.measurement-review-detail.is-table-view .secondary-action:hover,
+.measurement-review-detail.is-table-view .secondary-action:focus-visible {
+  border-color: var(--ct-border-strong);
+  background: #ffffff;
+}
+
+.measurement-review-detail.is-table-view .primary-action {
+  border-color: var(--ct-primary);
+  background: var(--ct-primary);
+  color: #ffffff;
+}
+
+.measurement-review-detail.is-table-view .measurement-view-toggle {
+  border-color: var(--ct-border);
+  border-radius: 4px;
+  background: var(--ct-surface-muted);
+  padding: 2px;
+}
+
+.measurement-review-detail.is-table-view .measurement-view-toggle button {
+  min-height: 24px;
+  border-radius: 3px;
+  color: var(--ct-muted);
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+.measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
+  background: var(--ct-surface);
+  color: var(--ct-text);
+  box-shadow: inset 0 0 0 1px rgb(31 41 51 / 8%);
+}
+
+.measurement-review-detail.is-table-view .measurement-status.is-open,
+.measurement-review-detail.is-table-view .measurement-status.is-submitted,
+.measurement-review-detail.is-table-view .measurement-status.is-rejected {
+  min-height: 24px;
+  border: 1px solid rgb(217 138 31 / 34%);
+  border-radius: 4px;
+  background: #fff6e8;
+  color: #8a4d0d;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.measurement-review-detail.is-table-view .measurement-status.is-billed,
+.measurement-review-detail.is-table-view .measurement-status.is-approved {
+  min-height: 24px;
+  border: 1px solid rgb(39 103 56 / 28%);
+  border-radius: 4px;
+  background: #edf7ee;
+  color: var(--ct-success);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100vh - 292px);
+  overflow: auto;
+  border-color: var(--ct-border);
+  border-radius: 4px;
+  background: var(--ct-surface);
+  box-shadow: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
+  min-width: max-content;
+  color: var(--ct-text);
+  font-size: 0.66rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view th,
+.measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view td {
+  min-width: 88px;
+  height: 23px;
+  border-color: var(--ct-border);
+  padding: 1px 3px;
+  background: var(--ct-table-cell);
+  vertical-align: middle;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table thead th {
+  background: var(--ct-table-header) !important;
+  color: var(--ct-text) !important;
+  font-weight: 800;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table .measurement-matrix-axis {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  min-width: 102px;
+  max-width: 140px;
+  border-right-color: var(--ct-border-strong);
+  background: var(--ct-table-muted) !important;
+  color: var(--ct-text);
+  font-size: 0.67rem;
+  font-weight: 800;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table thead .measurement-matrix-axis {
+  z-index: 10;
+  background: #e4ded3 !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-position-heading {
+  min-width: 98px;
+  font-size: 0.69rem !important;
+  line-height: 1.05;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-description-heading {
+  min-width: 118px;
+  max-width: 132px;
+  font-size: 0.58rem !important;
+  line-height: 1.05;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-description-heading span {
+  -webkit-line-clamp: 3;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-section-row th,
+.measurement-review-detail.is-table-view .measurement-matrix-section-row td {
+  height: 22px;
+  background: var(--ct-table-muted) !important;
+  color: var(--ct-muted);
+  font-weight: 800;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-quantity-cell,
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell {
+  min-width: 76px;
+  height: 22px;
+  background: var(--ct-table-cell);
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-detail.is-table-view .measurement-table-input.is-quantity {
+  width: 100%;
+  min-height: 18px;
+  border: 1px solid transparent;
+  border-radius: 1px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ct-text);
+  font-size: inherit;
+  font-weight: 750;
+  line-height: 1;
+  padding: 0 2px;
+  text-align: right;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell .measurement-table-input.is-quantity:not(.has-value) {
+  background: transparent;
+  color: transparent;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity:not(.has-value) {
+  background: #faf9f6;
+  color: transparent;
+}
+
+.measurement-review-detail.is-table-view .measurement-table-input.is-quantity:hover {
+  border-color: #c7c1b8;
+  background: #fffdf8;
+}
+
+.measurement-review-detail.is-table-view .measurement-table-input.is-quantity:focus {
+  border-color: var(--ct-focus);
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(31 47 70 / 28%);
+  outline: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-total-row th,
+.measurement-review-detail.is-table-view .measurement-matrix-total-row td {
+  border-top: 2px solid var(--ct-border-strong);
+  background: #ece7dd !important;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
+  background: #dfd8cd !important;
+}
