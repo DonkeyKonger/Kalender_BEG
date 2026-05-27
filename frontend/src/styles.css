@@ -6256,3 +6256,134 @@ button.person-chip:focus-visible {
   background: #e5e7eb;
   color: #374151;
 }
+
+/* Compact Excel-like layout for the desktop Aufmaß review matrix. */
+.measurement-review-table-wrap {
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  border-color: #c6d3e3;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 60%);
+}
+
+.measurement-review-table.measurement-table-view {
+  font-size: 0.69rem;
+  line-height: 1.12;
+}
+
+.measurement-review-table.measurement-table-view th,
+.measurement-review-table.measurement-table-view td {
+  min-width: 104px;
+  border-color: #d9e2ee;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
+.measurement-review-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+}
+
+.measurement-review-table thead th {
+  background: #eef3f8;
+}
+
+.measurement-review-table .measurement-matrix-axis {
+  min-width: 108px;
+  max-width: 150px;
+  background: #f7f9fc;
+  font-size: 0.7rem;
+  font-weight: 850;
+  z-index: 4;
+}
+
+.measurement-review-table thead .measurement-matrix-axis {
+  z-index: 9;
+  background: #e8eef6;
+}
+
+.measurement-review-table .measurement-matrix-position-heading {
+  min-width: 112px;
+  background: #eaf0f8 !important;
+  font-size: 0.72rem !important;
+  line-height: 1.1;
+}
+
+.measurement-review-table .measurement-matrix-description-heading {
+  min-width: 138px;
+  max-width: 158px;
+  background: #f5f8fc !important;
+  font-size: 0.63rem !important;
+  line-height: 1.12;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.measurement-review-table .measurement-matrix-description-heading span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.measurement-review-table .measurement-matrix-section-row th,
+.measurement-review-table .measurement-matrix-section-row td {
+  height: 24px;
+  background: #fbfcfe;
+}
+
+.measurement-review-table .measurement-matrix-quantity-cell,
+.measurement-review-table .measurement-matrix-empty-cell {
+  height: 24px;
+  min-width: 92px;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-table .measurement-table-input.is-quantity {
+  width: 100%;
+  min-height: 20px;
+  border-radius: 2px;
+  border-color: transparent;
+  background: transparent;
+  padding: 1px 3px;
+  color: #172033;
+  font-size: inherit;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-table .measurement-matrix-empty-cell .measurement-table-input.is-quantity:not(.has-value) {
+  color: transparent;
+}
+
+.measurement-review-table .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity,
+.measurement-review-table .measurement-matrix-empty-cell .measurement-table-input.is-quantity:focus,
+.measurement-review-table .measurement-matrix-empty-cell .measurement-table-input.is-quantity.has-value {
+  color: #172033;
+}
+
+.measurement-review-table .measurement-table-input.is-quantity:hover {
+  border-color: #d6e0ec;
+  background: #fbfdff;
+}
+
+.measurement-review-table .measurement-table-input.is-quantity:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(37 99 235 / 34%);
+}
+
+.measurement-review-table .measurement-matrix-total-row th,
+.measurement-review-table .measurement-matrix-total-row td {
+  border-top: 2px solid #adc0d5;
+  background: #edf3fa;
+  font-size: 0.72rem;
+}
+
+.measurement-review-table .measurement-matrix-total-row .measurement-matrix-axis {
+  background: #e2ebf6;
+}

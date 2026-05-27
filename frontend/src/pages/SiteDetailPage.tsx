@@ -1740,7 +1740,7 @@ function MeasurementReviewTable({
           <tr>
             <th className="measurement-matrix-axis">Beschreibung</th>
             {items.map((item) => (
-              <th className="measurement-matrix-description-heading" key={item.id}>{item.description}</th>
+              <th className="measurement-matrix-description-heading" key={item.id} title={item.description}><span>{item.description}</span></th>
             ))}
           </tr>
           <tr>
@@ -1767,7 +1767,7 @@ function MeasurementReviewTable({
                   return (
                     <td className="measurement-matrix-empty-cell" key={item.id}>
                       <input
-                        className="measurement-table-input is-quantity"
+                        className={`measurement-table-input is-quantity${draftValue.trim() ? " has-value" : ""}`}
                         value={draftValue}
                         disabled={!canEditRows || reviewActionLoading || isSaving || savingCellKey !== null}
                         inputMode="decimal"
