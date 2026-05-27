@@ -321,7 +321,6 @@ export function SiteDetailPage() {
     try {
       await api.updateSiteMeasurementEntry(site.id, batch.id, entryId, payload);
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
-      setMeasurementReviewMessage("Aufmaßzeile wurde aktualisiert.");
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden."));
       throw requestError;
@@ -344,7 +343,6 @@ export function SiteDetailPage() {
     try {
       await api.createSiteMeasurementEntry(site.id, batch.id, measurementItemId, payload);
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
-      setMeasurementReviewMessage("Aufmaßzeile wurde angelegt.");
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht angelegt werden."));
       throw requestError;
@@ -1480,7 +1478,7 @@ function MeasurementReviewPanel({
       await onResetToSubmitted(batch);
       setUndoStack([]);
     } catch {
-      setInlineError("Monteurstand konnte nicht wiederhergestellt werden.");
+      // The parent handler already surfaces the API error; avoid duplicate red messages.
     }
   }
 

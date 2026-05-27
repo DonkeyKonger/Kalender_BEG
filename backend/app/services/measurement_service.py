@@ -320,17 +320,28 @@ class MeasurementService:
                 "Dieses Aufmaß enthält keine Aufmaßzeilen.",
             )
 
-        missing_snapshot = any(
-            entry.submitted_area_or_comment is None or entry.submitted_quantity is None
-            for entry in entries
-        )
-        if missing_snapshot:
+        original_entries: list[SiteMeasurementEntry] = []
+        review_only_entries: list[SiteMeasurementEntry] = []
+        has_partial_snapshot = False
+        for entry in entries:
+            has_submitted_area = entry.submitted_area_or_comment is not None
+            has_submitted_quantity = entry.submitted_quantity is not None
+            if has_submitted_area and has_submitted_quantity:
+                original_entries.append(entry)
+            elif not has_submitted_area and not has_submitted_quantity:
+                review_only_entries.append(entry)
+            else:
+                has_partial_snapshot = True
+
+        if has_partial_snapshot or not original_entries:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Der ursprüngliche Monteurstand ist für dieses Aufmaß nicht gespeichert.",
             )
 
-        for entry in entries:
+        for entry in review_only_entries:
+            self.db.delete(entry)
+        for entry in original_entries:
             if entry.submitted_area_or_comment is not None:
                 entry.area_or_comment = entry.submitted_area_or_comment
             if entry.submitted_quantity is not None:

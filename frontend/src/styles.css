@@ -6549,15 +6549,18 @@ button.person-chip:focus-visible {
   position: sticky;
   left: 0;
   z-index: 5;
-  min-width: 102px;
-  max-width: 140px;
+  min-width: 168px;
+  max-width: 190px;
   border-right-color: var(--ct-border-strong);
   background: var(--ct-table-muted) !important;
   color: var(--ct-text);
   font-size: 0.67rem;
   font-weight: 800;
+  line-height: 1.12;
   text-transform: none;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table thead .measurement-matrix-axis {
