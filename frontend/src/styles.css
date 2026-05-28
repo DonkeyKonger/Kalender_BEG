@@ -417,19 +417,7 @@ button:disabled {
   }
 
   .topbar {
-    justify-content: flex-end;
-    min-height: 42px;
-    padding: 7px 10px;
-  }
-
-  .topbar > div {
     display: none;
-  }
-
-  .topbar .icon-button {
-    min-height: 30px;
-    padding: 7px 9px;
-    font-size: 0.78rem;
   }
 
   .content-area {
@@ -2531,6 +2519,37 @@ button.person-chip:focus-visible {
 
 .mobile-home-page {
   gap: 12px;
+}
+
+.mobile-home-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-home-actions .icon-button {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.mobile-subpage-title {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-subpage-title h1,
+.mobile-subpage-title p {
+  margin: 0;
+}
+
+.mobile-subpage-title h1 {
+  color: #111827;
+  font-size: 1.25rem;
+  line-height: 1.15;
+  letter-spacing: 0;
 }
 
 .mobile-home-hero {

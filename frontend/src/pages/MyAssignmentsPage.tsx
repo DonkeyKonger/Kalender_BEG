@@ -4,6 +4,7 @@ import {
   CalendarClock,
   FileText,
   HeartPulse,
+  LogOut,
   MapPin,
   Plane,
   RefreshCcw,
@@ -13,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
@@ -39,6 +41,7 @@ type PlaceholderContent = {
 };
 
 export function MyAssignmentsPage() {
+  const { logout } = useAuth();
   const [mode, setMode] = useState<MobileViewMode>("two_weeks");
   const [data, setData] = useState<MobileAssignmentsResponse | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -101,16 +104,9 @@ export function MyAssignmentsPage() {
           <span>Zurück</span>
         </button>
 
-        <header className="mobile-home-hero is-compact">
-          <div>
-            <p className="eyebrow">Einsatzliste</p>
-            <h1>Meine Einsätze</h1>
-            <p>{mode === "two_weeks" ? "Tagesansicht für die nächsten 14 Tage." : "Zusammengefasste Baustelleneinsätze im Jahresblick."}</p>
-          </div>
-          <button className="icon-button secondary mobile-refresh-button" type="button" onClick={() => void loadAssignments()}>
-            <RefreshCcw aria-hidden="true" size={17} />
-            <span>Aktualisieren</span>
-          </button>
+        <header className="mobile-subpage-title">
+          <p className="eyebrow">Einsatzliste</p>
+          <h1>Meine Einsätze</h1>
         </header>
 
         <div className="mobile-segment" role="group" aria-label="Zeitraum">
@@ -158,17 +154,16 @@ export function MyAssignmentsPage() {
 
   return (
     <section className="mobile-page mobile-home-page">
-      <header className="mobile-home-hero">
-        <div>
-          <p className="eyebrow">Heute</p>
-          <h1>Kalender Baustellen</h1>
-          <p>Deine Einsätze, Meldungen und Aufmaße für den Arbeitstag.</p>
-        </div>
-        <button className="icon-button secondary mobile-refresh-button" type="button" onClick={() => void loadAssignments()}>
+      <div className="mobile-home-actions" aria-label="Startseitenaktionen">
+        <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
           <RefreshCcw aria-hidden="true" size={17} />
           <span>Aktualisieren</span>
         </button>
-      </header>
+        <button className="icon-button" type="button" onClick={() => void logout()}>
+          <LogOut aria-hidden="true" size={17} />
+          <span>Abmelden</span>
+        </button>
+      </div>
 
       {loadedAt && (
         <p className={isFromCache ? "cache-note warning" : "cache-note"}>
