@@ -70,9 +70,9 @@ MATRIX_AREA_ROW_LINES = tuple(
     )
 )
 MATRIX_AREA_ROW_COUNT = len(MATRIX_AREA_ROW_LINES) - 1
-MATRIX_AREA_LABEL_X = 94.7
+MATRIX_AREA_LABEL_X = 96.3
 MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
-MATRIX_SECTION_LABEL_RIGHT = 94.9
+MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 
@@ -380,21 +380,21 @@ def _template_header(
         )
 
     _text(commands, TABLE_LEFT, 481, "Kunde:", 8, "F2")
-    _line(commands, 94.7, 478, 360, 478)
-    _text(commands, 99, 481, customer, 8)
+    _line(commands, 96, PAGE_HEIGHT - 121, 360, PAGE_HEIGHT - 121, 0.9)
+    _text(commands, 102, 481, customer, 8)
     _text(commands, 365, 481, "Komissions-Nr.:", 8, "F2")
-    _line(commands, 460, 478, 620, 478)
-    _text(commands, 465, 481, commission, 8)
-    _text(commands, TABLE_LEFT, 451, "Projekt/Bauvorhaben:", 8, "F2")
-    _line(commands, 175, 448, 420, 448)
-    _text(commands, 180, 451, project, 8)
-    _text(commands, 420, 451, "Blatt-Nr.:", 8, "F2")
-    _line(commands, 475, 448, 510, 448)
+    _line(commands, 430, PAGE_HEIGHT - 121, 620, PAGE_HEIGHT - 121, 0.9)
+    _text(commands, 464, 479, commission, 10.5, "F2", color=(0.7, 0, 0))
+    _text(commands, TABLE_LEFT, 456, "Projekt/Bauvorhaben:", 8, "F2")
+    _line(commands, 139, PAGE_HEIGHT - 143, 421, PAGE_HEIGHT - 143, 0.9)
+    _text(commands, 181, 456, project, 8)
+    _text(commands, 420, 456, "Blatt-Nr.:", 8, "F2")
+    _line(commands, 456, PAGE_HEIGHT - 143, 509, PAGE_HEIGHT - 143, 0.9)
     sheet_label_size = 5.0 if len(sheet_label) > 8 else 7.4
-    _text(commands, 477, 451, sheet_label, sheet_label_size, "F2")
-    _text(commands, 510, 451, "Datum:", 8, "F2")
-    _line(commands, 552, 448, 620, 448)
-    _text(commands, 557, 451, date_label, 8)
+    _text(commands, 476, 456, sheet_label, sheet_label_size, "F2")
+    _text(commands, 510, 456, "Datum:", 8, "F2")
+    _line(commands, 553, PAGE_HEIGHT - 143, 620, PAGE_HEIGHT - 143, 0.9)
+    _text(commands, 558, 456, date_label, 8)
 
 
 def _header_meta_row(
@@ -464,12 +464,11 @@ def _draw_measurement_matrix(
             MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM,
             position.description,
         )
-        _cell_text(
+        _text_centered(
             commands,
-            x,
-            _baseline_between(MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, 6.2) + 2,
+            (x + column_right) / 2,
+            MATRIX_UNIT_BOTTOM + 3,
             position.unit,
-            width,
             6.2,
             "F2",
         )
@@ -532,7 +531,14 @@ def _draw_matrix_grid(commands: list[bytes]) -> None:
 
     for x in MATRIX_COLUMN_BOUNDARIES[1:-1]:
         _line(commands, x, MATRIX_BOTTOM, x, TABLE_TOP, 0.75)
-    _line(commands, MATRIX_SECTION_LABEL_RIGHT, MATRIX_BOTTOM, MATRIX_UNIT_BOTTOM, 0.85)
+    _line(
+        commands,
+        MATRIX_SECTION_LABEL_RIGHT,
+        MATRIX_TOTAL_TOP,
+        MATRIX_SECTION_LABEL_RIGHT,
+        PAGE_HEIGHT - 336.3,
+        0.85,
+    )
     _line(commands, MATRIX_X, MATRIX_BOTTOM, MATRIX_X, TABLE_TOP, 1.35)
 
     _line(commands, TABLE_LEFT, MATRIX_BOTTOM, TABLE_LEFT, TABLE_TOP, 1.6)
@@ -677,10 +683,11 @@ def _text(
     font: str = "F1",
     *,
     align_right: bool = False,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
     text_width = len(text) * size * 0.48
     text_x = x - text_width if align_right else x
-    commands.append(
+    text_command = (
         b"BT /"
         + font.encode("ascii")
         + b" "
@@ -692,6 +699,20 @@ def _text(
         + b" Td "
         + _pdf_string(text)
         + b" Tj ET"
+    )
+    if color is None:
+        commands.append(text_command)
+        return
+    commands.append(
+        b"q "
+        + _number(color[0])
+        + b" "
+        + _number(color[1])
+        + b" "
+        + _number(color[2])
+        + b" rg "
+        + text_command
+        + b" Q"
     )
 
 
