@@ -3575,14 +3575,48 @@ button.person-chip:focus-visible {
   padding: 10px 12px;
 }
 
+.measurement-base-main {
+  display: grid;
+  grid-template-columns: minmax(88px, 128px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.measurement-base-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.measurement-offer-note-input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #991b1b;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 3px 5px;
+}
+
+.measurement-offer-note-input:hover,
+.measurement-offer-note-input:focus {
+  border-color: #fecaca;
+  background: #fff7f7;
+  outline: none;
+}
+
 .measurement-base-card.is-active {
   border-color: #b9b2a7;
   background: #f7f4ee;
 }
 
-.measurement-base-card > div:first-child {
+.measurement-base-card > .measurement-base-main {
   display: grid;
-  gap: 3px;
+  gap: 10px;
 }
 
 .measurement-base-card small {
@@ -3601,6 +3635,10 @@ button.person-chip:focus-visible {
   .measurement-base-card {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .measurement-base-main {
+    grid-template-columns: 1fr;
   }
 
   .measurement-base-card > div:last-child {
@@ -3953,7 +3991,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   color: #172033;
@@ -3961,6 +3999,11 @@ button.person-chip:focus-visible {
   font: inherit;
   padding: 12px;
   text-align: left;
+}
+
+.measurement-review-card > .measurement-status {
+  justify-content: center;
+  width: 100%;
 }
 
 .measurement-review-card.is-submitted {
@@ -7043,6 +7086,7 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .project-document-search,
 .site-detail-page.is-project-file-workspace .measurement-import-modal-options select,
 .site-detail-page.is-project-file-workspace .measurement-import-modal-options .measurement-base-name-input,
+.site-detail-page.is-project-file-workspace .measurement-offer-note-input,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-input,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-quantity,
 .site-detail-page.is-project-file-workspace .measurement-table-input {
@@ -7052,11 +7096,25 @@ button.person-chip:focus-visible {
 }
 
 .site-detail-page.is-project-file-workspace .project-document-search:focus-within,
+.site-detail-page.is-project-file-workspace .measurement-offer-note-input:focus,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-input:focus,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-quantity:focus,
 .site-detail-page.is-project-file-workspace .measurement-table-input:focus {
   border-color: var(--pf-primary);
   box-shadow: 0 0 0 3px rgb(30 41 59 / 9%);
+}
+
+.site-detail-page.is-project-file-workspace .measurement-offer-note-input {
+  border-color: transparent;
+  background: transparent;
+  color: #991b1b;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-offer-note-input:hover,
+.site-detail-page.is-project-file-workspace .measurement-offer-note-input:focus {
+  border-color: #fecaca;
+  background: #fff7f7;
+  box-shadow: none;
 }
 
 .site-detail-page.is-project-file-workspace .project-document-browser-actions,

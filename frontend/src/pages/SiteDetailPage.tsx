@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
@@ -22,7 +22,7 @@ const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Zeitenliste" },
   { key: "review", label: "Prüfung" },
   { key: "time-analysis", label: "Zeitauswertung" },
-  { key: "bases", label: "Aufmaße" },
+  { key: "bases", label: "Angebot" },
 ];
 
 const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
@@ -418,7 +418,7 @@ export function SiteDetailPage() {
   }
 
 
-  async function updateMeasurementBase(base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }): Promise<void> {
+  async function updateMeasurementBase(base: MeasurementBase, payload: MeasurementBaseUpdate): Promise<void> {
     if (!site || measurementImporting) {
       return;
     }
@@ -427,7 +427,7 @@ export function SiteDetailPage() {
       const updated = await api.updateMeasurementBase(site.id, base.id, payload);
       setMeasurementBases((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
     } catch (requestError) {
-      setMeasurementImportError(readApiError(requestError, "Aufmaßblatt konnte nicht aktualisiert werden."));
+      setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktualisiert werden."));
     }
   }
 
@@ -439,9 +439,9 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       setMeasurementBases(await api.activateMeasurementBase(site.id, base.id));
-      setMeasurementImportMessage(`${formatMeasurementBaseName(base)} ist jetzt aktiv.`);
+      setMeasurementImportMessage("Angebot ist jetzt aktiv.");
     } catch (requestError) {
-      setMeasurementImportError(readApiError(requestError, "Aufmaßblatt konnte nicht aktiviert werden."));
+      setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktiviert werden."));
     }
   }
 
@@ -450,7 +450,7 @@ export function SiteDetailPage() {
       return;
     }
     const confirmed = window.confirm(
-      "Aufmaßblatt wirklich löschen?\n\nImportierte Positionen dieses Aufmaßblatts werden entfernt. Bereits erfasste oder abgerechnete Aufmaße dürfen nicht gelöscht werden.",
+      "Angebot wirklich löschen?\n\nImportierte Positionen dieses Angebots werden entfernt. Bereits erfasste oder abgerechnete Aufmaße dürfen nicht gelöscht werden.",
     );
     if (!confirmed) {
       return;
@@ -462,9 +462,9 @@ export function SiteDetailPage() {
       const items = await api.measurementItems(site.id);
       setMeasurementBases(bases);
       setMeasurementItems(items);
-      setMeasurementImportMessage(`${formatMeasurementBaseName(base)} wurde gelöscht.`);
+      setMeasurementImportMessage("Angebot wurde gelöscht.");
     } catch (requestError) {
-      setMeasurementImportError(readApiError(requestError, "Aufmaßblatt konnte nicht gelöscht werden."));
+      setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht gelöscht werden."));
     }
   }
 
@@ -1278,7 +1278,7 @@ function MeasurementTab({
   importMessage: string | null;
   importError: string | null;
   onImport: (file: File, options: MeasurementImportOptions) => Promise<void>;
-  onUpdateBase: (base: MeasurementBase, payload: { status?: "draft" | "active" | "closed" | "archived"; released_to_mobile?: boolean }) => void;
+  onUpdateBase: (base: MeasurementBase, payload: MeasurementBaseUpdate) => void;
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
   onRetry: () => void;
@@ -1300,8 +1300,6 @@ function MeasurementTab({
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
-  const latestImport = items[0];
-
   return (
     <div className="project-record-tab-panel">
       <div className="project-record-subtabs" role="tablist" aria-label="Aufmaß Bereiche">
@@ -1324,7 +1322,6 @@ function MeasurementTab({
           siteNumber={siteNumber}
           bases={bases}
           items={items}
-          latestImport={latestImport}
           isLoading={isLoading}
           error={error}
           isImporting={isImporting}
@@ -1366,6 +1363,7 @@ function MeasurementTab({
           items={items}
           message={importMessage}
           error={importError}
+          onUpdateBase={onUpdateBase}
           onActivateBase={onActivateBase}
           onDeleteBase={onDeleteBase}
         />
@@ -1378,7 +1376,6 @@ function MeasurementTimesheetPanel({
   siteNumber,
   bases,
   items,
-  latestImport,
   isLoading,
   error,
   isImporting,
@@ -1390,7 +1387,6 @@ function MeasurementTimesheetPanel({
   siteNumber: string | null;
   bases: MeasurementBase[];
   items: MeasurementItem[];
-  latestImport: MeasurementItem | undefined;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
@@ -1668,6 +1664,7 @@ function MeasurementBasesPanel({
   items,
   message,
   error,
+  onUpdateBase,
   onActivateBase,
   onDeleteBase,
 }: {
@@ -1675,6 +1672,7 @@ function MeasurementBasesPanel({
   items: MeasurementItem[];
   message: string | null;
   error: string | null;
+  onUpdateBase: (base: MeasurementBase, payload: MeasurementBaseUpdate) => void;
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
 }) {
@@ -1682,32 +1680,61 @@ function MeasurementBasesPanel({
     counts.set(item.measurement_base_id, (counts.get(item.measurement_base_id) ?? 0) + 1);
     return counts;
   }, new Map());
+  const sortedBases = bases.slice().sort((left, right) => (
+    new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+    || left.id - right.id
+  ));
+  const offerNumberByBaseId = new Map(sortedBases.map((base, index) => [base.id, index + 1]));
 
   return (
     <section className="measurement-bases-panel">
       <div className="project-record-toolbar">
         <div>
-          <h2><Ruler aria-hidden="true" size={18} />Aufmaße</h2>
-          <p>Aufmaßblätter verwalten. Es ist immer genau ein Aufmaßblatt für Monteure aktiv.</p>
+          <h2><Ruler aria-hidden="true" size={18} />Angebotsübersicht</h2>
+          <p>Angebote verwalten. Der Monteur sieht immer genau ein Angebot für die Aufmaßerstellung.</p>
         </div>
       </div>
       {message ? <div className="project-record-empty-state is-success">{message}</div> : null}
       {error ? <div className="project-record-empty-state is-error"><strong>{error}</strong></div> : null}
       {bases.length === 0 ? (
-        <div className="project-record-empty-state">Noch kein Aufmaßblatt vorhanden.</div>
+        <div className="project-record-empty-state">Noch kein Angebot vorhanden.</div>
       ) : (
         <div className="measurement-base-list">
-          {bases.map((base) => {
+          {sortedBases.map((base) => {
             const isActive = base.status === "active" && base.released_to_mobile;
             const positionCount = base.item_count ?? itemCounts.get(base.id) ?? 0;
             const hasMeasurementData = (base.batch_count ?? 0) > 0;
+            const offerLabel = `Angebot ${offerNumberByBaseId.get(base.id) ?? ""}`.trim();
             return (
               <article className={`measurement-base-card${isActive ? " is-active" : ""}`} key={base.id}>
-                <div>
-                  <strong>{formatMeasurementBaseName(base)}</strong>
-                  <small>
-                    {isActive ? "Aktiv" : "Inaktiv"} · {positionCount} Positionen · erstellt {formatDateTime(base.created_at)}
-                  </small>
+                <div className="measurement-base-main">
+                  <input
+                    className="measurement-offer-note-input"
+                    key={`${base.id}-${base.source_note ?? ""}`}
+                    defaultValue={base.source_note ?? ""}
+                    aria-label={`Notiz zu ${offerLabel}`}
+                    onBlur={(event) => {
+                      const nextValue = event.currentTarget.value.trim();
+                      if (nextValue !== (base.source_note ?? "")) {
+                        onUpdateBase(base, { source_note: nextValue || null });
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                      if (event.key === "Escape") {
+                        event.currentTarget.value = base.source_note ?? "";
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <div className="measurement-base-copy">
+                    <strong>{offerLabel}</strong>
+                    <small>
+                      {isActive ? "Aktiv" : "Inaktiv"} · {positionCount} Positionen · erstellt {formatDateTime(base.created_at)}
+                    </small>
+                  </div>
                 </div>
                 <div>
                   {!isActive ? (
@@ -1721,9 +1748,9 @@ function MeasurementBasesPanel({
                     disabled={isActive || hasMeasurementData}
                     title={
                       isActive
-                        ? "Aktive Aufmaßblätter können nicht gelöscht werden."
+                        ? "Aktive Angebote können nicht gelöscht werden."
                         : hasMeasurementData
-                          ? "Aufmaßblätter mit erfassten Aufmaßen können nicht gelöscht werden."
+                          ? "Angebote mit erfassten Aufmaßen können nicht gelöscht werden."
                           : undefined
                     }
                     onClick={() => onDeleteBase(base)}
