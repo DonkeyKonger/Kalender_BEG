@@ -1,4 +1,4 @@
-name: Build and deploy Python app to Azure Web App - kalender-beg-staging-api
+name: Build and deploy Python app to Azure Web App - kalender-beg-staging-api-a0c2c9b2hna9bjf2
 
 on:
   push:
@@ -67,7 +67,6 @@ jobs:
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: kalender-beg-staging-api
-          slot-name: Production
+          app-name: kalender-beg-staging-api-a0c2c9b2hna9bjf2
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
           package: backend-release.zip
