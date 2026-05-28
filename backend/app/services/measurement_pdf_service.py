@@ -381,17 +381,17 @@ def _template_header(
 
     _text(commands, TABLE_LEFT, 481, "Kunde:", 8, "F2")
     _line(commands, 96, PAGE_HEIGHT - 121, 360, PAGE_HEIGHT - 121, 0.9)
-    _text(commands, 102, 481, customer, 8)
+    _text(commands, 101, 481, customer, 8)
     _text(commands, 365, 481, "Komissions-Nr.:", 8, "F2")
     _line(commands, 430, PAGE_HEIGHT - 121, 620, PAGE_HEIGHT - 121, 0.9)
-    _text(commands, 464, 479, commission, 10.5, "F2", color=(0.7, 0, 0))
+    _text(commands, 436, 479, commission, 10.5, "F2", color=(0.7, 0, 0))
     _text(commands, TABLE_LEFT, 456, "Projekt/Bauvorhaben:", 8, "F2")
     _line(commands, 139, PAGE_HEIGHT - 143, 421, PAGE_HEIGHT - 143, 0.9)
-    _text(commands, 181, 456, project, 8)
+    _text(commands, 144, 456, project, 8)
     _text(commands, 420, 456, "Blatt-Nr.:", 8, "F2")
     _line(commands, 456, PAGE_HEIGHT - 143, 509, PAGE_HEIGHT - 143, 0.9)
     sheet_label_size = 5.0 if len(sheet_label) > 8 else 7.4
-    _text(commands, 476, 456, sheet_label, sheet_label_size, "F2")
+    _text(commands, 461, 456, sheet_label, sheet_label_size, "F2")
     _text(commands, 510, 456, "Datum:", 8, "F2")
     _line(commands, 553, PAGE_HEIGHT - 143, 620, PAGE_HEIGHT - 143, 0.9)
     _text(commands, 558, 456, date_label, 8)
@@ -450,10 +450,10 @@ def _draw_measurement_matrix(
         _cell_text(
             commands,
             x,
-            _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 5.4) + 1.5,
+            _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5,
             position.position,
             width,
-            5.4,
+            6.4,
             "F2",
         )
         _rotated_cell_text(
@@ -469,7 +469,7 @@ def _draw_measurement_matrix(
             (x + column_right) / 2,
             MATRIX_UNIT_BOTTOM + 3,
             position.unit,
-            6.2,
+            8.2,
             "F2",
         )
 
@@ -496,8 +496,15 @@ def _draw_measurement_matrix(
     for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
         row_top = MATRIX_AREA_ROW_LINES[area_index]
         row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
-        y = _baseline_between(row_top, row_bottom, 6.3)
-        _cell_text(commands, MATRIX_AREA_LABEL_X, y + 2, area.label, MATRIX_AREA_LABEL_WIDTH, 6.3)
+        y = _baseline_between(row_top, row_bottom, 7.3)
+        _text_fitted(
+            commands,
+            MATRIX_AREA_LABEL_X + 2,
+            y,
+            area.label,
+            7.3,
+            max_width=MATRIX_AREA_LABEL_WIDTH - 4,
+        )
 
 
 def _signature_block(commands: list[bytes], *, contractor_name: str) -> None:
@@ -759,8 +766,8 @@ def _rotated_cell_text(
     height: float,
     text: str,
 ) -> None:
-    size = 5.8
-    line_height = 6.4
+    size = 6.8
+    line_height = 7.4
     max_chars = max(16, int((height - 8) / (size * 0.48)))
     lines = _wrap_ellipsis(text, width=max_chars, max_lines=5)
     block_width = (len(lines) - 1) * line_height
