@@ -7591,7 +7591,7 @@ button.person-chip:focus-visible {
   border-radius: 0;
   background: var(--ct-surface);
   box-shadow: none;
-  padding-bottom: 0;
+  padding-bottom: 14px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
@@ -7736,6 +7736,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-placeholder-header-input {
+  display: block;
   width: 100%;
   min-height: 17px;
   border: 1px solid transparent;
@@ -7749,6 +7750,7 @@ button.person-chip:focus-visible {
   line-height: 1.05;
   padding: 0 2px;
   text-align: left;
+  vertical-align: top;
 }
 
 .measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input {
@@ -7824,15 +7826,85 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
+.measurement-review-detail.is-table-view .measurement-matrix-position-heading,
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-heading {
+  position: relative;
+  vertical-align: top !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 4px;
+  z-index: 30;
+  display: grid;
+  width: 260px;
+  max-height: 210px;
+  overflow: auto;
+  border: 1px solid #b8c5d7;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 16%);
+  padding: 3px;
+  text-align: left;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions button {
+  display: grid;
+  grid-template-columns: minmax(56px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ct-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.66rem;
+  line-height: 1.12;
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions button:hover,
+.measurement-review-detail.is-table-view .measurement-position-suggestions button.is-active {
+  background: #eaf0f7;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions span {
+  overflow: hidden;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions small {
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 850;
+  text-transform: lowercase;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell.is-manual-column {
+  background: var(--ct-table-cell) !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell.is-manual-column .measurement-table-input.is-quantity {
+  color: var(--ct-text);
+}
+
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
   position: sticky;
-  bottom: 0;
+  bottom: 14px;
   z-index: 4;
+  height: 44px !important;
   border-top: 2px solid var(--ct-border-strong);
   background: var(--ct-table-total) !important;
   font-size: 0.69rem;
   font-weight: 900;
+  vertical-align: middle !important;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {

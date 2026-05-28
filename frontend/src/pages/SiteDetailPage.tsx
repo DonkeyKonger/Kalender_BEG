@@ -1777,6 +1777,19 @@ type MeasurementEntryUndoState = {
   quantity: string;
 };
 
+type MeasurementManualColumnDraft = {
+  position: string;
+  description: string;
+  unit: string;
+  linkedItemId?: number | null;
+};
+
+type MeasurementSuggestionState = {
+  columnKey: string;
+  query: string;
+  activeIndex: number;
+} | null;
+
 
 type MeasurementMatrixAreaRow = {
   key: string;
@@ -1823,6 +1836,31 @@ function normalizeMeasurementAreaLabel(value: string): string {
     return `${Number(floorMatch[1])}. OG`;
   }
   return trimmed;
+}
+
+function normalizeMeasurementUnitDisplay(unit: string | null | undefined): string {
+  const raw = (unit ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  const normalized = raw
+    .toLocaleLowerCase("de-DE")
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ");
+
+  if (["st", "stk", "stck", "stück", "stueck", "stücke", "stuecke"].includes(normalized)) {
+    return "st";
+  }
+  if (["m", "mtr", "meter", "lfm", "laufmeter"].includes(normalized)) {
+    return "m";
+  }
+  if (["std", "stunde", "stunden", "h"].includes(normalized)) {
+    return "std";
+  }
+  if (["pausch", "pauschal", "psch"].includes(normalized)) {
+    return "psch";
+  }
+  return normalized;
 }
 
 function getMeasurementAreaKey(value: string): string {
@@ -2238,6 +2276,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading && itemsWithEntries.length > 0 && viewMode === "table" ? (
           <MeasurementReviewTable
             items={itemsWithEntries}
+            positionSuggestions={batchItems}
             entryDrafts={entryDrafts}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
@@ -2312,6 +2351,7 @@ function MeasurementViewToggle({
 
 function MeasurementReviewTable({
   items,
+  positionSuggestions,
   entryDrafts,
   canEditRows,
   reviewActionLoading,
@@ -2321,6 +2361,7 @@ function MeasurementReviewTable({
   onCellCreate,
 }: {
   items: MobileMeasurementItem[];
+  positionSuggestions: MobileMeasurementItem[];
   entryDrafts: Record<number, MeasurementEntryDraft>;
   canEditRows: boolean;
   reviewActionLoading: boolean;
@@ -2331,10 +2372,13 @@ function MeasurementReviewTable({
 }) {
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
-  const placeholderHeaderDraftsRef = useRef<Record<string, { position: string; description: string; unit: string }>>({});
   const savingCellKeysRef = useRef<Set<string>>(new Set());
   const [viewportColumnCount, setViewportColumnCount] = useState(MEASUREMENT_TABLE_MIN_COLUMNS);
+  const [manualColumnDrafts, setManualColumnDrafts] = useState<Record<string, MeasurementManualColumnDraft>>({});
+  const [manualColumnTotals, setManualColumnTotals] = useState<Record<string, number>>({});
+  const [suggestionState, setSuggestionState] = useState<MeasurementSuggestionState>(null);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
+  const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length, viewportColumnCount);
   const placeholderColumnCount = Math.max(0, displayColumnCount - items.length);
   const displayColumns: Array<
@@ -2374,6 +2418,19 @@ function MeasurementReviewTable({
     return groups;
   }, [items]);
   const totalsByItemId = useMemo(() => new Map(items.map((item) => [item.id, getMeasurementCellQuantity(item.entries)])), [items]);
+  const suggestionMatches = useMemo(() => {
+    if (!suggestionState?.query.trim()) {
+      return [];
+    }
+    const query = suggestionState.query.trim().toLocaleLowerCase("de-DE");
+    return positionSuggestions
+      .filter((item) => !actualItemIds.has(item.id))
+      .filter((item) => (
+        item.position.toLocaleLowerCase("de-DE").includes(query)
+        || item.description.toLocaleLowerCase("de-DE").includes(query)
+      ))
+      .slice(0, 8);
+  }, [actualItemIds, positionSuggestions, suggestionState]);
   const tableStyle = useMemo(() => ({
     "--measurement-axis-width": `${MEASUREMENT_TABLE_AXIS_WIDTH}px`,
     "--measurement-position-width": `${MEASUREMENT_TABLE_POSITION_WIDTH}px`,
@@ -2405,20 +2462,67 @@ function MeasurementReviewTable({
     areaLabelDraftsRef.current[areaKey] = value;
   }
 
-  function updatePlaceholderHeaderDraft(columnKey: string, field: "position" | "description" | "unit", value: string): void {
-    placeholderHeaderDraftsRef.current[columnKey] = {
-      position: placeholderHeaderDraftsRef.current[columnKey]?.position ?? "",
-      description: placeholderHeaderDraftsRef.current[columnKey]?.description ?? "",
-      unit: placeholderHeaderDraftsRef.current[columnKey]?.unit ?? "",
-      [field]: value,
-    };
+  function getManualColumnDraft(columnKey: string): MeasurementManualColumnDraft {
+    return manualColumnDrafts[columnKey] ?? { position: "", description: "", unit: "", linkedItemId: null };
+  }
+
+  function getManualColumnItem(columnKey: string): MobileMeasurementItem | null {
+    const linkedItemId = manualColumnDrafts[columnKey]?.linkedItemId;
+    if (!linkedItemId || actualItemIds.has(linkedItemId)) {
+      return null;
+    }
+    return positionSuggestions.find((item) => item.id === linkedItemId) ?? null;
+  }
+
+  function updateManualColumnDraft(columnKey: string, patch: Partial<MeasurementManualColumnDraft>): void {
+    setManualColumnDrafts((current) => ({
+      ...current,
+      [columnKey]: {
+        position: current[columnKey]?.position ?? "",
+        description: current[columnKey]?.description ?? "",
+        unit: current[columnKey]?.unit ?? "",
+        linkedItemId: current[columnKey]?.linkedItemId ?? null,
+        ...patch,
+      },
+    }));
+  }
+
+  function selectPositionSuggestion(columnKey: string, item: MobileMeasurementItem): void {
+    updateManualColumnDraft(columnKey, {
+      position: item.position,
+      description: item.description,
+      unit: normalizeMeasurementUnitDisplay(item.unit),
+      linkedItemId: item.id,
+    });
+    setSuggestionState(null);
+  }
+
+  function updateManualColumnTotal(columnKey: string): void {
+    const node = tableWrapRef.current;
+    if (!node) {
+      return;
+    }
+    const inputs = node.querySelectorAll<HTMLInputElement>(`input[data-manual-column="${columnKey}"]`);
+    let total = 0;
+    inputs.forEach((input) => {
+      const quantity = parseMeasurementQuantityInput(input.value);
+      if (quantity !== null) {
+        total += quantity;
+      }
+    });
+    setManualColumnTotals((current) => ({ ...current, [columnKey]: total }));
   }
 
   function getCellEntries(item: MobileMeasurementItem, areaKey: string): MobileMeasurementItem["entries"] {
     return entryGroups.get(`${item.id}:${areaKey}`) ?? [];
   }
 
-  async function saveNewCellDraft(item: MobileMeasurementItem, area: MeasurementMatrixAreaRow, input: HTMLInputElement): Promise<void> {
+  async function saveNewCellDraft(
+    item: MobileMeasurementItem,
+    area: MeasurementMatrixAreaRow,
+    input: HTMLInputElement,
+    sourceColumnKey?: string,
+  ): Promise<void> {
     const value = input.value;
     const quantity = parseMeasurementQuantityInput(value);
     const areaLabel = getAreaLabel(area).trim();
@@ -2438,6 +2542,18 @@ function MeasurementReviewTable({
     try {
       await onCellCreate(item, areaLabel, quantity);
       input.value = "";
+      if (sourceColumnKey) {
+        setManualColumnDrafts((current) => {
+          const next = { ...current };
+          delete next[sourceColumnKey];
+          return next;
+        });
+        setManualColumnTotals((current) => {
+          const next = { ...current };
+          delete next[sourceColumnKey];
+          return next;
+        });
+      }
     } finally {
       savingCellKeysRef.current.delete(cellKey);
     }
@@ -2462,21 +2578,80 @@ function MeasurementReviewTable({
         <thead>
           <tr className="measurement-matrix-meta-row measurement-matrix-position-row">
             <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
-            {displayColumns.map((column) => column.kind === "item" ? (
+            {displayColumns.map((column) => {
+              if (column.kind === "item") {
+                return (
               <th className="measurement-matrix-position-heading" key={column.key} scope="col">
                 <strong>{column.item.position}</strong>
               </th>
-            ) : (
+                );
+              }
+              const draft = getManualColumnDraft(column.key);
+              const isSuggestionOpen = suggestionState?.columnKey === column.key && suggestionMatches.length > 0;
+              return (
               <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
                 <input
                   className="measurement-placeholder-header-input"
-                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.position ?? ""}
+                  value={draft.position}
                   aria-label={`Manuelle Pos.-Nr. Spalte ${column.index}`}
                   placeholder="Pos."
-                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "position", event.currentTarget.value)}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    updateManualColumnDraft(column.key, { position: value, linkedItemId: null });
+                    setSuggestionState({ columnKey: column.key, query: value, activeIndex: 0 });
+                  }}
+                  onFocus={(event) => {
+                    if (event.currentTarget.value.trim()) {
+                      setSuggestionState({ columnKey: column.key, query: event.currentTarget.value, activeIndex: 0 });
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" && suggestionMatches.length > 0) {
+                      event.preventDefault();
+                      setSuggestionState((current) => current?.columnKey === column.key
+                        ? { ...current, activeIndex: Math.min(current.activeIndex + 1, suggestionMatches.length - 1) }
+                        : current);
+                    }
+                    if (event.key === "ArrowUp" && suggestionMatches.length > 0) {
+                      event.preventDefault();
+                      setSuggestionState((current) => current?.columnKey === column.key
+                        ? { ...current, activeIndex: Math.max(current.activeIndex - 1, 0) }
+                        : current);
+                    }
+                    if (event.key === "Enter" && suggestionState?.columnKey === column.key && suggestionMatches.length > 0) {
+                      event.preventDefault();
+                      selectPositionSuggestion(column.key, suggestionMatches[suggestionState.activeIndex] ?? suggestionMatches[0]);
+                    }
+                    if (event.key === "Escape") {
+                      setSuggestionState(null);
+                    }
+                  }}
                 />
+                {isSuggestionOpen ? (
+                  <div className="measurement-position-suggestions" role="listbox">
+                    {suggestionMatches.map((item, index) => (
+                      <button
+                        className={index === suggestionState.activeIndex ? "is-active" : ""}
+                        key={item.id}
+                        type="button"
+                        role="option"
+                        aria-selected={index === suggestionState.activeIndex}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectPositionSuggestion(column.key, item);
+                        }}
+                      >
+                        <strong>{item.position}</strong>
+                        <span>{item.description}</span>
+                        <small>{normalizeMeasurementUnitDisplay(item.unit)}</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </th>
-            ))}
+              );
+            })}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
             <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
@@ -2486,11 +2661,11 @@ function MeasurementReviewTable({
               <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
                 <textarea
                   className="measurement-placeholder-header-input is-description"
-                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.description ?? ""}
+                  value={getManualColumnDraft(column.key).description}
                   aria-label={`Manuelle Beschreibung Spalte ${column.index}`}
                   placeholder="Beschreibung"
                   rows={2}
-                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "description", event.currentTarget.value)}
+                  onChange={(event) => updateManualColumnDraft(column.key, { description: event.currentTarget.value })}
                 />
               </th>
             ))}
@@ -2498,15 +2673,16 @@ function MeasurementReviewTable({
           <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
             <th className="measurement-matrix-axis" scope="row">Einheit</th>
             {displayColumns.map((column) => column.kind === "item" ? (
-              <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{column.item.unit ?? "-"}</th>
+              <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{normalizeMeasurementUnitDisplay(column.item.unit) || "-"}</th>
             ) : (
               <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
                 <input
                   className="measurement-placeholder-header-input"
-                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.unit ?? ""}
+                  value={getManualColumnDraft(column.key).unit}
                   aria-label={`Manuelle Einheit Spalte ${column.index}`}
                   placeholder="Einheit"
-                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "unit", event.currentTarget.value)}
+                  onChange={(event) => updateManualColumnDraft(column.key, { unit: event.currentTarget.value })}
+                  onBlur={(event) => updateManualColumnDraft(column.key, { unit: normalizeMeasurementUnitDisplay(event.currentTarget.value) })}
                 />
               </th>
             ))}
@@ -2533,17 +2709,57 @@ function MeasurementReviewTable({
               </th>
               {displayColumns.map((column) => {
                 if (column.kind === "placeholder") {
+                  const manualItem = getManualColumnItem(column.key);
+                  const manualDraft = getManualColumnDraft(column.key);
+                  const isManualColumnActive = Boolean(
+                    manualItem
+                    || manualDraft.position.trim()
+                    || manualDraft.description.trim()
+                    || manualDraft.unit.trim(),
+                  );
+                  if (manualItem) {
+                    return (
+                      <td className="measurement-matrix-empty-cell is-manual-column" key={column.key}>
+                        <input
+                          className="measurement-table-input is-quantity"
+                          data-manual-column={column.key}
+                          disabled={!canEditRows || reviewActionLoading}
+                          inputMode="decimal"
+                          aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${manualItem.position}`}
+                          onInput={() => updateManualColumnTotal(column.key)}
+                          onBlur={(event) => {
+                            updateManualColumnTotal(column.key);
+                            void saveNewCellDraft(manualItem, area, event.currentTarget, column.key);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              updateManualColumnTotal(column.key);
+                              void saveNewCellDraft(manualItem, area, event.currentTarget, column.key);
+                            }
+                            if (event.key === "Escape") {
+                              event.currentTarget.value = "";
+                              updateManualColumnTotal(column.key);
+                            }
+                          }}
+                        />
+                      </td>
+                    );
+                  }
                   return (
-                    <td className="measurement-matrix-empty-cell measurement-matrix-placeholder-cell" key={column.key}>
+                    <td className={`measurement-matrix-empty-cell${isManualColumnActive ? " is-manual-column" : " measurement-matrix-placeholder-cell"}`} key={column.key}>
                       <input
                         className="measurement-table-input is-quantity"
+                        data-manual-column={column.key}
                         disabled={!canEditRows || reviewActionLoading}
                         inputMode="decimal"
-                        aria-label={`Vorbereitete Menge ${areaLabel || "ohne Bereich"} in leerer Positionsspalte`}
-                        title="Diese Spalte ist ein Arbeitsraster ohne importierte Position und wird noch nicht gespeichert."
+                        aria-label={`Vorbereitete Menge ${areaLabel || "ohne Bereich"} in manueller Positionsspalte`}
+                        title="Diese manuelle Spalte ist lokal vorbereitet. Dauerhaft gespeichert wird sie erst nach Auswahl einer vorhandenen Position."
+                        onInput={() => updateManualColumnTotal(column.key)}
                         onKeyDown={(event) => {
                           if (event.key === "Escape") {
                             event.currentTarget.value = "";
+                            updateManualColumnTotal(column.key);
                           }
                         }}
                       />
@@ -2621,7 +2837,9 @@ function MeasurementReviewTable({
                 <strong>{formatMeasurementNumber(totalsByItemId.get(column.item.id) ?? 0)}</strong>
               </td>
             ) : (
-              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key} />
+              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key}>
+                <strong>{(manualColumnTotals[column.key] ?? 0) > 0 ? formatMeasurementNumber(manualColumnTotals[column.key] ?? 0) : ""}</strong>
+              </td>
             ))}
           </tr>
         </tbody>
