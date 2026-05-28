@@ -75,11 +75,12 @@ export function MobileAssignmentDetailPage() {
     );
   }
 
-  const isFocusedEntry = activeTab === "measurement" && isMeasurementEntryMode;
+  const isMeasurementFlow = activeTab === "measurement";
+  const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
 
   return (
     <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}`}>
-      {!isFocusedEntry ? (
+      {!isMeasurementFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
             <ArrowLeft aria-hidden="true" size={17} />
@@ -126,7 +127,16 @@ export function MobileAssignmentDetailPage() {
 
       {activeTab === "overview" && <OverviewPanel assignment={assignment} />}
       {activeTab === "folders" && <PlaceholderPanel icon={FolderOpen} text="Diese Funktion ist vorbereitet und wird später aktiviert." />}
-      {activeTab === "measurement" && <MobileMeasurementTab assignment={assignment} onEntryModeChange={setIsMeasurementEntryMode} />}
+      {activeTab === "measurement" && (
+        <MobileMeasurementTab
+          assignment={assignment}
+          onBackToProject={() => {
+            setIsMeasurementEntryMode(false);
+            setActiveTab("overview");
+          }}
+          onEntryModeChange={setIsMeasurementEntryMode}
+        />
+      )}
       {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird später Wagen-, Werkzeug- und Materialinformationen anzeigen." />}
     </section>
   );
@@ -155,9 +165,11 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
 
 function MobileMeasurementTab({
   assignment,
+  onBackToProject,
   onEntryModeChange,
 }: {
   assignment: MobileAssignment;
+  onBackToProject: () => void;
   onEntryModeChange?: (isActive: boolean) => void;
 }) {
   const { user } = useAuth();
@@ -337,9 +349,17 @@ function MobileMeasurementTab({
   }
 
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel">
+    <div className="mobile-measurement-page mobile-measurement-panel">
+      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBackToProject}>
+        <ArrowLeft aria-hidden="true" size={17} />
+        <span>Projektakte</span>
+      </button>
+
       <div className="mobile-panel-title-row">
-        <h2>Aufmaßpakete</h2>
+        <div className="mobile-measurement-page-title">
+          <h1>Aufmaße</h1>
+          <p>{[assignment.site.site_number, assignment.site.name].filter(Boolean).join(" · ")}</p>
+        </div>
         <button
           className="primary-action"
           type="button"

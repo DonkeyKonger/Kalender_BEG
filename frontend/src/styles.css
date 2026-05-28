@@ -6629,6 +6629,36 @@ button.person-chip:focus-visible {
   gap: 12px;
 }
 
+.mobile-measurement-page {
+  display: grid;
+  gap: 12px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-measurement-page-title {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-measurement-page-title h1,
+.mobile-measurement-page-title p {
+  margin: 0;
+}
+
+.mobile-measurement-page-title h1 {
+  color: #111827;
+  font-size: 1.25rem;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.mobile-measurement-page-title p {
+  color: #65738a;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
 .mobile-measurement-search {
   display: flex;
   align-items: center;
