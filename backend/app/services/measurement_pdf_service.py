@@ -23,20 +23,55 @@ from app.models.user import User
 PAGE_WIDTH = 841.89
 PAGE_HEIGHT = 595.276
 MARGIN = 32
-TEMPLATE_LABEL_X = 54
-TEMPLATE_VALUE_X = 96
-MATRIX_X = 273
-MATRIX_TOP = 419
-MATRIX_POSITION_BOTTOM = 398
-MATRIX_DESCRIPTION_BOTTOM = 278
-MATRIX_UNIT_BOTTOM = 257
-MATRIX_BOTTOM = 91
-MATRIX_COLUMN_WIDTH = 41
-MATRIX_COLUMN_COUNT = 12
+TABLE_LEFT = 50.8
+TABLE_RIGHT = 763.6
+TABLE_TOP = PAGE_HEIGHT - 174.6
+MATRIX_POSITION_BOTTOM = PAGE_HEIGHT - 196.2
+MATRIX_DESCRIPTION_BOTTOM = PAGE_HEIGHT - 316.4
+MATRIX_UNIT_BOTTOM = PAGE_HEIGHT - 336.6
+MATRIX_TOTAL_TOP = PAGE_HEIGHT - 504.7
+MATRIX_BOTTOM = PAGE_HEIGHT - 518.8
+MATRIX_X = 232.6
+MATRIX_COLUMN_BOUNDARIES = (
+    232.6,
+    273.2,
+    313.2,
+    353.2,
+    395.3,
+    437.4,
+    479.2,
+    519.1,
+    559.4,
+    600.1,
+    642.2,
+    684.4,
+    724.3,
+    763.6,
+)
+MATRIX_COLUMN_COUNT = len(MATRIX_COLUMN_BOUNDARIES) - 1
 MATRIX_AREA_ROW_HEIGHT = 14
-MATRIX_AREA_ROW_COUNT = 11
-MATRIX_AREA_LABEL_X = 96
-MATRIX_AREA_LABEL_WIDTH = 136
+MATRIX_AREA_ROW_LINES = tuple(
+    PAGE_HEIGHT - top_y
+    for top_y in (
+        336.6,
+        351.4,
+        365.4,
+        379.4,
+        393.1,
+        407.2,
+        421.2,
+        435.2,
+        449.3,
+        463.3,
+        477.4,
+        491.4,
+        504.7,
+    )
+)
+MATRIX_AREA_ROW_COUNT = len(MATRIX_AREA_ROW_LINES) - 1
+MATRIX_AREA_LABEL_X = 94.7
+MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
+MATRIX_SECTION_LABEL_RIGHT = MATRIX_AREA_LABEL_X
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 
@@ -296,12 +331,12 @@ class MeasurementPdfService:
             commission=site.site_number or "-",
             date_label=_format_date(datetime.now()),
             sheet_label=f"{page_number}/{page_count}{page_suffix}",
-            logo_available=logo_available,
+            logo=_load_png_rgb(LOGO_PATH) if logo_available else None,
         )
-        _text(commands, 54, 431, f"Adresse: {project_address}", 7)
-        _text(commands, 371, 431, f"Monteur: {submitted_by}", 7)
-        _text(commands, 522, 431, f"Eingereicht: {submitted_at or '-'}", 7)
-        _text(commands, 650, 431, f"Status: {_status_label(batch.status)}", 7)
+        _text(commands, TABLE_LEFT, 431, f"Adresse: {project_address}", 6.5)
+        _text(commands, 298, 431, f"Monteur: {submitted_by}", 6.5)
+        _text(commands, 454, 431, f"Eingereicht: {submitted_at or '-'}", 6.5)
+        _text(commands, 635, 431, f"Status: {_status_label(batch.status)}", 6.5)
 
         _draw_measurement_matrix(
             commands=commands,
@@ -313,9 +348,7 @@ class MeasurementPdfService:
 
         if page_number == page_count:
             total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
-            _text(commands, 98, 77, "Gesamtsumme:", 8, "F2")
-            _line(commands, 176, 75, 250, 75)
-            _text(commands, 245, 77, _format_decimal(total), 8, "F2", align_right=True)
+            _draw_grand_total(commands, total)
             _signature_block(commands)
         else:
             _text(commands, PAGE_WIDTH - MARGIN, 68, "Fortsetzung auf folgendem Blatt", 8, "F2", align_right=True)
@@ -332,28 +365,37 @@ def _template_header(
     commission: str,
     date_label: str,
     sheet_label: str,
-    logo_available: bool,
+    logo: PdfImage | None,
 ) -> None:
     _text(commands, 56, 513, "Aufmaß", 20, "F2")
     _line(commands, 56, 510, 145, 510)
-    if logo_available:
-        _image(commands, LOGO_RESOURCE_NAME, 728, 511, 72, 72)
-    _text(commands, 650, 500, f"Aufmaß-Nr.: {title}", 10, "F2")
-    _text(commands, TEMPLATE_LABEL_X, 481, "Kunde:", 8, "F2")
-    _line(commands, 95, 478, 370, 478)
-    _text(commands, 100, 481, customer, 8)
-    _text(commands, 371, 481, "Komissions-Nr.:", 8, "F2")
-    _line(commands, 464, 478, 805, 478)
-    _text(commands, 470, 481, commission, 8)
-    _text(commands, 53, 451, "Projekt/Bauvorhaben:", 8, "F2")
-    _line(commands, 178, 448, 428, 448)
-    _text(commands, 184, 451, project, 8)
-    _text(commands, 428, 451, "Blatt-Nr.:", 8, "F2")
-    _line(commands, 480, 448, 520, 448)
-    _text(commands, 484, 451, sheet_label, 7)
-    _text(commands, 522, 451, "Datum:", 8, "F2")
-    _line(commands, 564, 448, 805, 448)
-    _text(commands, 570, 451, date_label, 8)
+    if logo is not None:
+        _image_fit(
+            commands,
+            LOGO_RESOURCE_NAME,
+            x=645,
+            top_y=65,
+            max_width=120,
+            max_height=80,
+            image=logo,
+        )
+    _text(commands, 642, 435, f"Aufmaß-Nr.: {title}", 8.5, "F2")
+
+    _text(commands, TABLE_LEFT, 481, "Kunde:", 8, "F2")
+    _line(commands, 94.7, 478, 360, 478)
+    _text(commands, 99, 481, customer, 8)
+    _text(commands, 365, 481, "Komissions-Nr.:", 8, "F2")
+    _line(commands, 460, 478, 620, 478)
+    _text(commands, 465, 481, commission, 8)
+    _text(commands, TABLE_LEFT, 451, "Projekt/Bauvorhaben:", 8, "F2")
+    _line(commands, 175, 448, 420, 448)
+    _text(commands, 180, 451, project, 8)
+    _text(commands, 420, 451, "Blatt-Nr.:", 8, "F2")
+    _line(commands, 475, 448, 510, 448)
+    _text(commands, 479, 451, sheet_label, 7)
+    _text(commands, 510, 451, "Datum:", 8, "F2")
+    _line(commands, 552, 448, 620, 448)
+    _text(commands, 557, 451, date_label, 8)
 
 
 def _draw_measurement_matrix(
@@ -364,81 +406,132 @@ def _draw_measurement_matrix(
     cells: dict[tuple[str, int], Decimal],
     totals_by_position: dict[int, Decimal],
 ) -> None:
-    matrix_right = MATRIX_X + MATRIX_COLUMN_COUNT * MATRIX_COLUMN_WIDTH
-    _text(commands, TEMPLATE_LABEL_X, 401, "Pos. Lt. Bestellung:", 9, "F2")
-    _line(commands, 52, MATRIX_POSITION_BOTTOM, 232, MATRIX_POSITION_BOTTOM)
-    _text(commands, TEMPLATE_LABEL_X, 331, "Art der Leistung:", 9, "F2")
-    _line(commands, 52, MATRIX_DESCRIPTION_BOTTOM, 232, MATRIX_DESCRIPTION_BOTTOM)
-    _text(commands, TEMPLATE_LABEL_X, 261, "Einheit:", 9, "F2")
-    _text_rotated(commands, 80, 104, "Bauteil / Abschnitt", 10, "F2")
-
-    for x in [MATRIX_X + index * MATRIX_COLUMN_WIDTH for index in range(MATRIX_COLUMN_COUNT + 1)]:
-        _line(commands, x, MATRIX_BOTTOM, x, MATRIX_TOP)
-    for y in [MATRIX_TOP, MATRIX_POSITION_BOTTOM, MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, MATRIX_BOTTOM]:
-        _line(commands, MATRIX_X, y, matrix_right, y)
-
-    for row_index in range(MATRIX_AREA_ROW_COUNT + 1):
-        y = MATRIX_UNIT_BOTTOM - row_index * MATRIX_AREA_ROW_HEIGHT
-        _line(commands, MATRIX_AREA_LABEL_X, y, matrix_right, y)
-    _line(commands, MATRIX_AREA_LABEL_X, MATRIX_BOTTOM, matrix_right, MATRIX_BOTTOM)
-    _line(commands, MATRIX_AREA_LABEL_X, MATRIX_BOTTOM, MATRIX_AREA_LABEL_X, MATRIX_UNIT_BOTTOM)
-    _line(
+    _draw_matrix_grid(commands)
+    _text(
         commands,
-        MATRIX_AREA_LABEL_X + MATRIX_AREA_LABEL_WIDTH,
-        MATRIX_BOTTOM,
-        MATRIX_AREA_LABEL_X + MATRIX_AREA_LABEL_WIDTH,
-        MATRIX_UNIT_BOTTOM,
+        TABLE_LEFT + 4,
+        _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 12),
+        "Pos. Lt. Bestellung:",
+        12,
+        "F2",
     )
+    _text(commands, TABLE_LEFT + 4, MATRIX_DESCRIPTION_BOTTOM + 52, "Art der Leistung:", 12, "F2")
+    _text(
+        commands,
+        TABLE_LEFT + 4,
+        _baseline_between(MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, 12),
+        "Einheit:",
+        12,
+        "F2",
+    )
+    _text_rotated(commands, 78, 117, "Bauteil / Abschnitt", 12, "F2")
 
     for index in range(MATRIX_COLUMN_COUNT):
-        x = MATRIX_X + index * MATRIX_COLUMN_WIDTH
+        x = MATRIX_COLUMN_BOUNDARIES[index]
+        column_right = MATRIX_COLUMN_BOUNDARIES[index + 1]
+        width = column_right - x
         if index >= len(positions):
             continue
         position = positions[index]
-        _cell_text(commands, x, MATRIX_POSITION_BOTTOM + 5, position.position, MATRIX_COLUMN_WIDTH, 5.5, "F2")
+        _cell_text(
+            commands,
+            x,
+            _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 5.4) + 1.5,
+            position.position,
+            width,
+            5.4,
+            "F2",
+        )
         _rotated_cell_text(
             commands,
             x,
             MATRIX_DESCRIPTION_BOTTOM,
-            MATRIX_COLUMN_WIDTH,
+            width,
             MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM,
             position.description,
         )
-        _cell_text(commands, x, MATRIX_UNIT_BOTTOM + 7, position.unit, MATRIX_COLUMN_WIDTH, 6, "F2")
+        _cell_text(
+            commands,
+            x,
+            _baseline_between(MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, 6.2) + 2,
+            position.unit,
+            width,
+            6.2,
+            "F2",
+        )
 
         for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
             value = cells.get((area.key, position.item_id))
             if value is None:
                 continue
-            y = MATRIX_UNIT_BOTTOM - area_index * MATRIX_AREA_ROW_HEIGHT - 10
-            _text(commands, x + MATRIX_COLUMN_WIDTH - 3, y, _format_decimal(value), 6, "F1", align_right=True)
+            row_top = MATRIX_AREA_ROW_LINES[area_index]
+            row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
+            y = _baseline_between(row_top, row_bottom, 6.2)
+            _text(commands, column_right - 2.5, y, _format_decimal(value), 6.2, "F1", align_right=True)
         total = totals_by_position.get(position.item_id)
         if total is not None:
-            _text(commands, x + MATRIX_COLUMN_WIDTH - 3, 77, _format_decimal(total), 6, "F2", align_right=True)
+            _text(
+                commands,
+                column_right - 2.5,
+                _baseline_between(MATRIX_TOTAL_TOP, MATRIX_BOTTOM, 6.2),
+                _format_decimal(total),
+                6.2,
+                "F2",
+                align_right=True,
+            )
 
     for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
-        y = MATRIX_UNIT_BOTTOM - area_index * MATRIX_AREA_ROW_HEIGHT - 10
-        _text(commands, MATRIX_AREA_LABEL_X + 4, y, area.label, 6.5)
+        row_top = MATRIX_AREA_ROW_LINES[area_index]
+        row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
+        y = _baseline_between(row_top, row_bottom, 6.3)
+        _cell_text(commands, MATRIX_AREA_LABEL_X, y + 2, area.label, MATRIX_AREA_LABEL_WIDTH, 6.3)
 
 
 def _signature_block(commands: list[bytes]) -> None:
-    _line(commands, MARGIN, 82, PAGE_WIDTH - MARGIN, 82)
-    _text(commands, MARGIN, 68, "Die Richtigkeit des Aufmaßes und die ordnungsgemäße Montage bescheinigen:", 8)
-    _text(commands, MARGIN, 44, "Ort / Datum:", 8, "F2")
-    _line(commands, 92, 42, 250, 42)
-    _text(commands, 284, 44, "Name Auftragnehmer (BEG):", 8, "F2")
-    _line(commands, 420, 42, 560, 42)
-    _text(commands, 594, 44, "Unterschrift:", 8, "F2")
-    _line(commands, 664, 42, 800, 42)
-    _text(commands, 284, 22, "Name Auftraggeber (Kunde):", 8, "F2")
-    _line(commands, 420, 20, 560, 20)
-    _text(commands, 594, 22, "Unterschrift:", 8, "F2")
-    _line(commands, 664, 20, 800, 20)
+    _text(commands, TABLE_LEFT, 56, "Die Richtigkeit des Aufmaßes und die", 7)
+    _text(commands, TABLE_LEFT, 47, "ordnungsgemäße Montage bescheinigen:", 7)
+    _text(commands, TABLE_LEFT, 27, "Ort / Datum:", 7, "F2")
+    _line(commands, 134, 25, 230, 25, 0.8)
+    _text(commands, 244, 50, "Name Auftragnehmer (BEG):", 7, "F2")
+    _line(commands, 388, 48, 558, 48, 0.8)
+    _text(commands, 588, 50, "Unterschrift:", 7, "F2")
+    _line(commands, 650, 48, 752, 48, 0.8)
+    _text(commands, 244, 27, "Name Auftraggeber (Kunde):", 7, "F2")
+    _line(commands, 388, 25, 558, 25, 0.8)
+    _text(commands, 588, 27, "Unterschrift:", 7, "F2")
+    _line(commands, 650, 25, 752, 25, 0.8)
 
 
 def _wrapped(value: str, width: int) -> list[str]:
     text = " ".join((value or "").split())
     return wrap(text, width=width, break_long_words=False) or [""]
+
+
+def _draw_matrix_grid(commands: list[bytes]) -> None:
+    for y in (MATRIX_POSITION_BOTTOM, MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, MATRIX_TOTAL_TOP):
+        _line(commands, TABLE_LEFT, y, TABLE_RIGHT, y, 1.0)
+    for y in MATRIX_AREA_ROW_LINES[1:-1]:
+        _line(commands, MATRIX_SECTION_LABEL_RIGHT, y, TABLE_RIGHT, y, 0.75)
+
+    for x in MATRIX_COLUMN_BOUNDARIES[1:-1]:
+        _line(commands, x, MATRIX_BOTTOM, x, TABLE_TOP, 0.75)
+    _line(commands, MATRIX_SECTION_LABEL_RIGHT, MATRIX_BOTTOM, MATRIX_UNIT_BOTTOM, 1.25)
+    _line(commands, MATRIX_X, MATRIX_BOTTOM, MATRIX_X, TABLE_TOP, 1.35)
+
+    _line(commands, TABLE_LEFT, MATRIX_BOTTOM, TABLE_LEFT, TABLE_TOP, 1.6)
+    _line(commands, TABLE_RIGHT, MATRIX_BOTTOM, TABLE_RIGHT, TABLE_TOP, 1.6)
+    _line(commands, TABLE_LEFT, TABLE_TOP, TABLE_RIGHT, TABLE_TOP, 1.6)
+    _line(commands, TABLE_LEFT, MATRIX_BOTTOM, TABLE_RIGHT, MATRIX_BOTTOM, 1.6)
+
+
+def _draw_grand_total(commands: list[bytes], total: Decimal) -> None:
+    y = _baseline_between(MATRIX_TOTAL_TOP, MATRIX_BOTTOM, 7.2)
+    _text(commands, MATRIX_AREA_LABEL_X + 4, y, "Gesamtsumme:", 7.2, "F2")
+    _text(commands, MATRIX_X - 4, y, _format_decimal(total), 7.2, "F2", align_right=True)
+
+
+def _baseline_between(top: float, bottom: float, size: float) -> float:
+    return bottom + (top - bottom - size) / 2 + size * 0.22
 
 
 def _load_png_rgb(path: Path) -> PdfImage | None:
@@ -472,7 +565,7 @@ def _load_png_rgb(path: Path) -> PdfImage | None:
         channels = 4 if color_type == 6 else 3
         stride = width * channels
         inflated = zlib.decompress(b"".join(idat_parts))
-        rows: list[bytes] = []
+        decoded_rows: list[bytearray] = []
         previous = bytearray(stride)
         cursor = 0
         for _row in range(height):
@@ -481,9 +574,19 @@ def _load_png_rgb(path: Path) -> PdfImage | None:
             row = bytearray(inflated[cursor : cursor + stride])
             cursor += stride
             _apply_png_filter(row, previous, channels, filter_type)
+            decoded_rows.append(row)
+            previous = row
+
+        crop_left, crop_top, crop_right, crop_bottom = 0, 0, width - 1, height - 1
+        if color_type == 6:
+            crop_left, crop_top, crop_right, crop_bottom = _alpha_crop_box(decoded_rows, width)
+
+        rows: list[bytes] = []
+        for row in decoded_rows[crop_top : crop_bottom + 1]:
             if color_type == 6:
                 rgb = bytearray()
-                for index in range(0, len(row), 4):
+                for x in range(crop_left, crop_right + 1):
+                    index = x * 4
                     alpha = row[index + 3]
                     rgb.extend(
                         (
@@ -494,9 +597,10 @@ def _load_png_rgb(path: Path) -> PdfImage | None:
                     )
                 rows.append(bytes(rgb))
             else:
-                rows.append(bytes(row))
-            previous = row
-        return PdfImage(width=width, height=height, data=zlib.compress(b"".join(rows), 9))
+                rows.append(bytes(row[crop_left * 3 : (crop_right + 1) * 3]))
+        crop_width = crop_right - crop_left + 1
+        crop_height = crop_bottom - crop_top + 1
+        return PdfImage(width=crop_width, height=crop_height, data=zlib.compress(b"".join(rows), 9))
     except Exception:
         return None
 
@@ -547,7 +651,7 @@ def _text(
     x: float,
     y: float,
     text: str,
-    size: int,
+    size: float,
     font: str = "F1",
     *,
     align_right: bool = False,
@@ -558,7 +662,7 @@ def _text(
         b"BT /"
         + font.encode("ascii")
         + b" "
-        + str(size).encode("ascii")
+        + _number(size)
         + b" Tf "
         + _number(text_x)
         + b" "
@@ -574,14 +678,14 @@ def _text_rotated(
     x: float,
     y: float,
     text: str,
-    size: int,
+    size: float,
     font: str = "F1",
 ) -> None:
     commands.append(
         b"BT /"
         + font.encode("ascii")
         + b" "
-        + str(size).encode("ascii")
+        + _number(size)
         + b" Tf 0 1 -1 0 "
         + _number(x)
         + b" "
@@ -600,15 +704,14 @@ def _rotated_cell_text(
     height: float,
     text: str,
 ) -> None:
-    size = 6
-    max_chars = max(16, int((height - 10) / (size * 0.48)))
-    _text_rotated(
-        commands,
-        x + width * 0.58,
-        y + 5,
-        _trim_text(text, max_chars),
-        size,
-    )
+    size = 5.8
+    line_height = 6.4
+    max_chars = max(16, int((height - 8) / (size * 0.48)))
+    lines = _wrap_ellipsis(text, width=max_chars, max_lines=5)
+    block_width = (len(lines) - 1) * line_height
+    start_x = x + (width - block_width) / 2 + 2
+    for index, line in enumerate(lines):
+        _text_rotated(commands, start_x + index * line_height, y + 4, line, size)
 
 
 def _cell_text(
@@ -622,7 +725,7 @@ def _cell_text(
 ) -> None:
     lines = _wrapped(text, max(4, int(width / (size * 0.55))))[:2]
     for index, line in enumerate(lines):
-        _text(commands, x + 2, y - index * (size + 1.5), line, int(size), font)
+        _text(commands, x + 2, y - index * (size + 1.5), line, size, font)
 
 
 def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
@@ -635,11 +738,59 @@ def _image(commands: list[bytes], name: str, x: float, y: float, width: float, h
     )
 
 
+def _image_fit(
+    commands: list[bytes],
+    name: str,
+    *,
+    x: float,
+    top_y: float,
+    max_width: float,
+    max_height: float,
+    image: PdfImage,
+) -> None:
+    scale = min(max_width / image.width, max_height / image.height)
+    width = image.width * scale
+    height = image.height * scale
+    fitted_x = x + (max_width - width) / 2
+    fitted_y = PAGE_HEIGHT - top_y - height
+    _image(commands, name, fitted_x, fitted_y, width, height)
+
+
 def _trim_text(value: str, max_chars: int) -> str:
     text = " ".join((value or "").split())
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 1].rstrip() + "…"
+
+
+def _wrap_ellipsis(value: str, *, width: int, max_lines: int) -> list[str]:
+    text = " ".join((value or "").split())
+    if not text:
+        return [""]
+    lines = wrap(text, width=width, break_long_words=False)
+    if len(lines) <= max_lines:
+        return [_trim_text(line, width) for line in lines]
+    kept = [_trim_text(line, width) for line in lines[: max_lines - 1]]
+    kept.append(_trim_text(" ".join(lines[max_lines - 1 :]), width))
+    return kept
+
+
+def _alpha_crop_box(rows: list[bytearray], width: int) -> tuple[int, int, int, int]:
+    crop_left = width
+    crop_top = len(rows)
+    crop_right = -1
+    crop_bottom = -1
+    for y, row in enumerate(rows):
+        for x in range(width):
+            if row[x * 4 + 3] <= 8:
+                continue
+            crop_left = min(crop_left, x)
+            crop_top = min(crop_top, y)
+            crop_right = max(crop_right, x)
+            crop_bottom = max(crop_bottom, y)
+    if crop_right < crop_left or crop_bottom < crop_top:
+        return 0, 0, width - 1, len(rows) - 1
+    return crop_left, crop_top, crop_right, crop_bottom
 
 
 def _apply_png_filter(
@@ -683,8 +834,19 @@ def _blend_on_white(channel: int, alpha: int) -> int:
     return (channel * alpha + 255 * (255 - alpha)) // 255
 
 
-def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float) -> None:
-    commands.append(b" ".join([_number(x1), _number(y1), b"m", _number(x2), _number(y2), b"l S"]))
+def _line(
+    commands: list[bytes],
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    width: float | None = None,
+) -> None:
+    line = b" ".join([_number(x1), _number(y1), b"m", _number(x2), _number(y2), b"l S"])
+    if width is None:
+        commands.append(line)
+        return
+    commands.append(b"q " + _number(width) + b" w " + line + b" Q")
 
 
 def _rect(commands: list[bytes], x: float, y: float, width: float, height: float) -> None:
