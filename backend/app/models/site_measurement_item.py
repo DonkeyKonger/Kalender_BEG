@@ -1,7 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from typing import Any
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -81,6 +83,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    original_submitted_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
     site = relationship("Site", back_populates="measurement_batches")
     measurement_base = relationship("SiteMeasurementBase", back_populates="batches")

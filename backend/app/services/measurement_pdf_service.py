@@ -93,6 +93,16 @@ class MatrixArea:
 
 
 @dataclass(frozen=True)
+class MatrixCellValue:
+    quantity: Decimal
+    original_quantity: Decimal | None = None
+
+    @property
+    def is_corrected(self) -> bool:
+        return self.original_quantity is not None and self.original_quantity != self.quantity
+
+
+@dataclass(frozen=True)
 class PdfImage:
     width: int
     height: int
@@ -257,7 +267,7 @@ class MeasurementPdfService:
     ) -> tuple[
         list[MatrixPosition],
         list[MatrixArea],
-        dict[tuple[str, int], Decimal],
+        dict[tuple[str, int], MatrixCellValue],
         dict[int, Decimal],
     ]:
         entries = sorted(
@@ -271,7 +281,7 @@ class MeasurementPdfService:
         )
         positions_by_id: dict[int, MatrixPosition] = {}
         area_by_key: dict[str, MatrixArea] = {}
-        cells: dict[tuple[str, int], Decimal] = {}
+        current_quantities: dict[tuple[str, int], Decimal] = {}
         totals_by_position: dict[int, Decimal] = {}
         for entry in entries:
             item = entry.measurement_item
@@ -288,9 +298,19 @@ class MeasurementPdfService:
             area_label = " ".join(entry.area_or_comment.split())
             area_key = area_label.casefold()
             area_by_key.setdefault(area_key, MatrixArea(key=area_key, label=area_label))
-            cells[(area_key, item.id)] = cells.get((area_key, item.id), Decimal("0")) + entry.quantity
+            current_quantities[(area_key, item.id)] = (
+                current_quantities.get((area_key, item.id), Decimal("0")) + entry.quantity
+            )
             totals_by_position[item.id] = totals_by_position.get(item.id, Decimal("0")) + entry.quantity
 
+        original_quantities = _snapshot_original_quantities(batch.original_submitted_snapshot)
+        cells = {
+            key: MatrixCellValue(
+                quantity=quantity,
+                original_quantity=original_quantities.get(key),
+            )
+            for key, quantity in current_quantities.items()
+        }
         return (
             sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
             list(area_by_key.values()),
@@ -303,7 +323,7 @@ class MeasurementPdfService:
         batch: SiteMeasurementBatch,
         positions: list[MatrixPosition],
         areas: list[MatrixArea],
-        cells: dict[tuple[str, int], Decimal],
+        cells: dict[tuple[str, int], MatrixCellValue],
         totals_by_position: dict[int, Decimal],
         page_number: int,
         page_count: int,
@@ -417,7 +437,7 @@ def _draw_measurement_matrix(
     commands: list[bytes],
     positions: list[MatrixPosition],
     areas: list[MatrixArea],
-    cells: dict[tuple[str, int], Decimal],
+    cells: dict[tuple[str, int], MatrixCellValue],
     totals_by_position: dict[int, Decimal],
 ) -> None:
     _draw_matrix_grid(commands)
@@ -474,13 +494,13 @@ def _draw_measurement_matrix(
         )
 
         for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
-            value = cells.get((area.key, position.item_id))
-            if value is None:
+            cell = cells.get((area.key, position.item_id))
+            if cell is None:
                 continue
             row_top = MATRIX_AREA_ROW_LINES[area_index]
             row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
             y = _baseline_between(row_top, row_bottom, 6.2)
-            _text_centered(commands, (x + column_right) / 2, y, _format_decimal(value), 6.2)
+            _text_centered(commands, (x + column_right) / 2, y, _format_decimal(cell.quantity), 6.2)
         total = totals_by_position.get(position.item_id)
         if total is not None:
             _text(
@@ -647,6 +667,31 @@ def _format_sheet_label(title: str, page_number: int, page_count: int) -> str:
     if page_count <= 1:
         return title
     return f"{title}.{page_number:02d}"
+
+
+def _snapshot_original_quantities(
+    snapshot: dict[str, object] | None,
+) -> dict[tuple[str, int], Decimal]:
+    if not snapshot:
+        return {}
+    entries = snapshot.get("entries")
+    if not isinstance(entries, list):
+        return {}
+
+    quantities: dict[tuple[str, int], Decimal] = {}
+    for raw_entry in entries:
+        if not isinstance(raw_entry, dict):
+            continue
+        item_id = raw_entry.get("measurement_item_id")
+        area = raw_entry.get("area_or_comment")
+        quantity = raw_entry.get("quantity")
+        if not isinstance(item_id, int) or not isinstance(area, str) or quantity is None:
+            continue
+        area_key = " ".join(area.split()).casefold()
+        quantities[(area_key, item_id)] = quantities.get((area_key, item_id), Decimal("0")) + Decimal(
+            str(quantity)
+        )
+    return quantities
 
 
 def _format_decimal(value: Decimal) -> str:

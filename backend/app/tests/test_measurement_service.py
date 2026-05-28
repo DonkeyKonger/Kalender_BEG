@@ -557,7 +557,27 @@ def test_site_measurement_billing_status_and_entry_update():
     assert stored_batch is not None
     assert stored_batch.status == "submitted"
     assert stored_entry is not None
+    snapshot = stored_batch.original_submitted_snapshot
+    assert snapshot is not None
+    assert snapshot["submitted_by_name"] == "Max Monteur"
+    assert snapshot["measurement_batch_id"] == batch.id
+    assert snapshot["site_id"] == site.id
+    assert snapshot["measurement_base_id"] == base.id
+    assert snapshot["entries"] == [
+        {
+            "entry_id": stored_entry.id,
+            "measurement_item_id": item.id,
+            "site_id": site.id,
+            "position": "1.01.05.10",
+            "description": "Kabelrinne liefern und montieren",
+            "unit": "m",
+            "sort_order": 1,
+            "area_or_comment": "1. OG Flur",
+            "quantity": "10.00",
+            "created_by_user_id": user.id,
+            "created_at": stored_entry.created_at.isoformat(),
+        }
+    ]
     assert stored_entry.status == "submitted"
     assert stored_entry.submitted_area_or_comment == "1. OG Flur"
     assert stored_entry.submitted_quantity == Decimal("10.00")
-

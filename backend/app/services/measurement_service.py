@@ -286,9 +286,16 @@ class MeasurementService:
             entry.submitted_area_or_comment = entry.area_or_comment
             entry.submitted_quantity = entry.quantity
 
+        submitted_at = datetime.now(timezone.utc)
         batch.status = "submitted"
         batch.submitted_by_user_id = current_user.id
-        batch.submitted_at = datetime.now(timezone.utc)
+        batch.submitted_at = submitted_at
+        if batch.original_submitted_snapshot is None:
+            batch.original_submitted_snapshot = self._build_original_submitted_snapshot(
+                batch=batch,
+                submitted_by=current_user,
+                submitted_at=submitted_at,
+            )
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
@@ -752,6 +759,47 @@ class MeasurementService:
             reported_hours=reported_hours,
         )
 
+    def _build_original_submitted_snapshot(
+        self,
+        *,
+        batch: SiteMeasurementBatch,
+        submitted_by: User,
+        submitted_at: datetime,
+    ) -> dict[str, object]:
+        entries: list[dict[str, object]] = []
+        for entry in sorted(batch.entries, key=lambda row: (row.created_at, row.id)):
+            item = entry.measurement_item
+            if item is None:
+                continue
+            entries.append(
+                {
+                    "entry_id": entry.id,
+                    "measurement_item_id": item.id,
+                    "site_id": entry.site_id,
+                    "position": item.position,
+                    "description": item.description,
+                    "unit": item.unit,
+                    "sort_order": item.sort_order,
+                    "area_or_comment": entry.area_or_comment,
+                    "quantity": _decimal_as_string(entry.quantity),
+                    "created_by_user_id": entry.created_by_user_id,
+                    "created_at": _datetime_as_string(entry.created_at),
+                }
+            )
+
+        return {
+            "version": 1,
+            "measurement_batch_id": batch.id,
+            "site_id": batch.site_id,
+            "measurement_base_id": batch.measurement_base_id,
+            "number": batch.number,
+            "title": batch.title,
+            "submitted_by_user_id": submitted_by.id,
+            "submitted_by_name": self._format_user_display_name(submitted_by),
+            "submitted_at": submitted_at.isoformat(),
+            "entries": entries,
+        }
+
     def _build_dashboard_submission(
         self, batch: SiteMeasurementBatch
     ) -> MeasurementDashboardSubmissionRead:
@@ -861,3 +909,11 @@ class MeasurementService:
             )
             is not None
         )
+
+
+def _decimal_as_string(value: Decimal) -> str:
+    return f"{value:.2f}"
+
+
+def _datetime_as_string(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
