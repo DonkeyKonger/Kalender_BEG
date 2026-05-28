@@ -6691,6 +6691,426 @@ button.person-chip:focus-visible {
 }
 
 
+/* Figma-style project file shell: scoped to Baustellenakte/Projektakte only. */
+.site-detail-page.is-project-file-workspace {
+  --pf-bg: #f5f7fa;
+  --pf-surface: #ffffff;
+  --pf-surface-soft: #f8fafc;
+  --pf-muted-surface: #f1f5f9;
+  --pf-border: #d1d9e6;
+  --pf-border-soft: #e2e8f0;
+  --pf-text: #0f172a;
+  --pf-muted: #64748b;
+  --pf-primary: #1e293b;
+  --pf-primary-hover: #0f172a;
+  --pf-active: #3b82f6;
+  --pf-warning-bg: #fef3c7;
+  --pf-warning-text: #92400e;
+  --pf-success-bg: #dcfce7;
+  --pf-success-text: #166534;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--pf-border);
+  border-radius: 0;
+  background: var(--pf-bg);
+  color: var(--pf-text);
+}
+
+.site-detail-page.is-project-file-workspace > .back-link {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--pf-border);
+  background: var(--pf-surface);
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-detail-page.is-project-file-workspace > .back-link:hover,
+.site-detail-page.is-project-file-workspace > .back-link:focus-visible {
+  background: var(--pf-surface-soft);
+  color: #334155;
+  outline: none;
+  text-decoration: none;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--pf-border);
+  background: var(--pf-surface);
+}
+
+.site-detail-page.is-project-file-workspace .site-color.large {
+  display: none;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-header h1 {
+  margin: 2px 0 1px;
+  color: var(--pf-text);
+  font-size: 1.14rem;
+  line-height: 1.2;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-header p:not(.eyebrow) {
+  color: var(--pf-muted);
+  font-size: 0.86rem;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-header .eyebrow {
+  color: var(--pf-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-header .status-badge {
+  grid-column: auto;
+  align-self: start;
+  border-radius: 0;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-tabs {
+  display: flex;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--pf-border);
+  border-radius: 0;
+  background: var(--pf-surface);
+  gap: 0;
+  padding: 0 18px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-tabs button {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--pf-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 11px 15px 10px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-tabs button:hover,
+.site-detail-page.is-project-file-workspace .project-record-tabs button:focus-visible {
+  background: var(--pf-surface-soft);
+  color: #334155;
+  outline: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-tabs button.is-active {
+  border-bottom-color: var(--pf-active);
+  background: #eff6ff;
+  color: #1e40af;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-tab-panel {
+  gap: 14px;
+  padding: 18px;
+  background: var(--pf-bg);
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtabs {
+  display: flex;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--pf-border);
+  border-radius: 0;
+  background: var(--pf-surface);
+  gap: 8px;
+  margin: -18px -18px 0;
+  padding: 10px 18px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtabs button {
+  min-height: 28px;
+  border-radius: 4px;
+  background: var(--pf-muted-surface);
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 750;
+  padding: 6px 11px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtabs button:hover,
+.site-detail-page.is-project-file-workspace .project-record-subtabs button:focus-visible {
+  background: #e2e8f0;
+  color: #334155;
+  outline: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtabs button.is-active {
+  background: var(--pf-primary);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-toolbar {
+  align-items: center;
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  background: var(--pf-surface);
+  padding: 14px 16px;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-toolbar h2 {
+  color: var(--pf-text);
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-toolbar p,
+.site-detail-page.is-project-file-workspace .project-record-toolbar small {
+  color: var(--pf-muted);
+  font-size: 0.84rem;
+}
+
+.site-detail-page.is-project-file-workspace .secondary-action,
+.site-detail-page.is-project-file-workspace .primary-action {
+  min-height: 30px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .secondary-action {
+  border-color: var(--pf-border);
+  background: var(--pf-surface);
+  color: #475569;
+}
+
+.site-detail-page.is-project-file-workspace .secondary-action:hover,
+.site-detail-page.is-project-file-workspace .secondary-action:focus-visible {
+  border-color: var(--pf-border);
+  background: var(--pf-muted-surface);
+  color: #334155;
+}
+
+.site-detail-page.is-project-file-workspace .primary-action {
+  border-color: var(--pf-primary);
+  background: var(--pf-primary);
+  color: #ffffff;
+}
+
+.site-detail-page.is-project-file-workspace .primary-action:hover,
+.site-detail-page.is-project-file-workspace .primary-action:focus-visible {
+  background: var(--pf-primary-hover);
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-section,
+.site-detail-page.is-project-file-workspace .site-notes-section,
+.site-detail-page.is-project-file-workspace .project-record-edit-panel,
+.site-detail-page.is-project-file-workspace .project-folder-placeholder,
+.site-detail-page.is-project-file-workspace .project-document-browser,
+.site-detail-page.is-project-file-workspace .project-record-empty-state,
+.site-detail-page.is-project-file-workspace .project-placeholder-card,
+.site-detail-page.is-project-file-workspace .measurement-review-card,
+.site-detail-page.is-project-file-workspace .measurement-review-position,
+.site-detail-page.is-project-file-workspace .measurement-review-detail,
+.site-detail-page.is-project-file-workspace .measurement-evaluation-grid > div,
+.site-detail-page.is-project-file-workspace .measurement-base-card,
+.site-detail-page.is-project-file-workspace .measurement-table-wrap {
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  background: var(--pf-surface);
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-section,
+.site-detail-page.is-project-file-workspace .site-notes-section,
+.site-detail-page.is-project-file-workspace .project-record-edit-panel,
+.site-detail-page.is-project-file-workspace .project-document-browser,
+.site-detail-page.is-project-file-workspace .measurement-evaluation-grid > div {
+  padding: 14px;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-section h2,
+.site-detail-page.is-project-file-workspace .site-notes-section h2,
+.site-detail-page.is-project-file-workspace .project-folder-placeholder h3,
+.site-detail-page.is-project-file-workspace .project-document-browser h3 {
+  color: var(--pf-text);
+  font-size: 0.94rem;
+}
+
+.site-detail-page.is-project-file-workspace .detail-item {
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pf-border-soft);
+}
+
+.site-detail-page.is-project-file-workspace .detail-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.site-detail-page.is-project-file-workspace .detail-item span,
+.site-detail-page.is-project-file-workspace .project-document-browser p,
+.site-detail-page.is-project-file-workspace .project-document-item span,
+.site-detail-page.is-project-file-workspace .project-placeholder-card small,
+.site-detail-page.is-project-file-workspace .measurement-base-card small,
+.site-detail-page.is-project-file-workspace .measurement-review-card small,
+.site-detail-page.is-project-file-workspace .measurement-review-card b {
+  color: var(--pf-muted);
+}
+
+.site-detail-page.is-project-file-workspace .detail-item strong,
+.site-detail-page.is-project-file-workspace .project-document-item strong,
+.site-detail-page.is-project-file-workspace .project-placeholder-card span,
+.site-detail-page.is-project-file-workspace .measurement-base-card strong,
+.site-detail-page.is-project-file-workspace .measurement-review-card strong {
+  color: var(--pf-text);
+}
+
+.site-detail-page.is-project-file-workspace .project-record-empty-state {
+  color: #475569;
+  padding: 14px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-empty-state.is-error {
+  border-color: rgb(180 35 24 / 24%);
+  background: #fff1ef;
+  color: #b42318;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-empty-state.is-success,
+.site-detail-page.is-project-file-workspace .measurement-status.is-billed,
+.site-detail-page.is-project-file-workspace .measurement-status.is-approved,
+.site-detail-page.is-project-file-workspace .measurement-status.is-active {
+  border-color: rgb(22 101 52 / 20%);
+  background: var(--pf-success-bg);
+  color: var(--pf-success-text);
+}
+
+.site-detail-page.is-project-file-workspace .measurement-status.is-open,
+.site-detail-page.is-project-file-workspace .measurement-status.is-submitted,
+.site-detail-page.is-project-file-workspace .measurement-status.is-rejected,
+.site-detail-page.is-project-file-workspace .measurement-status.is-nep {
+  background: var(--pf-warning-bg);
+  color: var(--pf-warning-text);
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-actions {
+  justify-content: flex-end;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-grid {
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 10px;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card,
+.site-detail-page.is-project-file-workspace .project-document-item {
+  border-color: var(--pf-border);
+  border-radius: 6px;
+  background: var(--pf-surface);
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card:hover,
+.site-detail-page.is-project-file-workspace .project-folder-card:focus-visible,
+.site-detail-page.is-project-file-workspace .project-document-item:hover {
+  border-color: #cbd5e1;
+  background: var(--pf-surface-soft);
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card.is-selected,
+.site-detail-page.is-project-file-workspace .measurement-base-card.is-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgb(59 130 246 / 10%);
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card.is-drag-over,
+.site-detail-page.is-project-file-workspace .measurement-import-drop-action.is-drop-target {
+  border-color: var(--pf-primary);
+  background: #eef2f7;
+  box-shadow: inset 0 0 0 1px rgb(30 41 59 / 18%);
+}
+
+.site-detail-page.is-project-file-workspace .project-document-search,
+.site-detail-page.is-project-file-workspace .measurement-import-modal-options select,
+.site-detail-page.is-project-file-workspace .measurement-import-modal-options .measurement-base-name-input,
+.site-detail-page.is-project-file-workspace .measurement-review-inline-input,
+.site-detail-page.is-project-file-workspace .measurement-review-inline-quantity,
+.site-detail-page.is-project-file-workspace .measurement-table-input {
+  border-color: var(--pf-border);
+  border-radius: 4px;
+  background: var(--pf-surface);
+}
+
+.site-detail-page.is-project-file-workspace .project-document-search:focus-within,
+.site-detail-page.is-project-file-workspace .measurement-review-inline-input:focus,
+.site-detail-page.is-project-file-workspace .measurement-review-inline-quantity:focus,
+.site-detail-page.is-project-file-workspace .measurement-table-input:focus {
+  border-color: var(--pf-primary);
+  box-shadow: 0 0 0 3px rgb(30 41 59 / 9%);
+}
+
+.site-detail-page.is-project-file-workspace .project-document-browser-actions,
+.site-detail-page.is-project-file-workspace .project-document-item-actions,
+.site-detail-page.is-project-file-workspace .project-record-edit-actions,
+.site-detail-page.is-project-file-workspace .project-placeholder-actions,
+.site-detail-page.is-project-file-workspace .measurement-import-modal-actions,
+.site-detail-page.is-project-file-workspace .measurement-base-card > div:last-child {
+  gap: 8px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-table-wrap {
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-table th,
+.site-detail-page.is-project-file-workspace .measurement-table-view th {
+  background: var(--pf-muted-surface);
+  color: #475569;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-table th,
+.site-detail-page.is-project-file-workspace .measurement-table td,
+.site-detail-page.is-project-file-workspace .measurement-table-view th,
+.site-detail-page.is-project-file-workspace .measurement-table-view td {
+  border-color: var(--pf-border-soft);
+}
+
+.site-detail-page.is-project-file-workspace .measurement-import-modal {
+  border-color: var(--pf-border);
+  border-radius: 6px;
+  box-shadow: 0 20px 50px rgb(15 23 42 / 18%);
+}
+
+.site-detail-page.is-project-file-workspace .measurement-import-modal-options label,
+.site-detail-page.is-project-file-workspace .measurement-import-file-row {
+  border-color: var(--pf-border);
+  border-radius: 6px;
+  background: var(--pf-surface);
+}
+
+.site-detail-page.is-project-file-workspace .measurement-import-modal-options label.is-selected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 /* Figma-style workspace shell for the real Aufmaß review screen. */
 .site-detail-page.is-measurement-review-workspace {
   --figma-bg: #f5f7fa;

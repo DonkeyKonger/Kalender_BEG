@@ -647,7 +647,7 @@ export function SiteDetailPage() {
   const isMeasurementReviewWorkspace = activeTab === "measurement" && measurementSubtab === "review";
 
   return (
-    <section className={`site-detail-page${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}`}>
+    <section className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}`}>
       <Link className="back-link" to="/sites">
         <ArrowLeft aria-hidden="true" size={16} />
         <span>Baustellen</span>
