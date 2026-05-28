@@ -7405,19 +7405,19 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-review-package-row {
-  height: 40px;
-  min-height: 40px;
-  max-height: 40px;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
   border-top: 1px solid var(--ct-border);
-  padding: 0 24px;
+  padding: 0 28px;
   background: var(--ct-surface-muted);
 }
 
 .measurement-review-detail.is-table-view .measurement-review-toolbar-row {
-  height: 40px;
-  min-height: 40px;
-  max-height: 40px;
-  padding: 0 24px;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
+  padding: 0 28px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-package-title,
@@ -7433,7 +7433,7 @@ button.person-chip:focus-visible {
   margin: 0;
   overflow: hidden;
   color: var(--ct-text);
-  font-size: 0.9rem;
+  font-size: 1.04rem;
   font-weight: 850;
   line-height: 1.12;
   text-overflow: ellipsis;
@@ -7442,7 +7442,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-updated {
   color: var(--ct-muted);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   white-space: nowrap;
 }
 
@@ -7459,12 +7459,12 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-filter-group span {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 30px;
   border-radius: 4px;
   color: var(--ct-muted);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-weight: 750;
-  padding: 3px 9px;
+  padding: 4px 10px;
   white-space: nowrap;
 }
 
@@ -7480,17 +7480,17 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-action-divider {
   width: 1px;
-  height: 20px;
+  height: 23px;
   background: var(--ct-border);
 }
 
 .measurement-review-detail.is-table-view .secondary-action,
 .measurement-review-detail.is-table-view .primary-action {
-  min-height: 28px;
-  max-height: 30px;
+  min-height: 32px;
+  max-height: 35px;
   border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 0.74rem;
+  padding: 5px 12px;
+  font-size: 0.85rem;
   font-weight: 750;
   line-height: 1;
   box-shadow: none;
@@ -7528,12 +7528,12 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-view-toggle button {
-  min-height: 24px;
-  max-height: 26px;
+  min-height: 28px;
+  max-height: 30px;
   border-radius: 3px;
   color: var(--ct-muted);
-  font-size: 0.72rem;
-  padding: 3px 8px;
+  font-size: 0.83rem;
+  padding: 4px 9px;
 }
 
 .measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
@@ -7545,27 +7545,27 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-status.is-open,
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
 .measurement-review-detail.is-table-view .measurement-status.is-rejected {
-  min-height: 24px;
-  max-height: 26px;
+  min-height: 28px;
+  max-height: 30px;
   border: 1px solid rgb(146 64 14 / 16%);
   border-radius: 4px;
   background: var(--ct-warning-bg);
   color: var(--ct-warning-text);
-  padding: 3px 8px;
-  font-size: 0.72rem;
+  padding: 4px 9px;
+  font-size: 0.83rem;
   font-weight: 800;
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-billed,
 .measurement-review-detail.is-table-view .measurement-status.is-approved {
-  min-height: 24px;
-  max-height: 26px;
+  min-height: 28px;
+  max-height: 30px;
   border: 1px solid rgb(22 101 52 / 20%);
   border-radius: 4px;
   background: #dcfce7;
   color: var(--ct-success);
-  padding: 3px 8px;
-  font-size: 0.72rem;
+  padding: 4px 9px;
+  font-size: 0.83rem;
   font-weight: 800;
 }
 
@@ -7591,7 +7591,7 @@ button.person-chip:focus-visible {
   border-radius: 0;
   background: var(--ct-surface);
   box-shadow: none;
-  padding-bottom: 14px;
+  padding-bottom: 16px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
@@ -7601,7 +7601,7 @@ button.person-chip:focus-visible {
   table-layout: fixed;
   border-collapse: collapse;
   color: var(--ct-text);
-  font-size: 0.67rem;
+  font-size: 0.77rem;
   line-height: 1.12;
   font-variant-numeric: tabular-nums;
 }
@@ -7619,9 +7619,9 @@ button.person-chip:focus-visible {
   width: var(--measurement-position-width);
   min-width: var(--measurement-position-width);
   max-width: var(--measurement-position-width);
-  height: 22px;
+  height: 25px;
   border: 1px solid var(--ct-border-soft);
-  padding: 2px 4px;
+  padding: 3px 5px;
   background: var(--ct-table-cell);
   vertical-align: middle;
 }
@@ -7648,7 +7648,7 @@ button.person-chip:focus-visible {
   border-right-color: #cbd5e1;
   background: var(--ct-table-label) !important;
   color: var(--ct-text);
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.14;
   text-align: left;
@@ -7665,7 +7665,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-position-heading {
   text-align: left;
-  font-size: 0.64rem !important;
+  font-size: 0.74rem !important;
   line-height: 1.05;
 }
 
@@ -7674,12 +7674,12 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading {
-  height: 45px;
+  height: 52px;
   text-align: left;
-  font-size: 0.55rem !important;
+  font-size: 0.63rem !important;
   line-height: 1.08;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
   vertical-align: top !important;
 }
 
@@ -7694,14 +7694,14 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-unit-heading {
   color: #475569 !important;
-  font-size: 0.6rem !important;
+  font-size: 0.69rem !important;
   font-weight: 850;
   text-align: left;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-section-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-section-row td {
-  height: 22px;
+  height: 25px;
   background: var(--ct-table-subheader) !important;
   color: var(--ct-muted);
   font-weight: 800;
@@ -7714,7 +7714,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-quantity-cell,
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell {
-  height: 21px;
+  height: 24px;
   background: var(--ct-table-cell);
   text-align: right !important;
   font-variant-numeric: tabular-nums;
@@ -7722,7 +7722,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity {
   width: 100%;
-  min-height: 17px;
+  min-height: 20px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
@@ -7738,7 +7738,7 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-placeholder-header-input {
   display: block;
   width: 100%;
-  min-height: 17px;
+  min-height: 20px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
@@ -7754,7 +7754,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input {
-  min-height: 34px;
+  min-height: 39px;
   overflow: hidden;
   resize: none;
 }
@@ -7774,7 +7774,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-area-input {
   width: 100%;
-  min-height: 17px;
+  min-height: 20px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
@@ -7838,8 +7838,8 @@ button.person-chip:focus-visible {
   left: 4px;
   z-index: 30;
   display: grid;
-  width: 260px;
-  max-height: 210px;
+  width: 300px;
+  max-height: 240px;
   overflow: auto;
   border: 1px solid #b8c5d7;
   border-radius: 6px;
@@ -7854,14 +7854,14 @@ button.person-chip:focus-visible {
   grid-template-columns: minmax(56px, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 32px;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--ct-text);
   cursor: pointer;
   font: inherit;
-  font-size: 0.66rem;
+  font-size: 0.76rem;
   line-height: 1.12;
   padding: 4px 6px;
   text-align: left;
@@ -7881,7 +7881,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-position-suggestions small {
   color: #64748b;
-  font-size: 0.62rem;
+  font-size: 0.71rem;
   font-weight: 850;
   text-transform: lowercase;
 }
@@ -7897,12 +7897,12 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
   position: sticky;
-  bottom: 14px;
+  bottom: 16px;
   z-index: 4;
-  height: 44px !important;
+  height: 51px !important;
   border-top: 2px solid var(--ct-border-strong);
   background: var(--ct-table-total) !important;
-  font-size: 0.69rem;
+  font-size: 0.79rem;
   font-weight: 900;
   vertical-align: middle !important;
 }

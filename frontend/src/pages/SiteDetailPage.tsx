@@ -17,8 +17,8 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
-const MEASUREMENT_TABLE_AXIS_WIDTH = 188;
-const MEASUREMENT_TABLE_POSITION_WIDTH = 116;
+const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
+const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 
@@ -2377,6 +2377,7 @@ function MeasurementReviewTable({
   const [manualColumnDrafts, setManualColumnDrafts] = useState<Record<string, MeasurementManualColumnDraft>>({});
   const [manualColumnTotals, setManualColumnTotals] = useState<Record<string, number>>({});
   const [suggestionState, setSuggestionState] = useState<MeasurementSuggestionState>(null);
+  const [areaDraftVersion, setAreaDraftVersion] = useState(0);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length, viewportColumnCount);
@@ -2462,6 +2463,14 @@ function MeasurementReviewTable({
     areaLabelDraftsRef.current[areaKey] = value;
   }
 
+  function clearAreaLabelDraft(areaKey: string): void {
+    if (areaLabelDraftsRef.current[areaKey] === undefined) {
+      return;
+    }
+    delete areaLabelDraftsRef.current[areaKey];
+    setAreaDraftVersion((version) => version + 1);
+  }
+
   function getManualColumnDraft(columnKey: string): MeasurementManualColumnDraft {
     return manualColumnDrafts[columnKey] ?? { position: "", description: "", unit: "", linkedItemId: null };
   }
@@ -2542,6 +2551,9 @@ function MeasurementReviewTable({
     try {
       await onCellCreate(item, areaLabel, quantity);
       input.value = "";
+      if (area.key.startsWith("placeholder-area-")) {
+        clearAreaLabelDraft(area.key);
+      }
       if (sourceColumnKey) {
         setManualColumnDrafts((current) => {
           const next = { ...current };
@@ -2699,6 +2711,7 @@ function MeasurementReviewTable({
             <tr key={area.key}>
               <th className={`measurement-matrix-axis measurement-matrix-area-axis${area.isPlaceholder ? " is-placeholder-row" : ""}`} scope="row">
                 <input
+                  key={`${area.key}-${areaDraftVersion}`}
                   className="measurement-area-input"
                   defaultValue={areaLabel}
                   disabled={!canEditRows || reviewActionLoading}
