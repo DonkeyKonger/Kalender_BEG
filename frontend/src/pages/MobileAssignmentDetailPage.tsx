@@ -53,6 +53,7 @@ export function MobileAssignmentDetailPage() {
   const location = useLocation();
   const { assignmentId } = useParams();
   const [activeTab, setActiveTab] = useState<MobileDetailTab>("overview");
+  const [isMeasurementEntryMode, setIsMeasurementEntryMode] = useState(false);
 
   const assignment = useMemo(() => {
     const stateAssignment = (location.state as LocationState | null)?.assignment;
@@ -74,47 +75,58 @@ export function MobileAssignmentDetailPage() {
     );
   }
 
+  const isFocusedEntry = activeTab === "measurement" && isMeasurementEntryMode;
+
   return (
-    <section className="mobile-page mobile-detail-page">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Zurück</span>
-      </button>
+    <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}`}>
+      {!isFocusedEntry ? (
+        <>
+          <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
+            <ArrowLeft aria-hidden="true" size={17} />
+            <span>Zurück</span>
+          </button>
 
-      <header className="mobile-detail-hero mobile-detail-summary">
-        <div className="assignment-card-main">
-          <div>
-            <h1>{assignment.site.name}</h1>
-            <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
+          <header className="mobile-detail-hero mobile-detail-summary">
+            <div className="assignment-card-main">
+              <div>
+                <h1>{assignment.site.name}</h1>
+                <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
+              </div>
+              <SiteStatusBadge status={assignment.site.status} />
+            </div>
+            <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</p>
+          </header>
+
+          <div className="mobile-detail-actions" aria-label="Baustellendetails">
+            {detailTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  className={activeTab === tab.key ? "is-active" : ""}
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.key);
+                    if (tab.key !== "measurement") {
+                      setIsMeasurementEntryMode(false);
+                    }
+                  }}
+                >
+                  <Icon aria-hidden="true" size={16} />
+                  <span>
+                    <strong>{tab.label}</strong>
+                    <small>{tab.description}</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <SiteStatusBadge status={assignment.site.status} />
-        </div>
-        <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</p>
-      </header>
-
-      <div className="mobile-detail-actions" aria-label="Baustellendetails">
-        {detailTabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              className={activeTab === tab.key ? "is-active" : ""}
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <Icon aria-hidden="true" size={16} />
-              <span>
-                <strong>{tab.label}</strong>
-                <small>{tab.description}</small>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+        </>
+      ) : null}
 
       {activeTab === "overview" && <OverviewPanel assignment={assignment} />}
       {activeTab === "folders" && <PlaceholderPanel icon={FolderOpen} text="Diese Funktion ist vorbereitet und wird später aktiviert." />}
-      {activeTab === "measurement" && <MobileMeasurementTab assignment={assignment} />}
+      {activeTab === "measurement" && <MobileMeasurementTab assignment={assignment} onEntryModeChange={setIsMeasurementEntryMode} />}
       {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird später Wagen-, Werkzeug- und Materialinformationen anzeigen." />}
     </section>
   );
@@ -141,7 +153,13 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
   );
 }
 
-function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) {
+function MobileMeasurementTab({
+  assignment,
+  onEntryModeChange,
+}: {
+  assignment: MobileAssignment;
+  onEntryModeChange?: (isActive: boolean) => void;
+}) {
   const { user } = useAuth();
   const [batches, setBatches] = useState<MobileMeasurementBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<MobileMeasurementBatch | null>(null);
@@ -217,14 +235,16 @@ function MobileMeasurementTab({ assignment }: { assignment: MobileAssignment }) 
     });
   }, [filter, items, searchTerm, user?.id]);
 
-  const areaTags = useMemo(() => collectMeasurementAreaTags(items), [items]);
+  useEffect(() => {
+    onEntryModeChange?.(Boolean(selectedBatch && selectedItem));
+    return () => onEntryModeChange?.(false);
+  }, [onEntryModeChange, selectedBatch, selectedItem]);
 
   if (selectedBatch && selectedItem) {
     return (
       <MeasurementDetail
         batch={selectedBatch}
         item={selectedItem}
-        areaTags={areaTags}
         isSaving={isSaving}
         formComment={formComment}
         formQuantity={formQuantity}
@@ -573,7 +593,6 @@ function MobileMeasurementTable({
 function MeasurementDetail({
   batch,
   item,
-  areaTags,
   isSaving,
   formComment,
   formQuantity,
@@ -586,7 +605,6 @@ function MeasurementDetail({
 }: {
   batch: MobileMeasurementBatch;
   item: MobileMeasurementItem;
-  areaTags: string[];
   isSaving: boolean;
   formComment: string;
   formQuantity: string;
@@ -599,63 +617,50 @@ function MeasurementDetail({
 }) {
   const isDraft = batch.status === "draft";
   const areaInputRef = useRef<HTMLInputElement>(null);
-  const selectedAreaKey = getMeasurementAreaKey(formComment);
-  const suggestedArea = findMeasurementAreaSuggestion(formComment, areaTags);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isDraft) {
+      return;
+    }
+    let timeoutId: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      timeoutId = window.setTimeout(() => {
+        quantityInputRef.current?.focus({ preventScroll: true });
+      }, 80);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [isDraft, item.id]);
 
   return (
-    <div className="mobile-detail-panel mobile-measurement-detail">
+    <div className="mobile-measurement-entry-page">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={17} />
-        <span>{batch.title}</span>
+        <span>Positionen</span>
       </button>
 
-      <div className="mobile-measurement-detail-head">
-        <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
-        <h2>{item.position}</h2>
-        <p>{item.description}</p>
-      </div>
-
-      <div className="mobile-measurement-quick-facts" aria-label="Aufmaß Kurzinfo">
-        <span>Einheit <strong>{item.unit ?? "-"}</strong></span>
-        <span>Gemeldet <strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></span>
-      </div>
-
-      <details className="mobile-measurement-secondary-details">
-        <summary>Details</summary>
+      <header className="mobile-entry-head">
         <div>
-          <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
-          <span>Menge Liste <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
-          <span>Minuten <strong>{formatMeasurementNumber(item.reported_minutes)}</strong></span>
-          <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
+          <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
+          <h1>Pos. {item.position}</h1>
+          <p>{item.description}</p>
         </div>
-      </details>
+        <div className="mobile-entry-facts">
+          <span>Einheit <strong>{item.unit ?? "-"}</strong></span>
+          <span>Gemeldet <strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></span>
+        </div>
+      </header>
 
       {isDraft ? (
         <div className="mobile-measurement-form mobile-measurement-entry-form">
-          <h3>Bereich wählen</h3>
-          <div className="mobile-area-tag-list" aria-label="Bisherige Bereiche">
-            {areaTags.map((tag) => (
-              <button
-                className={`mobile-area-tag ${selectedAreaKey === getMeasurementAreaKey(tag) ? "is-selected" : ""}`}
-                key={tag}
-                type="button"
-                onClick={() => onCommentChange(tag)}
-              >
-                {tag}
-              </button>
-            ))}
-            <button
-              className="mobile-area-tag mobile-area-tag-new"
-              type="button"
-              onClick={() => areaInputRef.current?.focus()}
-            >
-              + Neuer Bereich
-            </button>
-          </div>
-
           <div className="mobile-measurement-form-grid">
             <label>
-              <span>Bereich</span>
+              <span>Bereich / Ort</span>
               <input
                 ref={areaInputRef}
                 value={formComment}
@@ -666,6 +671,7 @@ function MeasurementDetail({
             <label>
               <span>Menge ({item.unit ?? "Einheit"})</span>
               <input
+                ref={quantityInputRef}
                 type="number"
                 min="0.01"
                 step="0.01"
@@ -675,12 +681,6 @@ function MeasurementDetail({
               />
             </label>
           </div>
-
-          {suggestedArea ? (
-            <button className="mobile-area-suggestion" type="button" onClick={() => onCommentChange(suggestedArea)}>
-              Vorhandenen Bereich übernehmen: {suggestedArea}
-            </button>
-          ) : null}
 
           {formError ? <p className="form-error">{formError}</p> : null}
           <div className="mobile-form-actions">
@@ -705,6 +705,17 @@ function MeasurementDetail({
           </article>
         ))}
       </div>
+
+      <details className="mobile-measurement-secondary-details">
+        <summary>Details anzeigen</summary>
+        <div>
+          <span>Paket <strong>{batch.title}</strong></span>
+          <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
+          <span>Menge Liste <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
+          <span>Minuten <strong>{formatMeasurementNumber(item.reported_minutes)}</strong></span>
+          <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
+        </div>
+      </details>
     </div>
   );
 }
@@ -848,19 +859,6 @@ function getMeasurementAreaSortRank(label: string, fallbackIndex: number): numbe
     return 920;
   }
   return 1000 + fallbackIndex;
-}
-
-function findMeasurementAreaSuggestion(input: string, tags: string[]): string | null {
-  const normalized = normalizeMeasurementArea(input);
-  if (!normalized) {
-    return null;
-  }
-  const normalizedKey = getMeasurementAreaKey(normalized);
-  const match = tags.find((tag) => getMeasurementAreaKey(tag) === normalizedKey);
-  if (!match || normalized === input.trim()) {
-    return null;
-  }
-  return match;
 }
 
 function formatRangeLabel(start: string, end: string): string {

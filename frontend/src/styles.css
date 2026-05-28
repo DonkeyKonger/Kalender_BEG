@@ -6503,6 +6503,11 @@ button.person-chip:focus-visible {
   padding-bottom: 24px;
 }
 
+.mobile-detail-page.is-entry-mode {
+  max-width: 480px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+
 .mobile-back-button {
   width: fit-content;
 }
@@ -6725,6 +6730,66 @@ button.person-chip:focus-visible {
   gap: 14px;
 }
 
+.mobile-measurement-entry-page {
+  display: grid;
+  gap: 10px;
+  min-height: calc(100vh - 72px);
+}
+
+.mobile-entry-head {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 6%);
+}
+
+.mobile-entry-head h1,
+.mobile-entry-head p,
+.mobile-entry-facts span,
+.mobile-entry-facts strong {
+  margin: 0;
+}
+
+.mobile-entry-head h1 {
+  margin-top: 7px;
+  color: #111827;
+  font-size: 1.3rem;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.mobile-entry-head p {
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.mobile-entry-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-entry-facts span {
+  display: grid;
+  gap: 2px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 9px;
+  color: #65738a;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.mobile-entry-facts strong {
+  color: #111827;
+  font-size: 0.95rem;
+}
+
 .mobile-measurement-detail-head {
   display: grid;
   gap: 7px;
@@ -6825,11 +6890,21 @@ button.person-chip:focus-visible {
   padding-top: 12px;
 }
 
+.mobile-measurement-entry-page .mobile-measurement-form {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .mobile-measurement-entry-form {
   border: 1px solid #dce3ee;
   border-radius: 8px;
   background: #f8fafc;
   padding: 11px;
+}
+
+.mobile-measurement-entry-page .mobile-measurement-entry-form {
+  background: #ffffff;
+  padding: 12px;
 }
 
 .mobile-area-tag-list {
@@ -6895,10 +6970,24 @@ button.person-chip:focus-visible {
   padding: 10px;
 }
 
+.mobile-measurement-entry-page .mobile-measurement-form input {
+  min-height: 48px;
+  font-size: 1rem;
+}
+
 .mobile-form-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.mobile-measurement-entry-page .mobile-form-actions {
+  position: sticky;
+  bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #dce3ee;
+  background: linear-gradient(180deg, rgb(255 255 255 / 78%), #ffffff 35%);
+  padding-top: 9px;
+  z-index: 5;
 }
 
 .mobile-status-open {
