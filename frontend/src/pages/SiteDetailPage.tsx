@@ -644,8 +644,10 @@ export function SiteDetailPage() {
     return <p className="form-error">{error ?? "Baustelle nicht gefunden."}</p>;
   }
 
+  const isMeasurementReviewWorkspace = activeTab === "measurement" && measurementSubtab === "review";
+
   return (
-    <section className="site-detail-page">
+    <section className={`site-detail-page${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}`}>
       <Link className="back-link" to="/sites">
         <ArrowLeft aria-hidden="true" size={16} />
         <span>Baustellen</span>
@@ -2054,13 +2056,14 @@ function MeasurementReviewPanel({
     return (
       <div className={`measurement-review-detail${viewMode === "table" ? " is-table-view" : ""}`}>
         <div className="measurement-review-header">
-          <div>
+          <div className="measurement-review-titlebar">
             <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
             <h2>{displayTitle}</h2>
           </div>
           <div className="measurement-review-actions">
             <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
             <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
+            <span className="measurement-review-action-divider" aria-hidden="true" />
             <button
               type="button"
               className="secondary-action"
@@ -2077,6 +2080,7 @@ function MeasurementReviewPanel({
             >
               Auf Monteurstand zurücksetzen
             </button>
+            <span className="measurement-review-action-divider" aria-hidden="true" />
             {!isDraft ? (
               isBilled ? (
                 <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>

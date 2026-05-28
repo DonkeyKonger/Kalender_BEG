@@ -6691,16 +6691,167 @@ button.person-chip:focus-visible {
 }
 
 
-/* Compact Technical UI: scoped first implementation for Aufmaßprüfung table mode. */
+/* Figma-style workspace shell for the real Aufmaß review screen. */
+.site-detail-page.is-measurement-review-workspace {
+  --figma-bg: #f5f7fa;
+  --figma-surface: #ffffff;
+  --figma-surface-soft: #f8fafc;
+  --figma-border: #d1d9e6;
+  --figma-border-soft: #e2e8f0;
+  --figma-text: #0f172a;
+  --figma-muted: #64748b;
+  --figma-primary: #1e293b;
+  --figma-active: #3b82f6;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--figma-border);
+  border-radius: 0;
+  background: var(--figma-bg);
+}
+
+.site-detail-page.is-measurement-review-workspace > .back-link {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--figma-border);
+  background: var(--figma-surface);
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-detail-page.is-measurement-review-workspace > .back-link:hover,
+.site-detail-page.is-measurement-review-workspace > .back-link:focus-visible {
+  background: var(--figma-surface-soft);
+  color: #334155;
+  outline: none;
+  text-decoration: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .site-detail-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--figma-border);
+  background: var(--figma-surface);
+}
+
+.site-detail-page.is-measurement-review-workspace .site-color.large {
+  display: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .site-detail-header h1 {
+  margin: 2px 0 1px;
+  color: var(--figma-text);
+  font-size: 1.14rem;
+  line-height: 1.2;
+}
+
+.site-detail-page.is-measurement-review-workspace .site-detail-header p:not(.eyebrow) {
+  color: var(--figma-muted);
+  font-size: 0.86rem;
+}
+
+.site-detail-page.is-measurement-review-workspace .site-detail-header .eyebrow {
+  color: var(--figma-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.site-detail-page.is-measurement-review-workspace .site-detail-header .status-badge {
+  grid-column: auto;
+  align-self: start;
+  border-radius: 0;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-tabs {
+  display: flex;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--figma-border);
+  border-radius: 0;
+  background: var(--figma-surface);
+  gap: 0;
+  padding: 0 18px;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-tabs button {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--figma-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 11px 15px 10px;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-tabs button:hover,
+.site-detail-page.is-measurement-review-workspace .project-record-tabs button:focus-visible {
+  background: var(--figma-surface-soft);
+  color: #334155;
+  outline: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-tabs button.is-active {
+  border-bottom-color: var(--figma-active);
+  background: #eff6ff;
+  color: #1e40af;
+  box-shadow: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-tab-panel {
+  gap: 0;
+  min-height: 0;
+  background: var(--figma-bg);
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-subtabs {
+  display: flex;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--figma-border);
+  border-radius: 0;
+  background: var(--figma-surface);
+  gap: 8px;
+  padding: 10px 18px;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-subtabs button {
+  min-height: 28px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 750;
+  padding: 6px 11px;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-subtabs button:hover,
+.site-detail-page.is-measurement-review-workspace .project-record-subtabs button:focus-visible {
+  background: #e2e8f0;
+  color: #334155;
+  outline: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-subtabs button.is-active {
+  background: var(--figma-primary);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+/* Figma-style table mode for Aufmaßprüfung; scoped to the real component. */
 .measurement-review-detail.is-table-view {
-  --ct-bg: #f5f3f0;
+  --ct-bg: #f5f7fa;
   --ct-surface: #ffffff;
-  --ct-surface-muted: #faf9f7;
-  --ct-toolbar: #fdfcfb;
-  --ct-border: #d8d1c6;
-  --ct-border-soft: #e8e2d9;
-  --ct-border-strong: #bfae96;
-  --ct-text: #172033;
+  --ct-surface-muted: #f8fafc;
+  --ct-toolbar: #ffffff;
+  --ct-border: #d1d9e6;
+  --ct-border-soft: #e2e8f0;
+  --ct-border-strong: #94a3b8;
+  --ct-text: #0f172a;
   --ct-muted: #64748b;
   --ct-primary: #1e293b;
   --ct-primary-hover: #0f172a;
@@ -6708,62 +6859,89 @@ button.person-chip:focus-visible {
   --ct-warning-text: #92400e;
   --ct-danger: #b42318;
   --ct-success: #166534;
-  --ct-table-header: #e7ded2;
-  --ct-table-subheader: #f7f4ee;
+  --ct-table-header: #f1f5f9;
+  --ct-table-subheader: #f8fafc;
   --ct-table-cell: #ffffff;
-  --ct-table-label: #f0e9df;
-  --ct-table-total: #e8ded0;
+  --ct-table-label: #f8fafc;
+  --ct-table-total: #f1f5f9;
   --ct-focus: #1e293b;
   width: 100%;
   max-width: none;
-  gap: 8px;
-  border-color: var(--ct-border);
-  border-radius: 6px;
+  min-height: calc(100vh - 238px);
+  gap: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
   background: var(--ct-surface);
   color: var(--ct-text);
-  padding: 8px;
+  padding: 0;
   box-shadow: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-header {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--ct-border-soft);
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--ct-border);
+  background: var(--ct-toolbar);
+}
+
+.measurement-review-detail.is-table-view .measurement-review-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-header h2 {
+  margin: 0;
+  overflow: hidden;
   color: var(--ct-text);
-  font-size: 1.02rem;
+  font-size: 0.96rem;
+  font-weight: 850;
   line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-actions {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-action-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--ct-border);
 }
 
 .measurement-review-detail.is-table-view .secondary-action,
 .measurement-review-detail.is-table-view .primary-action {
   min-height: 28px;
   border-radius: 4px;
-  padding: 5px 9px;
+  padding: 5px 10px;
   font-size: 0.74rem;
+  font-weight: 750;
   line-height: 1;
   box-shadow: none;
 }
 
 .measurement-review-detail.is-table-view .secondary-action {
-  border-color: var(--ct-border);
-  background: var(--ct-toolbar);
-  color: var(--ct-text);
+  border-color: transparent;
+  background: transparent;
+  color: #475569;
 }
 
 .measurement-review-detail.is-table-view .secondary-action:hover,
 .measurement-review-detail.is-table-view .secondary-action:focus-visible {
-  border-color: var(--ct-border-strong);
-  background: #ffffff;
+  border-color: transparent;
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .measurement-review-detail.is-table-view .primary-action {
@@ -6795,30 +6973,36 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
   background: var(--ct-surface);
   color: var(--ct-text);
-  box-shadow: inset 0 0 0 1px rgb(23 32 51 / 10%);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-open,
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
 .measurement-review-detail.is-table-view .measurement-status.is-rejected {
   min-height: 24px;
-  border: 1px solid rgb(146 64 14 / 22%);
+  border: 1px solid rgb(146 64 14 / 16%);
   border-radius: 4px;
   background: var(--ct-warning-bg);
   color: var(--ct-warning-text);
-  padding: 3px 8px;
+  padding: 4px 8px;
   font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-billed,
 .measurement-review-detail.is-table-view .measurement-status.is-approved {
   min-height: 24px;
-  border: 1px solid rgb(22 101 52 / 22%);
+  border: 1px solid rgb(22 101 52 / 20%);
   border-radius: 4px;
   background: #dcfce7;
   color: var(--ct-success);
-  padding: 3px 8px;
+  padding: 4px 8px;
   font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.measurement-review-detail.is-table-view .project-record-empty-state {
+  margin: 8px 18px 0;
 }
 
 .measurement-review-detail.is-table-view .project-record-empty-state.is-error {
@@ -6831,15 +7015,15 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-table-wrap {
   width: 100%;
   max-width: 100%;
-  min-height: 320px;
-  max-height: max(380px, calc(100vh - 258px));
+  min-height: 520px;
+  max-height: max(520px, calc(100vh - 288px));
   overflow: auto;
   scrollbar-gutter: stable both-edges;
-  border: 1px solid var(--ct-border);
-  border-radius: 4px;
-  background: var(--ct-surface-muted);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%);
-  padding-bottom: 18px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ct-surface);
+  box-shadow: none;
+  padding-bottom: 22px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
@@ -6849,7 +7033,7 @@ button.person-chip:focus-visible {
   table-layout: fixed;
   border-collapse: collapse;
   color: var(--ct-text);
-  font-size: 0.68rem;
+  font-size: 0.67rem;
   line-height: 1.12;
   font-variant-numeric: tabular-nums;
 }
@@ -6869,7 +7053,7 @@ button.person-chip:focus-visible {
   max-width: var(--measurement-position-width);
   height: 23px;
   border: 1px solid var(--ct-border-soft);
-  padding: 2px 5px;
+  padding: 2px 6px;
   background: var(--ct-table-cell);
   vertical-align: middle;
 }
@@ -6882,7 +7066,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-table thead th {
   background: var(--ct-table-header) !important;
-  color: var(--ct-text) !important;
+  color: #475569 !important;
   font-weight: 800;
 }
 
@@ -6893,7 +7077,7 @@ button.person-chip:focus-visible {
   width: var(--measurement-axis-width) !important;
   min-width: var(--measurement-axis-width) !important;
   max-width: var(--measurement-axis-width) !important;
-  border-right-color: var(--ct-border-strong);
+  border-right-color: #cbd5e1;
   background: var(--ct-table-label) !important;
   color: var(--ct-text);
   font-size: 0.68rem;
@@ -6908,19 +7092,23 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-table thead .measurement-matrix-axis {
   z-index: 10;
-  background: #dfd4c6 !important;
+  background: #eef2f7 !important;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-position-heading {
   text-align: left;
-  font-size: 0.72rem !important;
+  font-size: 0.7rem !important;
   line-height: 1.05;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-position-heading strong {
+  color: #475569;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading {
   height: 52px;
   text-align: left;
-  font-size: 0.62rem !important;
+  font-size: 0.61rem !important;
   line-height: 1.08;
   padding-top: 3px !important;
   padding-bottom: 3px !important;
@@ -6930,13 +7118,14 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading span {
   display: -webkit-box;
   overflow: hidden;
+  color: var(--ct-muted);
   text-align: left;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-unit-heading {
-  color: var(--ct-muted) !important;
+  color: #475569 !important;
   font-size: 0.64rem !important;
   font-weight: 850;
   text-align: left;
@@ -6984,12 +7173,12 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity:not(.has-value) {
-  background: #fbfaf7;
+  background: #f8fafc;
   color: transparent;
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:hover {
-  border-color: var(--ct-border-strong);
+  border-color: #cbd5e1;
   background: #ffffff;
 }
 
@@ -7002,6 +7191,9 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   border-top: 2px solid var(--ct-border-strong);
   background: var(--ct-table-total) !important;
   font-size: 0.69rem;
@@ -7009,5 +7201,6 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
-  background: #ded1c1 !important;
+  z-index: 7;
+  background: #e8eef6 !important;
 }
