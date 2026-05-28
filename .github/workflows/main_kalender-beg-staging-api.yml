@@ -55,7 +55,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write
       contents: read
 
     steps:
@@ -64,17 +63,11 @@ jobs:
         with:
           name: python-app
 
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B9505352247C4046A0B1A603037065F5 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_70FB3E87FF944A05A5C397FE71A77FA3 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_412CC59BD2A14E62883CA4D1F3803FA6 }}
-
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: kalender-beg-staging-api
           slot-name: Production
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
           package: backend-release.zip
