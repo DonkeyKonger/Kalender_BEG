@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
+import struct
 from textwrap import wrap
+import zlib
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -34,6 +37,8 @@ MATRIX_AREA_ROW_HEIGHT = 14
 MATRIX_AREA_ROW_COUNT = 11
 MATRIX_AREA_LABEL_X = 96
 MATRIX_AREA_LABEL_WIDTH = 136
+LOGO_RESOURCE_NAME = "ImLogo"
+LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 
 
 @dataclass(frozen=True)
@@ -51,9 +56,20 @@ class MatrixArea:
     label: str
 
 
+@dataclass(frozen=True)
+class PdfImage:
+    width: int
+    height: int
+    data: bytes
+
+
 class SimplePdf:
     def __init__(self) -> None:
         self.pages: list[bytes] = []
+        self.images: dict[str, PdfImage] = {}
+
+    def add_image(self, name: str, image: PdfImage) -> None:
+        self.images[name] = image
 
     def add_page(self, commands: list[bytes]) -> None:
         self.pages.append(b"\n".join(commands))
@@ -65,6 +81,29 @@ class SimplePdf:
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
         ]
+        image_object_numbers: dict[str, int] = {}
+        for name, image in self.images.items():
+            objects.append(
+                b"<< /Type /XObject /Subtype /Image /Width "
+                + str(image.width).encode("ascii")
+                + b" /Height "
+                + str(image.height).encode("ascii")
+                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                + str(len(image.data)).encode("ascii")
+                + b" >>\nstream\n"
+                + image.data
+                + b"\nendstream"
+            )
+            image_object_numbers[name] = len(objects)
+
+        xobject_resource = b""
+        if image_object_numbers:
+            xobjects = b" ".join(
+                b"/" + name.encode("ascii") + b" " + str(number).encode("ascii") + b" 0 R"
+                for name, number in image_object_numbers.items()
+            )
+            xobject_resource = b" /XObject << " + xobjects + b" >>"
+
         page_object_numbers: list[int] = []
         for page_stream in self.pages:
             stream_object_number = len(objects) + 1
@@ -81,7 +120,9 @@ class SimplePdf:
                 + _number(PAGE_WIDTH)
                 + b" "
                 + _number(PAGE_HEIGHT)
-                + b"] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents "
+                + b"] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>"
+                + xobject_resource
+                + b" >> /Contents "
                 + str(stream_object_number).encode("ascii")
                 + b" 0 R >>"
             )
@@ -145,6 +186,9 @@ class MeasurementPdfService:
             )
 
         pdf = SimplePdf()
+        logo = _load_png_rgb(LOGO_PATH)
+        if logo is not None:
+            pdf.add_image(LOGO_RESOURCE_NAME, logo)
         positions, areas, cells, totals_by_position = self._build_matrix(batch)
         position_pages = _chunk(positions, MATRIX_COLUMN_COUNT) or [[]]
         area_pages = _chunk(areas, MATRIX_AREA_ROW_COUNT) or [[]]
@@ -163,6 +207,7 @@ class MeasurementPdfService:
                         page_count=page_count,
                         position_page_index=position_page_index,
                         area_page_index=area_page_index,
+                        logo_available=logo is not None,
                     )
                 )
                 page_number += 1
@@ -228,6 +273,7 @@ class MeasurementPdfService:
         page_count: int,
         position_page_index: int,
         area_page_index: int,
+        logo_available: bool,
     ) -> list[bytes]:
         site = batch.site
         assert site is not None
@@ -250,6 +296,7 @@ class MeasurementPdfService:
             commission=site.site_number or "-",
             date_label=_format_date(datetime.now()),
             sheet_label=f"{page_number}/{page_count}{page_suffix}",
+            logo_available=logo_available,
         )
         _text(commands, 54, 431, f"Adresse: {project_address}", 7)
         _text(commands, 371, 431, f"Monteur: {submitted_by}", 7)
@@ -264,12 +311,14 @@ class MeasurementPdfService:
             totals_by_position=totals_by_position,
         )
 
-        total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
-        _text(commands, 98, 77, "Gesamtsumme:", 8, "F2")
-        _line(commands, 176, 75, 250, 75)
         if page_number == page_count:
+            total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
+            _text(commands, 98, 77, "Gesamtsumme:", 8, "F2")
+            _line(commands, 176, 75, 250, 75)
             _text(commands, 245, 77, _format_decimal(total), 8, "F2", align_right=True)
-        _signature_block(commands)
+            _signature_block(commands)
+        else:
+            _text(commands, PAGE_WIDTH - MARGIN, 68, "Fortsetzung auf folgendem Blatt", 8, "F2", align_right=True)
 
         return commands
 
@@ -283,10 +332,13 @@ def _template_header(
     commission: str,
     date_label: str,
     sheet_label: str,
+    logo_available: bool,
 ) -> None:
     _text(commands, 56, 513, "Aufmaß", 20, "F2")
     _line(commands, 56, 510, 145, 510)
-    _text(commands, 650, 513, f"Aufmaß-Nr.: {title}", 10, "F2")
+    if logo_available:
+        _image(commands, LOGO_RESOURCE_NAME, 728, 511, 72, 72)
+    _text(commands, 650, 500, f"Aufmaß-Nr.: {title}", 10, "F2")
     _text(commands, TEMPLATE_LABEL_X, 481, "Kunde:", 8, "F2")
     _line(commands, 95, 478, 370, 478)
     _text(commands, 100, 481, customer, 8)
@@ -344,16 +396,14 @@ def _draw_measurement_matrix(
             continue
         position = positions[index]
         _cell_text(commands, x, MATRIX_POSITION_BOTTOM + 5, position.position, MATRIX_COLUMN_WIDTH, 5.5, "F2")
-        description_lines = _wrapped(position.description, 8)[:12]
-        for line_index, line in enumerate(description_lines):
-            _cell_text(
-                commands,
-                x,
-                MATRIX_POSITION_BOTTOM - 12 - line_index * 8,
-                line,
-                MATRIX_COLUMN_WIDTH,
-                5.4,
-            )
+        _rotated_cell_text(
+            commands,
+            x,
+            MATRIX_DESCRIPTION_BOTTOM,
+            MATRIX_COLUMN_WIDTH,
+            MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM,
+            position.description,
+        )
         _cell_text(commands, x, MATRIX_UNIT_BOTTOM + 7, position.unit, MATRIX_COLUMN_WIDTH, 6, "F2")
 
         for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
@@ -389,6 +439,66 @@ def _signature_block(commands: list[bytes]) -> None:
 def _wrapped(value: str, width: int) -> list[str]:
     text = " ".join((value or "").split())
     return wrap(text, width=width, break_long_words=False) or [""]
+
+
+def _load_png_rgb(path: Path) -> PdfImage | None:
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_bytes()
+        if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            return None
+        offset = 8
+        width = height = color_type = bit_depth = None
+        idat_parts: list[bytes] = []
+        while offset + 8 <= len(raw):
+            length = struct.unpack(">I", raw[offset : offset + 4])[0]
+            chunk_type = raw[offset + 4 : offset + 8]
+            chunk_data = raw[offset + 8 : offset + 8 + length]
+            offset += 12 + length
+            if chunk_type == b"IHDR":
+                width, height, bit_depth, color_type, _compression, _filter, interlace = (
+                    struct.unpack(">IIBBBBB", chunk_data)
+                )
+                if bit_depth != 8 or color_type not in {2, 6} or interlace != 0:
+                    return None
+            elif chunk_type == b"IDAT":
+                idat_parts.append(chunk_data)
+            elif chunk_type == b"IEND":
+                break
+        if width is None or height is None or color_type is None:
+            return None
+
+        channels = 4 if color_type == 6 else 3
+        stride = width * channels
+        inflated = zlib.decompress(b"".join(idat_parts))
+        rows: list[bytes] = []
+        previous = bytearray(stride)
+        cursor = 0
+        for _row in range(height):
+            filter_type = inflated[cursor]
+            cursor += 1
+            row = bytearray(inflated[cursor : cursor + stride])
+            cursor += stride
+            _apply_png_filter(row, previous, channels, filter_type)
+            if color_type == 6:
+                rgb = bytearray()
+                for index in range(0, len(row), 4):
+                    alpha = row[index + 3]
+                    rgb.extend(
+                        (
+                            _blend_on_white(row[index], alpha),
+                            _blend_on_white(row[index + 1], alpha),
+                            _blend_on_white(row[index + 2], alpha),
+                        )
+                    )
+                rows.append(bytes(rgb))
+            else:
+                rows.append(bytes(row))
+            previous = row
+        return PdfImage(width=width, height=height, data=zlib.compress(b"".join(rows), 9))
+    except Exception:
+        return None
 
 
 def _chunk[T](rows: list[T], size: int) -> list[list[T]]:
@@ -482,6 +592,25 @@ def _text_rotated(
     )
 
 
+def _rotated_cell_text(
+    commands: list[bytes],
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    text: str,
+) -> None:
+    size = 6
+    max_chars = max(16, int((height - 10) / (size * 0.48)))
+    _text_rotated(
+        commands,
+        x + width * 0.58,
+        y + 5,
+        _trim_text(text, max_chars),
+        size,
+    )
+
+
 def _cell_text(
     commands: list[bytes],
     x: float,
@@ -494,6 +623,64 @@ def _cell_text(
     lines = _wrapped(text, max(4, int(width / (size * 0.55))))[:2]
     for index, line in enumerate(lines):
         _text(commands, x + 2, y - index * (size + 1.5), line, int(size), font)
+
+
+def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
+    commands.append(
+        b"q "
+        + b" ".join([_number(width), b"0", b"0", _number(height), _number(x), _number(y)])
+        + b" cm /"
+        + name.encode("ascii")
+        + b" Do Q"
+    )
+
+
+def _trim_text(value: str, max_chars: int) -> str:
+    text = " ".join((value or "").split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
+
+
+def _apply_png_filter(
+    row: bytearray,
+    previous: bytearray,
+    bytes_per_pixel: int,
+    filter_type: int,
+) -> None:
+    for index, value in enumerate(row):
+        left = row[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+        up = previous[index]
+        upper_left = previous[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+        if filter_type == 0:
+            predictor = 0
+        elif filter_type == 1:
+            predictor = left
+        elif filter_type == 2:
+            predictor = up
+        elif filter_type == 3:
+            predictor = (left + up) // 2
+        elif filter_type == 4:
+            predictor = _paeth(left, up, upper_left)
+        else:
+            raise ValueError(f"Unsupported PNG filter: {filter_type}")
+        row[index] = (value + predictor) & 0xFF
+
+
+def _paeth(left: int, up: int, upper_left: int) -> int:
+    estimate = left + up - upper_left
+    distance_left = abs(estimate - left)
+    distance_up = abs(estimate - up)
+    distance_upper_left = abs(estimate - upper_left)
+    if distance_left <= distance_up and distance_left <= distance_upper_left:
+        return left
+    if distance_up <= distance_upper_left:
+        return up
+    return upper_left
+
+
+def _blend_on_white(channel: int, alpha: int) -> int:
+    return (channel * alpha + 255 * (255 - alpha)) // 255
 
 
 def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float) -> None:

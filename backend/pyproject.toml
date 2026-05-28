@@ -41,3 +41,6 @@ target-version = "py312"
 [tool.setuptools.packages.find]
 include = ["app*"]
 exclude = ["alembic*"]
+
+[tool.setuptools.package-data]
+app = ["assets/*.png"]
