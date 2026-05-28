@@ -1,4 +1,4 @@
-name: Build and deploy Python app to Azure Web App - kalender-beg-staging-api-a0c2c9b2hna9bjf2
+name: Build and deploy Python app to Azure Web App - staging API
 
 on:
   push:
@@ -64,9 +64,55 @@ jobs:
           name: python-app
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
-        with:
-          app-name: kalender-beg-staging-api-a0c2c9b2hna9bjf2
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
-          package: backend-release.zip
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+
+          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
+          profiles = root.findall("publishProfile")
+          profile = next(
+              (item for item in profiles if item.attrib.get("publishMethod") == "ZipDeploy"),
+              None,
+          )
+          if profile is None:
+              profile = next(
+                  (item for item in profiles if item.attrib.get("publishMethod") == "MSDeploy"),
+                  None,
+              )
+          if profile is None:
+              raise SystemExit("Publish profile does not contain ZipDeploy/MSDeploy credentials.")
+
+          username = profile.attrib["userName"]
+          password = profile.attrib["userPWD"]
+          publish_url = profile.attrib["publishUrl"].strip()
+          if not publish_url.startswith(("http://", "https://")):
+              publish_url = f"https://{publish_url}"
+          publish_url = publish_url.rstrip("/")
+          if not publish_url.endswith("/api/zipdeploy"):
+              publish_url = f"{publish_url}/api/zipdeploy"
+
+          print(f"::add-mask::{username}")
+          print(f"::add-mask::{password}")
+          subprocess.run(
+              [
+                  "curl",
+                  "--fail",
+                  "--show-error",
+                  "--location",
+                  "--request",
+                  "POST",
+                  "--user",
+                  f"{username}:{password}",
+                  "--header",
+                  "Content-Type: application/zip",
+                  "--data-binary",
+                  "@backend-release.zip",
+                  publish_url,
+              ],
+              check=True,
+          )
+          PY
