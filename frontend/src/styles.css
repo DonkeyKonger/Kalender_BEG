@@ -7382,7 +7382,7 @@ button.person-chip:focus-visible {
   --ct-focus: #1e293b;
   width: 100%;
   max-width: none;
-  min-height: calc(100vh - 250px);
+  min-height: 0;
   gap: 0;
   overflow: hidden;
   border: 0;
@@ -7583,15 +7583,15 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-table-wrap {
   width: 100%;
   max-width: 100%;
-  min-height: 520px;
-  max-height: max(520px, calc(100vh - 330px));
+  min-height: 0;
+  max-height: calc(100vh - 330px);
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   border: 0;
   border-radius: 0;
   background: var(--ct-surface);
   box-shadow: none;
-  padding-bottom: 22px;
+  padding-bottom: 0;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
@@ -7735,6 +7735,41 @@ button.person-chip:focus-visible {
   text-align: right;
 }
 
+.measurement-review-detail.is-table-view .measurement-placeholder-header-input {
+  width: 100%;
+  min-height: 17px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ct-text);
+  font: inherit;
+  font-size: inherit;
+  font-weight: 800;
+  line-height: 1.05;
+  padding: 0 2px;
+  text-align: left;
+}
+
+.measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input {
+  min-height: 34px;
+  overflow: hidden;
+  resize: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-placeholder-header-input::placeholder {
+  color: #94a3b8;
+  font-weight: 650;
+}
+
+.measurement-review-detail.is-table-view .measurement-placeholder-header-input:hover,
+.measurement-review-detail.is-table-view .measurement-placeholder-header-input:focus {
+  border-color: var(--ct-focus);
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(30 41 59 / 18%);
+  outline: none;
+}
+
 .measurement-review-detail.is-table-view .measurement-area-input {
   width: 100%;
   min-height: 17px;
@@ -7769,12 +7804,12 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell .measurement-table-input.is-quantity:not(.has-value) {
   background: transparent;
-  color: transparent;
+  color: var(--ct-text);
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity:not(.has-value) {
   background: #f8fafc;
-  color: transparent;
+  color: var(--ct-text);
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:hover {

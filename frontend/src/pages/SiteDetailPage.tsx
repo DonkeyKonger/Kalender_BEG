@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
@@ -17,6 +17,10 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
+const MEASUREMENT_TABLE_AXIS_WIDTH = 188;
+const MEASUREMENT_TABLE_POSITION_WIDTH = 116;
+const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
+const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Zeitenliste" },
@@ -360,20 +364,17 @@ export function SiteDetailPage() {
     entryId: number,
     payload: { area_or_comment: string; quantity: number },
   ): Promise<void> {
-    if (!site || measurementReviewActionLoading) {
+    if (!site) {
       return;
     }
-    setMeasurementReviewActionLoading(true);
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      await api.updateSiteMeasurementEntry(site.id, batch.id, entryId, payload);
-      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      const updatedEntry = await api.updateSiteMeasurementEntry(site.id, batch.id, entryId, payload);
+      setMeasurementBatchItems((current) => replaceMeasurementEntryInItems(current, updatedEntry));
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden."));
       throw requestError;
-    } finally {
-      setMeasurementReviewActionLoading(false);
     }
   }
 
@@ -382,20 +383,17 @@ export function SiteDetailPage() {
     measurementItemId: number,
     payload: { area_or_comment: string; quantity: number },
   ): Promise<void> {
-    if (!site || measurementReviewActionLoading) {
+    if (!site) {
       return;
     }
-    setMeasurementReviewActionLoading(true);
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      await api.createSiteMeasurementEntry(site.id, batch.id, measurementItemId, payload);
-      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      const createdEntry = await api.createSiteMeasurementEntry(site.id, batch.id, measurementItemId, payload);
+      setMeasurementBatchItems((current) => addMeasurementEntryToItems(current, createdEntry));
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeile konnte nicht angelegt werden."));
       throw requestError;
-    } finally {
-      setMeasurementReviewActionLoading(false);
     }
   }
 
@@ -1856,15 +1854,48 @@ function getMeasurementAreaSortRank(label: string, fallbackIndex: number): numbe
   return 1000 + fallbackIndex;
 }
 
-function getMeasurementCellEntries(item: MobileMeasurementItem, areaKey: string): MobileMeasurementItem["entries"] {
-  return item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
-}
-
 function getMeasurementCellQuantity(entries: MobileMeasurementItem["entries"]): number {
   return entries.reduce((sum, entry) => {
     const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
     return Number.isFinite(quantity) ? sum + quantity : sum;
   }, 0);
+}
+
+function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: MeasurementEntry[]): MobileMeasurementItem {
+  const reportedQuantity = getMeasurementCellQuantity(entries);
+  const minutesPerUnit = typeof item.minutes_per_unit === "number" ? item.minutes_per_unit : Number(item.minutes_per_unit);
+  const reportedMinutes = Number.isFinite(minutesPerUnit) ? reportedQuantity * minutesPerUnit : item.reported_minutes;
+  const reportedHours = typeof reportedMinutes === "number" && Number.isFinite(reportedMinutes) ? reportedMinutes / 60 : item.reported_hours;
+  return {
+    ...item,
+    entries,
+    reported_quantity: reportedQuantity,
+    reported_minutes: reportedMinutes,
+    reported_hours: reportedHours,
+    mobile_status: reportedQuantity > 0 ? "edited" : "open",
+  };
+}
+
+function replaceMeasurementEntryInItems(items: MobileMeasurementItem[], updatedEntry: MeasurementEntry): MobileMeasurementItem[] {
+  return items.map((item) => {
+    if (item.id !== updatedEntry.measurement_item_id) {
+      return item;
+    }
+    const entries = item.entries.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry));
+    return recalculateMeasurementItemTotals(item, entries);
+  });
+}
+
+function addMeasurementEntryToItems(items: MobileMeasurementItem[], createdEntry: MeasurementEntry): MobileMeasurementItem[] {
+  return items.map((item) => {
+    if (item.id !== createdEntry.measurement_item_id) {
+      return item;
+    }
+    const entries = item.entries.some((entry) => entry.id === createdEntry.id)
+      ? item.entries
+      : [...item.entries, createdEntry];
+    return recalculateMeasurementItemTotals(item, entries);
+  });
 }
 
 function MeasurementReviewPanel({
@@ -1941,14 +1972,14 @@ function MeasurementReviewPanel({
     persistMeasurementViewMode(mode);
   }
 
-  const sortedBatches = [...batches].sort((left, right) => {
+  const sortedBatches = useMemo(() => [...batches].sort((left, right) => {
     const rightTime = getMeasurementBatchSortTime(right);
     const leftTime = getMeasurementBatchSortTime(left);
     if (rightTime !== leftTime) {
       return rightTime - leftTime;
     }
     return right.number - left.number;
-  });
+  }), [batches]);
 
   function updateEntryDraft(entryId: number, field: keyof MeasurementEntryDraft, value: string): void {
     setEntryDrafts((current) => ({
@@ -2211,7 +2242,6 @@ function MeasurementReviewPanel({
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
             savingEntryId={savingEntryId}
-            onDraftChange={updateEntryDraft}
             onDraftSave={(entry, draft) => void saveEntryDraft(selectedBatch, entry, draft)}
             onDraftReset={resetEntryDraft}
             onCellCreate={(item, areaLabel, quantity) => onCreateEntry(selectedBatch, item.id, { area_or_comment: areaLabel, quantity })}
@@ -2286,7 +2316,6 @@ function MeasurementReviewTable({
   canEditRows,
   reviewActionLoading,
   savingEntryId,
-  onDraftChange,
   onDraftSave,
   onDraftReset,
   onCellCreate,
@@ -2296,51 +2325,60 @@ function MeasurementReviewTable({
   canEditRows: boolean;
   reviewActionLoading: boolean;
   savingEntryId: number | null;
-  onDraftChange: (entryId: number, field: keyof MeasurementEntryDraft, value: string) => void;
   onDraftSave: (entry: MobileMeasurementItem["entries"][number], draft: MeasurementEntryDraft | undefined) => void;
   onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
 }) {
-  const areaRows = buildMeasurementMatrixAreaRows(items);
-  const measurementAxisWidth = 188;
-  const measurementPositionWidth = 116;
-  const minDisplayColumns = 12;
-  const minDisplayAreaRows = 12;
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-  const [viewportColumnCount, setViewportColumnCount] = useState(minDisplayColumns);
-  const [newCellDrafts, setNewCellDrafts] = useState<Record<string, string>>({});
-  const [areaLabelDrafts, setAreaLabelDrafts] = useState<Record<string, string>>({});
-  const [placeholderCellDrafts, setPlaceholderCellDrafts] = useState<Record<string, string>>({});
-  const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
-  const displayColumnCount = Math.max(minDisplayColumns, items.length, viewportColumnCount);
+  const areaLabelDraftsRef = useRef<Record<string, string>>({});
+  const placeholderHeaderDraftsRef = useRef<Record<string, { position: string; description: string; unit: string }>>({});
+  const savingCellKeysRef = useRef<Set<string>>(new Set());
+  const [viewportColumnCount, setViewportColumnCount] = useState(MEASUREMENT_TABLE_MIN_COLUMNS);
+  const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
+  const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length, viewportColumnCount);
   const placeholderColumnCount = Math.max(0, displayColumnCount - items.length);
   const displayColumns: Array<
     | { key: string; kind: "item"; item: MobileMeasurementItem }
     | { key: string; kind: "placeholder"; index: number }
-  > = [
+  > = useMemo(() => ([
     ...items.map((item) => ({ key: `item-${item.id}`, kind: "item" as const, item })),
     ...Array.from({ length: placeholderColumnCount }, (_, index) => ({
       key: `placeholder-column-${index + 1}`,
       kind: "placeholder" as const,
       index: index + 1,
     })),
-  ];
-  const placeholderAreaRows = Array.from({ length: Math.max(0, minDisplayAreaRows - areaRows.length) }, (_, index) => ({
-    key: `placeholder-area-${index + 1}`,
-    label: "",
-    firstIndex: areaRows.length + index,
-    sortRank: Number.MAX_SAFE_INTEGER - minDisplayAreaRows + index,
-    isPlaceholder: true,
-  }));
-  const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = [
-    ...areaRows.map((area) => ({ ...area, isPlaceholder: false })),
-    ...placeholderAreaRows,
-  ];
-  const tableStyle = {
-    "--measurement-axis-width": `${measurementAxisWidth}px`,
-    "--measurement-position-width": `${measurementPositionWidth}px`,
-    "--measurement-table-width": `${measurementAxisWidth + displayColumnCount * measurementPositionWidth}px`,
-  } as CSSProperties;
+  ]), [items, placeholderColumnCount]);
+  const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = useMemo(() => {
+    const placeholderAreaRows = Array.from({ length: Math.max(0, MEASUREMENT_TABLE_MIN_AREA_ROWS - areaRows.length) }, (_, index) => ({
+      key: `placeholder-area-${index + 1}`,
+      label: "",
+      firstIndex: areaRows.length + index,
+      sortRank: Number.MAX_SAFE_INTEGER - MEASUREMENT_TABLE_MIN_AREA_ROWS + index,
+      isPlaceholder: true,
+    }));
+    return [
+      ...areaRows.map((area) => ({ ...area, isPlaceholder: false })),
+      ...placeholderAreaRows,
+    ];
+  }, [areaRows]);
+  const entryGroups = useMemo(() => {
+    const groups = new Map<string, MobileMeasurementItem["entries"]>();
+    for (const item of items) {
+      for (const entry of item.entries) {
+        const key = `${item.id}:${getMeasurementAreaKey(entry.area_or_comment)}`;
+        const entries = groups.get(key) ?? [];
+        entries.push(entry);
+        groups.set(key, entries);
+      }
+    }
+    return groups;
+  }, [items]);
+  const totalsByItemId = useMemo(() => new Map(items.map((item) => [item.id, getMeasurementCellQuantity(item.entries)])), [items]);
+  const tableStyle = useMemo(() => ({
+    "--measurement-axis-width": `${MEASUREMENT_TABLE_AXIS_WIDTH}px`,
+    "--measurement-position-width": `${MEASUREMENT_TABLE_POSITION_WIDTH}px`,
+    "--measurement-table-width": `${MEASUREMENT_TABLE_AXIS_WIDTH + displayColumnCount * MEASUREMENT_TABLE_POSITION_WIDTH}px`,
+  }) as CSSProperties, [displayColumnCount]);
 
   useEffect(() => {
     const node = tableWrapRef.current;
@@ -2349,51 +2387,67 @@ function MeasurementReviewTable({
     }
 
     const updateViewportColumns = () => {
-      const availableWidth = Math.max(0, node.clientWidth - measurementAxisWidth);
-      setViewportColumnCount(Math.max(minDisplayColumns, Math.ceil(availableWidth / measurementPositionWidth)));
+      const availableWidth = Math.max(0, node.clientWidth - MEASUREMENT_TABLE_AXIS_WIDTH);
+      setViewportColumnCount(Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, Math.ceil(availableWidth / MEASUREMENT_TABLE_POSITION_WIDTH)));
     };
 
     updateViewportColumns();
     const observer = new ResizeObserver(updateViewportColumns);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [measurementAxisWidth, measurementPositionWidth]);
-
-  function updateNewCellDraft(cellKey: string, value: string): void {
-    setNewCellDrafts((current) => ({ ...current, [cellKey]: value }));
-  }
+  }, []);
 
   function getAreaLabel(area: MeasurementMatrixAreaRow): string {
-    return areaLabelDrafts[area.key] ?? area.label;
+    return areaLabelDraftsRef.current[area.key] ?? area.label;
   }
 
   function updateAreaLabelDraft(areaKey: string, value: string): void {
-    setAreaLabelDrafts((current) => ({ ...current, [areaKey]: value }));
+    areaLabelDraftsRef.current[areaKey] = value;
   }
 
-  function updatePlaceholderCellDraft(cellKey: string, value: string): void {
-    setPlaceholderCellDrafts((current) => ({ ...current, [cellKey]: value }));
+  function updatePlaceholderHeaderDraft(columnKey: string, field: "position" | "description" | "unit", value: string): void {
+    placeholderHeaderDraftsRef.current[columnKey] = {
+      position: placeholderHeaderDraftsRef.current[columnKey]?.position ?? "",
+      description: placeholderHeaderDraftsRef.current[columnKey]?.description ?? "",
+      unit: placeholderHeaderDraftsRef.current[columnKey]?.unit ?? "",
+      [field]: value,
+    };
   }
 
-  async function saveNewCellDraft(item: MobileMeasurementItem, area: MeasurementMatrixAreaRow, value: string): Promise<void> {
+  function getCellEntries(item: MobileMeasurementItem, areaKey: string): MobileMeasurementItem["entries"] {
+    return entryGroups.get(`${item.id}:${areaKey}`) ?? [];
+  }
+
+  async function saveNewCellDraft(item: MobileMeasurementItem, area: MeasurementMatrixAreaRow, input: HTMLInputElement): Promise<void> {
+    const value = input.value;
     const quantity = parseMeasurementQuantityInput(value);
     const areaLabel = getAreaLabel(area).trim();
     if (value.trim() === "") {
       return;
     }
-    if (!areaLabel || quantity === null || quantity <= 0 || savingCellKey) {
-      setNewCellDrafts((current) => ({ ...current, [`${area.key}-${item.id}`]: "" }));
+    if (!areaLabel || quantity === null || quantity <= 0) {
+      input.value = "";
       return;
     }
 
     const cellKey = `${area.key}-${item.id}`;
-    setSavingCellKey(cellKey);
+    if (savingCellKeysRef.current.has(cellKey)) {
+      return;
+    }
+    savingCellKeysRef.current.add(cellKey);
     try {
       await onCellCreate(item, areaLabel, quantity);
-      setNewCellDrafts((current) => ({ ...current, [cellKey]: "" }));
+      input.value = "";
     } finally {
-      setSavingCellKey(null);
+      savingCellKeysRef.current.delete(cellKey);
     }
+  }
+
+  function saveExistingQuantityDraft(entry: MobileMeasurementItem["entries"][number], input: HTMLInputElement): void {
+    onDraftSave(entry, {
+      area_or_comment: entry.area_or_comment,
+      quantity: input.value,
+    });
   }
 
   return (
@@ -2413,7 +2467,15 @@ function MeasurementReviewTable({
                 <strong>{column.item.position}</strong>
               </th>
             ) : (
-              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Positionsspalte ${column.index}`} />
+              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+                <input
+                  className="measurement-placeholder-header-input"
+                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.position ?? ""}
+                  aria-label={`Manuelle Pos.-Nr. Spalte ${column.index}`}
+                  placeholder="Pos."
+                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "position", event.currentTarget.value)}
+                />
+              </th>
             ))}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
@@ -2421,7 +2483,16 @@ function MeasurementReviewTable({
             {displayColumns.map((column) => column.kind === "item" ? (
               <th className="measurement-matrix-description-heading" key={column.key} scope="col" title={column.item.description}><span>{column.item.description}</span></th>
             ) : (
-              <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Beschreibungsspalte ${column.index}`} />
+              <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+                <textarea
+                  className="measurement-placeholder-header-input is-description"
+                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.description ?? ""}
+                  aria-label={`Manuelle Beschreibung Spalte ${column.index}`}
+                  placeholder="Beschreibung"
+                  rows={2}
+                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "description", event.currentTarget.value)}
+                />
+              </th>
             ))}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
@@ -2429,7 +2500,15 @@ function MeasurementReviewTable({
             {displayColumns.map((column) => column.kind === "item" ? (
               <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{column.item.unit ?? "-"}</th>
             ) : (
-              <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Einheitsspalte ${column.index}`} />
+              <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+                <input
+                  className="measurement-placeholder-header-input"
+                  defaultValue={placeholderHeaderDraftsRef.current[column.key]?.unit ?? ""}
+                  aria-label={`Manuelle Einheit Spalte ${column.index}`}
+                  placeholder="Einheit"
+                  onInput={(event) => updatePlaceholderHeaderDraft(column.key, "unit", event.currentTarget.value)}
+                />
+              </th>
             ))}
           </tr>
         </thead>
@@ -2445,30 +2524,26 @@ function MeasurementReviewTable({
               <th className={`measurement-matrix-axis measurement-matrix-area-axis${area.isPlaceholder ? " is-placeholder-row" : ""}`} scope="row">
                 <input
                   className="measurement-area-input"
-                  value={areaLabel}
+                  defaultValue={areaLabel}
                   disabled={!canEditRows || reviewActionLoading}
                   placeholder={area.isPlaceholder ? "Bereich / Ort" : undefined}
                   aria-label="Bauteil oder Ort"
-                  onChange={(event) => updateAreaLabelDraft(area.key, event.target.value)}
+                  onInput={(event) => updateAreaLabelDraft(area.key, event.currentTarget.value)}
                 />
               </th>
               {displayColumns.map((column) => {
                 if (column.kind === "placeholder") {
-                  const cellKey = `${area.key}-${column.key}`;
-                  const draftValue = placeholderCellDrafts[cellKey] ?? "";
                   return (
                     <td className="measurement-matrix-empty-cell measurement-matrix-placeholder-cell" key={column.key}>
                       <input
-                        className={`measurement-table-input is-quantity${draftValue.trim() ? " has-value" : ""}`}
-                        value={draftValue}
-                        disabled={!canEditRows || reviewActionLoading || !areaLabel.trim()}
+                        className="measurement-table-input is-quantity"
+                        disabled={!canEditRows || reviewActionLoading}
                         inputMode="decimal"
                         aria-label={`Vorbereitete Menge ${areaLabel || "ohne Bereich"} in leerer Positionsspalte`}
                         title="Diese Spalte ist ein Arbeitsraster ohne importierte Position und wird noch nicht gespeichert."
-                        onChange={(event) => updatePlaceholderCellDraft(cellKey, event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Escape") {
-                            updatePlaceholderCellDraft(cellKey, "");
+                            event.currentTarget.value = "";
                           }
                         }}
                       />
@@ -2476,28 +2551,23 @@ function MeasurementReviewTable({
                   );
                 }
                 const item = column.item;
-                const entries = getMeasurementCellEntries(item, area.key);
+                const entries = getCellEntries(item, area.key);
                 if (entries.length === 0) {
-                  const cellKey = `${area.key}-${item.id}`;
-                  const draftValue = newCellDrafts[cellKey] ?? "";
-                  const isSaving = savingCellKey === cellKey;
                   return (
                     <td className="measurement-matrix-empty-cell" key={column.key}>
                       <input
-                        className={`measurement-table-input is-quantity${draftValue.trim() ? " has-value" : ""}`}
-                        value={draftValue}
-                        disabled={!canEditRows || reviewActionLoading || isSaving || savingCellKey !== null}
+                        className="measurement-table-input is-quantity"
+                        disabled={!canEditRows || reviewActionLoading}
                         inputMode="decimal"
                         aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
-                        onChange={(event) => updateNewCellDraft(cellKey, event.target.value)}
-                        onBlur={() => void saveNewCellDraft(item, area, draftValue)}
+                        onBlur={(event) => void saveNewCellDraft(item, area, event.currentTarget)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             event.preventDefault();
-                            void saveNewCellDraft(item, area, draftValue);
+                            void saveNewCellDraft(item, area, event.currentTarget);
                           }
                           if (event.key === "Escape") {
-                            updateNewCellDraft(cellKey, "");
+                            event.currentTarget.value = "";
                           }
                         }}
                       />
@@ -2520,19 +2590,20 @@ function MeasurementReviewTable({
                 return (
                   <td className="measurement-matrix-quantity-cell" key={column.key}>
                     <input
+                      key={`${entry.id}-${entry.updated_at}-${entry.quantity}`}
                       className="measurement-table-input is-quantity"
-                      value={draft.quantity}
+                      defaultValue={draft.quantity}
                       disabled={!canEditRows || reviewActionLoading || isSaving}
                       inputMode="decimal"
                       aria-label={`Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
-                      onChange={(event) => onDraftChange(entry.id, "quantity", event.target.value)}
-                      onBlur={() => onDraftSave(entry, draft)}
+                      onBlur={(event) => saveExistingQuantityDraft(entry, event.currentTarget)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          onDraftSave(entry, draft);
+                          saveExistingQuantityDraft(entry, event.currentTarget);
                         }
                         if (event.key === "Escape") {
+                          event.currentTarget.value = formatMeasurementDraftQuantity(entry.quantity);
                           onDraftReset(entry);
                         }
                       }}
@@ -2547,7 +2618,7 @@ function MeasurementReviewTable({
             <th className="measurement-matrix-axis" scope="row">Gesamt</th>
             {displayColumns.map((column) => column.kind === "item" ? (
               <td className="measurement-matrix-quantity-cell" key={column.key}>
-                <strong>{formatMeasurementNumber(getMeasurementCellQuantity(column.item.entries))}</strong>
+                <strong>{formatMeasurementNumber(totalsByItemId.get(column.item.id) ?? 0)}</strong>
               </td>
             ) : (
               <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key} />
