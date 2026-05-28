@@ -71,7 +71,7 @@ MATRIX_AREA_ROW_LINES = tuple(
 MATRIX_AREA_ROW_COUNT = len(MATRIX_AREA_ROW_LINES) - 1
 MATRIX_AREA_LABEL_X = 94.7
 MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
-MATRIX_SECTION_LABEL_RIGHT = MATRIX_AREA_LABEL_X
+MATRIX_SECTION_LABEL_RIGHT = 94.9
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 
@@ -333,10 +333,13 @@ class MeasurementPdfService:
             sheet_label=f"{page_number}/{page_count}{page_suffix}",
             logo=logo,
         )
-        _text(commands, TABLE_LEFT, 431, f"Adresse: {project_address}", 6.5)
-        _text(commands, 298, 431, f"Monteur: {submitted_by}", 6.5)
-        _text(commands, 454, 431, f"Eingereicht: {submitted_at or '-'}", 6.5)
-        _text(commands, 635, 431, f"Status: {_status_label(batch.status)}", 6.5)
+        _header_meta_row(
+            commands,
+            address=project_address,
+            submitted_by=submitted_by,
+            submitted_at=submitted_at or "-",
+            status_label=_status_label(batch.status),
+        )
 
         _draw_measurement_matrix(
             commands=commands,
@@ -349,7 +352,7 @@ class MeasurementPdfService:
         if page_number == page_count:
             total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
             _draw_grand_total(commands, total)
-            _signature_block(commands)
+            _signature_block(commands, contractor_name=submitted_by)
         else:
             _text(commands, PAGE_WIDTH - MARGIN, 68, "Fortsetzung auf folgendem Blatt", 8, "F2", align_right=True)
 
@@ -379,7 +382,6 @@ def _template_header(
             max_height=80,
             image=logo,
         )
-    _text(commands, 642, 435, f"Aufmaß-Nr.: {title}", 8.5, "F2")
 
     _text(commands, TABLE_LEFT, 481, "Kunde:", 8, "F2")
     _line(commands, 94.7, 478, 360, 478)
@@ -392,10 +394,25 @@ def _template_header(
     _text(commands, 180, 451, project, 8)
     _text(commands, 420, 451, "Blatt-Nr.:", 8, "F2")
     _line(commands, 475, 448, 510, 448)
-    _text(commands, 479, 451, sheet_label, 7)
+    _text(commands, 479, 451, title, 7.4, "F2")
     _text(commands, 510, 451, "Datum:", 8, "F2")
     _line(commands, 552, 448, 620, 448)
     _text(commands, 557, 451, date_label, 8)
+
+
+def _header_meta_row(
+    commands: list[bytes],
+    *,
+    address: str,
+    submitted_by: str,
+    submitted_at: str,
+    status_label: str,
+) -> None:
+    y = 493.8
+    _text_fitted(commands, TABLE_LEFT, y, f"Adresse: {address}", 6.5, max_width=210)
+    _text_fitted(commands, 275, y, f"Monteur: {submitted_by}", 6.5, max_width=140)
+    _text_fitted(commands, 430, y, f"Eingereicht: {submitted_at}", 6.5, max_width=140)
+    _text_fitted(commands, 585, y, f"Status: {status_label}", 6.5, max_width=62)
 
 
 def _draw_measurement_matrix(
@@ -487,19 +504,22 @@ def _draw_measurement_matrix(
         _cell_text(commands, MATRIX_AREA_LABEL_X, y + 2, area.label, MATRIX_AREA_LABEL_WIDTH, 6.3)
 
 
-def _signature_block(commands: list[bytes]) -> None:
-    _text(commands, TABLE_LEFT, 56, "Die Richtigkeit des Aufmaßes und die", 7)
-    _text(commands, TABLE_LEFT, 47, "ordnungsgemäße Montage bescheinigen:", 7)
-    _text(commands, TABLE_LEFT, 27, "Ort / Datum:", 7, "F2")
-    _line(commands, 134, 25, 230, 25, 0.8)
-    _text(commands, 244, 50, "Name Auftragnehmer (BEG):", 7, "F2")
-    _line(commands, 388, 48, 558, 48, 0.8)
-    _text(commands, 588, 50, "Unterschrift:", 7, "F2")
-    _line(commands, 650, 48, 752, 48, 0.8)
-    _text(commands, 244, 27, "Name Auftraggeber (Kunde):", 7, "F2")
-    _line(commands, 388, 25, 558, 25, 0.8)
-    _text(commands, 588, 27, "Unterschrift:", 7, "F2")
-    _line(commands, 650, 25, 752, 25, 0.8)
+def _signature_block(commands: list[bytes], *, contractor_name: str) -> None:
+    _text(commands, 53, 53.6, "Die Richtigkeit des Aufmaßes und die", 7)
+    _text(commands, 53, 42.6, "ordnungsgemäße Montage bescheinigen:", 7)
+    _text(commands, 54, 20.0, "Ort / Datum:", 7, "F2")
+    _line(commands, 136, 14.6, 233.5, 14.6, 0.8)
+
+    _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")
+    _text_fitted(commands, 396, 45.0, contractor_name, 8, max_width=158)
+    _line(commands, 394.9, 41.3, 566.6, 41.3, 0.8)
+    _text(commands, 598.6, 44.6, "Unterschrift:", 7, "F2")
+    _line(commands, 661, 41.3, 764, 41.3, 0.8)
+
+    _text(commands, 250.2, 20.4, "Name Auftraggeber (Kunde):", 7, "F2")
+    _line(commands, 394.9, 14.6, 566.6, 14.6, 0.8)
+    _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
+    _line(commands, 661, 14.6, 764, 14.6, 0.8)
 
 
 def _wrapped(value: str, width: int) -> list[str]:
@@ -515,7 +535,7 @@ def _draw_matrix_grid(commands: list[bytes]) -> None:
 
     for x in MATRIX_COLUMN_BOUNDARIES[1:-1]:
         _line(commands, x, MATRIX_BOTTOM, x, TABLE_TOP, 0.75)
-    _line(commands, MATRIX_SECTION_LABEL_RIGHT, MATRIX_BOTTOM, MATRIX_UNIT_BOTTOM, 1.25)
+    _line(commands, MATRIX_SECTION_LABEL_RIGHT, MATRIX_BOTTOM, MATRIX_UNIT_BOTTOM, 0.85)
     _line(commands, MATRIX_X, MATRIX_BOTTOM, MATRIX_X, TABLE_TOP, 1.35)
 
     _line(commands, TABLE_LEFT, MATRIX_BOTTOM, TABLE_LEFT, TABLE_TOP, 1.6)
@@ -761,6 +781,27 @@ def _trim_text(value: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 1].rstrip() + "…"
+
+
+def _text_fitted(
+    commands: list[bytes],
+    x: float,
+    y: float,
+    text: str,
+    size: float,
+    *,
+    max_width: float,
+    font: str = "F1",
+) -> None:
+    _text(commands, x, y, _trim_to_width(text, size=size, max_width=max_width), size, font)
+
+
+def _trim_to_width(value: str, *, size: float, max_width: float) -> str:
+    text = " ".join((value or "").split())
+    if len(text) * size * 0.48 <= max_width:
+        return text
+    max_chars = max(1, int(max_width / (size * 0.48)))
+    return _trim_text(text, max_chars)
 
 
 def _wrap_ellipsis(value: str, *, width: int, max_lines: int) -> list[str]:
