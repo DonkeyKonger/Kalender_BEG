@@ -7324,7 +7324,7 @@ button.person-chip:focus-visible {
   --ct-focus: #1e293b;
   width: 100%;
   max-width: none;
-  min-height: calc(100vh - 238px);
+  min-height: calc(100vh - 250px);
   gap: 0;
   overflow: hidden;
   border: 0;
@@ -7340,21 +7340,26 @@ button.person-chip:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   margin: 0;
   border-bottom: 1px solid var(--ct-border);
   background: var(--ct-toolbar);
 }
 
 .measurement-review-detail.is-table-view .measurement-review-package-row {
+  height: 40px;
   min-height: 40px;
-  padding: 8px 18px;
+  max-height: 40px;
+  border-top: 1px solid var(--ct-border);
+  padding: 0 24px;
   background: var(--ct-surface-muted);
 }
 
 .measurement-review-detail.is-table-view .measurement-review-toolbar-row {
-  min-height: 44px;
-  padding: 7px 18px;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  padding: 0 24px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-package-title,
@@ -7363,14 +7368,14 @@ button.person-chip:focus-visible {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 10px;
+  gap: 8px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-package-title h2 {
   margin: 0;
   overflow: hidden;
   color: var(--ct-text);
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: 850;
   line-height: 1.12;
   text-overflow: ellipsis;
@@ -7379,7 +7384,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-updated {
   color: var(--ct-muted);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 
@@ -7396,12 +7401,12 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-filter-group span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 26px;
   border-radius: 4px;
   color: var(--ct-muted);
   font-size: 0.72rem;
   font-weight: 750;
-  padding: 3px 8px;
+  padding: 3px 9px;
   white-space: nowrap;
 }
 
@@ -7417,15 +7422,16 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-action-divider {
   width: 1px;
-  height: 18px;
+  height: 20px;
   background: var(--ct-border);
 }
 
 .measurement-review-detail.is-table-view .secondary-action,
 .measurement-review-detail.is-table-view .primary-action {
   min-height: 28px;
+  max-height: 30px;
   border-radius: 4px;
-  padding: 5px 10px;
+  padding: 4px 10px;
   font-size: 0.74rem;
   font-weight: 750;
   line-height: 1;
@@ -7465,6 +7471,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-view-toggle button {
   min-height: 24px;
+  max-height: 26px;
   border-radius: 3px;
   color: var(--ct-muted);
   font-size: 0.72rem;
@@ -7481,11 +7488,12 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
 .measurement-review-detail.is-table-view .measurement-status.is-rejected {
   min-height: 24px;
+  max-height: 26px;
   border: 1px solid rgb(146 64 14 / 16%);
   border-radius: 4px;
   background: var(--ct-warning-bg);
   color: var(--ct-warning-text);
-  padding: 4px 8px;
+  padding: 3px 8px;
   font-size: 0.72rem;
   font-weight: 800;
 }
@@ -7493,11 +7501,12 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-status.is-billed,
 .measurement-review-detail.is-table-view .measurement-status.is-approved {
   min-height: 24px;
+  max-height: 26px;
   border: 1px solid rgb(22 101 52 / 20%);
   border-radius: 4px;
   background: #dcfce7;
   color: var(--ct-success);
-  padding: 4px 8px;
+  padding: 3px 8px;
   font-size: 0.72rem;
   font-weight: 800;
 }
@@ -7517,7 +7526,7 @@ button.person-chip:focus-visible {
   width: 100%;
   max-width: 100%;
   min-height: 520px;
-  max-height: max(520px, calc(100vh - 288px));
+  max-height: max(520px, calc(100vh - 330px));
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   border: 0;

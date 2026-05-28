@@ -2056,7 +2056,7 @@ function MeasurementReviewPanel({
 
     return (
       <div className={`measurement-review-detail${viewMode === "table" ? " is-table-view" : ""}`}>
-        <div className="measurement-review-package-row">
+        <div className="measurement-package-header measurement-review-package-row">
           <div className="measurement-review-package-title">
             <h2>{displayTitle}</h2>
             <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
@@ -2064,7 +2064,7 @@ function MeasurementReviewPanel({
           {updatedLabel ? <span className="measurement-review-updated">Letzte Änderung: {updatedLabel}</span> : null}
         </div>
 
-        <div className="measurement-review-toolbar-row">
+        <div className="measurement-table-toolbar measurement-review-toolbar-row">
           <div className="measurement-review-toolbar-left">
             <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
             <span className="measurement-review-action-divider" aria-hidden="true" />
@@ -2370,7 +2370,7 @@ function MeasurementReviewTable({
   }
 
   return (
-    <div className="measurement-review-table-wrap" ref={tableWrapRef} role="region" aria-label="Tabellarische Aufmaßaufstellung">
+    <div className="measurement-table-surface measurement-review-table-wrap" ref={tableWrapRef} role="region" aria-label="Tabellarische Aufmaßaufstellung">
       <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}>
         <colgroup>
           <col className="measurement-matrix-label-col" />
