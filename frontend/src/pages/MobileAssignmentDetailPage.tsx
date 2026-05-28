@@ -23,7 +23,7 @@ import type { MobileMeasurementBatch, MobileMeasurementItem } from "../types/sit
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
-type MobileDetailTab = "overview" | "time" | "folders" | "measurement" | "tools";
+type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
 type MeasurementFilter = "all" | "open" | "edited" | "mine" | "approved";
 type MeasurementViewMode = "list" | "table";
 
@@ -33,12 +33,11 @@ type LocationState = {
   assignment?: MobileAssignment;
 };
 
-const detailTabs: Array<{ key: MobileDetailTab; label: string; icon: typeof ClipboardList }> = [
-  { key: "overview", label: "Übersicht", icon: ClipboardList },
-  { key: "time", label: "Lohnerfassung", icon: CalendarClock },
-  { key: "folders", label: "Ordnerstruktur", icon: FolderOpen },
-  { key: "measurement", label: "Aufmaß", icon: ReceiptText },
-  { key: "tools", label: "Werkzeuge & Material", icon: Package },
+const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
+  { key: "overview", label: "Übersicht", description: "Adresse, Kunde und Projektleiter", icon: ClipboardList },
+  { key: "folders", label: "Ordner", description: "Projektordner vorbereitet", icon: FolderOpen },
+  { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
+  { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
 ];
 
 const measurementFilters: Array<{ key: MeasurementFilter; label: string }> = [
@@ -82,10 +81,9 @@ export function MobileAssignmentDetailPage() {
         <span>Zurück</span>
       </button>
 
-      <header className="mobile-detail-hero assignment-card">
+      <header className="mobile-detail-hero mobile-detail-summary">
         <div className="assignment-card-main">
           <div>
-            <p className="eyebrow">Baustelle</p>
             <h1>{assignment.site.name}</h1>
             <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
           </div>
@@ -94,28 +92,30 @@ export function MobileAssignmentDetailPage() {
         <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</p>
       </header>
 
-      <nav className="mobile-detail-tabs" aria-label="Baustellendetails">
+      <div className="mobile-detail-actions" aria-label="Baustellendetails">
         {detailTabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
-              className={activeTab === tab.key ? "active" : ""}
+              className={activeTab === tab.key ? "is-active" : ""}
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
             >
               <Icon aria-hidden="true" size={16} />
-              <span>{tab.label}</span>
+              <span>
+                <strong>{tab.label}</strong>
+                <small>{tab.description}</small>
+              </span>
             </button>
           );
         })}
-      </nav>
+      </div>
 
       {activeTab === "overview" && <OverviewPanel assignment={assignment} />}
-      {activeTab === "time" && <PlaceholderPanel icon={CalendarClock} text="Lohnerfassung wird vorbereitet." />}
-      {activeTab === "folders" && <PlaceholderPanel icon={FolderOpen} text="Ordnerstruktur wird vorbereitet." />}
+      {activeTab === "folders" && <PlaceholderPanel icon={FolderOpen} text="Diese Funktion ist vorbereitet und wird später aktiviert." />}
       {activeTab === "measurement" && <MobileMeasurementTab assignment={assignment} />}
-      {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird vorbereitet." />}
+      {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird später Wagen-, Werkzeug- und Materialinformationen anzeigen." />}
     </section>
   );
 }
