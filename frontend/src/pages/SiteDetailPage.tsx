@@ -2289,35 +2289,35 @@ function MeasurementReviewTable({
     <div className="measurement-review-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
       <table className="measurement-table-view measurement-matrix-table measurement-review-table">
         <thead>
-          <tr>
-            <th className="measurement-matrix-axis">Pos.-Nr.</th>
+          <tr className="measurement-matrix-meta-row measurement-matrix-position-row">
+            <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
             {items.map((item) => (
-              <th className="measurement-matrix-position-heading" key={item.id}>
+              <th className="measurement-matrix-position-heading" key={item.id} scope="col">
                 <strong>{item.position}</strong>
               </th>
             ))}
           </tr>
-          <tr>
-            <th className="measurement-matrix-axis">Beschreibung</th>
+          <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
+            <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
             {items.map((item) => (
-              <th className="measurement-matrix-description-heading" key={item.id} title={item.description}><span>{item.description}</span></th>
+              <th className="measurement-matrix-description-heading" key={item.id} scope="col" title={item.description}><span>{item.description}</span></th>
             ))}
           </tr>
-          <tr>
-            <th className="measurement-matrix-axis">Einheit</th>
+          <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
+            <th className="measurement-matrix-axis" scope="row">Einheit</th>
             {items.map((item) => (
-              <th key={item.id}>{item.unit ?? "-"}</th>
+              <th className="measurement-matrix-unit-heading" key={item.id} scope="col">{item.unit ?? "-"}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           <tr className="measurement-matrix-section-row">
-            <th className="measurement-matrix-axis">Bauteil / Ort</th>
+            <th className="measurement-matrix-axis" scope="row">Bauteil / Ort</th>
             {items.map((item) => <td key={item.id} />)}
           </tr>
           {areaRows.map((area) => (
             <tr key={area.key}>
-              <th className="measurement-matrix-axis">{area.label}</th>
+              <th className="measurement-matrix-axis" scope="row">{area.label}</th>
               {items.map((item) => {
                 const entries = getMeasurementCellEntries(item, area.key);
                 if (entries.length === 0) {
@@ -2386,7 +2386,7 @@ function MeasurementReviewTable({
             </tr>
           ))}
           <tr className="measurement-matrix-total-row">
-            <th className="measurement-matrix-axis">Gesamt</th>
+            <th className="measurement-matrix-axis" scope="row">Gesamt</th>
             {items.map((item) => (
               <td className="measurement-matrix-quantity-cell" key={item.id}>
                 <strong>{formatMeasurementNumber(getMeasurementCellQuantity(item.entries))}</strong>
