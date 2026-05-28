@@ -404,6 +404,10 @@ export const api = {
     });
   },
 
+  async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number): Promise<Blob> {
+    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf`);
+  },
+
   async createSiteMeasurementEntry(
     siteId: number,
     batchId: number,

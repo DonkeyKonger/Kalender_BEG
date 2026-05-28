@@ -34,6 +34,7 @@ from app.schemas.site import (
     SiteUpdate,
 )
 from app.services.geo_service import search_geocoding_candidates
+from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
@@ -315,6 +316,26 @@ def reset_measurement_batch_to_submitted(
     return MeasurementService(db).reset_site_batch_to_submitted(
         site_id=site_id,
         batch_id=batch_id,
+    )
+
+
+@router.get("/{site_id}/measurement-batches/{batch_id}/pdf")
+def download_measurement_batch_pdf(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=site_id,
+        batch_id=batch_id,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        },
     )
 
 

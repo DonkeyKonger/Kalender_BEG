@@ -415,6 +415,23 @@ export function SiteDetailPage() {
     }
   }
 
+  async function downloadMeasurementBatchPdf(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const blob = await api.downloadSiteMeasurementBatchPdf(site.id, batch.id);
+      const packageNumber = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)
+        .replace(/^Aufmaß\s+/, "")
+        .replace(/[^\w.-]+/g, "_");
+      triggerBrowserDownload(blob, `Aufmass_${packageNumber}.pdf`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "PDF konnte nicht erstellt werden."));
+    }
+  }
+
 
   async function updateMeasurementBase(base: MeasurementBase, payload: MeasurementBaseUpdate): Promise<void> {
     if (!site || measurementImporting) {
@@ -770,6 +787,7 @@ export function SiteDetailPage() {
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
+          onExportPdf={downloadMeasurementBatchPdf}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -1264,6 +1282,7 @@ function MeasurementTab({
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
+  onExportPdf,
 }: {
   siteNumber: string | null;
   activeSubtab: MeasurementSubtab;
@@ -1297,6 +1316,7 @@ function MeasurementTab({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
+  onExportPdf: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
   return (
     <div className="project-record-tab-panel">
@@ -1350,6 +1370,7 @@ function MeasurementTab({
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
           onResetToSubmitted={onResetToSubmitted}
+          onExportPdf={onExportPdf}
         />
       ) : null}
 
@@ -1955,6 +1976,7 @@ function MeasurementReviewPanel({
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
+  onExportPdf,
 }: {
   siteNumber: string | null;
   batches: MobileMeasurementBatch[];
@@ -1974,11 +1996,13 @@ function MeasurementReviewPanel({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
+  onExportPdf: (batch: MobileMeasurementBatch) => Promise<void>;
 }) {
   const [entryDrafts, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
   const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
+  const [pdfExportingBatchId, setPdfExportingBatchId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
 
   useEffect(() => {
@@ -2319,24 +2343,44 @@ function MeasurementReviewPanel({
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
         <div className="measurement-review-list">
-          {sortedBatches.map((batch) => (
-            <button
-              key={batch.id}
-              type="button"
-              className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}`}
-              onClick={() => onSelectBatch(batch)}
-            >
-              <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
-              <div className="measurement-review-card-main">
-                <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
-                <small>
-                  {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
-                  {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
-                </small>
+          {sortedBatches.map((batch) => {
+            const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
+            const isExportingPdf = pdfExportingBatchId === batch.id;
+            return (
+              <div
+                key={batch.id}
+                className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="measurement-review-card-open"
+                  onClick={() => onSelectBatch(batch)}
+                >
+                  <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
+                  <div className="measurement-review-card-main">
+                    <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
+                    <small>
+                      {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
+                      {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
+                    </small>
+                  </div>
+                  <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
+                </button>
+                <button
+                  type="button"
+                  className="measurement-review-pdf-action"
+                  disabled={!canExportPdf || isExportingPdf}
+                  title={canExportPdf ? "PDF exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
+                  onClick={() => {
+                    setPdfExportingBatchId(batch.id);
+                    void onExportPdf(batch).finally(() => setPdfExportingBatchId(null));
+                  }}
+                >
+                  {isExportingPdf ? "PDF..." : "PDF"}
+                </button>
               </div>
-              <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
-            </button>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </>
@@ -3073,6 +3117,10 @@ function getMeasurementBatchStatusClass(status: string): string {
 
 function isMeasurementBatchBilled(status: string): boolean {
   return status === "billed" || status === "approved";
+}
+
+function isMeasurementBatchPdfExportable(status: string): boolean {
+  return isMeasurementBatchBilled(status);
 }
 
 function isMeasurementBatchOpen(status: string): boolean {

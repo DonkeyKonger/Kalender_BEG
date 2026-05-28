@@ -3991,19 +3991,67 @@ button.person-chip:focus-visible {
 
 .measurement-review-card {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   color: #172033;
+  cursor: default;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.measurement-review-card-open {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
   font: inherit;
   padding: 12px;
   text-align: left;
 }
 
-.measurement-review-card > .measurement-status {
+.measurement-review-card-open:hover,
+.measurement-review-card-open:focus-visible {
+  background: rgb(15 23 42 / 3%);
+  outline: none;
+}
+
+.measurement-review-card-open > .measurement-status {
   justify-content: center;
   width: 100%;
+}
+
+.measurement-review-pdf-action {
+  min-height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1e293b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-right: 12px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.measurement-review-pdf-action:hover,
+.measurement-review-pdf-action:focus-visible {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  outline: none;
+}
+
+.measurement-review-pdf-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .measurement-review-card.is-submitted {
