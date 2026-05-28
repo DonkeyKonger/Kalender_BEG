@@ -2543,6 +2543,10 @@ button.person-chip:focus-visible {
   box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
 }
 
+.mobile-home-hero.is-compact {
+  padding: 12px;
+}
+
 .mobile-home-hero h1,
 .mobile-home-hero p,
 .mobile-section-heading h2,

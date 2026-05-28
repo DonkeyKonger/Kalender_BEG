@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowLeft,
   CalendarClock,
   FileText,
   HeartPulse,
@@ -45,6 +46,7 @@ export function MyAssignmentsPage() {
   const [isFromCache, setIsFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
+  const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
 
   const range = useMemo(() => getRange(mode), [mode]);
 
@@ -90,6 +92,69 @@ export function MyAssignmentsPage() {
     () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
   );
+
+  if (activeScreen === "assignments") {
+    return (
+      <section className="mobile-page mobile-home-page">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveScreen("home")}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Zurück</span>
+        </button>
+
+        <header className="mobile-home-hero is-compact">
+          <div>
+            <p className="eyebrow">Einsatzliste</p>
+            <h1>Meine Einsätze</h1>
+            <p>{mode === "two_weeks" ? "Tagesansicht für die nächsten 14 Tage." : "Zusammengefasste Baustelleneinsätze im Jahresblick."}</p>
+          </div>
+          <button className="icon-button secondary mobile-refresh-button" type="button" onClick={() => void loadAssignments()}>
+            <RefreshCcw aria-hidden="true" size={17} />
+            <span>Aktualisieren</span>
+          </button>
+        </header>
+
+        <div className="mobile-segment" role="group" aria-label="Zeitraum">
+          <button
+            className={mode === "two_weeks" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("two_weeks")}
+          >
+            14 Tage
+          </button>
+          <button
+            className={mode === "year" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("year")}
+          >
+            Jahr
+          </button>
+        </div>
+
+        {loadedAt && (
+          <p className={isFromCache ? "cache-note warning" : "cache-note"}>
+            Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}
+          </p>
+        )}
+        {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}
+        {isLoading ? <div className="empty-panel">Einsätze werden geladen...</div> : null}
+
+        {!isLoading && mode === "two_weeks" ? (
+          <div className="mobile-day-list">
+            {nextFourteenDays.map((date) => (
+              <DayListCard date={date} assignments={dailyByDate.get(date) ?? []} key={date} />
+            ))}
+          </div>
+        ) : null}
+        {!isLoading && mode === "year" ? (
+          <div className="mobile-day-list">
+            {yearGroups.length ? yearGroups.map((group) => (
+              <AssignmentRangeCard group={group} key={group.key} />
+            )) : <p className="empty-inline">Keine Einsätze im Zeitraum.</p>}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="mobile-page mobile-home-page">
@@ -142,42 +207,6 @@ export function MyAssignmentsPage() {
 
           <section className="mobile-home-section">
             <div className="mobile-section-heading">
-              <h2>Meine Einsätze</h2>
-              <span>{mode === "two_weeks" ? "Nächste 14 Tage" : "Ganzes Jahr"}</span>
-            </div>
-            <div className="mobile-segment" role="group" aria-label="Zeitraum">
-              <button
-                className={mode === "two_weeks" ? "active" : ""}
-                type="button"
-                onClick={() => setMode("two_weeks")}
-              >
-                14 Tage
-              </button>
-              <button
-                className={mode === "year" ? "active" : ""}
-                type="button"
-                onClick={() => setMode("year")}
-              >
-                Jahr
-              </button>
-            </div>
-            {mode === "two_weeks" ? (
-              <div className="mobile-day-list">
-                {nextFourteenDays.map((date) => (
-                  <DayListCard date={date} assignments={dailyByDate.get(date) ?? []} key={date} />
-                ))}
-              </div>
-            ) : (
-              <div className="mobile-day-list">
-                {yearGroups.length ? yearGroups.map((group) => (
-                  <AssignmentRangeCard group={group} key={group.key} />
-                )) : <p className="empty-inline">Keine Einsätze im Zeitraum.</p>}
-              </div>
-            )}
-          </section>
-
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
               <h2>Melden & Einreichen</h2>
               <span>Vorbereitet</span>
             </div>
@@ -214,18 +243,26 @@ export function MyAssignmentsPage() {
 
           <section className="mobile-home-section">
             <div className="mobile-section-heading">
-              <h2>Persönliche Akte</h2>
-              <span>Später</span>
+              <h2>Weitere Bereiche</h2>
+              <span>Direkt erreichbar</span>
             </div>
-            <PlaceholderAction
-              icon={UserCircle}
-              title="Persönliche Informationen"
-              text="Diese persönliche Akte wird später Resturlaub, Krankheitstage und weitere Informationen anzeigen."
-              onOpen={() => setPlaceholder({
-                title: "Persönliche Akte",
-                text: "Diese persönliche Akte wird später Resturlaub, Krankheitstage, Statistiken sowie Wagen- und Werkzeugzuordnung anzeigen.",
-              })}
-            />
+            <div className="mobile-action-list">
+              <PlaceholderAction
+                icon={CalendarClock}
+                title="Alle Einsätze anzeigen"
+                text="Öffnet die vollständige Einsatzliste mit 14-Tage- und Jahresansicht."
+                onOpen={() => setActiveScreen("assignments")}
+              />
+              <PlaceholderAction
+                icon={UserCircle}
+                title="Persönliche Akte"
+                text="Diese persönliche Akte wird später Resturlaub, Krankheitstage und weitere Informationen anzeigen."
+                onOpen={() => setPlaceholder({
+                  title: "Persönliche Akte",
+                  text: "Diese persönliche Akte wird später Resturlaub, Krankheitstage, Statistiken sowie Wagen- und Werkzeugzuordnung anzeigen.",
+                })}
+              />
+            </div>
           </section>
         </>
       )}
