@@ -48,7 +48,8 @@ MATRIX_COLUMN_BOUNDARIES = (
     724.3,
     763.6,
 )
-MATRIX_COLUMN_COUNT = len(MATRIX_COLUMN_BOUNDARIES) - 1
+MAX_POSITIONS_PER_SHEET = 13
+MATRIX_COLUMN_COUNT = MAX_POSITIONS_PER_SHEET
 MATRIX_AREA_ROW_HEIGHT = 14
 MATRIX_AREA_ROW_LINES = tuple(
     PAGE_HEIGHT - top_y
@@ -319,10 +320,6 @@ class MeasurementPdfService:
         address = " ".join(part for part in [site.street, site.house_number] if part)
         city = " ".join(part for part in [site.postal_code, site.city] if part)
         project_address = ", ".join(part for part in [address or site.address, city] if part) or "-"
-        page_suffix = ""
-        if page_count > 1:
-            page_suffix = f" · Spalte {position_page_index}, Bereich {area_page_index}"
-
         _template_header(
             commands=commands,
             title=title,
@@ -330,7 +327,7 @@ class MeasurementPdfService:
             project=site.name,
             commission=site.site_number or "-",
             date_label=_format_date(datetime.now()),
-            sheet_label=f"{page_number}/{page_count}{page_suffix}",
+            sheet_label=_format_sheet_label(title, page_number, page_count),
             logo=logo,
         )
         _header_meta_row(
@@ -350,8 +347,7 @@ class MeasurementPdfService:
         )
 
         if page_number == page_count:
-            total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
-            _draw_grand_total(commands, total)
+            _draw_grand_total(commands)
             _signature_block(commands, contractor_name=submitted_by)
         else:
             _text(commands, PAGE_WIDTH - MARGIN, 68, "Fortsetzung auf folgendem Blatt", 8, "F2", align_right=True)
@@ -394,7 +390,8 @@ def _template_header(
     _text(commands, 180, 451, project, 8)
     _text(commands, 420, 451, "Blatt-Nr.:", 8, "F2")
     _line(commands, 475, 448, 510, 448)
-    _text(commands, 479, 451, title, 7.4, "F2")
+    sheet_label_size = 5.0 if len(sheet_label) > 8 else 7.4
+    _text(commands, 477, 451, sheet_label, sheet_label_size, "F2")
     _text(commands, 510, 451, "Datum:", 8, "F2")
     _line(commands, 552, 448, 620, 448)
     _text(commands, 557, 451, date_label, 8)
@@ -408,11 +405,11 @@ def _header_meta_row(
     submitted_at: str,
     status_label: str,
 ) -> None:
-    y = 493.8
-    _text_fitted(commands, TABLE_LEFT, y, f"Adresse: {address}", 6.5, max_width=210)
-    _text_fitted(commands, 275, y, f"Monteur: {submitted_by}", 6.5, max_width=140)
-    _text_fitted(commands, 430, y, f"Eingereicht: {submitted_at}", 6.5, max_width=140)
-    _text_fitted(commands, 585, y, f"Status: {status_label}", 6.5, max_width=62)
+    y = 574.4
+    _text_fitted(commands, TABLE_LEFT, y, f"Adresse: {address}", 6.0, max_width=210)
+    _text_fitted(commands, 275, y, f"Monteur: {submitted_by}", 6.0, max_width=140)
+    _text_fitted(commands, 430, y, f"Eingereicht: {submitted_at}", 6.0, max_width=140)
+    _text_fitted(commands, 585, y, f"Status: {status_label}", 6.0, max_width=62)
 
 
 def _draw_measurement_matrix(
@@ -484,7 +481,7 @@ def _draw_measurement_matrix(
             row_top = MATRIX_AREA_ROW_LINES[area_index]
             row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
             y = _baseline_between(row_top, row_bottom, 6.2)
-            _text(commands, column_right - 2.5, y, _format_decimal(value), 6.2, "F1", align_right=True)
+            _text_centered(commands, (x + column_right) / 2, y, _format_decimal(value), 6.2)
         total = totals_by_position.get(position.item_id)
         if total is not None:
             _text(
@@ -544,10 +541,9 @@ def _draw_matrix_grid(commands: list[bytes]) -> None:
     _line(commands, TABLE_LEFT, MATRIX_BOTTOM, TABLE_RIGHT, MATRIX_BOTTOM, 1.6)
 
 
-def _draw_grand_total(commands: list[bytes], total: Decimal) -> None:
+def _draw_grand_total(commands: list[bytes]) -> None:
     y = _baseline_between(MATRIX_TOTAL_TOP, MATRIX_BOTTOM, 7.2)
     _text(commands, MATRIX_AREA_LABEL_X + 4, y, "Gesamtsumme:", 7.2, "F2")
-    _text(commands, MATRIX_X - 4, y, _format_decimal(total), 7.2, "F2", align_right=True)
 
 
 def _baseline_between(top: float, bottom: float, size: float) -> float:
@@ -634,6 +630,12 @@ def _format_batch_number(site_number: str | None, number: int) -> str:
     return f"{prefix}.{number:02d}" if site_number else f"Aufmaß {number}"
 
 
+def _format_sheet_label(title: str, page_number: int, page_count: int) -> str:
+    if page_count <= 1:
+        return title
+    return f"{title}.{page_number:02d}"
+
+
 def _format_decimal(value: Decimal) -> str:
     return f"{value:.2f}".replace(".", ",")
 
@@ -691,6 +693,18 @@ def _text(
         + _pdf_string(text)
         + b" Tj ET"
     )
+
+
+def _text_centered(
+    commands: list[bytes],
+    center_x: float,
+    y: float,
+    text: str,
+    size: float,
+    font: str = "F1",
+) -> None:
+    text_width = len(text) * size * 0.48
+    _text(commands, center_x - text_width / 2, y, text, size, font)
 
 
 def _text_rotated(
