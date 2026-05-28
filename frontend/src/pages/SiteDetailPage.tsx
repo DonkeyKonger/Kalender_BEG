@@ -2109,6 +2109,10 @@ function MeasurementReviewPanel({
     setInlineError(null);
     try {
       await onUpdateEntry(batch, entry.id, { area_or_comment: comment, quantity });
+      setEntryDrafts((current) => ({
+        ...current,
+        [entry.id]: { area_or_comment: comment, quantity: formatMeasurementDraftQuantity(quantity) },
+      }));
       setUndoStack((current) => [...current, previousState].slice(-20));
     } catch {
       setInlineError("Änderung konnte nicht gespeichert werden.");
@@ -2312,7 +2316,6 @@ function MeasurementReviewPanel({
           <MeasurementReviewTable
             items={itemsWithEntries}
             positionSuggestions={batchItems}
-            entryDrafts={entryDrafts}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
             savingEntryId={savingEntryId}
@@ -2425,7 +2428,6 @@ function MeasurementViewToggle({
 function MeasurementReviewTable({
   items,
   positionSuggestions,
-  entryDrafts,
   canEditRows,
   reviewActionLoading,
   savingEntryId,
@@ -2435,7 +2437,6 @@ function MeasurementReviewTable({
 }: {
   items: MobileMeasurementItem[];
   positionSuggestions: MobileMeasurementItem[];
-  entryDrafts: Record<number, MeasurementEntryDraft>;
   canEditRows: boolean;
   reviewActionLoading: boolean;
   savingEntryId: number | null;
@@ -2884,17 +2885,14 @@ function MeasurementReviewTable({
                   );
                 }
                 const entry = entries[0];
-                const draft = entryDrafts[entry.id] ?? {
-                  area_or_comment: entry.area_or_comment,
-                  quantity: formatMeasurementDraftQuantity(entry.quantity),
-                };
+                const displayedQuantity = formatMeasurementDraftQuantity(entry.quantity);
                 const isSaving = savingEntryId === entry.id;
                 return (
                   <td className="measurement-matrix-quantity-cell" key={column.key}>
                     <input
                       key={`${entry.id}-${entry.updated_at}-${entry.quantity}`}
                       className="measurement-table-input is-quantity"
-                      defaultValue={draft.quantity}
+                      defaultValue={displayedQuantity}
                       disabled={!canEditRows || reviewActionLoading || isSaving}
                       inputMode="decimal"
                       aria-label={`Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
@@ -2905,7 +2903,7 @@ function MeasurementReviewTable({
                           saveExistingQuantityDraft(entry, event.currentTarget);
                         }
                         if (event.key === "Escape") {
-                          event.currentTarget.value = formatMeasurementDraftQuantity(entry.quantity);
+                          event.currentTarget.value = displayedQuantity;
                           onDraftReset(entry);
                         }
                       }}
