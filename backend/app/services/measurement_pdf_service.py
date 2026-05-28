@@ -84,22 +84,37 @@ class MatrixPosition:
     description: str
     unit: str
     sort_order: int
+    is_added: bool = False
 
 
 @dataclass(frozen=True)
 class MatrixArea:
     key: str
     label: str
+    is_added: bool = False
 
 
 @dataclass(frozen=True)
 class MatrixCellValue:
     quantity: Decimal
     original_quantity: Decimal | None = None
+    is_added: bool = False
+    is_removed: bool = False
 
     @property
     def is_corrected(self) -> bool:
-        return self.original_quantity is not None and self.original_quantity != self.quantity
+        return (
+            self.original_quantity is not None
+            and self.original_quantity != self.quantity
+            and not self.is_removed
+        )
+
+
+@dataclass(frozen=True)
+class SnapshotMatrix:
+    positions_by_id: dict[int, MatrixPosition]
+    areas_by_key: dict[str, MatrixArea]
+    quantities: dict[tuple[str, int], Decimal]
 
 
 @dataclass(frozen=True)
@@ -211,7 +226,15 @@ class MeasurementPdfService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def build_batch_pdf(self, *, site_id: int, batch_id: int) -> tuple[bytes, str]:
+    def build_batch_pdf(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        mode: str = "checked",
+    ) -> tuple[bytes, str]:
+        if mode not in {"checked", "original"}:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger PDF-Modus.")
         batch = self.db.scalar(
             select(SiteMeasurementBatch)
             .options(
@@ -235,7 +258,7 @@ class MeasurementPdfService:
         logo = _load_png_rgb(LOGO_PATH)
         if logo is not None:
             pdf.add_image(LOGO_RESOURCE_NAME, logo)
-        positions, areas, cells, totals_by_position = self._build_matrix(batch)
+        positions, areas, cells, totals_by_position = self._build_matrix(batch, mode=mode)
         position_pages = _chunk(positions, MATRIX_COLUMN_COUNT) or [[]]
         area_pages = _chunk(areas, MATRIX_AREA_ROW_COUNT) or [[]]
         page_count = len(position_pages) * len(area_pages)
@@ -260,10 +283,11 @@ class MeasurementPdfService:
 
         file_number = _format_batch_number(batch.site.site_number, batch.number)
         safe_number = file_number.replace("/", "-").replace(" ", "_")
-        return pdf.build(), f"Aufmass_{safe_number}.pdf"
+        prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
+        return pdf.build(), f"{prefix}_{safe_number}.pdf"
 
     def _build_matrix(
-        self, batch: SiteMeasurementBatch
+        self, batch: SiteMeasurementBatch, *, mode: str
     ) -> tuple[
         list[MatrixPosition],
         list[MatrixArea],
@@ -303,14 +327,56 @@ class MeasurementPdfService:
             )
             totals_by_position[item.id] = totals_by_position.get(item.id, Decimal("0")) + entry.quantity
 
-        original_quantities = _snapshot_original_quantities(batch.original_submitted_snapshot)
+        snapshot = _snapshot_matrix(batch.original_submitted_snapshot)
+        if mode == "original" and snapshot is not None:
+            snapshot_cells = {
+                key: MatrixCellValue(quantity=quantity)
+                for key, quantity in snapshot.quantities.items()
+            }
+            return (
+                sorted(snapshot.positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
+                list(snapshot.areas_by_key.values()),
+                snapshot_cells,
+                _position_totals(snapshot.quantities),
+            )
+
+        original_quantities = snapshot.quantities if snapshot is not None else {}
+        if snapshot is not None:
+            for item_id, position in snapshot.positions_by_id.items():
+                positions_by_id.setdefault(item_id, position)
+            for area_key, area in snapshot.areas_by_key.items():
+                area_by_key.setdefault(area_key, area)
         cells = {
             key: MatrixCellValue(
                 quantity=quantity,
                 original_quantity=original_quantities.get(key),
+                is_added=snapshot is not None and key not in original_quantities,
             )
             for key, quantity in current_quantities.items()
         }
+        if snapshot is not None:
+            for key, quantity in original_quantities.items():
+                cells.setdefault(
+                    key,
+                    MatrixCellValue(
+                        quantity=Decimal("0"),
+                        original_quantity=quantity,
+                        is_removed=True,
+                    ),
+                )
+            for item_id, position in list(positions_by_id.items()):
+                if item_id not in snapshot.positions_by_id:
+                    positions_by_id[item_id] = MatrixPosition(
+                        item_id=position.item_id,
+                        position=position.position,
+                        description=position.description,
+                        unit=position.unit,
+                        sort_order=position.sort_order,
+                        is_added=True,
+                    )
+            for area_key, area in list(area_by_key.items()):
+                if area_key not in snapshot.areas_by_key:
+                    area_by_key[area_key] = MatrixArea(key=area.key, label=area.label, is_added=True)
         return (
             sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
             list(area_by_key.values()),
@@ -475,6 +541,7 @@ def _draw_measurement_matrix(
             width,
             6.4,
             "F2",
+            color=_correction_color() if position.is_added else None,
         )
         _rotated_cell_text(
             commands,
@@ -483,6 +550,7 @@ def _draw_measurement_matrix(
             width,
             MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM,
             position.description,
+            color=_correction_color() if position.is_added else None,
         )
         _text_centered(
             commands,
@@ -491,6 +559,7 @@ def _draw_measurement_matrix(
             position.unit,
             8.2,
             "F2",
+            color=_correction_color() if position.is_added else None,
         )
 
         for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
@@ -500,7 +569,7 @@ def _draw_measurement_matrix(
             row_top = MATRIX_AREA_ROW_LINES[area_index]
             row_bottom = MATRIX_AREA_ROW_LINES[area_index + 1]
             y = _baseline_between(row_top, row_bottom, 6.2)
-            _text_centered(commands, (x + column_right) / 2, y, _format_decimal(cell.quantity), 6.2)
+            _draw_quantity_cell(commands, x, column_right, y, cell)
         total = totals_by_position.get(position.item_id)
         if total is not None:
             _text(
@@ -511,6 +580,7 @@ def _draw_measurement_matrix(
                 6.2,
                 "F2",
                 align_right=True,
+                color=_correction_color() if position.is_added else None,
             )
 
     for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
@@ -524,6 +594,7 @@ def _draw_measurement_matrix(
             area.label,
             7.3,
             max_width=MATRIX_AREA_LABEL_WIDTH - 4,
+            color=_correction_color() if area.is_added else None,
         )
 
 
@@ -577,6 +648,65 @@ def _draw_matrix_grid(commands: list[bytes]) -> None:
 def _draw_grand_total(commands: list[bytes]) -> None:
     y = _baseline_between(MATRIX_TOTAL_TOP, MATRIX_BOTTOM, 7.2)
     _text(commands, MATRIX_AREA_LABEL_X + 4, y, "Gesamtsumme:", 7.2, "F2")
+
+
+def _draw_quantity_cell(
+    commands: list[bytes],
+    left: float,
+    right: float,
+    y: float,
+    cell: MatrixCellValue,
+) -> None:
+    center = (left + right) / 2
+    width = right - left
+    if cell.is_removed and cell.original_quantity is not None:
+        _text_centered_struck(commands, center, y, _format_decimal(cell.original_quantity), 5.5)
+        return
+    if cell.is_corrected and cell.original_quantity is not None:
+        _text_centered_struck(
+            commands,
+            center - width * 0.18,
+            y,
+            _format_decimal(cell.original_quantity),
+            4.8,
+        )
+        _text_centered(
+            commands,
+            center + width * 0.22,
+            y,
+            _format_decimal(cell.quantity),
+            5.4,
+            "F2",
+            color=_correction_color(),
+        )
+        return
+    _text_centered(
+        commands,
+        center,
+        y,
+        _format_decimal(cell.quantity),
+        6.2,
+        color=_correction_color() if cell.is_added else None,
+    )
+
+
+def _text_centered_struck(
+    commands: list[bytes],
+    center_x: float,
+    y: float,
+    text: str,
+    size: float,
+) -> None:
+    text_width = _text_width(text, size)
+    _text(commands, center_x - text_width / 2, y, text, size)
+    _line(
+        commands,
+        center_x - text_width / 2,
+        y + size * 0.35,
+        center_x + text_width / 2,
+        y + size * 0.35,
+        0.55,
+    )
 
 
 def _baseline_between(top: float, bottom: float, size: float) -> float:
@@ -669,29 +799,62 @@ def _format_sheet_label(title: str, page_number: int, page_count: int) -> str:
     return f"{title}.{page_number:02d}"
 
 
-def _snapshot_original_quantities(
-    snapshot: dict[str, object] | None,
-) -> dict[tuple[str, int], Decimal]:
+def _snapshot_matrix(snapshot: dict[str, object] | None) -> SnapshotMatrix | None:
     if not snapshot:
-        return {}
+        return None
     entries = snapshot.get("entries")
     if not isinstance(entries, list):
-        return {}
+        return None
 
+    positions_by_id: dict[int, MatrixPosition] = {}
+    areas_by_key: dict[str, MatrixArea] = {}
     quantities: dict[tuple[str, int], Decimal] = {}
     for raw_entry in entries:
         if not isinstance(raw_entry, dict):
             continue
         item_id = raw_entry.get("measurement_item_id")
+        position = raw_entry.get("position")
+        description = raw_entry.get("description")
+        unit = raw_entry.get("unit")
+        sort_order = raw_entry.get("sort_order")
         area = raw_entry.get("area_or_comment")
         quantity = raw_entry.get("quantity")
-        if not isinstance(item_id, int) or not isinstance(area, str) or quantity is None:
+        if (
+            not isinstance(item_id, int)
+            or not isinstance(position, str)
+            or not isinstance(description, str)
+            or not isinstance(area, str)
+            or quantity is None
+        ):
             continue
+        sort_order_value = sort_order if isinstance(sort_order, int) else 0
         area_key = " ".join(area.split()).casefold()
+        positions_by_id.setdefault(
+            item_id,
+            MatrixPosition(
+                item_id=item_id,
+                position=position,
+                description=description,
+                unit=unit if isinstance(unit, str) else "",
+                sort_order=sort_order_value,
+            ),
+        )
+        areas_by_key.setdefault(area_key, MatrixArea(key=area_key, label=" ".join(area.split())))
         quantities[(area_key, item_id)] = quantities.get((area_key, item_id), Decimal("0")) + Decimal(
             str(quantity)
         )
-    return quantities
+    return SnapshotMatrix(
+        positions_by_id=positions_by_id,
+        areas_by_key=areas_by_key,
+        quantities=quantities,
+    )
+
+
+def _position_totals(quantities: dict[tuple[str, int], Decimal]) -> dict[int, Decimal]:
+    totals: dict[int, Decimal] = {}
+    for (_area_key, item_id), quantity in quantities.items():
+        totals[item_id] = totals.get(item_id, Decimal("0")) + quantity
+    return totals
 
 
 def _format_decimal(value: Decimal) -> str:
@@ -737,7 +900,7 @@ def _text(
     align_right: bool = False,
     color: tuple[float, float, float] | None = None,
 ) -> None:
-    text_width = len(text) * size * 0.48
+    text_width = _text_width(text, size)
     text_x = x - text_width if align_right else x
     text_command = (
         b"BT /"
@@ -775,9 +938,11 @@ def _text_centered(
     text: str,
     size: float,
     font: str = "F1",
+    *,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
-    text_width = len(text) * size * 0.48
-    _text(commands, center_x - text_width / 2, y, text, size, font)
+    text_width = _text_width(text, size)
+    _text(commands, center_x - text_width / 2, y, text, size, font, color=color)
 
 
 def _text_rotated(
@@ -787,8 +952,10 @@ def _text_rotated(
     text: str,
     size: float,
     font: str = "F1",
+    *,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
-    commands.append(
+    text_command = (
         b"BT /"
         + font.encode("ascii")
         + b" "
@@ -801,6 +968,20 @@ def _text_rotated(
         + _pdf_string(text)
         + b" Tj ET"
     )
+    if color is None:
+        commands.append(text_command)
+        return
+    commands.append(
+        b"q "
+        + _number(color[0])
+        + b" "
+        + _number(color[1])
+        + b" "
+        + _number(color[2])
+        + b" rg "
+        + text_command
+        + b" Q"
+    )
 
 
 def _rotated_cell_text(
@@ -810,6 +991,8 @@ def _rotated_cell_text(
     width: float,
     height: float,
     text: str,
+    *,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
     size = 6.8
     line_height = 7.4
@@ -818,7 +1001,7 @@ def _rotated_cell_text(
     block_width = (len(lines) - 1) * line_height
     start_x = x + (width - block_width) / 2 + 2
     for index, line in enumerate(lines):
-        _text_rotated(commands, start_x + index * line_height, y + 4, line, size)
+        _text_rotated(commands, start_x + index * line_height, y + 4, line, size, color=color)
 
 
 def _cell_text(
@@ -829,10 +1012,12 @@ def _cell_text(
     width: float,
     size: float,
     font: str = "F1",
+    *,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
     lines = _wrapped(text, max(4, int(width / (size * 0.55))))[:2]
     for index, line in enumerate(lines):
-        _text(commands, x + 2, y - index * (size + 1.5), line, size, font)
+        _text(commands, x + 2, y - index * (size + 1.5), line, size, font, color=color)
 
 
 def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
@@ -879,16 +1064,33 @@ def _text_fitted(
     *,
     max_width: float,
     font: str = "F1",
+    color: tuple[float, float, float] | None = None,
 ) -> None:
-    _text(commands, x, y, _trim_to_width(text, size=size, max_width=max_width), size, font)
+    _text(
+        commands,
+        x,
+        y,
+        _trim_to_width(text, size=size, max_width=max_width),
+        size,
+        font,
+        color=color,
+    )
 
 
 def _trim_to_width(value: str, *, size: float, max_width: float) -> str:
     text = " ".join((value or "").split())
-    if len(text) * size * 0.48 <= max_width:
+    if _text_width(text, size) <= max_width:
         return text
     max_chars = max(1, int(max_width / (size * 0.48)))
     return _trim_text(text, max_chars)
+
+
+def _text_width(text: str, size: float) -> float:
+    return len(text) * size * 0.48
+
+
+def _correction_color() -> tuple[float, float, float]:
+    return (0.7, 0, 0)
 
 
 def _wrap_ellipsis(value: str, *, width: int, max_lines: int) -> list[str]:

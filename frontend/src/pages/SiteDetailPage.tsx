@@ -15,6 +15,7 @@ import type { EditableSite } from "./SitesPage";
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
+type MeasurementPdfMode = "checked" | "original";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -415,18 +416,19 @@ export function SiteDetailPage() {
     }
   }
 
-  async function downloadMeasurementBatchPdf(batch: MobileMeasurementBatch): Promise<void> {
+  async function downloadMeasurementBatchPdf(batch: MobileMeasurementBatch, mode: MeasurementPdfMode): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
     }
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      const blob = await api.downloadSiteMeasurementBatchPdf(site.id, batch.id);
+      const blob = await api.downloadSiteMeasurementBatchPdf(site.id, batch.id, mode);
       const packageNumber = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)
         .replace(/^Aufmaß\s+/, "")
         .replace(/[^\w.-]+/g, "_");
-      triggerBrowserDownload(blob, `Aufmass_${packageNumber}.pdf`);
+      const prefix = mode === "checked" ? "Aufmass_geprueft" : "Aufmass";
+      triggerBrowserDownload(blob, `${prefix}_${packageNumber}.pdf`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "PDF konnte nicht erstellt werden."));
     }
@@ -1316,7 +1318,7 @@ function MeasurementTab({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
-  onExportPdf: (batch: MobileMeasurementBatch) => Promise<void>;
+  onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
   return (
     <div className="project-record-tab-panel">
@@ -1996,13 +1998,13 @@ function MeasurementReviewPanel({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
-  onExportPdf: (batch: MobileMeasurementBatch) => Promise<void>;
+  onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
   const [entryDrafts, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
   const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
-  const [pdfExportingBatchId, setPdfExportingBatchId] = useState<number | null>(null);
+  const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
 
   useEffect(() => {
@@ -2345,7 +2347,11 @@ function MeasurementReviewPanel({
         <div className="measurement-review-list">
           {sortedBatches.map((batch) => {
             const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
-            const isExportingPdf = pdfExportingBatchId === batch.id;
+            const checkedPdfKey = `${batch.id}:checked`;
+            const originalPdfKey = `${batch.id}:original`;
+            const isExportingCheckedPdf = pdfExportingAction === checkedPdfKey;
+            const isExportingOriginalPdf = pdfExportingAction === originalPdfKey;
+            const isExportingPdf = isExportingCheckedPdf || isExportingOriginalPdf;
             return (
               <div
                 key={batch.id}
@@ -2366,18 +2372,32 @@ function MeasurementReviewPanel({
                   </div>
                   <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
                 </button>
-                <button
-                  type="button"
-                  className="measurement-review-pdf-action"
-                  disabled={!canExportPdf || isExportingPdf}
-                  title={canExportPdf ? "PDF exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
-                  onClick={() => {
-                    setPdfExportingBatchId(batch.id);
-                    void onExportPdf(batch).finally(() => setPdfExportingBatchId(null));
-                  }}
-                >
-                  {isExportingPdf ? "PDF..." : "PDF"}
-                </button>
+                <div className="measurement-review-pdf-actions">
+                  <button
+                    type="button"
+                    className="measurement-review-pdf-action"
+                    disabled={!canExportPdf || isExportingPdf}
+                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
+                    onClick={() => {
+                      setPdfExportingAction(checkedPdfKey);
+                      void onExportPdf(batch, "checked").finally(() => setPdfExportingAction(null));
+                    }}
+                  >
+                    {isExportingCheckedPdf ? "PDF..." : "Aufmaß geprüft"}
+                  </button>
+                  <button
+                    type="button"
+                    className="measurement-review-pdf-action"
+                    disabled={!canExportPdf || isExportingPdf}
+                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
+                    onClick={() => {
+                      setPdfExportingAction(originalPdfKey);
+                      void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
+                    }}
+                  >
+                    {isExportingOriginalPdf ? "PDF..." : "Aufmaß"}
+                  </button>
+                </div>
               </div>
             );
           })}

@@ -581,3 +581,76 @@ def test_site_measurement_billing_status_and_entry_update():
     assert stored_entry.status == "submitted"
     assert stored_entry.submitted_area_or_comment == "1. OG Flur"
     assert stored_entry.submitted_quantity == Decimal("10.00")
+
+
+def test_measurement_pdf_matrix_separates_original_and_checked_values():
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="billed",
+        original_submitted_snapshot={
+            "version": 1,
+            "measurement_batch_id": 1,
+            "site_id": site.id,
+            "measurement_base_id": base.id,
+            "number": 1,
+            "title": "Aufmaß 1",
+            "entries": [
+                {
+                    "entry_id": 1,
+                    "measurement_item_id": 1,
+                    "site_id": site.id,
+                    "position": "1.01.05.10",
+                    "description": "Kabelrinne liefern und montieren",
+                    "unit": "m",
+                    "sort_order": 1,
+                    "area_or_comment": "EG",
+                    "quantity": "10.00",
+                }
+            ],
+        },
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("12.00"),
+        area_or_comment="EG",
+        status="billed",
+    )
+    db.add_all([item, batch, entry])
+    db.commit()
+
+    pdf_service = MeasurementPdfService(db)
+    _positions, _areas, original_cells, original_totals = pdf_service._build_matrix(batch, mode="original")
+    _positions, _areas, checked_cells, checked_totals = pdf_service._build_matrix(batch, mode="checked")
+
+    original_cell = original_cells[("eg", item.id)]
+    checked_cell = checked_cells[("eg", item.id)]
+    assert original_cell.quantity == Decimal("10.00")
+    assert original_cell.original_quantity is None
+    assert original_totals[item.id] == Decimal("10.00")
+    assert checked_cell.quantity == Decimal("12.00")
+    assert checked_cell.original_quantity == Decimal("10.00")
+    assert checked_cell.is_corrected is True
+    assert checked_totals[item.id] == Decimal("12.00")

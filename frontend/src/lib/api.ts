@@ -404,8 +404,8 @@ export const api = {
     });
   },
 
-  async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number): Promise<Blob> {
-    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf`);
+  async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number, mode: "checked" | "original" = "checked"): Promise<Blob> {
+    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
   },
 
   async createSiteMeasurementEntry(

@@ -323,12 +323,14 @@ def reset_measurement_batch_to_submitted(
 def download_measurement_batch_pdf(
     site_id: int,
     batch_id: int,
+    mode: str = Query("checked", pattern="^(checked|original)$"),
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> Response:
     content, filename = MeasurementPdfService(db).build_batch_pdf(
         site_id=site_id,
         batch_id=batch_id,
+        mode=mode,
     )
     return Response(
         content=content,

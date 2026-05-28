@@ -4037,9 +4037,15 @@ button.person-chip:focus-visible {
   font: inherit;
   font-size: 0.78rem;
   font-weight: 800;
-  margin-right: 12px;
   padding: 5px 10px;
   white-space: nowrap;
+}
+
+.measurement-review-pdf-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
 }
 
 .measurement-review-pdf-action:hover,
