@@ -20,13 +20,35 @@ from app.models.user import User
 PAGE_WIDTH = 841.89
 PAGE_HEIGHT = 595.276
 MARGIN = 32
+TEMPLATE_LABEL_X = 54
+TEMPLATE_VALUE_X = 96
+MATRIX_X = 273
+MATRIX_TOP = 419
+MATRIX_POSITION_BOTTOM = 398
+MATRIX_DESCRIPTION_BOTTOM = 278
+MATRIX_UNIT_BOTTOM = 257
+MATRIX_BOTTOM = 91
+MATRIX_COLUMN_WIDTH = 41
+MATRIX_COLUMN_COUNT = 12
+MATRIX_AREA_ROW_HEIGHT = 14
+MATRIX_AREA_ROW_COUNT = 11
+MATRIX_AREA_LABEL_X = 96
+MATRIX_AREA_LABEL_WIDTH = 136
 
 
 @dataclass(frozen=True)
-class PdfLine:
-    text: str
-    size: int = 8
-    font: str = "F1"
+class MatrixPosition:
+    item_id: int
+    position: str
+    description: str
+    unit: str
+    sort_order: int
+
+
+@dataclass(frozen=True)
+class MatrixArea:
+    key: str
+    label: str
 
 
 class SimplePdf:
@@ -123,16 +145,40 @@ class MeasurementPdfService:
             )
 
         pdf = SimplePdf()
-        rows = self._build_rows(batch)
-        page_rows = _chunk(rows, 18)
-        for page_index, rows_on_page in enumerate(page_rows or [[]], start=1):
-            pdf.add_page(self._render_page(batch, rows_on_page, page_index, len(page_rows or [[]])))
+        positions, areas, cells, totals_by_position = self._build_matrix(batch)
+        position_pages = _chunk(positions, MATRIX_COLUMN_COUNT) or [[]]
+        area_pages = _chunk(areas, MATRIX_AREA_ROW_COUNT) or [[]]
+        page_count = len(position_pages) * len(area_pages)
+        page_number = 1
+        for position_page_index, position_page in enumerate(position_pages, start=1):
+            for area_page_index, area_page in enumerate(area_pages, start=1):
+                pdf.add_page(
+                    self._render_page(
+                        batch=batch,
+                        positions=position_page,
+                        areas=area_page,
+                        cells=cells,
+                        totals_by_position=totals_by_position,
+                        page_number=page_number,
+                        page_count=page_count,
+                        position_page_index=position_page_index,
+                        area_page_index=area_page_index,
+                    )
+                )
+                page_number += 1
 
         file_number = _format_batch_number(batch.site.site_number, batch.number)
         safe_number = file_number.replace("/", "-").replace(" ", "_")
         return pdf.build(), f"Aufmass_{safe_number}.pdf"
 
-    def _build_rows(self, batch: SiteMeasurementBatch) -> list[list[str]]:
+    def _build_matrix(
+        self, batch: SiteMeasurementBatch
+    ) -> tuple[
+        list[MatrixPosition],
+        list[MatrixArea],
+        dict[tuple[str, int], Decimal],
+        dict[int, Decimal],
+    ]:
         entries = sorted(
             batch.entries,
             key=lambda entry: (
@@ -142,117 +188,187 @@ class MeasurementPdfService:
                 entry.id,
             ),
         )
-        rows: list[list[str]] = []
-        current_item_id: int | None = None
-        current_total = Decimal("0")
-        current_unit = ""
-
+        positions_by_id: dict[int, MatrixPosition] = {}
+        area_by_key: dict[str, MatrixArea] = {}
+        cells: dict[tuple[str, int], Decimal] = {}
+        totals_by_position: dict[int, Decimal] = {}
         for entry in entries:
             item = entry.measurement_item
             if item is None:
                 continue
-            if current_item_id is not None and item.id != current_item_id:
-                rows.append(["", "", "", "Summe Position", _format_decimal(current_total), current_unit])
-                current_total = Decimal("0")
-            current_item_id = item.id
-            current_unit = item.unit or ""
-            current_total += entry.quantity
-            rows.append(
-                [
-                    item.position,
-                    item.description,
-                    item.unit or "",
-                    entry.area_or_comment,
-                    _format_decimal(entry.quantity),
-                    "",
-                ]
-            )
+            if item.id not in positions_by_id:
+                positions_by_id[item.id] = MatrixPosition(
+                    item_id=item.id,
+                    position=item.position,
+                    description=item.description,
+                    unit=item.unit or "",
+                    sort_order=item.sort_order,
+                )
+            area_label = " ".join(entry.area_or_comment.split())
+            area_key = area_label.casefold()
+            area_by_key.setdefault(area_key, MatrixArea(key=area_key, label=area_label))
+            cells[(area_key, item.id)] = cells.get((area_key, item.id), Decimal("0")) + entry.quantity
+            totals_by_position[item.id] = totals_by_position.get(item.id, Decimal("0")) + entry.quantity
 
-        if current_item_id is not None:
-            rows.append(["", "", "", "Summe Position", _format_decimal(current_total), current_unit])
-        return rows
+        return (
+            sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
+            list(area_by_key.values()),
+            cells,
+            totals_by_position,
+        )
 
     def _render_page(
         self,
         batch: SiteMeasurementBatch,
-        rows: list[list[str]],
+        positions: list[MatrixPosition],
+        areas: list[MatrixArea],
+        cells: dict[tuple[str, int], Decimal],
+        totals_by_position: dict[int, Decimal],
         page_number: int,
         page_count: int,
+        position_page_index: int,
+        area_page_index: int,
     ) -> list[bytes]:
         site = batch.site
         assert site is not None
-        commands: list[bytes] = [b"1 w"]
+        commands: list[bytes] = [b"0.75 w"]
         title = _format_batch_number(site.site_number, batch.number)
         submitted_by = _format_user(batch.submitted_by) or "-"
         submitted_at = _format_datetime(batch.submitted_at)
         address = " ".join(part for part in [site.street, site.house_number] if part)
         city = " ".join(part for part in [site.postal_code, site.city] if part)
         project_address = ", ".join(part for part in [address or site.address, city] if part) or "-"
+        page_suffix = ""
+        if page_count > 1:
+            page_suffix = f" · Spalte {position_page_index}, Bereich {area_page_index}"
 
-        _text(commands, MARGIN, PAGE_HEIGHT - 36, "BEG Aufmaß", 16, "F2")
-        _text(commands, PAGE_WIDTH - 230, PAGE_HEIGHT - 34, f"Aufmaß {title}", 14, "F2")
-        _text(commands, PAGE_WIDTH - 230, PAGE_HEIGHT - 52, f"Blatt-Nr.: {page_number}/{page_count}", 9)
-        _line(commands, MARGIN, PAGE_HEIGHT - 62, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 62)
+        _template_header(
+            commands=commands,
+            title=title,
+            customer=site.customer or "-",
+            project=site.name,
+            commission=site.site_number or "-",
+            date_label=_format_date(datetime.now()),
+            sheet_label=f"{page_number}/{page_count}{page_suffix}",
+        )
+        _text(commands, 54, 431, f"Adresse: {project_address}", 7)
+        _text(commands, 371, 431, f"Monteur: {submitted_by}", 7)
+        _text(commands, 522, 431, f"Eingereicht: {submitted_at or '-'}", 7)
+        _text(commands, 650, 431, f"Status: {_status_label(batch.status)}", 7)
 
-        y = PAGE_HEIGHT - 84
-        y = _field(commands, MARGIN, y, "Kunde:", site.customer or "-")
-        y = _field(commands, MARGIN, y, "Projekt/Bauvorhaben:", site.name)
-        y = _field(commands, MARGIN, y, "Kommissions-Nr.:", site.site_number or "-")
-        y = _field(commands, MARGIN, y, "Adresse:", project_address)
+        _draw_measurement_matrix(
+            commands=commands,
+            positions=positions,
+            areas=areas,
+            cells=cells,
+            totals_by_position=totals_by_position,
+        )
 
-        info_x = 520
-        info_y = PAGE_HEIGHT - 84
-        info_y = _field(commands, info_x, info_y, "Datum:", _format_date(datetime.now()))
-        info_y = _field(commands, info_x, info_y, "Status:", _status_label(batch.status))
-        info_y = _field(commands, info_x, info_y, "Monteur:", submitted_by)
-        _field(commands, info_x, info_y, "Eingereicht:", submitted_at or "-")
-
-        table_top = PAGE_HEIGHT - 190
-        _table_header(commands, table_top)
-        y = table_top - 24
-        for row in rows:
-            row_height = _table_row(commands, y, row)
-            y -= row_height
-
+        total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
+        _text(commands, 98, 77, "Gesamtsumme:", 8, "F2")
+        _line(commands, 176, 75, 250, 75)
         if page_number == page_count:
-            total = sum((entry.quantity for entry in batch.entries), Decimal("0"))
-            _text(commands, 614, 98, "Gesamtsumme:", 9, "F2")
-            _text(commands, 704, 98, _format_decimal(total), 9, "F2")
-            _signature_block(commands)
+            _text(commands, 245, 77, _format_decimal(total), 8, "F2", align_right=True)
+        _signature_block(commands)
 
         return commands
 
 
-def _table_header(commands: list[bytes], y: float) -> None:
-    headers = ["Pos. lt. Bestellung", "Art der Leistung", "Einheit", "Bauteil / Abschnitt", "Menge", "Summe"]
-    widths = [92, 300, 54, 190, 70, 70]
-    x = MARGIN
-    _rect(commands, MARGIN, y - 22, sum(widths), 22)
-    for header, width in zip(headers, widths, strict=True):
-        _text(commands, x + 4, y - 14, header, 7, "F2")
-        _line(commands, x, y - 22, x, y)
-        x += width
-    _line(commands, x, y - 22, x, y)
+def _template_header(
+    *,
+    commands: list[bytes],
+    title: str,
+    customer: str,
+    project: str,
+    commission: str,
+    date_label: str,
+    sheet_label: str,
+) -> None:
+    _text(commands, 56, 513, "Aufmaß", 20, "F2")
+    _line(commands, 56, 510, 145, 510)
+    _text(commands, 650, 513, f"Aufmaß-Nr.: {title}", 10, "F2")
+    _text(commands, TEMPLATE_LABEL_X, 481, "Kunde:", 8, "F2")
+    _line(commands, 95, 478, 370, 478)
+    _text(commands, 100, 481, customer, 8)
+    _text(commands, 371, 481, "Komissions-Nr.:", 8, "F2")
+    _line(commands, 464, 478, 805, 478)
+    _text(commands, 470, 481, commission, 8)
+    _text(commands, 53, 451, "Projekt/Bauvorhaben:", 8, "F2")
+    _line(commands, 178, 448, 428, 448)
+    _text(commands, 184, 451, project, 8)
+    _text(commands, 428, 451, "Blatt-Nr.:", 8, "F2")
+    _line(commands, 480, 448, 520, 448)
+    _text(commands, 484, 451, sheet_label, 7)
+    _text(commands, 522, 451, "Datum:", 8, "F2")
+    _line(commands, 564, 448, 805, 448)
+    _text(commands, 570, 451, date_label, 8)
 
 
-def _table_row(commands: list[bytes], y: float, row: list[str]) -> float:
-    widths = [92, 300, 54, 190, 70, 70]
-    line_counts = [
-        max(1, len(_wrapped(value, max(8, int(width / 5.2)))))
-        for value, width in zip(row, widths, strict=True)
-    ]
-    height = max(18, max(line_counts) * 9 + 6)
-    _rect(commands, MARGIN, y - height, sum(widths), height)
-    x = MARGIN
-    for value, width in zip(row, widths, strict=True):
-        _line(commands, x, y - height, x, y)
-        lines = _wrapped(value, max(8, int(width / 5.2)))[:4]
-        for index, line in enumerate(lines):
-            text_x = x + width - 6 if width <= 70 and value else x + 4
-            _text(commands, text_x, y - 11 - index * 8, line, 7, "F2" if row[3] == "Summe Position" else "F1", align_right=width <= 70)
-        x += width
-    _line(commands, x, y - height, x, y)
-    return height
+def _draw_measurement_matrix(
+    *,
+    commands: list[bytes],
+    positions: list[MatrixPosition],
+    areas: list[MatrixArea],
+    cells: dict[tuple[str, int], Decimal],
+    totals_by_position: dict[int, Decimal],
+) -> None:
+    matrix_right = MATRIX_X + MATRIX_COLUMN_COUNT * MATRIX_COLUMN_WIDTH
+    _text(commands, TEMPLATE_LABEL_X, 401, "Pos. Lt. Bestellung:", 9, "F2")
+    _line(commands, 52, MATRIX_POSITION_BOTTOM, 232, MATRIX_POSITION_BOTTOM)
+    _text(commands, TEMPLATE_LABEL_X, 331, "Art der Leistung:", 9, "F2")
+    _line(commands, 52, MATRIX_DESCRIPTION_BOTTOM, 232, MATRIX_DESCRIPTION_BOTTOM)
+    _text(commands, TEMPLATE_LABEL_X, 261, "Einheit:", 9, "F2")
+    _text_rotated(commands, 80, 104, "Bauteil / Abschnitt", 10, "F2")
+
+    for x in [MATRIX_X + index * MATRIX_COLUMN_WIDTH for index in range(MATRIX_COLUMN_COUNT + 1)]:
+        _line(commands, x, MATRIX_BOTTOM, x, MATRIX_TOP)
+    for y in [MATRIX_TOP, MATRIX_POSITION_BOTTOM, MATRIX_DESCRIPTION_BOTTOM, MATRIX_UNIT_BOTTOM, MATRIX_BOTTOM]:
+        _line(commands, MATRIX_X, y, matrix_right, y)
+
+    for row_index in range(MATRIX_AREA_ROW_COUNT + 1):
+        y = MATRIX_UNIT_BOTTOM - row_index * MATRIX_AREA_ROW_HEIGHT
+        _line(commands, MATRIX_AREA_LABEL_X, y, matrix_right, y)
+    _line(commands, MATRIX_AREA_LABEL_X, MATRIX_BOTTOM, matrix_right, MATRIX_BOTTOM)
+    _line(commands, MATRIX_AREA_LABEL_X, MATRIX_BOTTOM, MATRIX_AREA_LABEL_X, MATRIX_UNIT_BOTTOM)
+    _line(
+        commands,
+        MATRIX_AREA_LABEL_X + MATRIX_AREA_LABEL_WIDTH,
+        MATRIX_BOTTOM,
+        MATRIX_AREA_LABEL_X + MATRIX_AREA_LABEL_WIDTH,
+        MATRIX_UNIT_BOTTOM,
+    )
+
+    for index in range(MATRIX_COLUMN_COUNT):
+        x = MATRIX_X + index * MATRIX_COLUMN_WIDTH
+        if index >= len(positions):
+            continue
+        position = positions[index]
+        _cell_text(commands, x, MATRIX_POSITION_BOTTOM + 5, position.position, MATRIX_COLUMN_WIDTH, 5.5, "F2")
+        description_lines = _wrapped(position.description, 8)[:12]
+        for line_index, line in enumerate(description_lines):
+            _cell_text(
+                commands,
+                x,
+                MATRIX_POSITION_BOTTOM - 12 - line_index * 8,
+                line,
+                MATRIX_COLUMN_WIDTH,
+                5.4,
+            )
+        _cell_text(commands, x, MATRIX_UNIT_BOTTOM + 7, position.unit, MATRIX_COLUMN_WIDTH, 6, "F2")
+
+        for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
+            value = cells.get((area.key, position.item_id))
+            if value is None:
+                continue
+            y = MATRIX_UNIT_BOTTOM - area_index * MATRIX_AREA_ROW_HEIGHT - 10
+            _text(commands, x + MATRIX_COLUMN_WIDTH - 3, y, _format_decimal(value), 6, "F1", align_right=True)
+        total = totals_by_position.get(position.item_id)
+        if total is not None:
+            _text(commands, x + MATRIX_COLUMN_WIDTH - 3, 77, _format_decimal(total), 6, "F2", align_right=True)
+
+    for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
+        y = MATRIX_UNIT_BOTTOM - area_index * MATRIX_AREA_ROW_HEIGHT - 10
+        _text(commands, MATRIX_AREA_LABEL_X + 4, y, area.label, 6.5)
 
 
 def _signature_block(commands: list[bytes]) -> None:
@@ -270,18 +386,12 @@ def _signature_block(commands: list[bytes]) -> None:
     _line(commands, 664, 20, 800, 20)
 
 
-def _field(commands: list[bytes], x: float, y: float, label: str, value: str) -> float:
-    _text(commands, x, y, label, 8, "F2")
-    _text(commands, x + 108, y, value, 8)
-    return y - 16
-
-
 def _wrapped(value: str, width: int) -> list[str]:
     text = " ".join((value or "").split())
     return wrap(text, width=width, break_long_words=False) or [""]
 
 
-def _chunk(rows: list[list[str]], size: int) -> list[list[list[str]]]:
+def _chunk[T](rows: list[T], size: int) -> list[list[T]]:
     return [rows[index : index + size] for index in range(0, len(rows), size)]
 
 
@@ -347,6 +457,43 @@ def _text(
         + _pdf_string(text)
         + b" Tj ET"
     )
+
+
+def _text_rotated(
+    commands: list[bytes],
+    x: float,
+    y: float,
+    text: str,
+    size: int,
+    font: str = "F1",
+) -> None:
+    commands.append(
+        b"BT /"
+        + font.encode("ascii")
+        + b" "
+        + str(size).encode("ascii")
+        + b" Tf 0 1 -1 0 "
+        + _number(x)
+        + b" "
+        + _number(y)
+        + b" Tm "
+        + _pdf_string(text)
+        + b" Tj ET"
+    )
+
+
+def _cell_text(
+    commands: list[bytes],
+    x: float,
+    y: float,
+    text: str,
+    width: float,
+    size: float,
+    font: str = "F1",
+) -> None:
+    lines = _wrapped(text, max(4, int(width / (size * 0.55))))[:2]
+    for index, line in enumerate(lines):
+        _text(commands, x + 2, y - index * (size + 1.5), line, int(size), font)
 
 
 def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float) -> None:
