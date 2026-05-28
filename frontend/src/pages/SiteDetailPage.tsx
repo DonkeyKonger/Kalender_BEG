@@ -2052,18 +2052,31 @@ function MeasurementReviewPanel({
     const isDraft = selectedBatch.status === "draft";
     const canEditRows = !isDraft;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
+    const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
 
     return (
       <div className={`measurement-review-detail${viewMode === "table" ? " is-table-view" : ""}`}>
-        <div className="measurement-review-header">
-          <div className="measurement-review-titlebar">
-            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
+        <div className="measurement-review-package-row">
+          <div className="measurement-review-package-title">
             <h2>{displayTitle}</h2>
+            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
+          </div>
+          {updatedLabel ? <span className="measurement-review-updated">Letzte Änderung: {updatedLabel}</span> : null}
+        </div>
+
+        <div className="measurement-review-toolbar-row">
+          <div className="measurement-review-toolbar-left">
+            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
+            <span className="measurement-review-action-divider" aria-hidden="true" />
+            <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
+            <span className="measurement-review-action-divider" aria-hidden="true" />
+            <div className="measurement-review-filter-group" aria-label="Statusfilter">
+              <span>Alle</span>
+              <span className={!isBilled ? "is-active" : ""}>Noch offen</span>
+              <span className={isBilled ? "is-active" : ""}>Abgerechnet</span>
+            </div>
           </div>
           <div className="measurement-review-actions">
-            <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
-            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
-            <span className="measurement-review-action-divider" aria-hidden="true" />
             <button
               type="button"
               className="secondary-action"
