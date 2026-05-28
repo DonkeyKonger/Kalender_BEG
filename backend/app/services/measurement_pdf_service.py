@@ -242,7 +242,7 @@ class MeasurementPdfService:
                         page_count=page_count,
                         position_page_index=position_page_index,
                         area_page_index=area_page_index,
-                        logo_available=logo is not None,
+                        logo=logo,
                     )
                 )
                 page_number += 1
@@ -308,7 +308,7 @@ class MeasurementPdfService:
         page_count: int,
         position_page_index: int,
         area_page_index: int,
-        logo_available: bool,
+        logo: PdfImage | None,
     ) -> list[bytes]:
         site = batch.site
         assert site is not None
@@ -331,7 +331,7 @@ class MeasurementPdfService:
             commission=site.site_number or "-",
             date_label=_format_date(datetime.now()),
             sheet_label=f"{page_number}/{page_count}{page_suffix}",
-            logo=_load_png_rgb(LOGO_PATH) if logo_available else None,
+            logo=logo,
         )
         _text(commands, TABLE_LEFT, 431, f"Adresse: {project_address}", 6.5)
         _text(commands, 298, 431, f"Monteur: {submitted_by}", 6.5)
