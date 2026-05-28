@@ -6693,22 +6693,27 @@ button.person-chip:focus-visible {
 
 /* Compact Technical UI: scoped first implementation for Aufmaßprüfung table mode. */
 .measurement-review-detail.is-table-view {
-  --ct-bg: #f4f1eb;
+  --ct-bg: #f5f3f0;
   --ct-surface: #ffffff;
-  --ct-surface-muted: #f7f4ee;
-  --ct-border: #d6d2ca;
-  --ct-border-strong: #b9b2a7;
-  --ct-text: #1f2933;
-  --ct-muted: #667085;
-  --ct-primary: #1f2f46;
-  --ct-primary-soft: #eef1f5;
-  --ct-warning: #d98a1f;
+  --ct-surface-muted: #faf9f7;
+  --ct-toolbar: #fdfcfb;
+  --ct-border: #d8d1c6;
+  --ct-border-soft: #e8e2d9;
+  --ct-border-strong: #bfae96;
+  --ct-text: #172033;
+  --ct-muted: #64748b;
+  --ct-primary: #1e293b;
+  --ct-primary-hover: #0f172a;
+  --ct-warning-bg: #fef3c7;
+  --ct-warning-text: #92400e;
   --ct-danger: #b42318;
-  --ct-success: #276738;
-  --ct-table-header: #e6dfd3;
+  --ct-success: #166534;
+  --ct-table-header: #e7ded2;
+  --ct-table-subheader: #f7f4ee;
   --ct-table-cell: #ffffff;
-  --ct-table-muted: #f0ebe2;
-  --ct-focus: #1f2f46;
+  --ct-table-label: #f0e9df;
+  --ct-table-total: #e8ded0;
+  --ct-focus: #1e293b;
   width: 100%;
   max-width: none;
   gap: 8px;
@@ -6716,23 +6721,26 @@ button.person-chip:focus-visible {
   border-radius: 6px;
   background: var(--ct-surface);
   color: var(--ct-text);
-  padding: 10px;
+  padding: 8px;
   box-shadow: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-header {
-  align-items: start;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 0;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--ct-border-soft);
 }
 
 .measurement-review-detail.is-table-view .measurement-review-header h2 {
   color: var(--ct-text);
-  font-size: 1.05rem;
-  line-height: 1.15;
+  font-size: 1.02rem;
+  line-height: 1.12;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-actions {
+  align-items: center;
   gap: 6px;
 }
 
@@ -6741,14 +6749,14 @@ button.person-chip:focus-visible {
   min-height: 28px;
   border-radius: 4px;
   padding: 5px 9px;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   line-height: 1;
   box-shadow: none;
 }
 
 .measurement-review-detail.is-table-view .secondary-action {
   border-color: var(--ct-border);
-  background: var(--ct-surface-muted);
+  background: var(--ct-toolbar);
   color: var(--ct-text);
 }
 
@@ -6762,6 +6770,11 @@ button.person-chip:focus-visible {
   border-color: var(--ct-primary);
   background: var(--ct-primary);
   color: #ffffff;
+}
+
+.measurement-review-detail.is-table-view .primary-action:hover,
+.measurement-review-detail.is-table-view .primary-action:focus-visible {
+  background: var(--ct-primary-hover);
 }
 
 .measurement-review-detail.is-table-view .measurement-view-toggle {
@@ -6782,17 +6795,17 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
   background: var(--ct-surface);
   color: var(--ct-text);
-  box-shadow: inset 0 0 0 1px rgb(31 41 51 / 8%);
+  box-shadow: inset 0 0 0 1px rgb(23 32 51 / 10%);
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-open,
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
 .measurement-review-detail.is-table-view .measurement-status.is-rejected {
   min-height: 24px;
-  border: 1px solid rgb(217 138 31 / 34%);
+  border: 1px solid rgb(146 64 14 / 22%);
   border-radius: 4px;
-  background: #fff6e8;
-  color: #8a4d0d;
+  background: var(--ct-warning-bg);
+  color: var(--ct-warning-text);
   padding: 3px 8px;
   font-size: 0.72rem;
 }
@@ -6800,9 +6813,9 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-status.is-billed,
 .measurement-review-detail.is-table-view .measurement-status.is-approved {
   min-height: 24px;
-  border: 1px solid rgb(39 103 56 / 28%);
+  border: 1px solid rgb(22 101 52 / 22%);
   border-radius: 4px;
-  background: #edf7ee;
+  background: #dcfce7;
   color: var(--ct-success);
   padding: 3px 8px;
   font-size: 0.72rem;
@@ -6818,32 +6831,45 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-review-table-wrap {
   width: 100%;
   max-width: 100%;
-  min-height: 260px;
-  max-height: max(320px, calc(100vh - 276px));
+  min-height: 320px;
+  max-height: max(380px, calc(100vh - 258px));
   overflow: auto;
-  scrollbar-gutter: stable;
-  border-color: var(--ct-border);
+  scrollbar-gutter: stable both-edges;
+  border: 1px solid var(--ct-border);
   border-radius: 4px;
-  background: var(--ct-surface);
-  box-shadow: none;
-  padding-bottom: 16px;
+  background: var(--ct-surface-muted);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%);
+  padding-bottom: 18px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {
-  width: max-content;
-  min-width: 100%;
+  width: var(--measurement-table-width);
+  min-width: var(--measurement-table-width);
+  max-width: var(--measurement-table-width);
+  table-layout: fixed;
+  border-collapse: collapse;
   color: var(--ct-text);
-  font-size: 0.66rem;
-  line-height: 1.1;
+  font-size: 0.68rem;
+  line-height: 1.12;
   font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-label-col {
+  width: var(--measurement-axis-width);
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-position-col {
+  width: var(--measurement-position-width);
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view th,
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view td {
-  min-width: 88px;
+  width: var(--measurement-position-width);
+  min-width: var(--measurement-position-width);
+  max-width: var(--measurement-position-width);
   height: 23px;
-  border-color: var(--ct-border);
-  padding: 1px 3px;
+  border: 1px solid var(--ct-border-soft);
+  padding: 2px 5px;
   background: var(--ct-table-cell);
   vertical-align: middle;
 }
@@ -6864,14 +6890,16 @@ button.person-chip:focus-visible {
   position: sticky;
   left: 0;
   z-index: 5;
-  min-width: 168px;
-  max-width: 190px;
+  width: var(--measurement-axis-width) !important;
+  min-width: var(--measurement-axis-width) !important;
+  max-width: var(--measurement-axis-width) !important;
   border-right-color: var(--ct-border-strong);
-  background: var(--ct-table-muted) !important;
+  background: var(--ct-table-label) !important;
   color: var(--ct-text);
-  font-size: 0.67rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  line-height: 1.12;
+  line-height: 1.14;
+  text-align: left;
   text-transform: none;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -6880,27 +6908,30 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-review-table thead .measurement-matrix-axis {
   z-index: 10;
-  background: #e4ded3 !important;
+  background: #dfd4c6 !important;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-position-heading {
-  min-width: 98px;
   text-align: left;
-  font-size: 0.69rem !important;
+  font-size: 0.72rem !important;
   line-height: 1.05;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading {
-  min-width: 118px;
+  height: 52px;
   text-align: left;
-  max-width: 132px;
-  font-size: 0.58rem !important;
-  line-height: 1.05;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  font-size: 0.62rem !important;
+  line-height: 1.08;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  vertical-align: top !important;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading span {
+  display: -webkit-box;
+  overflow: hidden;
+  text-align: left;
+  -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 
@@ -6913,8 +6944,8 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-section-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-section-row td {
-  height: 22px;
-  background: var(--ct-table-muted) !important;
+  height: 23px;
+  background: var(--ct-table-subheader) !important;
   color: var(--ct-muted);
   font-weight: 800;
   text-align: left;
@@ -6926,7 +6957,6 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-quantity-cell,
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell {
-  min-width: 76px;
   height: 22px;
   background: var(--ct-table-cell);
   text-align: right !important;
@@ -6937,14 +6967,14 @@ button.person-chip:focus-visible {
   width: 100%;
   min-height: 18px;
   border: 1px solid transparent;
-  border-radius: 1px;
+  border-radius: 2px;
   background: transparent;
   box-shadow: none;
   color: var(--ct-text);
   font-size: inherit;
   font-weight: 750;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0 3px;
   text-align: right;
 }
 
@@ -6954,30 +6984,30 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell:hover .measurement-table-input.is-quantity:not(.has-value) {
-  background: #faf9f6;
+  background: #fbfaf7;
   color: transparent;
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:hover {
-  border-color: #c7c1b8;
+  border-color: var(--ct-border-strong);
   background: #ffffff;
 }
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity:focus {
   border-color: var(--ct-focus);
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px rgb(31 47 70 / 28%);
+  box-shadow: inset 0 0 0 1px rgb(30 41 59 / 28%);
   outline: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
   border-top: 2px solid var(--ct-border-strong);
-  background: #e8e0d3 !important;
-  font-size: 0.68rem;
+  background: var(--ct-table-total) !important;
+  font-size: 0.69rem;
   font-weight: 900;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
-  background: #dfd8cd !important;
+  background: #ded1c1 !important;
 }

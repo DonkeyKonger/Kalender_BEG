@@ -1,7 +1,7 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -2258,6 +2258,13 @@ function MeasurementReviewTable({
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
 }) {
   const areaRows = buildMeasurementMatrixAreaRows(items);
+  const measurementAxisWidth = 238;
+  const measurementPositionWidth = 198;
+  const tableStyle = {
+    "--measurement-axis-width": `${measurementAxisWidth}px`,
+    "--measurement-position-width": `${measurementPositionWidth}px`,
+    "--measurement-table-width": `${measurementAxisWidth + Math.max(items.length, 1) * measurementPositionWidth}px`,
+  } as CSSProperties;
   const [newCellDrafts, setNewCellDrafts] = useState<Record<string, string>>({});
   const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
 
@@ -2287,7 +2294,13 @@ function MeasurementReviewTable({
 
   return (
     <div className="measurement-review-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-      <table className="measurement-table-view measurement-matrix-table measurement-review-table">
+      <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}>
+        <colgroup>
+          <col className="measurement-matrix-label-col" />
+          {items.map((item) => (
+            <col className="measurement-matrix-position-col" key={item.id} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="measurement-matrix-meta-row measurement-matrix-position-row">
             <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
