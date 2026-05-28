@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, FolderOpen, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -2275,26 +2275,86 @@ function MeasurementReviewTable({
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
 }) {
   const areaRows = buildMeasurementMatrixAreaRows(items);
-  const measurementAxisWidth = 238;
-  const measurementPositionWidth = 198;
+  const measurementAxisWidth = 188;
+  const measurementPositionWidth = 116;
+  const minDisplayColumns = 12;
+  const minDisplayAreaRows = 12;
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const [viewportColumnCount, setViewportColumnCount] = useState(minDisplayColumns);
+  const [newCellDrafts, setNewCellDrafts] = useState<Record<string, string>>({});
+  const [areaLabelDrafts, setAreaLabelDrafts] = useState<Record<string, string>>({});
+  const [placeholderCellDrafts, setPlaceholderCellDrafts] = useState<Record<string, string>>({});
+  const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+  const displayColumnCount = Math.max(minDisplayColumns, items.length, viewportColumnCount);
+  const placeholderColumnCount = Math.max(0, displayColumnCount - items.length);
+  const displayColumns: Array<
+    | { key: string; kind: "item"; item: MobileMeasurementItem }
+    | { key: string; kind: "placeholder"; index: number }
+  > = [
+    ...items.map((item) => ({ key: `item-${item.id}`, kind: "item" as const, item })),
+    ...Array.from({ length: placeholderColumnCount }, (_, index) => ({
+      key: `placeholder-column-${index + 1}`,
+      kind: "placeholder" as const,
+      index: index + 1,
+    })),
+  ];
+  const placeholderAreaRows = Array.from({ length: Math.max(0, minDisplayAreaRows - areaRows.length) }, (_, index) => ({
+    key: `placeholder-area-${index + 1}`,
+    label: "",
+    firstIndex: areaRows.length + index,
+    sortRank: Number.MAX_SAFE_INTEGER - minDisplayAreaRows + index,
+    isPlaceholder: true,
+  }));
+  const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = [
+    ...areaRows.map((area) => ({ ...area, isPlaceholder: false })),
+    ...placeholderAreaRows,
+  ];
   const tableStyle = {
     "--measurement-axis-width": `${measurementAxisWidth}px`,
     "--measurement-position-width": `${measurementPositionWidth}px`,
-    "--measurement-table-width": `${measurementAxisWidth + Math.max(items.length, 1) * measurementPositionWidth}px`,
+    "--measurement-table-width": `${measurementAxisWidth + displayColumnCount * measurementPositionWidth}px`,
   } as CSSProperties;
-  const [newCellDrafts, setNewCellDrafts] = useState<Record<string, string>>({});
-  const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const node = tableWrapRef.current;
+    if (!node || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const updateViewportColumns = () => {
+      const availableWidth = Math.max(0, node.clientWidth - measurementAxisWidth);
+      setViewportColumnCount(Math.max(minDisplayColumns, Math.ceil(availableWidth / measurementPositionWidth)));
+    };
+
+    updateViewportColumns();
+    const observer = new ResizeObserver(updateViewportColumns);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [measurementAxisWidth, measurementPositionWidth]);
 
   function updateNewCellDraft(cellKey: string, value: string): void {
     setNewCellDrafts((current) => ({ ...current, [cellKey]: value }));
   }
 
+  function getAreaLabel(area: MeasurementMatrixAreaRow): string {
+    return areaLabelDrafts[area.key] ?? area.label;
+  }
+
+  function updateAreaLabelDraft(areaKey: string, value: string): void {
+    setAreaLabelDrafts((current) => ({ ...current, [areaKey]: value }));
+  }
+
+  function updatePlaceholderCellDraft(cellKey: string, value: string): void {
+    setPlaceholderCellDrafts((current) => ({ ...current, [cellKey]: value }));
+  }
+
   async function saveNewCellDraft(item: MobileMeasurementItem, area: MeasurementMatrixAreaRow, value: string): Promise<void> {
     const quantity = parseMeasurementQuantityInput(value);
+    const areaLabel = getAreaLabel(area).trim();
     if (value.trim() === "") {
       return;
     }
-    if (quantity === null || quantity <= 0 || savingCellKey) {
+    if (!areaLabel || quantity === null || quantity <= 0 || savingCellKey) {
       setNewCellDrafts((current) => ({ ...current, [`${area.key}-${item.id}`]: "" }));
       return;
     }
@@ -2302,7 +2362,7 @@ function MeasurementReviewTable({
     const cellKey = `${area.key}-${item.id}`;
     setSavingCellKey(cellKey);
     try {
-      await onCellCreate(item, area.label, quantity);
+      await onCellCreate(item, areaLabel, quantity);
       setNewCellDrafts((current) => ({ ...current, [cellKey]: "" }));
     } finally {
       setSavingCellKey(null);
@@ -2310,58 +2370,98 @@ function MeasurementReviewTable({
   }
 
   return (
-    <div className="measurement-review-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
+    <div className="measurement-review-table-wrap" ref={tableWrapRef} role="region" aria-label="Tabellarische Aufmaßaufstellung">
       <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}>
         <colgroup>
           <col className="measurement-matrix-label-col" />
-          {items.map((item) => (
-            <col className="measurement-matrix-position-col" key={item.id} />
+          {displayColumns.map((column) => (
+            <col className="measurement-matrix-position-col" key={column.key} />
           ))}
         </colgroup>
         <thead>
           <tr className="measurement-matrix-meta-row measurement-matrix-position-row">
             <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
-            {items.map((item) => (
-              <th className="measurement-matrix-position-heading" key={item.id} scope="col">
-                <strong>{item.position}</strong>
+            {displayColumns.map((column) => column.kind === "item" ? (
+              <th className="measurement-matrix-position-heading" key={column.key} scope="col">
+                <strong>{column.item.position}</strong>
               </th>
+            ) : (
+              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Positionsspalte ${column.index}`} />
             ))}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
             <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
-            {items.map((item) => (
-              <th className="measurement-matrix-description-heading" key={item.id} scope="col" title={item.description}><span>{item.description}</span></th>
+            {displayColumns.map((column) => column.kind === "item" ? (
+              <th className="measurement-matrix-description-heading" key={column.key} scope="col" title={column.item.description}><span>{column.item.description}</span></th>
+            ) : (
+              <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Beschreibungsspalte ${column.index}`} />
             ))}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
             <th className="measurement-matrix-axis" scope="row">Einheit</th>
-            {items.map((item) => (
-              <th className="measurement-matrix-unit-heading" key={item.id} scope="col">{item.unit ?? "-"}</th>
+            {displayColumns.map((column) => column.kind === "item" ? (
+              <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{column.item.unit ?? "-"}</th>
+            ) : (
+              <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" aria-label={`Leere Einheitsspalte ${column.index}`} />
             ))}
           </tr>
         </thead>
         <tbody>
           <tr className="measurement-matrix-section-row">
             <th className="measurement-matrix-axis" scope="row">Bauteil / Ort</th>
-            {items.map((item) => <td key={item.id} />)}
+            {displayColumns.map((column) => <td className={column.kind === "placeholder" ? "measurement-matrix-placeholder-cell" : undefined} key={column.key} />)}
           </tr>
-          {areaRows.map((area) => (
+          {displayAreaRows.map((area) => {
+            const areaLabel = getAreaLabel(area);
+            return (
             <tr key={area.key}>
-              <th className="measurement-matrix-axis" scope="row">{area.label}</th>
-              {items.map((item) => {
+              <th className={`measurement-matrix-axis measurement-matrix-area-axis${area.isPlaceholder ? " is-placeholder-row" : ""}`} scope="row">
+                <input
+                  className="measurement-area-input"
+                  value={areaLabel}
+                  disabled={!canEditRows || reviewActionLoading}
+                  placeholder={area.isPlaceholder ? "Bereich / Ort" : undefined}
+                  aria-label="Bauteil oder Ort"
+                  onChange={(event) => updateAreaLabelDraft(area.key, event.target.value)}
+                />
+              </th>
+              {displayColumns.map((column) => {
+                if (column.kind === "placeholder") {
+                  const cellKey = `${area.key}-${column.key}`;
+                  const draftValue = placeholderCellDrafts[cellKey] ?? "";
+                  return (
+                    <td className="measurement-matrix-empty-cell measurement-matrix-placeholder-cell" key={column.key}>
+                      <input
+                        className={`measurement-table-input is-quantity${draftValue.trim() ? " has-value" : ""}`}
+                        value={draftValue}
+                        disabled={!canEditRows || reviewActionLoading || !areaLabel.trim()}
+                        inputMode="decimal"
+                        aria-label={`Vorbereitete Menge ${areaLabel || "ohne Bereich"} in leerer Positionsspalte`}
+                        title="Diese Spalte ist ein Arbeitsraster ohne importierte Position und wird noch nicht gespeichert."
+                        onChange={(event) => updatePlaceholderCellDraft(cellKey, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            updatePlaceholderCellDraft(cellKey, "");
+                          }
+                        }}
+                      />
+                    </td>
+                  );
+                }
+                const item = column.item;
                 const entries = getMeasurementCellEntries(item, area.key);
                 if (entries.length === 0) {
                   const cellKey = `${area.key}-${item.id}`;
                   const draftValue = newCellDrafts[cellKey] ?? "";
                   const isSaving = savingCellKey === cellKey;
                   return (
-                    <td className="measurement-matrix-empty-cell" key={item.id}>
+                    <td className="measurement-matrix-empty-cell" key={column.key}>
                       <input
                         className={`measurement-table-input is-quantity${draftValue.trim() ? " has-value" : ""}`}
                         value={draftValue}
                         disabled={!canEditRows || reviewActionLoading || isSaving || savingCellKey !== null}
                         inputMode="decimal"
-                        aria-label={`Neue Menge ${area.label} für ${item.position}`}
+                        aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
                         onChange={(event) => updateNewCellDraft(cellKey, event.target.value)}
                         onBlur={() => void saveNewCellDraft(item, area, draftValue)}
                         onKeyDown={(event) => {
@@ -2391,13 +2491,13 @@ function MeasurementReviewTable({
                 };
                 const isSaving = savingEntryId === entry.id;
                 return (
-                  <td className="measurement-matrix-quantity-cell" key={entry.id}>
+                  <td className="measurement-matrix-quantity-cell" key={column.key}>
                     <input
                       className="measurement-table-input is-quantity"
                       value={draft.quantity}
                       disabled={!canEditRows || reviewActionLoading || isSaving}
                       inputMode="decimal"
-                      aria-label={`Menge ${area.label} für ${item.position}`}
+                      aria-label={`Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
                       onChange={(event) => onDraftChange(entry.id, "quantity", event.target.value)}
                       onBlur={() => onDraftSave(entry, draft)}
                       onKeyDown={(event) => {
@@ -2414,13 +2514,16 @@ function MeasurementReviewTable({
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
           <tr className="measurement-matrix-total-row">
             <th className="measurement-matrix-axis" scope="row">Gesamt</th>
-            {items.map((item) => (
-              <td className="measurement-matrix-quantity-cell" key={item.id}>
-                <strong>{formatMeasurementNumber(getMeasurementCellQuantity(item.entries))}</strong>
+            {displayColumns.map((column) => column.kind === "item" ? (
+              <td className="measurement-matrix-quantity-cell" key={column.key}>
+                <strong>{formatMeasurementNumber(getMeasurementCellQuantity(column.item.entries))}</strong>
               </td>
+            ) : (
+              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key} />
             ))}
           </tr>
         </tbody>

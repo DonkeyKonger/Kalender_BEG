@@ -7552,9 +7552,9 @@ button.person-chip:focus-visible {
   width: var(--measurement-position-width);
   min-width: var(--measurement-position-width);
   max-width: var(--measurement-position-width);
-  height: 23px;
+  height: 22px;
   border: 1px solid var(--ct-border-soft);
-  padding: 2px 6px;
+  padding: 2px 4px;
   background: var(--ct-table-cell);
   vertical-align: middle;
 }
@@ -7598,7 +7598,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-position-heading {
   text-align: left;
-  font-size: 0.7rem !important;
+  font-size: 0.64rem !important;
   line-height: 1.05;
 }
 
@@ -7607,12 +7607,12 @@ button.person-chip:focus-visible {
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading {
-  height: 52px;
+  height: 45px;
   text-align: left;
-  font-size: 0.61rem !important;
+  font-size: 0.55rem !important;
   line-height: 1.08;
-  padding-top: 3px !important;
-  padding-bottom: 3px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
   vertical-align: top !important;
 }
 
@@ -7627,14 +7627,14 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-unit-heading {
   color: #475569 !important;
-  font-size: 0.64rem !important;
+  font-size: 0.6rem !important;
   font-weight: 850;
   text-align: left;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-section-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-section-row td {
-  height: 23px;
+  height: 22px;
   background: var(--ct-table-subheader) !important;
   color: var(--ct-muted);
   font-weight: 800;
@@ -7647,7 +7647,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-quantity-cell,
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell {
-  height: 22px;
+  height: 21px;
   background: var(--ct-table-cell);
   text-align: right !important;
   font-variant-numeric: tabular-nums;
@@ -7655,7 +7655,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-table-input.is-quantity {
   width: 100%;
-  min-height: 18px;
+  min-height: 17px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
@@ -7666,6 +7666,38 @@ button.person-chip:focus-visible {
   line-height: 1;
   padding: 0 3px;
   text-align: right;
+}
+
+.measurement-review-detail.is-table-view .measurement-area-input {
+  width: 100%;
+  min-height: 17px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ct-text);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1.05;
+  padding: 0 2px;
+  text-align: left;
+}
+
+.measurement-review-detail.is-table-view .measurement-area-input::placeholder {
+  color: #94a3b8;
+  font-weight: 650;
+}
+
+.measurement-review-detail.is-table-view .measurement-area-input:hover {
+  border-color: #d2d8e2;
+  background: #ffffff;
+}
+
+.measurement-review-detail.is-table-view .measurement-area-input:focus {
+  border-color: var(--ct-focus);
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(30 41 59 / 22%);
+  outline: none;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell .measurement-table-input.is-quantity:not(.has-value) {
@@ -7704,4 +7736,21 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
   z-index: 7;
   background: #e8eef6 !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-heading,
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-cell {
+  background: #fbfcfe !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-cell .measurement-table-input.is-quantity {
+  color: #94a3b8;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-cell .measurement-table-input.is-quantity.has-value {
+  color: var(--ct-text);
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-axis.is-placeholder-row {
+  background: #f6f9fc !important;
 }
