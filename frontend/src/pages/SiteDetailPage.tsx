@@ -2114,7 +2114,16 @@ function MeasurementReviewPanel({
         area_or_comment: previousState.area_or_comment,
         quantity: previousQuantity,
       });
-      setUndoStack((current) => current.slice(0, -1));
+      setUndoStack((current) => {
+        const undoIndex = current.lastIndexOf(previousState);
+        if (undoIndex === -1) {
+          return current;
+        }
+        return [
+          ...current.slice(0, undoIndex),
+          ...current.slice(undoIndex + 1),
+        ];
+      });
       setEntryDrafts((current) => ({
         ...current,
         [previousState.entryId]: {

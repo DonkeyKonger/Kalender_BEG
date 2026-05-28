@@ -7585,6 +7585,7 @@ button.person-chip:focus-visible {
   max-width: 100%;
   min-height: 0;
   max-height: calc(100vh - 330px);
+  margin-top: 8px;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   border: 0;
