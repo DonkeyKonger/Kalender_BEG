@@ -3985,6 +3985,165 @@ button.person-chip:focus-visible {
   color: #c2410c;
 }
 
+.measurement-timesheet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.measurement-timesheet-meta strong {
+  color: #334155;
+}
+
+.measurement-timesheet-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.measurement-timesheet-kpi-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.measurement-timesheet-kpi-card span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.measurement-timesheet-kpi-card strong {
+  color: #172033;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.measurement-timesheet-protocol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.86rem;
+}
+
+.measurement-timesheet-protocol span {
+  border: 1px solid #dce5f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  padding: 5px 10px;
+}
+
+.measurement-timesheet-protocol span.is-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.measurement-timesheet-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.measurement-timesheet-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.measurement-timesheet-filter-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #d8e2ee;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 5px 10px;
+}
+
+.measurement-timesheet-filter-group button span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.measurement-timesheet-filter-group button.is-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.measurement-timesheet-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 320px);
+  min-height: 34px;
+  border: 1px solid #d8e2ee;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #64748b;
+  padding: 0 12px;
+}
+
+.measurement-timesheet-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #172033;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.measurement-timesheet-table {
+  min-width: 1040px;
+}
+
+.measurement-timesheet-table td:nth-child(2) {
+  min-width: auto;
+}
+
+.measurement-timesheet-description {
+  min-width: 320px;
+}
+
+.measurement-timesheet-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.measurement-timesheet-table tbody tr.has-quantity td:first-child {
+  box-shadow: inset 3px 0 0 #9bb6d3;
+}
+
+.measurement-timesheet-table tbody tr.has-quantity .measurement-timesheet-number {
+  color: #0f172a;
+}
+
+.measurement-timesheet-table tbody tr.needs-review td {
+  background: #fffbeb;
+}
+
 .measurement-status.is-open,
 .measurement-status.is-submitted,
 .measurement-status.is-rejected {

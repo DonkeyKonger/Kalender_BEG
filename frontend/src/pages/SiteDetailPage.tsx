@@ -16,6 +16,7 @@ type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
+type MeasurementTimesheetFilter = "all" | "with_quantity" | "without_quantity" | "review" | "imported";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -1427,6 +1428,92 @@ function MeasurementTimesheetPanel({
   const [isDropTargetActive, setIsDropTargetActive] = useState(false);
   const [fileSelectionError, setFileSelectionError] = useState<string | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<MeasurementTimesheetFilter>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const timesheetRows = useMemo(() => (
+    items.map((item) => {
+      const quantity = getMeasurementNumericValue(item.list_quantity);
+      const minutesTotal = getMeasurementNumericValue(item.list_minutes_total);
+      const status = getMeasurementTimesheetStatus(item);
+
+      return {
+        item,
+        quantity,
+        minutesTotal,
+        status,
+        hasQuantity: quantity > 0,
+      };
+    })
+  ), [items]);
+
+  const timesheetStats = useMemo(() => {
+    const total = timesheetRows.length;
+    const withQuantity = timesheetRows.filter((row) => row.hasQuantity).length;
+    const review = timesheetRows.filter((row) => row.status.key === "review").length;
+    const imported = timesheetRows.filter((row) => row.status.key === "imported").length;
+    const totalMinutes = timesheetRows.reduce((sum, row) => sum + row.minutesTotal, 0);
+
+    return {
+      total,
+      withQuantity,
+      withoutQuantity: total - withQuantity,
+      review,
+      imported,
+      totalMinutes,
+    };
+  }, [timesheetRows]);
+
+  const latestImportInfo = useMemo(() => {
+    let latestItem: MeasurementItem | null = null;
+    let latestTimestamp = -Infinity;
+
+    for (const item of items) {
+      const timestamp = Date.parse(item.updated_at || item.created_at);
+      if (Number.isFinite(timestamp) && timestamp > latestTimestamp) {
+        latestTimestamp = timestamp;
+        latestItem = item;
+      }
+    }
+
+    return latestItem
+      ? {
+          fileName: latestItem.source_file_name,
+          updatedAt: latestItem.updated_at || latestItem.created_at,
+        }
+      : null;
+  }, [items]);
+
+  const filterOptions = useMemo(() => ([
+    { key: "all" as const, label: "Alle", count: timesheetStats.total },
+    { key: "with_quantity" as const, label: "Mit Menge", count: timesheetStats.withQuantity },
+    { key: "without_quantity" as const, label: "Ohne Menge", count: timesheetStats.withoutQuantity },
+    { key: "review" as const, label: "Zu prüfen", count: timesheetStats.review },
+    { key: "imported" as const, label: "Importiert", count: timesheetStats.imported },
+  ]), [timesheetStats]);
+
+  const filteredTimesheetRows = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase("de-DE");
+
+    return timesheetRows.filter((row) => {
+      const matchesFilter =
+        activeFilter === "all"
+        || (activeFilter === "with_quantity" && row.hasQuantity)
+        || (activeFilter === "without_quantity" && !row.hasQuantity)
+        || (activeFilter === "review" && row.status.key === "review")
+        || (activeFilter === "imported" && row.status.key === "imported");
+
+      if (!matchesFilter) {
+        return false;
+      }
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const haystack = `${row.item.position} ${row.item.description ?? ""}`.toLocaleLowerCase("de-DE");
+      return haystack.includes(normalizedSearch);
+    });
+  }, [activeFilter, searchTerm, timesheetRows]);
 
   useEffect(() => {
     if (defaultBase && selectedBaseId === null) {
@@ -1491,8 +1578,12 @@ function MeasurementTimesheetPanel({
       <div className="project-record-toolbar">
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Zeitenliste</h2>
-          <p>Zeitenliste als PDF importieren und die erkannten Aufmaß-Vorlagenpositionen prüfen.</p>
-          {defaultBase ? <small>Aktives Aufmaßblatt: {formatMeasurementBaseName(defaultBase)}</small> : null}
+          <p>Zeitenliste als PDF importieren, erkannte Positionen prüfen und Mengen für die Aufmaßbearbeitung einordnen.</p>
+          <div className="measurement-timesheet-meta">
+            {defaultBase ? <span><strong>Aktives Aufmaß:</strong> {formatMeasurementBaseName(defaultBase)}</span> : null}
+            {latestImportInfo?.fileName ? <span><strong>Letzter Import:</strong> {latestImportInfo.fileName}</span> : null}
+            {latestImportInfo?.updatedAt ? <span><strong>Importzeit:</strong> {formatDateTime(latestImportInfo.updatedAt)}</span> : null}
+          </div>
         </div>
         <label
           className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
@@ -1555,36 +1646,102 @@ function MeasurementTimesheetPanel({
         <div className="project-record-empty-state">Noch keine Aufmaßpositionen importiert.</div>
       ) : null}
       {!isLoading && !error && items.length > 0 ? (
-        <div className="measurement-table-wrap">
-          <table className="measurement-table">
-            <thead>
-              <tr>
-                <th>Aufmaßblatt</th>
-                <th>Position</th>
-                <th>Bezeichnung</th>
-                <th>Menge Liste</th>
-                <th>Einheit</th>
-                <th>Min/Einh.</th>
-                <th>Minuten gesamt</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.measurement_base ? formatMeasurementBaseName(item.measurement_base) : "-"}</td>
-                  <td><strong>{item.position}</strong></td>
-                  <td>{item.description}</td>
-                  <td>{formatMeasurementNumber(item.list_quantity)}</td>
-                  <td>{item.unit ?? "-"}</td>
-                  <td>{formatMeasurementNumber(item.minutes_per_unit)}</td>
-                  <td>{item.is_nep ? "NEP" : formatMeasurementNumber(item.list_minutes_total)}</td>
-                  <td><span className={`measurement-status${item.is_nep ? " is-nep" : ""}`}>{item.is_nep ? "NEP" : "Importiert"}</span></td>
-                </tr>
+        <>
+          <div className="measurement-timesheet-kpis" aria-label="Zeitenliste Kennzahlen">
+            <div className="measurement-timesheet-kpi-card">
+              <span>Positionen erkannt</span>
+              <strong>{timesheetStats.total}</strong>
+            </div>
+            <div className="measurement-timesheet-kpi-card">
+              <span>Mit Menge</span>
+              <strong>{timesheetStats.withQuantity}</strong>
+            </div>
+            <div className="measurement-timesheet-kpi-card">
+              <span>Ohne Menge</span>
+              <strong>{timesheetStats.withoutQuantity}</strong>
+            </div>
+            <div className="measurement-timesheet-kpi-card">
+              <span>Zu prüfen / Unklar</span>
+              <strong>{timesheetStats.review}</strong>
+            </div>
+            <div className="measurement-timesheet-kpi-card">
+              <span>Zeit gesamt</span>
+              <strong>{formatMeasurementDuration(timesheetStats.totalMinutes)}</strong>
+            </div>
+          </div>
+
+          <div className="measurement-timesheet-protocol" aria-label="Import-Protokoll">
+            <span>{timesheetStats.total} Positionen erkannt</span>
+            <span>{timesheetStats.imported} Positionen automatisch zugeordnet</span>
+            <span>{timesheetStats.withoutQuantity} Positionen ohne Menge</span>
+            <span className={timesheetStats.review > 0 ? "is-warning" : ""}>
+              {timesheetStats.review > 0 ? `${timesheetStats.review} Positionen müssen geprüft werden` : "Keine unklaren Positionen erkannt"}
+            </span>
+          </div>
+
+          <div className="measurement-timesheet-filterbar">
+            <div className="measurement-timesheet-filter-group" aria-label="Zeitenliste filtern">
+              {filterOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={activeFilter === option.key ? "is-active" : ""}
+                  onClick={() => setActiveFilter(option.key)}
+                >
+                  {option.label}
+                  <span>{option.count}</span>
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <label className="measurement-timesheet-search">
+              <Search aria-hidden="true" size={15} />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Position oder Beschreibung suchen..."
+              />
+            </label>
+          </div>
+
+          {filteredTimesheetRows.length === 0 ? (
+            <div className="project-record-empty-state">Keine passenden Zeitenlistenpositionen gefunden.</div>
+          ) : (
+            <div className="measurement-table-wrap">
+              <table className="measurement-table measurement-timesheet-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Pos.-Nr.</th>
+                    <th>Bezeichnung</th>
+                    <th>Menge aus Zeitenliste</th>
+                    <th>Einheit</th>
+                    <th>Montagezeit</th>
+                    <th>Zeit gesamt</th>
+                    <th>Aufmaßblatt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTimesheetRows.map((row) => (
+                    <tr
+                      key={row.item.id}
+                      className={`${row.hasQuantity ? "has-quantity" : ""}${row.status.key === "review" ? " needs-review" : ""}`}
+                    >
+                      <td><span className={`measurement-status ${row.status.className}`}>{row.status.label}</span></td>
+                      <td><strong>{row.item.position}</strong></td>
+                      <td className="measurement-timesheet-description">{row.item.description}</td>
+                      <td className="measurement-timesheet-number">{formatMeasurementNumber(row.item.list_quantity)}</td>
+                      <td>{row.item.unit ?? "-"}</td>
+                      <td className="measurement-timesheet-number">{formatMeasurementNumber(row.item.minutes_per_unit)}</td>
+                      <td className="measurement-timesheet-number">{row.item.is_nep ? "NEP" : formatMeasurementNumber(row.item.list_minutes_total)}</td>
+                      <td>{row.item.measurement_base ? formatMeasurementBaseName(row.item.measurement_base) : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       ) : null}
 
       {isImportDialogOpen && pendingFile ? (
@@ -3158,6 +3315,33 @@ function formatMeasurementNumber(value: string | number | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(numericValue);
+}
+
+function getMeasurementNumericValue(value: string | number | null): number {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+  const normalizedValue = typeof value === "number"
+    ? value
+    : Number(String(value).includes(",") ? String(value).replace(/\./g, "").replace(",", ".") : value);
+  return Number.isFinite(normalizedValue) ? normalizedValue : 0;
+}
+
+function formatMeasurementDuration(minutes: number): string {
+  if (minutes >= 60) {
+    const roundedMinutes = Math.round(minutes);
+    const hours = Math.floor(roundedMinutes / 60);
+    const restMinutes = roundedMinutes % 60;
+    return `${hours} Std. ${restMinutes} Min.`;
+  }
+  return `${formatMeasurementNumber(minutes)} min`;
+}
+
+function getMeasurementTimesheetStatus(item: MeasurementItem): { key: "imported" | "review"; label: string; className: string } {
+  if (item.is_nep) {
+    return { key: "review", label: "Zu prüfen", className: "is-nep" };
+  }
+  return { key: "imported", label: "Importiert", className: "is-imported" };
 }
 
 function formatMeasurementDraftQuantity(value: string | number | null): string {
