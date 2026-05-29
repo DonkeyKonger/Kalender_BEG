@@ -8377,9 +8377,6 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-matrix-total-row th,
 .measurement-review-detail.is-table-view .measurement-matrix-total-row td {
-  position: sticky;
-  bottom: 16px;
-  z-index: 4;
   height: 51px !important;
   border-top: 2px solid var(--ct-border-strong);
   background: var(--ct-table-total) !important;
@@ -8391,6 +8388,10 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .measurement-matrix-total-row .measurement-matrix-axis {
   z-index: 7;
   background: #e8eef6 !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-actions button:disabled {
+  cursor: not-allowed;
 }
 
 .measurement-review-detail.is-table-view .measurement-matrix-placeholder-heading,

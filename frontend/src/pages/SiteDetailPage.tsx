@@ -2194,7 +2194,6 @@ function MeasurementReviewPanel({
         <div className="measurement-package-header measurement-review-package-row">
           <div className="measurement-review-package-title">
             <h2>{displayTitle}</h2>
-            <span className={getMeasurementBatchStatusClass(selectedBatch.status)}>{getMeasurementBatchStatusLabel(selectedBatch.status)}</span>
           </div>
           {updatedLabel ? <span className="measurement-review-updated">Letzte Änderung: {updatedLabel}</span> : null}
         </div>
@@ -2914,6 +2913,8 @@ function MeasurementReviewTable({
             </tr>
             );
           })}
+        </tbody>
+        <tfoot>
           <tr className="measurement-matrix-total-row">
             <th className="measurement-matrix-axis" scope="row">Gesamt</th>
             {displayColumns.map((column) => column.kind === "item" ? (
@@ -2926,7 +2927,7 @@ function MeasurementReviewTable({
               </td>
             ))}
           </tr>
-        </tbody>
+        </tfoot>
       </table>
     </div>
   );
