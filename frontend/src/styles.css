@@ -232,6 +232,20 @@ button:disabled {
   padding: 18px;
 }
 
+.mobile-appshell-actions {
+  display: none;
+}
+
+.mobile-appshell-user {
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .page-stack {
   display: grid;
   gap: 18px;
@@ -418,6 +432,22 @@ button:disabled {
 
   .topbar {
     display: none;
+  }
+
+  .mobile-appshell-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 10px 0;
+  }
+
+  .mobile-appshell-actions .icon-button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
   }
 
   .content-area {

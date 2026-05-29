@@ -7,6 +7,7 @@ import { navigationItems } from "../config/navigation";
 export function AppShell() {
   const { user, logout } = useAuth();
   const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
+  const showProjectManagerMobileLogout = user?.role === "project_manager";
 
   return (
     <div className="app-shell">
@@ -43,6 +44,16 @@ export function AppShell() {
             <span>Abmelden</span>
           </button>
         </header>
+
+        {showProjectManagerMobileLogout ? (
+          <div className="mobile-appshell-actions" aria-label="Mobile Projektleiteraktionen">
+            <span className="mobile-appshell-user">Angemeldet als {user?.display_name}</span>
+            <button className="icon-button" type="button" onClick={() => void logout()}>
+              <LogOut aria-hidden="true" size={17} />
+              <span>Abmelden</span>
+            </button>
+          </div>
+        ) : null}
 
         <main className="content-area">
           <Outlet />
