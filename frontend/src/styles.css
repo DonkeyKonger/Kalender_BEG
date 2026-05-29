@@ -4057,6 +4057,60 @@ button.person-chip:focus-visible {
   font-weight: 900;
 }
 
+.measurement-timesheet-progress-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.measurement-timesheet-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.measurement-timesheet-progress-head h3,
+.measurement-timesheet-progress-head p,
+.measurement-timesheet-progress-note {
+  margin: 0;
+}
+
+.measurement-timesheet-progress-head h3 {
+  color: #172033;
+  font-size: 1rem;
+}
+
+.measurement-timesheet-progress-head p,
+.measurement-timesheet-progress-note {
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.measurement-timesheet-progress-head strong {
+  color: #172033;
+  font-size: 1.15rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.measurement-timesheet-progress-track {
+  overflow: hidden;
+  height: 9px;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+
+.measurement-timesheet-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #54769f;
+}
+
 .measurement-timesheet-protocol {
   display: flex;
   flex-wrap: wrap;
@@ -4145,7 +4199,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-table {
-  min-width: 1040px;
+  min-width: 1420px;
 }
 
 .measurement-timesheet-table td:nth-child(2) {
@@ -4172,6 +4226,31 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table tbody tr.needs-review td {
   background: #fffbeb;
+}
+
+.measurement-status.is-timesheet-open {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.measurement-status.is-timesheet-progress {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.measurement-status.is-timesheet-near-done {
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.measurement-status.is-timesheet-over-plan {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.measurement-status.is-timesheet-unclear {
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .measurement-status.is-open,
