@@ -40,6 +40,7 @@ class Site(TimestampMixin, Base):
     )
     info: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str | None] = mapped_column(String(30))
+    planned_work_minutes: Mapped[int | None] = mapped_column(Integer)
     project_folder_id: Mapped[str | None] = mapped_column(String(200))
     project_folder_web_url: Mapped[str | None] = mapped_column(String(500))
     project_folder_name: Mapped[str | None] = mapped_column(String(200))

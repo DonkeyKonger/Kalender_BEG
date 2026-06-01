@@ -20,6 +20,7 @@ type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteWorkTimeRangeMode = "week" | "month";
+type SiteWorkTimeBalanceStatus = "missing" | "within" | "near_limit" | "over";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -818,7 +819,7 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "assembly-times" ? (
-        <SiteWorkTimesPanel site={site} />
+        <SiteWorkTimesPanel site={site} canEdit={canEditSite} onSiteUpdated={setSite} />
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
@@ -3307,11 +3308,24 @@ function MeasurementTimeAnalysisPanel() {
   );
 }
 
-function SiteWorkTimesPanel({ site }: { site: Site }) {
+function SiteWorkTimesPanel({
+  site,
+  canEdit,
+  onSiteUpdated,
+}: {
+  site: Site;
+  canEdit: boolean;
+  onSiteUpdated: (site: Site) => void;
+}) {
   const [rangeMode, setRangeMode] = useState<SiteWorkTimeRangeMode>("month");
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditingPlanned, setIsEditingPlanned] = useState(false);
+  const [plannedInput, setPlannedInput] = useState(() => formatPlannedWorkHours(site.planned_work_minutes));
+  const [plannedSaveError, setPlannedSaveError] = useState<string | null>(null);
+  const [plannedSaveMessage, setPlannedSaveMessage] = useState<string | null>(null);
+  const [isSavingPlanned, setIsSavingPlanned] = useState(false);
   const activeRange = useMemo(
     () => (rangeMode === "week" ? getCurrentGermanWeekRange() : getCurrentMonthRange()),
     [rangeMode],
@@ -3323,6 +3337,17 @@ function SiteWorkTimesPanel({ site }: { site: Site }) {
     breakMinutes: sumTimeEntryMinutes(entries, "break_minutes"),
     travelMinutes: sumTimeEntryMinutes(entries, "travel_minutes"),
   }), [entries]);
+  const plannedMinutes = site.planned_work_minutes;
+  const hasPlannedMinutes = typeof plannedMinutes === "number" && plannedMinutes > 0;
+  const differenceMinutes = hasPlannedMinutes ? summary.workMinutes - plannedMinutes : null;
+  const usagePercent = hasPlannedMinutes ? (summary.workMinutes / plannedMinutes) * 100 : null;
+  const balanceStatus = getSiteWorkTimeBalanceStatus(plannedMinutes, summary.workMinutes);
+
+  useEffect(() => {
+    if (!isEditingPlanned) {
+      setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
+    }
+  }, [isEditingPlanned, site.planned_work_minutes]);
 
   useEffect(() => {
     let ignore = false;
@@ -3356,6 +3381,44 @@ function SiteWorkTimesPanel({ site }: { site: Site }) {
     };
   }, [activeRange.end, activeRange.start, site.id]);
 
+  function startPlannedEdit(): void {
+    setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
+    setPlannedSaveError(null);
+    setPlannedSaveMessage(null);
+    setIsEditingPlanned(true);
+  }
+
+  function cancelPlannedEdit(): void {
+    if (isSavingPlanned) {
+      return;
+    }
+    setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
+    setPlannedSaveError(null);
+    setIsEditingPlanned(false);
+  }
+
+  async function savePlannedWorkMinutes(): Promise<void> {
+    const parsed = parsePlannedWorkHours(plannedInput);
+    if (!parsed.ok) {
+      setPlannedSaveError(parsed.error);
+      setPlannedSaveMessage(null);
+      return;
+    }
+    setIsSavingPlanned(true);
+    setPlannedSaveError(null);
+    setPlannedSaveMessage(null);
+    try {
+      const updatedSite = await api.updateSite(site.id, { planned_work_minutes: parsed.value });
+      onSiteUpdated(updatedSite);
+      setIsEditingPlanned(false);
+      setPlannedSaveMessage("Soll-Stunden gespeichert.");
+    } catch (requestError) {
+      setPlannedSaveError(readApiError(requestError, "Soll-Stunden konnten nicht gespeichert werden."));
+    } finally {
+      setIsSavingPlanned(false);
+    }
+  }
+
   return (
     <div className="project-record-tab-panel">
       <div className="project-record-toolbar">
@@ -3383,6 +3446,71 @@ function SiteWorkTimesPanel({ site }: { site: Site }) {
         <div><span>Pause</span><strong>{formatMeasurementDuration(summary.breakMinutes)}</strong></div>
         <div><span>Fahrtzeit</span><strong>{formatMeasurementDuration(summary.travelMinutes)}</strong></div>
       </div>
+
+      <section className="site-worktime-balance-panel" aria-label="Soll-Ist-Auswertung">
+        <div className="site-worktime-balance-header">
+          <div>
+            <h3>Soll/Ist im aktuellen Zeitraum</h3>
+            <p>Ist-Stunden aus Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}. Keine Projektfortschrittsbewertung.</p>
+          </div>
+          {canEdit && !isEditingPlanned ? (
+            <button className="secondary-action" type="button" onClick={startPlannedEdit}>
+              Soll-Stunden bearbeiten
+            </button>
+          ) : null}
+        </div>
+
+        {isEditingPlanned ? (
+          <div className="site-worktime-planned-edit">
+            <label>
+              <span>Soll-Stunden für Auswertung</span>
+              <input
+                inputMode="decimal"
+                placeholder="z. B. 120,5"
+                value={plannedInput}
+                onChange={(event) => setPlannedInput(event.target.value)}
+              />
+            </label>
+            <div className="site-worktime-planned-actions">
+              <button className="icon-button secondary" disabled={isSavingPlanned} type="button" onClick={cancelPlannedEdit}>
+                Abbrechen
+              </button>
+              <button className="icon-button" disabled={isSavingPlanned} type="button" onClick={() => void savePlannedWorkMinutes()}>
+                {isSavingPlanned ? "Speichert..." : "Speichern"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {plannedSaveError ? <div className="project-record-empty-state is-error">{plannedSaveError}</div> : null}
+        {plannedSaveMessage ? <div className="project-record-empty-state is-success">{plannedSaveMessage}</div> : null}
+
+        <div className="site-worktime-balance-grid">
+          <div>
+            <span>Soll-Stunden</span>
+            <strong>{hasPlannedMinutes ? formatMeasurementDuration(plannedMinutes ?? 0) : "Nicht hinterlegt"}</strong>
+          </div>
+          <div>
+            <span>Ist-Stunden im Zeitraum</span>
+            <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
+          </div>
+          <div>
+            <span>Differenz Ist - Soll</span>
+            <strong>{differenceMinutes !== null ? formatMeasurementDuration(differenceMinutes) : "-"}</strong>
+          </div>
+          <div>
+            <span>Verbrauch</span>
+            <strong>{usagePercent !== null ? formatMeasurementPercent(usagePercent) : "-"}</strong>
+          </div>
+          <div>
+            <span>Hinweisstatus</span>
+            <strong>
+              <StatusBadge tone={siteWorkTimeBalanceTone(balanceStatus)}>
+                {siteWorkTimeBalanceLabel(balanceStatus)}
+              </StatusBadge>
+            </strong>
+          </div>
+        </div>
+      </section>
 
       <section className="site-worktime-table-panel" aria-label="Gemeldete Arbeitszeiten">
         {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
@@ -3737,8 +3865,65 @@ function formatDateOnly(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parsed);
 }
 
+function formatPlannedWorkHours(minutes: number | null): string {
+  if (minutes === null || minutes === undefined) {
+    return "";
+  }
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2))).replace(".", ",");
+}
+
+function parsePlannedWorkHours(value: string): { ok: true; value: number | null } | { ok: false; error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true, value: null };
+  }
+  const parsed = Number(trimmed.replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { ok: false, error: "Soll-Stunden müssen eine Zahl ab 0 sein." };
+  }
+  return { ok: true, value: Math.round(parsed * 60) };
+}
+
 function sumTimeEntryMinutes(entries: TimeEntry[], field: "work_minutes" | "break_minutes" | "travel_minutes"): number {
   return entries.reduce((sum, entry) => sum + entry[field], 0);
+}
+
+function getSiteWorkTimeBalanceStatus(plannedMinutes: number | null, actualMinutes: number): SiteWorkTimeBalanceStatus {
+  if (typeof plannedMinutes !== "number" || plannedMinutes <= 0) {
+    return "missing";
+  }
+  const percent = (actualMinutes / plannedMinutes) * 100;
+  if (percent > 100) {
+    return "over";
+  }
+  if (percent >= 80) {
+    return "near_limit";
+  }
+  return "within";
+}
+
+function siteWorkTimeBalanceLabel(status: SiteWorkTimeBalanceStatus): string {
+  if (status === "within") {
+    return "Im Rahmen";
+  }
+  if (status === "near_limit") {
+    return "Soll fast erreicht";
+  }
+  if (status === "over") {
+    return "Soll überschritten";
+  }
+  return "Sollwert fehlt";
+}
+
+function siteWorkTimeBalanceTone(status: SiteWorkTimeBalanceStatus): StatusBadgeTone {
+  if (status === "within") {
+    return "active";
+  }
+  if (status === "near_limit" || status === "over") {
+    return "warning";
+  }
+  return "neutral";
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {

@@ -35,6 +35,7 @@ class SiteBase(BaseModel):
     status: SiteStatus = SiteStatus.ACTIVE
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
+    planned_work_minutes: int | None = Field(default=None, ge=0)
 
 
 class SiteCreate(SiteBase):
@@ -60,6 +61,7 @@ class SiteUpdate(BaseModel):
     status: SiteStatus | None = None
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
+    planned_work_minutes: int | None = Field(default=None, ge=0)
 
 
 class SitePersonSummary(BaseModel):

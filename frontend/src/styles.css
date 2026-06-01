@@ -5032,6 +5032,101 @@ button.person-chip:focus-visible {
   font-weight: 900;
 }
 
+.site-worktime-balance-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px 16px;
+}
+
+.site-worktime-balance-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-worktime-balance-header h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.site-worktime-balance-header p {
+  margin: 3px 0 0;
+  color: #5f6f89;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.site-worktime-planned-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 10px;
+}
+
+.site-worktime-planned-edit label {
+  display: grid;
+  min-width: 220px;
+  gap: 5px;
+  color: #41516a;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.site-worktime-planned-edit input {
+  min-height: 38px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 10px;
+  color: #172033;
+  font: inherit;
+}
+
+.site-worktime-planned-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.site-worktime-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 10px;
+}
+
+.site-worktime-balance-grid > div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e5edf7;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
+.site-worktime-balance-grid span {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.site-worktime-balance-grid strong {
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .site-worktime-table-panel {
   display: grid;
   gap: 10px;

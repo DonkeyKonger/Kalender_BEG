@@ -421,6 +421,7 @@ def site_snapshot(site: Site) -> dict:
         "status": site.status.value,
         "info": site.info,
         "color": site.color,
+        "planned_work_minutes": site.planned_work_minutes,
         "project_folder_id": getattr(site, "project_folder_id", None),
         "project_folder_web_url": getattr(site, "project_folder_web_url", None),
         "project_folder_name": getattr(site, "project_folder_name", None),

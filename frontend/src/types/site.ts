@@ -51,6 +51,7 @@ export type Site = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  planned_work_minutes: number | null;
   project_folder_id: string | null;
   project_folder_web_url: string | null;
   project_folder_name: string | null;
@@ -81,6 +82,7 @@ export type SiteCreate = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  planned_work_minutes?: number | null;
 };
 
 export type SiteUpdate = Partial<SiteCreate>;
