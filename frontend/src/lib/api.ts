@@ -228,6 +228,10 @@ export const api = {
     return request<PersonRemoveResponse>(`/persons/${personId}/remove`, { method: "POST" });
   },
 
+  async deletePerson(personId: number): Promise<void> {
+    return request<void>(`/persons/${personId}`, { method: "DELETE" });
+  },
+
   async customers(params: { isActive?: boolean | null } = { isActive: true }): Promise<Customer[]> {
     const search = new URLSearchParams();
     if (params.isActive !== null && params.isActive !== undefined) {
@@ -278,6 +282,10 @@ export const api = {
 
   async disableUser(userId: number): Promise<AdminUser> {
     return request<AdminUser>(`/users/${userId}/disable`, { method: "POST" });
+  },
+
+  async deleteUser(userId: number): Promise<void> {
+    return request<void>(`/users/${userId}`, { method: "DELETE" });
   },
 
 

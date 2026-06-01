@@ -155,6 +155,28 @@ class PersonService:
         self.db.commit()
         return "deleted", None
 
+    def delete_person(self, person_id: int, user_id: int) -> None:
+        person = self.people.get(person_id)
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
+        if self._person_has_hard_delete_references(person):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Kann nicht geloescht werden, weil der Eintrag noch verwendet wird.",
+            )
+
+        old_value = person_snapshot(person)
+        self.audit.record(
+            user_id=user_id,
+            action="person.deleted",
+            entity_type="person",
+            entity_id=person.id,
+            old_value=old_value,
+            new_value=None,
+        )
+        self.db.delete(person)
+        self.db.commit()
+
     def _deactivate_person(self, person: Person, user_id: int) -> Person:
         if not person.is_active:
             return person
@@ -176,17 +198,22 @@ class PersonService:
         if any(getattr(person, field, None) not in (None, "") for field in PERSON_LOCATION_DEPENDENCY_FIELDS):
             return True
         return (
-            self._has_row(Assignment, Assignment.person_id == person.id)
-            or self._has_row(Absence, Absence.person_id == person.id)
-            or self._has_row(User, User.person_id == person.id)
-            or self._has_row(Site, Site.project_manager_person_id == person.id)
-            or self._has_row(GpsPoint, GpsPoint.person_id == person.id)
+            self._person_has_hard_delete_references(person)
             or self._has_row(
                 AuditLog,
                 AuditLog.entity_type == "person",
                 AuditLog.entity_id == person.id,
                 AuditLog.action != "person.created",
             )
+        )
+
+    def _person_has_hard_delete_references(self, person: Person) -> bool:
+        return (
+            self._has_row(Assignment, Assignment.person_id == person.id)
+            or self._has_row(Absence, Absence.person_id == person.id)
+            or self._has_row(User, User.person_id == person.id)
+            or self._has_row(Site, Site.project_manager_person_id == person.id)
+            or self._has_row(GpsPoint, GpsPoint.person_id == person.id)
         )
 
     def _has_row(self, model, *criteria) -> bool:

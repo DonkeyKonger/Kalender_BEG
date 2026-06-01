@@ -1,8 +1,15 @@
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
+from app.models.absence import Absence
+from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.enums import UserRole
+from app.models.planning_cell_mark import PlanningCellMark
+from app.models.site import Site
+from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
 from app.models.user import User
 from app.repositories.person_repository import PersonRepository
 from app.repositories.user_repository import UserRepository
@@ -87,6 +94,27 @@ class UserService:
         self.db.refresh(user)
         return user
 
+    def delete_user(self, user_id: int, current_user_id: int) -> None:
+        if user_id == current_user_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Der eigene Benutzer kann nicht geloescht werden.",
+            )
+        user = self._get_user(user_id)
+        if user.role == UserRole.ADMIN and not self._has_other_active_admin(user.id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Der letzte aktive Admin kann nicht geloescht werden.",
+            )
+        if self._user_has_references(user.id):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Kann nicht geloescht werden, weil der Eintrag noch verwendet wird.",
+            )
+
+        self.db.delete(user)
+        self.db.commit()
+
     def _get_user(self, user_id: int) -> User:
         user = self.users.get_by_id(user_id)
         if user is None:
@@ -106,6 +134,37 @@ class UserService:
     def _ensure_person_exists(self, person_id: int | None) -> None:
         if person_id is not None and self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
+
+    def _has_other_active_admin(self, user_id: int) -> bool:
+        statement = (
+            select(User.id)
+            .where(
+                User.id != user_id,
+                User.role == UserRole.ADMIN,
+                User.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        return self.db.scalar(statement) is not None
+
+    def _user_has_references(self, user_id: int) -> bool:
+        return (
+            self._has_row(Assignment, Assignment.created_by_user_id == user_id)
+            or self._has_row(Assignment, Assignment.updated_by_user_id == user_id)
+            or self._has_row(Absence, Absence.created_by_user_id == user_id)
+            or self._has_row(Absence, Absence.updated_by_user_id == user_id)
+            or self._has_row(Site, Site.closed_by_user_id == user_id)
+            or self._has_row(SiteMeasurementBatch, SiteMeasurementBatch.created_by_user_id == user_id)
+            or self._has_row(SiteMeasurementBatch, SiteMeasurementBatch.submitted_by_user_id == user_id)
+            or self._has_row(SiteMeasurementEntry, SiteMeasurementEntry.created_by_user_id == user_id)
+            or self._has_row(PlanningCellMark, PlanningCellMark.created_by_user_id == user_id)
+            or self._has_row(PlanningCellMark, PlanningCellMark.updated_by_user_id == user_id)
+            or self._has_row(AuditLog, AuditLog.user_id == user_id)
+        )
+
+    def _has_row(self, model, *criteria) -> bool:
+        statement = select(model.id).where(*criteria).limit(1)
+        return self.db.scalar(statement) is not None
 
 
 def clean_username(username: str) -> str:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
@@ -80,6 +80,16 @@ def remove_person(
 ) -> PersonRemoveResponse:
     action, person = PersonService(db).remove_person(person_id, current_user.id)
     return PersonRemoveResponse(action=action, person=PersonRead.model_validate(person) if person else None)
+
+
+@router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_person(
+    person_id: int,
+    current_user=Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> Response:
+    PersonService(db).delete_person(person_id, current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("", response_model=PersonRead, status_code=201)

@@ -48,6 +48,13 @@ def test_admin_cannot_disable_self():
     assert error.value.status_code == 400
 
 
+def test_admin_cannot_delete_self():
+    with pytest.raises(HTTPException) as error:
+        service_with().delete_user(user_id=1, current_user_id=1)
+
+    assert error.value.status_code == 400
+
+
 def test_admin_cannot_remove_own_admin_role():
     user = SimpleNamespace(id=1, role=UserRole.ADMIN, is_active=True)
 
@@ -59,6 +66,28 @@ def test_admin_cannot_remove_own_admin_role():
         )
 
     assert error.value.status_code == 400
+
+
+def test_last_active_admin_cannot_be_deleted():
+    user = SimpleNamespace(id=2, role=UserRole.ADMIN, is_active=True)
+    service = service_with(user=user)
+    service._has_other_active_admin = lambda _user_id: False
+
+    with pytest.raises(HTTPException) as error:
+        service.delete_user(user_id=2, current_user_id=1)
+
+    assert error.value.status_code == 400
+
+
+def test_referenced_user_cannot_be_deleted():
+    user = SimpleNamespace(id=2, role=UserRole.MONTEUR, is_active=True)
+    service = service_with(user=user)
+    service._user_has_references = lambda _user_id: True
+
+    with pytest.raises(HTTPException) as error:
+        service.delete_user(user_id=2, current_user_id=1)
+
+    assert error.value.status_code == 409
 
 
 def test_duplicate_username_is_blocked_on_create():

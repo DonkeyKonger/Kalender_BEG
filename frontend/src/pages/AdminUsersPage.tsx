@@ -1,9 +1,10 @@
-import { KeyRound, PlugZap, Save, UserCog, UserPlus } from "lucide-react";
+import { KeyRound, PlugZap, Save, Trash2, UserCog, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
+import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
@@ -33,6 +34,7 @@ const emptyCreateForm: AdminUserCreate = {
 };
 
 export function AdminUsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditableUser>>({});
   const [people, setPeople] = useState<Person[]>([]);
@@ -170,6 +172,39 @@ export function AdminUsersPage() {
       setMessage("Benutzer deaktiviert.");
     } catch (requestError) {
       setError(readApiError(requestError, "Benutzer konnte nicht deaktiviert werden."));
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  async function deleteUser(userId: number) {
+    if (userId === currentUser?.id) {
+      setError("Der eigene Benutzer kann nicht geloescht werden.");
+      setMessage(null);
+      return;
+    }
+    const confirmed = window.confirm(
+      "Benutzer wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingUserId(userId);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.deleteUser(userId);
+      setUsers((current) => current.filter((user) => user.id !== userId));
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setDrawer(null);
+      setMessage("Benutzer geloescht.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Benutzer konnte nicht geloescht werden."));
     } finally {
       setSavingUserId(null);
     }
@@ -339,6 +374,17 @@ export function AdminUsersPage() {
         onClose={closeDrawer}
         footer={selectedUser && selectedDraft ? (
           <>
+            {selectedUser.id !== currentUser?.id && (
+              <button
+                className="icon-button danger danger-action"
+                disabled={savingUserId === selectedUser.id}
+                type="button"
+                onClick={() => void deleteUser(selectedUser.id)}
+              >
+                <Trash2 aria-hidden="true" size={16} />
+                <span>{savingUserId === selectedUser.id ? "Loescht..." : "Loeschen"}</span>
+              </button>
+            )}
             <button
               className="icon-button secondary"
               disabled={savingUserId === selectedUser.id}

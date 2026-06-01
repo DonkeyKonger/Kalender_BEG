@@ -53,7 +53,6 @@ export function PersonsPage() {
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [removalPlans, setRemovalPlans] = useState<Record<number, "delete" | "deactivate">>({});
 
   useEffect(() => {
     void loadPeople();
@@ -87,13 +86,6 @@ export function PersonsPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedPerson
     ? drafts[selectedPerson.id] ?? toEditablePerson(selectedPerson)
     : null;
-
-  useEffect(() => {
-    if (!selectedPerson || !isEditingPerson || !canRemove || removalPlans[selectedPerson.id]) {
-      return;
-    }
-    void loadPersonRemovalPlan(selectedPerson.id);
-  }, [canRemove, isEditingPerson, removalPlans, selectedPerson]);
 
   async function createPerson() {
     const validationError = validatePersonPayload(createForm);
@@ -150,21 +142,9 @@ export function PersonsPage() {
     }
   }
 
-  async function loadPersonRemovalPlan(personId: number) {
-    try {
-      const plan = await api.personRemovalPlan(personId);
-      setRemovalPlans((current) => ({ ...current, [personId]: plan.action }));
-    } catch {
-      setRemovalPlans((current) => ({ ...current, [personId]: "deactivate" }));
-    }
-  }
-
-  async function removePerson(personId: number) {
-    const plan = removalPlans[personId] ?? "deactivate";
+  async function deletePerson(personId: number) {
     const confirmed = window.confirm(
-      plan === "delete"
-        ? "Dieser Personendatensatz hat keine abhaengigen Daten und kann endgueltig geloescht werden. Diese Aktion kann nicht rueckgaengig gemacht werden. Fortfahren?"
-        : "Diese Person wird deaktiviert und kann nicht mehr neu eingeplant werden. Historische Einsaetze bleiben erhalten. Fortfahren?",
+      "Person wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.",
     );
     if (!confirmed) {
       return;
@@ -174,27 +154,18 @@ export function PersonsPage() {
     setError(null);
     setMessage(null);
     try {
-      const result = await api.removePerson(personId);
-      if (result.action === "deleted") {
-        setPeople((current) => current.filter((person) => person.id !== personId));
-        setDrafts((current) => {
-          const next = { ...current };
-          delete next[personId];
-          return next;
-        });
-        setMessage("Person geloescht.");
-      } else if (result.person) {
-        const deactivatedPerson = result.person;
-        setPeople((current) =>
-          current.map((person) => person.id === deactivatedPerson.id ? deactivatedPerson : person).sort(comparePeople),
-        );
-        setDrafts((current) => ({ ...current, [deactivatedPerson.id]: toEditablePerson(deactivatedPerson) }));
-        setMessage("Person deaktiviert.");
-      }
+      await api.deletePerson(personId);
+      setPeople((current) => current.filter((person) => person.id !== personId));
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[personId];
+        return next;
+      });
       setDrawer(null);
       setIsEditingPerson(false);
+      setMessage("Person geloescht.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Person konnte nicht entfernt werden."));
+      setError(readApiError(requestError, "Person konnte nicht geloescht werden."));
     } finally {
       setSavingPersonId(null);
     }
@@ -346,10 +317,10 @@ export function PersonsPage() {
                   className="icon-button danger danger-action"
                   disabled={savingPersonId === selectedPerson.id}
                   type="button"
-                  onClick={() => void removePerson(selectedPerson.id)}
+                  onClick={() => void deletePerson(selectedPerson.id)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{removalPlans[selectedPerson.id] === "delete" ? "Person loeschen" : "Person deaktivieren"}</span>
+                  <span>{savingPersonId === selectedPerson.id ? "Loescht..." : "Loeschen"}</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
@@ -372,9 +343,22 @@ export function PersonsPage() {
               </button>
             </>
           ) : (
-            <button className="icon-button secondary" type="button" onClick={closeDrawer}>
-              <span>Schliessen</span>
-            </button>
+            <>
+              {canRemove && (
+                <button
+                  className="icon-button danger danger-action"
+                  disabled={savingPersonId === selectedPerson.id}
+                  type="button"
+                  onClick={() => void deletePerson(selectedPerson.id)}
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                  <span>{savingPersonId === selectedPerson.id ? "Loescht..." : "Loeschen"}</span>
+                </button>
+              )}
+              <button className="icon-button secondary" type="button" onClick={closeDrawer}>
+                <span>Schliessen</span>
+              </button>
+            </>
           )
         ) : undefined}
       >

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_admin
@@ -58,3 +58,13 @@ def disable_user(
 ) -> UserRead:
     user = UserService(db).disable_user(user_id, current_user.id)
     return UserRead.model_validate(user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    UserService(db).delete_user(user_id, current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
