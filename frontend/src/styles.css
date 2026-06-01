@@ -4565,6 +4565,29 @@ button.person-chip:focus-visible {
   background: #f8fbff;
 }
 
+.measurement-review-card.is-old-offer {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.measurement-review-card.is-old-offer .measurement-review-card-open {
+  color: #475569;
+}
+
+.measurement-review-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.measurement-status.is-old-offer {
+  min-height: 20px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.72rem;
+}
+
 .measurement-review-card strong,
 .measurement-review-card-main strong,
 .measurement-review-position strong,

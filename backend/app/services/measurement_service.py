@@ -95,8 +95,17 @@ class MeasurementService:
         self.db.commit()
         return self.list_measurement_bases(site_id)
 
-    def list_items(self, site_id: int, measurement_base_id: int | None = None) -> list[SiteMeasurementItem]:
+    def list_items(
+        self,
+        site_id: int,
+        measurement_base_id: int | None = None,
+        active_only: bool = False,
+    ) -> list[SiteMeasurementItem]:
         self._get_site(site_id)
+        if active_only:
+            measurement_base_id = self._get_active_measurement_base_id(site_id)
+            if measurement_base_id is None:
+                return []
         statement = (
             select(SiteMeasurementItem)
             .options(selectinload(SiteMeasurementItem.measurement_base))
@@ -137,7 +146,8 @@ class MeasurementService:
                 .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
-        return [self._build_mobile_batch(batch) for batch in batches]
+        active_base_id = self._get_active_measurement_base_id(assignment.site_id)
+        return [self._build_mobile_batch(batch, active_base_id=active_base_id) for batch in batches]
 
     def create_mobile_batch(
         self, *, assignment_id: int, current_user: User
@@ -163,7 +173,7 @@ class MeasurementService:
         self.db.add(batch)
         self.db.commit()
         self.db.refresh(batch)
-        return self._build_mobile_batch(batch)
+        return self._build_mobile_batch(batch, active_base_id=measurement_base.id)
 
     def list_mobile_batch_items(
         self, *, assignment_id: int, batch_id: int, current_user: User
@@ -300,23 +310,37 @@ class MeasurementService:
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
 
-    def list_site_batches(self, site_id: int) -> list[MobileMeasurementBatchRead]:
+    def list_site_batches(
+        self,
+        site_id: int,
+        measurement_base_id: int | None = None,
+        active_only: bool = False,
+    ) -> list[MobileMeasurementBatchRead]:
         self._get_site(site_id)
+        active_base_id = self._get_active_measurement_base_id(site_id)
+        if active_only:
+            measurement_base_id = active_base_id
+            if measurement_base_id is None:
+                return []
+        statement = (
+            select(SiteMeasurementBatch)
+            .options(
+                selectinload(SiteMeasurementBatch.entries).selectinload(
+                    SiteMeasurementEntry.measurement_item
+                ),
+                selectinload(SiteMeasurementBatch.measurement_base),
+                selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+            )
+            .where(SiteMeasurementBatch.site_id == site_id)
+        )
+        if measurement_base_id is not None:
+            statement = statement.where(SiteMeasurementBatch.measurement_base_id == measurement_base_id)
         batches = list(
             self.db.scalars(
-                select(SiteMeasurementBatch)
-                .options(
-                    selectinload(SiteMeasurementBatch.entries).selectinload(
-                        SiteMeasurementEntry.measurement_item
-                    ),
-                    selectinload(SiteMeasurementBatch.measurement_base),
-                    selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
-                )
-                .where(SiteMeasurementBatch.site_id == site_id)
-                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
+                statement.order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
-        return [self._build_mobile_batch(batch) for batch in batches]
+        return [self._build_mobile_batch(batch, active_base_id=active_base_id) for batch in batches]
 
     def list_site_batch_items(
         self, *, site_id: int, batch_id: int
@@ -660,6 +684,17 @@ class MeasurementService:
             )
         return base
 
+    def _get_active_measurement_base_id(self, site_id: int) -> int | None:
+        return self.db.scalar(
+            select(SiteMeasurementBase.id)
+            .where(
+                SiteMeasurementBase.site_id == site_id,
+                SiteMeasurementBase.status == "active",
+                SiteMeasurementBase.released_to_mobile.is_(True),
+            )
+            .order_by(SiteMeasurementBase.created_at.desc(), SiteMeasurementBase.id.desc())
+        )
+
     def _get_measurement_base_for_site(self, measurement_base_id: int, site_id: int) -> SiteMeasurementBase:
         base = self.db.scalar(
             select(SiteMeasurementBase).where(
@@ -735,15 +770,31 @@ class MeasurementService:
         ) or 0
         return result
 
-    def _build_mobile_batch(self, batch: SiteMeasurementBatch) -> MobileMeasurementBatchRead:
+    def _build_mobile_batch(
+        self,
+        batch: SiteMeasurementBatch,
+        active_base_id: int | None = None,
+    ) -> MobileMeasurementBatchRead:
         position_ids = {entry.measurement_item_id for entry in batch.entries}
         reported_minutes = self._sum_reported_minutes(batch.entries)
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
+        is_current_offer = (
+            batch.measurement_base_id == active_base_id
+            if active_base_id is not None
+            else bool(
+                batch.measurement_base
+                and batch.measurement_base.status == "active"
+                and batch.measurement_base.released_to_mobile
+            )
+        )
         return MobileMeasurementBatchRead(
             id=batch.id,
             site_id=batch.site_id,
             measurement_base_id=batch.measurement_base_id,
             measurement_base_name=batch.measurement_base.name if batch.measurement_base else None,
+            offer_id=batch.measurement_base_id,
+            offer_name=batch.measurement_base.name if batch.measurement_base else None,
+            is_current_offer=is_current_offer,
             number=batch.number,
             title=batch.title,
             status=batch.status,

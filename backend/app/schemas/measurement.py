@@ -85,6 +85,9 @@ class MobileMeasurementBatchRead(BaseModel):
     site_id: int
     measurement_base_id: int
     measurement_base_name: str | None
+    offer_id: int
+    offer_name: str | None
+    is_current_offer: bool
     number: int
     title: str
     status: str

@@ -244,20 +244,32 @@ def delete_measurement_base(
 @router.get("/{site_id}/measurement-items", response_model=list[MeasurementItemRead])
 def list_measurement_items(
     site_id: int,
+    measurement_base_id: int | None = Query(default=None),
+    active_only: bool = Query(default=False),
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[MeasurementItemRead]:
-    items = MeasurementService(db).list_items(site_id)
+    items = MeasurementService(db).list_items(
+        site_id,
+        measurement_base_id=measurement_base_id,
+        active_only=active_only,
+    )
     return [MeasurementItemRead.model_validate(item) for item in items]
 
 
 @router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])
 def list_measurement_batches(
     site_id: int,
+    measurement_base_id: int | None = Query(default=None),
+    active_only: bool = Query(default=False),
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[MobileMeasurementBatchRead]:
-    return MeasurementService(db).list_site_batches(site_id)
+    return MeasurementService(db).list_site_batches(
+        site_id,
+        measurement_base_id=measurement_base_id,
+        active_only=active_only,
+    )
 
 
 @router.get(

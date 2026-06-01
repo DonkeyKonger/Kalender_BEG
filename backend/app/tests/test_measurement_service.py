@@ -162,6 +162,79 @@ def test_new_measurement_base_import_becomes_only_active_base(monkeypatch):
     assert old_base.released_to_mobile is False
 
 
+def test_site_measurement_lists_can_be_scoped_to_active_offer():
+    from app.models.site_measurement_item import SiteMeasurementBatch
+
+    db = db_session()
+    site = create_site(db)
+    old_base = create_measurement_base(db, site)
+    old_base.status = "draft"
+    old_base.released_to_mobile = False
+    active_base = SiteMeasurementBase(
+        site=site,
+        name="Aktuelles Angebot",
+        base_type="main_offer",
+        status="active",
+        released_to_mobile=True,
+    )
+    old_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=old_base,
+        position="1.01.05.10",
+        description="Alte Position",
+        list_quantity=Decimal("10.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("100.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    active_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=active_base,
+        position="1.01.05.10",
+        description="Aktuelle Position",
+        list_quantity=Decimal("5.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("50.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    old_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=old_base,
+        number=1,
+        title="Aufmaß 1",
+        status="billed",
+    )
+    active_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=active_base,
+        number=2,
+        title="Aufmaß 2",
+        status="submitted",
+    )
+    db.add_all([active_base, old_item, active_item, old_batch, active_batch])
+    db.commit()
+
+    service = MeasurementService(db)
+    active_items = service.list_items(site.id, active_only=True)
+    all_batches = service.list_site_batches(site.id)
+    active_batches = service.list_site_batches(site.id, active_only=True)
+
+    assert [item.id for item in active_items] == [active_item.id]
+    assert [batch.id for batch in active_batches] == [active_batch.id]
+    assert {batch.id: batch.is_current_offer for batch in all_batches} == {
+        old_batch.id: False,
+        active_batch.id: True,
+    }
+    assert all_batches[0].offer_id == old_base.id
+    assert all_batches[0].offer_name == old_base.name
+    assert all_batches[1].offer_id == active_base.id
+    assert all_batches[1].offer_name == active_base.name
+
+
 def test_measurement_base_activate_and_delete_rules():
     db = db_session()
     site = create_site(db)

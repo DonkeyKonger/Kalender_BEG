@@ -245,6 +245,9 @@ export type MobileMeasurementBatch = {
   site_id: number;
   measurement_base_id: number;
   measurement_base_name: string | null;
+  offer_id: number;
+  offer_name: string | null;
+  is_current_offer: boolean;
   number: number;
   title: string;
   status: "draft" | "submitted" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;

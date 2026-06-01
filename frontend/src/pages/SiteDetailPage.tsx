@@ -274,15 +274,16 @@ export function SiteDetailPage() {
       setMeasurementError(null);
       setMeasurementBatchesError(null);
       try {
-        const [bases, items, batches] = await Promise.all([
+        const [bases, items, batches, activeBatches] = await Promise.all([
           api.measurementBases(site.id),
-          api.measurementItems(site.id),
+          api.measurementItems(site.id, { activeOnly: true }),
           api.siteMeasurementBatches(site.id),
+          api.siteMeasurementBatches(site.id, { activeOnly: true }),
         ]);
         let progressItemLists: MobileMeasurementItem[][] = [];
         try {
-          progressItemLists = batches.length > 0
-            ? await Promise.all(batches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
+          progressItemLists = activeBatches.length > 0
+            ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
             : [];
         } catch (progressError) {
           setMeasurementBatchesError(readApiError(progressError, "Aufmaßmengen konnten für den Vergleich nicht geladen werden."));
@@ -474,7 +475,21 @@ export function SiteDetailPage() {
     setMeasurementImportMessage(null);
     setMeasurementImportError(null);
     try {
-      setMeasurementBases(await api.activateMeasurementBase(site.id, base.id));
+      const bases = await api.activateMeasurementBase(site.id, base.id);
+      const [items, batches, activeBatches] = await Promise.all([
+        api.measurementItems(site.id, { activeOnly: true }),
+        api.siteMeasurementBatches(site.id),
+        api.siteMeasurementBatches(site.id, { activeOnly: true }),
+      ]);
+      const progressItemLists = activeBatches.length > 0
+        ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
+        : [];
+      setMeasurementBases(bases);
+      setMeasurementItems(items);
+      setMeasurementBatches(batches);
+      setMeasurementProgressItems(progressItemLists.flat());
+      setMeasurementLoaded(true);
+      setMeasurementBatchesLoaded(true);
       setMeasurementImportMessage("Angebot ist jetzt aktiv.");
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktiviert werden."));
@@ -495,7 +510,7 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.deleteMeasurementBase(site.id, base.id);
-      const items = await api.measurementItems(site.id);
+      const items = await api.measurementItems(site.id, { activeOnly: true });
       setMeasurementBases(bases);
       setMeasurementItems(items);
       setMeasurementImportMessage("Angebot wurde gelöscht.");
@@ -513,10 +528,21 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const [bases, items] = await Promise.all([api.measurementBases(site.id), api.measurementItems(site.id)]);
+      const [bases, items, batches, activeBatches] = await Promise.all([
+        api.measurementBases(site.id),
+        api.measurementItems(site.id, { activeOnly: true }),
+        api.siteMeasurementBatches(site.id),
+        api.siteMeasurementBatches(site.id, { activeOnly: true }),
+      ]);
+      const progressItemLists = activeBatches.length > 0
+        ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
+        : [];
       setMeasurementBases(bases);
       setMeasurementItems(items);
+      setMeasurementBatches(batches);
+      setMeasurementProgressItems(progressItemLists.flat());
       setMeasurementLoaded(true);
+      setMeasurementBatchesLoaded(true);
       setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`);
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
@@ -1364,7 +1390,6 @@ function MeasurementTab({
           siteNumber={siteNumber}
           bases={bases}
           items={items}
-          batches={batches}
           progressItems={batchProgressItems}
           isLoading={isLoading}
           error={error}
@@ -1405,7 +1430,6 @@ function MeasurementTab({
       {activeSubtab === "bases" ? (
         <MeasurementBasesPanel
           bases={bases}
-          items={items}
           message={importMessage}
           error={importError}
           onUpdateBase={onUpdateBase}
@@ -1421,7 +1445,6 @@ function MeasurementTimesheetPanel({
   siteNumber,
   bases,
   items,
-  batches,
   progressItems,
   isLoading,
   error,
@@ -1434,7 +1457,6 @@ function MeasurementTimesheetPanel({
   siteNumber: string | null;
   bases: MeasurementBase[];
   items: MeasurementItem[];
-  batches: MobileMeasurementBatch[];
   progressItems: MobileMeasurementItem[];
   isLoading: boolean;
   error: string | null;
@@ -1506,9 +1528,7 @@ function MeasurementTimesheetPanel({
 
   const projectPositionStats = useMemo(() => {
     const plannedMinutes = projectPositionRows.reduce((sum, row) => sum + row.plannedMinutes, 0);
-    const measuredMinutesFromRows = projectPositionRows.reduce((sum, row) => sum + row.measuredMinutes, 0);
-    const measuredMinutesFromBatches = batches.reduce((sum, batch) => sum + getMeasurementNumericValue(batch.reported_minutes), 0);
-    const measuredMinutes = measuredMinutesFromRows > 0 ? measuredMinutesFromRows : measuredMinutesFromBatches;
+    const measuredMinutes = projectPositionRows.reduce((sum, row) => sum + row.measuredMinutes, 0);
     const hasPlannedBasis = plannedMinutes > 0;
     const progressPercent = hasPlannedBasis ? (measuredMinutes / plannedMinutes) * 100 : null;
     const withMeasurement = projectPositionRows.filter((row) => row.measuredQuantity > 0).length;
@@ -1524,7 +1544,7 @@ function MeasurementTimesheetPanel({
       withMeasurement,
       withoutMeasurement: projectPositionRows.length - withMeasurement,
     };
-  }, [batches, projectPositionRows]);
+  }, [projectPositionRows]);
 
   const latestImportInfo = useMemo(() => {
     let latestItem: MeasurementItem | null = null;
@@ -1914,7 +1934,6 @@ function MeasurementTimesheetPanel({
 
 function MeasurementBasesPanel({
   bases,
-  items,
   message,
   error,
   onUpdateBase,
@@ -1922,17 +1941,12 @@ function MeasurementBasesPanel({
   onDeleteBase,
 }: {
   bases: MeasurementBase[];
-  items: MeasurementItem[];
   message: string | null;
   error: string | null;
   onUpdateBase: (base: MeasurementBase, payload: MeasurementBaseUpdate) => void;
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
 }) {
-  const itemCounts = items.reduce<Map<number, number>>((counts, item) => {
-    counts.set(item.measurement_base_id, (counts.get(item.measurement_base_id) ?? 0) + 1);
-    return counts;
-  }, new Map());
   const sortedBases = bases.slice().sort((left, right) => (
     new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
     || left.id - right.id
@@ -1955,7 +1969,7 @@ function MeasurementBasesPanel({
         <div className="measurement-base-list">
           {sortedBases.map((base) => {
             const isActive = base.status === "active" && base.released_to_mobile;
-            const positionCount = base.item_count ?? itemCounts.get(base.id) ?? 0;
+            const positionCount = base.item_count ?? 0;
             const hasMeasurementData = (base.batch_count ?? 0) > 0;
             const offerLabel = `Angebot ${offerNumberByBaseId.get(base.id) ?? ""}`.trim();
             return (
@@ -2581,6 +2595,7 @@ function MeasurementReviewPanel({
         <div className="measurement-review-list">
           {sortedBatches.map((batch) => {
             const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
+            const isOldOffer = batch.is_current_offer === false;
             const checkedPdfKey = `${batch.id}:checked`;
             const originalPdfKey = `${batch.id}:original`;
             const isExportingCheckedPdf = pdfExportingAction === checkedPdfKey;
@@ -2589,7 +2604,7 @@ function MeasurementReviewPanel({
             return (
               <div
                 key={batch.id}
-                className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}`}
+                className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}${isOldOffer ? " is-old-offer" : ""}`}
               >
                 <button
                   type="button"
@@ -2598,10 +2613,14 @@ function MeasurementReviewPanel({
                 >
                   <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
                   <div className="measurement-review-card-main">
-                    <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
+                    <div className="measurement-review-card-title-row">
+                      <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
+                      {isOldOffer ? <span className="measurement-status is-old-offer">Altes Angebot</span> : null}
+                    </div>
                     <small>
                       {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
                       {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
+                      {isOldOffer && batch.offer_name ? ` · ${batch.offer_name}` : ""}
                     </small>
                   </div>
                   <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>

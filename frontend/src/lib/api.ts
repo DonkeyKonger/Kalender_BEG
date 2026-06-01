@@ -374,12 +374,28 @@ export const api = {
     });
   },
 
-  async measurementItems(siteId: number): Promise<MeasurementItem[]> {
-    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items`);
+  async measurementItems(siteId: number, params: { measurementBaseId?: number | null; activeOnly?: boolean } = {}): Promise<MeasurementItem[]> {
+    const search = new URLSearchParams();
+    if (params.measurementBaseId !== null && params.measurementBaseId !== undefined) {
+      search.set("measurement_base_id", String(params.measurementBaseId));
+    }
+    if (params.activeOnly) {
+      search.set("active_only", "true");
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`);
   },
 
-  async siteMeasurementBatches(siteId: number): Promise<MobileMeasurementBatch[]> {
-    return request<MobileMeasurementBatch[]>(`/sites/${siteId}/measurement-batches`);
+  async siteMeasurementBatches(siteId: number, params: { measurementBaseId?: number | null; activeOnly?: boolean } = {}): Promise<MobileMeasurementBatch[]> {
+    const search = new URLSearchParams();
+    if (params.measurementBaseId !== null && params.measurementBaseId !== undefined) {
+      search.set("measurement_base_id", String(params.measurementBaseId));
+    }
+    if (params.activeOnly) {
+      search.set("active_only", "true");
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<MobileMeasurementBatch[]>(`/sites/${siteId}/measurement-batches${suffix}`);
   },
 
   async siteMeasurementBatchItems(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
