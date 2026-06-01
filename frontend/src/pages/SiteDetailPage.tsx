@@ -5,11 +5,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
+import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
@@ -18,6 +19,7 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
+type SiteWorkTimeRangeMode = "week" | "month";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -39,6 +41,12 @@ const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "measurement", label: "Aufmaß" },
   { key: "tools-material", label: "Werkzeuge & Material" },
 ];
+
+const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
+  draft: "Entwurf",
+  submitted: "Gemeldet",
+  reviewed: "Geprüft",
+};
 
 export function SiteDetailPage() {
   const { user } = useAuth();
@@ -810,13 +818,7 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "assembly-times" ? (
-        <PlaceholderTab
-          icon={CalendarClock}
-          title="Montagezeiten"
-          description="Montagezeiten werden später aus mobiler Rückmeldung, Standortdaten und Fahrzeugdaten abgeleitet und hier nachvollziehbar dargestellt."
-          emptyText="Noch keine Montagezeiten vorhanden."
-          sections={["Zeitraum", "Monteur", "Fahrzeug", "erkannte Anwesenheit", "Quelle", "Prüfstatus"]}
-        />
+        <SiteWorkTimesPanel site={site} />
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
@@ -3305,6 +3307,128 @@ function MeasurementTimeAnalysisPanel() {
   );
 }
 
+function SiteWorkTimesPanel({ site }: { site: Site }) {
+  const [rangeMode, setRangeMode] = useState<SiteWorkTimeRangeMode>("month");
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const activeRange = useMemo(
+    () => (rangeMode === "week" ? getCurrentGermanWeekRange() : getCurrentMonthRange()),
+    [rangeMode],
+  );
+  const summary = useMemo(() => ({
+    count: entries.length,
+    workerCount: new Set(entries.map((entry) => entry.person_id)).size,
+    workMinutes: sumTimeEntryMinutes(entries, "work_minutes"),
+    breakMinutes: sumTimeEntryMinutes(entries, "break_minutes"),
+    travelMinutes: sumTimeEntryMinutes(entries, "travel_minutes"),
+  }), [entries]);
+
+  useEffect(() => {
+    let ignore = false;
+    setIsLoading(true);
+    setError(null);
+
+    api.timeEntries({
+      siteId: site.id,
+      dateFrom: activeRange.start,
+      dateTo: activeRange.end,
+    })
+      .then((entryData) => {
+        if (!ignore) {
+          setEntries(entryData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setEntries([]);
+          setError(readApiError(requestError, "Arbeitszeiten konnten nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeRange.end, activeRange.start, site.id]);
+
+  return (
+    <div className="project-record-tab-panel">
+      <div className="project-record-toolbar">
+        <div>
+          <h2><CalendarClock aria-hidden="true" size={18} />Montagezeiten</h2>
+          <p>Gemeldete Ist-Arbeitszeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
+        </div>
+        <div className="site-worktime-range">
+          <div className="matrix-pm-filter" aria-label="Zeitraum">
+            <button className={rangeMode === "week" ? "is-active" : ""} type="button" onClick={() => setRangeMode("week")}>
+              Aktuelle Woche
+            </button>
+            <button className={rangeMode === "month" ? "is-active" : ""} type="button" onClick={() => setRangeMode("month")}>
+              Aktueller Monat
+            </button>
+          </div>
+          <small>{formatDateRange(activeRange.start, activeRange.end)}</small>
+        </div>
+      </div>
+
+      <div className="site-worktime-kpis" aria-label="Arbeitszeiten Kennzahlen">
+        <div><span>Einträge</span><strong>{summary.count}</strong></div>
+        <div><span>Monteure</span><strong>{summary.workerCount}</strong></div>
+        <div><span>Arbeitszeit</span><strong>{formatMeasurementDuration(summary.workMinutes)}</strong></div>
+        <div><span>Pause</span><strong>{formatMeasurementDuration(summary.breakMinutes)}</strong></div>
+        <div><span>Fahrtzeit</span><strong>{formatMeasurementDuration(summary.travelMinutes)}</strong></div>
+      </div>
+
+      <section className="site-worktime-table-panel" aria-label="Gemeldete Arbeitszeiten">
+        {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
+        {isLoading ? <div className="project-record-empty-state">Arbeitszeiten werden geladen...</div> : null}
+        {!isLoading && !error && entries.length === 0 ? (
+          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine Arbeitszeiten auf diese Baustelle gemeldet.</div>
+        ) : null}
+        {!isLoading && !error && entries.length > 0 ? (
+          <div className="site-worktime-table-wrap">
+            <table className="site-worktime-table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Monteur</th>
+                  <th>Arbeitszeit</th>
+                  <th>Pause</th>
+                  <th>Fahrtzeit</th>
+                  <th>Status</th>
+                  <th>Notiz</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{formatDateOnly(entry.work_date)}</td>
+                    <td>{entry.person_name || `Person ${entry.person_id}`}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(entry.work_minutes)}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(entry.break_minutes)}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(entry.travel_minutes)}</td>
+                    <td>
+                      <StatusBadge tone={timeEntryStatusTone(entry.status)}>
+                        {timeEntryStatusLabels[entry.status] ?? entry.status}
+                      </StatusBadge>
+                    </td>
+                    <td>{entry.note || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 
 function PlaceholderTab({
   icon: Icon,
@@ -3592,6 +3716,39 @@ function getCurrentGermanWeekRange(referenceDate = new Date()): { start: string;
     start: toLocalDateKey(start),
     end: toLocalDateKey(end),
   };
+}
+
+function getCurrentMonthRange(referenceDate = new Date()): { start: string; end: string } {
+  return {
+    start: toLocalDateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)),
+    end: toLocalDateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)),
+  };
+}
+
+function formatDateRange(start: string, end: string): string {
+  return `${formatDateOnly(start)} bis ${formatDateOnly(end)}`;
+}
+
+function formatDateOnly(value: string): string {
+  const parsed = parseLocalDateKey(value);
+  if (!parsed) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parsed);
+}
+
+function sumTimeEntryMinutes(entries: TimeEntry[], field: "work_minutes" | "break_minutes" | "travel_minutes"): number {
+  return entries.reduce((sum, entry) => sum + entry[field], 0);
+}
+
+function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {
+  if (status === "reviewed") {
+    return "active";
+  }
+  if (status === "submitted") {
+    return "planned";
+  }
+  return "neutral";
 }
 
 function getWeeklyWorkerHeadCount(assignments: AssignmentRead[], weekStart: string, weekEnd: string): number {

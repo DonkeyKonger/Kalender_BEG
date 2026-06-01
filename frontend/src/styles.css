@@ -4994,6 +4994,93 @@ button.person-chip:focus-visible {
   line-height: 1.4;
 }
 
+.site-worktime-range {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.site-worktime-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.site-worktime-kpis > div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.site-worktime-kpis span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.site-worktime-kpis strong {
+  color: #172033;
+  font-size: 1.18rem;
+  font-weight: 900;
+}
+
+.site-worktime-table-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.site-worktime-table-wrap {
+  overflow: auto;
+}
+
+.site-worktime-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.site-worktime-table th,
+.site-worktime-table td {
+  border-bottom: 1px solid #e5edf7;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.site-worktime-table th {
+  background: #f3f7fb;
+  color: #41516a;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.site-worktime-table td {
+  color: #172033;
+  font-size: 0.84rem;
+  font-weight: 720;
+}
+
+.site-worktime-number {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .project-placeholder-actions {
   display: flex;
   flex-wrap: wrap;
