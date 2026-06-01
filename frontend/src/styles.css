@@ -4111,27 +4111,6 @@ button.person-chip:focus-visible {
   background: #54769f;
 }
 
-.measurement-timesheet-protocol {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: #475569;
-  font-size: 0.86rem;
-}
-
-.measurement-timesheet-protocol span {
-  border: 1px solid #dce5f0;
-  border-radius: 999px;
-  background: #f8fafc;
-  padding: 5px 10px;
-}
-
-.measurement-timesheet-protocol span.is-warning {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #92400e;
-}
-
 .measurement-timesheet-filterbar {
   display: flex;
   flex-wrap: wrap;
@@ -4199,7 +4178,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-table {
-  min-width: 1420px;
+  min-width: 1120px;
 }
 
 .measurement-timesheet-table td:nth-child(2) {
@@ -4207,7 +4186,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-description {
-  min-width: 320px;
+  min-width: 560px;
 }
 
 .measurement-timesheet-number {
@@ -4222,35 +4201,6 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table tbody tr.has-quantity .measurement-timesheet-number {
   color: #0f172a;
-}
-
-.measurement-timesheet-table tbody tr.needs-review td {
-  background: #fffbeb;
-}
-
-.measurement-status.is-timesheet-open {
-  background: #f8fafc;
-  color: #475569;
-}
-
-.measurement-status.is-timesheet-progress {
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.measurement-status.is-timesheet-near-done {
-  background: #ecfdf3;
-  color: #166534;
-}
-
-.measurement-status.is-timesheet-over-plan {
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.measurement-status.is-timesheet-unclear {
-  background: #fff7ed;
-  color: #9a3412;
 }
 
 .measurement-status.is-open,

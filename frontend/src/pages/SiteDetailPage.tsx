@@ -16,8 +16,7 @@ type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
-type MeasurementTimesheetFilter = "all" | "open" | "in_progress" | "near_done" | "over_plan" | "unclear" | "with_measurement" | "without_measurement";
-type MeasurementProjectPositionStatus = "open" | "in_progress" | "near_done" | "over_plan" | "unclear";
+type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -1487,18 +1486,6 @@ function MeasurementTimesheetPanel({
       const measuredMinutes = measured.minutes > 0 ? measured.minutes : measured.quantity * minutesPerUnit;
       const progressPercent = plannedMinutes > 0 ? (measuredMinutes / plannedMinutes) * 100 : null;
       const remainingQuantity = plannedQuantity > 0 ? plannedQuantity - measured.quantity : null;
-      const deviationMinutes = plannedMinutes > 0 ? measuredMinutes - plannedMinutes : null;
-      const hasMissingComparisonBasis = measured.quantity > 0 && plannedQuantity <= 0;
-      const hasMissingTime = minutesPerUnit <= 0;
-      const hasMissingUnit = !item.unit;
-      const status = getProjectPositionStatus({
-        isUnclearImport: item.is_nep,
-        hasMissingTime,
-        hasMissingUnit,
-        hasMissingComparisonBasis,
-        measuredQuantity: measured.quantity,
-        progressPercent,
-      });
 
       return {
         item,
@@ -1513,9 +1500,6 @@ function MeasurementTimesheetPanel({
         plannedMinutes,
         measuredMinutes,
         progressPercent,
-        deviationMinutes,
-        status,
-        hasIssue: item.is_nep || hasMissingTime || hasMissingUnit || hasMissingComparisonBasis || (progressPercent !== null && progressPercent > 105),
       };
     })
   ), [items, measuredByItemId]);
@@ -1527,10 +1511,6 @@ function MeasurementTimesheetPanel({
     const measuredMinutes = measuredMinutesFromRows > 0 ? measuredMinutesFromRows : measuredMinutesFromBatches;
     const hasPlannedBasis = plannedMinutes > 0;
     const progressPercent = hasPlannedBasis ? (measuredMinutes / plannedMinutes) * 100 : null;
-    const statusCounts = projectPositionRows.reduce<Record<MeasurementProjectPositionStatus, number>>((counts, row) => {
-      counts[row.status.key] += 1;
-      return counts;
-    }, { open: 0, in_progress: 0, near_done: 0, over_plan: 0, unclear: 0 });
     const withMeasurement = projectPositionRows.filter((row) => row.measuredQuantity > 0).length;
 
     // Belastbarer Fortschritt ist erst möglich, wenn Angebots-/Sollmengen als Vergleichsbasis vorhanden sind.
@@ -1541,11 +1521,8 @@ function MeasurementTimesheetPanel({
       progressPercent,
       openMinutes: hasPlannedBasis ? plannedMinutes - measuredMinutes : null,
       hasPlannedBasis,
-      issues: projectPositionRows.filter((row) => row.hasIssue).length,
       withMeasurement,
       withoutMeasurement: projectPositionRows.length - withMeasurement,
-      statusCounts,
-      imported: projectPositionRows.filter((row) => !row.item.is_nep).length,
     };
   }, [batches, projectPositionRows]);
 
@@ -1571,13 +1548,8 @@ function MeasurementTimesheetPanel({
 
   const filterOptions = useMemo(() => ([
     { key: "all" as const, label: "Alle", count: projectPositionStats.total },
-    { key: "open" as const, label: "Offen", count: projectPositionStats.statusCounts.open },
-    { key: "in_progress" as const, label: "In Arbeit", count: projectPositionStats.statusCounts.in_progress },
-    { key: "near_done" as const, label: "Nahe fertig", count: projectPositionStats.statusCounts.near_done },
-    { key: "over_plan" as const, label: "Über Angebot", count: projectPositionStats.statusCounts.over_plan },
-    { key: "unclear" as const, label: "Unklar", count: projectPositionStats.statusCounts.unclear },
-    { key: "with_measurement" as const, label: "Mit Aufmaß", count: projectPositionStats.withMeasurement },
-    { key: "without_measurement" as const, label: "Ohne Aufmaß", count: projectPositionStats.withoutMeasurement },
+    { key: "billed" as const, label: "Abgerechnet", count: projectPositionStats.withMeasurement },
+    { key: "unbilled" as const, label: "Noch nicht abgerechnet", count: projectPositionStats.withoutMeasurement },
   ]), [projectPositionStats]);
 
   const filteredProjectPositionRows = useMemo(() => {
@@ -1586,9 +1558,8 @@ function MeasurementTimesheetPanel({
     return projectPositionRows.filter((row) => {
       const matchesFilter =
         activeFilter === "all"
-        || row.status.key === activeFilter
-        || (activeFilter === "with_measurement" && row.measuredQuantity > 0)
-        || (activeFilter === "without_measurement" && row.measuredQuantity <= 0);
+        || (activeFilter === "billed" && row.measuredQuantity > 0)
+        || (activeFilter === "unbilled" && row.measuredQuantity <= 0);
 
       if (!matchesFilter) {
         return false;
@@ -1755,10 +1726,6 @@ function MeasurementTimesheetPanel({
               <span>Offene Stunden</span>
               <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
             </div>
-            <div className="measurement-timesheet-kpi-card">
-              <span>Auffälligkeiten</span>
-              <strong>{projectPositionStats.issues}</strong>
-            </div>
           </div>
 
           <section className="measurement-timesheet-progress-panel" aria-label="Rechnerischer Ausführungsstand">
@@ -1784,15 +1751,6 @@ function MeasurementTimesheetPanel({
               </p>
             )}
           </section>
-
-          <div className="measurement-timesheet-protocol" aria-label="Import-Protokoll">
-            <span>Zeitenliste importiert</span>
-            <span>{projectPositionStats.total} Positionen aus Zeitenliste erkannt</span>
-            <span>{projectPositionStats.imported} Positionen automatisch zugeordnet</span>
-            <span className={projectPositionStats.statusCounts.unclear > 0 ? "is-warning" : ""}>
-              {projectPositionStats.statusCounts.unclear > 0 ? `${projectPositionStats.statusCounts.unclear} Positionen zu prüfen` : "Keine unklaren Importpositionen erkannt"}
-            </span>
-          </div>
 
           <div className="measurement-timesheet-filterbar">
             <div className="measurement-timesheet-filter-group" aria-label="Zeitenliste filtern">
@@ -1826,7 +1784,6 @@ function MeasurementTimesheetPanel({
               <table className="measurement-table measurement-timesheet-table">
                 <thead>
                   <tr>
-                    <th>Status</th>
                     <th>Pos.-Nr.</th>
                     <th>Bezeichnung</th>
                     <th>Einheit</th>
@@ -1834,20 +1791,16 @@ function MeasurementTimesheetPanel({
                     <th>Aufmaßmenge</th>
                     <th>Restmenge</th>
                     <th>Min./Einheit</th>
-                    <th>Plan-Stunden</th>
                     <th>Aufmaß-Stunden</th>
                     <th>Fortschritt</th>
-                    <th>Abweichung</th>
-                    <th>Aufmaßblatt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredProjectPositionRows.map((row) => (
                     <tr
                       key={row.item.id}
-                      className={`${row.measuredQuantity > 0 ? "has-quantity" : ""}${row.hasIssue ? " needs-review" : ""}`}
+                      className={row.measuredQuantity > 0 ? "has-quantity" : ""}
                     >
-                      <td><span className={`measurement-status ${row.status.className}`}>{row.status.label}</span></td>
                       <td><strong>{row.positionNumber}</strong></td>
                       <td className="measurement-timesheet-description">{row.description}</td>
                       <td>{row.unit ?? "-"}</td>
@@ -1855,11 +1808,8 @@ function MeasurementTimesheetPanel({
                       <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
                       <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
                       <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.plannedMinutes > 0 ? formatMeasurementDuration(row.plannedMinutes) : "-"}</td>
                       <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
                       <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.deviationMinutes !== null ? formatMeasurementDuration(row.deviationMinutes) : "-"}</td>
-                      <td>{row.item.measurement_base ? formatMeasurementBaseName(row.item.measurement_base) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3469,36 +3419,6 @@ function formatMeasurementPercent(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   }).format(value)} %`;
-}
-
-function getProjectPositionStatus({
-  isUnclearImport,
-  hasMissingTime,
-  hasMissingUnit,
-  hasMissingComparisonBasis,
-  measuredQuantity,
-  progressPercent,
-}: {
-  isUnclearImport: boolean;
-  hasMissingTime: boolean;
-  hasMissingUnit: boolean;
-  hasMissingComparisonBasis: boolean;
-  measuredQuantity: number;
-  progressPercent: number | null;
-}): { key: MeasurementProjectPositionStatus; label: string; className: string } {
-  if (isUnclearImport || hasMissingTime || hasMissingUnit || hasMissingComparisonBasis) {
-    return { key: "unclear", label: "Unklar", className: "is-timesheet-unclear" };
-  }
-  if (progressPercent !== null && progressPercent > 105) {
-    return { key: "over_plan", label: "Über Angebot", className: "is-timesheet-over-plan" };
-  }
-  if (progressPercent !== null && progressPercent >= 95) {
-    return { key: "near_done", label: "Nahe fertig", className: "is-timesheet-near-done" };
-  }
-  if (measuredQuantity > 0) {
-    return { key: "in_progress", label: "In Arbeit", className: "is-timesheet-progress" };
-  }
-  return { key: "open", label: "Offen", className: "is-timesheet-open" };
 }
 
 function formatMeasurementDraftQuantity(value: string | number | null): string {
