@@ -64,11 +64,17 @@ def time_entry_read(entry: WorkTimeEntry, gps_service: GpsPresenceService | None
     gps_status = None
     gps_matched_points = None
     gps_total_points = None
+    gps_first_seen_at = None
+    gps_last_seen_at = None
+    gps_work_minutes = None
     if gps_service is not None:
         gps_evaluation = gps_service.evaluate_time_entry(entry)
         gps_status = gps_evaluation.status
         gps_matched_points = gps_evaluation.matched_points
         gps_total_points = gps_evaluation.total_points
+        gps_first_seen_at = gps_evaluation.first_seen_at
+        gps_last_seen_at = gps_evaluation.last_seen_at
+        gps_work_minutes = gps_evaluation.work_minutes
 
     return TimeEntryRead(
         id=entry.id,
@@ -90,6 +96,9 @@ def time_entry_read(entry: WorkTimeEntry, gps_service: GpsPresenceService | None
         gps_status=gps_status,
         gps_matched_points=gps_matched_points,
         gps_total_points=gps_total_points,
+        gps_first_seen_at=gps_first_seen_at,
+        gps_last_seen_at=gps_last_seen_at,
+        gps_work_minutes=gps_work_minutes,
         created_by_user_id=entry.created_by_user_id,
         reviewed_by_user_id=entry.reviewed_by_user_id,
         reviewed_at=entry.reviewed_at,

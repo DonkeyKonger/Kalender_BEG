@@ -183,3 +183,6 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
     assert response.gps_status == "matched"
     assert response.gps_matched_points == 1
     assert response.gps_total_points == 1
+    assert response.gps_first_seen_at == older_outside_point.timestamp
+    assert response.gps_last_seen_at == latest_inside_point.timestamp
+    assert response.gps_work_minutes == 240

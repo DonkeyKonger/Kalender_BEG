@@ -1,5 +1,5 @@
 import { Clock3, Pencil, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
@@ -532,19 +532,19 @@ export function TimeEntriesPage() {
                         isLoadingAssignments,
                         assignmentsUnavailable: Boolean(assignmentsError),
                       });
+                      const plannedSiteText = isLoadingAssignments
+                        ? "wird geladen..."
+                        : plannedSiteLabel(plannedSiteIds, siteById);
                       return (
-                        <tr key={entry.id}>
-                          <td>{formatDate(entry.work_date)}</td>
-                          <td>{formatWeekday(entry.work_date)}</td>
-                          <td>
-                            {isLoadingAssignments
-                              ? "wird geladen..."
-                              : plannedSiteLabel(plannedSiteIds, siteById)}
-                          </td>
-                          <td>{reportedSiteLabel(entry)}</td>
-                          <td>{formatMinutes(entry.work_minutes)}</td>
-                          <td>{formatMinutes(entry.break_minutes)}</td>
-                          <td>{formatMinutes(entry.travel_minutes)}</td>
+                        <Fragment key={entry.id}>
+                          <tr>
+                            <td>{formatDate(entry.work_date)}</td>
+                            <td>{formatWeekday(entry.work_date)}</td>
+                            <td>{plannedSiteText}</td>
+                            <td>{reportedSiteLabel(entry)}</td>
+	                            <td>{formatMinutes(entry.work_minutes)}</td>
+	                            <td>{formatMinutes(entry.break_minutes)}</td>
+	                            <td>{formatMinutes(entry.travel_minutes)}</td>
                           <td>
                             <StatusBadge tone={timeEntryStatusTone(entry.status)}>
                               {timeEntryStatusLabels[entry.status] ?? entry.status}
@@ -575,6 +575,34 @@ export function TimeEntriesPage() {
                             </td>
                           )}
                         </tr>
+                        {entry.gps_first_seen_at && (
+                          <tr className="time-gps-comparison-row">
+                            <td>{formatDate(entry.work_date)}</td>
+                            <td>{formatGpsSignalRange(entry)}</td>
+                            <td>{plannedSiteText}</td>
+                            <td>-</td>
+                            <td>{formatGpsWorkMinutes(entry)}</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>
+                              <StatusBadge tone="neutral">GPS berechnet</StatusBadge>
+                            </td>
+                            <td>
+                              <StatusBadge tone="neutral">Kontrollwert</StatusBadge>
+                            </td>
+                            <td>
+                              {entry.gps_status ? (
+                                <span title={gpsStatusTitle(entry)}>
+                                  <StatusBadge tone={gpsStatusTone(entry.gps_status)}>
+                                    {gpsStatusLabels[entry.gps_status]}
+                                  </StatusBadge>
+                                </span>
+                              ) : "-"}
+                            </td>
+                            {canManageTimeEntries && <td>-</td>}
+                          </tr>
+                        )}
+	                      </Fragment>
                       );
                     })}
                   </tbody>
@@ -733,6 +761,13 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function formatMinutes(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined) {
     return "-";
@@ -743,6 +778,23 @@ function formatMinutes(minutes: number | null | undefined): string {
     return `${rest} Min.`;
   }
   return `${hours} Std. ${rest} Min.`;
+}
+
+function formatGpsSignalRange(entry: TimeEntry): string {
+  if (!entry.gps_first_seen_at) {
+    return "GPS";
+  }
+  if (!entry.gps_last_seen_at || entry.gps_first_seen_at === entry.gps_last_seen_at) {
+    return `GPS ${formatTime(entry.gps_first_seen_at)}`;
+  }
+  return `GPS ${formatTime(entry.gps_first_seen_at)}-${formatTime(entry.gps_last_seen_at)}`;
+}
+
+function formatGpsWorkMinutes(entry: TimeEntry): string {
+  if (entry.gps_work_minutes === null) {
+    return "nicht berechenbar";
+  }
+  return formatMinutes(entry.gps_work_minutes);
 }
 
 function defaultEntryDate(dateFrom: string, dateTo: string): string {

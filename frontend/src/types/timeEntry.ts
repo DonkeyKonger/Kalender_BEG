@@ -22,6 +22,9 @@ export type TimeEntry = {
   gps_status: TimeEntryGpsStatus | null;
   gps_matched_points: number | null;
   gps_total_points: number | null;
+  gps_first_seen_at: string | null;
+  gps_last_seen_at: string | null;
+  gps_work_minutes: number | null;
   created_by_user_id: number | null;
   reviewed_by_user_id: number | null;
   reviewed_at: string | null;

@@ -6203,6 +6203,12 @@ button.person-chip:focus-visible {
   font-weight: 700;
 }
 
+.time-entries-table tr.time-gps-comparison-row td {
+  background: #f8fafc;
+  color: #52627a;
+  font-weight: 750;
+}
+
 .time-table-action {
   display: inline-flex;
   align-items: center;

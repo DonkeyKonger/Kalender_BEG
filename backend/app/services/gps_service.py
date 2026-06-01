@@ -27,6 +27,9 @@ class GpsPresenceEvaluation:
     matched_points: int
     total_points: int
     reason: str
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    work_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -113,20 +116,21 @@ class GpsPresenceService:
         ]
 
     def evaluate_time_entry(self, entry: WorkTimeEntry) -> GpsPresenceEvaluation:
-        planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
-        if not planned_sites:
-            return GpsPresenceEvaluation("not_checkable", 0, 0, "planned_site_missing")
-        start_at, end_at = time_entry_gps_window(entry)
-        point = self._latest_location_point_for_person(
+        start_at, end_at = day_window(entry.work_date)
+        points = self._location_points_for_person(
             person_id=entry.person_id,
             start_datetime=start_at,
             end_datetime=end_at,
         )
-        if point is None:
+        gps_range = gps_range_from_points(points)
+        planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
+        if not planned_sites:
+            return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range)
+        if not points:
             return GpsPresenceEvaluation("not_checkable", 0, 0, "no_gps_point_for_work_date")
 
-        plausibility = self._evaluate_point_against_planned_sites(point, planned_sites)
-        return self._presence_evaluation_from_point_plausibility(plausibility)
+        plausibility = self._evaluate_point_against_planned_sites(points[-1], planned_sites)
+        return self._presence_evaluation_from_point_plausibility(plausibility, gps_range=gps_range)
 
     def evaluate_presence(
         self,
@@ -233,14 +237,14 @@ class GpsPresenceService:
             if assignment.site is not None
         ]
 
-    def _latest_location_point_for_person(
+    def _location_points_for_person(
         self,
         *,
         person_id: int,
         start_datetime: datetime,
         end_datetime: datetime,
-    ) -> GpsPoint | None:
-        return self.db.scalars(
+    ) -> list[GpsPoint]:
+        return list(self.db.scalars(
             select(GpsPoint)
             .where(
                 GpsPoint.source_type == GpsSourceType.PHONE,
@@ -248,9 +252,8 @@ class GpsPresenceService:
                 GpsPoint.timestamp >= ensure_aware_utc(start_datetime),
                 GpsPoint.timestamp <= ensure_aware_utc(end_datetime),
             )
-            .order_by(GpsPoint.timestamp.desc(), GpsPoint.id.desc())
-            .limit(1)
-        ).first()
+            .order_by(GpsPoint.timestamp, GpsPoint.id)
+        ))
 
     @staticmethod
     def _evaluate_point_against_planned_sites(point: GpsPoint, planned_sites: list[Site]) -> GpsPointPlausibility:
@@ -283,21 +286,17 @@ class GpsPresenceService:
         )
 
     @staticmethod
-    def _presence_evaluation_from_point_plausibility(plausibility: GpsPointPlausibility) -> GpsPresenceEvaluation:
+    def _presence_evaluation_from_point_plausibility(
+        plausibility: GpsPointPlausibility,
+        *,
+        gps_range: dict[str, datetime | int | None] | None = None,
+    ) -> GpsPresenceEvaluation:
+        range_values = gps_range or {}
         if plausibility.plausibility_status == "matched":
-            return GpsPresenceEvaluation("matched", 1, 1, "latest_gps_point_inside_planned_site")
+            return GpsPresenceEvaluation("matched", 1, 1, "latest_gps_point_inside_planned_site", **range_values)
         if plausibility.plausibility_status == "mismatch":
-            return GpsPresenceEvaluation("mismatch", 0, 1, "latest_gps_point_outside_planned_site")
-        return GpsPresenceEvaluation("not_checkable", 0, 0, "planned_site_not_checkable")
-
-
-def time_entry_gps_window(entry: WorkTimeEntry) -> tuple[datetime, datetime]:
-    if entry.start_time and entry.end_time:
-        return (
-            datetime.combine(entry.work_date, entry.start_time, tzinfo=UTC),
-            datetime.combine(entry.work_date, entry.end_time, tzinfo=UTC),
-        )
-    return day_window(entry.work_date)
+            return GpsPresenceEvaluation("mismatch", 0, 1, "latest_gps_point_outside_planned_site", **range_values)
+        return GpsPresenceEvaluation("not_checkable", 0, 0, "planned_site_not_checkable", **range_values)
 
 
 def day_window(work_date: date) -> tuple[datetime, datetime]:
@@ -316,6 +315,23 @@ def ensure_aware_utc(value: datetime) -> datetime:
 def clean_source_id(device_id: str | None, user_id: int) -> str:
     cleaned = device_id.strip() if isinstance(device_id, str) else ""
     return cleaned[:120] if cleaned else f"user:{user_id}"
+
+
+def gps_range_from_points(points: list[GpsPoint]) -> dict[str, datetime | int | None]:
+    if not points:
+        return {"first_seen_at": None, "last_seen_at": None, "work_minutes": None}
+
+    first_seen_at = points[0].timestamp
+    last_seen_at = points[-1].timestamp
+    work_minutes = None
+    if len(points) >= 2:
+        duration_seconds = (ensure_aware_utc(last_seen_at) - ensure_aware_utc(first_seen_at)).total_seconds()
+        work_minutes = max(0, int(duration_seconds // 60))
+    return {
+        "first_seen_at": first_seen_at,
+        "last_seen_at": last_seen_at,
+        "work_minutes": work_minutes,
+    }
 
 
 def person_label(person: Person | None) -> str:
