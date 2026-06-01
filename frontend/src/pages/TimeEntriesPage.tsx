@@ -9,11 +9,30 @@ import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
+type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
 
 const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
   draft: "Entwurf",
   submitted: "Gemeldet",
   reviewed: "Geprueft",
+};
+
+const planningStatusLabels: Record<PlanningMatchStatus, string> = {
+  matches: "Passt",
+  needs_review: "Pruefen",
+  without_plan: "Ohne Planung",
+  missing_reported_site: "Unvollstaendig",
+  unknown: "-",
+  not_checkable: "nicht pruefbar",
+};
+
+const planningStatusTitles: Record<PlanningMatchStatus, string> = {
+  matches: "Gemeldete Baustelle entspricht der Planung.",
+  needs_review: "Gemeldete Baustelle weicht von der Planung ab.",
+  without_plan: "Fuer diesen Tag wurde keine Baustelle geplant.",
+  missing_reported_site: "Es gibt eine Planung, aber keine gemeldete Baustelle.",
+  unknown: "Planungshinweis ist mit den vorhandenen Daten nicht bestimmbar.",
+  not_checkable: "Geplante Baustellen konnten nicht geladen werden.",
 };
 
 export function TimeEntriesPage() {
@@ -256,50 +275,65 @@ export function TimeEntriesPage() {
                       <th>Pause</th>
                       <th>Fahrtzeit</th>
                       <th>Status</th>
+                      <th>Planung</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoadingEntries && (
                       <tr>
-                        <td className="time-empty-row" colSpan={8}>
+                        <td className="time-empty-row" colSpan={9}>
                           Arbeitszeiten werden geladen...
                         </td>
                       </tr>
                     )}
                     {!isLoadingEntries && entriesError && (
                       <tr>
-                        <td className="time-empty-row" colSpan={8}>
+                        <td className="time-empty-row" colSpan={9}>
                           {entriesError}
                         </td>
                       </tr>
                     )}
                     {!isLoadingEntries && !entriesError && entries.length === 0 && (
                       <tr>
-                        <td className="time-empty-row" colSpan={8}>
+                        <td className="time-empty-row" colSpan={9}>
                           Fuer diesen Zeitraum sind noch keine Arbeitszeiten erfasst.
                         </td>
                       </tr>
                     )}
-                    {!isLoadingEntries && !entriesError && entries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{formatDate(entry.work_date)}</td>
-                        <td>{formatWeekday(entry.work_date)}</td>
-                        <td>
-                          {isLoadingAssignments
-                            ? "wird geladen..."
-                            : plannedSiteLabel(plannedSitesByDate.get(entry.work_date), siteById)}
-                        </td>
-                        <td>{reportedSiteLabel(entry)}</td>
-                        <td>{formatMinutes(entry.work_minutes)}</td>
-                        <td>{formatMinutes(entry.break_minutes)}</td>
-                        <td>{formatMinutes(entry.travel_minutes)}</td>
-                        <td>
-                          <StatusBadge tone={timeEntryStatusTone(entry.status)}>
-                            {timeEntryStatusLabels[entry.status] ?? entry.status}
-                          </StatusBadge>
-                        </td>
-                      </tr>
-                    ))}
+                    {!isLoadingEntries && !entriesError && entries.map((entry) => {
+                      const plannedSiteIds = plannedSitesByDate.get(entry.work_date);
+                      const planningStatus = getPlanningMatchStatus(entry, plannedSiteIds, {
+                        isLoadingAssignments,
+                        assignmentsUnavailable: Boolean(assignmentsError),
+                      });
+                      return (
+                        <tr key={entry.id}>
+                          <td>{formatDate(entry.work_date)}</td>
+                          <td>{formatWeekday(entry.work_date)}</td>
+                          <td>
+                            {isLoadingAssignments
+                              ? "wird geladen..."
+                              : plannedSiteLabel(plannedSiteIds, siteById)}
+                          </td>
+                          <td>{reportedSiteLabel(entry)}</td>
+                          <td>{formatMinutes(entry.work_minutes)}</td>
+                          <td>{formatMinutes(entry.break_minutes)}</td>
+                          <td>{formatMinutes(entry.travel_minutes)}</td>
+                          <td>
+                            <StatusBadge tone={timeEntryStatusTone(entry.status)}>
+                              {timeEntryStatusLabels[entry.status] ?? entry.status}
+                            </StatusBadge>
+                          </td>
+                          <td>
+                            <span title={planningStatusTitles[planningStatus]}>
+                              <StatusBadge tone={planningStatusTone(planningStatus)}>
+                                {planningStatusLabels[planningStatus]}
+                              </StatusBadge>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -428,6 +462,44 @@ function compactSiteLabel(siteId: number, siteById: Map<number, SiteSummary>): s
     return `Baustelle ${siteId}`;
   }
   return site.site_number || site.name || `Baustelle ${siteId}`;
+}
+
+function getPlanningMatchStatus(
+  entry: TimeEntry,
+  plannedSiteIds: number[] | undefined,
+  options: { isLoadingAssignments: boolean; assignmentsUnavailable: boolean },
+): PlanningMatchStatus {
+  if (options.isLoadingAssignments || options.assignmentsUnavailable) {
+    return "not_checkable";
+  }
+  const hasPlannedSites = Boolean(plannedSiteIds?.length);
+  const reportedSiteId = entry.site_id;
+  if (!hasPlannedSites && !reportedSiteId) {
+    return "unknown";
+  }
+  if (!hasPlannedSites && reportedSiteId) {
+    return "without_plan";
+  }
+  if (hasPlannedSites && !reportedSiteId) {
+    return "missing_reported_site";
+  }
+  if (plannedSiteIds?.includes(reportedSiteId as number)) {
+    return "matches";
+  }
+  return "needs_review";
+}
+
+function planningStatusTone(status: PlanningMatchStatus): StatusBadgeTone {
+  if (status === "matches") {
+    return "active";
+  }
+  if (status === "needs_review" || status === "missing_reported_site") {
+    return "warning";
+  }
+  if (status === "without_plan") {
+    return "planned";
+  }
+  return "neutral";
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {
