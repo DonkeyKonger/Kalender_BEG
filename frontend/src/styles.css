@@ -5872,6 +5872,16 @@ button.person-chip:focus-visible {
   overflow: auto;
 }
 
+.time-table-note {
+  margin: 0;
+  border-bottom: 1px solid #dce6f2;
+  background: #fffaf0;
+  color: #8a5a00;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
 .time-entries-table {
   width: 100%;
   min-width: 980px;

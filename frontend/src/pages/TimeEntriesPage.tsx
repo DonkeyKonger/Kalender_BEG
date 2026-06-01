@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
@@ -18,12 +20,16 @@ export function TimeEntriesPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
+  const [sites, setSites] = useState<SiteSummary[]>([]);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entriesError, setEntriesError] = useState<string | null>(null);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadPeople();
@@ -65,6 +71,30 @@ export function TimeEntriesPage() {
     () => (rangeMode === "week" ? currentWeekRange() : currentMonthRange()),
     [rangeMode],
   );
+  const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
+  const plannedSitesByDate = useMemo(
+    () => buildPlannedSitesByDate(assignments, activeRange.start, activeRange.end),
+    [activeRange.end, activeRange.start, assignments],
+  );
+
+  useEffect(() => {
+    let ignore = false;
+    api.siteSummaries()
+      .then((siteData) => {
+        if (!ignore) {
+          setSites(siteData);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSites([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedPersonId === null) {
@@ -96,6 +126,44 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingEntries(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeRange.end, activeRange.start, selectedPersonId]);
+
+  useEffect(() => {
+    if (selectedPersonId === null) {
+      setAssignments([]);
+      setAssignmentsError(null);
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingAssignments(true);
+    setAssignmentsError(null);
+
+    api.assignments({
+      personId: selectedPersonId,
+      start: activeRange.start,
+      end: activeRange.end,
+    })
+      .then((assignmentData) => {
+        if (!ignore) {
+          setAssignments(assignmentData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setAssignments([]);
+          setAssignmentsError(readApiError(requestError, "Geplante Baustellen konnten nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingAssignments(false);
         }
       });
 
@@ -175,6 +243,7 @@ export function TimeEntriesPage() {
             </div>
           ) : (
             <div className="time-table-panel">
+              {assignmentsError && <p className="time-table-note">{assignmentsError}</p>}
               <div className="time-table-scroll">
                 <table className="time-entries-table">
                   <thead>
@@ -215,7 +284,11 @@ export function TimeEntriesPage() {
                       <tr key={entry.id}>
                         <td>{formatDate(entry.work_date)}</td>
                         <td>{formatWeekday(entry.work_date)}</td>
-                        <td>-</td>
+                        <td>
+                          {isLoadingAssignments
+                            ? "wird geladen..."
+                            : plannedSiteLabel(plannedSitesByDate.get(entry.work_date), siteById)}
+                        </td>
                         <td>{reportedSiteLabel(entry)}</td>
                         <td>{formatMinutes(entry.work_minutes)}</td>
                         <td>{formatMinutes(entry.break_minutes)}</td>
@@ -268,6 +341,41 @@ function parseDateInput(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function buildPlannedSitesByDate(assignments: AssignmentRead[], dateFrom: string, dateTo: string): Map<string, number[]> {
+  const result = new Map<string, number[]>();
+  for (const assignment of assignments) {
+    const start = maxDateString(assignment.start_date, dateFrom);
+    const end = minDateString(assignment.end_date, dateTo);
+    for (const day of daysBetween(start, end)) {
+      const siteIds = result.get(day) ?? [];
+      if (!siteIds.includes(assignment.site_id)) {
+        siteIds.push(assignment.site_id);
+      }
+      result.set(day, siteIds);
+    }
+  }
+  return result;
+}
+
+function daysBetween(start: string, end: string): string[] {
+  const days: string[] = [];
+  const cursor = parseDateInput(start);
+  const last = parseDateInput(end);
+  while (cursor <= last) {
+    days.push(toDateInputValue(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function maxDateString(left: string, right: string): string {
+  return left > right ? left : right;
+}
+
+function minDateString(left: string, right: string): string {
+  return left < right ? left : right;
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parseDateInput(value));
 }
@@ -294,6 +402,32 @@ function formatMinutes(minutes: number | null | undefined): string {
 
 function reportedSiteLabel(entry: TimeEntry): string {
   return [entry.site_number, entry.site_name].filter(Boolean).join(" · ") || "-";
+}
+
+function plannedSiteLabel(siteIds: number[] | undefined, siteById: Map<number, SiteSummary>): string {
+  if (!siteIds?.length) {
+    return "-";
+  }
+  if (siteIds.length === 1) {
+    return fullSiteLabel(siteIds[0], siteById);
+  }
+  return siteIds.map((siteId) => compactSiteLabel(siteId, siteById)).join(", ");
+}
+
+function fullSiteLabel(siteId: number, siteById: Map<number, SiteSummary>): string {
+  const site = siteById.get(siteId);
+  if (!site) {
+    return `Baustelle ${siteId}`;
+  }
+  return [site.site_number, site.name].filter(Boolean).join(" · ") || `Baustelle ${siteId}`;
+}
+
+function compactSiteLabel(siteId: number, siteById: Map<number, SiteSummary>): string {
+  const site = siteById.get(siteId);
+  if (!site) {
+    return `Baustelle ${siteId}`;
+  }
+  return site.site_number || site.name || `Baustelle ${siteId}`;
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {
