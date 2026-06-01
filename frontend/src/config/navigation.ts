@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  Building2,
   CalendarDays,
   CalendarX,
   Download,
@@ -54,6 +55,12 @@ export const navigationItems: NavigationItem[] = [
     path: "/users",
     icon: ShieldCheck,
     roles: ["admin"],
+  },
+  {
+    label: "Kunden",
+    path: "/customers",
+    icon: Building2,
+    roles: ["admin", "project_manager"],
   },
   {
     label: "Personen",

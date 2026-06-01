@@ -1,0 +1,45 @@
+from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin
+
+
+class Customer(TimestampMixin, Base):
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    address_street: Mapped[str | None] = mapped_column(String(200))
+    address_house_number: Mapped[str | None] = mapped_column(String(40))
+    address_postal_code: Mapped[str | None] = mapped_column(String(20))
+    address_city: Mapped[str | None] = mapped_column(String(120))
+    address_country: Mapped[str | None] = mapped_column(String(120), default="Deutschland")
+    company_phone: Mapped[str | None] = mapped_column(String(80))
+    project_lead_name: Mapped[str | None] = mapped_column(String(200))
+    project_lead_phone: Mapped[str | None] = mapped_column(String(80))
+    project_lead_email: Mapped[str | None] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+    contacts = relationship(
+        "CustomerContact",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        order_by="CustomerContact.id",
+    )
+
+
+class CustomerContact(TimestampMixin, Base):
+    __tablename__ = "customer_contacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    contact_type: Mapped[str] = mapped_column(String(40), nullable=False, default="monteur")
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(80))
+    email: Mapped[str | None] = mapped_column(String(255))
+
+    customer = relationship("Customer", back_populates="contacts")

@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./layout/AppShell";
 import { AbsencesPage } from "./pages/AbsencesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -47,6 +48,7 @@ export function App() {
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
+            <Route path="customers" element={<CustomersPage />} />
             <Route path="persons" element={<PersonsPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>

@@ -1,5 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
+import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
@@ -225,6 +226,33 @@ export const api = {
 
   async removePerson(personId: number): Promise<PersonRemoveResponse> {
     return request<PersonRemoveResponse>(`/persons/${personId}/remove`, { method: "POST" });
+  },
+
+  async customers(params: { isActive?: boolean | null } = { isActive: true }): Promise<Customer[]> {
+    const search = new URLSearchParams();
+    if (params.isActive !== null && params.isActive !== undefined) {
+      search.set("is_active", String(params.isActive));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<Customer[]>(`/customers${suffix}`);
+  },
+
+  async createCustomer(payload: CustomerCreate): Promise<Customer> {
+    return request<Customer>("/customers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateCustomer(customerId: number, payload: CustomerUpdate): Promise<Customer> {
+    return request<Customer>(`/customers/${customerId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async removeCustomer(customerId: number): Promise<CustomerRemoveResponse> {
+    return request<CustomerRemoveResponse>(`/customers/${customerId}/remove`, { method: "POST" });
   },
 
   async createUser(payload: AdminUserCreate): Promise<AdminUser> {
