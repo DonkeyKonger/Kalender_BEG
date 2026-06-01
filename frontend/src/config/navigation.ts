@@ -3,6 +3,7 @@ import {
   Building2,
   CalendarDays,
   CalendarX,
+  Clock3,
   Download,
   FolderKanban,
   Home,
@@ -24,6 +25,12 @@ export const navigationItems: NavigationItem[] = [
     label: "Planmatrix",
     path: "/matrix",
     icon: CalendarDays,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Zeiten",
+    path: "/time-entries",
+    icon: Clock3,
     roles: ["admin", "project_manager", "office"],
   },
   {

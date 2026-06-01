@@ -15,6 +15,7 @@ import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import { SiteDetailPage } from "./pages/SiteDetailPage";
 import { SitesPage } from "./pages/SitesPage";
+import { TimeEntriesPage } from "./pages/TimeEntriesPage";
 
 const SiteMapPage = lazy(() =>
   import("./pages/SiteMapPage").then((module) => ({ default: module.SiteMapPage })),
@@ -31,6 +32,7 @@ export function App() {
             element={<ProtectedRoute roles={["admin", "project_manager", "office"]} />}
           >
             <Route path="matrix" element={<MatrixPage />} />
+            <Route path="time-entries" element={<TimeEntriesPage />} />
             <Route path="sites" element={<SitesPage />} />
             <Route
               path="site-map"

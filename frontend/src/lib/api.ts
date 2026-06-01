@@ -7,6 +7,7 @@ import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMess
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
+import type { TimeEntry, TimeEntryCreate, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -286,6 +287,43 @@ export const api = {
 
   async deleteUser(userId: number): Promise<void> {
     return request<void>(`/users/${userId}`, { method: "DELETE" });
+  },
+
+  async timeEntries(params: {
+    personId?: number;
+    siteId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}): Promise<TimeEntry[]> {
+    const search = new URLSearchParams();
+    if (params.personId !== undefined) {
+      search.set("person_id", String(params.personId));
+    }
+    if (params.siteId !== undefined) {
+      search.set("site_id", String(params.siteId));
+    }
+    if (params.dateFrom) {
+      search.set("date_from", params.dateFrom);
+    }
+    if (params.dateTo) {
+      search.set("date_to", params.dateTo);
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<TimeEntry[]>(`/time-entries${suffix}`);
+  },
+
+  async createTimeEntry(payload: TimeEntryCreate): Promise<TimeEntry> {
+    return request<TimeEntry>("/time-entries", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateTimeEntry(entryId: number, payload: TimeEntryUpdate): Promise<TimeEntry> {
+    return request<TimeEntry>(`/time-entries/${entryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
 
 

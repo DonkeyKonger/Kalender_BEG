@@ -16,6 +16,7 @@ from app.api.routes import (
     persons,
     project_folders,
     sites,
+    time_entries,
     users,
 )
 from app.core.config import settings
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix="/api")
     app.include_router(persons.router, prefix="/api")
     app.include_router(sites.router, prefix="/api")
+    app.include_router(time_entries.router, prefix="/api")
     app.include_router(project_folders.router, prefix="/api")
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
