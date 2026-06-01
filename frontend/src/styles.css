@@ -4352,6 +4352,20 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table {
   min-width: 1120px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.measurement-timesheet-table-wrap {
+  max-height: min(64vh, 680px);
+  overflow: auto;
+}
+
+.measurement-timesheet-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--pf-border-soft, #e5edf7);
 }
 
 .measurement-timesheet-table td:nth-child(2) {
@@ -7754,7 +7768,8 @@ button.person-chip:focus-visible {
 
 .site-detail-page.is-project-file-workspace .project-record-subtabs {
   display: flex;
-  width: 100%;
+  box-sizing: border-box;
+  width: calc(100% + 36px);
   border: 0;
   border-bottom: 1px solid var(--pf-border);
   border-radius: 0;
@@ -8182,12 +8197,14 @@ button.person-chip:focus-visible {
 
 .site-detail-page.is-measurement-review-workspace .project-record-subtabs {
   display: flex;
-  width: 100%;
+  box-sizing: border-box;
+  width: calc(100% + 36px);
   border: 0;
   border-bottom: 1px solid var(--figma-border);
   border-radius: 0;
   background: var(--figma-surface);
   gap: 8px;
+  margin: -18px -18px 0;
   padding: 10px 18px;
 }
 

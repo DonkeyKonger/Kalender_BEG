@@ -1841,7 +1841,7 @@ function MeasurementTimesheetPanel({
           {filteredProjectPositionRows.length === 0 ? (
             <div className="project-record-empty-state">Keine passenden Projektpositionen gefunden.</div>
           ) : (
-            <div className="measurement-table-wrap">
+            <div className="measurement-table-wrap measurement-timesheet-table-wrap">
               <table className="measurement-table measurement-timesheet-table">
                 <thead>
                   <tr>
