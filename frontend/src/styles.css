@@ -3889,9 +3889,7 @@ button.person-chip:focus-visible {
 
 .measurement-base-main {
   display: grid;
-  grid-template-columns: minmax(88px, 128px) minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -3901,9 +3899,26 @@ button.person-chip:focus-visible {
   min-width: 0;
 }
 
+.measurement-base-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.measurement-base-title-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .measurement-offer-note-input {
-  width: 100%;
+  flex: 1 1 min(48%, 360px);
+  max-width: 520px;
   min-height: 28px;
+  min-width: 140px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -3951,6 +3966,17 @@ button.person-chip:focus-visible {
 
   .measurement-base-main {
     grid-template-columns: 1fr;
+  }
+
+  .measurement-base-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .measurement-offer-note-input {
+    width: 100%;
+    max-width: none;
   }
 
   .measurement-base-card > div:last-child {

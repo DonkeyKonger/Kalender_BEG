@@ -2070,33 +2070,37 @@ function MeasurementBasesPanel({
             const isActive = base.status === "active" && base.released_to_mobile;
             const positionCount = base.item_count ?? 0;
             const hasMeasurementData = (base.batch_count ?? 0) > 0;
-            const offerLabel = `Angebot ${offerNumberByBaseId.get(base.id) ?? ""}`.trim();
+            const fallbackOfferLabel = `Angebot ${offerNumberByBaseId.get(base.id) ?? ""}`.trim();
+            const offerLabel = formatMeasurementBaseName(base).trim() || fallbackOfferLabel;
             return (
               <article className={`measurement-base-card${isActive ? " is-active" : ""}`} key={base.id}>
                 <div className="measurement-base-main">
-                  <input
-                    className="measurement-offer-note-input"
-                    key={`${base.id}-${base.source_note ?? ""}`}
-                    defaultValue={base.source_note ?? ""}
-                    aria-label={`Notiz zu ${offerLabel}`}
-                    onBlur={(event) => {
-                      const nextValue = event.currentTarget.value.trim();
-                      if (nextValue !== (base.source_note ?? "")) {
-                        onUpdateBase(base, { source_note: nextValue || null });
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.currentTarget.blur();
-                      }
-                      if (event.key === "Escape") {
-                        event.currentTarget.value = base.source_note ?? "";
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
                   <div className="measurement-base-copy">
-                    <strong>{offerLabel}</strong>
+                    <div className="measurement-base-title-row">
+                      <strong>{offerLabel}</strong>
+                      <input
+                        className="measurement-offer-note-input"
+                        key={`${base.id}-${base.source_note ?? ""}`}
+                        defaultValue={base.source_note ?? ""}
+                        aria-label={`Kurzkennung zu ${offerLabel}`}
+                        placeholder="Kurzkennung"
+                        onBlur={(event) => {
+                          const nextValue = event.currentTarget.value.trim();
+                          if (nextValue !== (base.source_note ?? "")) {
+                            onUpdateBase(base, { source_note: nextValue || null });
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                          if (event.key === "Escape") {
+                            event.currentTarget.value = base.source_note ?? "";
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                    </div>
                     <small>
                       {isActive ? "Aktiv" : "Inaktiv"} · {positionCount} Positionen · erstellt {formatDateTime(base.created_at)}
                     </small>
