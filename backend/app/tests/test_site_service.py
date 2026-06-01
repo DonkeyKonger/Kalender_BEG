@@ -86,6 +86,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
         status=SiteStatus.COMPLETED,
         info=None,
         color="#1d5c99",
+        planned_work_minutes=1200,
         closed_at=closed_at,
         closed_by_user_id=4,
     )
@@ -95,6 +96,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
     assert snapshot["status"] == "completed"
     assert snapshot["location_status"] == "geocoded"
     assert snapshot["geofence_radius_m"] == 5000
+    assert snapshot["planned_work_minutes"] == 1200
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"
 
 
