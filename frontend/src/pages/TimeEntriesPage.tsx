@@ -103,6 +103,7 @@ export function TimeEntriesPage() {
     () => people.find((person) => person.id === selectedPersonId) ?? null,
     [people, selectedPersonId],
   );
+  const editorPersonName = editingEntry?.person_name ?? selectedPerson?.display_name ?? "Ausgewaehlter Monteur";
 
   const activeRange = useMemo(
     () => (rangeMode === "week" ? currentWeekRange() : currentMonthRange()),
@@ -243,11 +244,12 @@ export function TimeEntriesPage() {
   }
 
   async function saveTimeEntry() {
-    if (!selectedPersonId) {
+    const targetPersonId = editingEntry?.person_id ?? selectedPersonId;
+    if (!targetPersonId) {
       setFormError("Bitte zuerst einen Monteur auswaehlen.");
       return;
     }
-    const payloadResult = buildTimeEntryPayload(entryForm, selectedPersonId);
+    const payloadResult = buildTimeEntryPayload(entryForm, targetPersonId);
     if (!payloadResult.ok) {
       setFormError(payloadResult.error);
       return;
@@ -354,7 +356,7 @@ export function TimeEntriesPage() {
               <div className="time-entry-editor-header">
                 <div>
                   <h3>{editingEntry ? "Arbeitszeit bearbeiten" : "Arbeitszeit erfassen"}</h3>
-                  <p>{selectedPerson?.display_name ?? "Ausgewaehlter Monteur"}</p>
+                  <p>{editorPersonName}</p>
                 </div>
                 <button className="icon-button secondary" disabled={isSavingEntry} type="button" onClick={closeEditor}>
                   Schliessen
