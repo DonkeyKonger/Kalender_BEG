@@ -4015,6 +4015,20 @@ button.person-chip:focus-visible {
   color: #c2410c;
 }
 
+.measurement-timesheet-workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid #dbe7f5;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.measurement-timesheet-header {
+  margin: 0;
+}
+
 .measurement-timesheet-meta {
   display: flex;
   flex-wrap: wrap;
@@ -4095,6 +4109,21 @@ button.person-chip:focus-visible {
   font-size: 1.15rem;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.measurement-timesheet-table-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #dce5f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.measurement-timesheet-table-panel .project-record-empty-state,
+.measurement-timesheet-table-panel .measurement-table-wrap {
+  margin: 0;
 }
 
 .measurement-execution-track {
@@ -7876,6 +7905,8 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .measurement-review-card,
 .site-detail-page.is-project-file-workspace .measurement-review-position,
 .site-detail-page.is-project-file-workspace .measurement-review-detail,
+.site-detail-page.is-project-file-workspace .measurement-timesheet-workspace,
+.site-detail-page.is-project-file-workspace .measurement-timesheet-table-panel,
 .site-detail-page.is-project-file-workspace .measurement-evaluation-grid > div,
 .site-detail-page.is-project-file-workspace .measurement-base-card,
 .site-detail-page.is-project-file-workspace .measurement-table-wrap {

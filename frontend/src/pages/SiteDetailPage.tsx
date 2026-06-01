@@ -1693,192 +1693,196 @@ function MeasurementTimesheetPanel({
 
   return (
     <>
-      <div className="project-record-toolbar">
-        <div>
-          <h2><Ruler aria-hidden="true" size={18} />Projektpositionen / Angebot vs. Ausführung</h2>
-          <p>Übersicht über Projektpositionen, Montagezeiten und bisher erfasste Aufmaßmengen.</p>
-          <div className="measurement-timesheet-meta">
-            {defaultBase ? <span><strong>Aktives Aufmaß:</strong> {formatMeasurementBaseName(defaultBase)}</span> : null}
-            {latestImportInfo?.fileName ? <span><strong>Letzter Import:</strong> {latestImportInfo.fileName}</span> : null}
-            {latestImportInfo?.updatedAt ? <span><strong>Importzeit:</strong> {formatDateTime(latestImportInfo.updatedAt)}</span> : null}
+      <div className="measurement-timesheet-workspace">
+        <div className="project-record-toolbar measurement-timesheet-header">
+          <div>
+            <h2><Ruler aria-hidden="true" size={18} />Projektpositionen / Angebot vs. Ausführung</h2>
+            <p>Übersicht über Projektpositionen, Montagezeiten und bisher erfasste Aufmaßmengen.</p>
+            <div className="measurement-timesheet-meta">
+              {defaultBase ? <span><strong>Aktives Aufmaß:</strong> {formatMeasurementBaseName(defaultBase)}</span> : null}
+              {latestImportInfo?.fileName ? <span><strong>Letzter Import:</strong> {latestImportInfo.fileName}</span> : null}
+              {latestImportInfo?.updatedAt ? <span><strong>Importzeit:</strong> {formatDateTime(latestImportInfo.updatedAt)}</span> : null}
+            </div>
           </div>
-        </div>
-        <label
-          className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (!isImporting) {
-              setIsDropTargetActive(true);
-            }
-          }}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setIsDropTargetActive(false);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setIsDropTargetActive(false);
-            const file = event.dataTransfer.files?.[0];
-            if (file) {
-              openImportDialog(file);
-            }
-          }}
-        >
-          <UploadCloud aria-hidden="true" size={15} />
-          <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
-          <input
-            className="project-upload-input"
-            type="file"
-            accept="application/pdf,.pdf"
-            disabled={isImporting}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                openImportDialog(file);
-                event.target.value = "";
+          <label
+            className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!isImporting) {
+                setIsDropTargetActive(true);
               }
             }}
-          />
-        </label>
-      </div>
-
-      {fileSelectionError ? <div className="project-record-empty-state is-error"><strong>{fileSelectionError}</strong></div> : null}
-      {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
-      {importError && !isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
-
-      {isLoading ? <div className="matrix-state">Aufmaßpositionen werden geladen...</div> : null}
-      {error ? (
-        <div className="project-record-empty-state is-error">
-          <strong>{error}</strong>
-          <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsDropTargetActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsDropTargetActive(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file) {
+                openImportDialog(file);
+              }
+            }}
+          >
+            <UploadCloud aria-hidden="true" size={15} />
+            <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
+            <input
+              className="project-upload-input"
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={isImporting}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  openImportDialog(file);
+                  event.target.value = "";
+                }
+              }}
+            />
+          </label>
         </div>
-      ) : null}
-      {!isLoading && !error && items.length === 0 ? (
-        <div className="project-record-empty-state">Noch keine Aufmaßpositionen importiert.</div>
-      ) : null}
-      {!isLoading && !error && items.length > 0 ? (
-        <>
-          <div className="measurement-timesheet-kpis" aria-label="Projektpositionen Kennzahlen">
-            <div className="measurement-timesheet-kpi-card">
-              <span>Projektpositionen</span>
-              <strong>{projectPositionStats.total}</strong>
-            </div>
-            <div className="measurement-timesheet-kpi-card">
-              <span>Geplante Stunden</span>
-              <strong>{projectPositionStats.hasPlannedBasis ? formatMeasurementDuration(projectPositionStats.plannedMinutes) : "Noch keine Sollbasis"}</strong>
-            </div>
-            <div className="measurement-timesheet-kpi-card">
-              <span>Aufmaß-Stunden</span>
-              <strong>{formatMeasurementDuration(projectPositionStats.measuredMinutes)}</strong>
-            </div>
-            <div className="measurement-timesheet-kpi-card">
-              <span>Rechnerischer Ausführungsstand</span>
-              <strong>{projectPositionStats.progressPercent !== null ? formatMeasurementPercent(projectPositionStats.progressPercent) : "Keine Sollbasis"}</strong>
-            </div>
-            <div className="measurement-timesheet-kpi-card">
-              <span>Offene Stunden</span>
-              <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
-            </div>
-          </div>
 
-          <section className="measurement-timesheet-progress-panel" aria-label="Rechnerischer Ausführungsstand">
-            <div className="measurement-timesheet-progress-head">
-              <div>
-                <h3>Rechnerischer Ausführungsstand</h3>
-                <p>Aufmaß-/Leistungsfortschritt auf Basis von Montagezeiten und erfassten Aufmaßmengen.</p>
+        {fileSelectionError ? <div className="project-record-empty-state is-error"><strong>{fileSelectionError}</strong></div> : null}
+        {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
+        {importError && !isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
+
+        {isLoading ? <div className="matrix-state">Aufmaßpositionen werden geladen...</div> : null}
+        {error ? (
+          <div className="project-record-empty-state is-error">
+            <strong>{error}</strong>
+            <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+          </div>
+        ) : null}
+        {!isLoading && !error && items.length === 0 ? (
+          <div className="project-record-empty-state">Noch keine Aufmaßpositionen importiert.</div>
+        ) : null}
+        {!isLoading && !error && items.length > 0 ? (
+          <>
+            <div className="measurement-timesheet-kpis" aria-label="Projektpositionen Kennzahlen">
+              <div className="measurement-timesheet-kpi-card">
+                <span>Projektpositionen</span>
+                <strong>{projectPositionStats.total}</strong>
               </div>
-              {projectPositionStats.progressPercent !== null ? <strong>{formatMeasurementPercent(projectPositionStats.progressPercent)}</strong> : null}
+              <div className="measurement-timesheet-kpi-card">
+                <span>Geplante Stunden</span>
+                <strong>{projectPositionStats.hasPlannedBasis ? formatMeasurementDuration(projectPositionStats.plannedMinutes) : "Noch keine Sollbasis"}</strong>
+              </div>
+              <div className="measurement-timesheet-kpi-card">
+                <span>Aufmaß-Stunden</span>
+                <strong>{formatMeasurementDuration(projectPositionStats.measuredMinutes)}</strong>
+              </div>
+              <div className="measurement-timesheet-kpi-card">
+                <span>Rechnerischer Ausführungsstand</span>
+                <strong>{projectPositionStats.progressPercent !== null ? formatMeasurementPercent(projectPositionStats.progressPercent) : "Keine Sollbasis"}</strong>
+              </div>
+              <div className="measurement-timesheet-kpi-card">
+                <span>Offene Stunden</span>
+                <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
+              </div>
             </div>
-            {projectPositionStats.progressPercent !== null ? (
-              <>
-                <ExecutionProgressTrack
-                  percent={projectPositionStats.progressPercent}
-                  workerHeadCount={workerHeadCount}
-                />
+
+            <section className="measurement-timesheet-progress-panel" aria-label="Rechnerischer Ausführungsstand">
+              <div className="measurement-timesheet-progress-head">
+                <div>
+                  <h3>Rechnerischer Ausführungsstand</h3>
+                  <p>Aufmaß-/Leistungsfortschritt auf Basis von Montagezeiten und erfassten Aufmaßmengen.</p>
+                </div>
+                {projectPositionStats.progressPercent !== null ? <strong>{formatMeasurementPercent(projectPositionStats.progressPercent)}</strong> : null}
+              </div>
+              {projectPositionStats.progressPercent !== null ? (
+                <>
+                  <ExecutionProgressTrack
+                    percent={projectPositionStats.progressPercent}
+                    workerHeadCount={workerHeadCount}
+                  />
+                  <p className="measurement-timesheet-progress-note">
+                    {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
+                  </p>
+                </>
+              ) : (
                 <p className="measurement-timesheet-progress-note">
-                  {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
+                  Für einen belastbaren Fortschritt fehlt aktuell noch die Sollbasis aus Angebots-/Projektmengen.
                 </p>
-              </>
-            ) : (
-              <p className="measurement-timesheet-progress-note">
-                Für einen belastbaren Fortschritt fehlt aktuell noch die Sollbasis aus Angebots-/Projektmengen.
-              </p>
-            )}
-          </section>
+              )}
+            </section>
 
-          <div className="measurement-timesheet-filterbar">
-            <div className="measurement-timesheet-filter-group" aria-label="Zeitenliste filtern">
-              {filterOptions.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={activeFilter === option.key ? "is-active" : ""}
-                  onClick={() => setActiveFilter(option.key)}
-                >
-                  {option.label}
-                  <span>{option.count}</span>
-                </button>
-              ))}
-            </div>
-            <label className="measurement-timesheet-search">
-              <Search aria-hidden="true" size={15} />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Position oder Beschreibung suchen..."
-              />
-            </label>
-          </div>
-
-          {filteredProjectPositionRows.length === 0 ? (
-            <div className="project-record-empty-state">Keine passenden Projektpositionen gefunden.</div>
-          ) : (
-            <div className="measurement-table-wrap measurement-timesheet-table-wrap">
-              <table className="measurement-table measurement-timesheet-table">
-                <thead>
-                  <tr>
-                    <th>Pos.-Nr.</th>
-                    <th>Bezeichnung</th>
-                    <th>Einheit</th>
-                    <th className="measurement-timesheet-number">Sollmenge / Listenmenge</th>
-                    <th className="measurement-timesheet-number">Aufmaßmenge</th>
-                    <th className="measurement-timesheet-number">Restmenge</th>
-                    <th className="measurement-timesheet-number">Min./Einheit</th>
-                    <th className="measurement-timesheet-number">Aufmaß-Stunden</th>
-                    <th className="measurement-timesheet-number">Fortschritt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProjectPositionRows.map((row) => (
-                    <tr
-                      key={row.item.id}
-                      className={row.measuredQuantity > 0 ? "has-quantity" : ""}
+            <section className="measurement-timesheet-table-panel" aria-label="Projektpositionen Tabelle">
+              <div className="measurement-timesheet-filterbar">
+                <div className="measurement-timesheet-filter-group" aria-label="Zeitenliste filtern">
+                  {filterOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={activeFilter === option.key ? "is-active" : ""}
+                      onClick={() => setActiveFilter(option.key)}
                     >
-                      <td><strong>{row.positionNumber}</strong></td>
-                      <td className="measurement-timesheet-description">{row.description}</td>
-                      <td>{row.unit ?? "-"}</td>
-                      <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
-                      <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
-                    </tr>
+                      {option.label}
+                      <span>{option.count}</span>
+                    </button>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : null}
+                </div>
+                <label className="measurement-timesheet-search">
+                  <Search aria-hidden="true" size={15} />
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Position oder Beschreibung suchen..."
+                  />
+                </label>
+              </div>
+
+              {filteredProjectPositionRows.length === 0 ? (
+                <div className="project-record-empty-state">Keine passenden Projektpositionen gefunden.</div>
+              ) : (
+                <div className="measurement-table-wrap measurement-timesheet-table-wrap">
+                  <table className="measurement-table measurement-timesheet-table">
+                    <thead>
+                      <tr>
+                        <th>Pos.-Nr.</th>
+                        <th>Bezeichnung</th>
+                        <th>Einheit</th>
+                        <th className="measurement-timesheet-number">Sollmenge / Listenmenge</th>
+                        <th className="measurement-timesheet-number">Aufmaßmenge</th>
+                        <th className="measurement-timesheet-number">Restmenge</th>
+                        <th className="measurement-timesheet-number">Min./Einheit</th>
+                        <th className="measurement-timesheet-number">Aufmaß-Stunden</th>
+                        <th className="measurement-timesheet-number">Fortschritt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProjectPositionRows.map((row) => (
+                        <tr
+                          key={row.item.id}
+                          className={row.measuredQuantity > 0 ? "has-quantity" : ""}
+                        >
+                          <td><strong>{row.positionNumber}</strong></td>
+                          <td className="measurement-timesheet-description">{row.description}</td>
+                          <td>{row.unit ?? "-"}</td>
+                          <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
+                          <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
+                          <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
+                          <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
+                          <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
+                          <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        ) : null}
+      </div>
 
       {isImportDialogOpen && pendingFile ? (
         <div className="measurement-import-modal-backdrop" role="presentation" onMouseDown={resetImportDialog}>
