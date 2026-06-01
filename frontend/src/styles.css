@@ -4376,10 +4376,14 @@ button.person-chip:focus-visible {
   min-width: 560px;
 }
 
-.measurement-timesheet-number {
+.measurement-timesheet-table .measurement-timesheet-number {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
+}
+
+.measurement-timesheet-table thead .measurement-timesheet-number {
+  text-align: right;
 }
 
 .measurement-timesheet-table tbody tr.has-quantity td:first-child {

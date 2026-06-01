@@ -1848,12 +1848,12 @@ function MeasurementTimesheetPanel({
                     <th>Pos.-Nr.</th>
                     <th>Bezeichnung</th>
                     <th>Einheit</th>
-                    <th>Sollmenge / Listenmenge</th>
-                    <th>Aufmaßmenge</th>
-                    <th>Restmenge</th>
-                    <th>Min./Einheit</th>
-                    <th>Aufmaß-Stunden</th>
-                    <th>Fortschritt</th>
+                    <th className="measurement-timesheet-number">Sollmenge / Listenmenge</th>
+                    <th className="measurement-timesheet-number">Aufmaßmenge</th>
+                    <th className="measurement-timesheet-number">Restmenge</th>
+                    <th className="measurement-timesheet-number">Min./Einheit</th>
+                    <th className="measurement-timesheet-number">Aufmaß-Stunden</th>
+                    <th className="measurement-timesheet-number">Fortschritt</th>
                   </tr>
                 </thead>
                 <tbody>
