@@ -1,22 +1,39 @@
 import { Clock3 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Person } from "../types/person";
+import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
+
+const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
+  draft: "Entwurf",
+  submitted: "Gemeldet",
+  reviewed: "Geprueft",
+};
 
 export function TimeEntriesPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
+  const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entriesError, setEntriesError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadPeople();
   }, []);
+
+  useEffect(() => {
+    if (selectedPersonId === null && people.length) {
+      setSelectedPersonId(people[0].id);
+    }
+  }, [people, selectedPersonId]);
 
   async function loadPeople() {
     setIsLoadingPeople(true);
@@ -48,6 +65,44 @@ export function TimeEntriesPage() {
     () => (rangeMode === "week" ? currentWeekRange() : currentMonthRange()),
     [rangeMode],
   );
+
+  useEffect(() => {
+    if (selectedPersonId === null) {
+      setEntries([]);
+      setEntriesError(null);
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingEntries(true);
+    setEntriesError(null);
+
+    api.timeEntries({
+      personId: selectedPersonId,
+      dateFrom: activeRange.start,
+      dateTo: activeRange.end,
+    })
+      .then((entryData) => {
+        if (!ignore) {
+          setEntries(entryData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setEntries([]);
+          setEntriesError(readApiError(requestError, "Arbeitszeiten konnten nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingEntries(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeRange.end, activeRange.start, selectedPersonId]);
 
   return (
     <section className="time-entries-page">
@@ -135,11 +190,43 @@ export function TimeEntriesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td className="time-empty-row" colSpan={8}>
-                        Fuer diesen Zeitraum sind noch keine Arbeitszeiten erfasst.
-                      </td>
-                    </tr>
+                    {isLoadingEntries && (
+                      <tr>
+                        <td className="time-empty-row" colSpan={8}>
+                          Arbeitszeiten werden geladen...
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoadingEntries && entriesError && (
+                      <tr>
+                        <td className="time-empty-row" colSpan={8}>
+                          {entriesError}
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoadingEntries && !entriesError && entries.length === 0 && (
+                      <tr>
+                        <td className="time-empty-row" colSpan={8}>
+                          Fuer diesen Zeitraum sind noch keine Arbeitszeiten erfasst.
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoadingEntries && !entriesError && entries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDate(entry.work_date)}</td>
+                        <td>{formatWeekday(entry.work_date)}</td>
+                        <td>-</td>
+                        <td>{reportedSiteLabel(entry)}</td>
+                        <td>{formatMinutes(entry.work_minutes)}</td>
+                        <td>{formatMinutes(entry.break_minutes)}</td>
+                        <td>{formatMinutes(entry.travel_minutes)}</td>
+                        <td>
+                          <StatusBadge tone={timeEntryStatusTone(entry.status)}>
+                            {timeEntryStatusLabels[entry.status] ?? entry.status}
+                          </StatusBadge>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -185,8 +272,38 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parseDateInput(value));
 }
 
+function formatWeekday(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseDateInput(value));
+}
+
 function formatRangeLabel(start: string, end: string): string {
   return `${formatDate(start)} bis ${formatDate(end)}`;
+}
+
+function formatMinutes(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) {
+    return "-";
+  }
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) {
+    return `${rest} Min.`;
+  }
+  return `${hours} Std. ${rest} Min.`;
+}
+
+function reportedSiteLabel(entry: TimeEntry): string {
+  return [entry.site_number, entry.site_name].filter(Boolean).join(" · ") || "-";
+}
+
+function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {
+  if (status === "reviewed") {
+    return "active";
+  }
+  if (status === "submitted") {
+    return "planned";
+  }
+  return "neutral";
 }
 
 function comparePeople(left: Person, right: Person): number {
