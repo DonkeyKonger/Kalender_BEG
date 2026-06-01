@@ -5817,6 +5817,20 @@ button.person-chip:focus-visible {
   gap: 10px;
 }
 
+.time-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.time-add-button {
+  min-height: 34px;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
 .time-range-controls label {
   display: grid;
   gap: 4px;
@@ -5833,6 +5847,76 @@ button.person-chip:focus-visible {
   color: #111827;
   padding: 0 9px;
   font: inherit;
+}
+
+.time-entry-editor {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce6f2;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.time-entry-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.time-entry-editor-header h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.time-entry-editor-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.time-entry-form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.time-entry-form-grid label {
+  display: grid;
+  gap: 5px;
+  color: #42526a;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.time-entry-form-grid input,
+.time-entry-form-grid select,
+.time-entry-form-grid textarea {
+  width: 100%;
+  border: 1px solid #d7e1ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.time-entry-form-grid textarea {
+  resize: vertical;
+}
+
+.time-entry-note-field {
+  grid-column: 1 / -1;
+}
+
+.time-entry-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .time-summary-strip {
@@ -5901,10 +5985,49 @@ button.person-chip:focus-visible {
   font-weight: 700;
 }
 
+.time-table-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cbd7e6;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #243348;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.time-table-action:hover {
+  border-color: #9bbbe2;
+  background: #eef4fb;
+}
+
 @media (min-width: 980px) {
   .time-entries-layout {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
     align-items: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .time-entries-toolbar,
+  .time-entry-editor-header {
+    display: grid;
+  }
+
+  .time-toolbar-actions,
+  .time-range-controls,
+  .time-add-button {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .time-range-controls label,
+  .time-add-button {
+    flex: 1 1 140px;
   }
 }
 
