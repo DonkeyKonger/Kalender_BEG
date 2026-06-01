@@ -5,8 +5,9 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from app.models.assignment import Assignment
 from app.models.enums import GpsSourceType, UserRole
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
@@ -26,6 +27,28 @@ class GpsPresenceEvaluation:
     matched_points: int
     total_points: int
     reason: str
+
+
+@dataclass(frozen=True)
+class GpsPointPlausibility:
+    planned_site_id: int | None
+    planned_site_label: str | None
+    plausibility_status: str
+    distance_to_planned_site_m: float | None
+    geofence_radius_m: int | None
+
+
+@dataclass(frozen=True)
+class GpsRecentLocationPoint:
+    id: int
+    person_id: int
+    person_name: str
+    captured_at: datetime
+    planned_site_id: int | None
+    planned_site_label: str | None
+    plausibility_status: str
+    distance_to_planned_site_m: float | None
+    geofence_radius_m: int | None
 
 
 class GpsPresenceService:
@@ -52,6 +75,42 @@ class GpsPresenceService:
         self.db.commit()
         self.db.refresh(point)
         return point
+
+    def list_recent_location_points(self, *, limit: int = 20) -> list[GpsRecentLocationPoint]:
+        safe_limit = max(1, min(limit, 100))
+        points = list(self.db.scalars(
+            select(GpsPoint)
+            .where(
+                GpsPoint.source_type == GpsSourceType.PHONE,
+                GpsPoint.person_id.is_not(None),
+            )
+            .order_by(GpsPoint.timestamp.desc(), GpsPoint.id.desc())
+            .limit(safe_limit)
+        ))
+        if not points:
+            return []
+
+        person_ids = {point.person_id for point in points if point.person_id is not None}
+        people = {
+            person.id: person
+            for person in self.db.scalars(select(Person).where(Person.id.in_(person_ids)))
+        }
+        point_dates = [ensure_aware_utc(point.timestamp).date() for point in points]
+        assignments = list(self.db.scalars(
+            select(Assignment)
+            .options(selectinload(Assignment.site))
+            .where(
+                Assignment.person_id.in_(person_ids),
+                Assignment.start_date <= max(point_dates),
+                Assignment.end_date >= min(point_dates),
+            )
+        ))
+
+        return [
+            self._recent_location_point(point, people, assignments)
+            for point in points
+            if point.person_id is not None
+        ]
 
     def evaluate_time_entry(self, entry: WorkTimeEntry) -> GpsPresenceEvaluation:
         if entry.site_id is None:
@@ -126,6 +185,64 @@ class GpsPresenceService:
             return "matched"
         return "partial"
 
+    def _recent_location_point(
+        self,
+        point: GpsPoint,
+        people: dict[int, Person],
+        assignments: list[Assignment],
+    ) -> GpsRecentLocationPoint:
+        point_day = ensure_aware_utc(point.timestamp).date()
+        planned_sites = [
+            assignment.site
+            for assignment in assignments
+            if assignment.person_id == point.person_id
+            and assignment.start_date <= point_day <= assignment.end_date
+            and assignment.site is not None
+        ]
+        plausibility = self._evaluate_point_against_planned_sites(point, planned_sites)
+        person = people.get(point.person_id) if point.person_id is not None else None
+        return GpsRecentLocationPoint(
+            id=point.id,
+            person_id=point.person_id or 0,
+            person_name=person_label(person),
+            captured_at=point.timestamp,
+            planned_site_id=plausibility.planned_site_id,
+            planned_site_label=plausibility.planned_site_label,
+            plausibility_status=plausibility.plausibility_status,
+            distance_to_planned_site_m=plausibility.distance_to_planned_site_m,
+            geofence_radius_m=plausibility.geofence_radius_m,
+        )
+
+    @staticmethod
+    def _evaluate_point_against_planned_sites(point: GpsPoint, planned_sites: list[Site]) -> GpsPointPlausibility:
+        if not planned_sites:
+            return GpsPointPlausibility(None, None, "not_checkable", None, None)
+
+        fallback_site = planned_sites[0]
+        checks = [
+            (site, check)
+            for site in planned_sites
+            if (check := is_point_inside_site_geofence(point, site)).distance_m is not None
+        ]
+        if not checks:
+            return GpsPointPlausibility(
+                fallback_site.id,
+                site_label(fallback_site),
+                "not_checkable",
+                None,
+                fallback_site.geofence_radius_m,
+            )
+
+        matching_checks = [(site, check) for site, check in checks if check.inside]
+        best_site, best_check = min(matching_checks or checks, key=lambda item: item[1].distance_m or float("inf"))
+        return GpsPointPlausibility(
+            best_site.id,
+            site_label(best_site),
+            "matched" if best_check.inside else "mismatch",
+            best_check.distance_m,
+            best_check.radius_m,
+        )
+
 
 def time_entry_gps_window(entry: WorkTimeEntry) -> tuple[datetime, datetime]:
     if entry.start_time and entry.end_time:
@@ -152,3 +269,15 @@ def ensure_aware_utc(value: datetime) -> datetime:
 def clean_source_id(device_id: str | None, user_id: int) -> str:
     cleaned = device_id.strip() if isinstance(device_id, str) else ""
     return cleaned[:120] if cleaned else f"user:{user_id}"
+
+
+def person_label(person: Person | None) -> str:
+    if person is None:
+        return "Unbekannte Person"
+    return person.display_name or f"{person.first_name} {person.last_name}".strip() or person.short_code
+
+
+def site_label(site: Site) -> str:
+    if site.site_number and site.name:
+        return f"{site.site_number} - {site.name}"
+    return site.site_number or site.name

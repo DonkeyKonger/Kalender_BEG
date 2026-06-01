@@ -5917,7 +5917,8 @@ button.person-chip:focus-visible {
 
 .time-entries-sidebar,
 .time-entries-main,
-.time-table-panel {
+.time-table-panel,
+.gps-verification-panel {
   border: 1px solid #dce6f2;
   border-radius: 10px;
   background: #ffffff;
@@ -5931,7 +5932,8 @@ button.person-chip:focus-visible {
 }
 
 .time-panel-header,
-.time-entries-toolbar {
+.time-entries-toolbar,
+.gps-verification-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -5939,14 +5941,16 @@ button.person-chip:focus-visible {
 }
 
 .time-panel-header h2,
-.time-entries-toolbar h2 {
+.time-entries-toolbar h2,
+.gps-verification-header h2 {
   margin: 0;
   color: #172033;
   font-size: 1rem;
 }
 
 .time-panel-header p,
-.time-entries-toolbar p {
+.time-entries-toolbar p,
+.gps-verification-header p {
   margin: 4px 0 0;
   color: #64748b;
   font-size: 0.82rem;
@@ -6143,6 +6147,19 @@ button.person-chip:focus-visible {
   overflow: hidden;
 }
 
+.gps-verification-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gps-verification-header {
+  padding: 14px 16px;
+}
+
+.gps-verification-table {
+  min-width: 720px;
+}
+
 .time-table-scroll {
   overflow: auto;
 }
@@ -6221,7 +6238,8 @@ button.person-chip:focus-visible {
 
 @media (max-width: 760px) {
   .time-entries-toolbar,
-  .time-entry-editor-header {
+  .time-entry-editor-header,
+  .gps-verification-header {
     display: grid;
   }
 

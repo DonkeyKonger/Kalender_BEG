@@ -1,9 +1,10 @@
-import { Clock3, Pencil, Plus } from "lucide-react";
+import { Clock3, Pencil, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
@@ -66,15 +67,18 @@ export function TimeEntriesPage() {
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
+  const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  const [isLoadingRecentGps, setIsLoadingRecentGps] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entriesError, setEntriesError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [entryForm, setEntryForm] = useState<TimeEntryFormState>(() => emptyTimeEntryForm(toDateInputValue(new Date())));
@@ -83,10 +87,19 @@ export function TimeEntriesPage() {
   const [isSavingEntry, setIsSavingEntry] = useState(false);
   const [entriesRefreshKey, setEntriesRefreshKey] = useState(0);
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
+  const canViewGpsVerification = canManageTimeEntries;
 
   useEffect(() => {
     void loadPeople();
   }, []);
+
+  useEffect(() => {
+    if (!canViewGpsVerification) {
+      setRecentGpsPoints([]);
+      return;
+    }
+    void loadRecentGpsPoints();
+  }, [canViewGpsVerification]);
 
   useEffect(() => {
     if (selectedPersonId === null && people.length) {
@@ -104,6 +117,20 @@ export function TimeEntriesPage() {
       setError(readApiError(requestError, "Monteure konnten nicht geladen werden."));
     } finally {
       setIsLoadingPeople(false);
+    }
+  }
+
+  async function loadRecentGpsPoints(): Promise<void> {
+    setIsLoadingRecentGps(true);
+    setRecentGpsError(null);
+    try {
+      const pointData = await api.recentGpsLocationPoints({ limit: 20 });
+      setRecentGpsPoints(pointData);
+    } catch (requestError) {
+      setRecentGpsPoints([]);
+      setRecentGpsError(readApiError(requestError, "GPS-Pruefdaten konnten nicht geladen werden."));
+    } finally {
+      setIsLoadingRecentGps(false);
     }
   }
 
@@ -555,6 +582,64 @@ export function TimeEntriesPage() {
               </div>
             </div>
           )}
+
+          {canViewGpsVerification && (
+            <div className="gps-verification-panel">
+              <div className="gps-verification-header">
+                <div>
+                  <h2>GPS-Pruefung</h2>
+                  <p>Letzte mobile Standortsendungen mit geplanter Baustelle und Geofence-Status.</p>
+                </div>
+                <button className="time-table-action" disabled={isLoadingRecentGps} type="button" onClick={() => void loadRecentGpsPoints()}>
+                  <RefreshCw aria-hidden="true" size={14} />
+                  Aktualisieren
+                </button>
+              </div>
+              {recentGpsError && <p className="time-table-note">{recentGpsError}</p>}
+              <div className="time-table-scroll">
+                <table className="time-entries-table gps-verification-table">
+                  <thead>
+                    <tr>
+                      <th>Monteur</th>
+                      <th>Zeitpunkt</th>
+                      <th>Geplante Baustelle</th>
+                      <th>Plausibilitaet</th>
+                      <th>Abstand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoadingRecentGps && (
+                      <tr>
+                        <td className="time-empty-row" colSpan={5}>
+                          GPS-Pruefdaten werden geladen...
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.length === 0 && (
+                      <tr>
+                        <td className="time-empty-row" colSpan={5}>
+                          Noch keine mobilen Standortsendungen vorhanden.
+                        </td>
+                      </tr>
+                    )}
+                    {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.map((point) => (
+                      <tr key={point.id}>
+                        <td>{point.person_name}</td>
+                        <td>{formatDateTime(point.captured_at)}</td>
+                        <td>{point.planned_site_label ?? "-"}</td>
+                        <td>
+                          <StatusBadge tone={gpsStatusTone(point.plausibility_status)}>
+                            {gpsStatusLabels[point.plausibility_status]}
+                          </StatusBadge>
+                        </td>
+                        <td>{formatDistance(point.distance_to_planned_site_m, point.geofence_radius_m)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -638,6 +723,16 @@ function formatRangeLabel(start: string, end: string): string {
   return `${formatDate(start)} bis ${formatDate(end)}`;
 }
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function formatMinutes(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined) {
     return "-";
@@ -683,6 +778,26 @@ function timeEntryToForm(entry: TimeEntry): TimeEntryFormState {
 function formatDecimalHours(minutes: number): string {
   const hours = minutes / 60;
   return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2))).replace(".", ",");
+}
+
+function formatDistance(distanceMeters: number | null, radiusMeters: number | null): string {
+  if (distanceMeters === null) {
+    return "-";
+  }
+  const distanceLabel = distanceMeters >= 1000
+    ? `${formatDecimalNumber(distanceMeters / 1000, 1)} km`
+    : `${Math.round(distanceMeters)} m`;
+  if (radiusMeters === null) {
+    return distanceLabel;
+  }
+  return `${distanceLabel} / Radius ${radiusMeters} m`;
+}
+
+function formatDecimalNumber(value: number, fractionDigits: number): string {
+  return value.toLocaleString("de-DE", {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
+  });
 }
 
 function buildTimeEntryPayload(

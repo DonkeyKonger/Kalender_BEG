@@ -4,7 +4,7 @@ import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate }
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
-import type { GpsLocationPointCreate, GpsLocationPointRead } from "../types/gps";
+import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
@@ -164,6 +164,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+
+  async recentGpsLocationPoints(params: { limit?: number } = {}): Promise<GpsRecentLocationPoint[]> {
+    const search = new URLSearchParams();
+    if (params.limit !== undefined) {
+      search.set("limit", String(params.limit));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<GpsRecentLocationPoint[]>(`/gps/location-points/recent${suffix}`);
   },
 
   async dashboardWeather(): Promise<WeatherSummary> {

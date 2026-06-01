@@ -27,6 +27,18 @@ class GpsLocationPointRead(BaseModel):
     accuracy_meters: float | None = None
 
 
+class GpsRecentLocationPointRead(BaseModel):
+    id: int
+    person_id: int
+    person_name: str
+    captured_at: datetime
+    planned_site_id: int | None = None
+    planned_site_label: str | None = None
+    plausibility_status: str
+    distance_to_planned_site_m: float | None = None
+    geofence_radius_m: int | None = None
+
+
 class GpsPresenceStatusRead(BaseModel):
     status: str
     matched_points: int

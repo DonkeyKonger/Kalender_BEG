@@ -55,3 +55,55 @@ def test_presence_status_for_mixed_points():
 
 def test_presence_status_for_points_outside_radius():
     assert service()._presence_status(total_points=3, matched_points=0) == "mismatch"
+
+
+def test_point_plausibility_matches_inside_planned_site():
+    point = SimpleNamespace(latitude=53.0142, longitude=9.0263)
+    site = SimpleNamespace(
+        id=7,
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+    )
+
+    result = service()._evaluate_point_against_planned_sites(point, [site])
+
+    assert result.plausibility_status == "matched"
+    assert result.planned_site_label == "8007 - Klinik"
+    assert result.distance_to_planned_site_m == pytest.approx(0)
+
+
+def test_point_plausibility_flags_outside_planned_site():
+    point = SimpleNamespace(latitude=53.8, longitude=10.1)
+    site = SimpleNamespace(
+        id=7,
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+    )
+
+    result = service()._evaluate_point_against_planned_sites(point, [site])
+
+    assert result.plausibility_status == "mismatch"
+    assert result.distance_to_planned_site_m is not None
+
+
+def test_point_plausibility_without_geofence_is_not_checkable():
+    point = SimpleNamespace(latitude=53.0142, longitude=9.0263)
+    site = SimpleNamespace(
+        id=7,
+        site_number="8007",
+        name="Klinik",
+        latitude=None,
+        longitude=None,
+        geofence_radius_m=5000,
+    )
+
+    result = service()._evaluate_point_against_planned_sites(point, [site])
+
+    assert result.plausibility_status == "not_checkable"
+    assert result.distance_to_planned_site_m is None
