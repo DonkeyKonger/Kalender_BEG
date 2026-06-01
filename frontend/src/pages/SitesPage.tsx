@@ -1,11 +1,14 @@
-import { BriefcaseBusiness, PlusCircle } from "lucide-react";
+import { BriefcaseBusiness, PlusCircle, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
+import { CustomerFields } from "./CustomersPage";
+import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteSummary } from "../types/site";
@@ -29,6 +32,21 @@ const emptySite: SiteCreate = {
   status: "active",
   info: null,
   color: "#1d5c99",
+};
+
+const emptyCustomerForSite: CustomerCreate = {
+  company_name: "",
+  address_street: null,
+  address_house_number: null,
+  address_postal_code: null,
+  address_city: null,
+  address_country: "Deutschland",
+  company_phone: null,
+  project_lead_name: null,
+  project_lead_phone: null,
+  project_lead_email: null,
+  is_active: true,
+  contacts: [],
 };
 
 export type EditableSite = SiteCreate & { id: number };
@@ -61,14 +79,21 @@ export function SitesPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [peopleLoaded, setPeopleLoaded] = useState(false);
   const [peopleLoading, setPeopleLoading] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoaded, setCustomersLoaded] = useState(false);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isCustomerCreateDrawerOpen, setIsCustomerCreateDrawerOpen] = useState(false);
+  const [customerCreateForm, setCustomerCreateForm] = useState<CustomerCreate>(emptyCustomerForSite);
+  const [customerCreateError, setCustomerCreateError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
+  const [savingCustomer, setSavingCustomer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -181,6 +206,9 @@ export function SitesPage() {
     if (peopleLoaded === false && peopleLoading === false) {
       void loadPeopleForSiteForm();
     }
+    if (customersLoaded === false && customersLoading === false) {
+      void loadCustomersForSiteForm();
+    }
   }
 
   async function loadPeopleForSiteForm() {
@@ -196,8 +224,68 @@ export function SitesPage() {
     }
   }
 
+  async function loadCustomersForSiteForm() {
+    if (customersLoading) {
+      return;
+    }
+    setCustomersLoading(true);
+    setError(null);
+    try {
+      setCustomers(await api.customers({ isActive: true }));
+      setCustomersLoaded(true);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
+    } finally {
+      setCustomersLoading(false);
+    }
+  }
+
+  function selectCustomerForSite(customer: Customer) {
+    setCreateForm((current) => ({ ...current, customer: customer.company_name }));
+  }
+
+  function openCustomerCreateDrawer(initialName: string) {
+    setCustomerCreateForm({ ...emptyCustomerForSite, company_name: initialName.trim() });
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(true);
+  }
+
+  function closeCustomerCreateDrawer() {
+    if (savingCustomer) {
+      return;
+    }
+    setCustomerCreateForm(emptyCustomerForSite);
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(false);
+  }
+
+  async function createCustomerFromSite() {
+    const validationError = validateCustomerPayloadForSite(customerCreateForm);
+    if (validationError) {
+      setCustomerCreateError(validationError);
+      return;
+    }
+    setSavingCustomer(true);
+    setCustomerCreateError(null);
+    try {
+      const created = await api.createCustomer(normalizeCustomerPayloadForSite(customerCreateForm));
+      setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
+      setCustomersLoaded(true);
+      setCreateForm((current) => ({ ...current, customer: created.company_name }));
+      setCustomerCreateForm(emptyCustomerForSite);
+      setIsCustomerCreateDrawerOpen(false);
+    } catch (requestError) {
+      setCustomerCreateError(readApiError(requestError, "Kunde konnte nicht angelegt werden."));
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
   function closeDrawer() {
     setCreateForm(emptySite);
+    setCustomerCreateForm(emptyCustomerForSite);
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(false);
     setIsCreateDrawerOpen(false);
   }
 
@@ -309,8 +397,36 @@ export function SitesPage() {
         <SiteFields
           draft={createForm}
           people={people}
+          customers={customers}
+          customersLoading={customersLoading}
           disabled={!canEdit}
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+          onCustomerFocus={() => {
+            if (customersLoaded === false && customersLoading === false) {
+              void loadCustomersForSiteForm();
+            }
+          }}
+          onCustomerSelected={selectCustomerForSite}
+          onCreateCustomer={openCustomerCreateDrawer}
+        />
+      </EntityDetailDrawer>
+
+      <EntityDetailDrawer
+        isOpen={isCustomerCreateDrawerOpen}
+        title="Neuer Kunde"
+        subtitle="Aus der Baustelle anlegen"
+        onClose={closeCustomerCreateDrawer}
+        footer={canEdit ? (
+          <button className="icon-button" disabled={savingCustomer} type="button" onClick={() => void createCustomerFromSite()}>
+            <UserPlus aria-hidden="true" size={17} />
+            <span>{savingCustomer ? "Kunde wird gespeichert..." : "Kunde speichern"}</span>
+          </button>
+        ) : undefined}
+      >
+        {customerCreateError && <p className="form-error">{customerCreateError}</p>}
+        <CustomerFields
+          draft={customerCreateForm}
+          onChange={(values) => setCustomerCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
     </section>
@@ -343,17 +459,27 @@ function toSiteSummary(site: Site): SiteSummary {
 export function SiteFields({
   draft,
   people,
+  customers = [],
+  customersLoading = false,
   disabled = false,
   isCheckingLocation = false,
   onChange,
+  onCustomerFocus,
+  onCustomerSelected,
+  onCreateCustomer,
   onCheckLocation,
   onGeocodeSelected,
 }: {
   draft: SiteCreate;
   people: Person[];
+  customers?: Customer[];
+  customersLoading?: boolean;
   disabled?: boolean;
   isCheckingLocation?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
+  onCustomerFocus?: () => void;
+  onCustomerSelected?: (customer: Customer) => void;
+  onCreateCustomer?: (initialName: string) => void;
   onCheckLocation?: () => void;
   onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
 }) {
@@ -362,6 +488,20 @@ export function SiteFields({
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
   const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
+  const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false);
+  const [activeCustomerSuggestionIndex, setActiveCustomerSuggestionIndex] = useState(0);
+
+  const customerQuery = draft.customer ?? "";
+  const customerSuggestions = useMemo(() => {
+    const needle = customerQuery.trim().toLowerCase();
+    const activeCustomers = customers.filter((customer) => customer.is_active);
+    const matches = needle
+      ? activeCustomers.filter((customer) => customerSearchTextForSite(customer).includes(needle))
+      : activeCustomers;
+    return matches.slice(0, 6);
+  }, [customerQuery, customers]);
+  const canUseCustomerAutocomplete = Boolean(onCustomerSelected || onCreateCustomer);
+  const showCustomerSuggestions = canUseCustomerAutocomplete && isCustomerSuggestionsOpen && !disabled;
 
   useEffect(() => {
     const query = addressSearch.trim();
@@ -446,6 +586,51 @@ export function SiteFields({
     (document.activeElement as HTMLElement | null)?.blur();
   }
 
+  function selectCustomer(customer: Customer) {
+    onChange({ customer: customer.company_name });
+    onCustomerSelected?.(customer);
+    setIsCustomerSuggestionsOpen(false);
+    setActiveCustomerSuggestionIndex(0);
+  }
+
+  function createCustomerFromAutocomplete() {
+    onCreateCustomer?.(customerQuery.trim());
+    setIsCustomerSuggestionsOpen(false);
+    setActiveCustomerSuggestionIndex(0);
+  }
+
+  function handleCustomerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!canUseCustomerAutocomplete) {
+      return;
+    }
+    const optionCount = customerSuggestions.length + (onCreateCustomer ? 1 : 0);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsCustomerSuggestionsOpen(true);
+      setActiveCustomerSuggestionIndex((current) => optionCount ? (current + 1) % optionCount : 0);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsCustomerSuggestionsOpen(true);
+      setActiveCustomerSuggestionIndex((current) => optionCount ? (current - 1 + optionCount) % optionCount : 0);
+      return;
+    }
+    if (event.key === "Enter" && showCustomerSuggestions && optionCount) {
+      event.preventDefault();
+      if (activeCustomerSuggestionIndex < customerSuggestions.length) {
+        selectCustomer(customerSuggestions[activeCustomerSuggestionIndex]);
+      } else {
+        createCustomerFromAutocomplete();
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      setIsCustomerSuggestionsOpen(false);
+      setActiveCustomerSuggestionIndex(0);
+    }
+  }
+
   return (
     <div className="site-form-grid">
       <label className="site-field-name">
@@ -468,14 +653,64 @@ export function SiteFields({
           onChange={(event) => onChange({ location: event.target.value || null })}
         />
       </label>
-      <label className="site-field-customer">
-        <span>Kunde</span>
-        <input
-          disabled={disabled}
-          value={draft.customer ?? ""}
-          onChange={(event) => onChange({ customer: event.target.value || null })}
-        />
-      </label>
+      <div className="site-field-customer site-customer-autocomplete">
+        <label>
+          <span>Kunde</span>
+          <input
+            aria-autocomplete={canUseCustomerAutocomplete ? "list" : undefined}
+            aria-expanded={showCustomerSuggestions}
+            disabled={disabled}
+            value={draft.customer ?? ""}
+            onBlur={() => {
+              window.setTimeout(() => setIsCustomerSuggestionsOpen(false), 120);
+            }}
+            onChange={(event) => {
+              onChange({ customer: event.target.value || null });
+              setActiveCustomerSuggestionIndex(0);
+              setIsCustomerSuggestionsOpen(true);
+            }}
+            onFocus={() => {
+              onCustomerFocus?.();
+              setIsCustomerSuggestionsOpen(true);
+            }}
+            onKeyDown={handleCustomerKeyDown}
+          />
+        </label>
+        {showCustomerSuggestions && (
+          <div className="site-customer-suggestions" role="listbox">
+            {customersLoading && <span className="site-customer-suggestion-empty">Kunden werden geladen...</span>}
+            {!customersLoading && customerSuggestions.map((customer, index) => (
+              <button
+                aria-selected={activeCustomerSuggestionIndex === index}
+                key={customer.id}
+                role="option"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectCustomer(customer)}
+              >
+                <strong>{customer.company_name}</strong>
+                <span>{customerSuggestionMeta(customer)}</span>
+              </button>
+            ))}
+            {!customersLoading && customerSuggestions.length === 0 && customerQuery.trim() && (
+              <span className="site-customer-suggestion-empty">Kein passender Kunde gefunden.</span>
+            )}
+            {onCreateCustomer && (
+              <button
+                aria-selected={activeCustomerSuggestionIndex === customerSuggestions.length}
+                className="site-customer-create-option"
+                role="option"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={createCustomerFromAutocomplete}
+              >
+                <UserPlus aria-hidden="true" size={15} />
+                <span>Neuen Kunden anlegen</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       <label className="site-field-manager">
         <span>Projektleiter</span>
         <select
@@ -667,6 +902,90 @@ function cleanOptionalText(value: string | null): string | null {
 
 function parsePersonId(value: string): number | null {
   return value ? Number(value) : null;
+}
+
+function customerSuggestionMeta(customer: Customer): string {
+  return [
+    formatCustomerAddressForSite(customer),
+    customer.project_lead_name ? `Projektleiter: ${customer.project_lead_name}` : "",
+    customer.company_phone,
+  ].filter(Boolean).join(" · ") || "Kundenstamm";
+}
+
+function validateCustomerPayloadForSite(customer: CustomerCreate): string | null {
+  if (!customer.company_name.trim()) {
+    return "Firmenname ist Pflicht.";
+  }
+  if (!isValidOptionalEmail(customer.project_lead_email)) {
+    return "Projektleiter-Mail ist nicht gueltig.";
+  }
+  for (const contact of customer.contacts) {
+    const hasContactData = Boolean(contact.name.trim() || contact.phone?.trim() || contact.email?.trim());
+    if (!hasContactData) {
+      continue;
+    }
+    if (!contact.name.trim()) {
+      return "Ansprechpartner brauchen einen Namen.";
+    }
+    if (!isValidOptionalEmail(contact.email)) {
+      return "Ansprechpartner-Mail ist nicht gueltig.";
+    }
+  }
+  return null;
+}
+
+function normalizeCustomerPayloadForSite(customer: CustomerCreate): CustomerCreate {
+  return {
+    company_name: customer.company_name.trim(),
+    address_street: customer.address_street?.trim() || null,
+    address_house_number: customer.address_house_number?.trim() || null,
+    address_postal_code: customer.address_postal_code?.trim() || null,
+    address_city: customer.address_city?.trim() || null,
+    address_country: customer.address_country?.trim() || "Deutschland",
+    company_phone: customer.company_phone?.trim() || null,
+    project_lead_name: customer.project_lead_name?.trim() || null,
+    project_lead_phone: customer.project_lead_phone?.trim() || null,
+    project_lead_email: customer.project_lead_email?.trim() || null,
+    is_active: customer.is_active,
+    contacts: customer.contacts
+      .map((contact) => ({
+        contact_type: contact.contact_type.trim() || "monteur",
+        name: contact.name.trim(),
+        phone: contact.phone?.trim() || null,
+        email: contact.email?.trim() || null,
+      }))
+      .filter((contact) => Boolean(contact.name || contact.phone || contact.email)),
+  };
+}
+
+function isValidOptionalEmail(value: string | null): boolean {
+  return !value || value.includes("@");
+}
+
+function compareCustomersByName(left: Customer, right: Customer): number {
+  return left.company_name.localeCompare(right.company_name, "de");
+}
+
+function formatCustomerAddressForSite(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country">): string {
+  const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
+  const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
+  return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
+}
+
+function customerSearchTextForSite(customer: Customer): string {
+  return [
+    customer.company_name,
+    customer.company_phone,
+    customer.address_street,
+    customer.address_house_number,
+    customer.address_postal_code,
+    customer.address_city,
+    customer.address_country,
+    customer.project_lead_name,
+    customer.project_lead_phone,
+    customer.project_lead_email,
+    customer.contacts.map((contact) => [contact.name, contact.phone, contact.email].filter(Boolean).join(" ")).join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function compareSites(left: SiteSummary, right: SiteSummary): number {

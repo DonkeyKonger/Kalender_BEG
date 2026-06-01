@@ -401,7 +401,7 @@ function ReadItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CustomerFields({
+export function CustomerFields({
   draft,
   onChange,
 }: {

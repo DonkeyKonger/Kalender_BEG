@@ -5851,6 +5851,85 @@ button.person-chip:focus-visible {
   background: #eef4fb;
 }
 
+.site-customer-autocomplete {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.site-customer-autocomplete label {
+  min-width: 0;
+}
+
+.site-customer-suggestions {
+  position: absolute;
+  z-index: 16;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #d7e1ee;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgb(15 23 42 / 14%);
+  padding: 5px;
+}
+
+.site-customer-suggestions button,
+.site-customer-suggestion-empty {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
+
+.site-customer-suggestions button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #172033;
+  text-align: left;
+  cursor: pointer;
+}
+
+.site-customer-suggestions button:hover,
+.site-customer-suggestions button[aria-selected="true"] {
+  background: #eef4fb;
+}
+
+.site-customer-suggestions button strong,
+.site-customer-suggestions button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-customer-suggestions button strong {
+  font-weight: 850;
+}
+
+.site-customer-suggestions button span,
+.site-customer-suggestion-empty {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.site-customer-create-option {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #e2e8f0 !important;
+  color: #174d83 !important;
+  font-weight: 850;
+}
+
 .site-form-grid textarea {
   min-height: 68px;
   padding-top: 8px;
