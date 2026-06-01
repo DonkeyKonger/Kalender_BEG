@@ -4097,18 +4097,191 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
-.measurement-timesheet-progress-track {
-  overflow: hidden;
-  height: 9px;
-  border-radius: 999px;
-  background: #edf2f7;
+.measurement-execution-track {
+  display: grid;
+  gap: 7px;
+  padding-top: 22px;
 }
 
-.measurement-timesheet-progress-track span {
-  display: block;
-  height: 100%;
+.measurement-execution-rail {
+  position: relative;
+  height: 14px;
+  border: 1px solid #cbd9eb;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgb(100 116 139 / 18%) 1px, transparent 1px) 0 0 / 25% 100%,
+    #eef4fb;
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 8%);
+}
+
+.measurement-execution-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
   border-radius: inherit;
-  background: #54769f;
+  background: linear-gradient(90deg, #6b8eb8 0%, #315b88 100%);
+  transition: width 160ms ease;
+}
+
+.measurement-execution-track.is-over-target .measurement-execution-fill {
+  background: linear-gradient(90deg, #6b8eb8 0%, #b86b31 100%);
+}
+
+.measurement-execution-flag {
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1e3a5f;
+  transform: translate(45%, -50%);
+}
+
+.measurement-execution-marker {
+  position: absolute;
+  top: -24px;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  transform: translateX(-50%);
+  transition: left 160ms ease;
+}
+
+.measurement-execution-marker.is-near-start {
+  justify-items: start;
+  transform: translateX(0);
+}
+
+.measurement-execution-marker.is-near-end {
+  justify-items: end;
+  transform: translateX(-100%);
+}
+
+.measurement-worker-heads {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid rgb(49 91 136 / 16%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 6px 14px rgb(15 23 42 / 10%);
+}
+
+.measurement-worker-head {
+  position: relative;
+  display: inline-block;
+  width: 16px;
+  height: 15px;
+  border: 1px solid #9b6b44;
+  border-radius: 50% 50% 44% 44%;
+  background: #d9a36e;
+}
+
+.measurement-worker-head::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -6px;
+  width: 18px;
+  height: 10px;
+  border: 1px solid #9f6b00;
+  border-bottom: 0;
+  border-radius: 10px 10px 3px 3px;
+  background: #f2c94c;
+}
+
+.measurement-worker-head::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: #5b341d;
+  box-shadow: 6px 0 0 #5b341d;
+}
+
+.measurement-execution-pin {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #315b88;
+  box-shadow: 0 0 0 1px #315b88;
+}
+
+.measurement-execution-track.is-over-target .measurement-execution-pin {
+  background: #b86b31;
+  box-shadow: 0 0 0 1px #b86b31;
+}
+
+.measurement-execution-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.measurement-execution-scale span {
+  text-align: center;
+}
+
+.measurement-execution-scale span:first-child {
+  text-align: left;
+}
+
+.measurement-execution-scale span:last-child {
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .measurement-execution-track {
+    padding-top: 19px;
+  }
+
+  .measurement-execution-rail {
+    height: 12px;
+  }
+
+  .measurement-execution-marker {
+    top: -21px;
+  }
+
+  .measurement-worker-heads {
+    gap: 2px;
+    padding: 2px 4px;
+  }
+
+  .measurement-worker-head {
+    width: 13px;
+    height: 13px;
+  }
+
+  .measurement-worker-head::before {
+    left: -2px;
+    top: -5px;
+    width: 15px;
+    height: 8px;
+  }
+
+  .measurement-worker-head::after {
+    left: 2px;
+    top: 5px;
+    box-shadow: 5px 0 0 #5b341d;
+  }
+
+  .measurement-execution-scale {
+    font-size: 0.66rem;
+  }
 }
 
 .measurement-timesheet-filterbar {

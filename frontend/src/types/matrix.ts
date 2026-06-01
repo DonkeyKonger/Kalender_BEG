@@ -24,6 +24,20 @@ export type MatrixAssignment = {
   note: string | null;
 };
 
+export type AssignmentRead = {
+  id: number;
+  site_id: number;
+  person_id: number;
+  start_date: string;
+  end_date: string;
+  assignment_type: AssignmentType;
+  note: string | null;
+  created_by_user_id: number | null;
+  updated_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MatrixAbsence = {
   person: MatrixPerson;
   absence_type: AbsenceType;

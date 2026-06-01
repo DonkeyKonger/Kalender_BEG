@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -7,6 +7,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -86,6 +87,7 @@ export function SiteDetailPage() {
   const [selectedMeasurementBatch, setSelectedMeasurementBatch] = useState<MobileMeasurementBatch | null>(null);
   const [measurementBatchItems, setMeasurementBatchItems] = useState<MobileMeasurementItem[]>([]);
   const [measurementProgressItems, setMeasurementProgressItems] = useState<MobileMeasurementItem[]>([]);
+  const [measurementWorkerHeadCount, setMeasurementWorkerHeadCount] = useState(0);
   const [measurementBatchItemsLoading, setMeasurementBatchItemsLoading] = useState(false);
   const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
   const [measurementReviewError, setMeasurementReviewError] = useState<string | null>(null);
@@ -176,6 +178,7 @@ export function SiteDetailPage() {
     setSelectedMeasurementBatch(null);
     setMeasurementBatchItems([]);
     setMeasurementProgressItems([]);
+    setMeasurementWorkerHeadCount(0);
     setMeasurementBatchItemsLoading(false);
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
@@ -303,6 +306,37 @@ export function SiteDetailPage() {
 
     void loadMeasurementItems();
   }, [activeTab, measurementLoaded, measurementLoading, measurementSubtab, site]);
+
+  useEffect(() => {
+    const currentSiteId = site?.id;
+    if (!currentSiteId || activeTab !== "measurement" || measurementSubtab !== "timesheet") {
+      return;
+    }
+
+    let isCurrent = true;
+    const weekRange = getCurrentGermanWeekRange();
+    setMeasurementWorkerHeadCount(0);
+    api
+      .assignments({
+        siteId: currentSiteId,
+        start: weekRange.start,
+        end: weekRange.end,
+      })
+      .then((assignments) => {
+        if (isCurrent) {
+          setMeasurementWorkerHeadCount(getWeeklyWorkerHeadCount(assignments, weekRange.start, weekRange.end));
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setMeasurementWorkerHeadCount(0);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeTab, measurementSubtab, site?.id]);
 
   useEffect(() => {
     if (
@@ -811,6 +845,7 @@ export function SiteDetailPage() {
           }}
           batches={measurementBatches}
           batchProgressItems={measurementProgressItems}
+          workerHeadCount={measurementWorkerHeadCount}
           batchesLoading={measurementBatchesLoading}
           batchesError={measurementBatchesError}
           selectedBatch={selectedMeasurementBatch}
@@ -1315,6 +1350,7 @@ function MeasurementTab({
   onRetry,
   batches,
   batchProgressItems,
+  workerHeadCount,
   batchesLoading,
   batchesError,
   selectedBatch,
@@ -1350,6 +1386,7 @@ function MeasurementTab({
   onRetry: () => void;
   batches: MobileMeasurementBatch[];
   batchProgressItems: MobileMeasurementItem[];
+  workerHeadCount: number;
   batchesLoading: boolean;
   batchesError: string | null;
   selectedBatch: MobileMeasurementBatch | null;
@@ -1391,6 +1428,7 @@ function MeasurementTab({
           bases={bases}
           items={items}
           progressItems={batchProgressItems}
+          workerHeadCount={workerHeadCount}
           isLoading={isLoading}
           error={error}
           isImporting={isImporting}
@@ -1446,6 +1484,7 @@ function MeasurementTimesheetPanel({
   bases,
   items,
   progressItems,
+  workerHeadCount,
   isLoading,
   error,
   isImporting,
@@ -1458,6 +1497,7 @@ function MeasurementTimesheetPanel({
   bases: MeasurementBase[];
   items: MeasurementItem[];
   progressItems: MobileMeasurementItem[];
+  workerHeadCount: number;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
@@ -1758,9 +1798,10 @@ function MeasurementTimesheetPanel({
             </div>
             {projectPositionStats.progressPercent !== null ? (
               <>
-                <div className="measurement-timesheet-progress-track" aria-hidden="true">
-                  <span style={{ width: `${Math.min(projectPositionStats.progressPercent, 100)}%` }} />
-                </div>
+                <ExecutionProgressTrack
+                  percent={projectPositionStats.progressPercent}
+                  workerHeadCount={workerHeadCount}
+                />
                 <p className="measurement-timesheet-progress-note">
                   {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
                 </p>
@@ -1929,6 +1970,60 @@ function MeasurementTimesheetPanel({
         </div>
       ) : null}
     </>
+  );
+}
+
+function ExecutionProgressTrack({
+  percent,
+  workerHeadCount,
+}: {
+  percent: number;
+  workerHeadCount: number;
+}) {
+  const visualPercent = clampProgressPercent(percent);
+  const displayPercent = Number.isFinite(percent) ? percent : 0;
+  const markerPlacement = visualPercent <= 8
+    ? " is-near-start"
+    : visualPercent >= 92
+      ? " is-near-end"
+      : "";
+  const headCount = Math.min(Math.max(Math.floor(workerHeadCount), 0), 5);
+
+  return (
+    <div
+      className={`measurement-execution-track${displayPercent > 100 ? " is-over-target" : ""}`}
+      role="meter"
+      aria-label={`Rechnerischer Ausführungsstand ${formatMeasurementPercent(displayPercent)}`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(visualPercent)}
+    >
+      <div className="measurement-execution-rail">
+        <span className="measurement-execution-fill" style={{ width: `${visualPercent}%` }} />
+        <span className="measurement-execution-flag" aria-hidden="true">
+          <Flag size={14} />
+        </span>
+        <span
+          className={`measurement-execution-marker${markerPlacement}`}
+          style={{ left: `${visualPercent}%` }}
+          aria-hidden="true"
+        >
+          {headCount > 0 ? (
+            <span className="measurement-worker-heads">
+              {Array.from({ length: headCount }).map((_, index) => (
+                <span className="measurement-worker-head" key={index} />
+              ))}
+            </span>
+          ) : null}
+          <span className="measurement-execution-pin" />
+        </span>
+      </div>
+      <div className="measurement-execution-scale" aria-hidden="true">
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <span key={tick}>{tick} %</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -3467,6 +3562,77 @@ function getMeasurementBatchSortTime(batch: MobileMeasurementBatch): number {
   const value = batch.submitted_at ?? batch.created_at;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function clampProgressPercent(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(value, 100);
+}
+
+function getCurrentGermanWeekRange(referenceDate = new Date()): { start: string; end: string } {
+  const start = new Date(referenceDate);
+  const day = start.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  return {
+    start: toLocalDateKey(start),
+    end: toLocalDateKey(end),
+  };
+}
+
+function getWeeklyWorkerHeadCount(assignments: AssignmentRead[], weekStart: string, weekEnd: string): number {
+  const weekDays = getDateKeysBetween(weekStart, weekEnd);
+  const peopleByDay = new Map(weekDays.map((day) => [day, new Set<number>()]));
+
+  for (const assignment of assignments) {
+    const assignmentDays = getDateKeysBetween(
+      assignment.start_date > weekStart ? assignment.start_date : weekStart,
+      assignment.end_date < weekEnd ? assignment.end_date : weekEnd,
+    );
+    for (const day of assignmentDays) {
+      peopleByDay.get(day)?.add(assignment.person_id);
+    }
+  }
+
+  return Math.min(
+    Math.max(...Array.from(peopleByDay.values(), (people) => people.size), 0),
+    5,
+  );
+}
+
+function getDateKeysBetween(startKey: string, endKey: string): string[] {
+  const start = parseLocalDateKey(startKey);
+  const end = parseLocalDateKey(endKey);
+  if (!start || !end || end < start) {
+    return [];
+  }
+
+  const days: string[] = [];
+  for (const current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
+    days.push(toLocalDateKey(current));
+  }
+  return days;
+}
+
+function parseLocalDateKey(value: string): Date | null {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+function toLocalDateKey(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatLocationStatus(status: Site["location_status"]): string {

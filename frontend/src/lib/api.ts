@@ -2,7 +2,7 @@ import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
+import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
@@ -585,6 +585,29 @@ export const api = {
 
   async deleteAssignment(assignmentId: number): Promise<void> {
     return request<void>(`/assignments/${assignmentId}`, { method: "DELETE" });
+  },
+
+  async assignments(params: {
+    start?: string;
+    end?: string;
+    personId?: number;
+    siteId?: number;
+  } = {}): Promise<AssignmentRead[]> {
+    const search = new URLSearchParams();
+    if (params.start) {
+      search.set("start", params.start);
+    }
+    if (params.end) {
+      search.set("end", params.end);
+    }
+    if (params.personId !== undefined) {
+      search.set("person_id", String(params.personId));
+    }
+    if (params.siteId !== undefined) {
+      search.set("site_id", String(params.siteId));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<AssignmentRead[]>(`/assignments${suffix}`);
   },
 
   async matrix(params: {
