@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { formatMobileGpsError, sendCurrentGpsLocation } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -50,6 +51,10 @@ export function MyAssignmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
   const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
+  const [isSendingGps, setIsSendingGps] = useState(false);
+  const [gpsMessage, setGpsMessage] = useState<string | null>(null);
+  const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
+  const [lastGpsSentAt, setLastGpsSentAt] = useState<string | null>(null);
 
   const range = useMemo(() => getRange(mode), [mode]);
 
@@ -82,6 +87,26 @@ export function MyAssignmentsPage() {
   useEffect(() => {
     void loadAssignments();
   }, [loadAssignments]);
+
+  async function sendGpsNow(): Promise<void> {
+    if (isSendingGps) {
+      return;
+    }
+    setIsSendingGps(true);
+    setGpsMessageTone("info");
+    setGpsMessage("Standort wird gesendet ...");
+    try {
+      const result = await sendCurrentGpsLocation();
+      setLastGpsSentAt(result.sentAt);
+      setGpsMessage("Standort gesendet.");
+      setGpsMessageTone("info");
+    } catch (requestError) {
+      setGpsMessage(formatMobileGpsError(requestError));
+      setGpsMessageTone("error");
+    } finally {
+      setIsSendingGps(false);
+    }
+  }
 
   const today = toIsoDate(startOfToday());
   const tomorrow = toIsoDate(addDays(startOfToday(), 1));
@@ -198,6 +223,22 @@ export function MyAssignmentsPage() {
               <DayFocusCard date={today} label="Einsatz heute" assignments={dailyByDate.get(today) ?? []} />
               <DayFocusCard date={tomorrow} label="Einsatz morgen" assignments={dailyByDate.get(tomorrow) ?? []} />
             </div>
+          </section>
+
+          <section className="mobile-home-section">
+            <div className="mobile-section-heading">
+              <h2>Standort</h2>
+              <span>Test</span>
+            </div>
+            <button className="mobile-message-card mobile-gps-send-card" disabled={isSendingGps} type="button" onClick={() => void sendGpsNow()}>
+              <MapPin aria-hidden="true" size={20} />
+              <span>
+                <strong>{isSendingGps ? "Standort wird gesendet" : "Standort jetzt senden"}</strong>
+                <small>Standortdaten werden zur Plausibilitätsprüfung deiner Baustellenzeiten verwendet.</small>
+              </span>
+            </button>
+            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
+            {lastGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt gesendet: {formatDateTime(lastGpsSentAt)}</p> : null}
           </section>
 
           <section className="mobile-home-section">

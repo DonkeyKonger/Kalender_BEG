@@ -2697,6 +2697,15 @@ button.person-chip:focus-visible {
   line-height: 1.3;
 }
 
+.mobile-gps-send-card:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.mobile-gps-status {
+  margin: 0;
+}
+
 .mobile-focus-grid,
 .mobile-day-list,
 .mobile-action-list {
