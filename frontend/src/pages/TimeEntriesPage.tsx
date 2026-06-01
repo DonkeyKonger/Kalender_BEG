@@ -7,7 +7,7 @@ import { ApiError, api } from "../lib/api";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryCreate, TimeEntryStatus } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
 type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
@@ -42,6 +42,22 @@ const planningStatusTitles: Record<PlanningMatchStatus, string> = {
   missing_reported_site: "Es gibt eine Planung, aber keine gemeldete Baustelle.",
   unknown: "Planungshinweis ist mit den vorhandenen Daten nicht bestimmbar.",
   not_checkable: "Geplante Baustellen konnten nicht geladen werden.",
+};
+
+const gpsStatusLabels: Record<TimeEntryGpsStatus, string> = {
+  matched: "passt",
+  missing: "fehlt",
+  partial: "teilweise",
+  mismatch: "abweichend",
+  not_checkable: "nicht pruefbar",
+};
+
+const gpsStatusTitles: Record<TimeEntryGpsStatus, string> = {
+  matched: "GPS-Punkte liegen im Baustellenradius.",
+  missing: "Fuer diesen Zeitraum liegen keine GPS-Punkte vor.",
+  partial: "Ein Teil der GPS-Punkte passt zur Baustelle.",
+  mismatch: "GPS-Punkte liegen ueberwiegend ausserhalb des Baustellenradius.",
+  not_checkable: "GPS-Plausibilitaet ist fuer diese Zeile nicht pruefbar.",
 };
 
 export function TimeEntriesPage() {
@@ -118,7 +134,7 @@ export function TimeEntriesPage() {
     () => buildPlannedSitesByDate(assignments, activeRange.start, activeRange.end),
     [activeRange.end, activeRange.start, assignments],
   );
-  const timeTableColumnCount = canManageTimeEntries ? 10 : 9;
+  const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
 
   useEffect(() => {
     let ignore = false;
@@ -154,6 +170,7 @@ export function TimeEntriesPage() {
       personId: selectedPersonId,
       dateFrom: activeRange.start,
       dateTo: activeRange.end,
+      includeGpsStatus: true,
     })
       .then((entryData) => {
         if (!ignore) {
@@ -456,6 +473,7 @@ export function TimeEntriesPage() {
                       <th>Fahrtzeit</th>
                       <th>Status</th>
                       <th>Planung</th>
+                      <th>GPS</th>
                       {canManageTimeEntries && <th>Aktion</th>}
                     </tr>
                   </thead>
@@ -511,6 +529,15 @@ export function TimeEntriesPage() {
                                 {planningStatusLabels[planningStatus]}
                               </StatusBadge>
                             </span>
+                          </td>
+                          <td>
+                            {entry.gps_status ? (
+                              <span title={gpsStatusTitle(entry)}>
+                                <StatusBadge tone={gpsStatusTone(entry.gps_status)}>
+                                  {gpsStatusLabels[entry.gps_status]}
+                                </StatusBadge>
+                              </span>
+                            ) : "-"}
                           </td>
                           {canManageTimeEntries && (
                             <td>
@@ -797,6 +824,30 @@ function planningStatusTone(status: PlanningMatchStatus): StatusBadgeTone {
     return "planned";
   }
   return "neutral";
+}
+
+function gpsStatusTone(status: TimeEntryGpsStatus): StatusBadgeTone {
+  if (status === "matched") {
+    return "active";
+  }
+  if (status === "partial") {
+    return "planned";
+  }
+  if (status === "mismatch") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+function gpsStatusTitle(entry: TimeEntry): string {
+  if (!entry.gps_status) {
+    return "GPS-Plausibilitaet wurde nicht berechnet.";
+  }
+  const baseTitle = gpsStatusTitles[entry.gps_status];
+  if (entry.gps_total_points === null || entry.gps_matched_points === null) {
+    return baseTitle;
+  }
+  return `${baseTitle} ${entry.gps_matched_points} von ${entry.gps_total_points} Punkten im Radius.`;
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {

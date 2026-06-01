@@ -10,6 +10,7 @@ from app.api.routes import (
     customers,
     dashboard,
     exports,
+    gps,
     health,
     matrix,
     me,
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
+    app.include_router(gps.router, prefix="/api")
     app.include_router(matrix.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
 

@@ -9,6 +9,7 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryRead, TimeEntryUpdate
+from app.services.gps_service import GpsPresenceService
 from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["time-entries"])
@@ -23,6 +24,7 @@ def list_time_entries(
     site_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    include_gps_status: bool = False,
     current_user: User = Depends(CAN_ACCESS),
     db: Session = Depends(get_db),
 ) -> list[TimeEntryRead]:
@@ -33,7 +35,8 @@ def list_time_entries(
         date_from=date_from,
         date_to=date_to,
     )
-    return [time_entry_read(entry) for entry in entries]
+    gps_service = GpsPresenceService(db) if include_gps_status else None
+    return [time_entry_read(entry, gps_service=gps_service) for entry in entries]
 
 
 @router.post("", response_model=TimeEntryRead, status_code=201)
@@ -57,7 +60,16 @@ def update_time_entry(
     return time_entry_read(entry)
 
 
-def time_entry_read(entry: WorkTimeEntry) -> TimeEntryRead:
+def time_entry_read(entry: WorkTimeEntry, gps_service: GpsPresenceService | None = None) -> TimeEntryRead:
+    gps_status = None
+    gps_matched_points = None
+    gps_total_points = None
+    if gps_service is not None:
+        gps_evaluation = gps_service.evaluate_time_entry(entry)
+        gps_status = gps_evaluation.status
+        gps_matched_points = gps_evaluation.matched_points
+        gps_total_points = gps_evaluation.total_points
+
     return TimeEntryRead(
         id=entry.id,
         person_id=entry.person_id,
@@ -75,6 +87,9 @@ def time_entry_read(entry: WorkTimeEntry) -> TimeEntryRead:
         note=entry.note,
         source=entry.source,
         status=entry.status,
+        gps_status=gps_status,
+        gps_matched_points=gps_matched_points,
+        gps_total_points=gps_total_points,
         created_by_user_id=entry.created_by_user_id,
         reviewed_by_user_id=entry.reviewed_by_user_id,
         reviewed_at=entry.reviewed_at,

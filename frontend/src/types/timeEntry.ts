@@ -1,5 +1,6 @@
 export type TimeEntryStatus = "draft" | "submitted" | "reviewed";
 export type TimeEntrySource = "manual";
+export type TimeEntryGpsStatus = "not_checkable" | "missing" | "partial" | "matched" | "mismatch";
 
 export type TimeEntry = {
   id: number;
@@ -18,6 +19,9 @@ export type TimeEntry = {
   note: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
+  gps_status: TimeEntryGpsStatus | null;
+  gps_matched_points: number | null;
+  gps_total_points: number | null;
   created_by_user_id: number | null;
   reviewed_by_user_id: number | null;
   reviewed_at: string | null;

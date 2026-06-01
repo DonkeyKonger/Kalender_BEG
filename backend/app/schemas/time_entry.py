@@ -102,6 +102,9 @@ class TimeEntryRead(BaseModel):
     note: str | None = None
     source: str
     status: str
+    gps_status: str | None = None
+    gps_matched_points: int | None = None
+    gps_total_points: int | None = None
     created_by_user_id: int | None = None
     reviewed_by_user_id: int | None = None
     reviewed_at: datetime | None = None

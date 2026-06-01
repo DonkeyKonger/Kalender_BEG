@@ -294,6 +294,7 @@ export const api = {
     siteId?: number;
     dateFrom?: string;
     dateTo?: string;
+    includeGpsStatus?: boolean;
   } = {}): Promise<TimeEntry[]> {
     const search = new URLSearchParams();
     if (params.personId !== undefined) {
@@ -307,6 +308,9 @@ export const api = {
     }
     if (params.dateTo) {
       search.set("date_to", params.dateTo);
+    }
+    if (params.includeGpsStatus) {
+      search.set("include_gps_status", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<TimeEntry[]>(`/time-entries${suffix}`);
