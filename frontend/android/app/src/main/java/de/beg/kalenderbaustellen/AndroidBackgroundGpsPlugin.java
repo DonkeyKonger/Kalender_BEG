@@ -2,8 +2,11 @@ package de.beg.kalenderbaustellen;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
 
@@ -12,8 +15,22 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
-@CapacitorPlugin(name = "AndroidBackgroundGps")
+@CapacitorPlugin(
+    name = "AndroidBackgroundGps",
+    permissions = {
+        @Permission(
+            alias = "foregroundLocation",
+            strings = {
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            }
+        ),
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
+    }
+)
 public class AndroidBackgroundGpsPlugin extends Plugin {
     @PluginMethod
     public void startTracking(PluginCall call) {
@@ -58,6 +75,44 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
         call.resolve(statusToJson(AndroidBackgroundGpsService.readStatus(getContext())));
     }
 
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        call.resolve(permissionStatusToJson(getContext()));
+    }
+
+    @PluginMethod
+    public void requestForegroundLocationPermission(PluginCall call) {
+        Context context = getContext();
+        if (hasForegroundLocationPermission(context) && hasNotificationPermission(context)) {
+            call.resolve(permissionStatusToJson(context));
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissionForAliases(
+                new String[] { "foregroundLocation", "notifications" },
+                call,
+                "foregroundLocationPermissionCallback"
+            );
+            return;
+        }
+        requestPermissionForAlias("foregroundLocation", call, "foregroundLocationPermissionCallback");
+    }
+
+    @PluginMethod
+    public void openAppLocationSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve(permissionStatusToJson(getContext()));
+    }
+
+    @PermissionCallback
+    private void foregroundLocationPermissionCallback(PluginCall call) {
+        call.resolve(permissionStatusToJson(getContext()));
+    }
+
     private JSObject statusToJson(AndroidBackgroundGpsService.BackgroundGpsStatus status) {
         JSObject result = new JSObject();
         result.put("isTracking", status.isTracking);
@@ -65,6 +120,17 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
         result.put("queuedCount", status.queuedCount);
         result.put("lastSentAt", status.lastSentAt);
         result.put("message", status.message);
+        return result;
+    }
+
+    private JSObject permissionStatusToJson(Context context) {
+        JSObject result = new JSObject();
+        result.put("foregroundLocationGranted", hasForegroundLocationPermission(context));
+        result.put("backgroundLocationGranted", hasBackgroundLocationPermission(context));
+        result.put("notificationsGranted", hasNotificationPermission(context));
+        result.put("canRequestForegroundLocation", true);
+        result.put("requiresBackgroundLocationSettings", Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q);
+        result.put("canOpenAppSettings", true);
         return result;
     }
 

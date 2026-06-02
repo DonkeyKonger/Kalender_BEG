@@ -16,6 +16,15 @@ export type AndroidBackgroundGpsStatus = {
   message?: string;
 };
 
+export type AndroidGpsPermissionStatus = {
+  foregroundLocationGranted: boolean;
+  backgroundLocationGranted: boolean;
+  notificationsGranted: boolean;
+  canRequestForegroundLocation: boolean;
+  requiresBackgroundLocationSettings: boolean;
+  canOpenAppSettings: boolean;
+};
+
 type AndroidBackgroundGpsPlugin = {
   startTracking(options: {
     apiBaseUrl: string;
@@ -24,6 +33,9 @@ type AndroidBackgroundGpsPlugin = {
   }): Promise<AndroidBackgroundGpsStatus>;
   stopTracking(): Promise<AndroidBackgroundGpsStatus>;
   getStatus(): Promise<AndroidBackgroundGpsStatus>;
+  checkPermissions(): Promise<AndroidGpsPermissionStatus>;
+  requestForegroundLocationPermission(): Promise<AndroidGpsPermissionStatus>;
+  openAppLocationSettings(): Promise<AndroidGpsPermissionStatus>;
 };
 
 const AndroidBackgroundGps = registerPlugin<AndroidBackgroundGpsPlugin>("AndroidBackgroundGps");
@@ -62,6 +74,27 @@ export async function getAndroidBackgroundGpsStatus(): Promise<AndroidBackground
   return AndroidBackgroundGps.getStatus();
 }
 
+export async function checkAndroidGpsPermissions(): Promise<AndroidGpsPermissionStatus> {
+  if (!isAndroidAppContext()) {
+    return androidGpsPermissionsUnavailable();
+  }
+  return AndroidBackgroundGps.checkPermissions();
+}
+
+export async function requestForegroundLocationPermission(): Promise<AndroidGpsPermissionStatus> {
+  if (!isAndroidAppContext()) {
+    return androidGpsPermissionsUnavailable();
+  }
+  return AndroidBackgroundGps.requestForegroundLocationPermission();
+}
+
+export async function openAndroidAppLocationSettings(): Promise<AndroidGpsPermissionStatus> {
+  if (!isAndroidAppContext()) {
+    return androidGpsPermissionsUnavailable();
+  }
+  return AndroidBackgroundGps.openAppLocationSettings();
+}
+
 export async function sendCurrentGpsLocation(): Promise<MobileGpsSendResult> {
   return sendCurrentLocation();
 }
@@ -91,6 +124,17 @@ function backgroundGpsUnavailableStatus(): AndroidBackgroundGpsStatus {
     intervalMs: ANDROID_GPS_PING_INTERVAL_MS,
     queuedCount: 0,
     message: "Android-Hintergrundstandort ist in diesem Kontext nicht verfügbar.",
+  };
+}
+
+function androidGpsPermissionsUnavailable(): AndroidGpsPermissionStatus {
+  return {
+    foregroundLocationGranted: false,
+    backgroundLocationGranted: false,
+    notificationsGranted: false,
+    canRequestForegroundLocation: false,
+    requiresBackgroundLocationSettings: false,
+    canOpenAppSettings: false,
   };
 }
 

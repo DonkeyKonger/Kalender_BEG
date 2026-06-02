@@ -19,13 +19,17 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
   ANDROID_GPS_PING_INTERVAL_MS,
+  checkAndroidGpsPermissions,
   formatMobileGpsError,
   getAndroidBackgroundGpsStatus,
+  openAndroidAppLocationSettings,
   isAndroidAppContext,
+  requestForegroundLocationPermission,
   sendCurrentGpsLocation,
   startAndroidBackgroundGpsTracking,
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
+import type { AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -63,6 +67,8 @@ export function MyAssignmentsPage() {
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
   const [lastGpsSentAt, setLastGpsSentAt] = useState<string | null>(null);
+  const [androidGpsPermissions, setAndroidGpsPermissions] = useState<AndroidGpsPermissionStatus | null>(null);
+  const [isHandlingGpsPermission, setIsHandlingGpsPermission] = useState(false);
 
   const range = useMemo(() => getRange(mode), [mode]);
 
@@ -96,37 +102,61 @@ export function MyAssignmentsPage() {
     void loadAssignments();
   }, [loadAssignments]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const syncAndroidGpsTracking = useCallback(async () => {
     if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
+      setAndroidGpsPermissions(null);
       void stopAndroidBackgroundGpsTracking();
+      return;
+    }
+
+    try {
+      const permissions = await checkAndroidGpsPermissions();
+      setAndroidGpsPermissions(permissions);
+      if (!hasRequiredAndroidGpsPermissions(permissions)) {
+        void stopAndroidBackgroundGpsTracking();
+        return;
+      }
+
+      const trackingStatus = await startAndroidBackgroundGpsTracking();
+      if (trackingStatus.lastSentAt) {
+        setLastGpsSentAt(trackingStatus.lastSentAt);
+      }
+      if (trackingStatus.isTracking) {
+        setGpsMessage("Android-Hintergrundstandort aktiv.");
+        setGpsMessageTone("info");
+      }
+    } catch (trackingError) {
+      setGpsMessage(formatMobileGpsError(trackingError));
+      setGpsMessageTone("error");
+    }
+  }, [status, user?.role]);
+
+  useEffect(() => {
+    void syncAndroidGpsTracking();
+    return () => {
+      void stopAndroidBackgroundGpsTracking();
+    };
+  }, [syncAndroidGpsTracking]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
       return undefined;
     }
 
-    void startAndroidBackgroundGpsTracking()
-      .then((trackingStatus) => {
-        if (!isMounted || !trackingStatus.isTracking) {
-          return;
-        }
-        if (trackingStatus.lastSentAt) {
-          setLastGpsSentAt(trackingStatus.lastSentAt);
-        }
-        setGpsMessage("Android-Hintergrundstandort aktiv.");
-        setGpsMessageTone("info");
-      })
-      .catch((trackingError) => {
-        if (!isMounted) {
-          return;
-        }
-        setGpsMessage(formatMobileGpsError(trackingError));
-        setGpsMessageTone("error");
-      });
+    const handleResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void syncAndroidGpsTracking();
+    };
+    window.addEventListener("focus", handleResume);
+    document.addEventListener("visibilitychange", handleResume);
 
     return () => {
-      isMounted = false;
-      void stopAndroidBackgroundGpsTracking();
+      window.removeEventListener("focus", handleResume);
+      document.removeEventListener("visibilitychange", handleResume);
     };
-  }, [status, user?.role]);
+  }, [status, syncAndroidGpsTracking, user?.role]);
 
   useEffect(() => {
     if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
@@ -170,6 +200,37 @@ export function MyAssignmentsPage() {
     }
   }
 
+  async function handleAndroidGpsPermissionAction(): Promise<void> {
+    const prompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
+    if (!prompt || isHandlingGpsPermission) {
+      return;
+    }
+
+    setIsHandlingGpsPermission(true);
+    setGpsMessageTone("info");
+    try {
+      if (prompt.kind === "background") {
+        setGpsMessage("App-Einstellungen geöffnet. Bitte Standort auf Immer erlauben stellen.");
+        await openAndroidAppLocationSettings();
+      } else {
+        setGpsMessage("Android-Berechtigung wird angefragt ...");
+        const permissions = await requestForegroundLocationPermission();
+        setAndroidGpsPermissions(permissions);
+        if (hasRequiredAndroidGpsPermissions(permissions)) {
+          await syncAndroidGpsTracking();
+        } else {
+          setGpsMessage("Standortberechtigung ist noch nicht vollständig erteilt.");
+        }
+      }
+      setGpsMessageTone("info");
+    } catch (permissionError) {
+      setGpsMessage(formatMobileGpsError(permissionError));
+      setGpsMessageTone("error");
+    } finally {
+      setIsHandlingGpsPermission(false);
+    }
+  }
+
   async function handleLogout(): Promise<void> {
     await stopAndroidBackgroundGpsTracking();
     await logout();
@@ -187,6 +248,7 @@ export function MyAssignmentsPage() {
     () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
   );
+  const androidGpsPermissionPrompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
 
   if (activeScreen === "assignments") {
     return (
@@ -303,6 +365,21 @@ export function MyAssignmentsPage() {
               <h2>Standort</h2>
               <span>Test</span>
             </div>
+            {user?.role === "monteur" && isAndroidAppContext() && androidGpsPermissionPrompt ? (
+              <div className="form-info mobile-gps-status">
+                <strong>{androidGpsPermissionPrompt.title}</strong>
+                <p>{androidGpsPermissionPrompt.text}</p>
+                <button
+                  className="icon-button secondary"
+                  disabled={isHandlingGpsPermission}
+                  type="button"
+                  onClick={() => void handleAndroidGpsPermissionAction()}
+                >
+                  <MapPin aria-hidden="true" size={17} />
+                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
+                </button>
+              </div>
+            ) : null}
             <button className="mobile-message-card mobile-gps-send-card" disabled={isSendingGps} type="button" onClick={() => void sendGpsNow()}>
               <MapPin aria-hidden="true" size={20} />
               <span>
@@ -384,6 +461,52 @@ export function MyAssignmentsPage() {
       {placeholder ? <MobilePlaceholderDialog content={placeholder} onClose={() => setPlaceholder(null)} /> : null}
     </section>
   );
+}
+
+type AndroidGpsPermissionPrompt = {
+  kind: "foreground" | "background" | "notifications";
+  title: string;
+  text: string;
+  actionLabel: string;
+};
+
+function hasRequiredAndroidGpsPermissions(permissions: AndroidGpsPermissionStatus | null): boolean {
+  return Boolean(
+    permissions?.foregroundLocationGranted
+      && permissions.backgroundLocationGranted
+      && permissions.notificationsGranted,
+  );
+}
+
+function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus | null): AndroidGpsPermissionPrompt | null {
+  if (!permissions) {
+    return null;
+  }
+  if (!permissions.foregroundLocationGranted) {
+    return {
+      kind: "foreground",
+      title: "Standort erlauben",
+      text: "Für die automatische Arbeitszeitprüfung benötigt die App Standortzugriff.",
+      actionLabel: "Standort erlauben",
+    };
+  }
+  if (!permissions.notificationsGranted) {
+    return {
+      kind: "notifications",
+      title: "Benachrichtigung erlauben",
+      text: "Damit Android die laufende Standortprüfung anzeigen kann, muss die App Benachrichtigungen senden dürfen.",
+      actionLabel: "Berechtigung erlauben",
+    };
+  }
+  if (!permissions.backgroundLocationGranted) {
+    return {
+      kind: "background",
+      title: "Standort auf Immer erlauben stellen",
+      text: "Damit die automatische Arbeitszeitprüfung auch bei gesperrtem Handy funktioniert, muss der Standortzugriff auf Immer erlauben gestellt werden.",
+      actionLabel: "App-Einstellungen öffnen",
+    };
+  }
+  return null;
 }
 
 function DayFocusCard({
