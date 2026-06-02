@@ -52,6 +52,7 @@ type CalendarWeekSelection = {
   week: number;
 };
 type CalendarWeekOption = CalendarWeekSelection & {
+  label: string;
   start: string;
   end: string;
   isCurrent: boolean;
@@ -307,8 +308,8 @@ export function TimeEntriesPage() {
     [selectedReviewWeek.week, selectedReviewWeek.year],
   );
   const reviewWeekOptions = useMemo(
-    () => buildCalendarWeekOptions(selectedReviewWeek.year, currentReviewWeek),
-    [currentReviewWeek, selectedReviewWeek.year],
+    () => buildCalendarWeekOptions(currentReviewWeek),
+    [currentReviewWeek],
   );
   const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
   const siteOptions = useMemo(
@@ -632,12 +633,13 @@ export function TimeEntriesPage() {
     }
   }
 
-  async function saveReviewDecision(issue: TimeReviewIssue): Promise<void> {
-    if (!reviewEditorMode || isSavingReviewDecision) {
+  async function saveReviewDecision(issue: TimeReviewIssue, modeOverride?: ReviewEditorMode): Promise<void> {
+    const decisionMode = modeOverride ?? reviewEditorMode;
+    if (!decisionMode || isSavingReviewDecision) {
       return;
     }
     let finalMinutes: number | null = null;
-    if (reviewEditorMode === "corrected") {
+    if (decisionMode === "corrected") {
       const parsedHours = parseHoursToMinutes(reviewDecisionForm.hours);
       if (!parsedHours.ok) {
         setReviewActionError(parsedHours.error);
@@ -654,7 +656,7 @@ export function TimeEntriesPage() {
       }
       reviewedSiteId = parsedSiteId;
     }
-    if (reviewEditorMode === "assign_site" && reviewedSiteId === null) {
+    if (decisionMode === "assign_site" && reviewedSiteId === null) {
       setReviewActionError("Bitte eine Baustelle auswählen.");
       return;
     }
@@ -662,7 +664,7 @@ export function TimeEntriesPage() {
     setIsSavingReviewDecision(true);
     setReviewActionError(null);
     try {
-      await decideReviewIssue(issue, reviewEditorMode === "corrected" ? "corrected" : "assign_site", {
+      await decideReviewIssue(issue, decisionMode === "corrected" ? "corrected" : "assign_site", {
         finalMinutes,
         reviewedSiteId,
       });
@@ -931,16 +933,6 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "review" && (
         <div className="time-entries-main time-review-main">
-          <div className="time-entries-toolbar">
-            <div>
-              <h2>Stundenprüfung</h2>
-              <p>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)} · GPS-Toleranz +/- {GPS_TIME_TOLERANCE_MINUTES} Min.</p>
-            </div>
-            <div className="time-toolbar-actions">
-              <span className="time-review-week-label">Ausgewählte Kalenderwoche {selectedReviewWeek.week}/{selectedReviewWeek.year}</span>
-            </div>
-          </div>
-
           <div className="project-record-subtabs time-review-subtabs" role="tablist" aria-label="Stundenprüfung Bereiche">
             <button
               className={selectedReviewPanelTab === "review" ? "is-active" : ""}
@@ -981,7 +973,7 @@ export function TimeEntriesPage() {
                   type="button"
                   onClick={() => setSelectedReviewWeek({ year: option.year, week: option.week })}
                 >
-                  KW {option.week}
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -1057,7 +1049,6 @@ export function TimeEntriesPage() {
                     {renderReviewTableRows({
                       rows: reviewTableRows,
                       expandedReviewEntryId,
-                      reviewEditorMode,
                       reviewDecisionForm,
                       reviewActionEntryId,
                       isSavingReviewDecision,
@@ -1476,7 +1467,6 @@ function ReviewSummaryCard({
 function renderReviewTableRows({
   rows,
   expandedReviewEntryId,
-  reviewEditorMode,
   reviewDecisionForm,
   reviewActionEntryId,
   isSavingReviewDecision,
@@ -1491,7 +1481,6 @@ function renderReviewTableRows({
 }: {
   rows: TimeReviewTableRow[];
   expandedReviewEntryId: number | null;
-  reviewEditorMode: ReviewEditorMode;
   reviewDecisionForm: ReviewDecisionFormState;
   reviewActionEntryId: number | null;
   isSavingReviewDecision: boolean;
@@ -1500,7 +1489,7 @@ function renderReviewTableRows({
   onConfirm: (row: TimeReviewTableRow) => Promise<void>;
   onOpenIssue: (issue: TimeReviewIssue, mode?: ReviewEditorMode) => void;
   onCloseIssue: () => void;
-  onSaveDecision: (issue: TimeReviewIssue) => Promise<void>;
+  onSaveDecision: (issue: TimeReviewIssue, modeOverride?: ReviewEditorMode) => Promise<void>;
   onReviewDecisionFormChange: (updater: (current: ReviewDecisionFormState) => ReviewDecisionFormState) => void;
   onDecideIssue: (
     issue: TimeReviewIssue,
@@ -1554,9 +1543,15 @@ function renderReviewTableRows({
                   className="time-table-action"
                   disabled={isBusy}
                   type="button"
-                  onClick={() => onOpenIssue(issue)}
+                  onClick={() => {
+                    if (isExpanded) {
+                      onCloseIssue();
+                    } else {
+                      onOpenIssue(issue, "corrected");
+                    }
+                  }}
                 >
-                  Details
+                  Korrektur
                 </button>
               )}
             </div>
@@ -1565,16 +1560,9 @@ function renderReviewTableRows({
         {isExpanded && issue && (
           <tr className="time-review-detail-row">
             <td colSpan={6}>
-              <div className="time-review-table-detail-panel">
-                <div className="time-review-detail-grid">
-                  <div><span>Originalwert</span><strong>{formatHalfHour(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
-                  <div><span>GPS-Wert</span><strong>{formatHalfHour(issue.gpsMinutes)}</strong></div>
-                  <div><span>Abweichung</span><strong>{formatHalfHourDelta(issue.deviationMinutes)}</strong></div>
-                  <div><span>Status</span><strong>{issue.statusLabel}</strong></div>
-                </div>
-                <p className="time-review-detail">{issue.detail}</p>
+              <div className="time-review-correction-panel">
                 {canManageTimeEntries && (
-                  <div className="time-review-table-detail-actions">
+                  <>
                     <button
                       className="time-table-action"
                       disabled={isBusy || issue.gpsMinutes === null}
@@ -1583,35 +1571,31 @@ function renderReviewTableRows({
                     >
                       GPS übernehmen
                     </button>
-                    <button className="time-table-action" disabled={isBusy} type="button" onClick={() => onOpenIssue(issue, "corrected")}>
-                      Korrigieren
-                    </button>
-                    <button className="time-table-action" disabled={isBusy} type="button" onClick={() => onOpenIssue(issue, "assign_site")}>
-                      Baustelle zuordnen
-                    </button>
-                    <button
-                      className="time-table-action"
-                      disabled={isBusy}
-                      type="button"
-                      onClick={() => void onDecideIssue(issue, "mark_not_verifiable")}
-                    >
-                      Nicht prüfbar
-                    </button>
-                    <button
-                      className="time-table-action"
-                      disabled={isBusy}
-                      type="button"
-                      onClick={() => void onDecideIssue(issue, "mark_clarification")}
-                    >
-                      Zur Klärung
-                    </button>
-                  </div>
-                )}
-                {reviewEditorMode && (
-                  <div className="time-entry-form-grid">
-                    {reviewEditorMode === "corrected" && (
+                    <div className="time-review-correction-field">
                       <label>
-                        <span>Finale Arbeitszeit (Std.)</span>
+                        <span>Baustelle zuordnen</span>
+                        <select
+                          value={reviewDecisionForm.site_id}
+                          onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, site_id: event.target.value }))}
+                        >
+                          <option value="">Nicht zugeordnet</option>
+                          {siteOptions.map((site) => (
+                            <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="time-table-action"
+                        disabled={isBusy}
+                        type="button"
+                        onClick={() => void onSaveDecision(issue, "assign_site")}
+                      >
+                        Baustelle zuordnen
+                      </button>
+                    </div>
+                    <div className="time-review-correction-field">
+                      <label>
+                        <span>Zeit manuell anpassen</span>
                         <input
                           inputMode="decimal"
                           placeholder="z. B. 8,5"
@@ -1619,31 +1603,20 @@ function renderReviewTableRows({
                           onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, hours: event.target.value }))}
                         />
                       </label>
-                    )}
-                    <label>
-                      <span>Baustelle</span>
-                      <select
-                        value={reviewDecisionForm.site_id}
-                        onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, site_id: event.target.value }))}
+                      <button
+                        className="time-table-action time-table-action-primary"
+                        disabled={isBusy}
+                        type="button"
+                        onClick={() => void onSaveDecision(issue, "corrected")}
                       >
-                        <option value="">Nicht zugeordnet</option>
-                        {siteOptions.map((site) => (
-                          <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                        Zeit übernehmen
+                      </button>
+                    </div>
+                  </>
                 )}
-                <div className="time-entry-editor-actions">
-                  <button className="icon-button secondary" disabled={isBusy} type="button" onClick={onCloseIssue}>
-                    Schließen
-                  </button>
-                  {reviewEditorMode && (
-                    <button className="icon-button" disabled={isBusy} type="button" onClick={() => void onSaveDecision(issue)}>
-                      {isSavingReviewDecision ? "Speichert..." : "Speichern"}
-                    </button>
-                  )}
-                </div>
+                {!canManageTimeEntries && (
+                  <StatusBadge tone={issue.statusTone}>{issue.statusLabel}</StatusBadge>
+                )}
               </div>
             </td>
           </tr>
@@ -1666,7 +1639,6 @@ function FinalSummaryList({ title, rows }: { title: string; rows: { label: strin
     </div>
   );
 }
-
 function currentMonthRange(): { start: string; end: string } {
   const today = new Date();
   return {
@@ -1689,23 +1661,23 @@ function currentIsoWeek(): CalendarWeekSelection {
   return isoWeekFromDate(new Date());
 }
 
-function buildCalendarWeekOptions(year: number, currentWeek: CalendarWeekSelection): CalendarWeekOption[] {
-  const totalWeeks = isoWeeksInYear(year);
-  const firstVisibleWeek = year === currentWeek.year ? Math.max(1, currentWeek.week - 4) : 1;
-  const orderedWeeks = [
-    ...numberRange(firstVisibleWeek, totalWeeks),
-    ...numberRange(1, firstVisibleWeek - 1),
-  ];
-  return orderedWeeks.map((week) => {
+function buildCalendarWeekOptions(currentWeek: CalendarWeekSelection): CalendarWeekOption[] {
+  const optionForWeek = (year: number, week: number): CalendarWeekOption => {
     const range = isoWeekRange(year, week);
     return {
       year,
       week,
+      label: year === currentWeek.year ? `KW ${week}` : `KW ${week}/${year}`,
       start: range.start,
       end: range.end,
       isCurrent: year === currentWeek.year && week === currentWeek.week,
     };
-  });
+  };
+
+  return [
+    ...numberRange(1, 54).map((week) => optionForWeek(currentWeek.year, week)),
+    ...numberRange(1, 5).map((week) => optionForWeek(currentWeek.year + 1, week)),
+  ];
 }
 
 function numberRange(start: number, end: number): number[] {
@@ -1723,10 +1695,6 @@ function isoWeekFromDate(input: Date): CalendarWeekSelection {
   const yearStart = new Date(Date.UTC(isoYear, 0, 1));
   const week = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
   return { year: isoYear, week };
-}
-
-function isoWeeksInYear(year: number): number {
-  return isoWeekFromDate(new Date(year, 11, 28)).week;
 }
 
 function isoWeekRange(year: number, week: number): { start: string; end: string } {
