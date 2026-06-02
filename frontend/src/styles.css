@@ -5910,6 +5910,10 @@ button.person-chip:focus-visible {
   gap: 16px;
 }
 
+.time-main-subtabs {
+  justify-self: start;
+}
+
 .time-entries-layout {
   display: grid;
   gap: 16px;
@@ -6206,6 +6210,18 @@ button.person-chip:focus-visible {
 .time-entries-table tr.time-gps-comparison-row td {
   background: #f8fafc;
   color: #52627a;
+  font-weight: 750;
+}
+
+.time-review-table {
+  min-width: 760px;
+}
+
+.time-review-detail {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 0.76rem;
   font-weight: 750;
 }
 

@@ -11,6 +11,7 @@ import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
+type TimeSubtab = "review" | "workerTimes";
 type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
 type TimeEntryFormState = {
   work_date: string;
@@ -20,6 +21,21 @@ type TimeEntryFormState = {
   travel_minutes: string;
   note: string;
 };
+type TimeReviewIssue = {
+  id: number;
+  workDate: string;
+  personName: string;
+  manualMinutes: number | null;
+  gpsMinutes: number | null;
+  deviationMinutes: number | null;
+  detail: string;
+};
+
+const GPS_TIME_TOLERANCE_MINUTES = 15;
+const timeSubtabs: { key: TimeSubtab; label: string }[] = [
+  { key: "review", label: "Stundenprüfung" },
+  { key: "workerTimes", label: "Monteurszeiten" },
+];
 
 const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
   draft: "Entwurf",
@@ -65,7 +81,9 @@ export function TimeEntriesPage() {
   const { user } = useAuth();
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [activeTimeSubtab, setActiveTimeSubtab] = useState<TimeSubtab>("review");
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -73,10 +91,12 @@ export function TimeEntriesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+  const [isLoadingReviewEntries, setIsLoadingReviewEntries] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isLoadingRecentGps, setIsLoadingRecentGps] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entriesError, setEntriesError] = useState<string | null>(null);
+  const [reviewEntriesError, setReviewEntriesError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -161,6 +181,7 @@ export function TimeEntriesPage() {
     () => buildPlannedSitesByDate(assignments, activeRange.start, activeRange.end),
     [activeRange.end, activeRange.start, assignments],
   );
+  const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
   const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
 
   useEffect(() => {
@@ -220,6 +241,42 @@ export function TimeEntriesPage() {
       ignore = true;
     };
   }, [activeRange.end, activeRange.start, entriesRefreshKey, selectedPersonId]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingReviewEntries(true);
+    setReviewEntriesError(null);
+
+    api.timeEntries({
+      dateFrom: activeRange.start,
+      dateTo: activeRange.end,
+      includeGpsStatus: true,
+    })
+      .then((entryData) => {
+        if (!ignore) {
+          setReviewEntries(entryData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setReviewEntries([]);
+          setReviewEntriesError(readApiError(requestError, "Stundenpruefung konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingReviewEntries(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeRange.end, activeRange.start, activeTimeSubtab, entriesRefreshKey]);
 
   useEffect(() => {
     if (selectedPersonId === null) {
@@ -333,6 +390,98 @@ export function TimeEntriesPage() {
 
       {error && <p className="form-error">{error}</p>}
 
+      <div className="project-record-subtabs time-main-subtabs" role="tablist" aria-label="Zeiten Bereiche">
+        {timeSubtabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTimeSubtab === tab.key}
+            className={activeTimeSubtab === tab.key ? "is-active" : ""}
+            onClick={() => setActiveTimeSubtab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTimeSubtab === "review" && (
+        <div className="time-entries-main time-review-main">
+          <div className="time-entries-toolbar">
+            <div>
+              <h2>Stundenprüfung</h2>
+              <p>{formatRangeLabel(activeRange.start, activeRange.end)} · GPS-Toleranz +/- {GPS_TIME_TOLERANCE_MINUTES} Min.</p>
+            </div>
+            <div className="time-toolbar-actions">
+              <div className="time-range-controls">
+                <div className="matrix-pm-filter" aria-label="Zeitraum">
+                  <button className={rangeMode === "week" ? "is-active" : ""} type="button" onClick={() => setRangeMode("week")}>
+                    Aktuelle Woche
+                  </button>
+                  <button className={rangeMode === "month" ? "is-active" : ""} type="button" onClick={() => setRangeMode("month")}>
+                    Aktueller Monat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="time-table-panel">
+            <div className="time-table-scroll">
+              <table className="time-entries-table time-review-table">
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Monteur</th>
+                    <th>Manuelle Arbeitszeit</th>
+                    <th>GPS-Arbeitszeit</th>
+                    <th>Abweichung</th>
+                    <th>Status / Hinweis</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingReviewEntries && (
+                    <tr>
+                      <td className="time-empty-row" colSpan={6}>
+                        Stundenprüfung wird geladen...
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoadingReviewEntries && reviewEntriesError && (
+                    <tr>
+                      <td className="time-empty-row" colSpan={6}>
+                        {reviewEntriesError}
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoadingReviewEntries && !reviewEntriesError && timeReviewIssues.length === 0 && (
+                    <tr>
+                      <td className="time-empty-row" colSpan={6}>
+                        Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz.
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoadingReviewEntries && !reviewEntriesError && timeReviewIssues.map((issue) => (
+                    <tr key={issue.id}>
+                      <td>{formatDate(issue.workDate)}</td>
+                      <td>{issue.personName}</td>
+                      <td>{formatMinutes(issue.manualMinutes)}</td>
+                      <td>{issue.gpsMinutes === null ? "-" : formatMinutes(issue.gpsMinutes)}</td>
+                      <td>{formatDeviationMinutes(issue.deviationMinutes)}</td>
+                      <td>
+                        <StatusBadge tone="warning">Manuelle Prüfung erforderlich</StatusBadge>
+                        <span className="time-review-detail">{issue.detail}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTimeSubtab === "workerTimes" && (
       <div className="time-entries-layout">
         <aside className="time-entries-sidebar">
           <div className="time-panel-header">
@@ -670,6 +819,7 @@ export function TimeEntriesPage() {
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -795,6 +945,63 @@ function formatGpsWorkMinutes(entry: TimeEntry): string {
     return "nicht berechenbar";
   }
   return formatMinutes(entry.gps_work_minutes);
+}
+
+function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
+  return entries
+    .map((entry) => timeReviewIssue(entry))
+    .filter((issue): issue is TimeReviewIssue => issue !== null);
+}
+
+function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
+  const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
+  const gpsMinutes = entry.gps_work_minutes;
+  if (manualMinutes === null && gpsMinutes === null) {
+    return null;
+  }
+  if (manualMinutes === null) {
+    return {
+      id: entry.id,
+      workDate: entry.work_date,
+      personName: entry.person_name,
+      manualMinutes,
+      gpsMinutes,
+      deviationMinutes: null,
+      detail: "Manuelle Arbeitszeit fehlt.",
+    };
+  }
+  if (gpsMinutes === null) {
+    return {
+      id: entry.id,
+      workDate: entry.work_date,
+      personName: entry.person_name,
+      manualMinutes,
+      gpsMinutes,
+      deviationMinutes: null,
+      detail: entry.gps_first_seen_at ? "GPS-Zeit ist nicht berechenbar." : "GPS fehlt.",
+    };
+  }
+
+  const deviationMinutes = gpsMinutes - manualMinutes;
+  if (Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
+    return null;
+  }
+  return {
+    id: entry.id,
+    workDate: entry.work_date,
+    personName: entry.person_name,
+    manualMinutes,
+    gpsMinutes,
+    deviationMinutes,
+    detail: "GPS-Zeit weicht mehr als 15 Minuten ab.",
+  };
+}
+
+function formatDeviationMinutes(minutes: number | null): string {
+  if (minutes === null) {
+    return "-";
+  }
+  return `${minutes > 0 ? "+" : ""}${minutes} Min.`;
 }
 
 function defaultEntryDate(dateFrom: string, dateTo: string): string {
