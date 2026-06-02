@@ -8,7 +8,7 @@ import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoi
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
-import type { TimeEntry, TimeEntryCreate, TimeEntryUpdate } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -312,6 +312,7 @@ export const api = {
     dateFrom?: string;
     dateTo?: string;
     includeGpsStatus?: boolean;
+    reviewOpenOnly?: boolean;
   } = {}): Promise<TimeEntry[]> {
     const search = new URLSearchParams();
     if (params.personId !== undefined) {
@@ -329,6 +330,9 @@ export const api = {
     if (params.includeGpsStatus) {
       search.set("include_gps_status", "true");
     }
+    if (params.reviewOpenOnly) {
+      search.set("review_open_only", "true");
+    }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<TimeEntry[]>(`/time-entries${suffix}`);
   },
@@ -343,6 +347,17 @@ export const api = {
   async updateTimeEntry(entryId: number, payload: TimeEntryUpdate): Promise<TimeEntry> {
     return request<TimeEntry>(`/time-entries/${entryId}`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async approveTimeEntryReview(entryId: number): Promise<TimeEntry> {
+    return request<TimeEntry>(`/time-entries/${entryId}/review/approve`, { method: "POST" });
+  },
+
+  async correctTimeEntryReview(entryId: number, payload: TimeEntryCorrection): Promise<TimeEntry> {
+    return request<TimeEntry>(`/time-entries/${entryId}/review/correct`, {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   },

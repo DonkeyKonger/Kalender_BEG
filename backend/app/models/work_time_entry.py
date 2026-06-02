@@ -33,9 +33,13 @@ class WorkTimeEntry(TimestampMixin, Base):
     break_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     travel_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     work_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    original_work_minutes: Mapped[int | None] = mapped_column(Integer)
+    corrected_work_minutes: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft")
+    time_review_status: Mapped[str] = mapped_column(String(40), nullable=False, default="open")
+    time_review_method: Mapped[str | None] = mapped_column(String(40))
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         index=True,

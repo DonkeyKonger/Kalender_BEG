@@ -6282,7 +6282,7 @@ button.person-chip:focus-visible {
 }
 
 .time-review-table {
-  min-width: 760px;
+  min-width: 980px;
 }
 
 .time-review-detail {
@@ -6291,6 +6291,23 @@ button.person-chip:focus-visible {
   color: #64748b;
   font-size: 0.76rem;
   font-weight: 750;
+}
+
+.time-review-correction-editor {
+  border-radius: 0;
+  border-width: 0 0 1px;
+}
+
+.time-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.time-table-action-primary {
+  border-color: #b7d9c2;
+  background: #eefaf1;
+  color: #166534;
 }
 
 .time-table-action {

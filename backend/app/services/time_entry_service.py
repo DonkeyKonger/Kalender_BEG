@@ -12,6 +12,10 @@ from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 
+GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
+OPEN_TIME_REVIEW_STATUS = "open"
+TERMINAL_TIME_REVIEW_STATUSES = {"manually_approved", "corrected", "auto_closed_by_deadline"}
+
 
 class TimeEntryService:
     def __init__(self, db: Session) -> None:
@@ -100,6 +104,78 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def approve_time_review(self, entry_id: int, current_user: User) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._mark_time_review(
+            entry,
+            status_value="manually_approved",
+            method="manual_confirmed",
+            current_user=current_user,
+        )
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
+    def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        if corrected_work_minutes < 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Korrigierte Arbeitszeit darf nicht negativ sein.")
+        if entry.original_work_minutes is None:
+            entry.original_work_minutes = entry.work_minutes
+        entry.corrected_work_minutes = corrected_work_minutes
+        entry.work_minutes = corrected_work_minutes
+        self._mark_time_review(
+            entry,
+            status_value="corrected",
+            method="manual_correction",
+            current_user=current_user,
+        )
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
+    def auto_close_deadline_reviews(
+        self,
+        entries: list[WorkTimeEntry],
+        gps_minutes_by_entry_id: dict[int, int | None],
+        *,
+        today: date | None = None,
+    ) -> bool:
+        check_date = today or date.today()
+        if check_date.day < 5:
+            return False
+        current_month_start = date(check_date.year, check_date.month, 1)
+        changed = False
+        for entry in entries:
+            if entry.work_date >= current_month_start:
+                continue
+            if not self.is_open_time_review_case(entry, gps_minutes_by_entry_id.get(entry.id)):
+                continue
+            entry.time_review_status = "auto_closed_by_deadline"
+            entry.time_review_method = "deadline"
+            entry.status = "reviewed"
+            entry.reviewed_by_user_id = None
+            entry.reviewed_at = datetime.now().astimezone()
+            changed = True
+        if changed:
+            self.db.commit()
+        return changed
+
+    @staticmethod
+    def is_open_time_review_case(entry: WorkTimeEntry, gps_minutes: int | None) -> bool:
+        review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
+        if review_status in TERMINAL_TIME_REVIEW_STATUSES:
+            return False
+        manual_minutes = getattr(entry, "work_minutes", None)
+        if manual_minutes is None and gps_minutes is None:
+            return False
+        if manual_minutes is None or gps_minutes is None:
+            return True
+        return abs(gps_minutes - manual_minutes) > GPS_TIME_REVIEW_TOLERANCE_MINUTES
+
     def _get_entry(self, entry_id: int) -> WorkTimeEntry:
         entry = self.db.get(WorkTimeEntry, entry_id)
         if entry is None:
@@ -120,6 +196,25 @@ class TimeEntryService:
             return
         if current_user.person_id != person_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Monteure duerfen nur eigene Arbeitszeiten erfassen.")
+
+    def _ensure_can_review_time(self, current_user: User) -> None:
+        if current_user.role in {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}:
+            return
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Arbeitszeiten duerfen nur durch Buero oder Projektleitung geprueft werden.")
+
+    @staticmethod
+    def _mark_time_review(
+        entry: WorkTimeEntry,
+        *,
+        status_value: str,
+        method: str,
+        current_user: User,
+    ) -> None:
+        entry.time_review_status = status_value
+        entry.time_review_method = method
+        entry.status = "reviewed"
+        entry.reviewed_by_user_id = current_user.id
+        entry.reviewed_at = datetime.now().astimezone()
 
     def _ensure_person_exists(self, person_id: int) -> None:
         if self.db.get(Person, person_id) is None:

@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 TIME_ENTRY_STATUSES = {"draft", "submitted", "reviewed"}
 TIME_ENTRY_SOURCES = {"manual"}
+TIME_REVIEW_STATUSES = {"open", "manually_approved", "corrected", "auto_closed_by_deadline"}
+TIME_REVIEW_METHODS = {"manual_confirmed", "manual_correction", "deadline"}
 
 
 class TimeEntryBase(BaseModel):
@@ -85,6 +87,10 @@ class TimeEntryUpdate(BaseModel):
         return cleaned
 
 
+class TimeEntryCorrection(BaseModel):
+    corrected_work_minutes: int = Field(ge=0)
+
+
 class TimeEntryRead(BaseModel):
     id: int
     person_id: int
@@ -99,9 +105,13 @@ class TimeEntryRead(BaseModel):
     break_minutes: int
     travel_minutes: int
     work_minutes: int
+    original_work_minutes: int | None = None
+    corrected_work_minutes: int | None = None
     note: str | None = None
     source: str
     status: str
+    time_review_status: str = "open"
+    time_review_method: str | None = None
     gps_status: str | None = None
     gps_matched_points: int | None = None
     gps_total_points: int | None = None

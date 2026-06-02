@@ -1,6 +1,8 @@
 export type TimeEntryStatus = "draft" | "submitted" | "reviewed";
 export type TimeEntrySource = "manual";
 export type TimeEntryGpsStatus = "not_checkable" | "missing" | "partial" | "matched" | "mismatch";
+export type TimeReviewStatus = "open" | "manually_approved" | "corrected" | "auto_closed_by_deadline";
+export type TimeReviewMethod = "manual_confirmed" | "manual_correction" | "deadline";
 
 export type TimeEntry = {
   id: number;
@@ -16,9 +18,13 @@ export type TimeEntry = {
   break_minutes: number;
   travel_minutes: number;
   work_minutes: number;
+  original_work_minutes: number | null;
+  corrected_work_minutes: number | null;
   note: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
+  time_review_status: TimeReviewStatus;
+  time_review_method: TimeReviewMethod | null;
   gps_status: TimeEntryGpsStatus | null;
   gps_matched_points: number | null;
   gps_total_points: number | null;
@@ -48,3 +54,7 @@ export type TimeEntryCreate = {
 };
 
 export type TimeEntryUpdate = Partial<TimeEntryCreate>;
+
+export type TimeEntryCorrection = {
+  corrected_work_minutes: number;
+};

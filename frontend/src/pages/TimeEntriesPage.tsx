@@ -23,8 +23,10 @@ type TimeEntryFormState = {
 };
 type TimeReviewIssue = {
   id: number;
+  entry: TimeEntry;
   workDate: string;
   personName: string;
+  siteLabel: string;
   manualMinutes: number | null;
   gpsMinutes: number | null;
   deviationMinutes: number | null;
@@ -107,6 +109,11 @@ export function TimeEntriesPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isSavingEntry, setIsSavingEntry] = useState(false);
   const [entriesRefreshKey, setEntriesRefreshKey] = useState(0);
+  const [reviewActionEntryId, setReviewActionEntryId] = useState<number | null>(null);
+  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
+  const [reviewCorrectionEntry, setReviewCorrectionEntry] = useState<TimeEntry | null>(null);
+  const [reviewCorrectionHours, setReviewCorrectionHours] = useState("");
+  const [isSavingReviewCorrection, setIsSavingReviewCorrection] = useState(false);
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canViewGpsVerification = canManageTimeEntries;
   const visibleTimeSubtabs = canViewGpsVerification
@@ -186,6 +193,7 @@ export function TimeEntriesPage() {
     [activeRange.end, activeRange.start, assignments],
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
+  const reviewTableColumnCount = canManageTimeEntries ? 8 : 7;
   const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
 
   useEffect(() => {
@@ -259,6 +267,7 @@ export function TimeEntriesPage() {
       dateFrom: activeRange.start,
       dateTo: activeRange.end,
       includeGpsStatus: true,
+      reviewOpenOnly: true,
     })
       .then((entryData) => {
         if (!ignore) {
@@ -382,6 +391,57 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function approveReviewIssue(entryId: number): Promise<void> {
+    if (!canManageTimeEntries || reviewActionEntryId !== null) {
+      return;
+    }
+    setReviewActionEntryId(entryId);
+    setReviewActionError(null);
+    try {
+      await api.approveTimeEntryReview(entryId);
+      if (reviewCorrectionEntry?.id === entryId) {
+        setReviewCorrectionEntry(null);
+        setReviewCorrectionHours("");
+      }
+      setEntriesRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Prueffall konnte nicht als geprueft markiert werden."));
+    } finally {
+      setReviewActionEntryId(null);
+    }
+  }
+
+  function openReviewCorrection(entry: TimeEntry): void {
+    setReviewCorrectionEntry(entry);
+    setReviewCorrectionHours(formatDecimalHours(entry.corrected_work_minutes ?? entry.work_minutes));
+    setReviewActionError(null);
+  }
+
+  async function saveReviewCorrection(): Promise<void> {
+    if (!reviewCorrectionEntry || isSavingReviewCorrection) {
+      return;
+    }
+    const parsedHours = parseHoursToMinutes(reviewCorrectionHours);
+    if (!parsedHours.ok) {
+      setReviewActionError(parsedHours.error);
+      return;
+    }
+    setIsSavingReviewCorrection(true);
+    setReviewActionEntryId(reviewCorrectionEntry.id);
+    setReviewActionError(null);
+    try {
+      await api.correctTimeEntryReview(reviewCorrectionEntry.id, { corrected_work_minutes: parsedHours.value });
+      setReviewCorrectionEntry(null);
+      setReviewCorrectionHours("");
+      setEntriesRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Arbeitszeit konnte nicht korrigiert werden."));
+    } finally {
+      setIsSavingReviewCorrection(false);
+      setReviewActionEntryId(null);
+    }
+  }
+
   return (
     <section className="time-entries-page">
       <div className="page-header entity-page-header">
@@ -431,36 +491,94 @@ export function TimeEntriesPage() {
           </div>
 
           <div className="time-table-panel">
+            {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
+            {reviewCorrectionEntry && (
+              <div className="time-entry-editor time-review-correction-editor">
+                <div className="time-entry-editor-header">
+                  <div>
+                    <h3>Arbeitszeit anpassen</h3>
+                    <p>{reviewCorrectionEntry.person_name} · {formatDate(reviewCorrectionEntry.work_date)} · {timeEntrySiteLabel(reviewCorrectionEntry)}</p>
+                  </div>
+                  <button
+                    className="icon-button secondary"
+                    disabled={isSavingReviewCorrection}
+                    type="button"
+                    onClick={() => {
+                      setReviewCorrectionEntry(null);
+                      setReviewCorrectionHours("");
+                    }}
+                  >
+                    Schliessen
+                  </button>
+                </div>
+                <p className="time-review-detail">
+                  Der urspruengliche Monteurwert bleibt gespeichert. Der korrigierte Wert wird als gepruefte Lohnzeit uebernommen.
+                </p>
+                <div className="time-entry-form-grid">
+                  <label>
+                    <span>Originalwert</span>
+                    <input disabled value={formatMinutes(reviewCorrectionEntry.original_work_minutes ?? reviewCorrectionEntry.work_minutes)} />
+                  </label>
+                  <label>
+                    <span>Korrigierte Arbeitszeit (Std.)</span>
+                    <input
+                      inputMode="decimal"
+                      placeholder="z. B. 8,5"
+                      value={reviewCorrectionHours}
+                      onChange={(event) => setReviewCorrectionHours(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="time-entry-editor-actions">
+                  <button
+                    className="icon-button secondary"
+                    disabled={isSavingReviewCorrection}
+                    type="button"
+                    onClick={() => {
+                      setReviewCorrectionEntry(null);
+                      setReviewCorrectionHours("");
+                    }}
+                  >
+                    Abbrechen
+                  </button>
+                  <button className="icon-button" disabled={isSavingReviewCorrection} type="button" onClick={() => void saveReviewCorrection()}>
+                    {isSavingReviewCorrection ? "Speichert..." : "Korrektur speichern"}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="time-table-scroll">
               <table className="time-entries-table time-review-table">
                 <thead>
                   <tr>
                     <th>Datum</th>
                     <th>Monteur</th>
+                    <th>Baustelle / Nr.</th>
                     <th>Manuelle Arbeitszeit</th>
                     <th>GPS-Arbeitszeit</th>
                     <th>Abweichung</th>
                     <th>Status / Hinweis</th>
+                    {canManageTimeEntries && <th>Aktionen</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {isLoadingReviewEntries && (
                     <tr>
-                      <td className="time-empty-row" colSpan={6}>
+                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
                         Stundenprüfung wird geladen...
                       </td>
                     </tr>
                   )}
                   {!isLoadingReviewEntries && reviewEntriesError && (
                     <tr>
-                      <td className="time-empty-row" colSpan={6}>
+                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
                         {reviewEntriesError}
                       </td>
                     </tr>
                   )}
                   {!isLoadingReviewEntries && !reviewEntriesError && timeReviewIssues.length === 0 && (
                     <tr>
-                      <td className="time-empty-row" colSpan={6}>
+                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
                         Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz.
                       </td>
                     </tr>
@@ -469,6 +587,7 @@ export function TimeEntriesPage() {
                     <tr key={issue.id}>
                       <td>{formatDate(issue.workDate)}</td>
                       <td>{issue.personName}</td>
+                      <td>{issue.siteLabel}</td>
                       <td>{formatMinutes(issue.manualMinutes)}</td>
                       <td>{issue.gpsMinutes === null ? "-" : formatMinutes(issue.gpsMinutes)}</td>
                       <td>{formatDeviationMinutes(issue.deviationMinutes)}</td>
@@ -476,6 +595,28 @@ export function TimeEntriesPage() {
                         <StatusBadge tone="warning">Manuelle Prüfung erforderlich</StatusBadge>
                         <span className="time-review-detail">{issue.detail}</span>
                       </td>
+                      {canManageTimeEntries && (
+                        <td>
+                          <div className="time-review-actions">
+                            <button
+                              className="time-table-action time-table-action-primary"
+                              disabled={reviewActionEntryId === issue.id}
+                              type="button"
+                              onClick={() => void approveReviewIssue(issue.id)}
+                            >
+                              Geprüft
+                            </button>
+                            <button
+                              className="time-table-action"
+                              disabled={reviewActionEntryId === issue.id}
+                              type="button"
+                              onClick={() => openReviewCorrection(issue.entry)}
+                            >
+                              Arbeitszeit anpassen
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -956,10 +1097,18 @@ function formatGpsWorkMinutes(entry: TimeEntry): string {
 function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
   return entries
     .map((entry) => timeReviewIssue(entry))
-    .filter((issue): issue is TimeReviewIssue => issue !== null);
+    .filter((issue): issue is TimeReviewIssue => issue !== null)
+    .sort((left, right) => (
+      left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
+      || left.workDate.localeCompare(right.workDate)
+      || left.id - right.id
+    ));
 }
 
 function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
+  if (entry.time_review_status !== "open") {
+    return null;
+  }
   const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
   const gpsMinutes = entry.gps_work_minutes;
   if (manualMinutes === null && gpsMinutes === null) {
@@ -968,8 +1117,10 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   if (manualMinutes === null) {
     return {
       id: entry.id,
+      entry,
       workDate: entry.work_date,
       personName: entry.person_name,
+      siteLabel: timeEntrySiteLabel(entry),
       manualMinutes,
       gpsMinutes,
       deviationMinutes: null,
@@ -979,8 +1130,10 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   if (gpsMinutes === null) {
     return {
       id: entry.id,
+      entry,
       workDate: entry.work_date,
       personName: entry.person_name,
+      siteLabel: timeEntrySiteLabel(entry),
       manualMinutes,
       gpsMinutes,
       deviationMinutes: null,
@@ -994,8 +1147,10 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   }
   return {
     id: entry.id,
+    entry,
     workDate: entry.work_date,
     personName: entry.person_name,
+    siteLabel: timeEntrySiteLabel(entry),
     manualMinutes,
     gpsMinutes,
     deviationMinutes,
@@ -1136,6 +1291,10 @@ function parseWholeMinutesField(value: string, label: string): { ok: true; value
 
 function reportedSiteLabel(entry: TimeEntry): string {
   return [entry.site_number, entry.site_name].filter(Boolean).join(" · ") || "-";
+}
+
+function timeEntrySiteLabel(entry: TimeEntry): string {
+  return [entry.site_name, entry.site_number].filter(Boolean).join(" · ") || "-";
 }
 
 function plannedSiteLabel(siteIds: number[] | undefined, siteById: Map<number, SiteSummary>): string {
