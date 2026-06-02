@@ -8,7 +8,13 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
-from app.schemas.time_entry import TimeEntryCorrection, TimeEntryCreate, TimeEntryRead, TimeEntryUpdate
+from app.schemas.time_entry import (
+    TimeEntryCorrection,
+    TimeEntryCreate,
+    TimeEntryRead,
+    TimeEntryReviewDecision,
+    TimeEntryUpdate,
+)
 from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService
 from app.services.time_entry_service import TimeEntryService
 
@@ -96,6 +102,23 @@ def correct_time_entry_review(
     db: Session = Depends(get_db),
 ) -> TimeEntryRead:
     entry = TimeEntryService(db).correct_time_review(entry_id, payload.corrected_work_minutes, current_user)
+    return time_entry_read(entry)
+
+
+@router.post("/{entry_id}/review/decision", response_model=TimeEntryRead)
+def decide_time_entry_review(
+    entry_id: int,
+    payload: TimeEntryReviewDecision,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryRead:
+    entry = TimeEntryService(db).apply_time_review_decision(
+        entry_id,
+        decision=payload.decision,
+        final_work_minutes=payload.final_work_minutes,
+        reviewed_site_id=payload.reviewed_site_id,
+        current_user=current_user,
+    )
     return time_entry_read(entry)
 
 

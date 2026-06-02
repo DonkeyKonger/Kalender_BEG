@@ -14,7 +14,13 @@ from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
 OPEN_TIME_REVIEW_STATUS = "open"
-TERMINAL_TIME_REVIEW_STATUSES = {"manually_approved", "corrected", "auto_closed_by_deadline"}
+TERMINAL_TIME_REVIEW_STATUSES = {
+    "manually_approved",
+    "corrected",
+    "not_verifiable",
+    "clarification",
+    "auto_closed_by_deadline",
+}
 
 
 class TimeEntryService:
@@ -137,6 +143,78 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def apply_time_review_decision(
+        self,
+        entry_id: int,
+        *,
+        decision: str,
+        current_user: User,
+        final_work_minutes: int | None = None,
+        reviewed_site_id: int | None = None,
+    ) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+
+        if reviewed_site_id is not None:
+            self._ensure_site_exists(reviewed_site_id)
+            entry.site_id = reviewed_site_id
+
+        if decision == "accept_manual":
+            self._mark_time_review(
+                entry,
+                status_value="manually_approved",
+                method="accept_manual",
+                current_user=current_user,
+            )
+        elif decision == "accept_gps":
+            if final_work_minutes is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "GPS-Zeit fehlt fuer diese Entscheidung.")
+            self._apply_final_work_minutes(entry, final_work_minutes)
+            self._mark_time_review(
+                entry,
+                status_value="corrected",
+                method="accept_gps",
+                current_user=current_user,
+            )
+        elif decision == "corrected":
+            if final_work_minutes is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Korrigierte Arbeitszeit fehlt.")
+            self._apply_final_work_minutes(entry, final_work_minutes)
+            self._mark_time_review(
+                entry,
+                status_value="corrected",
+                method="manual_correction",
+                current_user=current_user,
+            )
+        elif decision == "assign_site":
+            if reviewed_site_id is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine Baustelle auswaehlen.")
+            self._mark_time_review(
+                entry,
+                status_value="manually_approved",
+                method="assign_site",
+                current_user=current_user,
+            )
+        elif decision == "mark_not_verifiable":
+            self._mark_time_review(
+                entry,
+                status_value="not_verifiable",
+                method="mark_not_verifiable",
+                current_user=current_user,
+            )
+        elif decision == "mark_clarification":
+            entry.time_review_status = "clarification"
+            entry.time_review_method = "clarification"
+            entry.reviewed_by_user_id = current_user.id
+            entry.reviewed_at = datetime.now().astimezone()
+        else:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Review-Entscheidung ist nicht erlaubt.")
+
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
     def auto_close_deadline_reviews(
         self,
         entries: list[WorkTimeEntry],
@@ -215,6 +293,15 @@ class TimeEntryService:
         entry.status = "reviewed"
         entry.reviewed_by_user_id = current_user.id
         entry.reviewed_at = datetime.now().astimezone()
+
+    @staticmethod
+    def _apply_final_work_minutes(entry: WorkTimeEntry, final_work_minutes: int) -> None:
+        if final_work_minutes < 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Gepruefte Arbeitszeit darf nicht negativ sein.")
+        if entry.original_work_minutes is None:
+            entry.original_work_minutes = entry.work_minutes
+        entry.corrected_work_minutes = final_work_minutes
+        entry.work_minutes = final_work_minutes
 
     def _ensure_person_exists(self, person_id: int) -> None:
         if self.db.get(Person, person_id) is None:

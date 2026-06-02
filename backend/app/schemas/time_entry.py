@@ -7,8 +7,32 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 TIME_ENTRY_STATUSES = {"draft", "submitted", "reviewed"}
 TIME_ENTRY_SOURCES = {"manual"}
-TIME_REVIEW_STATUSES = {"open", "manually_approved", "corrected", "auto_closed_by_deadline"}
-TIME_REVIEW_METHODS = {"manual_confirmed", "manual_correction", "deadline"}
+TIME_REVIEW_STATUSES = {
+    "open",
+    "manually_approved",
+    "corrected",
+    "not_verifiable",
+    "clarification",
+    "auto_closed_by_deadline",
+}
+TIME_REVIEW_METHODS = {
+    "accept_manual",
+    "accept_gps",
+    "manual_confirmed",
+    "manual_correction",
+    "assign_site",
+    "mark_not_verifiable",
+    "clarification",
+    "deadline",
+}
+TIME_REVIEW_DECISIONS = {
+    "accept_manual",
+    "accept_gps",
+    "corrected",
+    "assign_site",
+    "mark_not_verifiable",
+    "mark_clarification",
+}
 
 
 class TimeEntryBase(BaseModel):
@@ -89,6 +113,20 @@ class TimeEntryUpdate(BaseModel):
 
 class TimeEntryCorrection(BaseModel):
     corrected_work_minutes: int = Field(ge=0)
+
+
+class TimeEntryReviewDecision(BaseModel):
+    decision: str
+    final_work_minutes: int | None = Field(default=None, ge=0)
+    reviewed_site_id: int | None = None
+
+    @field_validator("decision")
+    @classmethod
+    def validate_decision(cls, value: str) -> str:
+        cleaned = value.strip()
+        if cleaned not in TIME_REVIEW_DECISIONS:
+            raise ValueError("review decision ist nicht erlaubt.")
+        return cleaned
 
 
 class TimeEntryRead(BaseModel):

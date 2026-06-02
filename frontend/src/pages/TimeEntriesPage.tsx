@@ -8,7 +8,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeReviewDecision } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
 type TimeSubtab = "review" | "gpsVerification" | "workerTimes";
@@ -30,7 +30,35 @@ type TimeReviewIssue = {
   manualMinutes: number | null;
   gpsMinutes: number | null;
   deviationMinutes: number | null;
+  finalMinutes: number | null;
+  status: TimeReviewCaseStatus;
+  statusLabel: string;
+  statusTone: StatusBadgeTone;
+  systemHint: string;
+  priority: number;
   detail: string;
+};
+type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
+type ReviewEditorMode = "corrected" | "assign_site" | null;
+type ReviewDecisionFormState = {
+  hours: string;
+  site_id: string;
+};
+type FinalHoursEntry = {
+  id: number;
+  workDate: string;
+  personName: string;
+  siteLabel: string;
+  siteKey: string;
+  finalMinutes: number | null;
+  statusLabel: string;
+  basisLabel: string;
+  originalMinutes: number | null;
+  gpsMinutes: number | null;
+  deviationMinutes: number | null;
+  note: string;
+  reviewedAt: string | null;
+  reviewedByUserId: number | null;
 };
 
 const GPS_TIME_TOLERANCE_MINUTES = 15;
@@ -87,6 +115,7 @@ export function TimeEntriesPage() {
   const [activeTimeSubtab, setActiveTimeSubtab] = useState<TimeSubtab>("review");
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
+  const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -95,11 +124,13 @@ export function TimeEntriesPage() {
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [isLoadingReviewEntries, setIsLoadingReviewEntries] = useState(false);
+  const [isLoadingReviewAllEntries, setIsLoadingReviewAllEntries] = useState(false);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isLoadingRecentGps, setIsLoadingRecentGps] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entriesError, setEntriesError] = useState<string | null>(null);
   const [reviewEntriesError, setReviewEntriesError] = useState<string | null>(null);
+  const [reviewAllEntriesError, setReviewAllEntriesError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -111,9 +142,12 @@ export function TimeEntriesPage() {
   const [entriesRefreshKey, setEntriesRefreshKey] = useState(0);
   const [reviewActionEntryId, setReviewActionEntryId] = useState<number | null>(null);
   const [reviewActionError, setReviewActionError] = useState<string | null>(null);
-  const [reviewCorrectionEntry, setReviewCorrectionEntry] = useState<TimeEntry | null>(null);
-  const [reviewCorrectionHours, setReviewCorrectionHours] = useState("");
-  const [isSavingReviewCorrection, setIsSavingReviewCorrection] = useState(false);
+  const [expandedReviewEntryId, setExpandedReviewEntryId] = useState<number | null>(null);
+  const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
+  const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
+  const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<"all" | TimeReviewCaseStatus>("all");
+  const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canViewGpsVerification = canManageTimeEntries;
   const visibleTimeSubtabs = canViewGpsVerification
@@ -193,7 +227,16 @@ export function TimeEntriesPage() {
     [activeRange.end, activeRange.start, assignments],
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
-  const reviewTableColumnCount = canManageTimeEntries ? 8 : 7;
+  const filteredTimeReviewIssues = useMemo(
+    () => filterTimeReviewIssues(timeReviewIssues, { status: reviewStatusFilter, person: reviewPersonFilter }),
+    [reviewPersonFilter, reviewStatusFilter, timeReviewIssues],
+  );
+  const reviewSummary = useMemo(
+    () => calculateReviewSummary(timeReviewIssues, reviewAllEntries),
+    [reviewAllEntries, timeReviewIssues],
+  );
+  const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
+  const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
 
   useEffect(() => {
@@ -283,6 +326,42 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewEntries(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeRange.end, activeRange.start, activeTimeSubtab, entriesRefreshKey]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingReviewAllEntries(true);
+    setReviewAllEntriesError(null);
+
+    api.timeEntries({
+      dateFrom: activeRange.start,
+      dateTo: activeRange.end,
+      includeGpsStatus: true,
+    })
+      .then((entryData) => {
+        if (!ignore) {
+          setReviewAllEntries(entryData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setReviewAllEntries([]);
+          setReviewAllEntriesError(readApiError(requestError, "Geprüfte Stundenliste konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingReviewAllEntries(false);
         }
       });
 
@@ -391,54 +470,88 @@ export function TimeEntriesPage() {
     }
   }
 
-  async function approveReviewIssue(entryId: number): Promise<void> {
-    if (!canManageTimeEntries || reviewActionEntryId !== null) {
+  function openReviewIssue(issue: TimeReviewIssue, mode: ReviewEditorMode = null): void {
+    setExpandedReviewEntryId(issue.id);
+    setReviewEditorMode(mode);
+    setReviewDecisionForm({
+      hours: formatDecimalHours(issue.finalMinutes ?? issue.manualMinutes ?? issue.gpsMinutes ?? 0),
+      site_id: issue.entry.site_id ? String(issue.entry.site_id) : "",
+    });
+    setReviewActionError(null);
+  }
+
+  function closeReviewIssue(): void {
+    if (isSavingReviewDecision) {
       return;
     }
-    setReviewActionEntryId(entryId);
+    setExpandedReviewEntryId(null);
+    setReviewEditorMode(null);
+    setReviewDecisionForm({ hours: "", site_id: "" });
+  }
+
+  async function decideReviewIssue(
+    issue: TimeReviewIssue,
+    decision: TimeReviewDecision,
+    options: { finalMinutes?: number | null; reviewedSiteId?: number | null } = {},
+  ): Promise<void> {
+    if (!canManageTimeEntries || reviewActionEntryId !== null || isSavingReviewDecision) {
+      return;
+    }
+    setReviewActionEntryId(issue.id);
     setReviewActionError(null);
     try {
-      await api.approveTimeEntryReview(entryId);
-      if (reviewCorrectionEntry?.id === entryId) {
-        setReviewCorrectionEntry(null);
-        setReviewCorrectionHours("");
+      await api.decideTimeEntryReview(issue.id, {
+        decision,
+        final_work_minutes: options.finalMinutes ?? null,
+        reviewed_site_id: options.reviewedSiteId ?? null,
+      });
+      setExpandedReviewEntryId(null);
+      setReviewEditorMode(null);
+      setReviewDecisionForm({ hours: "", site_id: "" });
+      setEntriesRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
+    } finally {
+      setReviewActionEntryId(null);
+    }
+  }
+
+  async function saveReviewDecision(issue: TimeReviewIssue): Promise<void> {
+    if (!reviewEditorMode || isSavingReviewDecision) {
+      return;
+    }
+    let finalMinutes: number | null = null;
+    if (reviewEditorMode === "corrected") {
+      const parsedHours = parseHoursToMinutes(reviewDecisionForm.hours);
+      if (!parsedHours.ok) {
+        setReviewActionError(parsedHours.error);
+        return;
       }
-      setEntriesRefreshKey((current) => current + 1);
-    } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Prueffall konnte nicht als geprueft markiert werden."));
-    } finally {
-      setReviewActionEntryId(null);
+      finalMinutes = parsedHours.value;
     }
-  }
-
-  function openReviewCorrection(entry: TimeEntry): void {
-    setReviewCorrectionEntry(entry);
-    setReviewCorrectionHours(formatDecimalHours(entry.corrected_work_minutes ?? entry.work_minutes));
-    setReviewActionError(null);
-  }
-
-  async function saveReviewCorrection(): Promise<void> {
-    if (!reviewCorrectionEntry || isSavingReviewCorrection) {
+    let reviewedSiteId: number | null = null;
+    if (reviewDecisionForm.site_id) {
+      const parsedSiteId = Number(reviewDecisionForm.site_id);
+      if (!Number.isInteger(parsedSiteId) || parsedSiteId <= 0) {
+        setReviewActionError("Bitte eine gültige Baustelle auswählen.");
+        return;
+      }
+      reviewedSiteId = parsedSiteId;
+    }
+    if (reviewEditorMode === "assign_site" && reviewedSiteId === null) {
+      setReviewActionError("Bitte eine Baustelle auswählen.");
       return;
     }
-    const parsedHours = parseHoursToMinutes(reviewCorrectionHours);
-    if (!parsedHours.ok) {
-      setReviewActionError(parsedHours.error);
-      return;
-    }
-    setIsSavingReviewCorrection(true);
-    setReviewActionEntryId(reviewCorrectionEntry.id);
+
+    setIsSavingReviewDecision(true);
     setReviewActionError(null);
     try {
-      await api.correctTimeEntryReview(reviewCorrectionEntry.id, { corrected_work_minutes: parsedHours.value });
-      setReviewCorrectionEntry(null);
-      setReviewCorrectionHours("");
-      setEntriesRefreshKey((current) => current + 1);
-    } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Arbeitszeit konnte nicht korrigiert werden."));
+      await decideReviewIssue(issue, reviewEditorMode === "corrected" ? "corrected" : "assign_site", {
+        finalMinutes,
+        reviewedSiteId,
+      });
     } finally {
-      setIsSavingReviewCorrection(false);
-      setReviewActionEntryId(null);
+      setIsSavingReviewDecision(false);
     }
   }
 
@@ -490,133 +603,232 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
-          <div className="time-table-panel">
+          <div className="time-review-summary-cards">
+            <ReviewSummaryCard label="Plausibel" value={reviewSummary.autoPlausible} tone="active" />
+            <ReviewSummaryCard label="Prüfung empfohlen" value={reviewSummary.needsReview} tone="planned" />
+            <ReviewSummaryCard label="Kritisch" value={reviewSummary.critical} tone="warning" />
+            <ReviewSummaryCard label="Nicht prüfbar" value={reviewSummary.notVerifiable} tone="neutral" />
+            <ReviewSummaryCard label="Menschlich geprüft" value={reviewSummary.verified} tone="active" />
+            <ReviewSummaryCard label="Offen insgesamt" value={timeReviewIssues.length} tone="warning" />
+          </div>
+
+          <div className="time-review-filters">
+            <label>
+              <span>Monteur</span>
+              <input
+                placeholder="Alle Monteure"
+                value={reviewPersonFilter}
+                onChange={(event) => setReviewPersonFilter(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={reviewStatusFilter} onChange={(event) => setReviewStatusFilter(event.target.value as "all" | TimeReviewCaseStatus)}>
+                <option value="all">Alle offenen Fälle</option>
+                <option value="needs_review">Prüfung empfohlen</option>
+                <option value="critical">Kritisch</option>
+                <option value="not_verifiable">Nicht prüfbar</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="time-review-case-list">
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
-            {reviewCorrectionEntry && (
-              <div className="time-entry-editor time-review-correction-editor">
-                <div className="time-entry-editor-header">
-                  <div>
-                    <h3>Arbeitszeit anpassen</h3>
-                    <p>{reviewCorrectionEntry.person_name} · {formatDate(reviewCorrectionEntry.work_date)} · {timeEntrySiteLabel(reviewCorrectionEntry)}</p>
-                  </div>
-                  <button
-                    className="icon-button secondary"
-                    disabled={isSavingReviewCorrection}
-                    type="button"
-                    onClick={() => {
-                      setReviewCorrectionEntry(null);
-                      setReviewCorrectionHours("");
-                    }}
-                  >
-                    Schliessen
-                  </button>
-                </div>
-                <p className="time-review-detail">
-                  Der urspruengliche Monteurwert bleibt gespeichert. Der korrigierte Wert wird als gepruefte Lohnzeit uebernommen.
-                </p>
-                <div className="time-entry-form-grid">
-                  <label>
-                    <span>Originalwert</span>
-                    <input disabled value={formatMinutes(reviewCorrectionEntry.original_work_minutes ?? reviewCorrectionEntry.work_minutes)} />
-                  </label>
-                  <label>
-                    <span>Korrigierte Arbeitszeit (Std.)</span>
-                    <input
-                      inputMode="decimal"
-                      placeholder="z. B. 8,5"
-                      value={reviewCorrectionHours}
-                      onChange={(event) => setReviewCorrectionHours(event.target.value)}
-                    />
-                  </label>
-                </div>
-                <div className="time-entry-editor-actions">
-                  <button
-                    className="icon-button secondary"
-                    disabled={isSavingReviewCorrection}
-                    type="button"
-                    onClick={() => {
-                      setReviewCorrectionEntry(null);
-                      setReviewCorrectionHours("");
-                    }}
-                  >
-                    Abbrechen
-                  </button>
-                  <button className="icon-button" disabled={isSavingReviewCorrection} type="button" onClick={() => void saveReviewCorrection()}>
-                    {isSavingReviewCorrection ? "Speichert..." : "Korrektur speichern"}
-                  </button>
-                </div>
+            {isLoadingReviewEntries && <div className="empty-panel">Stundenprüfung wird geladen...</div>}
+            {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
+            {!isLoadingReviewEntries && !reviewEntriesError && filteredTimeReviewIssues.length === 0 && (
+              <div className="empty-panel">
+                Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz.
               </div>
             )}
+            {!isLoadingReviewEntries && !reviewEntriesError && filteredTimeReviewIssues.map((issue) => {
+              const isExpanded = expandedReviewEntryId === issue.id;
+              const isBusy = reviewActionEntryId === issue.id || isSavingReviewDecision;
+              return (
+                <article className={`time-review-case-card time-review-case-card-${issue.status}`} key={issue.id}>
+                  <div className="time-review-case-main">
+                    <div className="time-review-case-head">
+                      <StatusBadge tone={issue.statusTone}>{issue.statusLabel}</StatusBadge>
+                      <div>
+                        <h3>{issue.personName}</h3>
+                        <p>{formatWeekday(issue.workDate)} · {formatDate(issue.workDate)} · {issue.siteLabel}</p>
+                      </div>
+                    </div>
+                    <div className="time-review-case-metrics">
+                      <div>
+                        <span>Gemeldet</span>
+                        <strong>{formatMinutes(issue.manualMinutes)}</strong>
+                      </div>
+                      <div>
+                        <span>GPS</span>
+                        <strong>{formatMinutes(issue.gpsMinutes)}</strong>
+                      </div>
+                      <div>
+                        <span>Abweichung</span>
+                        <strong>{formatHumanDeviation(issue.deviationMinutes)}</strong>
+                      </div>
+                      <div>
+                        <span>Final</span>
+                        <strong>{formatMinutes(issue.finalMinutes)}</strong>
+                      </div>
+                    </div>
+                    <p className="time-review-case-hint">{issue.systemHint}</p>
+                  </div>
+
+                  {canManageTimeEntries && (
+                    <div className="time-review-actions">
+                      <button
+                        className="time-table-action time-table-action-primary"
+                        disabled={isBusy || issue.manualMinutes === null}
+                        type="button"
+                        onClick={() => void decideReviewIssue(issue, "accept_manual")}
+                      >
+                        Manuelle Zeit übernehmen
+                      </button>
+                      <button
+                        className="time-table-action"
+                        disabled={isBusy || issue.gpsMinutes === null}
+                        type="button"
+                        onClick={() => void decideReviewIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
+                      >
+                        GPS-Zeit übernehmen
+                      </button>
+                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue, "corrected")}>
+                        Korrigieren
+                      </button>
+                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue, "assign_site")}>
+                        Baustelle zuordnen
+                      </button>
+                      <button
+                        className="time-table-action"
+                        disabled={isBusy}
+                        type="button"
+                        onClick={() => void decideReviewIssue(issue, "mark_not_verifiable")}
+                      >
+                        Als nicht prüfbar markieren
+                      </button>
+                      <button
+                        className="time-table-action"
+                        disabled={isBusy}
+                        type="button"
+                        onClick={() => void decideReviewIssue(issue, "mark_clarification")}
+                      >
+                        Zur Klärung
+                      </button>
+                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue)}>
+                        Details
+                      </button>
+                    </div>
+                  )}
+
+                  {isExpanded && (
+                    <div className="time-review-inline-editor">
+                      <div className="time-review-detail-grid">
+                        <div><span>Originalwert</span><strong>{formatMinutes(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
+                        <div><span>GPS-Wert</span><strong>{formatMinutes(issue.gpsMinutes)}</strong></div>
+                        <div><span>Abweichung</span><strong>{formatHumanDeviation(issue.deviationMinutes)}</strong></div>
+                        <div><span>Geplante/Gemeldete Baustelle</span><strong>{issue.siteLabel}</strong></div>
+                      </div>
+                      <p className="time-review-detail">{issue.detail}</p>
+                      {reviewEditorMode && (
+                        <div className="time-entry-form-grid">
+                          {reviewEditorMode === "corrected" && (
+                            <label>
+                              <span>Finale Arbeitszeit (Std.)</span>
+                              <input
+                                inputMode="decimal"
+                                placeholder="z. B. 8,5"
+                                value={reviewDecisionForm.hours}
+                                onChange={(event) => setReviewDecisionForm((current) => ({ ...current, hours: event.target.value }))}
+                              />
+                            </label>
+                          )}
+                          <label>
+                            <span>Baustelle</span>
+                            <select
+                              value={reviewDecisionForm.site_id}
+                              onChange={(event) => setReviewDecisionForm((current) => ({ ...current, site_id: event.target.value }))}
+                            >
+                              <option value="">Nicht zugeordnet</option>
+                              {siteOptions.map((site) => (
+                                <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      )}
+                      <div className="time-entry-editor-actions">
+                        <button className="icon-button secondary" disabled={isBusy} type="button" onClick={closeReviewIssue}>
+                          Abbrechen
+                        </button>
+                        {reviewEditorMode && (
+                          <button className="icon-button" disabled={isBusy} type="button" onClick={() => void saveReviewDecision(issue)}>
+                            {isSavingReviewDecision ? "Speichert..." : "Speichern"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="time-final-hours-panel">
+            <div className="time-entries-toolbar">
+              <div>
+                <h2>Geprüfte Stundenliste</h2>
+                <p>Finale Stunden im aktuellen Zeitraum mit Original- und GPS-Vergleich.</p>
+              </div>
+            </div>
+            {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
+            <div className="time-summary-strip">
+              <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
+              <div><span>Offene Prüffälle</span><strong>{timeReviewIssues.length}</strong></div>
+              <div><span>Monteure</span><strong>{finalHoursTotals.byPerson.length}</strong></div>
+              <div><span>Baustellen</span><strong>{finalHoursTotals.bySite.length}</strong></div>
+            </div>
+            <div className="time-final-summary-grid">
+              <FinalSummaryList title="Summe je Monteur" rows={finalHoursTotals.byPerson} />
+              <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
+            </div>
             <div className="time-table-scroll">
-              <table className="time-entries-table time-review-table">
+              <table className="time-entries-table time-final-hours-table">
                 <thead>
                   <tr>
                     <th>Datum</th>
+                    <th>Tag</th>
                     <th>Monteur</th>
                     <th>Baustelle / Nr.</th>
-                    <th>Manuelle Arbeitszeit</th>
-                    <th>GPS-Arbeitszeit</th>
+                    <th>Finale Stunden</th>
+                    <th>Status</th>
+                    <th>Grundlage</th>
+                    <th>Original</th>
+                    <th>GPS</th>
                     <th>Abweichung</th>
-                    <th>Status / Hinweis</th>
-                    {canManageTimeEntries && <th>Aktionen</th>}
+                    <th>Hinweis</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoadingReviewEntries && (
-                    <tr>
-                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
-                        Stundenprüfung wird geladen...
-                      </td>
-                    </tr>
+                  {isLoadingReviewAllEntries && (
+                    <tr><td className="time-empty-row" colSpan={11}>Geprüfte Stundenliste wird geladen...</td></tr>
                   )}
-                  {!isLoadingReviewEntries && reviewEntriesError && (
-                    <tr>
-                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
-                        {reviewEntriesError}
-                      </td>
-                    </tr>
+                  {!isLoadingReviewAllEntries && !reviewAllEntriesError && finalHoursEntries.length === 0 && (
+                    <tr><td className="time-empty-row" colSpan={11}>Für diesen Zeitraum gibt es noch keine Arbeitszeiten.</td></tr>
                   )}
-                  {!isLoadingReviewEntries && !reviewEntriesError && timeReviewIssues.length === 0 && (
-                    <tr>
-                      <td className="time-empty-row" colSpan={reviewTableColumnCount}>
-                        Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz.
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingReviewEntries && !reviewEntriesError && timeReviewIssues.map((issue) => (
-                    <tr key={issue.id}>
-                      <td>{formatDate(issue.workDate)}</td>
-                      <td>{issue.personName}</td>
-                      <td>{issue.siteLabel}</td>
-                      <td>{formatMinutes(issue.manualMinutes)}</td>
-                      <td>{issue.gpsMinutes === null ? "-" : formatMinutes(issue.gpsMinutes)}</td>
-                      <td>{formatDeviationMinutes(issue.deviationMinutes)}</td>
-                      <td>
-                        <StatusBadge tone="warning">Manuelle Prüfung erforderlich</StatusBadge>
-                        <span className="time-review-detail">{issue.detail}</span>
-                      </td>
-                      {canManageTimeEntries && (
-                        <td>
-                          <div className="time-review-actions">
-                            <button
-                              className="time-table-action time-table-action-primary"
-                              disabled={reviewActionEntryId === issue.id}
-                              type="button"
-                              onClick={() => void approveReviewIssue(issue.id)}
-                            >
-                              Geprüft
-                            </button>
-                            <button
-                              className="time-table-action"
-                              disabled={reviewActionEntryId === issue.id}
-                              type="button"
-                              onClick={() => openReviewCorrection(issue.entry)}
-                            >
-                              Arbeitszeit anpassen
-                            </button>
-                          </div>
-                        </td>
-                      )}
+                  {!isLoadingReviewAllEntries && !reviewAllEntriesError && finalHoursEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatDate(entry.workDate)}</td>
+                      <td>{formatWeekday(entry.workDate)}</td>
+                      <td>{entry.personName}</td>
+                      <td>{entry.siteLabel}</td>
+                      <td>{formatMinutes(entry.finalMinutes)}</td>
+                      <td>{entry.statusLabel}</td>
+                      <td>{entry.basisLabel}</td>
+                      <td>{formatMinutes(entry.originalMinutes)}</td>
+                      <td>{formatMinutes(entry.gpsMinutes)}</td>
+                      <td>{formatHumanDeviation(entry.deviationMinutes)}</td>
+                      <td>{entry.note}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -971,6 +1183,29 @@ export function TimeEntriesPage() {
   );
 }
 
+function ReviewSummaryCard({ label, value, tone }: { label: string; value: number; tone: StatusBadgeTone }) {
+  return (
+    <div className={`time-review-summary-card time-review-summary-card-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function FinalSummaryList({ title, rows }: { title: string; rows: { label: string; minutes: number }[] }) {
+  return (
+    <div className="time-final-summary-list">
+      <h3>{title}</h3>
+      {rows.length ? rows.map((row) => (
+        <div key={row.label}>
+          <span>{row.label}</span>
+          <strong>{formatMinutes(row.minutes)}</strong>
+        </div>
+      )) : <p>Keine Summen vorhanden.</p>}
+    </div>
+  );
+}
+
 function currentMonthRange(): { start: string; end: string } {
   const today = new Date();
   return {
@@ -1099,7 +1334,8 @@ function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
     .map((entry) => timeReviewIssue(entry))
     .filter((issue): issue is TimeReviewIssue => issue !== null)
     .sort((left, right) => (
-      left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
+      left.priority - right.priority
+      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
       || left.workDate.localeCompare(right.workDate)
       || left.id - right.id
     ));
@@ -1114,37 +1350,12 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   if (manualMinutes === null && gpsMinutes === null) {
     return null;
   }
-  if (manualMinutes === null) {
-    return {
-      id: entry.id,
-      entry,
-      workDate: entry.work_date,
-      personName: entry.person_name,
-      siteLabel: timeEntrySiteLabel(entry),
-      manualMinutes,
-      gpsMinutes,
-      deviationMinutes: null,
-      detail: "Manuelle Arbeitszeit fehlt.",
-    };
-  }
-  if (gpsMinutes === null) {
-    return {
-      id: entry.id,
-      entry,
-      workDate: entry.work_date,
-      personName: entry.person_name,
-      siteLabel: timeEntrySiteLabel(entry),
-      manualMinutes,
-      gpsMinutes,
-      deviationMinutes: null,
-      detail: entry.gps_first_seen_at ? "GPS-Zeit ist nicht berechenbar." : "GPS fehlt.",
-    };
-  }
-
-  const deviationMinutes = gpsMinutes - manualMinutes;
-  if (Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
+  const deviationMinutes = manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null;
+  if (deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
     return null;
   }
+
+  const classification = classifyTimeReviewCase(entry, manualMinutes, gpsMinutes, deviationMinutes);
   return {
     id: entry.id,
     entry,
@@ -1154,15 +1365,256 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
     manualMinutes,
     gpsMinutes,
     deviationMinutes,
-    detail: "GPS-Zeit weicht mehr als 15 Minuten ab.",
+    finalMinutes: entry.corrected_work_minutes ?? entry.work_minutes ?? gpsMinutes,
+    ...classification,
   };
 }
 
-function formatDeviationMinutes(minutes: number | null): string {
+function classifyTimeReviewCase(
+  entry: TimeEntry,
+  manualMinutes: number | null,
+  gpsMinutes: number | null,
+  deviationMinutes: number | null,
+): Pick<TimeReviewIssue, "status" | "statusLabel" | "statusTone" | "systemHint" | "priority" | "detail"> {
+  if (!entry.site_id && manualMinutes !== null) {
+    return {
+      status: "critical",
+      statusLabel: "Kritisch",
+      statusTone: "warning",
+      priority: 1,
+      systemHint: "Arbeitszeit ist vorhanden, aber keine Baustelle zugeordnet.",
+      detail: "Bitte Baustelle zuordnen oder bewusst als nicht zuordenbar klären.",
+    };
+  }
+  if (manualMinutes === null && gpsMinutes !== null) {
+    return {
+      status: "needs_review",
+      statusLabel: "Prüfung empfohlen",
+      statusTone: "planned",
+      priority: 2,
+      systemHint: "GPS-Zeit ist vorhanden, aber keine manuelle Arbeitszeit erfasst.",
+      detail: "Bitte Arbeitszeit nachtragen, GPS-Zeit übernehmen oder zur Klärung markieren.",
+    };
+  }
+  if (gpsMinutes === null) {
+    const hasGpsSignals = Boolean(entry.gps_first_seen_at);
+    return {
+      status: "not_verifiable",
+      statusLabel: "Nicht prüfbar",
+      statusTone: "neutral",
+      priority: 3,
+      systemHint: hasGpsSignals
+        ? "GPS-Signale sind vorhanden, aber die GPS-Arbeitszeit ist nicht berechenbar."
+        : "Keine GPS-Daten für diesen Tag vorhanden.",
+      detail: hasGpsSignals
+        ? "Es gibt nur einen GPS-Punkt oder eine unvollständige GPS-Kette."
+        : "Bitte manuelle Zeit übernehmen, zur Klärung markieren oder als nicht prüfbar bestätigen.",
+    };
+  }
+  if (manualMinutes !== null && manualMinutes > 12 * 60) {
+    return {
+      status: "critical",
+      statusLabel: "Kritisch",
+      statusTone: "warning",
+      priority: 1,
+      systemHint: "Die gemeldete Arbeitszeit ist ungewöhnlich lang.",
+      detail: "Bitte die Stunden menschlich bestätigen oder korrigieren.",
+    };
+  }
+  if (deviationMinutes !== null && Math.abs(deviationMinutes) > 60) {
+    return {
+      status: "critical",
+      statusLabel: "Kritisch",
+      statusTone: "warning",
+      priority: 1,
+      systemHint: "GPS-Zeit und gemeldete Zeit weichen deutlich voneinander ab.",
+      detail: `Abweichung: ${formatHumanDeviation(deviationMinutes)}.`,
+    };
+  }
+  return {
+    status: "needs_review",
+    statusLabel: "Prüfung empfohlen",
+    statusTone: "planned",
+    priority: 2,
+    systemHint: "GPS-Zeit weicht mehr als 15 Minuten ab.",
+    detail: `Abweichung: ${formatHumanDeviation(deviationMinutes)}.`,
+  };
+}
+
+function filterTimeReviewIssues(
+  issues: TimeReviewIssue[],
+  filters: { status: "all" | TimeReviewCaseStatus; person: string },
+): TimeReviewIssue[] {
+  const personNeedle = filters.person.trim().toLowerCase();
+  return issues.filter((issue) => {
+    if (filters.status !== "all" && issue.status !== filters.status) {
+      return false;
+    }
+    if (personNeedle && !issue.personName.toLowerCase().includes(personNeedle)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function formatHumanDeviation(minutes: number | null): string {
   if (minutes === null) {
     return "-";
   }
-  return `${minutes > 0 ? "+" : ""}${minutes} Min.`;
+  const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
+  return `${sign}${formatMinutes(Math.abs(minutes))}`;
+}
+
+function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntry[]) {
+  let autoPlausible = 0;
+  let verified = 0;
+  for (const entry of entries) {
+    if (entry.time_review_status !== "open") {
+      verified += 1;
+      continue;
+    }
+    if (
+      entry.gps_work_minutes !== null
+      && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
+    ) {
+      autoPlausible += 1;
+    }
+  }
+  return {
+    autoPlausible,
+    verified,
+    needsReview: openIssues.filter((issue) => issue.status === "needs_review").length,
+    critical: openIssues.filter((issue) => issue.status === "critical").length,
+    notVerifiable: openIssues.filter((issue) => issue.status === "not_verifiable").length,
+  };
+}
+
+function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {
+  return entries
+    .map((entry) => {
+      const originalMinutes = entry.original_work_minutes ?? entry.work_minutes;
+      const gpsMinutes = entry.gps_work_minutes;
+      return {
+        id: entry.id,
+        workDate: entry.work_date,
+        personName: entry.person_name,
+        siteLabel: timeEntrySiteLabel(entry),
+        siteKey: timeEntrySiteLabel(entry),
+        finalMinutes: entry.work_minutes,
+        statusLabel: finalStatusLabel(entry),
+        basisLabel: finalBasisLabel(entry),
+        originalMinutes,
+        gpsMinutes,
+        deviationMinutes: gpsMinutes === null ? null : gpsMinutes - originalMinutes,
+        note: entry.note || finalNoteLabel(entry),
+        reviewedAt: entry.reviewed_at,
+        reviewedByUserId: entry.reviewed_by_user_id,
+      };
+    })
+    .sort((left, right) => (
+      left.workDate.localeCompare(right.workDate)
+      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
+      || left.id - right.id
+    ));
+}
+
+function calculateFinalHoursTotals(entries: FinalHoursEntry[]): {
+  totalMinutes: number;
+  byPerson: { label: string; minutes: number }[];
+  bySite: { label: string; minutes: number }[];
+} {
+  const byPerson = new Map<string, number>();
+  const bySite = new Map<string, number>();
+  let totalMinutes = 0;
+  for (const entry of entries) {
+    const minutes = entry.finalMinutes ?? 0;
+    totalMinutes += minutes;
+    byPerson.set(entry.personName, (byPerson.get(entry.personName) ?? 0) + minutes);
+    bySite.set(entry.siteKey, (bySite.get(entry.siteKey) ?? 0) + minutes);
+  }
+  return {
+    totalMinutes,
+    byPerson: mapTotalsToRows(byPerson),
+    bySite: mapTotalsToRows(bySite),
+  };
+}
+
+function mapTotalsToRows(totals: Map<string, number>): { label: string; minutes: number }[] {
+  return [...totals.entries()]
+    .map(([label, minutes]) => ({ label, minutes }))
+    .sort((left, right) => left.label.localeCompare(right.label, "de", { sensitivity: "base" }));
+}
+
+function finalStatusLabel(entry: TimeEntry): string {
+  if (entry.time_review_status === "open") {
+    if (
+      entry.gps_work_minutes !== null
+      && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
+    ) {
+      return "automatisch plausibel";
+    }
+    return "offen";
+  }
+  if (entry.time_review_status === "manually_approved") {
+    return "geprüft";
+  }
+  if (entry.time_review_status === "corrected") {
+    return "korrigiert";
+  }
+  if (entry.time_review_status === "not_verifiable") {
+    return "nicht prüfbar";
+  }
+  if (entry.time_review_status === "clarification") {
+    return "zur Klärung";
+  }
+  if (entry.time_review_status === "auto_closed_by_deadline") {
+    return "automatisch abgeschlossen";
+  }
+  return entry.time_review_status;
+}
+
+function finalBasisLabel(entry: TimeEntry): string {
+  if (entry.time_review_method === "accept_manual" || entry.time_review_method === "manual_confirmed") {
+    return "manuelle Zeit übernommen";
+  }
+  if (entry.time_review_method === "accept_gps") {
+    return "GPS-Zeit übernommen";
+  }
+  if (entry.time_review_method === "manual_correction") {
+    return "korrigiert";
+  }
+  if (entry.time_review_method === "assign_site") {
+    return "Baustelle zugeordnet";
+  }
+  if (entry.time_review_method === "mark_not_verifiable") {
+    return "nicht prüfbar markiert";
+  }
+  if (entry.time_review_method === "clarification") {
+    return "zur Klärung";
+  }
+  if (entry.time_review_method === "deadline") {
+    return "Monatsfrist";
+  }
+  if (
+    entry.gps_work_minutes !== null
+    && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
+  ) {
+    return "automatisch plausibel";
+  }
+  return "offen";
+}
+
+function finalNoteLabel(entry: TimeEntry): string {
+  if (!entry.site_id) {
+    return "Baustelle fehlt oder wurde noch nicht zugeordnet.";
+  }
+  if (entry.time_review_status === "clarification") {
+    return "Fall ist bewusst zur Klärung markiert.";
+  }
+  if (entry.time_review_status === "not_verifiable") {
+    return "GPS konnte nicht verlässlich geprüft werden.";
+  }
+  return "-";
 }
 
 function defaultEntryDate(dateFrom: string, dateTo: string): string {

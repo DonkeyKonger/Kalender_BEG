@@ -1,8 +1,9 @@
 export type TimeEntryStatus = "draft" | "submitted" | "reviewed";
 export type TimeEntrySource = "manual";
 export type TimeEntryGpsStatus = "not_checkable" | "missing" | "partial" | "matched" | "mismatch";
-export type TimeReviewStatus = "open" | "manually_approved" | "corrected" | "auto_closed_by_deadline";
-export type TimeReviewMethod = "manual_confirmed" | "manual_correction" | "deadline";
+export type TimeReviewStatus = "open" | "manually_approved" | "corrected" | "not_verifiable" | "clarification" | "auto_closed_by_deadline";
+export type TimeReviewMethod = "accept_manual" | "accept_gps" | "manual_confirmed" | "manual_correction" | "assign_site" | "mark_not_verifiable" | "clarification" | "deadline";
+export type TimeReviewDecision = "accept_manual" | "accept_gps" | "corrected" | "assign_site" | "mark_not_verifiable" | "mark_clarification";
 
 export type TimeEntry = {
   id: number;
@@ -57,4 +58,10 @@ export type TimeEntryUpdate = Partial<TimeEntryCreate>;
 
 export type TimeEntryCorrection = {
   corrected_work_minutes: number;
+};
+
+export type TimeEntryReviewDecisionPayload = {
+  decision: TimeReviewDecision;
+  final_work_minutes?: number | null;
+  reviewed_site_id?: number | null;
 };

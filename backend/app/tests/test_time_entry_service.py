@@ -106,6 +106,43 @@ def test_correct_time_review_preserves_original_and_marks_reviewed():
     assert updated.reviewed_by_user_id == 8
 
 
+def test_review_decision_accept_gps_preserves_original_and_sets_final_minutes():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        work_minutes=480,
+        original_work_minutes=None,
+        corrected_work_minutes=None,
+        status="draft",
+        time_review_status="open",
+        time_review_method=None,
+        reviewed_by_user_id=None,
+        reviewed_at=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: None,
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=9, role=UserRole.OFFICE)
+
+    updated = item.apply_time_review_decision(
+        entry.id,
+        decision="accept_gps",
+        final_work_minutes=420,
+        current_user=current_user,
+    )
+
+    assert updated.original_work_minutes == 480
+    assert updated.corrected_work_minutes == 420
+    assert updated.work_minutes == 420
+    assert updated.time_review_status == "corrected"
+    assert updated.time_review_method == "accept_gps"
+    assert updated.status == "reviewed"
+    assert updated.reviewed_by_user_id == 9
+
+
 def test_deadline_auto_closes_previous_month_open_review_case():
     entry = SimpleNamespace(
         id=1,

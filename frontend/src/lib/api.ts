@@ -8,7 +8,7 @@ import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoi
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse } from "../types/mobile";
-import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryUpdate } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -365,6 +365,13 @@ export const api = {
 
   async correctTimeEntryReview(entryId: number, payload: TimeEntryCorrection): Promise<TimeEntry> {
     return request<TimeEntry>(`/time-entries/${entryId}/review/correct`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async decideTimeEntryReview(entryId: number, payload: TimeEntryReviewDecisionPayload): Promise<TimeEntry> {
+    return request<TimeEntry>(`/time-entries/${entryId}/review/decision`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
