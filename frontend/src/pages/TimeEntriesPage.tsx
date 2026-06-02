@@ -556,7 +556,7 @@ export function TimeEntriesPage() {
   }
 
   return (
-    <section className="time-entries-page">
+    <section className="time-entries-page is-figma-times-workspace">
       <div className="page-header entity-page-header">
         <div>
           <p className="eyebrow">Arbeitszeiten</p>

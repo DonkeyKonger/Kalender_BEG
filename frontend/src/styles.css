@@ -6594,6 +6594,400 @@ button.person-chip:focus-visible {
   text-align: center;
 }
 
+.time-entries-page.is-figma-times-workspace {
+  --time-bg: #f5f7fb;
+  --time-surface: #ffffff;
+  --time-surface-soft: #f8fafc;
+  --time-border: #dbe4ef;
+  --time-border-soft: #e7edf5;
+  --time-text: #172033;
+  --time-muted: #64748b;
+  --time-primary: #1f5f9f;
+  --time-primary-soft: #e9f3ff;
+  --time-success: #1f7a4d;
+  --time-warning: #b7791f;
+  --time-danger: #b42318;
+  gap: 14px;
+  min-height: calc(100vh - 112px);
+  margin: -4px -6px 0;
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background: var(--time-bg);
+  padding: 14px;
+}
+
+.time-entries-page.is-figma-times-workspace .page-header {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(31, 95, 159, 0.08) 0%, rgba(31, 122, 77, 0.04) 46%, rgba(255, 255, 255, 0.96) 100%),
+    var(--time-surface);
+  padding: 18px 20px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+}
+
+.time-entries-page.is-figma-times-workspace .page-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #1f5f9f 0%, #2f8a61 100%);
+}
+
+.time-entries-page.is-figma-times-workspace .page-header h1 {
+  margin: 2px 0 0;
+  color: var(--time-text);
+  font-size: clamp(1.55rem, 2vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.time-entries-page.is-figma-times-workspace .page-header .eyebrow {
+  color: var(--time-primary);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.time-entries-page.is-figma-times-workspace .page-subtitle {
+  max-width: 680px;
+  color: var(--time-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.time-entries-page.is-figma-times-workspace .time-main-subtabs {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  gap: 6px;
+  padding: 6px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.time-entries-page.is-figma-times-workspace .time-main-subtabs button {
+  min-height: 34px;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 850;
+  padding: 7px 14px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-main-subtabs button:hover,
+.time-entries-page.is-figma-times-workspace .time-main-subtabs button:focus-visible {
+  background: var(--time-surface-soft);
+  color: #223044;
+  outline: none;
+}
+
+.time-entries-page.is-figma-times-workspace .time-main-subtabs button.is-active {
+  background: var(--time-primary);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(31, 95, 159, 0.22);
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-sidebar,
+.time-entries-page.is-figma-times-workspace .time-entries-main,
+.time-entries-page.is-figma-times-workspace .time-table-panel,
+.time-entries-page.is-figma-times-workspace .gps-verification-panel,
+.time-entries-page.is-figma-times-workspace .time-review-case-card,
+.time-entries-page.is-figma-times-workspace .time-final-hours-panel,
+.time-entries-page.is-figma-times-workspace .time-entry-editor {
+  border-color: var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-main,
+.time-entries-page.is-figma-times-workspace .time-entries-sidebar {
+  padding: 16px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-main {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-toolbar,
+.time-entries-page.is-figma-times-workspace .gps-verification-header,
+.time-entries-page.is-figma-times-workspace .time-panel-header {
+  align-items: center;
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  padding: 12px 14px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-panel-header,
+.time-entries-page.is-figma-times-workspace .time-entries-sidebar .time-panel-header {
+  border: 0;
+  border-bottom: 1px solid var(--time-border-soft);
+  border-radius: 0;
+  padding: 0 0 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-toolbar h2,
+.time-entries-page.is-figma-times-workspace .gps-verification-header h2,
+.time-entries-page.is-figma-times-workspace .time-panel-header h2 {
+  color: var(--time-text);
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-toolbar p,
+.time-entries-page.is-figma-times-workspace .gps-verification-header p,
+.time-entries-page.is-figma-times-workspace .time-panel-header p {
+  color: var(--time-muted);
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.time-entries-page.is-figma-times-workspace .matrix-pm-filter {
+  border-color: var(--time-border);
+  background: var(--time-surface-soft);
+  padding: 3px;
+}
+
+.time-entries-page.is-figma-times-workspace .matrix-pm-filter button {
+  border-radius: 6px;
+  color: #52627a;
+  font-size: 0.8rem;
+  font-weight: 850;
+  padding: 6px 10px;
+}
+
+.time-entries-page.is-figma-times-workspace .matrix-pm-filter button.is-active {
+  background: #ffffff;
+  color: var(--time-primary);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-cards,
+.time-entries-page.is-figma-times-workspace .time-summary-strip {
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card,
+.time-entries-page.is-figma-times-workspace .time-summary-strip > div,
+.time-entries-page.is-figma-times-workspace .time-final-summary-list {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card::before,
+.time-entries-page.is-figma-times-workspace .time-summary-strip > div::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--time-primary);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card-active::before {
+  background: var(--time-success);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card-warning::before {
+  background: var(--time-warning);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card span,
+.time-entries-page.is-figma-times-workspace .time-summary-strip span {
+  color: var(--time-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card strong,
+.time-entries-page.is-figma-times-workspace .time-summary-strip strong {
+  color: var(--time-text);
+  font-size: 1.26rem;
+  font-weight: 900;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-filters {
+  align-items: end;
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  padding: 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-filters input,
+.time-entries-page.is-figma-times-workspace .time-review-filters select,
+.time-entries-page.is-figma-times-workspace .entity-search,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid input,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid select,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea {
+  border-color: var(--time-border);
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-filters input:focus,
+.time-entries-page.is-figma-times-workspace .time-review-filters select:focus,
+.time-entries-page.is-figma-times-workspace .entity-search:focus,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid input:focus,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid select:focus,
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea:focus {
+  border-color: #7aa7d7;
+  box-shadow: 0 0 0 3px rgba(31, 95, 159, 0.12);
+  outline: none;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-list {
+  gap: 10px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-card-critical {
+  border-color: #f1c66e;
+  box-shadow: inset 3px 0 0 var(--time-warning), 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-card-not_verifiable {
+  background: #fbfcfe;
+  box-shadow: inset 3px 0 0 #94a3b8, 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-head {
+  align-items: center;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-head h3 {
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-case-metrics div,
+.time-entries-page.is-figma-times-workspace .time-review-detail-grid div {
+  border-color: var(--time-border-soft);
+  border-radius: 7px;
+  background: var(--time-surface-soft);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-actions {
+  border-top: 1px solid var(--time-border-soft);
+  padding-top: 10px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-table-action,
+.time-entries-page.is-figma-times-workspace .icon-button,
+.time-entries-page.is-figma-times-workspace .primary-action,
+.time-entries-page.is-figma-times-workspace .secondary-action {
+  border-radius: 6px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-table-action {
+  border-color: var(--time-border);
+  background: #ffffff;
+  color: #243348;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.04);
+}
+
+.time-entries-page.is-figma-times-workspace .time-table-action:hover,
+.time-entries-page.is-figma-times-workspace .time-table-action:focus-visible {
+  border-color: #9bbce0;
+  background: var(--time-primary-soft);
+  color: #174678;
+  outline: none;
+}
+
+.time-entries-page.is-figma-times-workspace .time-table-action-primary {
+  border-color: #b9dfca;
+  background: #eefaf3;
+  color: var(--time-success);
+}
+
+.time-entries-page.is-figma-times-workspace .time-entry-editor {
+  background: #fbfcfe;
+}
+
+.time-entries-page.is-figma-times-workspace .time-table-scroll {
+  border-top: 1px solid var(--time-border-soft);
+  scrollbar-gutter: stable both-edges;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--time-text);
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table th,
+.time-entries-page.is-figma-times-workspace .time-entries-table td {
+  border-bottom-color: var(--time-border-soft);
+  padding: 11px 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f1f5f9;
+  color: #52627a;
+  box-shadow: 0 1px 0 var(--time-border-soft);
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table tbody tr:hover td {
+  background: #fbfdff;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table tr.time-gps-comparison-row td {
+  background: #f8fbff;
+  color: #52627a;
+}
+
+.time-entries-page.is-figma-times-workspace .time-person-list button {
+  border-color: var(--time-border);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.time-entries-page.is-figma-times-workspace .time-person-list button:hover,
+.time-entries-page.is-figma-times-workspace .time-person-list button.is-active {
+  border-color: #9bbce0;
+  background: var(--time-primary-soft);
+  box-shadow: inset 3px 0 0 var(--time-primary);
+}
+
+.time-entries-page.is-figma-times-workspace .time-final-hours-panel {
+  gap: 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .gps-verification-panel {
+  background: var(--time-surface);
+}
+
+.time-entries-page.is-figma-times-workspace .empty-panel,
+.time-entries-page.is-figma-times-workspace .matrix-state {
+  border-color: var(--time-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 @media (min-width: 980px) {
   .time-entries-layout {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
