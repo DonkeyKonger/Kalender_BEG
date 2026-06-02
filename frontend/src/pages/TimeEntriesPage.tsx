@@ -46,6 +46,15 @@ type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
 };
+type CalendarWeekSelection = {
+  year: number;
+  week: number;
+};
+type CalendarWeekOption = CalendarWeekSelection & {
+  start: string;
+  end: string;
+  isCurrent: boolean;
+};
 type TimeReviewTableRow = {
   id: number;
   entry: TimeEntry;
@@ -173,6 +182,7 @@ export function TimeEntriesPage() {
   const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
+  const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
@@ -289,6 +299,15 @@ export function TimeEntriesPage() {
     () => (rangeMode === "week" ? currentWeekRange() : currentMonthRange()),
     [rangeMode],
   );
+  const currentReviewWeek = useMemo(() => currentIsoWeek(), []);
+  const reviewWeekRange = useMemo(
+    () => isoWeekRange(selectedReviewWeek.year, selectedReviewWeek.week),
+    [selectedReviewWeek.week, selectedReviewWeek.year],
+  );
+  const reviewWeekOptions = useMemo(
+    () => buildCalendarWeekOptions(selectedReviewWeek.year, currentReviewWeek),
+    [currentReviewWeek, selectedReviewWeek.year],
+  );
   const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
   const siteOptions = useMemo(
     () => [...sites].sort((left, right) => siteOptionLabel(left).localeCompare(siteOptionLabel(right), "de")),
@@ -379,8 +398,8 @@ export function TimeEntriesPage() {
     setReviewEntriesError(null);
 
     api.timeEntries({
-      dateFrom: activeRange.start,
-      dateTo: activeRange.end,
+      dateFrom: reviewWeekRange.start,
+      dateTo: reviewWeekRange.end,
       includeGpsStatus: true,
       reviewOpenOnly: true,
     })
@@ -404,7 +423,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeRange.end, activeRange.start, activeTimeSubtab, entriesRefreshKey]);
+  }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
@@ -416,8 +435,8 @@ export function TimeEntriesPage() {
     setReviewAllEntriesError(null);
 
     api.timeEntries({
-      dateFrom: activeRange.start,
-      dateTo: activeRange.end,
+      dateFrom: reviewWeekRange.start,
+      dateTo: reviewWeekRange.end,
       includeGpsStatus: true,
     })
       .then((entryData) => {
@@ -440,7 +459,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeRange.end, activeRange.start, activeTimeSubtab, entriesRefreshKey]);
+  }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
 
   useEffect(() => {
     if (selectedPersonId === null) {
@@ -913,19 +932,33 @@ export function TimeEntriesPage() {
           <div className="time-entries-toolbar">
             <div>
               <h2>Stundenprüfung</h2>
-              <p>{formatRangeLabel(activeRange.start, activeRange.end)} · GPS-Toleranz +/- {GPS_TIME_TOLERANCE_MINUTES} Min.</p>
+              <p>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)} · GPS-Toleranz +/- {GPS_TIME_TOLERANCE_MINUTES} Min.</p>
             </div>
             <div className="time-toolbar-actions">
-              <div className="time-range-controls">
-                <div className="matrix-pm-filter" aria-label="Zeitraum">
-                  <button className={rangeMode === "week" ? "is-active" : ""} type="button" onClick={() => setRangeMode("week")}>
-                    Aktuelle Woche
-                  </button>
-                  <button className={rangeMode === "month" ? "is-active" : ""} type="button" onClick={() => setRangeMode("month")}>
-                    Aktueller Monat
-                  </button>
-                </div>
-              </div>
+              <span className="time-review-week-label">Ausgewählte Kalenderwoche {selectedReviewWeek.week}/{selectedReviewWeek.year}</span>
+            </div>
+          </div>
+
+          <div className="time-week-nav-panel" aria-label="Kalenderwochen">
+            <div className="time-week-nav-title">
+              <span>Kalenderwoche</span>
+              <strong>KW {selectedReviewWeek.week}</strong>
+            </div>
+            <div className="time-week-strip">
+              {reviewWeekOptions.map((option) => (
+                <button
+                  className={[
+                    option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
+                    option.isCurrent ? "is-current" : "",
+                  ].filter(Boolean).join(" ")}
+                  key={`${option.year}-${option.week}`}
+                  title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                  type="button"
+                  onClick={() => setSelectedReviewWeek({ year: option.year, week: option.week })}
+                >
+                  KW {option.week}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -978,8 +1011,8 @@ export function TimeEntriesPage() {
             {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length === 0 && (
               <div className="empty-panel">
                 {reviewStatusFilter === "all"
-                  ? "Keine Zeitprüffälle im aktuellen Zeitraum vorhanden."
-                  : "Für diesen Status gibt es im aktuellen Zeitraum keine Fälle."}
+                  ? "Keine Zeitprüffälle in dieser Kalenderwoche."
+                  : `Keine Fälle für diesen Status in KW ${selectedReviewWeek.week}.`}
               </div>
             )}
             {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length > 0 && (
@@ -987,7 +1020,6 @@ export function TimeEntriesPage() {
                 <table className="time-entries-table time-review-compact-table">
                   <thead>
                     <tr>
-                      <th>Datum</th>
                       <th>Baustelle</th>
                       <th>Gemeldete Zeit</th>
                       <th>GPS-Zeit</th>
@@ -1501,20 +1533,14 @@ function renderReviewTableRows({
       <Fragment key={row.id}>
         {showGroup && (
           <tr className="time-review-group-row">
-            <td colSpan={7}>{group}</td>
+            <td colSpan={6}>{group}</td>
           </tr>
         )}
         <tr className={isExpanded ? "is-expanded" : ""}>
           <td>
-            <span className="time-review-date-cell">
-              <strong>{formatDate(row.workDate)}</strong>
-              <small>{formatWeekday(row.workDate)}</small>
-            </span>
-          </td>
-          <td>
             <div className="time-review-site-cell">
               <strong>{row.siteLabel}</strong>
-              <span>{row.systemHint}</span>
+              <span>{formatWeekday(row.workDate)} {formatDate(row.workDate)} · {row.systemHint}</span>
             </div>
           </td>
           <td>{formatHalfHour(row.manualMinutes)}</td>
@@ -1550,7 +1576,7 @@ function renderReviewTableRows({
         </tr>
         {isExpanded && issue && (
           <tr className="time-review-detail-row">
-            <td colSpan={7}>
+            <td colSpan={6}>
               <div className="time-review-table-detail-panel">
                 <div className="time-review-detail-grid">
                   <div><span>Originalwert</span><strong>{formatHalfHour(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
@@ -1669,6 +1695,70 @@ function currentWeekRange(): { start: string; end: string } {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return { start: toDateInputValue(monday), end: toDateInputValue(sunday) };
+}
+
+function currentIsoWeek(): CalendarWeekSelection {
+  return isoWeekFromDate(new Date());
+}
+
+function buildCalendarWeekOptions(year: number, currentWeek: CalendarWeekSelection): CalendarWeekOption[] {
+  const totalWeeks = isoWeeksInYear(year);
+  const firstVisibleWeek = year === currentWeek.year ? Math.max(1, currentWeek.week - 4) : 1;
+  const orderedWeeks = [
+    ...numberRange(firstVisibleWeek, totalWeeks),
+    ...numberRange(1, firstVisibleWeek - 1),
+  ];
+  return orderedWeeks.map((week) => {
+    const range = isoWeekRange(year, week);
+    return {
+      year,
+      week,
+      start: range.start,
+      end: range.end,
+      isCurrent: year === currentWeek.year && week === currentWeek.week,
+    };
+  });
+}
+
+function numberRange(start: number, end: number): number[] {
+  if (end < start) {
+    return [];
+  }
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+}
+
+function isoWeekFromDate(input: Date): CalendarWeekSelection {
+  const utcDate = new Date(Date.UTC(input.getFullYear(), input.getMonth(), input.getDate()));
+  const day = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+  const isoYear = utcDate.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+  return { year: isoYear, week };
+}
+
+function isoWeeksInYear(year: number): number {
+  return isoWeekFromDate(new Date(year, 11, 28)).week;
+}
+
+function isoWeekRange(year: number, week: number): { start: string; end: string } {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return {
+    start: toUtcDateInputValue(monday),
+    end: toUtcDateInputValue(sunday),
+  };
+}
+
+function toUtcDateInputValue(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function defaultTestDataForm(): TestDataFormState {

@@ -6450,6 +6450,82 @@ button.person-chip:focus-visible {
   font: inherit;
 }
 
+.time-week-nav-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dce6f2;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.time-week-nav-title {
+  display: grid;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.time-week-nav-title span {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-week-nav-title strong {
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.time-week-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 5px;
+  scrollbar-gutter: stable;
+}
+
+.time-week-strip button {
+  flex: 0 0 70px;
+  min-height: 34px;
+  border: 1px solid #d7e1ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #42526a;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.time-week-strip button:hover,
+.time-week-strip button:focus-visible {
+  border-color: #9bbce0;
+  background: #f3f8ff;
+  color: #174678;
+  outline: none;
+}
+
+.time-week-strip button.is-current {
+  border-color: #b7d9c2;
+  background: #f3fbf5;
+  color: #166534;
+}
+
+.time-week-strip button.is-active {
+  border-color: #1f5f9f;
+  background: #1f5f9f;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgb(31 95 159 / 20%);
+}
+
+.time-review-week-label {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
 .time-review-case-list,
 .time-review-table-panel,
 .time-final-hours-panel {
@@ -6869,7 +6945,8 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-review-summary-card,
 .time-entries-page.is-figma-times-workspace .time-summary-strip > div,
-.time-entries-page.is-figma-times-workspace .time-final-summary-list {
+.time-entries-page.is-figma-times-workspace .time-final-summary-list,
+.time-entries-page.is-figma-times-workspace .time-week-nav-panel {
   position: relative;
   overflow: hidden;
   border-color: var(--time-border);
@@ -6920,6 +6997,38 @@ button.person-chip:focus-visible {
   color: var(--time-text);
   font-size: 1.26rem;
   font-weight: 900;
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-nav-panel {
+  overflow: visible;
+  padding: 10px 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-nav-title span,
+.time-entries-page.is-figma-times-workspace .time-review-week-label {
+  color: var(--time-muted);
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-nav-title strong {
+  color: var(--time-text);
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-strip button {
+  border-color: var(--time-border);
+  border-radius: 6px;
+  background: var(--time-surface-soft);
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-strip button.is-current {
+  border-color: #b9dfca;
+  background: #eefaf3;
+  color: var(--time-success);
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-strip button.is-active {
+  border-color: var(--time-primary);
+  background: var(--time-primary);
+  color: #ffffff;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-filters {
