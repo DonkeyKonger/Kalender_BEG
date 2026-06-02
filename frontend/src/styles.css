@@ -6376,7 +6376,22 @@ button.person-chip:focus-visible {
   border: 1px solid #dce6f2;
   border-radius: 9px;
   background: #ffffff;
+  cursor: pointer;
   padding: 11px 12px;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.time-review-summary-card:hover,
+.time-review-summary-card:focus-visible,
+.time-review-summary-card.is-active {
+  border-color: #7aa7d7;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 10%);
+  outline: none;
+}
+
+.time-review-summary-card.is-active {
+  transform: translateY(-1px);
 }
 
 .time-review-summary-card span {
@@ -6436,6 +6451,7 @@ button.person-chip:focus-visible {
 }
 
 .time-review-case-list,
+.time-review-table-panel,
 .time-final-hours-panel {
   display: grid;
   gap: 12px;
@@ -6522,6 +6538,55 @@ button.person-chip:focus-visible {
   margin-top: 12px;
   border-top: 1px solid #e2e8f0;
   padding-top: 12px;
+}
+
+.time-review-compact-table {
+  min-width: 940px;
+}
+
+.time-review-compact-table .time-review-group-row td {
+  background: #eef4fb;
+  color: #172033;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.time-review-site-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.time-review-site-cell strong {
+  color: #172033;
+  font-size: 0.82rem;
+}
+
+.time-review-site-cell span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.time-review-table-actions,
+.time-review-table-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.time-review-detail-row td {
+  background: #f8fafc;
+}
+
+.time-review-table-detail-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
 }
 
 .time-final-summary-grid {
@@ -6789,6 +6854,17 @@ button.person-chip:focus-visible {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
+.time-entries-page.is-figma-times-workspace .time-review-summary-card:hover,
+.time-entries-page.is-figma-times-workspace .time-review-summary-card:focus-visible,
+.time-entries-page.is-figma-times-workspace .time-review-summary-card.is-active {
+  border-color: #7aa7d7;
+  box-shadow: 0 14px 30px rgba(31, 95, 159, 0.14);
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-summary-card.is-active {
+  background: #f7fbff;
+}
+
 .time-entries-page.is-figma-times-workspace .time-review-summary-card::before,
 .time-entries-page.is-figma-times-workspace .time-summary-strip > div::before {
   content: "";
@@ -6964,6 +7040,33 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-review-case-list {
   gap: 10px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-table-panel {
+  border: 1px solid var(--time-border);
+  border-radius: 8px;
+  background: var(--time-surface);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  padding: 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-compact-table {
+  font-size: 0.82rem;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-compact-table .time-review-group-row td {
+  background: #eaf2fb;
+  color: #243348;
+  font-size: 0.74rem;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-detail-row td {
+  background: #f8fbff;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-table-detail-panel {
+  border-color: var(--time-border-soft);
+  background: #ffffff;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-case-card {

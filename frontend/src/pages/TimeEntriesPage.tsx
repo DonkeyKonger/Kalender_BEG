@@ -40,10 +40,27 @@ type TimeReviewIssue = {
   detail: string;
 };
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
+type ReviewSummaryFilter = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "all";
 type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
+};
+type TimeReviewTableRow = {
+  id: number;
+  entry: TimeEntry;
+  issue: TimeReviewIssue | null;
+  workDate: string;
+  personName: string;
+  siteLabel: string;
+  manualMinutes: number | null;
+  gpsMinutes: number | null;
+  deviationMinutes: number | null;
+  correctedMinutes: number | null;
+  statusLabel: string;
+  statusTone: StatusBadgeTone;
+  systemHint: string;
+  canConfirm: boolean;
 };
 type TestDataRangeMode = "week" | "month" | "custom";
 type TestDataFormState = {
@@ -156,7 +173,7 @@ export function TimeEntriesPage() {
   const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
-  const [reviewStatusFilter, setReviewStatusFilter] = useState<"all" | TimeReviewCaseStatus>("all");
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
   const [isTestDataToolEnabled, setIsTestDataToolEnabled] = useState(false);
@@ -282,9 +299,9 @@ export function TimeEntriesPage() {
     [activeRange.end, activeRange.start, assignments],
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
-  const filteredTimeReviewIssues = useMemo(
-    () => filterTimeReviewIssues(timeReviewIssues, { status: reviewStatusFilter, person: reviewPersonFilter }),
-    [reviewPersonFilter, reviewStatusFilter, timeReviewIssues],
+  const reviewTableRows = useMemo(
+    () => buildTimeReviewTableRows(timeReviewIssues, reviewAllEntries, reviewStatusFilter, reviewPersonFilter),
+    [reviewAllEntries, reviewPersonFilter, reviewStatusFilter, timeReviewIssues],
   );
   const reviewSummary = useMemo(
     () => calculateReviewSummary(timeReviewIssues, reviewAllEntries),
@@ -559,6 +576,29 @@ export function TimeEntriesPage() {
         decision,
         final_work_minutes: options.finalMinutes ?? null,
         reviewed_site_id: options.reviewedSiteId ?? null,
+      });
+      setExpandedReviewEntryId(null);
+      setReviewEditorMode(null);
+      setReviewDecisionForm({ hours: "", site_id: "" });
+      setEntriesRefreshKey((current) => current + 1);
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
+    } finally {
+      setReviewActionEntryId(null);
+    }
+  }
+
+  async function confirmReviewRow(row: TimeReviewTableRow): Promise<void> {
+    if (!canManageTimeEntries || reviewActionEntryId !== null || isSavingReviewDecision || !row.canConfirm) {
+      return;
+    }
+    setReviewActionEntryId(row.id);
+    setReviewActionError(null);
+    try {
+      await api.decideTimeEntryReview(row.id, {
+        decision: "accept_manual",
+        final_work_minutes: null,
+        reviewed_site_id: null,
       });
       setExpandedReviewEntryId(null);
       setReviewEditorMode(null);
@@ -890,12 +930,48 @@ export function TimeEntriesPage() {
           </div>
 
           <div className="time-review-summary-cards">
-            <ReviewSummaryCard label="Plausibel" value={reviewSummary.autoPlausible} tone="active" />
-            <ReviewSummaryCard label="Prüfung empfohlen" value={reviewSummary.needsReview} tone="planned" />
-            <ReviewSummaryCard label="Kritisch" value={reviewSummary.critical} tone="warning" />
-            <ReviewSummaryCard label="Nicht prüfbar" value={reviewSummary.notVerifiable} tone="neutral" />
-            <ReviewSummaryCard label="Menschlich geprüft" value={reviewSummary.verified} tone="active" />
-            <ReviewSummaryCard label="Offen insgesamt" value={timeReviewIssues.length} tone="warning" />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "auto_plausible"}
+              label="Plausibel"
+              onClick={() => setReviewStatusFilter("auto_plausible")}
+              tone="active"
+              value={reviewSummary.autoPlausible}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "needs_review"}
+              label="Prüfung empfohlen"
+              onClick={() => setReviewStatusFilter("needs_review")}
+              tone="planned"
+              value={reviewSummary.needsReview}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "critical"}
+              label="Kritisch"
+              onClick={() => setReviewStatusFilter("critical")}
+              tone="warning"
+              value={reviewSummary.critical}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "not_verifiable"}
+              label="Nicht prüfbar"
+              onClick={() => setReviewStatusFilter("not_verifiable")}
+              tone="neutral"
+              value={reviewSummary.notVerifiable}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "verified"}
+              label="Menschlich geprüft"
+              onClick={() => setReviewStatusFilter("verified")}
+              tone="active"
+              value={reviewSummary.verified}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "all"}
+              label="Offen insgesamt"
+              onClick={() => setReviewStatusFilter("all")}
+              tone="warning"
+              value={timeReviewIssues.length}
+            />
           </div>
 
           <div className="time-review-filters">
@@ -907,157 +983,53 @@ export function TimeEntriesPage() {
                 onChange={(event) => setReviewPersonFilter(event.target.value)}
               />
             </label>
-            <label>
-              <span>Status</span>
-              <select value={reviewStatusFilter} onChange={(event) => setReviewStatusFilter(event.target.value as "all" | TimeReviewCaseStatus)}>
-                <option value="all">Alle offenen Fälle</option>
-                <option value="needs_review">Prüfung empfohlen</option>
-                <option value="critical">Kritisch</option>
-                <option value="not_verifiable">Nicht prüfbar</option>
-              </select>
-            </label>
           </div>
 
-          <div className="time-review-case-list">
+          <div className="time-review-table-panel">
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
             {isLoadingReviewEntries && <div className="empty-panel">Stundenprüfung wird geladen...</div>}
             {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
-            {!isLoadingReviewEntries && !reviewEntriesError && filteredTimeReviewIssues.length === 0 && (
+            {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length === 0 && (
               <div className="empty-panel">
-                Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz.
+                {reviewStatusFilter === "all"
+                  ? "Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz."
+                  : "Für diesen Status gibt es im aktuellen Zeitraum keine Fälle."}
               </div>
             )}
-            {!isLoadingReviewEntries && !reviewEntriesError && filteredTimeReviewIssues.map((issue) => {
-              const isExpanded = expandedReviewEntryId === issue.id;
-              const isBusy = reviewActionEntryId === issue.id || isSavingReviewDecision;
-              return (
-                <article className={`time-review-case-card time-review-case-card-${issue.status}`} key={issue.id}>
-                  <div className="time-review-case-main">
-                    <div className="time-review-case-head">
-                      <StatusBadge tone={issue.statusTone}>{issue.statusLabel}</StatusBadge>
-                      <div>
-                        <h3>{issue.personName}</h3>
-                        <p>{formatWeekday(issue.workDate)} · {formatDate(issue.workDate)} · {issue.siteLabel}</p>
-                      </div>
-                    </div>
-                    <div className="time-review-case-metrics">
-                      <div>
-                        <span>Gemeldet</span>
-                        <strong>{formatMinutes(issue.manualMinutes)}</strong>
-                      </div>
-                      <div>
-                        <span>GPS</span>
-                        <strong>{formatMinutes(issue.gpsMinutes)}</strong>
-                      </div>
-                      <div>
-                        <span>Abweichung</span>
-                        <strong>{formatHumanDeviation(issue.deviationMinutes)}</strong>
-                      </div>
-                      <div>
-                        <span>Final</span>
-                        <strong>{formatMinutes(issue.finalMinutes)}</strong>
-                      </div>
-                    </div>
-                    <p className="time-review-case-hint">{issue.systemHint}</p>
-                  </div>
-
-                  {canManageTimeEntries && (
-                    <div className="time-review-actions">
-                      <button
-                        className="time-table-action time-table-action-primary"
-                        disabled={isBusy || issue.manualMinutes === null}
-                        type="button"
-                        onClick={() => void decideReviewIssue(issue, "accept_manual")}
-                      >
-                        Manuelle Zeit übernehmen
-                      </button>
-                      <button
-                        className="time-table-action"
-                        disabled={isBusy || issue.gpsMinutes === null}
-                        type="button"
-                        onClick={() => void decideReviewIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
-                      >
-                        GPS-Zeit übernehmen
-                      </button>
-                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue, "corrected")}>
-                        Korrigieren
-                      </button>
-                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue, "assign_site")}>
-                        Baustelle zuordnen
-                      </button>
-                      <button
-                        className="time-table-action"
-                        disabled={isBusy}
-                        type="button"
-                        onClick={() => void decideReviewIssue(issue, "mark_not_verifiable")}
-                      >
-                        Als nicht prüfbar markieren
-                      </button>
-                      <button
-                        className="time-table-action"
-                        disabled={isBusy}
-                        type="button"
-                        onClick={() => void decideReviewIssue(issue, "mark_clarification")}
-                      >
-                        Zur Klärung
-                      </button>
-                      <button className="time-table-action" disabled={isBusy} type="button" onClick={() => openReviewIssue(issue)}>
-                        Details
-                      </button>
-                    </div>
-                  )}
-
-                  {isExpanded && (
-                    <div className="time-review-inline-editor">
-                      <div className="time-review-detail-grid">
-                        <div><span>Originalwert</span><strong>{formatMinutes(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
-                        <div><span>GPS-Wert</span><strong>{formatMinutes(issue.gpsMinutes)}</strong></div>
-                        <div><span>Abweichung</span><strong>{formatHumanDeviation(issue.deviationMinutes)}</strong></div>
-                        <div><span>Geplante/Gemeldete Baustelle</span><strong>{issue.siteLabel}</strong></div>
-                      </div>
-                      <p className="time-review-detail">{issue.detail}</p>
-                      {reviewEditorMode && (
-                        <div className="time-entry-form-grid">
-                          {reviewEditorMode === "corrected" && (
-                            <label>
-                              <span>Finale Arbeitszeit (Std.)</span>
-                              <input
-                                inputMode="decimal"
-                                placeholder="z. B. 8,5"
-                                value={reviewDecisionForm.hours}
-                                onChange={(event) => setReviewDecisionForm((current) => ({ ...current, hours: event.target.value }))}
-                              />
-                            </label>
-                          )}
-                          <label>
-                            <span>Baustelle</span>
-                            <select
-                              value={reviewDecisionForm.site_id}
-                              onChange={(event) => setReviewDecisionForm((current) => ({ ...current, site_id: event.target.value }))}
-                            >
-                              <option value="">Nicht zugeordnet</option>
-                              {siteOptions.map((site) => (
-                                <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                      )}
-                      <div className="time-entry-editor-actions">
-                        <button className="icon-button secondary" disabled={isBusy} type="button" onClick={closeReviewIssue}>
-                          Abbrechen
-                        </button>
-                        {reviewEditorMode && (
-                          <button className="icon-button" disabled={isBusy} type="button" onClick={() => void saveReviewDecision(issue)}>
-                            {isSavingReviewDecision ? "Speichert..." : "Speichern"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+            {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length > 0 && (
+              <div className="time-table-scroll">
+                <table className="time-entries-table time-review-compact-table">
+                  <thead>
+                    <tr>
+                      <th>Baustelle</th>
+                      <th>Gemeldete Zeit</th>
+                      <th>GPS-Zeit</th>
+                      <th>Zeitdifferenz</th>
+                      <th>Korrigierte Zeit</th>
+                      <th>Entscheidung</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {renderReviewTableRows({
+                      rows: reviewTableRows,
+                      expandedReviewEntryId,
+                      reviewEditorMode,
+                      reviewDecisionForm,
+                      reviewActionEntryId,
+                      isSavingReviewDecision,
+                      siteOptions,
+                      canManageTimeEntries,
+                      onConfirm: confirmReviewRow,
+                      onOpenIssue: openReviewIssue,
+                      onCloseIssue: closeReviewIssue,
+                      onSaveDecision: saveReviewDecision,
+                      onReviewDecisionFormChange: setReviewDecisionForm,
+                      onDecideIssue: decideReviewIssue,
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="time-final-hours-panel">
@@ -1469,13 +1441,209 @@ export function TimeEntriesPage() {
   );
 }
 
-function ReviewSummaryCard({ label, value, tone }: { label: string; value: number; tone: StatusBadgeTone }) {
+function ReviewSummaryCard({
+  active,
+  label,
+  onClick,
+  tone,
+  value,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  tone: StatusBadgeTone;
+  value: number;
+}) {
   return (
-    <div className={`time-review-summary-card time-review-summary-card-${tone}`}>
+    <button
+      className={`time-review-summary-card time-review-summary-card-${tone}${active ? " is-active" : ""}`}
+      type="button"
+      onClick={onClick}
+    >
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </button>
   );
+}
+
+function renderReviewTableRows({
+  rows,
+  expandedReviewEntryId,
+  reviewEditorMode,
+  reviewDecisionForm,
+  reviewActionEntryId,
+  isSavingReviewDecision,
+  siteOptions,
+  canManageTimeEntries,
+  onConfirm,
+  onOpenIssue,
+  onCloseIssue,
+  onSaveDecision,
+  onReviewDecisionFormChange,
+  onDecideIssue,
+}: {
+  rows: TimeReviewTableRow[];
+  expandedReviewEntryId: number | null;
+  reviewEditorMode: ReviewEditorMode;
+  reviewDecisionForm: ReviewDecisionFormState;
+  reviewActionEntryId: number | null;
+  isSavingReviewDecision: boolean;
+  siteOptions: SiteSummary[];
+  canManageTimeEntries: boolean;
+  onConfirm: (row: TimeReviewTableRow) => Promise<void>;
+  onOpenIssue: (issue: TimeReviewIssue, mode?: ReviewEditorMode) => void;
+  onCloseIssue: () => void;
+  onSaveDecision: (issue: TimeReviewIssue) => Promise<void>;
+  onReviewDecisionFormChange: (updater: (current: ReviewDecisionFormState) => ReviewDecisionFormState) => void;
+  onDecideIssue: (
+    issue: TimeReviewIssue,
+    decision: TimeReviewDecision,
+    options?: { finalMinutes?: number | null; reviewedSiteId?: number | null },
+  ) => Promise<void>;
+}) {
+  let previousGroup = "";
+  return rows.map((row) => {
+    const issue = row.issue;
+    const isExpanded = expandedReviewEntryId === row.id && issue !== null;
+    const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
+    const group = `${row.personName} · ${formatWeekday(row.workDate)} ${formatDate(row.workDate)}`;
+    const showGroup = group !== previousGroup;
+    previousGroup = group;
+
+    return (
+      <Fragment key={row.id}>
+        {showGroup && (
+          <tr className="time-review-group-row">
+            <td colSpan={6}>{group}</td>
+          </tr>
+        )}
+        <tr className={isExpanded ? "is-expanded" : ""}>
+          <td>
+            <div className="time-review-site-cell">
+              <strong>{row.siteLabel}</strong>
+              <span>{row.systemHint}</span>
+            </div>
+          </td>
+          <td>{formatHalfHour(row.manualMinutes)}</td>
+          <td>{formatHalfHour(row.gpsMinutes)}</td>
+          <td>{formatHalfHourDelta(row.deviationMinutes)}</td>
+          <td>{formatHalfHour(row.correctedMinutes)}</td>
+          <td>
+            <div className="time-review-table-actions">
+              {canManageTimeEntries && row.canConfirm ? (
+                <button
+                  className="time-table-action time-table-action-primary"
+                  disabled={isBusy}
+                  type="button"
+                  onClick={() => void onConfirm(row)}
+                >
+                  Bestätigen
+                </button>
+              ) : (
+                <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
+              )}
+              {issue && (
+                <button
+                  className="time-table-action"
+                  disabled={isBusy}
+                  type="button"
+                  onClick={() => onOpenIssue(issue)}
+                >
+                  Details
+                </button>
+              )}
+            </div>
+          </td>
+        </tr>
+        {isExpanded && issue && (
+          <tr className="time-review-detail-row">
+            <td colSpan={6}>
+              <div className="time-review-table-detail-panel">
+                <div className="time-review-detail-grid">
+                  <div><span>Originalwert</span><strong>{formatHalfHour(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
+                  <div><span>GPS-Wert</span><strong>{formatHalfHour(issue.gpsMinutes)}</strong></div>
+                  <div><span>Abweichung</span><strong>{formatHalfHourDelta(issue.deviationMinutes)}</strong></div>
+                  <div><span>Status</span><strong>{issue.statusLabel}</strong></div>
+                </div>
+                <p className="time-review-detail">{issue.detail}</p>
+                {canManageTimeEntries && (
+                  <div className="time-review-table-detail-actions">
+                    <button
+                      className="time-table-action"
+                      disabled={isBusy || issue.gpsMinutes === null}
+                      type="button"
+                      onClick={() => void onDecideIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
+                    >
+                      GPS übernehmen
+                    </button>
+                    <button className="time-table-action" disabled={isBusy} type="button" onClick={() => onOpenIssue(issue, "corrected")}>
+                      Korrigieren
+                    </button>
+                    <button className="time-table-action" disabled={isBusy} type="button" onClick={() => onOpenIssue(issue, "assign_site")}>
+                      Baustelle zuordnen
+                    </button>
+                    <button
+                      className="time-table-action"
+                      disabled={isBusy}
+                      type="button"
+                      onClick={() => void onDecideIssue(issue, "mark_not_verifiable")}
+                    >
+                      Nicht prüfbar
+                    </button>
+                    <button
+                      className="time-table-action"
+                      disabled={isBusy}
+                      type="button"
+                      onClick={() => void onDecideIssue(issue, "mark_clarification")}
+                    >
+                      Zur Klärung
+                    </button>
+                  </div>
+                )}
+                {reviewEditorMode && (
+                  <div className="time-entry-form-grid">
+                    {reviewEditorMode === "corrected" && (
+                      <label>
+                        <span>Finale Arbeitszeit (Std.)</span>
+                        <input
+                          inputMode="decimal"
+                          placeholder="z. B. 8,5"
+                          value={reviewDecisionForm.hours}
+                          onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, hours: event.target.value }))}
+                        />
+                      </label>
+                    )}
+                    <label>
+                      <span>Baustelle</span>
+                      <select
+                        value={reviewDecisionForm.site_id}
+                        onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, site_id: event.target.value }))}
+                      >
+                        <option value="">Nicht zugeordnet</option>
+                        {siteOptions.map((site) => (
+                          <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                <div className="time-entry-editor-actions">
+                  <button className="icon-button secondary" disabled={isBusy} type="button" onClick={onCloseIssue}>
+                    Schließen
+                  </button>
+                  {reviewEditorMode && (
+                    <button className="icon-button" disabled={isBusy} type="button" onClick={() => void onSaveDecision(issue)}>
+                      {isSavingReviewDecision ? "Speichert..." : "Speichern"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  });
 }
 
 function FinalSummaryList({ title, rows }: { title: string; rows: { label: string; minutes: number }[] }) {
@@ -1652,6 +1820,22 @@ function formatMinutes(minutes: number | null | undefined): string {
   return `${hours} Std. ${rest} Min.`;
 }
 
+function formatHalfHour(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) {
+    return "-";
+  }
+  const roundedHours = Math.round(minutes / 30) / 2;
+  return `${roundedHours.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+}
+
+function formatHalfHourDelta(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) {
+    return "-";
+  }
+  const prefix = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
+  return `${prefix}${formatHalfHour(Math.abs(minutes))}`;
+}
+
 function formatGpsSignalRange(entry: TimeEntry): string {
   if (!entry.gps_first_seen_at) {
     return "GPS";
@@ -1679,6 +1863,90 @@ function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
       || left.workDate.localeCompare(right.workDate)
       || left.id - right.id
     ));
+}
+
+function buildTimeReviewTableRows(
+  openIssues: TimeReviewIssue[],
+  allEntries: TimeEntry[],
+  status: ReviewSummaryFilter,
+  personFilter: string,
+): TimeReviewTableRow[] {
+  const rows = reviewRowsForStatus(openIssues, allEntries, status);
+  const personNeedle = personFilter.trim().toLowerCase();
+  return rows
+    .filter((row) => !personNeedle || row.personName.toLowerCase().includes(personNeedle))
+    .sort((left, right) => (
+      left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
+      || left.workDate.localeCompare(right.workDate)
+      || left.id - right.id
+    ));
+}
+
+function reviewRowsForStatus(
+  openIssues: TimeReviewIssue[],
+  allEntries: TimeEntry[],
+  status: ReviewSummaryFilter,
+): TimeReviewTableRow[] {
+  if (status === "all") {
+    return openIssues.map(timeReviewIssueToTableRow);
+  }
+  if (status === "needs_review" || status === "critical" || status === "not_verifiable") {
+    return openIssues.filter((issue) => issue.status === status).map(timeReviewIssueToTableRow);
+  }
+  if (status === "auto_plausible") {
+    return allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Plausibel", "active"));
+  }
+  return allEntries
+    .filter((entry) => entry.time_review_status !== "open")
+    .map((entry) => timeEntryToTableRow(entry, finalStatusLabel(entry), "active"));
+}
+
+function timeReviewIssueToTableRow(issue: TimeReviewIssue): TimeReviewTableRow {
+  return {
+    id: issue.id,
+    entry: issue.entry,
+    issue,
+    workDate: issue.workDate,
+    personName: issue.personName,
+    siteLabel: issue.siteLabel,
+    manualMinutes: issue.manualMinutes,
+    gpsMinutes: issue.gpsMinutes,
+    deviationMinutes: issue.deviationMinutes,
+    correctedMinutes: issue.entry.corrected_work_minutes,
+    statusLabel: issue.statusLabel,
+    statusTone: issue.statusTone,
+    systemHint: issue.systemHint,
+    canConfirm: issue.manualMinutes !== null,
+  };
+}
+
+function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: StatusBadgeTone): TimeReviewTableRow {
+  const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
+  const gpsMinutes = entry.gps_work_minutes;
+  return {
+    id: entry.id,
+    entry,
+    issue: null,
+    workDate: entry.work_date,
+    personName: entry.person_name,
+    siteLabel: timeEntrySiteLabel(entry),
+    manualMinutes,
+    gpsMinutes,
+    deviationMinutes: manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null,
+    correctedMinutes: entry.corrected_work_minutes,
+    statusLabel,
+    statusTone,
+    systemHint: finalBasisLabel(entry),
+    canConfirm: entry.time_review_status === "open" && manualMinutes !== null,
+  };
+}
+
+function isAutoPlausibleEntry(entry: TimeEntry): boolean {
+  return (
+    entry.time_review_status === "open"
+    && entry.gps_work_minutes !== null
+    && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
+  );
 }
 
 function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
@@ -1779,22 +2047,6 @@ function classifyTimeReviewCase(
     systemHint: "GPS-Zeit weicht mehr als 15 Minuten ab.",
     detail: `Abweichung: ${formatHumanDeviation(deviationMinutes)}.`,
   };
-}
-
-function filterTimeReviewIssues(
-  issues: TimeReviewIssue[],
-  filters: { status: "all" | TimeReviewCaseStatus; person: string },
-): TimeReviewIssue[] {
-  const personNeedle = filters.person.trim().toLowerCase();
-  return issues.filter((issue) => {
-    if (filters.status !== "all" && issue.status !== filters.status) {
-      return false;
-    }
-    if (personNeedle && !issue.personName.toLowerCase().includes(personNeedle)) {
-      return false;
-    }
-    return true;
-  });
 }
 
 function formatHumanDeviation(minutes: number | null): string {
