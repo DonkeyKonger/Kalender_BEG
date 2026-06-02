@@ -20,10 +20,11 @@ import { ApiError, api } from "../lib/api";
 import {
   ANDROID_GPS_PING_INTERVAL_MS,
   formatMobileGpsError,
+  getAndroidBackgroundGpsStatus,
   isAndroidAppContext,
   sendCurrentGpsLocation,
-  startAndroidGpsPingTimer,
-  stopAndroidGpsPingTimer,
+  startAndroidBackgroundGpsTracking,
+  stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
@@ -49,7 +50,7 @@ type PlaceholderContent = {
 };
 
 export function MyAssignmentsPage() {
-  const { logout, status } = useAuth();
+  const { logout, status, user } = useAuth();
   const [mode, setMode] = useState<MobileViewMode>("two_weeks");
   const [data, setData] = useState<MobileAssignmentsResponse | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -96,26 +97,58 @@ export function MyAssignmentsPage() {
   }, [loadAssignments]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !isAndroidAppContext()) {
-      stopAndroidGpsPingTimer();
+    let isMounted = true;
+    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
+      void stopAndroidBackgroundGpsTracking();
       return undefined;
     }
 
-    startAndroidGpsPingTimer((gpsStatus) => {
-      if (gpsStatus.type === "sent") {
-        setLastGpsSentAt(gpsStatus.sentAt);
-        setGpsMessage("Standort automatisch gesendet.");
+    void startAndroidBackgroundGpsTracking()
+      .then((trackingStatus) => {
+        if (!isMounted || !trackingStatus.isTracking) {
+          return;
+        }
+        if (trackingStatus.lastSentAt) {
+          setLastGpsSentAt(trackingStatus.lastSentAt);
+        }
+        setGpsMessage("Android-Hintergrundstandort aktiv.");
         setGpsMessageTone("info");
-        return;
-      }
-      setGpsMessage(gpsStatus.message);
-      setGpsMessageTone("error");
-    });
+      })
+      .catch((trackingError) => {
+        if (!isMounted) {
+          return;
+        }
+        setGpsMessage(formatMobileGpsError(trackingError));
+        setGpsMessageTone("error");
+      });
 
     return () => {
-      stopAndroidGpsPingTimer();
+      isMounted = false;
+      void stopAndroidBackgroundGpsTracking();
     };
-  }, [status]);
+  }, [status, user?.role]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadBackgroundGpsStatus = async () => {
+      const trackingStatus = await getAndroidBackgroundGpsStatus();
+      if (!isMounted) {
+        return;
+      }
+      if (trackingStatus.lastSentAt) {
+        setLastGpsSentAt(trackingStatus.lastSentAt);
+      }
+    };
+    void loadBackgroundGpsStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [status, user?.role]);
 
   async function sendGpsNow(): Promise<void> {
     if (isSendingGps) {
@@ -138,7 +171,7 @@ export function MyAssignmentsPage() {
   }
 
   async function handleLogout(): Promise<void> {
-    stopAndroidGpsPingTimer();
+    await stopAndroidBackgroundGpsTracking();
     await logout();
   }
 
@@ -278,9 +311,9 @@ export function MyAssignmentsPage() {
               </span>
             </button>
             {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
-            {isAndroidAppContext() ? (
+            {user?.role === "monteur" && isAndroidAppContext() ? (
               <p className="cache-note mobile-gps-status">
-                Automatische Standortsendung: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten bei geöffneter App.
+                Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
               </p>
             ) : null}
             {lastGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt gesendet: {formatDateTime(lastGpsSentAt)}</p> : null}

@@ -13,6 +13,14 @@ import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem("kb_access_token");
+}
+
 type AssignmentMutationApiResponse = {
   assignment: { id: number };
   warnings: MatrixConflictMessage[];
