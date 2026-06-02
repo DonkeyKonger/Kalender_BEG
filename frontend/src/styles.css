@@ -2542,13 +2542,14 @@ button.person-chip:focus-visible {
 
 .mobile-page {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   max-width: 760px;
   margin: 0 auto;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-home-page {
-  gap: 12px;
+  gap: 14px;
 }
 
 .mobile-home-actions {
@@ -2563,6 +2564,7 @@ button.person-chip:focus-visible {
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 0.82rem;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 8%);
 }
 
 .mobile-subpage-title {
@@ -2584,12 +2586,15 @@ button.person-chip:focus-visible {
 
 .mobile-home-hero {
   display: grid;
-  gap: 10px;
-  border: 1px solid #dce3ee;
+  gap: 8px;
+  border: 1px solid #d5e2f1;
+  border-top: 4px solid #f4b73f;
   border-radius: 8px;
-  background: #ffffff;
-  padding: 13px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%) 0%, rgb(238 246 255 / 96%) 100%),
+    #ffffff;
+  padding: 15px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
 .mobile-home-hero.is-compact {
@@ -2618,7 +2623,8 @@ button.person-chip:focus-visible {
 
 .mobile-home-hero h1 {
   color: #111827;
-  font-size: 1.35rem;
+  font-size: 1.46rem;
+  line-height: 1.12;
   letter-spacing: 0;
 }
 
@@ -2633,7 +2639,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-section {
   display: grid;
-  gap: 9px;
+  gap: 10px;
 }
 
 .mobile-section-heading {
@@ -2661,20 +2667,37 @@ button.person-chip:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   width: 100%;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   color: #172033;
-  padding: 12px;
+  padding: 12px 13px;
   text-align: left;
-  box-shadow: 0 8px 20px rgb(18 29 52 / 6%);
+  box-shadow: 0 12px 26px rgb(18 29 52 / 7%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .mobile-message-card svg,
 .mobile-action-card svg {
+  box-sizing: border-box;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #eaf2fb;
   color: #143c6d;
+  padding: 9px;
+}
+
+.mobile-message-card:hover,
+.mobile-action-card:hover,
+.mobile-message-card:focus-visible,
+.mobile-action-card:focus-visible {
+  border-color: #9db7d6;
+  box-shadow: 0 15px 30px rgb(18 29 52 / 10%);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .mobile-message-card span,
@@ -2697,9 +2720,20 @@ button.person-chip:focus-visible {
   line-height: 1.3;
 }
 
+.mobile-gps-send-card {
+  border-color: #c9e7d0;
+  background: linear-gradient(135deg, #ffffff 0%, #f1fbf4 100%);
+}
+
+.mobile-gps-send-card svg {
+  background: #e4f7e9;
+  color: #166534;
+}
+
 .mobile-gps-send-card:disabled {
   cursor: wait;
   opacity: 0.75;
+  transform: none;
 }
 
 .mobile-gps-status {
@@ -2710,18 +2744,18 @@ button.person-chip:focus-visible {
 .mobile-day-list,
 .mobile-action-list {
   display: grid;
-  gap: 9px;
+  gap: 10px;
 }
 
 .mobile-focus-card,
 .mobile-day-card {
   display: grid;
-  gap: 8px;
-  border: 1px solid #dce3ee;
+  gap: 9px;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
-  padding: 10px;
-  box-shadow: 0 8px 20px rgb(18 29 52 / 6%);
+  padding: 11px;
+  box-shadow: 0 12px 26px rgb(18 29 52 / 7%);
 }
 
 .mobile-focus-card-head,
@@ -2739,7 +2773,10 @@ button.person-chip:focus-visible {
 }
 
 .mobile-focus-card-head strong {
+  border-radius: 999px;
+  background: #eaf2fb;
   color: #143c6d;
+  padding: 3px 8px;
 }
 
 .mobile-day-card {
@@ -2749,9 +2786,12 @@ button.person-chip:focus-visible {
 .mobile-day-card-date {
   display: grid;
   gap: 2px;
+  border-radius: 8px;
+  background: #eef6ff;
   color: #65738a;
   font-size: 0.78rem;
   font-weight: 800;
+  padding: 8px 7px;
 }
 
 .mobile-day-card-date strong {
@@ -2769,6 +2809,13 @@ button.person-chip:focus-visible {
   color: #65738a;
   font-size: 0.85rem;
   font-weight: 650;
+}
+
+@media (min-width: 520px) {
+  .mobile-focus-grid,
+  .mobile-detail-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .mobile-dialog-backdrop {
@@ -2897,15 +2944,17 @@ button.person-chip:focus-visible {
 .assignment-card {
   display: grid;
   gap: 12px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   padding: 14px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+  box-shadow: 0 12px 28px rgb(18 29 52 / 8%);
 }
 
 .assignment-card.is-compact {
   gap: 7px;
+  border-color: #e2e8f0;
+  background: #fbfdff;
   padding: 10px;
   box-shadow: none;
 }
@@ -2937,6 +2986,7 @@ button.person-chip:focus-visible {
   color: #111827;
   font-size: 1.05rem;
   letter-spacing: 0;
+  line-height: 1.18;
 }
 
 .assignment-date,
@@ -2947,9 +2997,20 @@ button.person-chip:focus-visible {
 }
 
 .assignment-date {
+  align-items: center;
   color: #143c6d;
   font-size: 0.85rem;
   font-weight: 800;
+}
+
+.assignment-date svg {
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #eaf2fb;
+  color: #143c6d;
+  padding: 6px;
 }
 
 .assignment-detail-list {
@@ -2957,6 +3018,13 @@ button.person-chip:focus-visible {
   gap: 8px;
   color: #334155;
   font-size: 0.92rem;
+}
+
+.assignment-detail-list p {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 8px 9px;
 }
 
 .assignment-detail-list svg,
@@ -7747,7 +7815,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-detail-page {
-  padding-bottom: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-detail-page.is-entry-mode {
@@ -7761,12 +7829,15 @@ button.person-chip:focus-visible {
 
 .mobile-detail-summary {
   display: grid;
-  gap: 8px;
-  border: 1px solid #dce3ee;
+  gap: 10px;
+  border: 1px solid #d5e2f1;
+  border-top: 4px solid #f4b73f;
   border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%) 0%, rgb(238 246 255 / 96%) 100%),
+    #ffffff;
+  padding: 14px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
 .mobile-detail-hero h1,
@@ -7777,34 +7848,41 @@ button.person-chip:focus-visible {
 
 .mobile-detail-hero h1 {
   color: #111827;
-  font-size: 1.18rem;
+  font-size: 1.28rem;
   letter-spacing: 0;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .mobile-detail-actions {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .mobile-detail-actions button {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  min-height: 58px;
-  border: 1px solid #dce3ee;
+  min-height: 64px;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   color: #172033;
-  padding: 10px 12px;
+  padding: 11px 12px;
   text-align: left;
-  box-shadow: 0 8px 20px rgb(18 29 52 / 6%);
+  box-shadow: 0 12px 26px rgb(18 29 52 / 7%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .mobile-detail-actions button svg {
+  box-sizing: border-box;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #eaf2fb;
   color: #143c6d;
+  padding: 9px;
 }
 
 .mobile-detail-actions button span {
@@ -7827,16 +7905,25 @@ button.person-chip:focus-visible {
 .mobile-detail-actions button.is-active {
   border-color: #9db7d6;
   background: #eaf2fb;
+  box-shadow: 0 14px 30px rgb(20 60 109 / 12%);
+}
+
+.mobile-detail-actions button:hover,
+.mobile-detail-actions button:focus-visible {
+  border-color: #9db7d6;
+  box-shadow: 0 15px 30px rgb(18 29 52 / 10%);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .mobile-detail-panel {
   display: grid;
   gap: 12px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   padding: 14px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 7%);
+  box-shadow: 0 12px 28px rgb(18 29 52 / 8%);
 }
 
 .mobile-detail-panel h2 {
@@ -7897,6 +7984,7 @@ button.person-chip:focus-visible {
   padding: 0 11px;
   min-height: 42px;
   color: #65738a;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
 }
 
 .mobile-measurement-search input {
@@ -7936,6 +8024,7 @@ button.person-chip:focus-visible {
   border-color: #143c6d;
   background: #eaf2fb;
   color: #143c6d;
+  box-shadow: 0 8px 16px rgb(20 60 109 / 10%);
 }
 
 .mobile-measurement-list {
@@ -7948,12 +8037,22 @@ button.person-chip:focus-visible {
   gap: 4px;
   width: 100%;
   min-height: 78px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   color: #172033;
   padding: 9px 10px;
   text-align: left;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.mobile-measurement-card:hover,
+.mobile-measurement-card:focus-visible {
+  border-color: #9db7d6;
+  box-shadow: 0 12px 24px rgb(18 29 52 / 9%);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .mobile-measurement-card strong,
@@ -8016,11 +8115,14 @@ button.person-chip:focus-visible {
 .mobile-entry-head {
   display: grid;
   gap: 10px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d5e2f1;
+  border-top: 4px solid #f4b73f;
   border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 8px 20px rgb(18 29 52 / 6%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%) 0%, rgb(238 246 255 / 96%) 100%),
+    #ffffff;
+  padding: 14px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
 .mobile-entry-head h1,
@@ -8053,13 +8155,14 @@ button.person-chip:focus-visible {
 .mobile-entry-facts span {
   display: grid;
   gap: 2px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #ffffff;
   padding: 8px 9px;
   color: #65738a;
   font-size: 0.75rem;
   font-weight: 750;
+  box-shadow: 0 8px 16px rgb(18 29 52 / 5%);
 }
 
 .mobile-entry-facts strong {
@@ -8081,13 +8184,14 @@ button.person-chip:focus-visible {
 .mobile-measurement-quick-facts span {
   display: grid;
   gap: 2px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #ffffff;
   padding: 8px 9px;
   color: #65738a;
   font-size: 0.74rem;
   font-weight: 750;
+  box-shadow: 0 8px 16px rgb(18 29 52 / 5%);
 }
 
 .mobile-measurement-quick-facts strong {
@@ -8143,10 +8247,11 @@ button.person-chip:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
   background: #ffffff;
   padding: 9px 10px;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
 }
 
 .mobile-measurement-entry strong {
@@ -8173,10 +8278,11 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-entry-form {
-  border: 1px solid #dce3ee;
+  border: 1px solid #d8e3ef;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #fbfdff;
   padding: 11px;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
 }
 
 .mobile-measurement-entry-page .mobile-measurement-entry-form {

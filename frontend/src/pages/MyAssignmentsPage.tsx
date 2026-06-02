@@ -190,6 +190,12 @@ export function MyAssignmentsPage() {
         </button>
       </div>
 
+      <header className="mobile-home-hero">
+        <p className="eyebrow">Mobile Baustellen-App</p>
+        <h1>Meine Baustellen</h1>
+        <p>Einsätze, Meldungen und Standortprüfung kompakt für den Arbeitstag.</p>
+      </header>
+
       {loadedAt && (
         <p className={isFromCache ? "cache-note warning" : "cache-note"}>
           Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}
