@@ -11,7 +11,7 @@ import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
-type TimeSubtab = "review" | "workerTimes";
+type TimeSubtab = "review" | "gpsVerification" | "workerTimes";
 type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
 type TimeEntryFormState = {
   work_date: string;
@@ -34,6 +34,7 @@ type TimeReviewIssue = {
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
+  { key: "gpsVerification", label: "GPS-Prüfung" },
   { key: "workerTimes", label: "Monteurszeiten" },
 ];
 
@@ -108,6 +109,9 @@ export function TimeEntriesPage() {
   const [entriesRefreshKey, setEntriesRefreshKey] = useState(0);
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canViewGpsVerification = canManageTimeEntries;
+  const visibleTimeSubtabs = canViewGpsVerification
+    ? timeSubtabs
+    : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
 
   useEffect(() => {
     void loadPeople();
@@ -391,7 +395,7 @@ export function TimeEntriesPage() {
       {error && <p className="form-error">{error}</p>}
 
       <div className="project-record-subtabs time-main-subtabs" role="tablist" aria-label="Zeiten Bereiche">
-        {timeSubtabs.map((tab) => (
+        {visibleTimeSubtabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -472,6 +476,66 @@ export function TimeEntriesPage() {
                         <StatusBadge tone="warning">Manuelle Prüfung erforderlich</StatusBadge>
                         <span className="time-review-detail">{issue.detail}</span>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTimeSubtab === "gpsVerification" && canViewGpsVerification && (
+        <div className="time-entries-main">
+          <div className="gps-verification-panel">
+            <div className="gps-verification-header">
+              <div>
+                <h2>GPS-Prüfung</h2>
+                <p>Letzte mobile Standortsendungen mit geplanter Baustelle und Geofence-Status.</p>
+              </div>
+              <button className="time-table-action" disabled={isLoadingRecentGps} type="button" onClick={() => void loadRecentGpsPoints()}>
+                <RefreshCw aria-hidden="true" size={14} />
+                Aktualisieren
+              </button>
+            </div>
+            {recentGpsError && <p className="time-table-note">{recentGpsError}</p>}
+            <div className="time-table-scroll">
+              <table className="time-entries-table gps-verification-table">
+                <thead>
+                  <tr>
+                    <th>Monteur</th>
+                    <th>Zeitpunkt</th>
+                    <th>Geplante Baustelle</th>
+                    <th>Plausibilität</th>
+                    <th>Abstand</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingRecentGps && (
+                    <tr>
+                      <td className="time-empty-row" colSpan={5}>
+                        GPS-Prüfdaten werden geladen...
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.length === 0 && (
+                    <tr>
+                      <td className="time-empty-row" colSpan={5}>
+                        Noch keine mobilen Standortsendungen vorhanden.
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.map((point) => (
+                    <tr key={point.id}>
+                      <td>{point.person_name}</td>
+                      <td>{formatDateTime(point.captured_at)}</td>
+                      <td>{point.planned_site_label ?? "-"}</td>
+                      <td>
+                        <StatusBadge tone={gpsStatusTone(point.plausibility_status)}>
+                          {gpsStatusLabels[point.plausibility_status]}
+                        </StatusBadge>
+                      </td>
+                      <td>{formatDistance(point.distance_to_planned_site_m, point.geofence_radius_m)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -754,64 +818,6 @@ export function TimeEntriesPage() {
 	                      </Fragment>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {canViewGpsVerification && (
-            <div className="gps-verification-panel">
-              <div className="gps-verification-header">
-                <div>
-                  <h2>GPS-Pruefung</h2>
-                  <p>Letzte mobile Standortsendungen mit geplanter Baustelle und Geofence-Status.</p>
-                </div>
-                <button className="time-table-action" disabled={isLoadingRecentGps} type="button" onClick={() => void loadRecentGpsPoints()}>
-                  <RefreshCw aria-hidden="true" size={14} />
-                  Aktualisieren
-                </button>
-              </div>
-              {recentGpsError && <p className="time-table-note">{recentGpsError}</p>}
-              <div className="time-table-scroll">
-                <table className="time-entries-table gps-verification-table">
-                  <thead>
-                    <tr>
-                      <th>Monteur</th>
-                      <th>Zeitpunkt</th>
-                      <th>Geplante Baustelle</th>
-                      <th>Plausibilitaet</th>
-                      <th>Abstand</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingRecentGps && (
-                      <tr>
-                        <td className="time-empty-row" colSpan={5}>
-                          GPS-Pruefdaten werden geladen...
-                        </td>
-                      </tr>
-                    )}
-                    {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.length === 0 && (
-                      <tr>
-                        <td className="time-empty-row" colSpan={5}>
-                          Noch keine mobilen Standortsendungen vorhanden.
-                        </td>
-                      </tr>
-                    )}
-                    {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.map((point) => (
-                      <tr key={point.id}>
-                        <td>{point.person_name}</td>
-                        <td>{formatDateTime(point.captured_at)}</td>
-                        <td>{point.planned_site_label ?? "-"}</td>
-                        <td>
-                          <StatusBadge tone={gpsStatusTone(point.plausibility_status)}>
-                            {gpsStatusLabels[point.plausibility_status]}
-                          </StatusBadge>
-                        </td>
-                        <td>{formatDistance(point.distance_to_planned_site_m, point.geofence_radius_m)}</td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
