@@ -189,16 +189,12 @@ def main() -> None:
         return
 
     if args.command == "clear":
-        with SessionLocal() as db:
-            if args.all_test_data:
-                result = clear_test_data(db, batch_id=None)
-            else:
-                result = clear_test_data(db, batch_id=args.batch_id)
-            db.commit()
+        result = clear_time_gps_test_data(batch_id=None if args.all_test_data else args.batch_id)
         print(json.dumps({"deleted_rows": result}, indent=2, sort_keys=True))
 
 
 def generate_time_gps_test_data(options: GeneratorOptions) -> GeneratorSummary:
+    ensure_safe_environment()
     rng = random.Random(options.seed)
     batch_id = new_batch_id(rng)
     summary = GeneratorSummary(
@@ -251,12 +247,24 @@ def generate_time_gps_test_data(options: GeneratorOptions) -> GeneratorSummary:
 
 
 def ensure_safe_environment() -> None:
-    environment = (settings.environment or "").strip().lower()
-    test_mode = truthy(os.getenv("TEST_MODE"))
-    if environment == "production" and not test_mode:
+    if not is_time_gps_test_data_allowed():
         raise SystemExit(
             "Refusing to run in production. Set TEST_MODE=true only for an explicitly approved test run."
         )
+
+
+def is_time_gps_test_data_allowed() -> bool:
+    environment = (settings.environment or "").strip().lower()
+    test_mode = truthy(os.getenv("TEST_MODE"))
+    return environment != "production" or test_mode
+
+
+def clear_time_gps_test_data(*, batch_id: str | None) -> dict[str, int]:
+    ensure_safe_environment()
+    with SessionLocal() as db:
+        result = clear_test_data(db, batch_id=batch_id)
+        db.commit()
+    return result
 
 
 def truthy(value: str | None) -> bool:

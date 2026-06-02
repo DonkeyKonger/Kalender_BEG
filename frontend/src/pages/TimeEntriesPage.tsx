@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import type { TimeGpsTestDataGenerateRequest, TimeGpsTestDataGenerateResponse } from "../types/devTestData";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
@@ -43,6 +44,15 @@ type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
+};
+type TestDataRangeMode = "week" | "month" | "custom";
+type TestDataFormState = {
+  rangeMode: TestDataRangeMode;
+  start_date: string;
+  end_date: string;
+  error_rate_percent: string;
+  seed: string;
+  clear_previous_test_data: boolean;
 };
 type FinalHoursEntry = {
   id: number;
@@ -148,7 +158,17 @@ export function TimeEntriesPage() {
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [reviewStatusFilter, setReviewStatusFilter] = useState<"all" | TimeReviewCaseStatus>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
+  const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
+  const [isTestDataToolEnabled, setIsTestDataToolEnabled] = useState(false);
+  const [testDataForm, setTestDataForm] = useState<TestDataFormState>(() => defaultTestDataForm());
+  const [testDataSummary, setTestDataSummary] = useState<TimeGpsTestDataGenerateResponse | null>(null);
+  const [lastTestDataBatchId, setLastTestDataBatchId] = useState<string | null>(() => localStorage.getItem("kb_time_gps_test_batch_id"));
+  const [testDataMessage, setTestDataMessage] = useState<string | null>(null);
+  const [testDataError, setTestDataError] = useState<string | null>(null);
+  const [isGeneratingTestData, setIsGeneratingTestData] = useState(false);
+  const [isClearingTestData, setIsClearingTestData] = useState(false);
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
+  const canUseTestDataTool = user?.role === "admin";
   const canViewGpsVerification = canManageTimeEntries;
   const visibleTimeSubtabs = canViewGpsVerification
     ? timeSubtabs
@@ -157,6 +177,41 @@ export function TimeEntriesPage() {
   useEffect(() => {
     void loadPeople();
   }, []);
+
+  useEffect(() => {
+    if (!canUseTestDataTool) {
+      setIsTestDataToolEnabled(false);
+      return;
+    }
+
+    let ignore = false;
+    setIsCheckingTestDataTool(true);
+    setTestDataError(null);
+    api.timeGpsTestDataStatus()
+      .then((status) => {
+        if (ignore) {
+          return;
+        }
+        setIsTestDataToolEnabled(status.enabled);
+        if (!status.enabled) {
+          setTestDataError(status.message ?? "Testdaten-Generator ist in dieser Umgebung deaktiviert.");
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setIsTestDataToolEnabled(false);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsCheckingTestDataTool(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [canUseTestDataTool]);
 
   useEffect(() => {
     if (!canViewGpsVerification) {
@@ -555,6 +610,103 @@ export function TimeEntriesPage() {
     }
   }
 
+  function updateTestDataRangeMode(mode: TestDataRangeMode): void {
+    const nextRange = mode === "week" ? currentWeekRange() : mode === "month" ? currentMonthRange() : null;
+    setTestDataForm((current) => ({
+      ...current,
+      rangeMode: mode,
+      start_date: nextRange?.start ?? current.start_date,
+      end_date: nextRange?.end ?? current.end_date,
+    }));
+  }
+
+  function refreshTimeDataAfterTestDataChange(): void {
+    setEntriesRefreshKey((current) => current + 1);
+    if (canViewGpsVerification) {
+      void loadRecentGpsPoints();
+    }
+  }
+
+  async function generateTestDataBatch(): Promise<void> {
+    if (!canUseTestDataTool || isGeneratingTestData || isClearingTestData) {
+      return;
+    }
+    const payloadResult = buildTestDataGeneratePayload(testDataForm);
+    if (!payloadResult.ok) {
+      setTestDataError(payloadResult.error);
+      setTestDataMessage(null);
+      return;
+    }
+
+    setIsGeneratingTestData(true);
+    setTestDataError(null);
+    setTestDataMessage(null);
+    try {
+      const summary = await api.generateTimeGpsTestData(payloadResult.payload);
+      setTestDataSummary(summary);
+      setLastTestDataBatchId(summary.batch_id);
+      localStorage.setItem("kb_time_gps_test_batch_id", summary.batch_id);
+      setTestDataMessage("Testdaten erzeugt. Stundenprüfung und GPS-Prüfung wurden aktualisiert.");
+      refreshTimeDataAfterTestDataChange();
+    } catch (requestError) {
+      setTestDataError(readApiError(requestError, "Testdaten konnten nicht erzeugt werden."));
+    } finally {
+      setIsGeneratingTestData(false);
+    }
+  }
+
+  async function deleteLastTestDataBatch(): Promise<void> {
+    if (!lastTestDataBatchId || isGeneratingTestData || isClearingTestData) {
+      return;
+    }
+    const confirmed = window.confirm(`Testdaten-Batch ${lastTestDataBatchId} löschen? Normale Daten bleiben erhalten.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setIsClearingTestData(true);
+    setTestDataError(null);
+    setTestDataMessage(null);
+    try {
+      await api.deleteTimeGpsTestDataBatch(lastTestDataBatchId);
+      localStorage.removeItem("kb_time_gps_test_batch_id");
+      setLastTestDataBatchId(null);
+      setTestDataSummary(null);
+      setTestDataMessage("Letzter Testdaten-Batch wurde gelöscht.");
+      refreshTimeDataAfterTestDataChange();
+    } catch (requestError) {
+      setTestDataError(readApiError(requestError, "Testdaten konnten nicht gelöscht werden."));
+    } finally {
+      setIsClearingTestData(false);
+    }
+  }
+
+  async function deleteAllTestData(): Promise<void> {
+    if (isGeneratingTestData || isClearingTestData) {
+      return;
+    }
+    const confirmed = window.confirm("Alle Generator-Testdaten löschen? Normale Daten bleiben erhalten.");
+    if (!confirmed) {
+      return;
+    }
+
+    setIsClearingTestData(true);
+    setTestDataError(null);
+    setTestDataMessage(null);
+    try {
+      await api.deleteAllTimeGpsTestData();
+      localStorage.removeItem("kb_time_gps_test_batch_id");
+      setLastTestDataBatchId(null);
+      setTestDataSummary(null);
+      setTestDataMessage("Alle Generator-Testdaten wurden gelöscht.");
+      refreshTimeDataAfterTestDataChange();
+    } catch (requestError) {
+      setTestDataError(readApiError(requestError, "Testdaten konnten nicht gelöscht werden."));
+    } finally {
+      setIsClearingTestData(false);
+    }
+  }
+
   return (
     <section className="time-entries-page is-figma-times-workspace">
       <div className="page-header entity-page-header">
@@ -566,6 +718,140 @@ export function TimeEntriesPage() {
       </div>
 
       {error && <p className="form-error">{error}</p>}
+
+      {canUseTestDataTool && isCheckingTestDataTool && (
+        <div className="time-test-data-status">Testdaten-Werkzeug wird geprüft...</div>
+      )}
+
+      {canUseTestDataTool && isTestDataToolEnabled && (
+        <details className="time-test-data-panel">
+          <summary>
+            <span>
+              <strong>Testdaten für Zeitprüfung</strong>
+              <small>Nur für Staging/Entwicklung</small>
+            </span>
+          </summary>
+          <div className="time-test-data-content">
+            <p>
+              Erzeugt realistische GPS- und Arbeitszeitdaten für die Prüfung. Normale Daten werden nicht gelöscht.
+            </p>
+            <div className="time-test-data-form">
+              <div className="matrix-pm-filter" aria-label="Testdaten-Zeitraum">
+                <button
+                  className={testDataForm.rangeMode === "week" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => updateTestDataRangeMode("week")}
+                >
+                  Aktuelle Woche
+                </button>
+                <button
+                  className={testDataForm.rangeMode === "month" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => updateTestDataRangeMode("month")}
+                >
+                  Aktueller Monat
+                </button>
+                <button
+                  className={testDataForm.rangeMode === "custom" ? "is-active" : ""}
+                  type="button"
+                  onClick={() => updateTestDataRangeMode("custom")}
+                >
+                  Eigener Zeitraum
+                </button>
+              </div>
+              <label>
+                <span>Startdatum</span>
+                <input
+                  type="date"
+                  value={testDataForm.start_date}
+                  onChange={(event) => setTestDataForm((current) => ({ ...current, rangeMode: "custom", start_date: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Enddatum</span>
+                <input
+                  type="date"
+                  value={testDataForm.end_date}
+                  onChange={(event) => setTestDataForm((current) => ({ ...current, rangeMode: "custom", end_date: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Fehlerquote (%)</span>
+                <input
+                  inputMode="decimal"
+                  value={testDataForm.error_rate_percent}
+                  onChange={(event) => setTestDataForm((current) => ({ ...current, error_rate_percent: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Seed</span>
+                <input
+                  inputMode="numeric"
+                  placeholder="optional"
+                  value={testDataForm.seed}
+                  onChange={(event) => setTestDataForm((current) => ({ ...current, seed: event.target.value }))}
+                />
+              </label>
+              <label className="time-test-data-checkbox">
+                <input
+                  checked={testDataForm.clear_previous_test_data}
+                  type="checkbox"
+                  onChange={(event) => setTestDataForm((current) => ({ ...current, clear_previous_test_data: event.target.checked }))}
+                />
+                <span>Vorherige Generator-Testdaten löschen</span>
+              </label>
+            </div>
+            {testDataError && <p className="form-error">{testDataError}</p>}
+            {testDataMessage && <p className="time-table-note">{testDataMessage}</p>}
+            <div className="time-test-data-actions">
+              <button
+                className="icon-button"
+                disabled={isGeneratingTestData || isClearingTestData}
+                type="button"
+                onClick={() => void generateTestDataBatch()}
+              >
+                {isGeneratingTestData ? "Erzeugt..." : "Testdaten erzeugen"}
+              </button>
+              <button
+                className="icon-button secondary"
+                disabled={!lastTestDataBatchId || isGeneratingTestData || isClearingTestData}
+                type="button"
+                onClick={() => void deleteLastTestDataBatch()}
+              >
+                Letzten Batch löschen
+              </button>
+              <button
+                className="time-table-action"
+                disabled={isGeneratingTestData || isClearingTestData}
+                type="button"
+                onClick={() => void deleteAllTestData()}
+              >
+                Alle Testdaten löschen
+              </button>
+              <button className="time-table-action" type="button" onClick={refreshTimeDataAfterTestDataChange}>
+                Stundenprüfung aktualisieren
+              </button>
+            </div>
+            {lastTestDataBatchId && <p className="time-test-data-batch">Letzter Batch: {lastTestDataBatchId}</p>}
+            {testDataSummary && (
+              <div className="time-test-data-result">
+                <div className="time-summary-strip">
+                  <div><span>Batch</span><strong>{testDataSummary.batch_id}</strong></div>
+                  <div><span>Arbeitszeiten</span><strong>{testDataSummary.work_time_entries_created}</strong></div>
+                  <div><span>GPS-Punkte</span><strong>{testDataSummary.gps_points_created}</strong></div>
+                  <div><span>Offene Prüffälle</span><strong>{testDataSummary.expected_open_review_cases}</strong></div>
+                  <div><span>Geprüfte Fälle</span><strong>{testDataSummary.expected_checked_cases}</strong></div>
+                </div>
+                <div className="time-test-data-scenarios" aria-label="Szenarien-Zusammenfassung">
+                  {Object.entries(testDataSummary.scenarios).map(([scenario, count]) => (
+                    <span key={scenario}>{scenarioLabel(scenario)}: {count}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
+      )}
 
       <div className="project-record-subtabs time-main-subtabs" role="tablist" aria-label="Zeiten Bereiche">
         {visibleTimeSubtabs.map((tab) => (
@@ -1224,6 +1510,60 @@ function currentWeekRange(): { start: string; end: string } {
   return { start: toDateInputValue(monday), end: toDateInputValue(sunday) };
 }
 
+function defaultTestDataForm(): TestDataFormState {
+  const weekRange = currentWeekRange();
+  return {
+    rangeMode: "week",
+    start_date: weekRange.start,
+    end_date: weekRange.end,
+    error_rate_percent: "30",
+    seed: defaultTestDataSeed(),
+    clear_previous_test_data: false,
+  };
+}
+
+function defaultTestDataSeed(): string {
+  const today = new Date();
+  return `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function buildTestDataGeneratePayload(
+  form: TestDataFormState,
+): { ok: true; payload: TimeGpsTestDataGenerateRequest } | { ok: false; error: string } {
+  if (!form.start_date || !form.end_date) {
+    return { ok: false, error: "Bitte einen Zeitraum auswaehlen." };
+  }
+  if (form.end_date < form.start_date) {
+    return { ok: false, error: "Das Enddatum darf nicht vor dem Startdatum liegen." };
+  }
+
+  const errorRatePercent = Number(form.error_rate_percent.trim().replace(",", "."));
+  if (!Number.isFinite(errorRatePercent) || errorRatePercent < 0 || errorRatePercent > 100) {
+    return { ok: false, error: "Die Fehlerquote muss zwischen 0 und 100 Prozent liegen." };
+  }
+
+  let seed: number | null = null;
+  const seedValue = form.seed.trim();
+  if (seedValue) {
+    const parsedSeed = Number(seedValue);
+    if (!Number.isInteger(parsedSeed)) {
+      return { ok: false, error: "Der Seed muss eine ganze Zahl sein." };
+    }
+    seed = parsedSeed;
+  }
+
+  return {
+    ok: true,
+    payload: {
+      start_date: form.start_date,
+      end_date: form.end_date,
+      error_rate: errorRatePercent / 100,
+      seed,
+      clear_previous_test_data: form.clear_previous_test_data,
+    },
+  };
+}
+
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1615,6 +1955,29 @@ function finalNoteLabel(entry: TimeEntry): string {
     return "GPS konnte nicht verlässlich geprüft werden.";
   }
   return "-";
+}
+
+function scenarioLabel(scenario: string): string {
+  const labels: Record<string, string> = {
+    absence_conflict: "Abwesenheit + Arbeitszeit",
+    already_reviewed: "Bereits geprüft",
+    critical_deviation: "Kritische Abweichung",
+    extreme_hours: "Extreme Arbeitszeit",
+    missing_gps: "Kein GPS",
+    new_device: "Neues Gerät",
+    offline_resync: "Offline nachgesendet",
+    outside_geofence: "Außerhalb Geofence",
+    partial_gps: "GPS teilweise",
+    plausible_normal: "Plausibel",
+    poor_accuracy: "Ungenaue GPS-Punkte",
+    review_recommended: "Prüfung empfohlen",
+    site_without_coordinates: "Baustelle ohne Koordinaten",
+    small_deviation: "Kleine Abweichung",
+    two_sites: "Zwei Baustellen",
+    weekend_work: "Wochenende",
+    wrong_site: "Andere Baustelle",
+  };
+  return labels[scenario] ?? scenario;
 }
 
 function defaultEntryDate(dateFrom: string, dateTo: string): string {

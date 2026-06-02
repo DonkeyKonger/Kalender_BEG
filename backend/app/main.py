@@ -9,6 +9,7 @@ from app.api.routes import (
     auth,
     customers,
     dashboard,
+    dev_test_data,
     exports,
     gps,
     health,
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_integrations.router, prefix="/api")
     app.include_router(customers.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(dev_test_data.router, prefix="/api")
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(users.router, prefix="/api")
     app.include_router(persons.router, prefix="/api")
