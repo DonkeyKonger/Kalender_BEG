@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
@@ -32,18 +33,24 @@ import com.getcapacitor.annotation.PermissionCallback;
     }
 )
 public class AndroidBackgroundGpsPlugin extends Plugin {
+    private static final String TAG = "KbAndroidGpsPlugin";
+
     @PluginMethod
     public void startTracking(PluginCall call) {
+        Log.i(TAG, "startTracking called from JS.");
         Context context = getContext();
         if (!hasForegroundLocationPermission(context)) {
+            Log.w(TAG, "startTracking rejected: foreground location permission missing.");
             call.reject("Standortberechtigung fehlt.");
             return;
         }
         if (!hasBackgroundLocationPermission(context)) {
+            Log.w(TAG, "startTracking rejected: background location permission missing.");
             call.reject("Hintergrund-Standortberechtigung fehlt. Bitte in Android den Standortzugriff auf \"Immer erlauben\" setzen.");
             return;
         }
         if (!hasNotificationPermission(context)) {
+            Log.w(TAG, "startTracking rejected: notification permission missing.");
             call.reject("Benachrichtigungsberechtigung fehlt. Bitte Benachrichtigungen für die App erlauben.");
             return;
         }
@@ -52,10 +59,12 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
         String accessToken = call.getString("accessToken");
         String source = call.getString("source", "android_background_service");
         if (apiBaseUrl == null || apiBaseUrl.trim().isEmpty()) {
+            Log.w(TAG, "startTracking rejected: apiBaseUrl missing.");
             call.reject("API-Basis-URL fehlt.");
             return;
         }
         if (accessToken == null || accessToken.trim().isEmpty()) {
+            Log.w(TAG, "startTracking rejected: accessToken missing.");
             call.reject("Login-Token fehlt.");
             return;
         }
@@ -66,6 +75,7 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
 
     @PluginMethod
     public void stopTracking(PluginCall call) {
+        Log.i(TAG, "stopTracking called from JS.");
         AndroidBackgroundGpsService.stopTracking(getContext());
         call.resolve(statusToJson(AndroidBackgroundGpsService.readStatus(getContext())));
     }
@@ -77,6 +87,7 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
+        Log.i(TAG, "checkPermissions called from JS.");
         call.resolve(permissionStatusToJson(getContext()));
     }
 
@@ -116,9 +127,15 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
     private JSObject statusToJson(AndroidBackgroundGpsService.BackgroundGpsStatus status) {
         JSObject result = new JSObject();
         result.put("isTracking", status.isTracking);
+        result.put("isServiceRunning", status.isServiceRunning);
+        result.put("isForegroundServiceRunning", status.isForegroundServiceRunning);
         result.put("intervalMs", status.intervalMs);
         result.put("queuedCount", status.queuedCount);
         result.put("lastSentAt", status.lastSentAt);
+        result.put("lastError", status.lastError);
+        result.put("lastServiceStartAt", status.lastServiceStartAt);
+        result.put("lastServiceStopAt", status.lastServiceStopAt);
+        result.put("nextPingAt", status.nextPingAt);
         result.put("message", status.message);
         return result;
     }

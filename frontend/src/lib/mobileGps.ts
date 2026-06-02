@@ -10,9 +10,15 @@ type MobileGpsSendResult = {
 
 export type AndroidBackgroundGpsStatus = {
   isTracking: boolean;
+  isServiceRunning?: boolean;
+  isForegroundServiceRunning?: boolean;
   intervalMs: number;
   queuedCount: number;
   lastSentAt?: string | null;
+  lastError?: string | null;
+  lastServiceStartAt?: string | null;
+  lastServiceStopAt?: string | null;
+  nextPingAt?: string | null;
   message?: string;
 };
 
@@ -44,26 +50,44 @@ export function isAndroidAppContext(): boolean {
   return Capacitor.getPlatform() === "android" && Capacitor.isNativePlatform();
 }
 
+export function getMobileGpsPlatform(): string {
+  return Capacitor.getPlatform();
+}
+
 export async function startAndroidBackgroundGpsTracking(): Promise<AndroidBackgroundGpsStatus> {
+  console.info("[GPS] Start Background GPS angefordert", {
+    platform: getMobileGpsPlatform(),
+    isNativeAndroid: isAndroidAppContext(),
+  });
   if (!isAndroidAppContext()) {
+    console.info("[GPS] Android nicht erkannt, Background GPS wird nicht gestartet.");
     return backgroundGpsUnavailableStatus();
   }
   const accessToken = getAccessToken();
   if (!accessToken) {
+    console.warn("[GPS] Native Start fehlgeschlagen: Login-Token fehlt.");
     throw new Error("Standortdienst konnte nicht gestartet werden. Bitte erneut anmelden.");
   }
 
-  return AndroidBackgroundGps.startTracking({
-    apiBaseUrl: getApiBaseUrl(),
-    accessToken,
-    source: "android_background_service",
-  });
+  try {
+    const status = await AndroidBackgroundGps.startTracking({
+      apiBaseUrl: getApiBaseUrl(),
+      accessToken,
+      source: "android_background_service",
+    });
+    console.info("[GPS] Native Start erfolgreich", status);
+    return status;
+  } catch (error) {
+    console.warn("[GPS] Native Start fehlgeschlagen", error);
+    throw error;
+  }
 }
 
 export async function stopAndroidBackgroundGpsTracking(): Promise<AndroidBackgroundGpsStatus> {
   if (!isAndroidAppContext()) {
     return backgroundGpsUnavailableStatus();
   }
+  console.info("[GPS] Stop Background GPS angefordert");
   return AndroidBackgroundGps.stopTracking();
 }
 
@@ -76,22 +100,28 @@ export async function getAndroidBackgroundGpsStatus(): Promise<AndroidBackground
 
 export async function checkAndroidGpsPermissions(): Promise<AndroidGpsPermissionStatus> {
   if (!isAndroidAppContext()) {
+    console.info("[GPS] Permission-Status: Android nicht erkannt.");
     return androidGpsPermissionsUnavailable();
   }
-  return AndroidBackgroundGps.checkPermissions();
+  const permissions = await AndroidBackgroundGps.checkPermissions();
+  console.info("[GPS] Permission-Status", permissions);
+  return permissions;
 }
 
 export async function requestForegroundLocationPermission(): Promise<AndroidGpsPermissionStatus> {
   if (!isAndroidAppContext()) {
     return androidGpsPermissionsUnavailable();
   }
-  return AndroidBackgroundGps.requestForegroundLocationPermission();
+  const permissions = await AndroidBackgroundGps.requestForegroundLocationPermission();
+  console.info("[GPS] Permission-Status nach Anfrage", permissions);
+  return permissions;
 }
 
 export async function openAndroidAppLocationSettings(): Promise<AndroidGpsPermissionStatus> {
   if (!isAndroidAppContext()) {
     return androidGpsPermissionsUnavailable();
   }
+  console.info("[GPS] Android App-Einstellungen werden geöffnet.");
   return AndroidBackgroundGps.openAppLocationSettings();
 }
 
@@ -121,8 +151,15 @@ async function sendCurrentLocation(): Promise<MobileGpsSendResult> {
 function backgroundGpsUnavailableStatus(): AndroidBackgroundGpsStatus {
   return {
     isTracking: false,
+    isServiceRunning: false,
+    isForegroundServiceRunning: false,
     intervalMs: ANDROID_GPS_PING_INTERVAL_MS,
     queuedCount: 0,
+    lastSentAt: null,
+    lastError: null,
+    lastServiceStartAt: null,
+    lastServiceStopAt: null,
+    nextPingAt: null,
     message: "Android-Hintergrundstandort ist in diesem Kontext nicht verfügbar.",
   };
 }

@@ -63,10 +63,18 @@ public class AndroidBackgroundGpsService extends Service {
     private static final String KEY_SOURCE = "source";
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_LAST_SENT_AT = "last_sent_at";
+    private static final String KEY_LAST_ERROR = "last_error";
+    private static final String KEY_LAST_SERVICE_START_AT = "last_service_start_at";
+    private static final String KEY_LAST_SERVICE_STOP_AT = "last_service_stop_at";
+    private static final String KEY_NEXT_PING_AT = "next_ping_at";
+    private static final String KEY_FOREGROUND_SERVICE_RUNNING = "foreground_service_running";
     private static final String KEY_QUEUE = "queue";
     private static final String NOTIFICATION_CHANNEL_ID = "kb_android_gps_tracking";
     private static final int NOTIFICATION_ID = 7201;
     private static final int MAX_QUEUE_ITEMS = 672;
+
+    private static volatile boolean serviceInstanceRunning = false;
+    private static volatile boolean foregroundServiceRunning = false;
 
     private HandlerThread handlerThread;
     private Handler handler;
@@ -85,6 +93,17 @@ public class AndroidBackgroundGpsService extends Service {
     };
 
     public static void startTracking(Context context, String apiBaseUrl, String accessToken, String source) {
+        Log.i(TAG, "Native start requested for Android background GPS.");
+        preferences(context)
+            .edit()
+            .putBoolean(KEY_TRACKING, true)
+            .putString(KEY_API_BASE_URL, apiBaseUrl)
+            .putString(KEY_ACCESS_TOKEN, accessToken)
+            .putString(KEY_SOURCE, source != null ? source : "android_background_service")
+            .putString(KEY_LAST_SERVICE_START_AT, nowIso())
+            .putString(KEY_NEXT_PING_AT, nowIso())
+            .remove(KEY_LAST_ERROR)
+            .apply();
         Intent intent = new Intent(context, AndroidBackgroundGpsService.class);
         intent.setAction(ACTION_START);
         intent.putExtra(EXTRA_API_BASE_URL, apiBaseUrl);
@@ -94,10 +113,13 @@ public class AndroidBackgroundGpsService extends Service {
     }
 
     public static void stopTracking(Context context) {
+        Log.i(TAG, "Native stop requested for Android background GPS.");
         preferences(context)
             .edit()
             .putBoolean(KEY_TRACKING, false)
             .remove(KEY_ACCESS_TOKEN)
+            .putString(KEY_LAST_SERVICE_STOP_AT, nowIso())
+            .remove(KEY_NEXT_PING_AT)
             .apply();
 
         Intent intent = new Intent(context, AndroidBackgroundGpsService.class);
@@ -111,11 +133,18 @@ public class AndroidBackgroundGpsService extends Service {
 
     public static BackgroundGpsStatus readStatus(Context context) {
         SharedPreferences prefs = preferences(context);
+        boolean storedForegroundRunning = prefs.getBoolean(KEY_FOREGROUND_SERVICE_RUNNING, false);
         return new BackgroundGpsStatus(
             prefs.getBoolean(KEY_TRACKING, false),
+            serviceInstanceRunning,
+            foregroundServiceRunning || storedForegroundRunning,
             GPS_INTERVAL_MS,
             readQueueCount(prefs),
             prefs.getString(KEY_LAST_SENT_AT, null),
+            prefs.getString(KEY_LAST_ERROR, null),
+            prefs.getString(KEY_LAST_SERVICE_START_AT, null),
+            prefs.getString(KEY_LAST_SERVICE_STOP_AT, null),
+            prefs.getString(KEY_NEXT_PING_AT, null),
             prefs.getBoolean(KEY_TRACKING, false) ? "Android-Hintergrundstandort aktiv." : "Android-Hintergrundstandort gestoppt."
         );
     }
@@ -123,6 +152,8 @@ public class AndroidBackgroundGpsService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        serviceInstanceRunning = true;
+        Log.i(TAG, "Service onCreate.");
         handlerThread = new HandlerThread("KbAndroidBackgroundGps");
         handlerThread.start();
         handler = new Handler(handlerThread.getLooper());
@@ -136,6 +167,7 @@ public class AndroidBackgroundGpsService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
+        Log.i(TAG, "Service onStartCommand: " + (action != null ? action : "no action"));
         if (ACTION_STOP.equals(action)) {
             shutdownTracking();
             return START_NOT_STICKY;
@@ -145,6 +177,7 @@ public class AndroidBackgroundGpsService extends Service {
         }
 
         if (!isTrackingEnabled()) {
+            Log.i(TAG, "Tracking disabled; stopping service.");
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -162,6 +195,13 @@ public class AndroidBackgroundGpsService extends Service {
 
     @Override
     public void onDestroy() {
+        Log.i(TAG, "Service destroyed.");
+        serviceInstanceRunning = false;
+        foregroundServiceRunning = false;
+        preferences(this)
+            .edit()
+            .putBoolean(KEY_FOREGROUND_SERVICE_RUNNING, false)
+            .apply();
         if (handler != null) {
             handler.removeCallbacksAndMessages(null);
         }
@@ -185,9 +225,14 @@ public class AndroidBackgroundGpsService extends Service {
         String apiBaseUrl = intent.getStringExtra(EXTRA_API_BASE_URL);
         String accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN);
         String source = intent.getStringExtra(EXTRA_SOURCE);
+        String now = nowIso();
+        Log.i(TAG, "Saving Android background GPS tracking config.");
         SharedPreferences.Editor editor = preferences(this).edit()
             .putBoolean(KEY_TRACKING, true)
-            .putString(KEY_DEVICE_ID, getStableDeviceId());
+            .putString(KEY_DEVICE_ID, getStableDeviceId())
+            .putString(KEY_LAST_SERVICE_START_AT, now)
+            .putString(KEY_NEXT_PING_AT, now)
+            .remove(KEY_LAST_ERROR);
         if (apiBaseUrl != null) {
             editor.putString(KEY_API_BASE_URL, apiBaseUrl);
         }
@@ -199,25 +244,37 @@ public class AndroidBackgroundGpsService extends Service {
     }
 
     private void shutdownTracking() {
+        Log.i(TAG, "Shutting down Android background GPS tracking.");
         if (handler != null) {
             handler.removeCallbacks(tickRunnable);
         }
         tickInFlight = false;
+        foregroundServiceRunning = false;
+        preferences(this)
+            .edit()
+            .putBoolean(KEY_FOREGROUND_SERVICE_RUNNING, false)
+            .putString(KEY_LAST_SERVICE_STOP_AT, nowIso())
+            .remove(KEY_NEXT_PING_AT)
+            .apply();
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
 
     private void runGpsTick() {
         if (!isTrackingEnabled()) {
+            Log.i(TAG, "GPS tick skipped because tracking is disabled.");
             stopSelf();
             return;
         }
         if (tickInFlight) {
+            Log.i(TAG, "GPS tick already in flight; scheduling next tick.");
             scheduleNextTick();
             return;
         }
         tickInFlight = true;
+        Log.i(TAG, "GPS tick started.");
         if (networkExecutor == null) {
+            setLastError("Background-GPS konnte nicht senden: interner Executor fehlt.");
             finishTick();
             return;
         }
@@ -230,28 +287,37 @@ public class AndroidBackgroundGpsService extends Service {
     private void requestCurrentLocation() {
         if (!hasLocationPermission()) {
             Log.w(TAG, "Location permission missing; stopping Android background GPS.");
-            preferences(this).edit().putBoolean(KEY_TRACKING, false).apply();
+            setLastError("Background-GPS nicht aktiv: Standortberechtigung Immer erlauben fehlt.");
+            preferences(this).edit().putBoolean(KEY_TRACKING, false).remove(KEY_NEXT_PING_AT).apply();
             finishTick();
             stopSelf();
             return;
         }
 
         try {
+            Log.i(TAG, "Location requested.");
             Task<Location> task = fusedLocationProvider.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null);
             task.addOnSuccessListener(networkExecutor, location -> {
                 if (location != null && isValidLocation(location)) {
+                    Log.i(TAG, "Location received.");
                     sendOrQueue(buildPayload(location));
                 } else {
                     Log.w(TAG, "No valid current location returned for background GPS tick.");
+                    setLastError("Standort konnte im Hintergrund nicht ermittelt werden.");
                 }
             });
-            task.addOnFailureListener(networkExecutor, error -> Log.w(TAG, "Current location request failed.", error));
+            task.addOnFailureListener(networkExecutor, error -> {
+                Log.w(TAG, "Current location request failed.", error);
+                setLastError("Standortabfrage im Hintergrund fehlgeschlagen: " + error.getMessage());
+            });
             task.addOnCompleteListener(networkExecutor, ignored -> finishTick());
         } catch (SecurityException error) {
             Log.w(TAG, "Location permission rejected while requesting background GPS.", error);
+            setLastError("Standortberechtigung wurde beim Hintergrunddienst abgelehnt.");
             finishTick();
         } catch (RuntimeException error) {
             Log.w(TAG, "Current location request failed unexpectedly.", error);
+            setLastError("Standortabfrage im Hintergrund fehlgeschlagen: " + error.getMessage());
             finishTick();
         }
     }
@@ -264,11 +330,14 @@ public class AndroidBackgroundGpsService extends Service {
 
     private boolean trySendPayload(JSONObject payload) {
         if (!isNetworkAvailable()) {
+            Log.i(TAG, "POST skipped; network not available.");
+            setLastError("Kein Netz: Standortpunkt wurde offline vorgemerkt.");
             return false;
         }
 
         HttpURLConnection connection = null;
         try {
+            Log.i(TAG, "POST started for background GPS point.");
             URL url = new URL(locationPointEndpoint());
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("POST");
@@ -286,23 +355,32 @@ public class AndroidBackgroundGpsService extends Service {
 
             int responseCode = connection.getResponseCode();
             if (responseCode >= 200 && responseCode < 300) {
-                preferences(this).edit().putString(KEY_LAST_SENT_AT, nowIso()).apply();
+                Log.i(TAG, "POST successful for background GPS point.");
+                preferences(this)
+                    .edit()
+                    .putString(KEY_LAST_SENT_AT, nowIso())
+                    .remove(KEY_LAST_ERROR)
+                    .apply();
                 return true;
             }
             if (responseCode == 401 || responseCode == 403) {
                 Log.w(TAG, "Background GPS auth failed; stopping service.");
-                preferences(this).edit().putBoolean(KEY_TRACKING, false).remove(KEY_ACCESS_TOKEN).apply();
+                setLastError("Background-GPS nicht aktiv: Login abgelaufen oder keine Berechtigung.");
+                preferences(this).edit().putBoolean(KEY_TRACKING, false).remove(KEY_ACCESS_TOKEN).remove(KEY_NEXT_PING_AT).apply();
                 stopSelf();
                 return true;
             }
             if (responseCode >= 400 && responseCode < 500) {
                 Log.w(TAG, "Background GPS point rejected with status " + responseCode + "; dropping payload.");
+                setLastError("Standortpunkt wurde vom Server abgelehnt: " + responseCode);
                 return true;
             }
             Log.w(TAG, "Background GPS point failed with retryable status " + responseCode + ".");
+            setLastError("Serverfehler beim Senden des Standortpunkts: " + responseCode);
             return false;
         } catch (Exception error) {
             Log.w(TAG, "Background GPS point send failed; queued for retry.", error);
+            setLastError("Standortpunkt konnte nicht gesendet werden: " + error.getMessage());
             return false;
         } finally {
             if (connection != null) {
@@ -317,6 +395,7 @@ public class AndroidBackgroundGpsService extends Service {
             return;
         }
 
+        Log.i(TAG, "Queue retry started with " + queue.length() + " item(s).");
         JSONArray remaining = new JSONArray();
         for (int index = 0; index < queue.length(); index += 1) {
             JSONObject payload = queue.optJSONObject(index);
@@ -335,12 +414,14 @@ public class AndroidBackgroundGpsService extends Service {
             }
         }
         writeQueue(trimQueue(remaining));
+        Log.i(TAG, "Queue retry finished; remaining item(s): " + remaining.length() + ".");
     }
 
     private void enqueuePayload(JSONObject payload) {
         JSONArray queue = readQueue();
         queue.put(payload);
         writeQueue(trimQueue(queue));
+        Log.i(TAG, "Queued offline background GPS point. Queue size: " + readQueue().length() + ".");
     }
 
     private JSONArray trimQueue(JSONArray queue) {
@@ -387,6 +468,7 @@ public class AndroidBackgroundGpsService extends Service {
             payload.put("device_id", readDeviceId());
         } catch (JSONException error) {
             Log.w(TAG, "Could not build background GPS payload.", error);
+            setLastError("Standortpunkt konnte nicht vorbereitet werden: " + error.getMessage());
         }
         return payload;
     }
@@ -403,6 +485,8 @@ public class AndroidBackgroundGpsService extends Service {
             return;
         }
         handler.removeCallbacks(tickRunnable);
+        preferences(this).edit().putString(KEY_NEXT_PING_AT, nowIso()).apply();
+        Log.i(TAG, "Timer/location request scheduled immediately.");
         handler.post(tickRunnable);
     }
 
@@ -411,6 +495,9 @@ public class AndroidBackgroundGpsService extends Service {
             return;
         }
         handler.removeCallbacks(tickRunnable);
+        String nextPingAt = toIso(System.currentTimeMillis() + GPS_INTERVAL_MS);
+        preferences(this).edit().putString(KEY_NEXT_PING_AT, nextPingAt).apply();
+        Log.i(TAG, "Timer/location request scheduled for " + nextPingAt + ".");
         handler.postDelayed(tickRunnable, GPS_INTERVAL_MS);
     }
 
@@ -464,6 +551,9 @@ public class AndroidBackgroundGpsService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+        foregroundServiceRunning = true;
+        preferences(this).edit().putBoolean(KEY_FOREGROUND_SERVICE_RUNNING, true).apply();
+        Log.i(TAG, "Foreground notification created.");
     }
 
     private Notification buildNotification() {
@@ -521,6 +611,10 @@ public class AndroidBackgroundGpsService extends Service {
         return preferences(this).getString(KEY_ACCESS_TOKEN, "");
     }
 
+    private void setLastError(String message) {
+        preferences(this).edit().putString(KEY_LAST_ERROR, message != null ? message : "").apply();
+    }
+
     private String readSource() {
         return preferences(this).getString(KEY_SOURCE, "android_background_service");
     }
@@ -569,16 +663,40 @@ public class AndroidBackgroundGpsService extends Service {
 
     public static class BackgroundGpsStatus {
         public final boolean isTracking;
+        public final boolean isServiceRunning;
+        public final boolean isForegroundServiceRunning;
         public final long intervalMs;
         public final int queuedCount;
         @Nullable public final String lastSentAt;
+        @Nullable public final String lastError;
+        @Nullable public final String lastServiceStartAt;
+        @Nullable public final String lastServiceStopAt;
+        @Nullable public final String nextPingAt;
         public final String message;
 
-        BackgroundGpsStatus(boolean isTracking, long intervalMs, int queuedCount, @Nullable String lastSentAt, String message) {
+        BackgroundGpsStatus(
+            boolean isTracking,
+            boolean isServiceRunning,
+            boolean isForegroundServiceRunning,
+            long intervalMs,
+            int queuedCount,
+            @Nullable String lastSentAt,
+            @Nullable String lastError,
+            @Nullable String lastServiceStartAt,
+            @Nullable String lastServiceStopAt,
+            @Nullable String nextPingAt,
+            String message
+        ) {
             this.isTracking = isTracking;
+            this.isServiceRunning = isServiceRunning;
+            this.isForegroundServiceRunning = isForegroundServiceRunning;
             this.intervalMs = intervalMs;
             this.queuedCount = queuedCount;
             this.lastSentAt = lastSentAt;
+            this.lastError = lastError;
+            this.lastServiceStartAt = lastServiceStartAt;
+            this.lastServiceStopAt = lastServiceStopAt;
+            this.nextPingAt = nextPingAt;
             this.message = message;
         }
     }

@@ -22,6 +22,7 @@ import {
   checkAndroidGpsPermissions,
   formatMobileGpsError,
   getAndroidBackgroundGpsStatus,
+  getMobileGpsPlatform,
   openAndroidAppLocationSettings,
   isAndroidAppContext,
   requestForegroundLocationPermission,
@@ -29,7 +30,7 @@ import {
   startAndroidBackgroundGpsTracking,
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
-import type { AndroidGpsPermissionStatus } from "../lib/mobileGps";
+import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -66,7 +67,9 @@ export function MyAssignmentsPage() {
   const [isSendingGps, setIsSendingGps] = useState(false);
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
-  const [lastGpsSentAt, setLastGpsSentAt] = useState<string | null>(null);
+  const [lastManualGpsSentAt, setLastManualGpsSentAt] = useState<string | null>(null);
+  const [lastAutomaticGpsSentAt, setLastAutomaticGpsSentAt] = useState<string | null>(null);
+  const [androidGpsStatus, setAndroidGpsStatus] = useState<AndroidBackgroundGpsStatus | null>(null);
   const [androidGpsPermissions, setAndroidGpsPermissions] = useState<AndroidGpsPermissionStatus | null>(null);
   const [isHandlingGpsPermission, setIsHandlingGpsPermission] = useState(false);
 
@@ -102,9 +105,32 @@ export function MyAssignmentsPage() {
     void loadAssignments();
   }, [loadAssignments]);
 
+  const refreshAndroidGpsStatus = useCallback(async () => {
+    if (!isAndroidAppContext()) {
+      setAndroidGpsStatus(null);
+      setLastAutomaticGpsSentAt(null);
+      return;
+    }
+    try {
+      const trackingStatus = await getAndroidBackgroundGpsStatus();
+      setAndroidGpsStatus(trackingStatus);
+      if (trackingStatus.lastSentAt) {
+        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
+      }
+      if (trackingStatus.lastError) {
+        setGpsMessage(trackingStatus.lastError);
+        setGpsMessageTone("error");
+      }
+    } catch (statusError) {
+      setGpsMessage(formatMobileGpsError(statusError));
+      setGpsMessageTone("error");
+    }
+  }, []);
+
   const syncAndroidGpsTracking = useCallback(async () => {
     if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
       setAndroidGpsPermissions(null);
+      setAndroidGpsStatus(null);
       void stopAndroidBackgroundGpsTracking();
       return;
     }
@@ -113,13 +139,15 @@ export function MyAssignmentsPage() {
       const permissions = await checkAndroidGpsPermissions();
       setAndroidGpsPermissions(permissions);
       if (!hasRequiredAndroidGpsPermissions(permissions)) {
-        void stopAndroidBackgroundGpsTracking();
+        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
+        setAndroidGpsStatus(stoppedStatus);
         return;
       }
 
       const trackingStatus = await startAndroidBackgroundGpsTracking();
+      setAndroidGpsStatus(trackingStatus);
       if (trackingStatus.lastSentAt) {
-        setLastGpsSentAt(trackingStatus.lastSentAt);
+        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
       }
       if (trackingStatus.isTracking) {
         setGpsMessage("Android-Hintergrundstandort aktiv.");
@@ -128,14 +156,12 @@ export function MyAssignmentsPage() {
     } catch (trackingError) {
       setGpsMessage(formatMobileGpsError(trackingError));
       setGpsMessageTone("error");
+      await refreshAndroidGpsStatus();
     }
-  }, [status, user?.role]);
+  }, [refreshAndroidGpsStatus, status, user?.role]);
 
   useEffect(() => {
     void syncAndroidGpsTracking();
-    return () => {
-      void stopAndroidBackgroundGpsTracking();
-    };
   }, [syncAndroidGpsTracking]);
 
   useEffect(() => {
@@ -163,22 +189,15 @@ export function MyAssignmentsPage() {
       return undefined;
     }
 
-    let isMounted = true;
-    const loadBackgroundGpsStatus = async () => {
-      const trackingStatus = await getAndroidBackgroundGpsStatus();
-      if (!isMounted) {
-        return;
-      }
-      if (trackingStatus.lastSentAt) {
-        setLastGpsSentAt(trackingStatus.lastSentAt);
-      }
-    };
-    void loadBackgroundGpsStatus();
+    void refreshAndroidGpsStatus();
+    const statusTimer = window.setInterval(() => {
+      void refreshAndroidGpsStatus();
+    }, 30_000);
 
     return () => {
-      isMounted = false;
+      window.clearInterval(statusTimer);
     };
-  }, [status, user?.role]);
+  }, [refreshAndroidGpsStatus, status, user?.role]);
 
   async function sendGpsNow(): Promise<void> {
     if (isSendingGps) {
@@ -189,7 +208,7 @@ export function MyAssignmentsPage() {
     setGpsMessage("Standort wird gesendet ...");
     try {
       const result = await sendCurrentGpsLocation();
-      setLastGpsSentAt(result.sentAt);
+      setLastManualGpsSentAt(result.sentAt);
       setGpsMessage("Standort gesendet.");
       setGpsMessageTone("info");
     } catch (requestError) {
@@ -249,6 +268,8 @@ export function MyAssignmentsPage() {
     [data?.assignments, range.end, range.start],
   );
   const androidGpsPermissionPrompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
+  const mobileGpsPlatform = getMobileGpsPlatform();
+  const showGpsDebugStatus = user?.role === "monteur";
 
   if (activeScreen === "assignments") {
     return (
@@ -393,7 +414,17 @@ export function MyAssignmentsPage() {
                 Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
               </p>
             ) : null}
-            {lastGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt gesendet: {formatDateTime(lastGpsSentAt)}</p> : null}
+            {lastManualGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt manuell gesendet: {formatDateTime(lastManualGpsSentAt)}</p> : null}
+            {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
+            {showGpsDebugStatus ? (
+              <MobileGpsDebugCard
+                platform={mobileGpsPlatform}
+                permissions={androidGpsPermissions}
+                status={androidGpsStatus}
+                lastManualSentAt={lastManualGpsSentAt}
+                lastAutomaticSentAt={lastAutomaticGpsSentAt}
+              />
+            ) : null}
           </section>
 
           <section className="mobile-home-section">
@@ -596,6 +627,48 @@ function MobilePlaceholderDialog({ content, onClose }: { content: PlaceholderCon
   );
 }
 
+function MobileGpsDebugCard({
+  platform,
+  permissions,
+  status,
+  lastManualSentAt,
+  lastAutomaticSentAt,
+}: {
+  platform: string;
+  permissions: AndroidGpsPermissionStatus | null;
+  status: AndroidBackgroundGpsStatus | null;
+  lastManualSentAt: string | null;
+  lastAutomaticSentAt: string | null;
+}) {
+  const backgroundAvailable = platform === "android" && isAndroidAppContext();
+  const nextPingLabel = status?.nextPingAt ? formatDateTime(status.nextPingAt) : "-";
+  return (
+    <div className="mobile-gps-debug-card" aria-label="GPS Status">
+      <div className="mobile-gps-debug-card-head">
+        <strong>GPS-Status</strong>
+        <span>Testphase</span>
+      </div>
+      <dl className="mobile-gps-debug-grid">
+        <div><dt>Plattform</dt><dd>{platform}</dd></div>
+        <div><dt>Background verfügbar</dt><dd>{formatYesNo(backgroundAvailable)}</dd></div>
+        <div><dt>Background aktiv</dt><dd>{formatYesNo(status?.isTracking)}</dd></div>
+        <div><dt>Service läuft</dt><dd>{formatYesNo(status?.isServiceRunning)}</dd></div>
+        <div><dt>Foreground-Service</dt><dd>{formatYesNo(status?.isForegroundServiceRunning)}</dd></div>
+        <div><dt>Standort foreground</dt><dd>{formatYesNo(permissions?.foregroundLocationGranted)}</dd></div>
+        <div><dt>Standort immer erlauben</dt><dd>{formatYesNo(permissions?.backgroundLocationGranted)}</dd></div>
+        <div><dt>Benachrichtigung</dt><dd>{formatYesNo(permissions?.notificationsGranted)}</dd></div>
+        <div><dt>Letzte manuelle Sendung</dt><dd>{formatOptionalDateTime(lastManualSentAt)}</dd></div>
+        <div><dt>Letzte automatische Sendung</dt><dd>{formatOptionalDateTime(lastAutomaticSentAt)}</dd></div>
+        <div><dt>Offline-Queue</dt><dd>{status?.queuedCount ?? 0}</dd></div>
+        <div><dt>Service-Start</dt><dd>{formatOptionalDateTime(status?.lastServiceStartAt ?? null)}</dd></div>
+        <div><dt>Service-Stop</dt><dd>{formatOptionalDateTime(status?.lastServiceStopAt ?? null)}</dd></div>
+        <div><dt>Nächster Ping</dt><dd>{nextPingLabel}</dd></div>
+      </dl>
+      {status?.lastError ? <p className="mobile-gps-debug-error">Letzter Fehler: {status.lastError}</p> : null}
+    </div>
+  );
+}
+
 function AssignmentCard({ assignment, date, compact = false }: { assignment: MobileAssignment; date?: string; compact?: boolean }) {
   return (
     <Link className={`assignment-card assignment-card-link${compact ? " is-compact" : ""}`} to={`/me/assignments/${assignment.id}`} state={{ assignment }}>
@@ -752,6 +825,17 @@ function formatWeekday(date: string): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatOptionalDateTime(value: string | null | undefined): string {
+  return value ? formatDateTime(value) : "-";
+}
+
+function formatYesNo(value: boolean | null | undefined): string {
+  if (value === undefined || value === null) {
+    return "-";
+  }
+  return value ? "ja" : "nein";
 }
 
 function formatRangeLabel(start: string, end: string): string {

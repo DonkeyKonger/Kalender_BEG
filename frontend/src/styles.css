@@ -2740,6 +2740,68 @@ button.person-chip:focus-visible {
   margin: 0;
 }
 
+.mobile-gps-debug-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 11px;
+  box-shadow: 0 12px 26px rgb(18 29 52 / 7%);
+}
+
+.mobile-gps-debug-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-gps-debug-card-head strong {
+  color: #111827;
+  font-size: 0.94rem;
+}
+
+.mobile-gps-debug-card-head span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mobile-gps-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
+  margin: 0;
+}
+
+.mobile-gps-debug-grid div {
+  min-width: 0;
+}
+
+.mobile-gps-debug-grid dt {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.mobile-gps-debug-grid dd {
+  margin: 2px 0 0;
+  color: #111827;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.mobile-gps-debug-error {
+  margin: 0;
+  border-top: 1px solid #e6edf5;
+  padding-top: 8px;
+  color: #b42318;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .mobile-focus-grid,
 .mobile-day-list,
 .mobile-action-list {
