@@ -41,6 +41,7 @@ type TimeReviewIssue = {
 };
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
 type ReviewSummaryFilter = "all" | "matches" | "needs_review" | "verified";
+type TimeReviewPanelTab = "review" | "evaluation";
 type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
@@ -183,6 +184,7 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
+  const [selectedReviewPanelTab, setSelectedReviewPanelTab] = useState<TimeReviewPanelTab>("review");
   const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
@@ -447,7 +449,7 @@ export function TimeEntriesPage() {
       .catch((requestError) => {
         if (!ignore) {
           setReviewAllEntries([]);
-          setReviewAllEntriesError(readApiError(requestError, "Geprüfte Stundenliste konnte nicht geladen werden."));
+          setReviewAllEntriesError(readApiError(requestError, "Auswertung konnte nicht geladen werden."));
         }
       })
       .finally(() => {
@@ -939,6 +941,29 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
+          <div className="project-record-subtabs time-review-subtabs" role="tablist" aria-label="Stundenprüfung Bereiche">
+            <button
+              className={selectedReviewPanelTab === "review" ? "is-active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={selectedReviewPanelTab === "review"}
+              onClick={() => setSelectedReviewPanelTab("review")}
+            >
+              Prüfung
+            </button>
+            <button
+              className={selectedReviewPanelTab === "evaluation" ? "is-active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={selectedReviewPanelTab === "evaluation"}
+              onClick={() => setSelectedReviewPanelTab("evaluation")}
+            >
+              Auswertung
+            </button>
+          </div>
+
+          {selectedReviewPanelTab === "review" && (
+            <>
           <div className="time-week-nav-panel" aria-label="Kalenderwochen">
             <div className="time-week-nav-title">
               <span>Kalenderwoche</span>
@@ -1050,15 +1075,19 @@ export function TimeEntriesPage() {
               </div>
             )}
           </div>
+            </>
+          )}
 
+          {selectedReviewPanelTab === "evaluation" && (
           <div className="time-final-hours-panel">
             <div className="time-entries-toolbar">
               <div>
-                <h2>Geprüfte Stundenliste</h2>
-                <p>Finale Stunden im aktuellen Zeitraum mit Original- und GPS-Vergleich.</p>
+                <h2>Auswertung</h2>
+                <p>Summen, Lohnbasis und spätere Stundenzettel-Auswertung.</p>
               </div>
             </div>
             {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
+            {isLoadingReviewAllEntries && <p className="time-table-note">Auswertung wird geladen...</p>}
             <div className="time-summary-strip">
               <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
               <div><span>Offene Prüffälle</span><strong>{timeReviewIssues.length}</strong></div>
@@ -1069,49 +1098,8 @@ export function TimeEntriesPage() {
               <FinalSummaryList title="Summe je Monteur" rows={finalHoursTotals.byPerson} />
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
-            <div className="time-table-scroll">
-              <table className="time-entries-table time-final-hours-table">
-                <thead>
-                  <tr>
-                    <th>Datum</th>
-                    <th>Tag</th>
-                    <th>Monteur</th>
-                    <th>Baustelle / Nr.</th>
-                    <th>Finale Stunden</th>
-                    <th>Status</th>
-                    <th>Grundlage</th>
-                    <th>Original</th>
-                    <th>GPS</th>
-                    <th>Abweichung</th>
-                    <th>Hinweis</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingReviewAllEntries && (
-                    <tr><td className="time-empty-row" colSpan={11}>Geprüfte Stundenliste wird geladen...</td></tr>
-                  )}
-                  {!isLoadingReviewAllEntries && !reviewAllEntriesError && finalHoursEntries.length === 0 && (
-                    <tr><td className="time-empty-row" colSpan={11}>Für diesen Zeitraum gibt es noch keine Arbeitszeiten.</td></tr>
-                  )}
-                  {!isLoadingReviewAllEntries && !reviewAllEntriesError && finalHoursEntries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>{formatDate(entry.workDate)}</td>
-                      <td>{formatWeekday(entry.workDate)}</td>
-                      <td>{entry.personName}</td>
-                      <td>{entry.siteLabel}</td>
-                      <td>{formatMinutes(entry.finalMinutes)}</td>
-                      <td>{entry.statusLabel}</td>
-                      <td>{entry.basisLabel}</td>
-                      <td>{formatMinutes(entry.originalMinutes)}</td>
-                      <td>{formatMinutes(entry.gpsMinutes)}</td>
-                      <td>{formatHumanDeviation(entry.deviationMinutes)}</td>
-                      <td>{entry.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
+          )}
         </div>
       )}
 
