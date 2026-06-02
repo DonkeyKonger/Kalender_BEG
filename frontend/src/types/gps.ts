@@ -3,7 +3,7 @@ export type GpsLocationPointCreate = {
   latitude: number;
   longitude: number;
   accuracy_meters?: number | null;
-  source?: "mobile";
+  source?: "mobile" | "android_app";
   device_id?: string | null;
 };
 

@@ -17,7 +17,14 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
-import { formatMobileGpsError, sendCurrentGpsLocation } from "../lib/mobileGps";
+import {
+  ANDROID_GPS_PING_INTERVAL_MS,
+  formatMobileGpsError,
+  isAndroidAppContext,
+  sendCurrentGpsLocation,
+  startAndroidGpsPingTimer,
+  stopAndroidGpsPingTimer,
+} from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -42,7 +49,7 @@ type PlaceholderContent = {
 };
 
 export function MyAssignmentsPage() {
-  const { logout } = useAuth();
+  const { logout, status } = useAuth();
   const [mode, setMode] = useState<MobileViewMode>("two_weeks");
   const [data, setData] = useState<MobileAssignmentsResponse | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -88,6 +95,28 @@ export function MyAssignmentsPage() {
     void loadAssignments();
   }, [loadAssignments]);
 
+  useEffect(() => {
+    if (status !== "authenticated" || !isAndroidAppContext()) {
+      stopAndroidGpsPingTimer();
+      return undefined;
+    }
+
+    startAndroidGpsPingTimer((gpsStatus) => {
+      if (gpsStatus.type === "sent") {
+        setLastGpsSentAt(gpsStatus.sentAt);
+        setGpsMessage("Standort automatisch gesendet.");
+        setGpsMessageTone("info");
+        return;
+      }
+      setGpsMessage(gpsStatus.message);
+      setGpsMessageTone("error");
+    });
+
+    return () => {
+      stopAndroidGpsPingTimer();
+    };
+  }, [status]);
+
   async function sendGpsNow(): Promise<void> {
     if (isSendingGps) {
       return;
@@ -106,6 +135,11 @@ export function MyAssignmentsPage() {
     } finally {
       setIsSendingGps(false);
     }
+  }
+
+  async function handleLogout(): Promise<void> {
+    stopAndroidGpsPingTimer();
+    await logout();
   }
 
   const today = toIsoDate(startOfToday());
@@ -184,7 +218,7 @@ export function MyAssignmentsPage() {
           <RefreshCcw aria-hidden="true" size={17} />
           <span>Aktualisieren</span>
         </button>
-        <button className="icon-button" type="button" onClick={() => void logout()}>
+        <button className="icon-button" type="button" onClick={() => void handleLogout()}>
           <LogOut aria-hidden="true" size={17} />
           <span>Abmelden</span>
         </button>
@@ -244,6 +278,11 @@ export function MyAssignmentsPage() {
               </span>
             </button>
             {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
+            {isAndroidAppContext() ? (
+              <p className="cache-note mobile-gps-status">
+                Automatische Standortsendung: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten bei geöffneter App.
+              </p>
+            ) : null}
             {lastGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt gesendet: {formatDateTime(lastGpsSentAt)}</p> : null}
           </section>
 

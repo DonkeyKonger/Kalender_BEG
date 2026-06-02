@@ -1,10 +1,94 @@
+import { Capacitor } from "@capacitor/core";
+
 import { ApiError, api } from "./api";
+
+export const ANDROID_GPS_PING_INTERVAL_MS = 900_000;
+
+type MobileGpsSource = "mobile" | "android_app";
 
 type MobileGpsSendResult = {
   sentAt: string;
 };
 
+type AndroidGpsPingStatus = {
+  type: "sent";
+  sentAt: string;
+} | {
+  type: "error";
+  message: string;
+};
+
+type AndroidGpsPingStatusHandler = (status: AndroidGpsPingStatus) => void;
+
+let androidGpsTimer: number | null = null;
+let androidGpsTimerGeneration = 0;
+let androidGpsPingInFlight = false;
+
 export async function sendCurrentGpsLocation(): Promise<MobileGpsSendResult> {
+  return sendCurrentLocation({ source: "mobile", deviceIdPrefix: "mobile" });
+}
+
+export async function sendAndroidLocationPing(): Promise<MobileGpsSendResult> {
+  if (!isAndroidAppContext()) {
+    throw new Error("Automatische Standortsendung läuft nur in der Android-App.");
+  }
+  return sendCurrentLocation({ source: "android_app", deviceIdPrefix: "android_app" });
+}
+
+export function isAndroidAppContext(): boolean {
+  return Capacitor.getPlatform() === "android" && Capacitor.isNativePlatform();
+}
+
+export function startAndroidGpsPingTimer(onStatus?: AndroidGpsPingStatusHandler): boolean {
+  if (!isAndroidAppContext()) {
+    return false;
+  }
+  if (androidGpsTimer !== null) {
+    return true;
+  }
+
+  const generation = androidGpsTimerGeneration;
+  void runAndroidGpsPing(onStatus, generation);
+  androidGpsTimer = window.setInterval(() => {
+    void runAndroidGpsPing(onStatus, generation);
+  }, ANDROID_GPS_PING_INTERVAL_MS);
+  return true;
+}
+
+export function stopAndroidGpsPingTimer(): void {
+  if (androidGpsTimer !== null) {
+    window.clearInterval(androidGpsTimer);
+    androidGpsTimer = null;
+  }
+  androidGpsTimerGeneration += 1;
+}
+
+async function runAndroidGpsPing(onStatus: AndroidGpsPingStatusHandler | undefined, generation: number): Promise<void> {
+  if (androidGpsPingInFlight) {
+    return;
+  }
+  androidGpsPingInFlight = true;
+  try {
+    const result = await sendAndroidLocationPing();
+    if (generation === androidGpsTimerGeneration) {
+      onStatus?.({ type: "sent", sentAt: result.sentAt });
+    }
+  } catch (error) {
+    if (generation === androidGpsTimerGeneration) {
+      onStatus?.({ type: "error", message: formatMobileGpsError(error) });
+    }
+  } finally {
+    androidGpsPingInFlight = false;
+  }
+}
+
+async function sendCurrentLocation({
+  source,
+  deviceIdPrefix,
+}: {
+  source: MobileGpsSource;
+  deviceIdPrefix: string;
+}): Promise<MobileGpsSendResult> {
   if (!("geolocation" in navigator)) {
     throw new Error("Standort ist auf diesem Gerät nicht verfügbar.");
   }
@@ -16,8 +100,8 @@ export async function sendCurrentGpsLocation(): Promise<MobileGpsSendResult> {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     accuracy_meters: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-    source: "mobile",
-    device_id: getMobileGpsDeviceId(),
+    source,
+    device_id: getMobileGpsDeviceId(deviceIdPrefix),
   });
 
   return { sentAt: new Date().toISOString() };
@@ -57,9 +141,9 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
-function getMobileGpsDeviceId(): string {
+function getMobileGpsDeviceId(prefix: string): string {
   const userAgent = navigator.userAgent || "webview";
-  return `mobile:${userAgent.slice(0, 96)}`;
+  return `${prefix}:${userAgent.slice(0, 96)}`;
 }
 
 function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
