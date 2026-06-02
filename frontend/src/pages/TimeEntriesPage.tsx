@@ -40,7 +40,7 @@ type TimeReviewIssue = {
   detail: string;
 };
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
-type ReviewSummaryFilter = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "all";
+type ReviewSummaryFilter = "all" | "matches" | "needs_review" | "verified";
 type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
@@ -931,9 +931,16 @@ export function TimeEntriesPage() {
 
           <div className="time-review-summary-cards">
             <ReviewSummaryCard
-              active={reviewStatusFilter === "auto_plausible"}
-              label="Plausibel"
-              onClick={() => setReviewStatusFilter("auto_plausible")}
+              active={reviewStatusFilter === "all"}
+              label="Alle"
+              onClick={() => setReviewStatusFilter("all")}
+              tone="warning"
+              value={reviewSummary.all}
+            />
+            <ReviewSummaryCard
+              active={reviewStatusFilter === "matches"}
+              label="Passt"
+              onClick={() => setReviewStatusFilter("matches")}
               tone="active"
               value={reviewSummary.autoPlausible}
             />
@@ -942,35 +949,14 @@ export function TimeEntriesPage() {
               label="Prüfung empfohlen"
               onClick={() => setReviewStatusFilter("needs_review")}
               tone="planned"
-              value={reviewSummary.needsReview}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "critical"}
-              label="Kritisch"
-              onClick={() => setReviewStatusFilter("critical")}
-              tone="warning"
-              value={reviewSummary.critical}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "not_verifiable"}
-              label="Nicht prüfbar"
-              onClick={() => setReviewStatusFilter("not_verifiable")}
-              tone="neutral"
-              value={reviewSummary.notVerifiable}
+              value={reviewSummary.reviewRecommended}
             />
             <ReviewSummaryCard
               active={reviewStatusFilter === "verified"}
-              label="Menschlich geprüft"
+              label="Manuell geprüft"
               onClick={() => setReviewStatusFilter("verified")}
               tone="active"
               value={reviewSummary.verified}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "all"}
-              label="Offen insgesamt"
-              onClick={() => setReviewStatusFilter("all")}
-              tone="warning"
-              value={timeReviewIssues.length}
             />
           </div>
 
@@ -992,7 +978,7 @@ export function TimeEntriesPage() {
             {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length === 0 && (
               <div className="empty-panel">
                 {reviewStatusFilter === "all"
-                  ? "Keine offenen Stundenprüfungen. Alle Zeiten liegen innerhalb der GPS-Toleranz."
+                  ? "Keine Zeitprüffälle im aktuellen Zeitraum vorhanden."
                   : "Für diesen Status gibt es im aktuellen Zeitraum keine Fälle."}
               </div>
             )}
@@ -1001,6 +987,7 @@ export function TimeEntriesPage() {
                 <table className="time-entries-table time-review-compact-table">
                   <thead>
                     <tr>
+                      <th>Datum</th>
                       <th>Baustelle</th>
                       <th>Gemeldete Zeit</th>
                       <th>GPS-Zeit</th>
@@ -1506,7 +1493,7 @@ function renderReviewTableRows({
     const issue = row.issue;
     const isExpanded = expandedReviewEntryId === row.id && issue !== null;
     const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
-    const group = `${row.personName} · ${formatWeekday(row.workDate)} ${formatDate(row.workDate)}`;
+    const group = row.personName;
     const showGroup = group !== previousGroup;
     previousGroup = group;
 
@@ -1514,10 +1501,16 @@ function renderReviewTableRows({
       <Fragment key={row.id}>
         {showGroup && (
           <tr className="time-review-group-row">
-            <td colSpan={6}>{group}</td>
+            <td colSpan={7}>{group}</td>
           </tr>
         )}
         <tr className={isExpanded ? "is-expanded" : ""}>
+          <td>
+            <span className="time-review-date-cell">
+              <strong>{formatDate(row.workDate)}</strong>
+              <small>{formatWeekday(row.workDate)}</small>
+            </span>
+          </td>
           <td>
             <div className="time-review-site-cell">
               <strong>{row.siteLabel}</strong>
@@ -1557,7 +1550,7 @@ function renderReviewTableRows({
         </tr>
         {isExpanded && issue && (
           <tr className="time-review-detail-row">
-            <td colSpan={6}>
+            <td colSpan={7}>
               <div className="time-review-table-detail-panel">
                 <div className="time-review-detail-grid">
                   <div><span>Originalwert</span><strong>{formatHalfHour(issue.entry.original_work_minutes ?? issue.manualMinutes)}</strong></div>
@@ -1825,12 +1818,17 @@ function formatHalfHour(minutes: number | null | undefined): string {
     return "-";
   }
   const roundedHours = Math.round(minutes / 30) / 2;
-  return `${roundedHours.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+  const normalizedHours = Object.is(roundedHours, -0) ? 0 : roundedHours;
+  return `${normalizedHours.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
 function formatHalfHourDelta(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined) {
     return "-";
+  }
+  const roundedSteps = Math.round(minutes / 30);
+  if (roundedSteps === 0) {
+    return "0,0 h";
   }
   const prefix = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
   return `${prefix}${formatHalfHour(Math.abs(minutes))}`;
@@ -1888,13 +1886,19 @@ function reviewRowsForStatus(
   status: ReviewSummaryFilter,
 ): TimeReviewTableRow[] {
   if (status === "all") {
+    return [
+      ...allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Passt", "active")),
+      ...openIssues.map(timeReviewIssueToTableRow),
+      ...allEntries
+        .filter((entry) => entry.time_review_status !== "open")
+        .map((entry) => timeEntryToTableRow(entry, finalStatusLabel(entry), "active")),
+    ];
+  }
+  if (status === "needs_review") {
     return openIssues.map(timeReviewIssueToTableRow);
   }
-  if (status === "needs_review" || status === "critical" || status === "not_verifiable") {
-    return openIssues.filter((issue) => issue.status === status).map(timeReviewIssueToTableRow);
-  }
-  if (status === "auto_plausible") {
-    return allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Plausibel", "active"));
+  if (status === "matches") {
+    return allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Passt", "active"));
   }
   return allEntries
     .filter((entry) => entry.time_review_status !== "open")
@@ -2072,9 +2076,12 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
       autoPlausible += 1;
     }
   }
+  const reviewRecommended = openIssues.length;
   return {
+    all: autoPlausible + reviewRecommended + verified,
     autoPlausible,
     verified,
+    reviewRecommended,
     needsReview: openIssues.filter((issue) => issue.status === "needs_review").length,
     critical: openIssues.filter((issue) => issue.status === "critical").length,
     notVerifiable: openIssues.filter((issue) => issue.status === "not_verifiable").length,

@@ -6541,7 +6541,9 @@ button.person-chip:focus-visible {
 }
 
 .time-review-compact-table {
-  min-width: 940px;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  min-width: 1020px;
 }
 
 .time-review-compact-table .time-review-group-row td {
@@ -6550,6 +6552,28 @@ button.person-chip:focus-visible {
   font-size: 0.78rem;
   font-weight: 900;
   letter-spacing: 0.02em;
+  padding-top: 14px;
+  text-transform: uppercase;
+}
+
+.time-review-compact-table .time-review-group-row:first-child td {
+  padding-top: 9px;
+}
+
+.time-review-date-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.time-review-date-cell strong {
+  color: #172033;
+  font-size: 0.8rem;
+}
+
+.time-review-date-cell small {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
@@ -7058,6 +7082,10 @@ button.person-chip:focus-visible {
   background: #eaf2fb;
   color: #243348;
   font-size: 0.74rem;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr:not(.time-review-group-row):not(.time-review-detail-row) td {
+  background: #ffffff;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-detail-row td {
