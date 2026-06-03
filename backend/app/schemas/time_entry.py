@@ -161,3 +161,7 @@ class TimeEntryRead(BaseModel):
     reviewed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    review_source: str = "manual"
+    is_gps_suggestion: bool = False
+    has_manual_entry: bool = True
+    gps_suggestion_key: str | None = None

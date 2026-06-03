@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.api.routes.time_entries import time_entry_read
+from app.api.routes.time_entries import list_time_entries, time_entry_read
 from app.models import Base
 from app.models.assignment import Assignment
 from app.models.enums import GpsSourceType, UserRole
@@ -186,3 +186,95 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
     assert response.gps_first_seen_at == older_outside_point.timestamp
     assert response.gps_last_seen_at == latest_inside_point.timestamp
     assert response.gps_work_minutes == 240
+
+
+def test_review_response_adds_gps_suggestion_for_unreported_site_only():
+    db = db_session()
+    work_date = date(2026, 6, 2)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site_a = Site(
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=800,
+    )
+    site_b = Site(
+        site_number="8010",
+        name="Schule",
+        latitude=52.2799,
+        longitude=8.0472,
+        geofence_radius_m=800,
+    )
+    db.add_all([person, site_a, site_b])
+    db.commit()
+
+    manual_entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=site_a.id,
+        work_date=work_date,
+        work_minutes=240,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    gps_points = [
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 2, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.2799,
+            longitude=8.0472,
+            timestamp=datetime(2026, 6, 2, 13, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.2799,
+            longitude=8.0472,
+            timestamp=datetime(2026, 6, 2, 16, 0, tzinfo=UTC),
+        ),
+    ]
+    db.add(manual_entry)
+    db.add_all(gps_points)
+    db.commit()
+
+    response = list_time_entries(
+        date_from=work_date,
+        date_to=work_date,
+        include_gps_status=True,
+        review_open_only=True,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        db=db,
+    )
+
+    gps_suggestions = [entry for entry in response if entry.is_gps_suggestion]
+    assert len(gps_suggestions) == 1
+    assert gps_suggestions[0].site_id == site_b.id
+    assert gps_suggestions[0].gps_work_minutes == 180
+    assert gps_suggestions[0].work_minutes == 0
+    assert gps_suggestions[0].source == "gps_suggestion"
+    assert not any(entry.is_gps_suggestion and entry.site_id == site_a.id for entry in response)

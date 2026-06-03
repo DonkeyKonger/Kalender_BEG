@@ -15,7 +15,7 @@ from app.schemas.time_entry import (
     TimeEntryReviewDecision,
     TimeEntryUpdate,
 )
-from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService
+from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService, GpsSiteStay
 from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["time-entries"])
@@ -48,6 +48,11 @@ def list_time_entries(
     gps_evaluations: dict[int, GpsPresenceEvaluation] = {}
     if gps_service is not None:
         gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+    manual_site_keys = {
+        (entry.person_id, entry.work_date, entry.site_id)
+        for entry in entries
+        if entry.site_id is not None
+    }
     if review_open_only:
         service.auto_close_deadline_reviews(
             entries,
@@ -60,7 +65,24 @@ def list_time_entries(
             if service.is_open_time_review_case(entry, gps_work_minutes):
                 open_entries.append(entry)
         entries = open_entries
-    return [time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id)) for entry in entries]
+    response_entries = [time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id)) for entry in entries]
+    if review_open_only and gps_service is not None and date_from is not None and date_to is not None:
+        gps_person_id = current_user.person_id if current_user.role == UserRole.MONTEUR else person_id
+        gps_suggestions = [
+            stay
+            for stay in gps_service.list_site_stays_for_review(
+                date_from=date_from,
+                date_to=date_to,
+                person_id=gps_person_id,
+                site_id=site_id,
+            )
+            if (stay.person_id, stay.work_date, stay.site_id) not in manual_site_keys
+        ]
+        response_entries.extend(
+            gps_suggestion_read(stay, synthetic_id=-(index + 1))
+            for index, stay in enumerate(gps_suggestions)
+        )
+    return response_entries
 
 
 @router.post("", response_model=TimeEntryRead, status_code=201)
@@ -175,4 +197,44 @@ def time_entry_read(
         reviewed_at=entry.reviewed_at,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
+    )
+
+
+def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRead:
+    return TimeEntryRead(
+        id=synthetic_id,
+        person_id=stay.person_id,
+        person_name=stay.person_name,
+        site_id=stay.site_id,
+        site_name=stay.site_name,
+        site_number=stay.site_number,
+        assignment_id=None,
+        work_date=stay.work_date,
+        start_time=None,
+        end_time=None,
+        break_minutes=0,
+        travel_minutes=0,
+        work_minutes=0,
+        original_work_minutes=None,
+        corrected_work_minutes=None,
+        note="GPS erkannt · kein manueller Eintrag",
+        source="gps_suggestion",
+        status="draft",
+        time_review_status="open",
+        time_review_method=None,
+        gps_status="matched",
+        gps_matched_points=stay.matched_points,
+        gps_total_points=stay.matched_points,
+        gps_first_seen_at=stay.first_seen_at,
+        gps_last_seen_at=stay.last_seen_at,
+        gps_work_minutes=stay.work_minutes,
+        created_by_user_id=None,
+        reviewed_by_user_id=None,
+        reviewed_at=None,
+        created_at=stay.last_seen_at,
+        updated_at=stay.last_seen_at,
+        review_source="gps_suggestion",
+        is_gps_suggestion=True,
+        has_manual_entry=False,
+        gps_suggestion_key=f"{stay.person_id}:{stay.work_date.isoformat()}:{stay.site_id}",
     )

@@ -611,6 +611,16 @@ export function TimeEntriesPage() {
     setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
   }
 
+  function applyCreatedTimeEntryFromGpsSuggestion(suggestionEntry: TimeEntry, createdEntry: TimeEntry): void {
+    const hydratedEntry = mergeTimeEntryReviewUpdate(suggestionEntry, createdEntry);
+    const shouldRemainInOpenReview = timeReviewIssue(hydratedEntry) !== null;
+    setReviewEntries((current) => {
+      const withoutSuggestion = current.filter((entry) => entry.id !== suggestionEntry.id);
+      return shouldRemainInOpenReview ? upsertTimeEntryInList(withoutSuggestion, hydratedEntry) : withoutSuggestion;
+    });
+    setReviewAllEntries((current) => upsertTimeEntryInList(current, hydratedEntry));
+  }
+
   function selectReviewWeek(option: CalendarWeekSelection): void {
     if (option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week) {
       return;
@@ -633,6 +643,32 @@ export function TimeEntriesPage() {
     setReviewActionEntryId(issue.id);
     setReviewActionError(null);
     try {
+      if (issue.entry.is_gps_suggestion) {
+        const finalMinutes = options.finalMinutes ?? issue.gpsMinutes;
+        const reviewedSiteId = options.reviewedSiteId ?? issue.entry.site_id;
+        if (finalMinutes === null) {
+          setReviewActionError("GPS-Zeit ist nicht berechenbar.");
+          return;
+        }
+        if (reviewedSiteId === null) {
+          setReviewActionError("Bitte eine Baustelle auswählen.");
+          return;
+        }
+        const createdEntry = await api.createTimeEntry({
+          person_id: issue.entry.person_id,
+          site_id: reviewedSiteId,
+          work_date: issue.entry.work_date,
+          work_minutes: finalMinutes,
+          break_minutes: 0,
+          travel_minutes: 0,
+          note: "Aus GPS-Vorschlag in der Stundenprüfung übernommen.",
+        });
+        setExpandedReviewEntryId(null);
+        setReviewEditorMode(null);
+        setReviewDecisionForm({ hours: "", site_id: "" });
+        applyCreatedTimeEntryFromGpsSuggestion(issue.entry, createdEntry);
+        return;
+      }
       const updatedEntry = await api.decideTimeEntryReview(issue.id, {
         decision,
         final_work_minutes: options.finalMinutes ?? null,
@@ -1531,6 +1567,7 @@ function renderReviewTableRows({
       isExpanded ? "is-expanded" : "",
       showDayGroup ? "is-day-start" : "is-same-day-continuation",
       hasNextSameDay ? "has-same-day-next" : "",
+      row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
     ].filter(Boolean).join(" ");
 
     return (
@@ -1954,6 +1991,16 @@ function replaceTimeEntryInList(entries: TimeEntry[], updatedEntry: TimeEntry): 
   return nextEntries;
 }
 
+function upsertTimeEntryInList(entries: TimeEntry[], updatedEntry: TimeEntry): TimeEntry[] {
+  const entryIndex = entries.findIndex((entry) => entry.id === updatedEntry.id);
+  if (entryIndex < 0) {
+    return [...entries, updatedEntry];
+  }
+  const nextEntries = [...entries];
+  nextEntries[entryIndex] = mergeTimeEntryReviewUpdate(entries[entryIndex], updatedEntry);
+  return nextEntries;
+}
+
 function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: TimeEntry): TimeEntry {
   return {
     ...updatedEntry,
@@ -2023,12 +2070,12 @@ function timeReviewIssueToTableRow(issue: TimeReviewIssue): TimeReviewTableRow {
     statusLabel: issue.statusLabel,
     statusTone: issue.statusTone,
     systemHint: issue.systemHint,
-    canConfirm: issue.manualMinutes !== null,
+    canConfirm: issue.manualMinutes !== null && !issue.entry.is_gps_suggestion,
   };
 }
 
 function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: StatusBadgeTone): TimeReviewTableRow {
-  const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
+  const manualMinutes = entry.is_gps_suggestion ? null : Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
   const gpsMinutes = entry.gps_work_minutes;
   return {
     id: entry.id,
@@ -2051,6 +2098,7 @@ function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: 
 function isAutoPlausibleEntry(entry: TimeEntry): boolean {
   return (
     entry.time_review_status === "open"
+    && !entry.is_gps_suggestion
     && entry.gps_work_minutes !== null
     && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
   );
@@ -2060,7 +2108,7 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   if (entry.time_review_status !== "open") {
     return null;
   }
-  const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
+  const manualMinutes = entry.is_gps_suggestion ? null : Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
   const gpsMinutes = entry.gps_work_minutes;
   if (manualMinutes === null && gpsMinutes === null) {
     return null;
@@ -2091,6 +2139,16 @@ function classifyTimeReviewCase(
   gpsMinutes: number | null,
   deviationMinutes: number | null,
 ): Pick<TimeReviewIssue, "status" | "statusLabel" | "statusTone" | "systemHint" | "priority" | "detail"> {
+  if (entry.is_gps_suggestion) {
+    return {
+      status: "needs_review",
+      statusLabel: "Prüfung empfohlen",
+      statusTone: "planned",
+      priority: 2,
+      systemHint: "GPS erkannt · kein manueller Eintrag",
+      detail: "Bitte GPS-Zeit übernehmen, manuell anpassen oder eine reguläre Arbeitszeit erfassen.",
+    };
+  }
   if (!entry.site_id && manualMinutes !== null) {
     return {
       status: "critical",

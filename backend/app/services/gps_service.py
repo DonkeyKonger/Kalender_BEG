@@ -19,6 +19,7 @@ from app.services.geo_service import has_valid_coordinates, is_point_inside_site
 
 
 GPS_CAPTURE_FUTURE_TOLERANCE = timedelta(minutes=10)
+GPS_REVIEW_SUGGESTION_MINUTES = 30
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,20 @@ class GpsRecentLocationPoint:
     plausibility_status: str
     distance_to_planned_site_m: float | None
     geofence_radius_m: int | None
+
+
+@dataclass(frozen=True)
+class GpsSiteStay:
+    person_id: int
+    person_name: str
+    site_id: int
+    site_name: str | None
+    site_number: str | None
+    work_date: date
+    first_seen_at: datetime
+    last_seen_at: datetime
+    work_minutes: int
+    matched_points: int
 
 
 class GpsPresenceService:
@@ -131,6 +146,77 @@ class GpsPresenceService:
 
         plausibility = self._evaluate_point_against_planned_sites(points[-1], planned_sites)
         return self._presence_evaluation_from_point_plausibility(plausibility, gps_range=gps_range)
+
+    def list_site_stays_for_review(
+        self,
+        *,
+        date_from: date,
+        date_to: date,
+        person_id: int | None = None,
+        site_id: int | None = None,
+        min_minutes: int = GPS_REVIEW_SUGGESTION_MINUTES,
+    ) -> list[GpsSiteStay]:
+        start_at, _ = day_window(date_from)
+        _, end_at = day_window(date_to)
+        point_statement = (
+            select(GpsPoint)
+            .where(
+                GpsPoint.source_type == GpsSourceType.PHONE,
+                GpsPoint.person_id.is_not(None),
+                GpsPoint.timestamp >= start_at,
+                GpsPoint.timestamp <= end_at,
+            )
+            .order_by(GpsPoint.person_id, GpsPoint.timestamp, GpsPoint.id)
+        )
+        if person_id is not None:
+            point_statement = point_statement.where(GpsPoint.person_id == person_id)
+        points = list(self.db.scalars(point_statement))
+        if not points:
+            return []
+
+        site_statement = select(Site)
+        if site_id is not None:
+            site_statement = site_statement.where(Site.id == site_id)
+        sites = [site for site in self.db.scalars(site_statement) if has_valid_coordinates(site)]
+        if not sites:
+            return []
+
+        person_ids = {point.person_id for point in points if point.person_id is not None}
+        people = {
+            person.id: person
+            for person in self.db.scalars(select(Person).where(Person.id.in_(person_ids)))
+        }
+        grouped_points: dict[tuple[int, date, int], list[GpsPoint]] = {}
+        site_by_id = {site.id: site for site in sites}
+        for point in points:
+            if point.person_id is None:
+                continue
+            matched_site = self._matched_site_for_point(point, sites)
+            if matched_site is None:
+                continue
+            point_date = ensure_aware_utc(point.timestamp).date()
+            grouped_points.setdefault((point.person_id, point_date, matched_site.id), []).append(point)
+
+        stays: list[GpsSiteStay] = []
+        for (stay_person_id, stay_date, stay_site_id), stay_points in grouped_points.items():
+            stay_range = gps_range_from_points(stay_points)
+            work_minutes = stay_range["work_minutes"]
+            if work_minutes is None or work_minutes < min_minutes:
+                continue
+            site = site_by_id[stay_site_id]
+            stays.append(GpsSiteStay(
+                person_id=stay_person_id,
+                person_name=person_label(people.get(stay_person_id)),
+                site_id=site.id,
+                site_name=site.name,
+                site_number=site.site_number,
+                work_date=stay_date,
+                first_seen_at=stay_range["first_seen_at"],
+                last_seen_at=stay_range["last_seen_at"],
+                work_minutes=work_minutes,
+                matched_points=len(stay_points),
+            ))
+        return sorted(stays, key=lambda stay: (stay.person_name, stay.work_date, stay.site_number or "", stay.site_name or ""))
 
     def evaluate_presence(
         self,
@@ -284,6 +370,18 @@ class GpsPresenceService:
             best_check.distance_m,
             best_check.radius_m,
         )
+
+    @staticmethod
+    def _matched_site_for_point(point: GpsPoint, sites: list[Site]) -> Site | None:
+        checks = [
+            (site, check)
+            for site in sites
+            if (check := is_point_inside_site_geofence(point, site)).inside
+        ]
+        if not checks:
+            return None
+        best_site, _ = min(checks, key=lambda item: item[1].distance_m or float("inf"))
+        return best_site
 
     @staticmethod
     def _presence_evaluation_from_point_plausibility(

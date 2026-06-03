@@ -1,5 +1,5 @@
 export type TimeEntryStatus = "draft" | "submitted" | "reviewed";
-export type TimeEntrySource = "manual";
+export type TimeEntrySource = "manual" | "gps_suggestion";
 export type TimeEntryGpsStatus = "not_checkable" | "missing" | "partial" | "matched" | "mismatch";
 export type TimeReviewStatus = "open" | "manually_approved" | "corrected" | "not_verifiable" | "clarification" | "auto_closed_by_deadline";
 export type TimeReviewMethod = "accept_manual" | "accept_gps" | "manual_confirmed" | "manual_correction" | "assign_site" | "mark_not_verifiable" | "clarification" | "deadline";
@@ -37,6 +37,10 @@ export type TimeEntry = {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  review_source: "manual" | "gps_suggestion";
+  is_gps_suggestion: boolean;
+  has_manual_entry: boolean;
+  gps_suggestion_key: string | null;
 };
 
 export type TimeEntryCreate = {
