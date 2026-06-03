@@ -6684,20 +6684,12 @@ button.person-chip:focus-visible {
   border-bottom-color: #e2e8f0;
 }
 
-.time-review-compact-table .time-review-entry-row.is-review-problem td:first-child {
-  border-left: 3px solid #d97706;
-}
-
-.time-review-compact-table .time-review-entry-row.is-gps-suggestion td:first-child {
-  border-left: 3px solid #f59e0b;
+.time-review-compact-table .time-review-entry-row.is-review-checked td:first-child {
+  border-left: 3px solid #1f7a4d;
 }
 
 .time-review-compact-table .time-review-entry-row.is-gps-suggestion td {
   background: #fffaf0;
-}
-
-.time-review-compact-table .time-review-entry-row.is-plan-gps-mismatch td:first-child {
-  border-left: 3px solid #b42318;
 }
 
 .time-review-compact-table .time-review-entry-row.is-day-start:not(:first-child) td {

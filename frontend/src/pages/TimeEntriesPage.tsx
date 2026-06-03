@@ -1573,16 +1573,15 @@ function renderReviewTableRows({
     const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
     const hasNextSameDay = nextRow?.personName === row.personName && nextRow.workDate === row.workDate;
     const isWeekend = isWeekendDate(row.workDate);
-    const isProblemRow = isProblematicReviewRow(row);
+    const isCheckedRow = isCheckedReviewRow(row);
     const rowClassName = [
       "time-review-entry-row",
       isExpanded ? "is-expanded" : "",
       showDayGroup ? "is-day-start" : "is-same-day-continuation",
       hasNextSameDay ? "has-same-day-next" : "",
       isWeekend ? "is-weekend-row" : "",
-      isProblemRow ? "is-review-problem" : "",
+      isCheckedRow ? "is-review-checked" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
-      hasBackendReviewNotice(row.entry) ? "is-plan-gps-mismatch" : "",
     ].filter(Boolean).join(" ");
 
     return (
@@ -2290,6 +2289,14 @@ function sourceConflictNotices(entry: TimeEntry): string[] {
 
 function isProblematicReviewRow(row: TimeReviewTableRow): boolean {
   return row.issue !== null || row.entry.is_gps_suggestion || hasBackendReviewNotice(row.entry);
+}
+
+function isCheckedReviewRow(row: TimeReviewTableRow): boolean {
+  return (
+    buildTimeReviewInstruction(row) === "automatisch geprüft"
+    || row.entry.time_review_status === "manually_approved"
+    || row.entry.time_review_status === "corrected"
+  );
 }
 
 function reviewSourceSummary(_entry: TimeEntry, hint: string): string {
