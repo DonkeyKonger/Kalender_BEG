@@ -6728,9 +6728,10 @@ button.person-chip:focus-visible {
 
 .time-review-correction-panel {
   display: grid;
-  grid-template-columns: auto minmax(300px, 1fr) 140px auto;
+  grid-template-columns: 104px minmax(320px, 600px) 132px 184px;
   align-items: end;
   gap: 12px;
+  justify-content: end;
   border: 1px solid #dce6f2;
   border-radius: 8px;
   background: #ffffff;
@@ -6749,6 +6750,7 @@ button.person-chip:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  max-width: 660px;
   min-width: 0;
 }
 
@@ -6769,11 +6771,14 @@ button.person-chip:focus-visible {
   color: #172033;
   font: inherit;
   font-size: 0.82rem;
+  overflow: hidden;
   padding: 6px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .time-review-correction-block .time-table-action {
-  min-height: 34px;
+  height: 34px;
   justify-content: center;
   white-space: nowrap;
 }
@@ -6784,6 +6789,10 @@ button.person-chip:focus-visible {
 
 .time-review-correction-block-save {
   justify-items: end;
+}
+
+.time-review-correction-block-save .time-table-action {
+  min-width: 150px;
 }
 
 .time-final-summary-grid {
