@@ -1092,7 +1092,12 @@ export function TimeEntriesPage() {
                   : `Keine Fälle für diesen Status in KW ${selectedReviewWeek.week}.`}
               </div>
             )}
-            {!reviewEntriesError && reviewTableRows.length > 0 && (
+            {!reviewEntriesError && reviewTableRows.length > 0 && reviewStatusFilter === "verified" && (
+              <div className="time-review-log-list">
+                {renderReviewedLogItems(reviewTableRows)}
+              </div>
+            )}
+            {!reviewEntriesError && reviewTableRows.length > 0 && reviewStatusFilter !== "verified" && (
               <div className="time-table-scroll">
                 <table className={reviewTableClassName}>
                   <thead>
@@ -1752,6 +1757,119 @@ function renderReviewNote(row: TimeReviewTableRow) {
     ? "time-review-note-instruction is-attention"
     : "time-review-note-instruction";
   return <span className={className}>{buildTimeReviewInstruction(row)}</span>;
+}
+
+function renderReviewedLogItems(rows: TimeReviewTableRow[]) {
+  return rows.map((row) => {
+    const log = buildTimeReviewLog(row);
+    return (
+      <article className={["time-review-log-item", log.isChanged ? "is-changed" : ""].filter(Boolean).join(" ")} key={row.id}>
+        <div className="time-review-log-status">
+          <StatusBadge tone={log.isChanged ? "warning" : "active"}>{log.statusLabel}</StatusBadge>
+          {row.entry.reviewed_at && <span>{formatDateTime(row.entry.reviewed_at)}</span>}
+        </div>
+        <div className="time-review-log-main">
+          <div>
+            <h3>
+              {formatWeekday(row.workDate)} · {row.personName} · {row.siteNumber} · {row.siteName}
+            </h3>
+            <p>Prüfhinweis: {buildTimeReviewInstruction(row)}</p>
+          </div>
+          <div className="time-review-log-change">
+            {log.changeParts ? (
+              <>
+                <span>{log.changeParts.label}</span>
+                <strong>{log.changeParts.from}</strong>
+                <span aria-hidden="true">→</span>
+                <strong>{log.changeParts.to}</strong>
+              </>
+            ) : (
+              <span>{log.changeText}</span>
+            )}
+          </div>
+        </div>
+        <div className="time-review-log-facts">
+          <span>Gemeldet: {formatHalfHour(log.reportedMinutes)}</span>
+          <span>GPS: {formatHalfHour(row.gpsMinutes)}</span>
+          <span>Gültig: {formatHalfHour(log.validMinutes)}</span>
+          {row.correctedMinutes !== null && <span>Korrigiert: {formatHalfHour(row.correctedMinutes)}</span>}
+          {row.entry.reviewed_by_user_id !== null && <span>Geprüft von: Benutzer #{row.entry.reviewed_by_user_id}</span>}
+          {row.entry.note && <span>Notiz: {row.entry.note}</span>}
+        </div>
+      </article>
+    );
+  });
+}
+
+function buildTimeReviewLog(row: TimeReviewTableRow): {
+  changeParts: { label: string; from: string; to: string } | null;
+  changeText: string;
+  isChanged: boolean;
+  reportedMinutes: number | null;
+  statusLabel: string;
+  validMinutes: number | null;
+} {
+  const entry = row.entry;
+  const reportedMinutes = entry.original_work_minutes ?? (entry.is_gps_suggestion ? null : entry.work_minutes);
+  const validMinutes = entry.work_minutes;
+  const correctedMinutes = entry.corrected_work_minutes;
+  const hasTimeChange = correctedMinutes !== null && reportedMinutes !== null && correctedMinutes !== reportedMinutes;
+  const hasGpsDecision = entry.time_review_method === "accept_gps";
+  const hasManualCorrection = entry.time_review_method === "manual_correction" || entry.time_review_status === "corrected";
+  const hasSiteDecision = entry.time_review_method === "assign_site";
+
+  if (hasGpsDecision && row.gpsMinutes !== null) {
+    return {
+      changeParts: null,
+      changeText: `GPS-Zeit übernommen: ${formatHalfHour(row.gpsMinutes)}`,
+      isChanged: true,
+      reportedMinutes,
+      statusLabel: "korrigiert",
+      validMinutes,
+    };
+  }
+  if (hasTimeChange) {
+    return {
+      changeParts: {
+        label: "Arbeitszeit geändert:",
+        from: formatHalfHour(reportedMinutes),
+        to: formatHalfHour(correctedMinutes),
+      },
+      changeText: "",
+      isChanged: true,
+      reportedMinutes,
+      statusLabel: "korrigiert",
+      validMinutes,
+    };
+  }
+  if (hasManualCorrection && correctedMinutes !== null) {
+    return {
+      changeParts: null,
+      changeText: `Korrektur: ${formatHalfHour(correctedMinutes)}`,
+      isChanged: true,
+      reportedMinutes,
+      statusLabel: "korrigiert",
+      validMinutes,
+    };
+  }
+  if (hasSiteDecision) {
+    return {
+      changeParts: null,
+      changeText: `Einsatzort geprüft/korrigiert: ${timeEntrySiteLabel(entry)}`,
+      isChanged: true,
+      reportedMinutes,
+      statusLabel: "korrigiert",
+      validMinutes,
+    };
+  }
+  return {
+    changeParts: null,
+    changeText: "Keine Änderung vorgenommen.",
+    isChanged: false,
+    reportedMinutes,
+    statusLabel: "geprüft",
+    validMinutes,
+  };
 }
 
 function buildTimeReviewInstruction(row: TimeReviewTableRow): string {
