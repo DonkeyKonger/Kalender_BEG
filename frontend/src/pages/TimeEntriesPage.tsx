@@ -203,6 +203,7 @@ export function TimeEntriesPage() {
     ? timeSubtabs
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledReviewWeekRef = useRef(false);
 
   useEffect(() => {
     void loadPeople();
@@ -432,6 +433,9 @@ export function TimeEntriesPage() {
     if (activeTimeSubtab !== "review") {
       return;
     }
+    if (hasAutoScrolledReviewWeekRef.current) {
+      return;
+    }
     const selectedWeekIndex = reviewWeekOptions.findIndex(
       (option) => option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week,
     );
@@ -443,6 +447,7 @@ export function TimeEntriesPage() {
       `[data-week-index="${firstVisibleIndex}"]`,
     );
     targetButton?.scrollIntoView({ block: "nearest", inline: "start" });
+    hasAutoScrolledReviewWeekRef.current = true;
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -600,6 +605,12 @@ export function TimeEntriesPage() {
     setReviewDecisionForm({ hours: "", site_id: "" });
   }
 
+  function applyUpdatedTimeEntry(updatedEntry: TimeEntry): void {
+    setEntries((current) => replaceTimeEntryInList(current, updatedEntry));
+    setReviewEntries((current) => replaceTimeEntryInList(current, updatedEntry));
+    setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
+  }
+
   async function decideReviewIssue(
     issue: TimeReviewIssue,
     decision: TimeReviewDecision,
@@ -611,7 +622,7 @@ export function TimeEntriesPage() {
     setReviewActionEntryId(issue.id);
     setReviewActionError(null);
     try {
-      await api.decideTimeEntryReview(issue.id, {
+      const updatedEntry = await api.decideTimeEntryReview(issue.id, {
         decision,
         final_work_minutes: options.finalMinutes ?? null,
         reviewed_site_id: options.reviewedSiteId ?? null,
@@ -619,7 +630,7 @@ export function TimeEntriesPage() {
       setExpandedReviewEntryId(null);
       setReviewEditorMode(null);
       setReviewDecisionForm({ hours: "", site_id: "" });
-      setEntriesRefreshKey((current) => current + 1);
+      applyUpdatedTimeEntry(updatedEntry);
     } catch (requestError) {
       setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
     } finally {
@@ -634,7 +645,7 @@ export function TimeEntriesPage() {
     setReviewActionEntryId(row.id);
     setReviewActionError(null);
     try {
-      await api.decideTimeEntryReview(row.id, {
+      const updatedEntry = await api.decideTimeEntryReview(row.id, {
         decision: "accept_manual",
         final_work_minutes: null,
         reviewed_site_id: null,
@@ -642,7 +653,7 @@ export function TimeEntriesPage() {
       setExpandedReviewEntryId(null);
       setReviewEditorMode(null);
       setReviewDecisionForm({ hours: "", site_id: "" });
-      setEntriesRefreshKey((current) => current + 1);
+      applyUpdatedTimeEntry(updatedEntry);
     } catch (requestError) {
       setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
     } finally {
@@ -950,17 +961,6 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "review" && (
         <div className="time-entries-main time-review-main">
-          <div className="project-record-subtabs time-review-subtabs" role="tablist" aria-label="Stundenprüfung Bereiche">
-            <button
-              className="is-active"
-              type="button"
-              role="tab"
-              aria-selected="true"
-            >
-              Prüfung
-            </button>
-          </div>
-
           <div className="time-week-nav-panel" aria-label="Kalenderwochen">
             <div className="time-week-nav-title">
               <span>Kalenderwoche</span>
@@ -1928,6 +1928,28 @@ function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
       || left.workDate.localeCompare(right.workDate)
       || left.id - right.id
     ));
+}
+
+function replaceTimeEntryInList(entries: TimeEntry[], updatedEntry: TimeEntry): TimeEntry[] {
+  const entryIndex = entries.findIndex((entry) => entry.id === updatedEntry.id);
+  if (entryIndex < 0) {
+    return entries;
+  }
+  const nextEntries = [...entries];
+  nextEntries[entryIndex] = mergeTimeEntryReviewUpdate(entries[entryIndex], updatedEntry);
+  return nextEntries;
+}
+
+function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: TimeEntry): TimeEntry {
+  return {
+    ...updatedEntry,
+    gps_status: updatedEntry.gps_status ?? previousEntry.gps_status,
+    gps_matched_points: updatedEntry.gps_matched_points ?? previousEntry.gps_matched_points,
+    gps_total_points: updatedEntry.gps_total_points ?? previousEntry.gps_total_points,
+    gps_first_seen_at: updatedEntry.gps_first_seen_at ?? previousEntry.gps_first_seen_at,
+    gps_last_seen_at: updatedEntry.gps_last_seen_at ?? previousEntry.gps_last_seen_at,
+    gps_work_minutes: updatedEntry.gps_work_minutes ?? previousEntry.gps_work_minutes,
+  };
 }
 
 function buildTimeReviewTableRows(
