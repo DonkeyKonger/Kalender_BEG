@@ -8,7 +8,8 @@ from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-DEFAULT_SITE_GEOFENCE_RADIUS_M = 5000
+from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
+
 EARTH_RADIUS_M = 6_371_000
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 GEOCODING_USER_AGENT = "Kalender-Baustellen/1.0"

@@ -8,14 +8,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api.routes.time_entries import list_time_entries, time_entry_read
+from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
 from app.models import Base
 from app.models.assignment import Assignment
-from app.models.enums import GpsSourceType, UserRole
+from app.models.enums import GpsSourceType, SiteStatus, UserRole
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.gps import GpsLocationPointCreate
+from app.services.geo_service import is_point_inside_site_geofence
 from app.services.gps_service import GpsPresenceService
 
 
@@ -122,6 +124,188 @@ def test_point_plausibility_without_geofence_is_not_checkable():
 
     assert result.plausibility_status == "not_checkable"
     assert result.distance_to_planned_site_m is None
+
+
+def test_default_site_geofence_radius_is_3000_meters():
+    point = SimpleNamespace(latitude=52.0, longitude=8.0)
+    site = SimpleNamespace(latitude=52.0, longitude=8.0, geofence_radius_m=None)
+
+    result = is_point_inside_site_geofence(point, site)
+
+    assert DEFAULT_SITE_GEOFENCE_RADIUS_M == 3000
+    assert result.radius_m == 3000
+
+
+def test_gps_stay_prefers_planned_site_when_multiple_sites_match():
+    db = db_session()
+    work_date = date(2026, 6, 4)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    active_site = Site(
+        site_number="1001",
+        name="Aktiv näher",
+        latitude=52.0002,
+        longitude=8.0002,
+        geofence_radius_m=3000,
+        status=SiteStatus.ACTIVE,
+    )
+    planned_site = Site(
+        site_number="1002",
+        name="Geplant weiter",
+        latitude=52.005,
+        longitude=8.005,
+        geofence_radius_m=3000,
+        status=SiteStatus.PLANNED,
+    )
+    db.add_all([person, active_site, planned_site])
+    db.commit()
+
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=planned_site.id,
+        start_date=work_date,
+        end_date=work_date,
+    ))
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 4, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 4, 9, 0, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    stays = GpsPresenceService(db).list_site_stays_for_review(date_from=work_date, date_to=work_date)
+
+    assert len(stays) == 1
+    assert stays[0].site_id == planned_site.id
+
+
+def test_gps_stay_ignores_inactive_unplanned_site_but_allows_inactive_planned_site():
+    db = db_session()
+    work_date = date(2026, 6, 5)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    completed_site = Site(
+        site_number="9001",
+        name="Abgeschlossen geplant",
+        latitude=52.0,
+        longitude=8.0,
+        geofence_radius_m=3000,
+        status=SiteStatus.COMPLETED,
+    )
+    db.add_all([person, completed_site])
+    db.commit()
+
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 5, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 5, 9, 0, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    service = GpsPresenceService(db)
+
+    assert service.list_site_stays_for_review(date_from=work_date, date_to=work_date) == []
+
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=completed_site.id,
+        start_date=work_date,
+        end_date=work_date,
+    ))
+    db.commit()
+
+    stays = service.list_site_stays_for_review(date_from=work_date, date_to=work_date)
+
+    assert len(stays) == 1
+    assert stays[0].site_id == completed_site.id
+
+
+def test_gps_stay_uses_nearest_active_site_when_no_planned_site_matches():
+    db = db_session()
+    work_date = date(2026, 6, 6)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    near_site = Site(
+        site_number="7001",
+        name="Näher aktiv",
+        latitude=52.0002,
+        longitude=8.0002,
+        geofence_radius_m=3000,
+        status=SiteStatus.ACTIVE,
+    )
+    far_site = Site(
+        site_number="7002",
+        name="Weiter aktiv",
+        latitude=52.005,
+        longitude=8.005,
+        geofence_radius_m=3000,
+        status=SiteStatus.ACTIVE,
+    )
+    db.add_all([person, near_site, far_site])
+    db.commit()
+
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 6, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=52.0,
+            longitude=8.0,
+            timestamp=datetime(2026, 6, 6, 9, 0, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    stays = GpsPresenceService(db).list_site_stays_for_review(date_from=work_date, date_to=work_date)
+
+    assert len(stays) == 1
+    assert stays[0].site_id == near_site.id
 
 
 def test_time_entry_response_uses_latest_gps_point_for_planned_site():

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.enums import (
@@ -391,7 +392,7 @@ def select_or_create_coordinate_sites(
             city=name.split()[0],
             latitude=lat,
             longitude=lon,
-            geofence_radius_m=5000,
+            geofence_radius_m=DEFAULT_SITE_GEOFENCE_RADIUS_M,
             location_status=SiteLocationStatus.GEOCODED,
             status=SiteStatus.ACTIVE,
             info=marker_note(batch_id, "test_site", "with_coordinates"),
@@ -427,7 +428,7 @@ def select_or_create_no_coordinate_site(
         name="Testbaustelle ohne Koordinaten",
         location="Adresse unklar",
         address="Adresse unklar",
-        geofence_radius_m=5000,
+        geofence_radius_m=DEFAULT_SITE_GEOFENCE_RADIUS_M,
         location_status=SiteLocationStatus.UNCHECKED,
         status=SiteStatus.ACTIVE,
         info=marker_note(batch_id, "test_site_without_coordinates"),
@@ -969,7 +970,7 @@ def gps_source_id(batch_id: str, person_id: int, scenario: str, suffix: str | No
 def gps_location_for_site(site: Site, rng: random.Random, *, outside_geofence: bool) -> tuple[float, float]:
     if site.latitude is None or site.longitude is None:
         raise ValueError("Site needs coordinates for GPS test points.")
-    radius = float(site.geofence_radius_m or 5000)
+    radius = float(site.geofence_radius_m or DEFAULT_SITE_GEOFENCE_RADIUS_M)
     if outside_geofence:
         distance_m = radius + rng.uniform(8_000, 18_000)
     else:

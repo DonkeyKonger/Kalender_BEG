@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
 from app.models.base import Base, TimestampMixin
 from app.models.enums import SiteLocationStatus, SiteStatus, enum_values
 
@@ -22,7 +23,7 @@ class Site(TimestampMixin, Base):
     address_extra: Mapped[str | None] = mapped_column(String(200))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
-    geofence_radius_m: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
+    geofence_radius_m: Mapped[int] = mapped_column(Integer, nullable=False, default=DEFAULT_SITE_GEOFENCE_RADIUS_M)
     location_status: Mapped[SiteLocationStatus] = mapped_column(
         Enum(SiteLocationStatus, values_callable=enum_values, name="site_location_status"),
         nullable=False,

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
-from app.models.enums import GpsSourceType, UserRole
+from app.models.enums import GpsSourceType, SiteStatus, UserRole
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
@@ -188,13 +188,9 @@ class GpsPresenceService:
         if not points:
             return []
 
-        site_statement = select(Site)
+        site_statement = select(Site).where(Site.status == SiteStatus.ACTIVE)
         if site_id is not None:
             site_statement = site_statement.where(Site.id == site_id)
-        sites = [site for site in self.db.scalars(site_statement) if has_valid_coordinates(site)]
-        if not sites:
-            return []
-
         person_ids = {point.person_id for point in points if point.person_id is not None}
         people = {
             person.id: person
@@ -209,15 +205,19 @@ class GpsPresenceService:
                 Assignment.end_date >= date_from,
             )
         ))
+        active_sites = [site for site in self.db.scalars(site_statement) if has_valid_coordinates(site)]
+        active_site_by_id = {site.id: site for site in active_sites}
         grouped_points: dict[tuple[int, date, int], list[GpsPoint]] = {}
-        site_by_id = {site.id: site for site in sites}
         for point in points:
             if point.person_id is None:
                 continue
-            matched_site = self._matched_site_for_point(point, sites)
+            point_date = ensure_aware_utc(point.timestamp).date()
+            planned_sites = planned_sites_from_assignments(assignments, point.person_id, point_date)
+            candidate_sites = matching_candidate_sites(active_site_by_id, planned_sites, site_id=site_id)
+            planned_site_ids = {site.id for site in planned_sites}
+            matched_site = self._matched_site_for_point(point, candidate_sites, planned_site_ids=planned_site_ids)
             if matched_site is None:
                 continue
-            point_date = ensure_aware_utc(point.timestamp).date()
             grouped_points.setdefault((point.person_id, point_date, matched_site.id), []).append(point)
 
         stays: list[GpsSiteStay] = []
@@ -226,8 +226,11 @@ class GpsPresenceService:
             work_minutes = stay_range["work_minutes"]
             if work_minutes is None or work_minutes < min_minutes:
                 continue
-            site = site_by_id[stay_site_id]
             planned_sites = planned_sites_from_assignments(assignments, stay_person_id, stay_date)
+            candidate_sites = matching_candidate_sites(active_site_by_id, planned_sites, site_id=site_id)
+            site = next((candidate_site for candidate_site in candidate_sites if candidate_site.id == stay_site_id), None)
+            if site is None:
+                continue
             planned_labels = tuple(site_label(planned_site) for planned_site in planned_sites)
             planned_site_ids = {planned_site.id for planned_site in planned_sites}
             planned_vs_gps_mismatch = bool(planned_sites and stay_site_id not in planned_site_ids)
@@ -356,9 +359,10 @@ class GpsPresenceService:
 
     def _planned_gps_context(self, planned_sites: list[Site], point: GpsPoint | None) -> dict[str, object]:
         planned_labels = tuple(site_label(site) for site in planned_sites)
-        detected_site = self._matched_site_for_point(point, self._sites_with_coordinates()) if point is not None else None
-        detected_label = site_label(detected_site) if detected_site is not None else None
+        candidate_sites = self._matching_candidate_sites(planned_sites)
         planned_site_ids = {site.id for site in planned_sites}
+        detected_site = self._matched_site_for_point(point, candidate_sites, planned_site_ids=planned_site_ids) if point is not None else None
+        detected_label = site_label(detected_site) if detected_site is not None else None
         planned_vs_gps_mismatch = bool(planned_sites and detected_site is not None and detected_site.id not in planned_site_ids)
         return {
             "planned_site_labels": planned_labels,
@@ -370,8 +374,13 @@ class GpsPresenceService:
             "mismatch_notice": plan_gps_mismatch_notice(planned_labels, detected_label) if planned_vs_gps_mismatch else None,
         }
 
-    def _sites_with_coordinates(self) -> list[Site]:
-        return [site for site in self.db.scalars(select(Site)) if has_valid_coordinates(site)]
+    def _matching_candidate_sites(self, planned_sites: list[Site]) -> list[Site]:
+        active_sites = [
+            site
+            for site in self.db.scalars(select(Site).where(Site.status == SiteStatus.ACTIVE))
+            if has_valid_coordinates(site)
+        ]
+        return matching_candidate_sites({site.id: site for site in active_sites}, planned_sites)
 
     def _location_points_for_person(
         self,
@@ -422,7 +431,7 @@ class GpsPresenceService:
         )
 
     @staticmethod
-    def _matched_site_for_point(point: GpsPoint, sites: list[Site]) -> Site | None:
+    def _matched_site_for_point(point: GpsPoint, sites: list[Site], *, planned_site_ids: set[int] | None = None) -> Site | None:
         checks = [
             (site, check)
             for site in sites
@@ -430,7 +439,8 @@ class GpsPresenceService:
         ]
         if not checks:
             return None
-        best_site, _ = min(checks, key=lambda item: item[1].distance_m or float("inf"))
+        planned_checks = [(site, check) for site, check in checks if planned_site_ids and site.id in planned_site_ids]
+        best_site, _ = min(planned_checks or checks, key=lambda item: item[1].distance_m or float("inf"))
         return best_site
 
     @staticmethod
@@ -502,6 +512,21 @@ def planned_sites_from_assignments(assignments: list[Assignment], person_id: int
         and assignment.start_date <= work_date <= assignment.end_date
         and assignment.site is not None
     ]
+
+
+def matching_candidate_sites(
+    active_site_by_id: dict[int, Site],
+    planned_sites: list[Site],
+    *,
+    site_id: int | None = None,
+) -> list[Site]:
+    candidates = dict(active_site_by_id)
+    for planned_site in planned_sites:
+        if has_valid_coordinates(planned_site) and (site_id is None or planned_site.id == site_id):
+            candidates[planned_site.id] = planned_site
+    if site_id is not None:
+        return [site for site in candidates.values() if site.id == site_id]
+    return list(candidates.values())
 
 
 def plan_gps_mismatch_notice(planned_labels: tuple[str, ...], detected_label: str | None) -> str:
