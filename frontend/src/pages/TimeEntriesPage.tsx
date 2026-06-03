@@ -373,6 +373,10 @@ export function TimeEntriesPage() {
     [reviewAllEntries, reviewEntries],
   );
   const exportPreviewSummary = useMemo(() => calculateExportPreviewSummary(exportPreviewRows), [exportPreviewRows]);
+  const exportableRows = useMemo(
+    () => exportPreviewRows.filter((row) => row.isExportable),
+    [exportPreviewRows],
+  );
   const notExportableRows = useMemo(
     () => exportPreviewRows.filter((row) => !row.isExportable),
     [exportPreviewRows],
@@ -803,6 +807,17 @@ export function TimeEntriesPage() {
     if (canViewGpsVerification) {
       void loadRecentGpsPoints();
     }
+  }
+
+  function downloadTimeExportXml(): void {
+    if (!exportableRows.length) {
+      return;
+    }
+    const xml = buildTimeExportXml(exportableRows, {
+      exportedAt: new Date().toISOString(),
+      periodLabel: `KW ${selectedReviewWeek.week} ${selectedReviewWeek.year}`,
+    });
+    downloadTextFile(xml, `zeiten_export_KW_${selectedReviewWeek.week}_${selectedReviewWeek.year}.xml`, "application/xml");
   }
 
   async function generateTestDataBatch(): Promise<void> {
@@ -1251,6 +1266,32 @@ export function TimeEntriesPage() {
                 ? "Export noch nicht vollständig bereit: Es gibt noch Einträge mit Prüfung empfohlen."
                 : "Export bereit: Alle Einträge sind automatisch oder manuell geprüft."}
             </p>
+
+            <div className="time-export-download-panel">
+              {notExportableRows.length > 0 && (
+                <p>
+                  Achtung: Es gibt noch offene Einträge mit Prüfung empfohlen. Der XML-Export enthält nur automatisch oder manuell geprüfte Zeiten.
+                </p>
+              )}
+              <div className="time-export-download-actions">
+                <div>
+                  <strong>{exportPreviewSummary.exportable}</strong>
+                  <span>exportierbare Einträge</span>
+                </div>
+                <div>
+                  <strong>{exportPreviewSummary.notExportable}</strong>
+                  <span>offene Einträge</span>
+                </div>
+                <button
+                  className="icon-button"
+                  disabled={exportableRows.length === 0}
+                  type="button"
+                  onClick={downloadTimeExportXml}
+                >
+                  Geprüfte Zeiten als XML exportieren
+                </button>
+              </div>
+            </div>
 
             {notExportableRows.length > 0 && (
               <div className="time-export-open-panel">
@@ -2820,6 +2861,87 @@ function calculateExportPreviewSummary(rows: ExportPreviewRow[]): ExportPreviewS
     exportable: 0,
     notExportable: 0,
   });
+}
+
+function buildTimeExportXml(rows: ExportPreviewRow[], meta: { exportedAt: string; periodLabel: string }): string {
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<zeitenExport>",
+    "  <meta>",
+    `    <exportiertAm>${escapeXml(meta.exportedAt)}</exportiertAm>`,
+    `    <zeitraum>${escapeXml(meta.periodLabel)}</zeitraum>`,
+    `    <anzahlEintraege>${rows.length}</anzahlEintraege>`,
+    "  </meta>",
+    "  <eintraege>",
+    ...rows.flatMap((row) => buildTimeExportEntryXmlLines(row)),
+    "  </eintraege>",
+    "</zeitenExport>",
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+function buildTimeExportEntryXmlLines(row: ExportPreviewRow): string[] {
+  const entry = row.entry;
+  const lines = [
+    "    <eintrag>",
+    `      <datum>${escapeXml(row.workDate)}</datum>`,
+    `      <tag>${escapeXml(formatWeekday(row.workDate).replace(".", ""))}</tag>`,
+    `      <monteur>${escapeXml(row.personName)}</monteur>`,
+    `      <baustellennummer>${escapeXml(row.siteNumber)}</baustellennummer>`,
+    `      <baustellenname>${escapeXml(row.siteName)}</baustellenname>`,
+    `      <gemeldeteZeit>${escapeXml(formatXmlHours(row.reportedMinutes))}</gemeldeteZeit>`,
+    `      <gpsZeit>${escapeXml(formatXmlHours(row.gpsMinutes))}</gpsZeit>`,
+    `      <korrigierteZeit>${escapeXml(formatXmlHours(row.correctedMinutes))}</korrigierteZeit>`,
+    `      <gueltigeArbeitszeit>${escapeXml(formatXmlHours(row.validMinutes))}</gueltigeArbeitszeit>`,
+    `      <exportstatus>${escapeXml(row.statusLabel)}</exportstatus>`,
+    `      <pruefhinweis>${escapeXml(row.instruction)}</pruefhinweis>`,
+    `      <personId>${entry.person_id}</personId>`,
+  ];
+  if (entry.site_id !== null) {
+    lines.push(`      <baustelleId>${entry.site_id}</baustelleId>`);
+  }
+  if (entry.reviewed_by_user_id !== null) {
+    lines.push(`      <geprueftVon>${entry.reviewed_by_user_id}</geprueftVon>`);
+  }
+  if (entry.reviewed_at) {
+    lines.push(`      <geprueftAm>${escapeXml(entry.reviewed_at)}</geprueftAm>`);
+  }
+  if (entry.note) {
+    lines.push(`      <korrekturhinweis>${escapeXml(entry.note)}</korrekturhinweis>`);
+  }
+  lines.push("    </eintrag>");
+  return lines;
+}
+
+function formatXmlHours(minutes: number | null): string {
+  if (minutes === null) {
+    return "";
+  }
+  return (minutes / 60).toFixed(1);
+}
+
+function escapeXml(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function downloadTextFile(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {

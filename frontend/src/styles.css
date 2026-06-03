@@ -6896,6 +6896,54 @@ button.person-chip:focus-visible {
   color: #8a5a00;
 }
 
+.time-export-download-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.time-export-download-panel p {
+  margin: 0;
+  color: #8a5a00;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.time-export-download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-export-download-actions div {
+  display: grid;
+  gap: 1px;
+  min-width: 130px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 7px 9px;
+}
+
+.time-export-download-actions strong {
+  color: #172033;
+  font-size: 1rem;
+}
+
+.time-export-download-actions span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.time-export-download-actions .icon-button {
+  margin-left: auto;
+}
+
 .time-export-open-panel {
   display: grid;
   gap: 8px;
