@@ -6620,28 +6620,28 @@ button.person-chip:focus-visible {
 .time-review-compact-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 1180px;
+  min-width: 1260px;
   table-layout: fixed;
 }
 
 .time-review-compact-table th:nth-child(1),
 .time-review-compact-table td:nth-child(1) {
-  width: 52px;
+  width: 48px;
 }
 
 .time-review-compact-table th:nth-child(2),
 .time-review-compact-table td:nth-child(2) {
-  width: 112px;
+  width: 96px;
 }
 
 .time-review-compact-table th:nth-child(3),
 .time-review-compact-table td:nth-child(3) {
-  width: 240px;
+  width: 210px;
 }
 
 .time-review-compact-table th:nth-child(4),
 .time-review-compact-table td:nth-child(4) {
-  width: 330px;
+  width: 390px;
 }
 
 .time-review-compact-table th:nth-child(5),
@@ -6652,12 +6652,12 @@ button.person-chip:focus-visible {
 .time-review-compact-table td:nth-child(7),
 .time-review-compact-table th:nth-child(8),
 .time-review-compact-table td:nth-child(8) {
-  width: 112px;
+  width: 98px;
 }
 
 .time-review-compact-table th:nth-child(9),
 .time-review-compact-table td:nth-child(9) {
-  width: 170px;
+  width: 132px;
 }
 
 .time-review-compact-table .time-review-group-row td {
@@ -6678,6 +6678,10 @@ button.person-chip:focus-visible {
 .time-review-compact-table .time-review-entry-row td {
   background: #ffffff;
   border-bottom-color: #e2e8f0;
+}
+
+.time-review-compact-table .time-review-entry-row.is-review-problem td:first-child {
+  border-left: 3px solid #d97706;
 }
 
 .time-review-compact-table .time-review-entry-row.is-gps-suggestion td:first-child {
@@ -6727,6 +6731,28 @@ button.person-chip:focus-visible {
   text-transform: capitalize;
 }
 
+.time-review-day-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.time-review-weekend-badge {
+  border: 1px solid #d8e2ee;
+  border-radius: 999px;
+  background: #f3f7fb;
+  color: #64748b;
+  padding: 1px 5px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.time-review-entry-row.is-weekend-row .time-review-day-cell {
+  color: #30445f;
+}
+
 .time-review-site-number-cell {
   font-variant-numeric: tabular-nums;
 }
@@ -6747,6 +6773,49 @@ button.person-chip:focus-visible {
   text-overflow: ellipsis;
 }
 
+.time-review-note-plain {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #172033;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-note-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.time-review-note-line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.18;
+}
+
+.time-review-note-line strong {
+  color: #52627a;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.time-review-note-line span {
+  min-width: 0;
+  overflow: hidden;
+  color: #172033;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-note-line:last-child span {
+  color: #30445f;
+}
+
 .time-review-delta {
   color: inherit;
 }
@@ -6760,7 +6829,29 @@ button.person-chip:focus-visible {
 .time-review-table-detail-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
+}
+
+.time-review-table-actions {
+  align-items: center;
+}
+
+.time-review-table-actions .time-table-action {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 0.73rem;
+}
+
+.time-review-action-correction-primary {
+  border-color: #b8cbe3;
+  background: #eef5ff;
+  color: #174678;
+}
+
+.time-review-action-confirm-secondary {
+  border-color: #d9e3ef;
+  background: #ffffff;
+  color: #52627a;
 }
 
 .time-review-detail-row td {
@@ -6778,7 +6869,7 @@ button.person-chip:focus-visible {
 
 .time-review-correction-panel {
   display: grid;
-  grid-template-columns: auto minmax(260px, 560px) minmax(150px, 160px) minmax(16px, 1fr) minmax(220px, 260px);
+  grid-template-columns: auto minmax(260px, 520px) minmax(150px, 160px) minmax(16px, 1fr) minmax(132px, 150px);
   align-items: end;
   gap: 12px;
   justify-content: stretch;
@@ -6844,7 +6935,7 @@ button.person-chip:focus-visible {
 }
 
 .time-review-correction-block-save .time-table-action {
-  min-width: 150px;
+  min-width: 132px;
 }
 
 .time-final-summary-grid {

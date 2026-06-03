@@ -1563,11 +1563,15 @@ function renderReviewTableRows({
     const showPersonGroup = previousRow?.personName !== row.personName;
     const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
     const hasNextSameDay = nextRow?.personName === row.personName && nextRow.workDate === row.workDate;
+    const isWeekend = isWeekendDate(row.workDate);
+    const isProblemRow = isProblematicReviewRow(row);
     const rowClassName = [
       "time-review-entry-row",
       isExpanded ? "is-expanded" : "",
       showDayGroup ? "is-day-start" : "is-same-day-continuation",
       hasNextSameDay ? "has-same-day-next" : "",
+      isWeekend ? "is-weekend-row" : "",
+      isProblemRow ? "is-review-problem" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
       hasBackendReviewNotice(row.entry) ? "is-plan-gps-mismatch" : "",
     ].filter(Boolean).join(" ");
@@ -1580,12 +1584,17 @@ function renderReviewTableRows({
           </tr>
         )}
         <tr className={rowClassName}>
-          <td className="time-review-day-cell">{formatWeekday(row.workDate)}</td>
+          <td className="time-review-day-cell">
+            <span className="time-review-day-value">
+              {formatWeekday(row.workDate)}
+              {isWeekend && <span className="time-review-weekend-badge">WE</span>}
+            </span>
+          </td>
           <td className="time-review-site-number-cell">{row.siteNumber}</td>
           <td>
             <span className="time-review-site-name-cell">{row.siteName}</span>
           </td>
-          <td className="time-review-note-cell">{row.systemHint}</td>
+          <td className="time-review-note-cell">{renderReviewNote(row)}</td>
           <td>{formatHalfHour(row.manualMinutes)}</td>
           <td>{formatHalfHour(row.gpsMinutes)}</td>
           <td>
@@ -1596,33 +1605,47 @@ function renderReviewTableRows({
           <td>{formatHalfHour(row.correctedMinutes)}</td>
           <td>
             <div className="time-review-table-actions">
-              {canManageTimeEntries && row.canConfirm ? (
-                <button
-                  className="time-table-action time-table-action-primary"
-                  disabled={isBusy}
-                  type="button"
-                  onClick={() => void onConfirm(row)}
-                >
-                  Bestätigen
-                </button>
+              {issue ? (
+                <>
+                  <button
+                    className="time-table-action time-review-action-correction-primary"
+                    disabled={isBusy}
+                    type="button"
+                    onClick={() => {
+                      if (isExpanded) {
+                        onCloseIssue();
+                      } else {
+                        onOpenIssue(issue, "corrected");
+                      }
+                    }}
+                  >
+                    Korrektur
+                  </button>
+                  {canManageTimeEntries && row.canConfirm && (
+                    <button
+                      className="time-table-action time-review-action-confirm-secondary"
+                      disabled={isBusy}
+                      type="button"
+                      onClick={() => void onConfirm(row)}
+                    >
+                      Bestätigen
+                    </button>
+                  )}
+                  {!canManageTimeEntries && <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>}
+                </>
               ) : (
-                <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
-              )}
-              {issue && (
-                <button
-                  className="time-table-action"
-                  disabled={isBusy}
-                  type="button"
-                  onClick={() => {
-                    if (isExpanded) {
-                      onCloseIssue();
-                    } else {
-                      onOpenIssue(issue, "corrected");
-                    }
-                  }}
-                >
-                  Korrektur
-                </button>
+                canManageTimeEntries && row.canConfirm ? (
+                  <button
+                    className="time-table-action time-table-action-primary"
+                    disabled={isBusy}
+                    type="button"
+                    onClick={() => void onConfirm(row)}
+                  >
+                    Bestätigen
+                  </button>
+                ) : (
+                  <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
+                )
               )}
             </div>
           </td>
@@ -1710,6 +1733,30 @@ function FinalSummaryList({ title, rows }: { title: string; rows: { label: strin
           <strong>{formatMinutes(row.minutes)}</strong>
         </div>
       )) : <p>Keine Summen vorhanden.</p>}
+    </div>
+  );
+}
+
+function renderReviewNote(row: TimeReviewTableRow) {
+  if (!isProblematicReviewRow(row)) {
+    return <span className="time-review-note-plain">{row.systemHint}</span>;
+  }
+
+  const noteLines = [
+    { label: "Geplant", value: row.entry.planned_site_labels.length ? row.entry.planned_site_labels.join(", ") : "-" },
+    { label: "Gemeldet", value: reportedSiteLabel(row.entry) },
+    { label: "GPS", value: gpsDetectedLabel(row.entry) },
+    { label: "Hinweis", value: row.systemHint || row.statusLabel },
+  ];
+
+  return (
+    <div className="time-review-note-stack">
+      {noteLines.map((line) => (
+        <span className="time-review-note-line" key={line.label}>
+          <strong>{line.label}</strong>
+          <span>{line.value}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -1924,6 +1971,11 @@ function formatDate(value: string): string {
 
 function formatWeekday(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseDateInput(value));
+}
+
+function isWeekendDate(value: string): boolean {
+  const day = parseDateInput(value).getDay();
+  return day === 0 || day === 6;
 }
 
 function formatRangeLabel(start: string, end: string): string {
@@ -2199,13 +2251,12 @@ function sourceConflictNotices(entry: TimeEntry): string[] {
   ].filter(Boolean);
 }
 
-function reviewSourceSummary(entry: TimeEntry, hint: string): string {
-  return [
-    `Geplant: ${entry.planned_site_labels.length ? entry.planned_site_labels.join(", ") : "-"}`,
-    `Gemeldet: ${reportedSiteLabel(entry)}`,
-    `GPS: ${gpsDetectedLabel(entry)}`,
-    hint,
-  ].join(" · ");
+function isProblematicReviewRow(row: TimeReviewTableRow): boolean {
+  return row.issue !== null || row.entry.is_gps_suggestion || hasBackendReviewNotice(row.entry);
+}
+
+function reviewSourceSummary(_entry: TimeEntry, hint: string): string {
+  return hint;
 }
 
 function gpsDetectedLabel(entry: TimeEntry): string {
