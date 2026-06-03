@@ -1,5 +1,5 @@
 import { Clock3, Pencil, Plus, RefreshCw } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
@@ -12,7 +12,7 @@ import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeReviewDecision } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
-type TimeSubtab = "review" | "gpsVerification" | "workerTimes";
+type TimeSubtab = "review" | "gpsVerification" | "workerTimes" | "evaluation";
 type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
 type TimeEntryFormState = {
   work_date: string;
@@ -41,7 +41,6 @@ type TimeReviewIssue = {
 };
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
 type ReviewSummaryFilter = "all" | "matches" | "needs_review" | "verified";
-type TimeReviewPanelTab = "review" | "evaluation";
 type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
@@ -104,6 +103,7 @@ const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
   { key: "gpsVerification", label: "GPS-Prüfung" },
   { key: "workerTimes", label: "Monteurszeiten" },
+  { key: "evaluation", label: "Auswertung" },
 ];
 
 const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
@@ -185,7 +185,6 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
-  const [selectedReviewPanelTab, setSelectedReviewPanelTab] = useState<TimeReviewPanelTab>("review");
   const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
@@ -203,6 +202,7 @@ export function TimeEntriesPage() {
   const visibleTimeSubtabs = canViewGpsVerification
     ? timeSubtabs
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
+  const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void loadPeople();
@@ -392,7 +392,7 @@ export function TimeEntriesPage() {
   }, [activeRange.end, activeRange.start, entriesRefreshKey, selectedPersonId]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
       return;
     }
 
@@ -428,8 +428,25 @@ export function TimeEntriesPage() {
     };
   }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activeTimeSubtab !== "review") {
+      return;
+    }
+    const selectedWeekIndex = reviewWeekOptions.findIndex(
+      (option) => option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week,
+    );
+    if (selectedWeekIndex < 0) {
+      return;
+    }
+    const firstVisibleIndex = Math.max(0, selectedWeekIndex - 5);
+    const targetButton = reviewWeekStripRef.current?.querySelector<HTMLButtonElement>(
+      `[data-week-index="${firstVisibleIndex}"]`,
+    );
+    targetButton?.scrollIntoView({ block: "nearest", inline: "start" });
+  }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek.week, selectedReviewWeek.year]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
       return;
     }
 
@@ -935,39 +952,28 @@ export function TimeEntriesPage() {
         <div className="time-entries-main time-review-main">
           <div className="project-record-subtabs time-review-subtabs" role="tablist" aria-label="Stundenprüfung Bereiche">
             <button
-              className={selectedReviewPanelTab === "review" ? "is-active" : ""}
+              className="is-active"
               type="button"
               role="tab"
-              aria-selected={selectedReviewPanelTab === "review"}
-              onClick={() => setSelectedReviewPanelTab("review")}
+              aria-selected="true"
             >
               Prüfung
             </button>
-            <button
-              className={selectedReviewPanelTab === "evaluation" ? "is-active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={selectedReviewPanelTab === "evaluation"}
-              onClick={() => setSelectedReviewPanelTab("evaluation")}
-            >
-              Auswertung
-            </button>
           </div>
 
-          {selectedReviewPanelTab === "review" && (
-            <>
           <div className="time-week-nav-panel" aria-label="Kalenderwochen">
             <div className="time-week-nav-title">
               <span>Kalenderwoche</span>
               <strong>KW {selectedReviewWeek.week}</strong>
             </div>
-            <div className="time-week-strip">
-              {reviewWeekOptions.map((option) => (
+            <div className="time-week-strip" ref={reviewWeekStripRef}>
+              {reviewWeekOptions.map((option, index) => (
                 <button
                   className={[
                     option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
                     option.isCurrent ? "is-current" : "",
                   ].filter(Boolean).join(" ")}
+                  data-week-index={index}
                   key={`${option.year}-${option.week}`}
                   title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
                   type="button"
@@ -1066,10 +1072,11 @@ export function TimeEntriesPage() {
               </div>
             )}
           </div>
-            </>
-          )}
+        </div>
+      )}
 
-          {selectedReviewPanelTab === "evaluation" && (
+      {activeTimeSubtab === "evaluation" && (
+        <div className="time-entries-main">
           <div className="time-final-hours-panel">
             <div className="time-entries-toolbar">
               <div>
@@ -1090,7 +1097,6 @@ export function TimeEntriesPage() {
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
           </div>
-          )}
         </div>
       )}
 
@@ -1497,27 +1503,39 @@ function renderReviewTableRows({
     options?: { finalMinutes?: number | null; reviewedSiteId?: number | null },
   ) => Promise<void>;
 }) {
-  let previousGroup = "";
-  return rows.map((row) => {
+  return rows.map((row, index) => {
     const issue = row.issue;
     const isExpanded = expandedReviewEntryId === row.id && issue !== null;
     const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
-    const group = row.personName;
-    const showGroup = group !== previousGroup;
-    previousGroup = group;
+    const previousRow = rows[index - 1] ?? null;
+    const nextRow = rows[index + 1] ?? null;
+    const showPersonGroup = previousRow?.personName !== row.personName;
+    const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
+    const hasNextSameDay = nextRow?.personName === row.personName && nextRow.workDate === row.workDate;
+    const rowClassName = [
+      "time-review-entry-row",
+      isExpanded ? "is-expanded" : "",
+      showDayGroup ? "is-day-start" : "is-same-day-continuation",
+      hasNextSameDay ? "has-same-day-next" : "",
+    ].filter(Boolean).join(" ");
 
     return (
       <Fragment key={row.id}>
-        {showGroup && (
+        {showPersonGroup && (
           <tr className="time-review-group-row">
-            <td colSpan={6}>{group}</td>
+            <td colSpan={6}>{row.personName}</td>
           </tr>
         )}
-        <tr className={isExpanded ? "is-expanded" : ""}>
+        {showDayGroup && (
+          <tr className="time-review-day-row">
+            <td colSpan={6}>{formatWeekday(row.workDate)} {formatDate(row.workDate)}</td>
+          </tr>
+        )}
+        <tr className={rowClassName}>
           <td>
             <div className="time-review-site-cell">
               <strong>{row.siteLabel}</strong>
-              <span>{formatWeekday(row.workDate)} {formatDate(row.workDate)} · {row.systemHint}</span>
+              <span>{row.systemHint}</span>
             </div>
           </td>
           <td>{formatHalfHour(row.manualMinutes)}</td>

@@ -6624,17 +6624,49 @@ button.person-chip:focus-visible {
 }
 
 .time-review-compact-table .time-review-group-row td {
-  background: #eef4fb;
-  color: #172033;
-  font-size: 0.78rem;
+  border-bottom: 0;
+  background: #dfeaf7;
+  color: #0f172a;
+  font-size: 0.92rem;
   font-weight: 900;
-  letter-spacing: 0.02em;
-  padding-top: 14px;
+  letter-spacing: 0.01em;
+  padding: 16px 14px 10px;
   text-transform: uppercase;
 }
 
 .time-review-compact-table .time-review-group-row:first-child td {
   padding-top: 9px;
+}
+
+.time-review-compact-table .time-review-day-row td {
+  border-bottom: 0;
+  background: #f4f8fc;
+  color: #42526a;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 9px 14px 6px;
+  text-transform: uppercase;
+}
+
+.time-review-compact-table .time-review-entry-row td {
+  background: #ffffff;
+}
+
+.time-review-compact-table .time-review-entry-row.has-same-day-next td {
+  border-bottom-color: transparent;
+  padding-bottom: 7px;
+}
+
+.time-review-compact-table .time-review-entry-row.is-same-day-continuation td {
+  padding-top: 7px;
+}
+
+.time-review-compact-table .time-review-entry-row.is-day-start td:first-child {
+  border-top-left-radius: 6px;
+}
+
+.time-review-compact-table .time-review-entry-row.is-day-start td:last-child {
+  border-top-right-radius: 6px;
 }
 
 .time-review-date-cell {
@@ -7234,12 +7266,18 @@ button.person-chip:focus-visible {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-compact-table .time-review-group-row td {
-  background: #eaf2fb;
-  color: #243348;
+  background: #dbe8f6;
+  color: #172033;
+  font-size: 0.9rem;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-compact-table .time-review-day-row td {
+  background: #f3f7fb;
+  color: #52627a;
   font-size: 0.74rem;
 }
 
-.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr:not(.time-review-group-row):not(.time-review-detail-row) td {
+.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr:not(.time-review-group-row):not(.time-review-day-row):not(.time-review-detail-row) td {
   background: #ffffff;
 }
 
