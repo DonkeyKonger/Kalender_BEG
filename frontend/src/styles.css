@@ -6723,7 +6723,7 @@ button.person-chip:focus-visible {
 
 .time-review-correction-panel {
   display: grid;
-  grid-template-columns: auto minmax(260px, 560px) 132px minmax(16px, 1fr) auto;
+  grid-template-columns: auto minmax(260px, 560px) minmax(150px, 160px) minmax(16px, 1fr) minmax(220px, 260px);
   align-items: end;
   gap: 12px;
   justify-content: stretch;
@@ -6754,6 +6754,7 @@ button.person-chip:focus-visible {
   font-size: 0.7rem;
   font-weight: 850;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .time-review-correction-block input,
@@ -6784,7 +6785,7 @@ button.person-chip:focus-visible {
 
 .time-review-correction-block-save {
   grid-column: 5;
-  justify-items: end;
+  justify-items: start;
 }
 
 .time-review-correction-block-save .time-table-action {
