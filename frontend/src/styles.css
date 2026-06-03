@@ -6619,7 +6619,7 @@ button.person-chip:focus-visible {
 
 .time-review-compact-table {
   border-collapse: separate;
-  border-spacing: 0 4px;
+  border-spacing: 0;
   min-width: 1020px;
 }
 
@@ -6640,28 +6640,23 @@ button.person-chip:focus-visible {
 
 .time-review-compact-table .time-review-entry-row td {
   background: #ffffff;
+  border-bottom-color: #e2e8f0;
 }
 
 .time-review-compact-table .time-review-entry-row.is-day-start:not(:first-child) td {
-  border-top: 4px solid #f4f8fc;
-  padding-top: 12px;
+  border-top: 2px solid #edf3f8;
+}
+
+.time-review-compact-table .time-review-group-row + .time-review-entry-row.is-day-start td {
+  border-top: 0;
 }
 
 .time-review-compact-table .time-review-entry-row.has-same-day-next td {
-  border-bottom-color: transparent;
-  padding-bottom: 6px;
+  border-bottom-color: #f8fafc;
 }
 
 .time-review-compact-table .time-review-entry-row.is-same-day-continuation td {
-  padding-top: 6px;
-}
-
-.time-review-compact-table .time-review-entry-row.is-day-start td:first-child {
-  border-top-left-radius: 6px;
-}
-
-.time-review-compact-table .time-review-entry-row.is-day-start td:last-child {
-  border-top-right-radius: 6px;
+  border-top: 0;
 }
 
 .time-review-date-cell {
