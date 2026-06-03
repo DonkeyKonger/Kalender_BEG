@@ -611,6 +611,17 @@ export function TimeEntriesPage() {
     setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
   }
 
+  function selectReviewWeek(option: CalendarWeekSelection): void {
+    if (option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week) {
+      return;
+    }
+    const scrollPosition = { left: window.scrollX, top: window.scrollY };
+    setSelectedReviewWeek({ year: option.year, week: option.week });
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ ...scrollPosition, behavior: "auto" });
+    });
+  }
+
   async function decideReviewIssue(
     issue: TimeReviewIssue,
     decision: TimeReviewDecision,
@@ -977,7 +988,7 @@ export function TimeEntriesPage() {
                   key={`${option.year}-${option.week}`}
                   title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
                   type="button"
-                  onClick={() => setSelectedReviewWeek({ year: option.year, week: option.week })}
+                  onClick={() => selectReviewWeek(option)}
                 >
                   {option.label}
                 </button>
@@ -1029,7 +1040,10 @@ export function TimeEntriesPage() {
 
           <div className="time-review-table-panel">
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
-            {isLoadingReviewEntries && <div className="empty-panel">Stundenprüfung wird geladen...</div>}
+            {isLoadingReviewEntries && reviewTableRows.length > 0 && (
+              <p className="time-table-note">Kalenderwoche wird geladen...</p>
+            )}
+            {isLoadingReviewEntries && reviewTableRows.length === 0 && <div className="empty-panel">Stundenprüfung wird geladen...</div>}
             {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
             {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length === 0 && (
               <div className="empty-panel">
@@ -1038,7 +1052,7 @@ export function TimeEntriesPage() {
                   : `Keine Fälle für diesen Status in KW ${selectedReviewWeek.week}.`}
               </div>
             )}
-            {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length > 0 && (
+            {!reviewEntriesError && reviewTableRows.length > 0 && (
               <div className="time-table-scroll">
                 <table className="time-entries-table time-review-compact-table">
                   <thead>
