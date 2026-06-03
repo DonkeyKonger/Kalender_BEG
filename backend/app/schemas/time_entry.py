@@ -171,4 +171,8 @@ class TimeEntryRead(BaseModel):
     gps_detected_site_number: str | None = None
     gps_detected_location_type: str | None = None
     planned_vs_gps_mismatch: bool = False
+    manual_vs_planned_mismatch: bool = False
+    manual_vs_gps_mismatch: bool = False
+    gps_not_checkable: bool = False
     mismatch_notice: str | None = None
+    review_notices: list[str] = Field(default_factory=list)

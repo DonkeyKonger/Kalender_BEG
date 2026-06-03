@@ -20,6 +20,10 @@ from app.services.geo_service import has_valid_coordinates, is_point_inside_site
 
 GPS_CAPTURE_FUTURE_TOLERANCE = timedelta(minutes=10)
 GPS_REVIEW_SUGGESTION_MINUTES = 30
+NOTICE_GPS_DIFFERS_FROM_PLAN = "GPS-Aufenthalt weicht von Planungsmatrix ab"
+NOTICE_MANUAL_DIFFERS_FROM_GPS = "Gemeldete Baustelle weicht von GPS ab"
+NOTICE_MANUAL_DIFFERS_FROM_PLAN = "Stundeneingabe weicht von Planungsmatrix ab"
+NOTICE_GPS_NOT_CHECKABLE = "GPS nicht eindeutig prüfbar"
 
 
 @dataclass(frozen=True)
@@ -37,7 +41,15 @@ class GpsPresenceEvaluation:
     gps_detected_site_number: str | None = None
     gps_detected_location_type: str | None = None
     planned_vs_gps_mismatch: bool = False
+    manual_vs_planned_mismatch: bool = False
+    manual_vs_gps_mismatch: bool = False
+    gps_not_checkable: bool = False
     mismatch_notice: str | None = None
+    review_notices: tuple[str, ...] = ()
+
+    @property
+    def has_source_mismatch(self) -> bool:
+        return self.planned_vs_gps_mismatch or self.manual_vs_planned_mismatch or self.manual_vs_gps_mismatch
 
 
 @dataclass(frozen=True)
@@ -77,6 +89,7 @@ class GpsSiteStay:
     planned_site_labels: tuple[str, ...] = ()
     planned_vs_gps_mismatch: bool = False
     mismatch_notice: str | None = None
+    review_notices: tuple[str, ...] = ()
 
 
 class GpsPresenceService:
@@ -149,7 +162,7 @@ class GpsPresenceService:
         )
         gps_range = gps_range_from_points(points)
         planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
-        planned_context = self._planned_gps_context(planned_sites, points[-1] if points else None)
+        planned_context = self._planned_gps_context(entry, planned_sites, points[-1] if points else None)
         if not planned_sites:
             return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range, **planned_context)
         if not points:
@@ -235,6 +248,7 @@ class GpsPresenceService:
             planned_site_ids = {planned_site.id for planned_site in planned_sites}
             planned_vs_gps_mismatch = bool(planned_sites and stay_site_id not in planned_site_ids)
             mismatch_notice = plan_gps_mismatch_notice(planned_labels, site_label(site)) if planned_vs_gps_mismatch else None
+            review_notices = (NOTICE_GPS_DIFFERS_FROM_PLAN,) if planned_vs_gps_mismatch else ()
             stays.append(GpsSiteStay(
                 person_id=stay_person_id,
                 person_name=person_label(people.get(stay_person_id)),
@@ -249,6 +263,7 @@ class GpsPresenceService:
                 planned_site_labels=planned_labels,
                 planned_vs_gps_mismatch=planned_vs_gps_mismatch,
                 mismatch_notice=mismatch_notice,
+                review_notices=review_notices,
             ))
         return sorted(stays, key=lambda stay: (stay.person_name, stay.work_date, stay.site_number or "", stay.site_name or ""))
 
@@ -357,13 +372,27 @@ class GpsPresenceService:
             if assignment.site is not None
         ]
 
-    def _planned_gps_context(self, planned_sites: list[Site], point: GpsPoint | None) -> dict[str, object]:
+    def _planned_gps_context(
+        self,
+        entry: WorkTimeEntry,
+        planned_sites: list[Site],
+        point: GpsPoint | None,
+    ) -> dict[str, object]:
         planned_labels = tuple(site_label(site) for site in planned_sites)
         candidate_sites = self._matching_candidate_sites(planned_sites)
         planned_site_ids = {site.id for site in planned_sites}
         detected_site = self._matched_site_for_point(point, candidate_sites, planned_site_ids=planned_site_ids) if point is not None else None
         detected_label = site_label(detected_site) if detected_site is not None else None
         planned_vs_gps_mismatch = bool(planned_sites and detected_site is not None and detected_site.id not in planned_site_ids)
+        manual_vs_planned_mismatch = bool(planned_sites and entry.site_id is not None and entry.site_id not in planned_site_ids)
+        manual_vs_gps_mismatch = bool(entry.site_id is not None and detected_site is not None and entry.site_id != detected_site.id)
+        gps_not_checkable = detected_site is None
+        review_notices = source_review_notices(
+            planned_vs_gps_mismatch=planned_vs_gps_mismatch,
+            manual_vs_planned_mismatch=manual_vs_planned_mismatch,
+            manual_vs_gps_mismatch=manual_vs_gps_mismatch,
+            gps_not_checkable=gps_not_checkable,
+        )
         return {
             "planned_site_labels": planned_labels,
             "gps_detected_site_id": detected_site.id if detected_site is not None else None,
@@ -371,7 +400,11 @@ class GpsPresenceService:
             "gps_detected_site_number": detected_site.site_number if detected_site is not None else None,
             "gps_detected_location_type": "site" if detected_site is not None else "unknown",
             "planned_vs_gps_mismatch": planned_vs_gps_mismatch,
+            "manual_vs_planned_mismatch": manual_vs_planned_mismatch,
+            "manual_vs_gps_mismatch": manual_vs_gps_mismatch,
+            "gps_not_checkable": gps_not_checkable,
             "mismatch_notice": plan_gps_mismatch_notice(planned_labels, detected_label) if planned_vs_gps_mismatch else None,
+            "review_notices": review_notices,
         }
 
     def _matching_candidate_sites(self, planned_sites: list[Site]) -> list[Site]:
@@ -533,3 +566,22 @@ def plan_gps_mismatch_notice(planned_labels: tuple[str, ...], detected_label: st
     planned_text = ", ".join(planned_labels) if planned_labels else "nicht geplant"
     gps_text = detected_label or "unbekannt"
     return f"Geplant: {planned_text} · GPS: {gps_text}"
+
+
+def source_review_notices(
+    *,
+    planned_vs_gps_mismatch: bool,
+    manual_vs_planned_mismatch: bool,
+    manual_vs_gps_mismatch: bool,
+    gps_not_checkable: bool,
+) -> tuple[str, ...]:
+    notices: list[str] = []
+    if planned_vs_gps_mismatch:
+        notices.append(NOTICE_GPS_DIFFERS_FROM_PLAN)
+    if manual_vs_gps_mismatch:
+        notices.append(NOTICE_MANUAL_DIFFERS_FROM_GPS)
+    if manual_vs_planned_mismatch:
+        notices.append(NOTICE_MANUAL_DIFFERS_FROM_PLAN)
+    if gps_not_checkable:
+        notices.append(NOTICE_GPS_NOT_CHECKABLE)
+    return tuple(notices)

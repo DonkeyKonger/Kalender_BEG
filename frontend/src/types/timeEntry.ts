@@ -47,7 +47,11 @@ export type TimeEntry = {
   gps_detected_site_number: string | null;
   gps_detected_location_type: "site" | "company" | "unknown" | null;
   planned_vs_gps_mismatch: boolean;
+  manual_vs_planned_mismatch: boolean;
+  manual_vs_gps_mismatch: boolean;
+  gps_not_checkable: boolean;
   mismatch_notice: string | null;
+  review_notices: string[];
 };
 
 export type TimeEntryCreate = {

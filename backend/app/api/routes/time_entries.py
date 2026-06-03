@@ -63,7 +63,7 @@ def list_time_entries(
             gps_evaluation = gps_evaluations.get(entry.id)
             gps_work_minutes = gps_evaluation.work_minutes if gps_evaluation is not None else None
             if service.is_open_time_review_case(entry, gps_work_minutes) or (
-                gps_evaluation is not None and gps_evaluation.planned_vs_gps_mismatch
+                gps_evaluation is not None and gps_evaluation.has_source_mismatch
             ):
                 open_entries.append(entry)
         entries = open_entries
@@ -163,7 +163,11 @@ def time_entry_read(
     gps_detected_site_number = None
     gps_detected_location_type = None
     planned_vs_gps_mismatch = False
+    manual_vs_planned_mismatch = False
+    manual_vs_gps_mismatch = False
+    gps_not_checkable = False
     mismatch_notice = None
+    review_notices = []
     if gps_evaluation is None and gps_service is not None:
         gps_evaluation = gps_service.evaluate_time_entry(entry)
     if gps_evaluation is not None:
@@ -179,7 +183,11 @@ def time_entry_read(
         gps_detected_site_number = gps_evaluation.gps_detected_site_number
         gps_detected_location_type = gps_evaluation.gps_detected_location_type
         planned_vs_gps_mismatch = gps_evaluation.planned_vs_gps_mismatch
+        manual_vs_planned_mismatch = gps_evaluation.manual_vs_planned_mismatch
+        manual_vs_gps_mismatch = gps_evaluation.manual_vs_gps_mismatch
+        gps_not_checkable = gps_evaluation.gps_not_checkable
         mismatch_notice = gps_evaluation.mismatch_notice
+        review_notices = list(gps_evaluation.review_notices)
 
     return TimeEntryRead(
         id=entry.id,
@@ -219,7 +227,11 @@ def time_entry_read(
         gps_detected_site_number=gps_detected_site_number,
         gps_detected_location_type=gps_detected_location_type,
         planned_vs_gps_mismatch=planned_vs_gps_mismatch,
+        manual_vs_planned_mismatch=manual_vs_planned_mismatch,
+        manual_vs_gps_mismatch=manual_vs_gps_mismatch,
+        gps_not_checkable=gps_not_checkable,
         mismatch_notice=mismatch_notice,
+        review_notices=review_notices,
     )
 
 
@@ -266,5 +278,9 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         gps_detected_site_number=stay.site_number,
         gps_detected_location_type="site",
         planned_vs_gps_mismatch=stay.planned_vs_gps_mismatch,
+        manual_vs_planned_mismatch=False,
+        manual_vs_gps_mismatch=False,
+        gps_not_checkable=False,
         mismatch_notice=stay.mismatch_notice,
+        review_notices=list(stay.review_notices),
     )

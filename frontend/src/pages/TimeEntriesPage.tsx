@@ -99,6 +99,7 @@ type FinalHoursEntry = {
 };
 
 const GPS_TIME_TOLERANCE_MINUTES = 15;
+const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
   { key: "gpsVerification", label: "GPS-Prüfung" },
@@ -1563,7 +1564,7 @@ function renderReviewTableRows({
       showDayGroup ? "is-day-start" : "is-same-day-continuation",
       hasNextSameDay ? "has-same-day-next" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
-      row.entry.planned_vs_gps_mismatch ? "is-plan-gps-mismatch" : "",
+      hasBackendReviewNotice(row.entry) ? "is-plan-gps-mismatch" : "",
     ].filter(Boolean).join(" ");
 
     return (
@@ -2032,6 +2033,17 @@ function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: Time
     gps_first_seen_at: updatedEntry.gps_first_seen_at ?? previousEntry.gps_first_seen_at,
     gps_last_seen_at: updatedEntry.gps_last_seen_at ?? previousEntry.gps_last_seen_at,
     gps_work_minutes: updatedEntry.gps_work_minutes ?? previousEntry.gps_work_minutes,
+    planned_site_labels: updatedEntry.planned_site_labels.length ? updatedEntry.planned_site_labels : previousEntry.planned_site_labels,
+    gps_detected_site_id: updatedEntry.gps_detected_site_id ?? previousEntry.gps_detected_site_id,
+    gps_detected_site_name: updatedEntry.gps_detected_site_name ?? previousEntry.gps_detected_site_name,
+    gps_detected_site_number: updatedEntry.gps_detected_site_number ?? previousEntry.gps_detected_site_number,
+    gps_detected_location_type: updatedEntry.gps_detected_location_type ?? previousEntry.gps_detected_location_type,
+    planned_vs_gps_mismatch: updatedEntry.planned_vs_gps_mismatch || previousEntry.planned_vs_gps_mismatch,
+    manual_vs_planned_mismatch: updatedEntry.manual_vs_planned_mismatch || previousEntry.manual_vs_planned_mismatch,
+    manual_vs_gps_mismatch: updatedEntry.manual_vs_gps_mismatch || previousEntry.manual_vs_gps_mismatch,
+    gps_not_checkable: updatedEntry.gps_not_checkable || previousEntry.gps_not_checkable,
+    mismatch_notice: updatedEntry.mismatch_notice ?? previousEntry.mismatch_notice,
+    review_notices: updatedEntry.review_notices.length ? updatedEntry.review_notices : previousEntry.review_notices,
   };
 }
 
@@ -2121,7 +2133,7 @@ function isAutoPlausibleEntry(entry: TimeEntry): boolean {
   return (
     entry.time_review_status === "open"
     && !entry.is_gps_suggestion
-    && !entry.planned_vs_gps_mismatch
+    && !hasBackendReviewNotice(entry)
     && entry.gps_work_minutes !== null
     && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
   );
@@ -2137,7 +2149,7 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
     return null;
   }
   const deviationMinutes = manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null;
-  if (!entry.planned_vs_gps_mismatch && deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
+  if (!hasBackendReviewNotice(entry) && deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
     return null;
   }
 
@@ -2156,6 +2168,51 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
   };
 }
 
+function hasBackendReviewNotice(entry: TimeEntry): boolean {
+  return (
+    entry.review_notices.length > 0
+    || entry.planned_vs_gps_mismatch
+    || entry.manual_vs_planned_mismatch
+    || entry.manual_vs_gps_mismatch
+    || entry.gps_not_checkable
+  );
+}
+
+function sourceConflictNotices(entry: TimeEntry): string[] {
+  const notices = entry.review_notices.filter((notice) => notice !== GPS_NOT_CHECKABLE_NOTICE);
+  if (notices.length) {
+    return notices;
+  }
+  return [
+    entry.planned_vs_gps_mismatch ? "GPS-Aufenthalt weicht von Planungsmatrix ab" : "",
+    entry.manual_vs_gps_mismatch ? "Gemeldete Baustelle weicht von GPS ab" : "",
+    entry.manual_vs_planned_mismatch ? "Stundeneingabe weicht von Planungsmatrix ab" : "",
+  ].filter(Boolean);
+}
+
+function reviewSourceSummary(entry: TimeEntry, hint: string): string {
+  return [
+    `Geplant: ${entry.planned_site_labels.length ? entry.planned_site_labels.join(", ") : "-"}`,
+    `Gemeldet: ${reportedSiteLabel(entry)}`,
+    `GPS: ${gpsDetectedLabel(entry)}`,
+    hint,
+  ].join(" · ");
+}
+
+function gpsDetectedLabel(entry: TimeEntry): string {
+  const detectedLabel = [entry.gps_detected_site_number, entry.gps_detected_site_name].filter(Boolean).join(" · ");
+  if (detectedLabel) {
+    return detectedLabel;
+  }
+  if (entry.gps_detected_location_type === "company") {
+    return "Firma";
+  }
+  if (entry.gps_not_checkable || entry.gps_status === "not_checkable" || entry.gps_status === "missing") {
+    return "nicht prüfbar";
+  }
+  return "-";
+}
+
 function classifyTimeReviewCase(
   entry: TimeEntry,
   manualMinutes: number | null,
@@ -2172,14 +2229,14 @@ function classifyTimeReviewCase(
       detail: "Bitte GPS-Zeit übernehmen, manuell anpassen oder eine reguläre Arbeitszeit erfassen.",
     };
   }
-  if (entry.planned_vs_gps_mismatch) {
+  if (sourceConflictNotices(entry).length > 0) {
     return {
       status: "needs_review",
       statusLabel: "Prüfung empfohlen",
       statusTone: "planned",
       priority: 2,
-      systemHint: entry.mismatch_notice ? `Geplant ≠ GPS · ${entry.mismatch_notice}` : "Geplant ≠ GPS",
-      detail: "GPS erkennt einen anderen Aufenthaltsort als die Einsatzplanung.",
+      systemHint: reviewSourceSummary(entry, sourceConflictNotices(entry).join(" · ")),
+      detail: "Planungsmatrix, Stundenzettel und GPS passen fachlich nicht zusammen.",
     };
   }
   if (!entry.site_id && manualMinutes !== null) {
@@ -2188,7 +2245,7 @@ function classifyTimeReviewCase(
       statusLabel: "Kritisch",
       statusTone: "warning",
       priority: 1,
-      systemHint: "Arbeitszeit ist vorhanden, aber keine Baustelle zugeordnet.",
+      systemHint: reviewSourceSummary(entry, "Arbeitszeit ist vorhanden, aber keine Baustelle zugeordnet."),
       detail: "Bitte Baustelle zuordnen oder bewusst als nicht zuordenbar klären.",
     };
   }
@@ -2198,7 +2255,7 @@ function classifyTimeReviewCase(
       statusLabel: "Prüfung empfohlen",
       statusTone: "planned",
       priority: 2,
-      systemHint: "GPS-Zeit ist vorhanden, aber keine manuelle Arbeitszeit erfasst.",
+      systemHint: reviewSourceSummary(entry, "GPS-Zeit ist vorhanden, aber keine manuelle Arbeitszeit erfasst."),
       detail: "Bitte Arbeitszeit nachtragen, GPS-Zeit übernehmen oder zur Klärung markieren.",
     };
   }
@@ -2209,9 +2266,9 @@ function classifyTimeReviewCase(
       statusLabel: "Nicht prüfbar",
       statusTone: "neutral",
       priority: 3,
-      systemHint: hasGpsSignals
+      systemHint: reviewSourceSummary(entry, hasGpsSignals
         ? "GPS-Signale sind vorhanden, aber die GPS-Arbeitszeit ist nicht berechenbar."
-        : "Keine GPS-Daten für diesen Tag vorhanden.",
+        : (entry.review_notices[0] ?? "Keine GPS-Daten für diesen Tag vorhanden.")),
       detail: hasGpsSignals
         ? "Es gibt nur einen GPS-Punkt oder eine unvollständige GPS-Kette."
         : "Bitte manuelle Zeit übernehmen, zur Klärung markieren oder als nicht prüfbar bestätigen.",
@@ -2223,7 +2280,7 @@ function classifyTimeReviewCase(
       statusLabel: "Kritisch",
       statusTone: "warning",
       priority: 1,
-      systemHint: "Die gemeldete Arbeitszeit ist ungewöhnlich lang.",
+      systemHint: reviewSourceSummary(entry, "Die gemeldete Arbeitszeit ist ungewöhnlich lang."),
       detail: "Bitte die Stunden menschlich bestätigen oder korrigieren.",
     };
   }
@@ -2233,7 +2290,7 @@ function classifyTimeReviewCase(
       statusLabel: "Kritisch",
       statusTone: "warning",
       priority: 1,
-      systemHint: "GPS-Zeit und gemeldete Zeit weichen deutlich voneinander ab.",
+      systemHint: reviewSourceSummary(entry, "GPS-Zeit und gemeldete Zeit weichen deutlich voneinander ab."),
       detail: `Abweichung: ${formatHumanDeviation(deviationMinutes)}.`,
     };
   }
@@ -2242,7 +2299,7 @@ function classifyTimeReviewCase(
     statusLabel: "Prüfung empfohlen",
     statusTone: "planned",
     priority: 2,
-    systemHint: "GPS-Zeit weicht mehr als 15 Minuten ab.",
+    systemHint: reviewSourceSummary(entry, "GPS-Zeit weicht mehr als 15 Minuten ab."),
     detail: `Abweichung: ${formatHumanDeviation(deviationMinutes)}.`,
   };
 }
@@ -2265,6 +2322,7 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
     }
     if (
       entry.gps_work_minutes !== null
+      && !hasBackendReviewNotice(entry)
       && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
     ) {
       autoPlausible += 1;
@@ -2342,6 +2400,7 @@ function finalStatusLabel(entry: TimeEntry): string {
   if (entry.time_review_status === "open") {
     if (
       entry.gps_work_minutes !== null
+      && !hasBackendReviewNotice(entry)
       && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
     ) {
       return "automatisch plausibel";
@@ -2390,6 +2449,7 @@ function finalBasisLabel(entry: TimeEntry): string {
   }
   if (
     entry.gps_work_minutes !== null
+    && !hasBackendReviewNotice(entry)
     && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
   ) {
     return "automatisch plausibel";

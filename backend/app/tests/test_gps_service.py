@@ -18,7 +18,13 @@ from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.gps import GpsLocationPointCreate
 from app.services.geo_service import is_point_inside_site_geofence
-from app.services.gps_service import GpsPresenceService
+from app.services.gps_service import (
+    NOTICE_GPS_DIFFERS_FROM_PLAN,
+    NOTICE_GPS_NOT_CHECKABLE,
+    NOTICE_MANUAL_DIFFERS_FROM_GPS,
+    NOTICE_MANUAL_DIFFERS_FROM_PLAN,
+    GpsPresenceService,
+)
 
 
 def service() -> GpsPresenceService:
@@ -306,6 +312,192 @@ def test_gps_stay_uses_nearest_active_site_when_no_planned_site_matches():
 
     assert len(stays) == 1
     assert stays[0].site_id == near_site.id
+
+
+def matrix_manual_gps_review_response(
+    *,
+    planned_site_keys: tuple[str, ...],
+    manual_site_key: str,
+    gps_site_key: str | None,
+):
+    db = db_session()
+    work_date = date(2026, 6, 7)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    sites = {
+        "A": Site(
+            site_number="A",
+            name="Baustelle A",
+            latitude=52.0,
+            longitude=8.0,
+            geofence_radius_m=800,
+            status=SiteStatus.ACTIVE,
+        ),
+        "B": Site(
+            site_number="B",
+            name="Baustelle B",
+            latitude=53.0,
+            longitude=9.0,
+            geofence_radius_m=800,
+            status=SiteStatus.ACTIVE,
+        ),
+    }
+    db.add(person)
+    db.add_all(sites.values())
+    db.commit()
+
+    db.add_all([
+        Assignment(
+            person_id=person.id,
+            site_id=sites[site_key].id,
+            start_date=work_date,
+            end_date=work_date,
+        )
+        for site_key in planned_site_keys
+    ])
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=sites[manual_site_key].id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    db.add(entry)
+    if gps_site_key is not None:
+        gps_site = sites[gps_site_key]
+        db.add_all([
+            GpsPoint(
+                source_type=GpsSourceType.PHONE,
+                source_id="mobile:test",
+                person_id=person.id,
+                latitude=gps_site.latitude,
+                longitude=gps_site.longitude,
+                timestamp=datetime(2026, 6, 7, 8, 0, tzinfo=UTC),
+            ),
+            GpsPoint(
+                source_type=GpsSourceType.PHONE,
+                source_id="mobile:test",
+                person_id=person.id,
+                latitude=gps_site.latitude,
+                longitude=gps_site.longitude,
+                timestamp=datetime(2026, 6, 7, 16, 0, tzinfo=UTC),
+            ),
+        ])
+    db.commit()
+
+    all_entries = list_time_entries(
+        date_from=work_date,
+        date_to=work_date,
+        include_gps_status=True,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        db=db,
+    )
+    open_entries = list_time_entries(
+        date_from=work_date,
+        date_to=work_date,
+        include_gps_status=True,
+        review_open_only=True,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        db=db,
+    )
+    return all_entries[0], open_entries
+
+
+def test_matrix_manual_gps_all_match_is_plausible():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A",),
+        manual_site_key="A",
+        gps_site_key="A",
+    )
+
+    assert response.review_notices == []
+    assert response.planned_vs_gps_mismatch is False
+    assert response.manual_vs_planned_mismatch is False
+    assert response.manual_vs_gps_mismatch is False
+    assert open_entries == []
+
+
+def test_matrix_manual_match_but_gps_differs_from_both_sources():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A",),
+        manual_site_key="A",
+        gps_site_key="B",
+    )
+
+    assert response.planned_vs_gps_mismatch is True
+    assert response.manual_vs_gps_mismatch is True
+    assert response.manual_vs_planned_mismatch is False
+    assert NOTICE_GPS_DIFFERS_FROM_PLAN in response.review_notices
+    assert NOTICE_MANUAL_DIFFERS_FROM_GPS in response.review_notices
+    assert any(entry.id == response.id for entry in open_entries)
+
+
+def test_manual_and_gps_match_but_both_differ_from_matrix():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A",),
+        manual_site_key="B",
+        gps_site_key="B",
+    )
+
+    assert response.planned_vs_gps_mismatch is True
+    assert response.manual_vs_gps_mismatch is False
+    assert response.manual_vs_planned_mismatch is True
+    assert NOTICE_GPS_DIFFERS_FROM_PLAN in response.review_notices
+    assert NOTICE_MANUAL_DIFFERS_FROM_PLAN in response.review_notices
+    assert len(open_entries) == 1
+
+
+def test_manual_differs_from_matrix_and_gps_when_gps_matches_matrix():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A",),
+        manual_site_key="B",
+        gps_site_key="A",
+    )
+
+    assert response.planned_vs_gps_mismatch is False
+    assert response.manual_vs_gps_mismatch is True
+    assert response.manual_vs_planned_mismatch is True
+    assert NOTICE_GPS_DIFFERS_FROM_PLAN not in response.review_notices
+    assert NOTICE_MANUAL_DIFFERS_FROM_GPS in response.review_notices
+    assert NOTICE_MANUAL_DIFFERS_FROM_PLAN in response.review_notices
+    assert any(entry.id == response.id for entry in open_entries)
+
+
+def test_multiple_planned_sites_do_not_flag_matrix_gps_conflict_when_gps_matches_one():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A", "B"),
+        manual_site_key="A",
+        gps_site_key="B",
+    )
+
+    assert response.planned_vs_gps_mismatch is False
+    assert response.manual_vs_gps_mismatch is True
+    assert response.manual_vs_planned_mismatch is False
+    assert NOTICE_GPS_DIFFERS_FROM_PLAN not in response.review_notices
+    assert NOTICE_MANUAL_DIFFERS_FROM_GPS in response.review_notices
+    assert any(entry.id == response.id for entry in open_entries)
+
+
+def test_gps_not_checkable_adds_notice_without_source_mismatch():
+    response, open_entries = matrix_manual_gps_review_response(
+        planned_site_keys=("A",),
+        manual_site_key="A",
+        gps_site_key=None,
+    )
+
+    assert response.planned_vs_gps_mismatch is False
+    assert response.manual_vs_gps_mismatch is False
+    assert response.manual_vs_planned_mismatch is False
+    assert response.gps_not_checkable is True
+    assert response.review_notices == [NOTICE_GPS_NOT_CHECKABLE]
+    assert len(open_entries) == 1
 
 
 def test_time_entry_response_uses_latest_gps_point_for_planned_site():
