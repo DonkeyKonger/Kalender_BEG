@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
@@ -55,6 +55,7 @@ type PlaceholderContent = {
 };
 
 export function MyAssignmentsPage() {
+  const navigate = useNavigate();
   const { logout, status, user } = useAuth();
   const [mode, setMode] = useState<MobileViewMode>("two_weeks");
   const [data, setData] = useState<MobileAssignmentsResponse | null>(null);
@@ -430,17 +431,14 @@ export function MyAssignmentsPage() {
           <section className="mobile-home-section">
             <div className="mobile-section-heading">
               <h2>Melden & Einreichen</h2>
-              <span>Vorbereitet</span>
+              <span>Aktiv</span>
             </div>
             <div className="mobile-action-list">
               <PlaceholderAction
                 icon={FileText}
-                title="Lohnzettel einreichen"
-                text="Hier können später Lohnzettel eingereicht werden."
-                onOpen={() => setPlaceholder({
-                  title: "Lohnzettel einreichen",
-                  text: "Hier können später Lohnzettel eingereicht werden. Die automatische Zuordnung zur Baustelle wird vorbereitet.",
-                })}
+                title="Lohnzeit erfassen"
+                text="Arbeitszeit tagesbezogen eintragen oder ändern."
+                onOpen={() => navigate("/me/time-entry")}
               />
               <PlaceholderAction
                 icon={Plane}

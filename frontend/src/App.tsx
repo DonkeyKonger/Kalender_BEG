@@ -11,6 +11,7 @@ import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MatrixPage } from "./pages/MatrixPage";
 import { MobileAssignmentDetailPage } from "./pages/MobileAssignmentDetailPage";
+import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import { SiteDetailPage } from "./pages/SiteDetailPage";
@@ -56,6 +57,7 @@ export function App() {
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
             <Route path="me/assignments" element={<MyAssignmentsPage />} />
             <Route path="me/assignments/:assignmentId" element={<MobileAssignmentDetailPage />} />
+            <Route path="me/time-entry" element={<MobileTimeEntryPage />} />
           </Route>
         </Route>
       </Route>
