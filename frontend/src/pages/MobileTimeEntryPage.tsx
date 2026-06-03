@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Clock3 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,13 +7,14 @@ import { ApiError, api } from "../lib/api";
 import type { MobileAssignment } from "../types/mobile";
 import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
 
-type MonthMode = "current" | "previous";
+type MobileTimeView = "month" | "day";
 
 type CalendarDay = {
   date: string;
   day: number;
   isCurrentMonth: boolean;
   isToday: boolean;
+  isWeekend: boolean;
 };
 
 type TimeFormState = {
@@ -28,6 +29,12 @@ type MobileTimeSiteOption = {
   name: string;
 };
 
+type DayWorkSummary = {
+  key: string;
+  siteLabel: string;
+  minutes: number;
+};
+
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const BREAK_THRESHOLD_MINUTES = 510;
 
@@ -37,9 +44,9 @@ export function MobileTimeEntryPage() {
   const personId = user?.person_id ?? null;
   const today = useMemo(() => toIsoDate(new Date()), []);
   const currentMonth = useMemo(() => startOfMonth(parseDateInput(today)), [today]);
-  const previousMonth = useMemo(() => addMonths(currentMonth, -1), [currentMonth]);
 
-  const [monthMode, setMonthMode] = useState<MonthMode>("current");
+  const [activeView, setActiveView] = useState<MobileTimeView>("month");
+  const [visibleMonth, setVisibleMonth] = useState(currentMonth);
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
@@ -51,13 +58,12 @@ export function MobileTimeEntryPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const activeMonth = monthMode === "current" ? currentMonth : previousMonth;
   const loadRange = useMemo(
     () => ({
-      start: toIsoDate(previousMonth),
-      end: toIsoDate(endOfMonth(currentMonth)),
+      start: toIsoDate(startOfMonth(addMonths(visibleMonth, -1))),
+      end: toIsoDate(endOfMonth(addMonths(visibleMonth, 1))),
     }),
-    [currentMonth, previousMonth],
+    [visibleMonth],
   );
 
   const loadTimeData = useCallback(async () => {
@@ -86,14 +92,6 @@ export function MobileTimeEntryPage() {
   useEffect(() => {
     void loadTimeData();
   }, [loadTimeData]);
-
-  useEffect(() => {
-    const monthStart = toIsoDate(startOfMonth(activeMonth));
-    const monthEnd = toIsoDate(endOfMonth(activeMonth));
-    if (selectedDate < monthStart || selectedDate > monthEnd) {
-      setSelectedDate(monthMode === "current" ? today : monthEnd);
-    }
-  }, [activeMonth, monthMode, selectedDate, today]);
 
   const entriesByDate = useMemo(() => {
     const grouped = new Map<string, TimeEntry[]>();
@@ -158,12 +156,35 @@ export function MobileTimeEntryPage() {
     [relevantSiteIds, siteById],
   );
 
-  const calendarDays = useMemo(() => buildMonthGrid(activeMonth, today), [activeMonth, today]);
+  const calendarDays = useMemo(() => buildMonthGrid(visibleMonth, today), [today, visibleMonth]);
+  const weekDays = useMemo(() => buildWeekDays(selectedDate, today), [selectedDate, today]);
   const grossMinutes = calculateGrossMinutes(form.startTime, form.endTime);
   const breakMinutes = calculateBreakMinutes(form.startTime, form.endTime);
   const netMinutes = calculateNetMinutes(form.startTime, form.endTime);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
   const selectedAssignmentId = findAssignmentIdForSite(assignmentsForSelectedDate, form.siteId);
+
+  function showMonth(month: Date) {
+    const monthStart = startOfMonth(month);
+    setVisibleMonth(monthStart);
+    setSelectedDate(toIsoDate(monthStart));
+    setActiveView("month");
+  }
+
+  function showToday() {
+    setVisibleMonth(currentMonth);
+    setSelectedDate(today);
+    setActiveView("month");
+  }
+
+  function openDay(date: string) {
+    setSelectedDate(date);
+    const dateMonth = startOfMonth(parseDateInput(date));
+    if (dateMonth.getFullYear() !== visibleMonth.getFullYear() || dateMonth.getMonth() !== visibleMonth.getMonth()) {
+      setVisibleMonth(dateMonth);
+    }
+    setActiveView("day");
+  }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -213,49 +234,51 @@ export function MobileTimeEntryPage() {
   }
 
   return (
-    <section className="mobile-page mobile-time-page">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Zurück</span>
-      </button>
-
-      <header className="mobile-subpage-title">
-        <h1>Lohnzeit erfassen</h1>
-        <p>Wähle einen Tag und trage Start- und Endzeit ein.</p>
-      </header>
-
-      <div className="mobile-segment mobile-month-segment" role="group" aria-label="Monat auswählen">
-        <button className={monthMode === "current" ? "active" : ""} type="button" onClick={() => setMonthMode("current")}>
-          Aktueller Monat
-        </button>
-        <button className={monthMode === "previous" ? "active" : ""} type="button" onClick={() => setMonthMode("previous")}>
-          Letzter Monat
-        </button>
-      </div>
+    <section className={classNames("mobile-page", "mobile-time-page", activeView === "day" && "is-day-view")}>
+      {activeView === "month" ? (
+        <header className="mobile-calendar-nav">
+          <button className="mobile-calendar-back" type="button" onClick={() => navigate("/me/assignments")}>
+            <ArrowLeft aria-hidden="true" size={18} />
+            <span>Zurück</span>
+          </button>
+          <button className="mobile-calendar-today" type="button" onClick={showToday}>Heute</button>
+        </header>
+      ) : (
+        <header className="mobile-calendar-nav">
+          <button className="mobile-calendar-back" type="button" onClick={() => setActiveView("month")}>
+            <ArrowLeft aria-hidden="true" size={18} />
+            <span>Monat</span>
+          </button>
+          <strong>{formatMonth(visibleMonth)}</strong>
+        </header>
+      )}
 
       {loadError ? <p className="form-error">{loadError}</p> : null}
-      {isLoading ? <div className="empty-panel">Arbeitszeiten werden geladen...</div> : null}
+      {isLoading ? <div className="empty-panel">Kalender wird geladen...</div> : null}
 
-      {!isLoading ? (
+      {!isLoading && activeView === "month" ? (
         <>
-          <section className="mobile-time-calendar-panel" aria-label="Monatskalender">
-            <div className="mobile-time-calendar-head">
-              <div>
-                <span>Monat</span>
-                <strong>{formatMonth(activeMonth)}</strong>
-              </div>
-              <small>
-                <Clock3 aria-hidden="true" size={14} />
-                Gespeicherte Tage sind markiert
-              </small>
+          <section className="mobile-time-month-hero" aria-label="Monatsnavigation">
+            <button type="button" aria-label="Vorheriger Monat" onClick={() => showMonth(addMonths(visibleMonth, -1))}>
+              <ChevronLeft aria-hidden="true" size={21} />
+            </button>
+            <div>
+              <span>Lohnzeit erfassen</span>
+              <h1>{formatMonth(visibleMonth)}</h1>
             </div>
+            <button type="button" aria-label="Nächster Monat" onClick={() => showMonth(addMonths(visibleMonth, 1))}>
+              <ChevronRight aria-hidden="true" size={21} />
+            </button>
+          </section>
+
+          <section className="mobile-time-calendar-panel" aria-label="Monatskalender">
             <div className="mobile-calendar-weekdays" aria-hidden="true">
               {WEEKDAY_LABELS.map((weekday) => <span key={weekday}>{weekday}</span>)}
             </div>
             <div className="mobile-calendar-grid">
               {calendarDays.map((day) => {
                 const dayEntries = entriesByDate.get(day.date) ?? [];
-                const dayEntry = dayEntries[0] ?? null;
+                const daySummaries = buildDayWorkSummaries(dayEntries, siteById);
                 const hasPlannedAssignment = assignments.some((assignment) => assignmentCoversDate(assignment, day.date));
                 return (
                   <button
@@ -263,28 +286,59 @@ export function MobileTimeEntryPage() {
                       "mobile-calendar-day",
                       day.isToday && "is-today",
                       selectedDate === day.date && "is-selected",
-                      dayEntry && "has-entry",
+                      daySummaries.length > 0 && "has-entry",
                       hasPlannedAssignment && "has-plan",
+                      day.isWeekend && "is-weekend",
                       !day.isCurrentMonth && "is-outside-month",
                     )}
-                    disabled={!day.isCurrentMonth}
                     key={day.date}
                     type="button"
-                    onClick={() => setSelectedDate(day.date)}
+                    onClick={() => openDay(day.date)}
                   >
                     <span className="mobile-calendar-day-number">{day.day}</span>
-                    {dayEntry ? <span className="mobile-calendar-day-time">{formatEntryTime(dayEntry)}</span> : null}
-                    {!dayEntry && hasPlannedAssignment ? <span className="mobile-calendar-day-plan">Einsatz</span> : null}
+                    <span className="mobile-calendar-day-events">
+                      {daySummaries.slice(0, 2).map((summary) => (
+                        <span className="mobile-calendar-event-chip" key={summary.key}>
+                          <span>{summary.siteLabel}</span>
+                          <strong>{formatHoursFromMinutes(summary.minutes)}</strong>
+                        </span>
+                      ))}
+                      {daySummaries.length > 2 ? <span className="mobile-calendar-more-chip">+{daySummaries.length - 2}</span> : null}
+                      {daySummaries.length === 0 && hasPlannedAssignment ? <span className="mobile-calendar-day-plan">Einsatz</span> : null}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </section>
+        </>
+      ) : null}
 
-          <section className="mobile-time-entry-panel" aria-label="Arbeitszeit erfassen">
+      {!isLoading && activeView === "day" ? (
+        <>
+          <section className="mobile-week-strip" aria-label="Woche auswählen">
+            {weekDays.map((day) => (
+              <button
+                className={classNames(
+                  "mobile-week-day",
+                  day.date === selectedDate && "is-selected",
+                  day.isToday && "is-today",
+                  day.isWeekend && "is-weekend",
+                )}
+                key={day.date}
+                type="button"
+                onClick={() => openDay(day.date)}
+              >
+                <span>{formatWeekdayShort(day.date)}</span>
+                <strong>{day.day}</strong>
+              </button>
+            ))}
+          </section>
+
+          <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
             <div className="mobile-time-entry-heading">
-              <span>Ausgewählter Tag</span>
-              <h2>{formatLongDate(selectedDate)}</h2>
+              <span>{formatCalendarWeek(selectedDate)}</span>
+              <h1>{formatDetailDate(selectedDate)}</h1>
               {entryForSelectedDate ? <p>Gespeicherter Eintrag wird bearbeitet.</p> : null}
               {!entryForSelectedDate && suggestionMessage ? <p>{suggestionMessage}</p> : null}
             </div>
@@ -418,6 +472,23 @@ function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[
   return sites;
 }
 
+function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, MobileTimeSiteOption>): DayWorkSummary[] {
+  const summaries = new Map<string, DayWorkSummary>();
+  for (const entry of entries) {
+    const key = entry.site_id !== null ? `site:${entry.site_id}` : "without-site";
+    const siteLabel = entry.site_id !== null
+      ? compactSiteLabel(entry.site_id, siteById, entry.site_name)
+      : "Ohne Baustelle";
+    const current = summaries.get(key);
+    if (current) {
+      current.minutes += entry.work_minutes;
+    } else {
+      summaries.set(key, { key, siteLabel, minutes: entry.work_minutes });
+    }
+  }
+  return Array.from(summaries.values()).sort((first, second) => first.siteLabel.localeCompare(second.siteLabel, "de"));
+}
+
 function upsertEntry(entries: TimeEntry[], savedEntry: TimeEntry): TimeEntry[] {
   const nextEntries = entries.filter((entry) => entry.id !== savedEntry.id);
   nextEntries.push(savedEntry);
@@ -529,6 +600,24 @@ function buildMonthGrid(month: Date, today: string): CalendarDay[] {
       day: date.getDate(),
       isCurrentMonth: date.getMonth() === monthStart.getMonth() && date.getFullYear() === monthStart.getFullYear(),
       isToday: dateValue === today,
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+    };
+  });
+}
+
+function buildWeekDays(selectedDate: string, today: string): CalendarDay[] {
+  const selected = parseDateInput(selectedDate);
+  const mondayOffset = (selected.getDay() + 6) % 7;
+  const weekStart = addDays(selected, -mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(weekStart, index);
+    const dateValue = toIsoDate(date);
+    return {
+      date: dateValue,
+      day: date.getDate(),
+      isCurrentMonth: true,
+      isToday: dateValue === today,
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
     };
   });
 }
@@ -565,21 +654,26 @@ function formatMonth(value: Date): string {
   return new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(value);
 }
 
-function formatLongDate(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { dateStyle: "full" }).format(parseDateInput(value));
+function formatDetailDate(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(parseDateInput(value));
+}
+
+function formatWeekdayShort(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseDateInput(value)).replace(".", "");
+}
+
+function formatCalendarWeek(value: string): string {
+  const { week, year } = getIsoWeek(parseDateInput(value));
+  return `KW ${week} · ${year}`;
 }
 
 function formatHoursFromMinutes(minutes: number): string {
   return `${(minutes / 60).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
-}
-
-function formatEntryTime(entry: TimeEntry): string {
-  const start = normalizeTimeInput(entry.start_time);
-  const end = normalizeTimeInput(entry.end_time);
-  if (start && end) {
-    return `${start}-${end}`;
-  }
-  return formatHoursFromMinutes(entry.work_minutes);
 }
 
 function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {
@@ -590,8 +684,25 @@ function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOpt
   return siteOptionLabel(site);
 }
 
+function compactSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>, fallbackName: string | null): string {
+  const site = siteById.get(siteId);
+  const label = site?.name ?? fallbackName ?? site?.site_number;
+  return label || `Baustelle ${siteId}`;
+}
+
 function siteOptionLabel(site: MobileTimeSiteOption): string {
   return [site.site_number, site.name].filter(Boolean).join(" - ") || `Baustelle ${site.id}`;
+}
+
+function getIsoWeek(value: Date): { week: number; year: number } {
+  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return {
+    week: Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7),
+    year: date.getUTCFullYear(),
+  };
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
