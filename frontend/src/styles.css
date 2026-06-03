@@ -6624,6 +6624,10 @@ button.person-chip:focus-visible {
   table-layout: fixed;
 }
 
+.time-review-compact-table.is-read-only-overview {
+  min-width: 1128px;
+}
+
 .time-review-compact-table th:nth-child(1),
 .time-review-compact-table td:nth-child(1) {
   width: 48px;

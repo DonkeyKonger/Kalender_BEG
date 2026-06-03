@@ -333,6 +333,12 @@ export function TimeEntriesPage() {
     () => calculateReviewSummary(timeReviewIssues, reviewAllEntries),
     [reviewAllEntries, timeReviewIssues],
   );
+  const isReadOnlyReviewOverview = reviewStatusFilter === "all" || reviewStatusFilter === "matches";
+  const reviewTableClassName = [
+    "time-entries-table",
+    "time-review-compact-table",
+    isReadOnlyReviewOverview ? "is-read-only-overview" : "",
+  ].filter(Boolean).join(" ");
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
@@ -1088,7 +1094,7 @@ export function TimeEntriesPage() {
             )}
             {!reviewEntriesError && reviewTableRows.length > 0 && (
               <div className="time-table-scroll">
-                <table className="time-entries-table time-review-compact-table">
+                <table className={reviewTableClassName}>
                   <thead>
                     <tr>
                       <th>Tag</th>
@@ -1099,7 +1105,7 @@ export function TimeEntriesPage() {
                       <th>GPS-Zeit</th>
                       <th>Zeitdifferenz</th>
                       <th>Korrigierte Zeit</th>
-                      <th>Entscheidung</th>
+                      {!isReadOnlyReviewOverview && <th>Entscheidung</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1111,6 +1117,7 @@ export function TimeEntriesPage() {
                       isSavingReviewDecision,
                       siteOptions,
                       canManageTimeEntries,
+                      showDecisionColumn: !isReadOnlyReviewOverview,
                       onConfirm: confirmReviewRow,
                       onOpenIssue: openReviewIssue,
                       onCloseIssue: closeReviewIssue,
@@ -1529,6 +1536,7 @@ function renderReviewTableRows({
   isSavingReviewDecision,
   siteOptions,
   canManageTimeEntries,
+  showDecisionColumn,
   onConfirm,
   onOpenIssue,
   onCloseIssue,
@@ -1543,6 +1551,7 @@ function renderReviewTableRows({
   isSavingReviewDecision: boolean;
   siteOptions: SiteSummary[];
   canManageTimeEntries: boolean;
+  showDecisionColumn: boolean;
   onConfirm: (row: TimeReviewTableRow) => Promise<void>;
   onOpenIssue: (issue: TimeReviewIssue, mode?: ReviewEditorMode) => void;
   onCloseIssue: () => void;
@@ -1556,7 +1565,7 @@ function renderReviewTableRows({
 }) {
   return rows.map((row, index) => {
     const issue = row.issue;
-    const isExpanded = expandedReviewEntryId === row.id && issue !== null;
+    const isExpanded = showDecisionColumn && expandedReviewEntryId === row.id && issue !== null;
     const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
     const previousRow = rows[index - 1] ?? null;
     const nextRow = rows[index + 1] ?? null;
@@ -1580,7 +1589,7 @@ function renderReviewTableRows({
       <Fragment key={row.id}>
         {showPersonGroup && (
           <tr className="time-review-group-row">
-            <td colSpan={9}>{row.personName}</td>
+            <td colSpan={showDecisionColumn ? 9 : 8}>{row.personName}</td>
           </tr>
         )}
         <tr className={rowClassName}>
@@ -1603,52 +1612,54 @@ function renderReviewTableRows({
             </span>
           </td>
           <td>{formatHalfHour(row.correctedMinutes)}</td>
-          <td>
-            <div className="time-review-table-actions">
-              {issue ? (
-                <>
-                  <button
-                    className="time-table-action time-review-action-correction-primary"
-                    disabled={isBusy}
-                    type="button"
-                    onClick={() => {
-                      if (isExpanded) {
-                        onCloseIssue();
-                      } else {
-                        onOpenIssue(issue, "corrected");
-                      }
-                    }}
-                  >
-                    Korrektur
-                  </button>
-                  {canManageTimeEntries && row.canConfirm && (
+          {showDecisionColumn && (
+            <td>
+              <div className="time-review-table-actions">
+                {issue ? (
+                  <>
                     <button
-                      className="time-table-action time-review-action-confirm-secondary"
+                      className="time-table-action time-review-action-correction-primary"
+                      disabled={isBusy}
+                      type="button"
+                      onClick={() => {
+                        if (isExpanded) {
+                          onCloseIssue();
+                        } else {
+                          onOpenIssue(issue, "corrected");
+                        }
+                      }}
+                    >
+                      Korrektur
+                    </button>
+                    {canManageTimeEntries && row.canConfirm && (
+                      <button
+                        className="time-table-action time-review-action-confirm-secondary"
+                        disabled={isBusy}
+                        type="button"
+                        onClick={() => void onConfirm(row)}
+                      >
+                        Bestätigen
+                      </button>
+                    )}
+                    {!canManageTimeEntries && <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>}
+                  </>
+                ) : (
+                  canManageTimeEntries && row.canConfirm ? (
+                    <button
+                      className="time-table-action time-table-action-primary"
                       disabled={isBusy}
                       type="button"
                       onClick={() => void onConfirm(row)}
                     >
                       Bestätigen
                     </button>
-                  )}
-                  {!canManageTimeEntries && <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>}
-                </>
-              ) : (
-                canManageTimeEntries && row.canConfirm ? (
-                  <button
-                    className="time-table-action time-table-action-primary"
-                    disabled={isBusy}
-                    type="button"
-                    onClick={() => void onConfirm(row)}
-                  >
-                    Bestätigen
-                  </button>
-                ) : (
-                  <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
-                )
-              )}
-            </div>
-          </td>
+                  ) : (
+                    <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
+                  )
+                )}
+              </div>
+            </td>
+          )}
         </tr>
         {isExpanded && issue && (
           <tr className="time-review-detail-row">
