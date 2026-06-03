@@ -125,9 +125,12 @@ export function MobileTimeEntryPage() {
     const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
     const suggestedEnd = normalizeTimeInput(prefillEntry?.end_time);
     const plannedSiteId = plannedSiteIds.length === 1 ? String(plannedSiteIds[0]) : "";
+    const initialSiteId = entryForSelectedDate
+      ? entryForSelectedDate.site_id !== null ? String(entryForSelectedDate.site_id) : ""
+      : plannedSiteId;
 
     setForm({
-      siteId: entryForSelectedDate?.site_id ? String(entryForSelectedDate.site_id) : plannedSiteId,
+      siteId: initialSiteId,
       startTime: existingStart ?? suggestedStart ?? "",
       endTime: existingEnd ?? suggestedEnd ?? "",
     });
