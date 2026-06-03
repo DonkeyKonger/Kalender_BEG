@@ -6888,6 +6888,9 @@ button.person-chip:focus-visible {
   --time-warning: #b7791f;
   --time-danger: #b42318;
   gap: 14px;
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
   min-height: calc(100vh - 112px);
   margin: -4px -6px 0;
   border: 1px solid var(--time-border);
