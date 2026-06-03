@@ -1,13 +1,15 @@
 import { LogOut } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { navigationItems } from "../config/navigation";
 
 export function AppShell() {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
-  const showProjectManagerMobileLogout = user?.role === "project_manager";
+  const showUserTopbar = location.pathname === "/";
+  const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
 
   return (
     <div className="app-shell">
@@ -34,16 +36,18 @@ export function AppShell() {
       </aside>
 
       <div className="app-main">
-        <header className="topbar">
-          <div>
-            <p className="topbar-label">Angemeldet als</p>
-            <p className="topbar-user">{user?.display_name}</p>
-          </div>
-          <button className="icon-button" type="button" onClick={() => void logout()}>
-            <LogOut aria-hidden="true" size={18} />
-            <span>Abmelden</span>
-          </button>
-        </header>
+        {showUserTopbar ? (
+          <header className="topbar">
+            <div>
+              <p className="topbar-label">Angemeldet als</p>
+              <p className="topbar-user">{user?.display_name}</p>
+            </div>
+            <button className="icon-button" type="button" onClick={() => void logout()}>
+              <LogOut aria-hidden="true" size={18} />
+              <span>Abmelden</span>
+            </button>
+          </header>
+        ) : null}
 
         {showProjectManagerMobileLogout ? (
           <div className="mobile-appshell-actions" aria-label="Mobile Projektleiteraktionen">
