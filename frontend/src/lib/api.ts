@@ -13,6 +13,8 @@ import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDe
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
+const AUTH_REFRESH_PATH = "/auth/refresh";
+let refreshAccessTokenPromise: Promise<string | null> | null = null;
 
 export function getApiBaseUrl(): string {
   return API_BASE_URL;
@@ -111,7 +113,41 @@ async function requestBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<T> {
+  const { response, payload } = await sendRequest(path, options);
+
+  if (
+    response.status === 401
+    && retryOnUnauthorized
+    && path !== AUTH_REFRESH_PATH
+    && getAccessToken()
+  ) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
+      return request<T>(path, options, false);
+    }
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  if (!response.ok) {
+    const detail = getApiErrorDetail(payload);
+    console.error("API request failed", {
+      method: options.method ?? "GET",
+      url: `${API_BASE_URL}${path}`,
+      requestBody: options.body,
+      status: response.status,
+      responseBody: payload,
+    });
+    throw new ApiError(response.status, detail);
+  }
+
+  return payload as T;
+}
+
+async function sendRequest(path: string, options: RequestInit = {}): Promise<{ response: Response; payload: unknown }> {
   const token = localStorage.getItem("kb_access_token");
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -129,7 +165,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (response.status === 204) {
-    return undefined as T;
+    return { response, payload: undefined };
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -137,19 +173,37 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ? await response.json()
     : await response.text();
 
-  if (!response.ok) {
-    const detail = payload.detail ?? payload;
-    console.error("API request failed", {
-      method: options.method ?? "GET",
-      url: `${API_BASE_URL}${path}`,
-      requestBody: options.body,
-      status: response.status,
-      responseBody: payload,
-    });
-    throw new ApiError(response.status, detail);
-  }
+  return { response, payload };
+}
 
-  return payload as T;
+function getApiErrorDetail(payload: unknown): unknown {
+  if (isRecord(payload) && "detail" in payload) {
+    return payload.detail;
+  }
+  return payload;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!getAccessToken()) {
+    return null;
+  }
+  refreshAccessTokenPromise ??= request<LoginResponse>(
+    AUTH_REFRESH_PATH,
+    { method: "POST" },
+    false,
+  )
+    .then((token) => {
+      localStorage.setItem("kb_access_token", token.access_token);
+      return token.access_token;
+    })
+    .catch((error) => {
+      console.warn("Session refresh failed", error);
+      return null;
+    })
+    .finally(() => {
+      refreshAccessTokenPromise = null;
+    });
+  return refreshAccessTokenPromise;
 }
 
 export const api = {
@@ -165,7 +219,7 @@ export const api = {
   },
 
   async logout(): Promise<void> {
-    return request<void>("/auth/logout", { method: "POST" });
+    return request<void>("/auth/logout", { method: "POST" }, false);
   },
 
   async createGpsLocationPoint(payload: GpsLocationPointCreate): Promise<GpsLocationPointRead> {

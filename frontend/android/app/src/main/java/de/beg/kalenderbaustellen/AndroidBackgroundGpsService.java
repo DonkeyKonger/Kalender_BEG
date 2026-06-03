@@ -35,6 +35,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -329,6 +331,10 @@ public class AndroidBackgroundGpsService extends Service {
     }
 
     private boolean trySendPayload(JSONObject payload) {
+        return trySendPayload(payload, true);
+    }
+
+    private boolean trySendPayload(JSONObject payload, boolean allowAuthRefresh) {
         if (!isNetworkAvailable()) {
             Log.i(TAG, "POST skipped; network not available.");
             setLastError("Kein Netz: Standortpunkt wurde offline vorgemerkt.");
@@ -363,11 +369,18 @@ public class AndroidBackgroundGpsService extends Service {
                     .apply();
                 return true;
             }
-            if (responseCode == 401 || responseCode == 403) {
-                Log.w(TAG, "Background GPS auth failed; stopping service.");
-                setLastError("Background-GPS nicht aktiv: Login abgelaufen oder keine Berechtigung.");
-                preferences(this).edit().putBoolean(KEY_TRACKING, false).remove(KEY_ACCESS_TOKEN).remove(KEY_NEXT_PING_AT).apply();
-                stopSelf();
+            if (responseCode == 401) {
+                Log.w(TAG, "Background GPS auth failed with 401.");
+                if (allowAuthRefresh && refreshAccessToken()) {
+                    Log.i(TAG, "Background GPS token refreshed; retrying current GPS point once.");
+                    return trySendPayload(payload, false);
+                }
+                setLastError("Login abgelaufen: Standortpunkt wurde offline vorgemerkt.");
+                return false;
+            }
+            if (responseCode == 403) {
+                Log.w(TAG, "Background GPS auth failed with 403; dropping payload.");
+                setLastError("Background-GPS nicht aktiv: keine Berechtigung zum Senden.");
                 return true;
             }
             if (responseCode >= 400 && responseCode < 500) {
@@ -381,6 +394,58 @@ public class AndroidBackgroundGpsService extends Service {
         } catch (Exception error) {
             Log.w(TAG, "Background GPS point send failed; queued for retry.", error);
             setLastError("Standortpunkt konnte nicht gesendet werden: " + error.getMessage());
+            return false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private boolean refreshAccessToken() {
+        String accessToken = readAccessToken();
+        if (accessToken.trim().isEmpty()) {
+            Log.w(TAG, "Token refresh skipped; access token missing.");
+            setLastError("Login abgelaufen: Token fehlt.");
+            return false;
+        }
+
+        HttpURLConnection connection = null;
+        try {
+            Log.i(TAG, "Token refresh started for background GPS.");
+            URL url = new URL(authRefreshEndpoint());
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(15_000);
+            connection.setReadTimeout(20_000);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode >= 200 && responseCode < 300) {
+                JSONObject response = new JSONObject(readResponseBody(connection));
+                String refreshedToken = response.optString("access_token", "");
+                if (refreshedToken.trim().isEmpty()) {
+                    Log.w(TAG, "Token refresh response did not contain an access token.");
+                    setLastError("Sitzung konnte nicht erneuert werden.");
+                    return false;
+                }
+                preferences(this)
+                    .edit()
+                    .putString(KEY_ACCESS_TOKEN, refreshedToken)
+                    .remove(KEY_LAST_ERROR)
+                    .apply();
+                Log.i(TAG, "Token refresh successful for background GPS.");
+                return true;
+            }
+
+            Log.w(TAG, "Token refresh failed with status " + responseCode + ".");
+            setLastError("Sitzung konnte nicht erneuert werden: " + responseCode);
+            return false;
+        } catch (Exception error) {
+            Log.w(TAG, "Token refresh failed for background GPS.", error);
+            setLastError("Sitzung konnte nicht erneuert werden: " + error.getMessage());
             return false;
         } finally {
             if (connection != null) {
@@ -600,15 +665,35 @@ public class AndroidBackgroundGpsService extends Service {
     }
 
     private String locationPointEndpoint() {
+        return apiEndpoint("/gps/location-points");
+    }
+
+    private String authRefreshEndpoint() {
+        return apiEndpoint("/auth/refresh");
+    }
+
+    private String apiEndpoint(String path) {
         String baseUrl = preferences(this).getString(KEY_API_BASE_URL, "");
         while (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
-        return baseUrl + "/gps/location-points";
+        return baseUrl + path;
     }
 
     private String readAccessToken() {
         return preferences(this).getString(KEY_ACCESS_TOKEN, "");
+    }
+
+    private String readResponseBody(HttpURLConnection connection) throws Exception {
+        try (InputStream input = connection.getInputStream();
+             ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+            byte[] chunk = new byte[4096];
+            int length;
+            while ((length = input.read(chunk)) != -1) {
+                buffer.write(chunk, 0, length);
+            }
+            return buffer.toString(StandardCharsets.UTF_8.name());
+        }
     }
 
     private void setLastError(String message) {

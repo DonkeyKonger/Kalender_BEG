@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     secret_key: str = Field(alias="SECRET_KEY")
     environment: str = Field(default="local", alias="ENVIRONMENT")
     access_token_expire_minutes: int = Field(default=480, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    access_token_refresh_grace_minutes: int = Field(
+        default=0, alias="ACCESS_TOKEN_REFRESH_GRACE_MINUTES"
+    )
     admin_username: str | None = Field(default=None, alias="ADMIN_USERNAME")
     admin_password: str | None = Field(default=None, alias="ADMIN_PASSWORD")
     admin_display_name: str = Field(default="Administrator", alias="ADMIN_DISPLAY_NAME")
