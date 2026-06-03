@@ -1738,28 +1738,54 @@ function FinalSummaryList({ title, rows }: { title: string; rows: { label: strin
 }
 
 function renderReviewNote(row: TimeReviewTableRow) {
-  if (!isProblematicReviewRow(row)) {
-    return <span className="time-review-note-plain">{row.systemHint}</span>;
-  }
-
-  const noteLines = [
-    { label: "Geplant", value: row.entry.planned_site_labels.length ? row.entry.planned_site_labels.join(", ") : "-" },
-    { label: "Gemeldet", value: reportedSiteLabel(row.entry) },
-    { label: "GPS", value: gpsDetectedLabel(row.entry) },
-    { label: "Hinweis", value: row.systemHint || row.statusLabel },
-  ];
-
-  return (
-    <div className="time-review-note-stack">
-      {noteLines.map((line) => (
-        <span className="time-review-note-line" key={line.label}>
-          <strong>{line.label}</strong>
-          <span>{line.value}</span>
-        </span>
-      ))}
-    </div>
-  );
+  const className = isProblematicReviewRow(row)
+    ? "time-review-note-instruction is-attention"
+    : "time-review-note-instruction";
+  return <span className={className}>{buildTimeReviewInstruction(row)}</span>;
 }
+
+function buildTimeReviewInstruction(row: TimeReviewTableRow): string {
+  const entry = row.entry;
+  const hasGpsSignal = Boolean(entry.gps_first_seen_at || entry.gps_last_seen_at || entry.gps_total_points);
+  const hasPlannedSite = entry.planned_site_labels.length > 0;
+  const gpsLocationType = entry.gps_detected_location_type;
+
+  if (entry.gps_status === "missing" || (row.gpsMinutes === null && !hasGpsSignal)) {
+    return "GPS fehlt: Arbeitszeit kann nicht automatisch geprüft werden.";
+  }
+  if (entry.gps_not_checkable || entry.gps_status === "not_checkable" || entry.review_notices.includes(GPS_NOT_CHECKABLE_NOTICE)) {
+    return "GPS nicht eindeutig: Standort liegt im Radius mehrerer Baustellen.";
+  }
+  if (row.gpsMinutes !== null && row.gpsMinutes <= 60) {
+    return "GPS fehlt: Arbeitszeit kann nicht automatisch geprüft werden.";
+  }
+  if (hasPlannedSite && gpsLocationType === "company") {
+    return "Einsatzort prüfen: automatisch erkannter Einsatzort weicht von geplantem Einsatzort ab.";
+  }
+  if (hasPlannedSite && gpsLocationType === "site" && entry.planned_vs_gps_mismatch) {
+    return "Einsatzort prüfen: automatisch erkannter Einsatzort zeigt andere Baustelle als geplant.";
+  }
+  if (entry.planned_vs_gps_mismatch) {
+    return "Einsatzort prüfen: automatisch erkannter Einsatzort weicht von geplantem Einsatzort ab.";
+  }
+  if (entry.manual_vs_gps_mismatch) {
+    return "Einsatzort prüfen: Einsatzort in Stundenerfassung weicht von automatisch erkanntem Einsatzort ab.";
+  }
+  if (entry.manual_vs_planned_mismatch) {
+    return "Planung prüfen: Einsatzort in Stundenerfassung weicht von der Kalenderplanung ab.";
+  }
+  if (row.deviationMinutes !== null && Math.abs(row.deviationMinutes) > GPS_TIME_TOLERANCE_MINUTES) {
+    return "Zeit prüfen: automatisch erkannte Zeit weicht deutlich von gemeldeter Zeit ab.";
+  }
+  if (isWeekendDate(row.workDate)) {
+    return "Wochenendeinsatz prüfen, falls nicht bewusst geplant.";
+  }
+  if (entry.time_review_status !== "open") {
+    return row.systemHint || "manuell geprüft";
+  }
+  return "automatisch geprüft";
+}
+
 function currentMonthRange(): { start: string; end: string } {
   const today = new Date();
   return {
@@ -2257,20 +2283,6 @@ function isProblematicReviewRow(row: TimeReviewTableRow): boolean {
 
 function reviewSourceSummary(_entry: TimeEntry, hint: string): string {
   return hint;
-}
-
-function gpsDetectedLabel(entry: TimeEntry): string {
-  const detectedLabel = [entry.gps_detected_site_number, entry.gps_detected_site_name].filter(Boolean).join(" · ");
-  if (detectedLabel) {
-    return detectedLabel;
-  }
-  if (entry.gps_detected_location_type === "company") {
-    return "Firma";
-  }
-  if (entry.gps_not_checkable || entry.gps_status === "not_checkable" || entry.gps_status === "missing") {
-    return "nicht prüfbar";
-  }
-  return "-";
 }
 
 function classifyTimeReviewCase(

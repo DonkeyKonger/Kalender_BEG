@@ -6769,51 +6769,19 @@ button.person-chip:focus-visible {
   color: #64748b;
   line-height: 1.35;
   font-weight: 750;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
-.time-review-note-plain {
-  display: inline-block;
+.time-review-note-instruction {
+  display: block;
   max-width: 100%;
-  overflow: hidden;
   color: #172033;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.28;
 }
 
-.time-review-note-stack {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.time-review-note-line {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 6px;
-  min-width: 0;
-  line-height: 1.18;
-}
-
-.time-review-note-line strong {
-  color: #52627a;
-  font-size: 0.64rem;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.time-review-note-line span {
-  min-width: 0;
-  overflow: hidden;
-  color: #172033;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-review-note-line:last-child span {
+.time-review-note-instruction.is-attention {
   color: #30445f;
+  font-weight: 850;
 }
 
 .time-review-delta {
