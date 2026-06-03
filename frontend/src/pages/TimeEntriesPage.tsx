@@ -203,7 +203,7 @@ export function TimeEntriesPage() {
     ? timeSubtabs
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
-  const hasAutoScrolledReviewWeekRef = useRef(false);
+  const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
 
   useEffect(() => {
     void loadPeople();
@@ -431,24 +431,19 @@ export function TimeEntriesPage() {
 
   useLayoutEffect(() => {
     if (activeTimeSubtab !== "review") {
+      hasAutoScrolledVisibleReviewWeekRef.current = false;
       return;
     }
-    if (hasAutoScrolledReviewWeekRef.current) {
+    if (hasAutoScrolledVisibleReviewWeekRef.current) {
       return;
     }
-    const selectedWeekIndex = reviewWeekOptions.findIndex(
-      (option) => option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week,
-    );
-    if (selectedWeekIndex < 0) {
-      return;
-    }
-    const firstVisibleIndex = Math.max(0, selectedWeekIndex - 5);
-    const targetButton = reviewWeekStripRef.current?.querySelector<HTMLButtonElement>(
-      `[data-week-index="${firstVisibleIndex}"]`,
-    );
-    targetButton?.scrollIntoView({ block: "nearest", inline: "start" });
-    hasAutoScrolledReviewWeekRef.current = true;
-  }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek.week, selectedReviewWeek.year]);
+    const animationFrameId = window.requestAnimationFrame(() => {
+      scrollWeekStripToSelection(reviewWeekStripRef.current, reviewWeekOptions, selectedReviewWeek);
+      hasAutoScrolledVisibleReviewWeekRef.current = true;
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
@@ -1751,6 +1746,32 @@ function buildCalendarWeekOptions(currentWeek: CalendarWeekSelection): CalendarW
     ...numberRange(1, 54).map((week) => optionForWeek(currentWeek.year, week)),
     ...numberRange(1, 5).map((week) => optionForWeek(currentWeek.year + 1, week)),
   ];
+}
+
+function scrollWeekStripToSelection(
+  container: HTMLDivElement | null,
+  options: CalendarWeekOption[],
+  selection: CalendarWeekSelection,
+): void {
+  if (!container) {
+    return;
+  }
+  const selectedWeekIndex = options.findIndex(
+    (option) => option.year === selection.year && option.week === selection.week,
+  );
+  if (selectedWeekIndex < 0) {
+    return;
+  }
+
+  const firstVisibleIndex = Math.max(0, selectedWeekIndex - 5);
+  const targetButton = container.querySelector<HTMLButtonElement>(`[data-week-index="${firstVisibleIndex}"]`);
+  if (!targetButton) {
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = targetButton.getBoundingClientRect();
+  container.scrollLeft = Math.max(0, container.scrollLeft + targetRect.left - containerRect.left);
 }
 
 function numberRange(start: number, end: number): number[] {
