@@ -62,7 +62,9 @@ def list_time_entries(
         for entry in entries:
             gps_evaluation = gps_evaluations.get(entry.id)
             gps_work_minutes = gps_evaluation.work_minutes if gps_evaluation is not None else None
-            if service.is_open_time_review_case(entry, gps_work_minutes):
+            if service.is_open_time_review_case(entry, gps_work_minutes) or (
+                gps_evaluation is not None and gps_evaluation.planned_vs_gps_mismatch
+            ):
                 open_entries.append(entry)
         entries = open_entries
     response_entries = [time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id)) for entry in entries]
@@ -155,6 +157,13 @@ def time_entry_read(
     gps_first_seen_at = None
     gps_last_seen_at = None
     gps_work_minutes = None
+    planned_site_labels = []
+    gps_detected_site_id = None
+    gps_detected_site_name = None
+    gps_detected_site_number = None
+    gps_detected_location_type = None
+    planned_vs_gps_mismatch = False
+    mismatch_notice = None
     if gps_evaluation is None and gps_service is not None:
         gps_evaluation = gps_service.evaluate_time_entry(entry)
     if gps_evaluation is not None:
@@ -164,6 +173,13 @@ def time_entry_read(
         gps_first_seen_at = gps_evaluation.first_seen_at
         gps_last_seen_at = gps_evaluation.last_seen_at
         gps_work_minutes = gps_evaluation.work_minutes
+        planned_site_labels = list(gps_evaluation.planned_site_labels)
+        gps_detected_site_id = gps_evaluation.gps_detected_site_id
+        gps_detected_site_name = gps_evaluation.gps_detected_site_name
+        gps_detected_site_number = gps_evaluation.gps_detected_site_number
+        gps_detected_location_type = gps_evaluation.gps_detected_location_type
+        planned_vs_gps_mismatch = gps_evaluation.planned_vs_gps_mismatch
+        mismatch_notice = gps_evaluation.mismatch_notice
 
     return TimeEntryRead(
         id=entry.id,
@@ -197,6 +213,13 @@ def time_entry_read(
         reviewed_at=entry.reviewed_at,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
+        planned_site_labels=planned_site_labels,
+        gps_detected_site_id=gps_detected_site_id,
+        gps_detected_site_name=gps_detected_site_name,
+        gps_detected_site_number=gps_detected_site_number,
+        gps_detected_location_type=gps_detected_location_type,
+        planned_vs_gps_mismatch=planned_vs_gps_mismatch,
+        mismatch_notice=mismatch_notice,
     )
 
 
@@ -237,4 +260,11 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         is_gps_suggestion=True,
         has_manual_entry=False,
         gps_suggestion_key=f"{stay.person_id}:{stay.work_date.isoformat()}:{stay.site_id}",
+        planned_site_labels=list(stay.planned_site_labels),
+        gps_detected_site_id=stay.site_id,
+        gps_detected_site_name=stay.site_name,
+        gps_detected_site_number=stay.site_number,
+        gps_detected_location_type="site",
+        planned_vs_gps_mismatch=stay.planned_vs_gps_mismatch,
+        mismatch_notice=stay.mismatch_notice,
     )

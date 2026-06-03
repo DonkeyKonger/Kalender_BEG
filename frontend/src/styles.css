@@ -6651,6 +6651,10 @@ button.person-chip:focus-visible {
   background: #fffaf0;
 }
 
+.time-review-compact-table .time-review-entry-row.is-plan-gps-mismatch td:first-child {
+  border-left: 3px solid #b42318;
+}
+
 .time-review-compact-table .time-review-entry-row.is-day-start:not(:first-child) td {
   border-top: 2px solid #edf3f8;
 }

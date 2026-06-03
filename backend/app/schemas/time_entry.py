@@ -165,3 +165,10 @@ class TimeEntryRead(BaseModel):
     is_gps_suggestion: bool = False
     has_manual_entry: bool = True
     gps_suggestion_key: str | None = None
+    planned_site_labels: list[str] = Field(default_factory=list)
+    gps_detected_site_id: int | None = None
+    gps_detected_site_name: str | None = None
+    gps_detected_site_number: str | None = None
+    gps_detected_location_type: str | None = None
+    planned_vs_gps_mismatch: bool = False
+    mismatch_notice: str | None = None

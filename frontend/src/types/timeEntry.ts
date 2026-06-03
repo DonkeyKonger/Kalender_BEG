@@ -41,6 +41,13 @@ export type TimeEntry = {
   is_gps_suggestion: boolean;
   has_manual_entry: boolean;
   gps_suggestion_key: string | null;
+  planned_site_labels: string[];
+  gps_detected_site_id: number | null;
+  gps_detected_site_name: string | null;
+  gps_detected_site_number: string | null;
+  gps_detected_location_type: "site" | "company" | "unknown" | null;
+  planned_vs_gps_mismatch: boolean;
+  mismatch_notice: string | null;
 };
 
 export type TimeEntryCreate = {
@@ -54,7 +61,7 @@ export type TimeEntryCreate = {
   travel_minutes?: number | null;
   work_minutes?: number | null;
   note?: string | null;
-  source?: TimeEntrySource;
+  source?: "manual";
   status?: TimeEntryStatus;
 };
 

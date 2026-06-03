@@ -1568,6 +1568,7 @@ function renderReviewTableRows({
       showDayGroup ? "is-day-start" : "is-same-day-continuation",
       hasNextSameDay ? "has-same-day-next" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
+      row.entry.planned_vs_gps_mismatch ? "is-plan-gps-mismatch" : "",
     ].filter(Boolean).join(" ");
 
     return (
@@ -2099,6 +2100,7 @@ function isAutoPlausibleEntry(entry: TimeEntry): boolean {
   return (
     entry.time_review_status === "open"
     && !entry.is_gps_suggestion
+    && !entry.planned_vs_gps_mismatch
     && entry.gps_work_minutes !== null
     && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
   );
@@ -2114,7 +2116,7 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
     return null;
   }
   const deviationMinutes = manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null;
-  if (deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
+  if (!entry.planned_vs_gps_mismatch && deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
     return null;
   }
 
@@ -2147,6 +2149,16 @@ function classifyTimeReviewCase(
       priority: 2,
       systemHint: "GPS erkannt · kein manueller Eintrag",
       detail: "Bitte GPS-Zeit übernehmen, manuell anpassen oder eine reguläre Arbeitszeit erfassen.",
+    };
+  }
+  if (entry.planned_vs_gps_mismatch) {
+    return {
+      status: "needs_review",
+      statusLabel: "Prüfung empfohlen",
+      statusTone: "planned",
+      priority: 2,
+      systemHint: entry.mismatch_notice ? `Geplant ≠ GPS · ${entry.mismatch_notice}` : "Geplant ≠ GPS",
+      detail: "GPS erkennt einen anderen Aufenthaltsort als die Einsatzplanung.",
     };
   }
   if (!entry.site_id && manualMinutes !== null) {

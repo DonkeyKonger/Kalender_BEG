@@ -186,6 +186,92 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
     assert response.gps_first_seen_at == older_outside_point.timestamp
     assert response.gps_last_seen_at == latest_inside_point.timestamp
     assert response.gps_work_minutes == 240
+    assert response.planned_site_labels == ["8007 - Klinik"]
+    assert response.gps_detected_site_id == planned_site.id
+    assert response.planned_vs_gps_mismatch is False
+    assert response.mismatch_notice is None
+
+
+def test_review_response_flags_planned_site_gps_mismatch():
+    db = db_session()
+    work_date = date(2026, 6, 3)
+    person = Person(
+        first_name="Marcin",
+        last_name="Monteur",
+        display_name="Marcin Monteur",
+        short_code="MM",
+    )
+    planned_site = Site(
+        site_number="8008",
+        name="Friedensschule Osnabrück",
+        latitude=52.2799,
+        longitude=8.0472,
+        geofence_radius_m=800,
+    )
+    detected_site = Site(
+        site_number="1010",
+        name="Firma BEG",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=800,
+    )
+    db.add_all([person, planned_site, detected_site])
+    db.commit()
+
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=planned_site.id,
+        start_date=work_date,
+        end_date=work_date,
+    ))
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=planned_site.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    db.add(entry)
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 3, 16, 0, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    response = list_time_entries(
+        date_from=work_date,
+        date_to=work_date,
+        include_gps_status=True,
+        review_open_only=True,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        db=db,
+    )
+
+    manual_response = next(item for item in response if item.id == entry.id)
+    assert manual_response.gps_work_minutes == 480
+    assert manual_response.gps_status == "mismatch"
+    assert manual_response.planned_site_labels == ["8008 - Friedensschule Osnabrück"]
+    assert manual_response.gps_detected_site_id == detected_site.id
+    assert manual_response.gps_detected_site_name == "Firma BEG"
+    assert manual_response.planned_vs_gps_mismatch is True
+    assert manual_response.mismatch_notice == "Geplant: 8008 - Friedensschule Osnabrück · GPS: 1010 - Firma BEG"
 
 
 def test_review_response_adds_gps_suggestion_for_unreported_site_only():

@@ -31,6 +31,13 @@ class GpsPresenceEvaluation:
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
     work_minutes: int | None = None
+    planned_site_labels: tuple[str, ...] = ()
+    gps_detected_site_id: int | None = None
+    gps_detected_site_name: str | None = None
+    gps_detected_site_number: str | None = None
+    gps_detected_location_type: str | None = None
+    planned_vs_gps_mismatch: bool = False
+    mismatch_notice: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,9 @@ class GpsSiteStay:
     last_seen_at: datetime
     work_minutes: int
     matched_points: int
+    planned_site_labels: tuple[str, ...] = ()
+    planned_vs_gps_mismatch: bool = False
+    mismatch_notice: str | None = None
 
 
 class GpsPresenceService:
@@ -139,13 +149,17 @@ class GpsPresenceService:
         )
         gps_range = gps_range_from_points(points)
         planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
+        planned_context = self._planned_gps_context(planned_sites, points[-1] if points else None)
         if not planned_sites:
-            return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range)
+            return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range, **planned_context)
         if not points:
-            return GpsPresenceEvaluation("not_checkable", 0, 0, "no_gps_point_for_work_date")
+            return GpsPresenceEvaluation("not_checkable", 0, 0, "no_gps_point_for_work_date", **gps_range, **planned_context)
 
         plausibility = self._evaluate_point_against_planned_sites(points[-1], planned_sites)
-        return self._presence_evaluation_from_point_plausibility(plausibility, gps_range=gps_range)
+        return self._presence_evaluation_from_point_plausibility(
+            plausibility,
+            gps_range={**gps_range, **planned_context},
+        )
 
     def list_site_stays_for_review(
         self,
@@ -186,6 +200,15 @@ class GpsPresenceService:
             person.id: person
             for person in self.db.scalars(select(Person).where(Person.id.in_(person_ids)))
         }
+        assignments = list(self.db.scalars(
+            select(Assignment)
+            .options(selectinload(Assignment.site))
+            .where(
+                Assignment.person_id.in_(person_ids),
+                Assignment.start_date <= date_to,
+                Assignment.end_date >= date_from,
+            )
+        ))
         grouped_points: dict[tuple[int, date, int], list[GpsPoint]] = {}
         site_by_id = {site.id: site for site in sites}
         for point in points:
@@ -204,6 +227,11 @@ class GpsPresenceService:
             if work_minutes is None or work_minutes < min_minutes:
                 continue
             site = site_by_id[stay_site_id]
+            planned_sites = planned_sites_from_assignments(assignments, stay_person_id, stay_date)
+            planned_labels = tuple(site_label(planned_site) for planned_site in planned_sites)
+            planned_site_ids = {planned_site.id for planned_site in planned_sites}
+            planned_vs_gps_mismatch = bool(planned_sites and stay_site_id not in planned_site_ids)
+            mismatch_notice = plan_gps_mismatch_notice(planned_labels, site_label(site)) if planned_vs_gps_mismatch else None
             stays.append(GpsSiteStay(
                 person_id=stay_person_id,
                 person_name=person_label(people.get(stay_person_id)),
@@ -215,6 +243,9 @@ class GpsPresenceService:
                 last_seen_at=stay_range["last_seen_at"],
                 work_minutes=work_minutes,
                 matched_points=len(stay_points),
+                planned_site_labels=planned_labels,
+                planned_vs_gps_mismatch=planned_vs_gps_mismatch,
+                mismatch_notice=mismatch_notice,
             ))
         return sorted(stays, key=lambda stay: (stay.person_name, stay.work_date, stay.site_number or "", stay.site_name or ""))
 
@@ -322,6 +353,25 @@ class GpsPresenceService:
             )
             if assignment.site is not None
         ]
+
+    def _planned_gps_context(self, planned_sites: list[Site], point: GpsPoint | None) -> dict[str, object]:
+        planned_labels = tuple(site_label(site) for site in planned_sites)
+        detected_site = self._matched_site_for_point(point, self._sites_with_coordinates()) if point is not None else None
+        detected_label = site_label(detected_site) if detected_site is not None else None
+        planned_site_ids = {site.id for site in planned_sites}
+        planned_vs_gps_mismatch = bool(planned_sites and detected_site is not None and detected_site.id not in planned_site_ids)
+        return {
+            "planned_site_labels": planned_labels,
+            "gps_detected_site_id": detected_site.id if detected_site is not None else None,
+            "gps_detected_site_name": detected_site.name if detected_site is not None else None,
+            "gps_detected_site_number": detected_site.site_number if detected_site is not None else None,
+            "gps_detected_location_type": "site" if detected_site is not None else "unknown",
+            "planned_vs_gps_mismatch": planned_vs_gps_mismatch,
+            "mismatch_notice": plan_gps_mismatch_notice(planned_labels, detected_label) if planned_vs_gps_mismatch else None,
+        }
+
+    def _sites_with_coordinates(self) -> list[Site]:
+        return [site for site in self.db.scalars(select(Site)) if has_valid_coordinates(site)]
 
     def _location_points_for_person(
         self,
@@ -442,3 +492,19 @@ def site_label(site: Site) -> str:
     if site.site_number and site.name:
         return f"{site.site_number} - {site.name}"
     return site.site_number or site.name
+
+
+def planned_sites_from_assignments(assignments: list[Assignment], person_id: int, work_date: date) -> list[Site]:
+    return [
+        assignment.site
+        for assignment in assignments
+        if assignment.person_id == person_id
+        and assignment.start_date <= work_date <= assignment.end_date
+        and assignment.site is not None
+    ]
+
+
+def plan_gps_mismatch_notice(planned_labels: tuple[str, ...], detected_label: str | None) -> str:
+    planned_text = ", ".join(planned_labels) if planned_labels else "nicht geplant"
+    gps_text = detected_label or "unbekannt"
+    return f"Geplant: {planned_text} · GPS: {gps_text}"
