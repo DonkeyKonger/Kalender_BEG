@@ -6638,27 +6638,22 @@ button.person-chip:focus-visible {
   padding-top: 9px;
 }
 
-.time-review-compact-table .time-review-day-row td {
-  border-bottom: 0;
-  background: #f4f8fc;
-  color: #42526a;
-  font-size: 0.76rem;
-  font-weight: 900;
-  padding: 9px 14px 6px;
-  text-transform: uppercase;
-}
-
 .time-review-compact-table .time-review-entry-row td {
   background: #ffffff;
 }
 
+.time-review-compact-table .time-review-entry-row.is-day-start:not(:first-child) td {
+  border-top: 4px solid #f4f8fc;
+  padding-top: 12px;
+}
+
 .time-review-compact-table .time-review-entry-row.has-same-day-next td {
   border-bottom-color: transparent;
-  padding-bottom: 7px;
+  padding-bottom: 6px;
 }
 
 .time-review-compact-table .time-review-entry-row.is-same-day-continuation td {
-  padding-top: 7px;
+  padding-top: 6px;
 }
 
 .time-review-compact-table .time-review-entry-row.is-day-start td:first-child {
@@ -7295,13 +7290,7 @@ button.person-chip:focus-visible {
   font-size: 0.9rem;
 }
 
-.time-entries-page.is-figma-times-workspace .time-review-compact-table .time-review-day-row td {
-  background: #f3f7fb;
-  color: #52627a;
-  font-size: 0.74rem;
-}
-
-.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr:not(.time-review-group-row):not(.time-review-day-row):not(.time-review-detail-row) td {
+.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr:not(.time-review-group-row):not(.time-review-detail-row) td {
   background: #ffffff;
 }
 

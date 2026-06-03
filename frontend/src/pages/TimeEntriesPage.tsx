@@ -1526,16 +1526,11 @@ function renderReviewTableRows({
             <td colSpan={6}>{row.personName}</td>
           </tr>
         )}
-        {showDayGroup && (
-          <tr className="time-review-day-row">
-            <td colSpan={6}>{formatWeekday(row.workDate)} {formatDate(row.workDate)}</td>
-          </tr>
-        )}
         <tr className={rowClassName}>
           <td>
             <div className="time-review-site-cell">
               <strong>{row.siteLabel}</strong>
-              <span>{row.systemHint}</span>
+              <span>{formatWeekday(row.workDate)} {formatDate(row.workDate)} · {row.systemHint}</span>
             </div>
           </td>
           <td>{formatHalfHour(row.manualMinutes)}</td>
