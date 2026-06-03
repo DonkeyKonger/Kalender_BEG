@@ -1540,7 +1540,11 @@ function renderReviewTableRows({
           </td>
           <td>{formatHalfHour(row.manualMinutes)}</td>
           <td>{formatHalfHour(row.gpsMinutes)}</td>
-          <td>{formatHalfHourDelta(row.deviationMinutes)}</td>
+          <td>
+            <span className={Math.abs(row.deviationMinutes ?? 0) > 60 ? "time-review-delta is-critical" : "time-review-delta"}>
+              {formatHalfHourDelta(row.deviationMinutes)}
+            </span>
+          </td>
           <td>{formatHalfHour(row.correctedMinutes)}</td>
           <td>
             <div className="time-review-table-actions">
@@ -1581,17 +1585,20 @@ function renderReviewTableRows({
               <div className="time-review-correction-panel">
                 {canManageTimeEntries && (
                   <>
-                    <button
-                      className="time-table-action"
-                      disabled={isBusy || issue.gpsMinutes === null}
-                      type="button"
-                      onClick={() => void onDecideIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
-                    >
-                      GPS übernehmen
-                    </button>
-                    <div className="time-review-correction-field">
-                      <label>
-                        <span>Baustelle zuordnen</span>
+                    <div className="time-review-correction-block time-review-correction-block-gps">
+                      <span>GPS</span>
+                      <button
+                        className="time-table-action"
+                        disabled={isBusy || issue.gpsMinutes === null}
+                        type="button"
+                        onClick={() => void onDecideIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
+                      >
+                        Übernehmen
+                      </button>
+                    </div>
+                    <div className="time-review-correction-block time-review-correction-block-site">
+                      <span>Baustelle zuordnen</span>
+                      <div className="time-review-correction-control-row">
                         <select
                           value={reviewDecisionForm.site_id}
                           onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, site_id: event.target.value }))}
@@ -1601,26 +1608,27 @@ function renderReviewTableRows({
                             <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
                           ))}
                         </select>
-                      </label>
-                      <button
-                        className="time-table-action"
-                        disabled={isBusy}
-                        type="button"
-                        onClick={() => void onSaveDecision(issue, "assign_site")}
-                      >
-                        Baustelle zuordnen
-                      </button>
+                        <button
+                          className="time-table-action"
+                          disabled={isBusy}
+                          type="button"
+                          onClick={() => void onSaveDecision(issue, "assign_site")}
+                        >
+                          Zuordnen
+                        </button>
+                      </div>
                     </div>
-                    <div className="time-review-correction-field">
-                      <label>
-                        <span>Zeit manuell anpassen</span>
-                        <input
-                          inputMode="decimal"
-                          placeholder="z. B. 8,5"
-                          value={reviewDecisionForm.hours}
-                          onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, hours: event.target.value }))}
-                        />
-                      </label>
+                    <div className="time-review-correction-block time-review-correction-block-time">
+                      <span>Zeit manuell anpassen</span>
+                      <input
+                        inputMode="decimal"
+                        placeholder="z. B. 8,5"
+                        value={reviewDecisionForm.hours}
+                        onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, hours: event.target.value }))}
+                      />
+                    </div>
+                    <div className="time-review-correction-block time-review-correction-block-save">
+                      <span>&nbsp;</span>
                       <button
                         className="time-table-action time-table-action-primary"
                         disabled={isBusy}
