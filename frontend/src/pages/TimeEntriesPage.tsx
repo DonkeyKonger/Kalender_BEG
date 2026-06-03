@@ -12,7 +12,7 @@ import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeReviewDecision } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
-type TimeSubtab = "review" | "gpsVerification" | "workerTimes" | "evaluation";
+type TimeSubtab = "review" | "gpsVerification" | "workerTimes" | "evaluation" | "export";
 type PlanningMatchStatus = "matches" | "needs_review" | "without_plan" | "missing_reported_site" | "unknown" | "not_checkable";
 type TimeEntryFormState = {
   work_date: string;
@@ -99,6 +99,32 @@ type FinalHoursEntry = {
   reviewedAt: string | null;
   reviewedByUserId: number | null;
 };
+type ExportPreviewStatus = "auto_checked" | "manually_checked" | "corrected" | "not_exportable";
+type ExportPreviewRow = {
+  id: number;
+  entry: TimeEntry;
+  workDate: string;
+  personName: string;
+  siteNumber: string;
+  siteName: string;
+  reportedMinutes: number | null;
+  gpsMinutes: number | null;
+  correctedMinutes: number | null;
+  validMinutes: number | null;
+  status: ExportPreviewStatus;
+  statusLabel: string;
+  statusTone: StatusBadgeTone;
+  isExportable: boolean;
+  instruction: string;
+};
+type ExportPreviewSummary = {
+  autoChecked: number;
+  manuallyChecked: number;
+  corrected: number;
+  open: number;
+  exportable: number;
+  notExportable: number;
+};
 
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
@@ -107,6 +133,7 @@ const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "gpsVerification", label: "GPS-Prüfung" },
   { key: "workerTimes", label: "Monteurszeiten" },
   { key: "evaluation", label: "Auswertung" },
+  { key: "export", label: "Export" },
 ];
 
 const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
@@ -341,6 +368,15 @@ export function TimeEntriesPage() {
   ].filter(Boolean).join(" ");
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
+  const exportPreviewRows = useMemo(
+    () => buildExportPreviewRows(reviewAllEntries, reviewEntries),
+    [reviewAllEntries, reviewEntries],
+  );
+  const exportPreviewSummary = useMemo(() => calculateExportPreviewSummary(exportPreviewRows), [exportPreviewRows]);
+  const notExportableRows = useMemo(
+    () => exportPreviewRows.filter((row) => !row.isExportable),
+    [exportPreviewRows],
+  );
   const timeTableColumnCount = canManageTimeEntries ? 11 : 10;
 
   useEffect(() => {
@@ -402,7 +438,7 @@ export function TimeEntriesPage() {
   }, [activeRange.end, activeRange.start, entriesRefreshKey, selectedPersonId]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
       return;
     }
 
@@ -439,7 +475,7 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
 
   useLayoutEffect(() => {
-    if (activeTimeSubtab !== "review") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "export") {
       hasAutoScrolledVisibleReviewWeekRef.current = false;
       return;
     }
@@ -455,7 +491,7 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
       return;
     }
 
@@ -1159,6 +1195,120 @@ export function TimeEntriesPage() {
               <FinalSummaryList title="Summe je Monteur" rows={finalHoursTotals.byPerson} />
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTimeSubtab === "export" && (
+        <div className="time-entries-main time-export-main">
+          <div className="time-week-nav-panel" aria-label="Kalenderwochen">
+            <div className="time-week-nav-title">
+              <span>Exportzeitraum</span>
+              <strong>KW {selectedReviewWeek.week}</strong>
+            </div>
+            <div className="time-week-strip" ref={reviewWeekStripRef}>
+              {reviewWeekOptions.map((option, index) => (
+                <button
+                  className={[
+                    option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
+                    option.isCurrent ? "is-current" : "",
+                  ].filter(Boolean).join(" ")}
+                  data-week-index={index}
+                  key={`${option.year}-${option.week}`}
+                  title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                  type="button"
+                  onClick={() => selectReviewWeek(option)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="time-export-panel">
+            <div className="time-entries-toolbar">
+              <div>
+                <h2>Exportvorschau</h2>
+                <p>{formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)} · Vorschau ohne Download.</p>
+              </div>
+            </div>
+
+            {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
+            {reviewEntriesError && <p className="time-table-note">{reviewEntriesError}</p>}
+            {(isLoadingReviewAllEntries || isLoadingReviewEntries) && <p className="time-table-note">Exportvorschau wird geladen...</p>}
+
+            <div className="time-summary-strip">
+              <div><span>Automatisch geprüft</span><strong>{exportPreviewSummary.autoChecked}</strong></div>
+              <div><span>Manuell geprüft</span><strong>{exportPreviewSummary.manuallyChecked}</strong></div>
+              <div><span>Korrigiert</span><strong>{exportPreviewSummary.corrected}</strong></div>
+              <div><span>Offen / Prüfung empfohlen</span><strong>{exportPreviewSummary.open}</strong></div>
+              <div><span>Exportierbar</span><strong>{exportPreviewSummary.exportable}</strong></div>
+              <div><span>Nicht exportierbar</span><strong>{exportPreviewSummary.notExportable}</strong></div>
+            </div>
+
+            <p className={notExportableRows.length ? "time-export-readiness is-blocked" : "time-export-readiness is-ready"}>
+              {notExportableRows.length
+                ? "Export noch nicht vollständig bereit: Es gibt noch Einträge mit Prüfung empfohlen."
+                : "Export bereit: Alle Einträge sind automatisch oder manuell geprüft."}
+            </p>
+
+            {notExportableRows.length > 0 && (
+              <div className="time-export-open-panel">
+                <h3>Diese Einträge sind noch nicht exportierbar</h3>
+                <div className="time-export-open-list">
+                  {notExportableRows.map((row) => (
+                    <div key={row.id}>
+                      <strong>{formatDate(row.workDate)} · {row.personName}</strong>
+                      <span>{row.siteNumber} · {row.siteName}</span>
+                      <small>{row.instruction}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!reviewAllEntriesError && exportPreviewRows.length === 0 && !isLoadingReviewAllEntries && (
+              <div className="empty-panel">Keine Zeiten im ausgewählten Zeitraum vorhanden.</div>
+            )}
+
+            {!reviewAllEntriesError && exportPreviewRows.length > 0 && (
+              <div className="time-table-scroll">
+                <table className="time-entries-table time-export-preview-table">
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Tag</th>
+                      <th>Monteur</th>
+                      <th>Baustellennr.</th>
+                      <th>Baustellenname</th>
+                      <th>Gemeldete Zeit</th>
+                      <th>GPS-Zeit</th>
+                      <th>Korrigierte Zeit</th>
+                      <th>Gültige Arbeitszeit</th>
+                      <th>Exportstatus</th>
+                      <th>Prüfhinweis</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exportPreviewRows.map((row) => (
+                      <tr className={row.status === "corrected" ? "is-corrected" : ""} key={row.id}>
+                        <td>{formatDate(row.workDate)}</td>
+                        <td>{formatWeekday(row.workDate)}</td>
+                        <td>{row.personName}</td>
+                        <td>{row.siteNumber}</td>
+                        <td>{row.siteName}</td>
+                        <td>{formatHalfHour(row.reportedMinutes)}</td>
+                        <td>{formatHalfHour(row.gpsMinutes)}</td>
+                        <td>{formatHalfHour(row.correctedMinutes)}</td>
+                        <td><strong>{formatHalfHour(row.validMinutes)}</strong></td>
+                        <td><StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge></td>
+                        <td>{row.instruction}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1878,6 +2028,9 @@ function buildTimeReviewInstruction(row: TimeReviewTableRow): string {
   const hasPlannedSite = entry.planned_site_labels.length > 0;
   const gpsLocationType = entry.gps_detected_location_type;
 
+  if (entry.is_gps_suggestion) {
+    return "GPS erkannt: kein manueller Eintrag vorhanden.";
+  }
   if (entry.gps_status === "missing" || (row.gpsMinutes === null && !hasGpsSignal)) {
     return "GPS fehlt: Arbeitszeit kann nicht automatisch geprüft werden.";
   }
@@ -2546,6 +2699,127 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
     critical: openIssues.filter((issue) => issue.status === "critical").length,
     notVerifiable: openIssues.filter((issue) => issue.status === "not_verifiable").length,
   };
+}
+
+function buildExportPreviewRows(entries: TimeEntry[], openEntries: TimeEntry[]): ExportPreviewRow[] {
+  const entryById = new Map<number, TimeEntry>();
+  for (const entry of entries) {
+    entryById.set(entry.id, entry);
+  }
+  for (const entry of openEntries) {
+    if (entry.is_gps_suggestion) {
+      entryById.set(entry.id, entry);
+    }
+  }
+  return [...entryById.values()]
+    .map(timeEntryToExportPreviewRow)
+    .sort((left, right) => (
+      left.workDate.localeCompare(right.workDate)
+      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
+      || left.siteNumber.localeCompare(right.siteNumber, "de", { sensitivity: "base" })
+      || left.id - right.id
+    ));
+}
+
+function timeEntryToExportPreviewRow(entry: TimeEntry): ExportPreviewRow {
+  const reportedMinutes = entry.is_gps_suggestion ? null : entry.original_work_minutes ?? entry.work_minutes;
+  const correctedMinutes = entry.corrected_work_minutes;
+  const validMinutes = correctedMinutes ?? reportedMinutes;
+  const status = exportPreviewStatus(entry);
+  const tableRow = timeEntryToTableRow(entry, exportPreviewStatusLabel(status), exportPreviewStatusTone(status));
+  return {
+    id: entry.id,
+    entry,
+    workDate: entry.work_date,
+    personName: entry.person_name,
+    siteNumber: timeEntrySiteNumber(entry),
+    siteName: timeEntrySiteName(entry),
+    reportedMinutes,
+    gpsMinutes: entry.gps_work_minutes,
+    correctedMinutes,
+    validMinutes,
+    status,
+    statusLabel: exportPreviewStatusLabel(status),
+    statusTone: exportPreviewStatusTone(status),
+    isExportable: status !== "not_exportable",
+    instruction: buildTimeReviewInstruction(tableRow),
+  };
+}
+
+function exportPreviewStatus(entry: TimeEntry): ExportPreviewStatus {
+  if (entry.is_gps_suggestion) {
+    return "not_exportable";
+  }
+  if (isAutoPlausibleEntry(entry)) {
+    return "auto_checked";
+  }
+  if (
+    entry.time_review_status === "corrected"
+    || entry.corrected_work_minutes !== null
+    || entry.time_review_method === "accept_gps"
+    || entry.time_review_method === "manual_correction"
+    || entry.time_review_method === "assign_site"
+  ) {
+    return "corrected";
+  }
+  if (
+    entry.time_review_status === "manually_approved"
+    || entry.time_review_status === "not_verifiable"
+    || entry.time_review_status === "auto_closed_by_deadline"
+  ) {
+    return "manually_checked";
+  }
+  return "not_exportable";
+}
+
+function exportPreviewStatusLabel(status: ExportPreviewStatus): string {
+  if (status === "auto_checked") {
+    return "automatisch geprüft";
+  }
+  if (status === "manually_checked") {
+    return "manuell geprüft";
+  }
+  if (status === "corrected") {
+    return "korrigiert";
+  }
+  return "offen / nicht exportierbar";
+}
+
+function exportPreviewStatusTone(status: ExportPreviewStatus): StatusBadgeTone {
+  if (status === "not_exportable") {
+    return "warning";
+  }
+  if (status === "corrected") {
+    return "planned";
+  }
+  return "active";
+}
+
+function calculateExportPreviewSummary(rows: ExportPreviewRow[]): ExportPreviewSummary {
+  return rows.reduce<ExportPreviewSummary>((summary, row) => {
+    if (row.status === "auto_checked") {
+      summary.autoChecked += 1;
+    } else if (row.status === "manually_checked") {
+      summary.manuallyChecked += 1;
+    } else if (row.status === "corrected") {
+      summary.corrected += 1;
+    } else {
+      summary.open += 1;
+    }
+    if (row.isExportable) {
+      summary.exportable += 1;
+    } else {
+      summary.notExportable += 1;
+    }
+    return summary;
+  }, {
+    autoChecked: 0,
+    manuallyChecked: 0,
+    corrected: 0,
+    open: 0,
+    exportable: 0,
+    notExportable: 0,
+  });
 }
 
 function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {
