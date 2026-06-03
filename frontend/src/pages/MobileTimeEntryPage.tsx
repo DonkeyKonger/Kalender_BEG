@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
-import type { AssignmentRead } from "../types/matrix";
-import type { SiteSummary } from "../types/site";
+import type { MobileAssignment } from "../types/mobile";
 import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
 
 type MonthMode = "current" | "previous";
@@ -23,6 +22,12 @@ type TimeFormState = {
   endTime: string;
 };
 
+type MobileTimeSiteOption = {
+  id: number;
+  site_number: string | null;
+  name: string;
+};
+
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const BREAK_THRESHOLD_MINUTES = 510;
 
@@ -37,8 +42,7 @@ export function MobileTimeEntryPage() {
   const [monthMode, setMonthMode] = useState<MonthMode>("current");
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
-  const [sites, setSites] = useState<SiteSummary[]>([]);
+  const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
   const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "" });
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,14 +70,12 @@ export function MobileTimeEntryPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [timeEntries, assignmentRows, siteRows] = await Promise.all([
+      const [timeEntries, assignmentResponse] = await Promise.all([
         api.timeEntries({ personId, dateFrom: loadRange.start, dateTo: loadRange.end }),
-        api.assignments({ personId, start: loadRange.start, end: loadRange.end }),
-        api.siteSummaries({ includeClosed: true }),
+        api.myAssignmentHistory({ start: loadRange.start, end: loadRange.end }),
       ]);
       setEntries(timeEntries.filter(isEditableManualEntry).sort(compareEntries));
-      setAssignments(assignmentRows);
-      setSites(siteRows);
+      setAssignments(assignmentResponse.assignments);
     } catch (error) {
       setLoadError(getErrorMessage(error, "Arbeitszeiten konnten nicht geladen werden."));
     } finally {
@@ -110,10 +112,10 @@ export function MobileTimeEntryPage() {
     [assignments, selectedDate],
   );
   const plannedSiteIds = useMemo(
-    () => uniqueNumbers(assignmentsForSelectedDate.map((assignment) => assignment.site_id)),
+    () => uniqueNumbers(assignmentsForSelectedDate.map((assignment) => assignment.site.id)),
     [assignmentsForSelectedDate],
   );
-  const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
+  const siteById = useMemo(() => buildSiteOptionMap(assignments, entries), [assignments, entries]);
   const prefillEntry = useMemo(
     () => (entryForSelectedDate ? null : findPrefillEntry(entries, selectedDate)),
     [entries, entryForSelectedDate, selectedDate],
@@ -139,7 +141,7 @@ export function MobileTimeEntryPage() {
   const relevantSiteIds = useMemo(() => {
     const ids = new Set<number>();
     for (const assignment of assignments) {
-      ids.add(assignment.site_id);
+      ids.add(assignment.site.id);
     }
     for (const entry of entries) {
       if (entry.site_id !== null) {
@@ -150,10 +152,10 @@ export function MobileTimeEntryPage() {
   }, [assignments, entries]);
 
   const siteOptions = useMemo(
-    () => sites
-      .filter((site) => site.status === "active" || relevantSiteIds.has(site.id))
+    () => Array.from(siteById.values())
+      .filter((site) => relevantSiteIds.has(site.id))
       .sort(compareSites),
-    [relevantSiteIds, sites],
+    [relevantSiteIds, siteById],
   );
 
   const calendarDays = useMemo(() => buildMonthGrid(activeMonth, today), [activeMonth, today]);
@@ -389,10 +391,31 @@ function compareEntries(first: TimeEntry, second: TimeEntry): number {
   return first.id - second.id;
 }
 
-function compareSites(first: SiteSummary, second: SiteSummary): number {
+function compareSites(first: MobileTimeSiteOption, second: MobileTimeSiteOption): number {
   const firstLabel = siteOptionLabel(first);
   const secondLabel = siteOptionLabel(second);
   return firstLabel.localeCompare(secondLabel, "de");
+}
+
+function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[]): Map<number, MobileTimeSiteOption> {
+  const sites = new Map<number, MobileTimeSiteOption>();
+  for (const assignment of assignments) {
+    sites.set(assignment.site.id, {
+      id: assignment.site.id,
+      site_number: assignment.site.site_number,
+      name: assignment.site.name,
+    });
+  }
+  for (const entry of entries) {
+    if (entry.site_id !== null && entry.site_name) {
+      sites.set(entry.site_id, {
+        id: entry.site_id,
+        site_number: entry.site_number,
+        name: entry.site_name,
+      });
+    }
+  }
+  return sites;
 }
 
 function upsertEntry(entries: TimeEntry[], savedEntry: TimeEntry): TimeEntry[] {
@@ -413,16 +436,16 @@ function findPrefillEntry(entries: TimeEntry[], selectedDate: string): TimeEntry
     .sort((first, second) => second.work_date.localeCompare(first.work_date) || second.id - first.id)[0] ?? null;
 }
 
-function assignmentCoversDate(assignment: AssignmentRead, date: string): boolean {
+function assignmentCoversDate(assignment: MobileAssignment, date: string): boolean {
   return assignment.start_date <= date && assignment.end_date >= date;
 }
 
-function findAssignmentIdForSite(assignments: AssignmentRead[], siteId: string): number | null {
+function findAssignmentIdForSite(assignments: MobileAssignment[], siteId: string): number | null {
   if (!siteId) {
     return null;
   }
   const parsedSiteId = Number(siteId);
-  return assignments.find((assignment) => assignment.site_id === parsedSiteId)?.id ?? null;
+  return assignments.find((assignment) => assignment.site.id === parsedSiteId)?.id ?? null;
 }
 
 function uniqueNumbers(values: number[]): number[] {
@@ -559,7 +582,7 @@ function formatEntryTime(entry: TimeEntry): string {
   return formatHoursFromMinutes(entry.work_minutes);
 }
 
-function formatSiteLabel(siteId: number, siteById: Map<number, SiteSummary>): string {
+function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {
   const site = siteById.get(siteId);
   if (!site) {
     return `Baustelle ${siteId}`;
@@ -567,7 +590,7 @@ function formatSiteLabel(siteId: number, siteById: Map<number, SiteSummary>): st
   return siteOptionLabel(site);
 }
 
-function siteOptionLabel(site: SiteSummary): string {
+function siteOptionLabel(site: MobileTimeSiteOption): string {
   return [site.site_number, site.name].filter(Boolean).join(" - ") || `Baustelle ${site.id}`;
 }
 
