@@ -63,6 +63,8 @@ type TimeReviewTableRow = {
   workDate: string;
   personName: string;
   siteLabel: string;
+  siteNumber: string;
+  siteName: string;
   manualMinutes: number | null;
   gpsMinutes: number | null;
   deviationMinutes: number | null;
@@ -1089,7 +1091,10 @@ export function TimeEntriesPage() {
                 <table className="time-entries-table time-review-compact-table">
                   <thead>
                     <tr>
-                      <th>Baustelle</th>
+                      <th>Tag</th>
+                      <th>Baustellennr.</th>
+                      <th>Baustellenname</th>
+                      <th>Notiz</th>
                       <th>Gemeldete Zeit</th>
                       <th>GPS-Zeit</th>
                       <th>Zeitdifferenz</th>
@@ -1571,16 +1576,16 @@ function renderReviewTableRows({
       <Fragment key={row.id}>
         {showPersonGroup && (
           <tr className="time-review-group-row">
-            <td colSpan={6}>{row.personName}</td>
+            <td colSpan={9}>{row.personName}</td>
           </tr>
         )}
         <tr className={rowClassName}>
+          <td className="time-review-day-cell">{formatWeekday(row.workDate)}</td>
+          <td className="time-review-site-number-cell">{row.siteNumber}</td>
           <td>
-            <div className="time-review-site-cell">
-              <strong>{row.siteLabel}</strong>
-              <span>{formatWeekday(row.workDate)} {formatDate(row.workDate)} · {row.systemHint}</span>
-            </div>
+            <span className="time-review-site-name-cell">{row.siteName}</span>
           </td>
+          <td className="time-review-note-cell">{row.systemHint}</td>
           <td>{formatHalfHour(row.manualMinutes)}</td>
           <td>{formatHalfHour(row.gpsMinutes)}</td>
           <td>
@@ -1624,7 +1629,7 @@ function renderReviewTableRows({
         </tr>
         {isExpanded && issue && (
           <tr className="time-review-detail-row">
-            <td colSpan={6}>
+            <td colSpan={9}>
               <div className="time-review-correction-panel">
                 {canManageTimeEntries && (
                   <>
@@ -2097,6 +2102,8 @@ function timeReviewIssueToTableRow(issue: TimeReviewIssue): TimeReviewTableRow {
     workDate: issue.workDate,
     personName: issue.personName,
     siteLabel: issue.siteLabel,
+    siteNumber: timeEntrySiteNumber(issue.entry),
+    siteName: timeEntrySiteName(issue.entry),
     manualMinutes: issue.manualMinutes,
     gpsMinutes: issue.gpsMinutes,
     deviationMinutes: issue.deviationMinutes,
@@ -2118,6 +2125,8 @@ function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: 
     workDate: entry.work_date,
     personName: entry.person_name,
     siteLabel: timeEntrySiteLabel(entry),
+    siteNumber: timeEntrySiteNumber(entry),
+    siteName: timeEntrySiteName(entry),
     manualMinutes,
     gpsMinutes,
     deviationMinutes: manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null,
@@ -2623,6 +2632,14 @@ function reportedSiteLabel(entry: TimeEntry): string {
 
 function timeEntrySiteLabel(entry: TimeEntry): string {
   return [entry.site_name, entry.site_number].filter(Boolean).join(" · ") || "-";
+}
+
+function timeEntrySiteNumber(entry: TimeEntry): string {
+  return entry.site_number || "-";
+}
+
+function timeEntrySiteName(entry: TimeEntry): string {
+  return entry.site_name || "-";
 }
 
 function plannedSiteLabel(siteIds: number[] | undefined, siteById: Map<number, SiteSummary>): string {

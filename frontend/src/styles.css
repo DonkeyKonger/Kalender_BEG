@@ -6620,7 +6620,44 @@ button.person-chip:focus-visible {
 .time-review-compact-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 1020px;
+  min-width: 1180px;
+  table-layout: fixed;
+}
+
+.time-review-compact-table th:nth-child(1),
+.time-review-compact-table td:nth-child(1) {
+  width: 52px;
+}
+
+.time-review-compact-table th:nth-child(2),
+.time-review-compact-table td:nth-child(2) {
+  width: 112px;
+}
+
+.time-review-compact-table th:nth-child(3),
+.time-review-compact-table td:nth-child(3) {
+  width: 240px;
+}
+
+.time-review-compact-table th:nth-child(4),
+.time-review-compact-table td:nth-child(4) {
+  width: 330px;
+}
+
+.time-review-compact-table th:nth-child(5),
+.time-review-compact-table td:nth-child(5),
+.time-review-compact-table th:nth-child(6),
+.time-review-compact-table td:nth-child(6),
+.time-review-compact-table th:nth-child(7),
+.time-review-compact-table td:nth-child(7),
+.time-review-compact-table th:nth-child(8),
+.time-review-compact-table td:nth-child(8) {
+  width: 112px;
+}
+
+.time-review-compact-table th:nth-child(9),
+.time-review-compact-table td:nth-child(9) {
+  width: 170px;
 }
 
 .time-review-compact-table .time-review-group-row td {
@@ -6671,37 +6708,43 @@ button.person-chip:focus-visible {
   border-top: 0;
 }
 
-.time-review-date-cell {
-  display: grid;
-  gap: 2px;
-}
-
-.time-review-date-cell strong {
+.time-review-day-cell,
+.time-review-site-number-cell,
+.time-review-site-name-cell,
+.time-review-note-cell {
   color: #172033;
   font-size: 0.8rem;
 }
 
-.time-review-date-cell small {
-  color: #64748b;
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
+.time-review-day-cell,
+.time-review-site-number-cell {
+  white-space: nowrap;
 }
 
-.time-review-site-cell {
-  display: grid;
-  gap: 3px;
+.time-review-day-cell {
+  color: #52627a;
+  font-weight: 900;
+  text-transform: capitalize;
 }
 
-.time-review-site-cell strong {
+.time-review-site-number-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.time-review-site-name-cell {
+  display: block;
   color: #172033;
-  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.time-review-site-cell span {
+.time-review-note-cell {
   color: #64748b;
-  font-size: 0.72rem;
+  line-height: 1.35;
   font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .time-review-delta {
