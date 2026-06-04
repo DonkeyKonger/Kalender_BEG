@@ -460,36 +460,44 @@ export function MatrixPage() {
       return;
     }
     try {
-      if (absence.start_date === absence.end_date) {
-        await api.deleteAbsence(absence.id);
-      } else if (date === absence.start_date) {
-        await api.updateAbsence(absence.id, { start_date: addIsoDays(date, 1) });
-      } else if (date === absence.end_date) {
-        await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
-      } else {
-        let rightAbsence: Absence | null = null;
-        try {
-          rightAbsence = await api.createAbsence({
-            person_id: absence.person_id,
-            absence_type: absence.absence_type,
-            start_date: addIsoDays(date, 1),
-            end_date: absence.end_date,
-            status: absence.status,
-            note: absence.note,
-          });
-          await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
-        } catch (splitError) {
-          if (rightAbsence) {
-            await api.deleteAbsence(rightAbsence.id).catch(() => undefined);
-          }
-          throw splitError;
-        }
+      const affectedAbsences = activeAbsencesForPersonOnDay(absences, absence.person_id, date);
+      const targetAbsences = affectedAbsences.length > 0 ? affectedAbsences : [absence];
+      for (const targetAbsence of targetAbsences) {
+        await deleteSingleAbsenceDayFromPlanning(targetAbsence, date);
       }
       setError(null);
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
     } catch (requestError) {
       setError(readApiError(requestError, "Fehlzeit konnte nicht fuer diesen Tag entfernt werden."));
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+    }
+  }
+
+  async function deleteSingleAbsenceDayFromPlanning(absence: Absence, date: string) {
+    if (absence.start_date === absence.end_date) {
+      await api.deleteAbsence(absence.id);
+    } else if (date === absence.start_date) {
+      await api.updateAbsence(absence.id, { start_date: addIsoDays(date, 1) });
+    } else if (date === absence.end_date) {
+      await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
+    } else {
+      let rightAbsence: Absence | null = null;
+      try {
+        rightAbsence = await api.createAbsence({
+          person_id: absence.person_id,
+          absence_type: absence.absence_type,
+          start_date: addIsoDays(date, 1),
+          end_date: absence.end_date,
+          status: absence.status,
+          note: absence.note,
+        });
+        await api.updateAbsence(absence.id, { end_date: addIsoDays(date, -1) });
+      } catch (splitError) {
+        if (rightAbsence) {
+          await api.deleteAbsence(rightAbsence.id).catch(() => undefined);
+        }
+        throw splitError;
+      }
     }
   }
 
@@ -2522,11 +2530,6 @@ function buildCellRange(start: SelectionCell, end: SelectionCell, visibleDays: M
   };
 }
 
-function singleCellRange(siteId: number, date: string, visibleDays: MatrixResponse["days"]): CellRange {
-  const dayIndex = Math.max(0, visibleDays.findIndex((day) => day.date === date));
-  return { siteId, startDate: date, endDate: date, startIndex: dayIndex, endIndex: dayIndex, dates: [date] };
-}
-
 function rangeFromDates(siteId: number, startDate: string, endDate: string, visibleDays: MatrixResponse["days"]): CellRange {
   const [sortedStartDate, sortedEndDate] = sortDates(startDate, endDate);
   const startIndex = Math.max(0, visibleDays.findIndex((day) => day.date === sortedStartDate));
@@ -2714,6 +2717,10 @@ function activeAbsencesForDay(absences: Absence[], date: string): Absence[] {
   return absences
     .filter((absence) => absence.status === "active" && absence.start_date <= date && absence.end_date >= date)
     .sort(comparePlanningAbsences);
+}
+
+function activeAbsencesForPersonOnDay(absences: Absence[], personId: number, date: string): Absence[] {
+  return activeAbsencesForDay(absences, date).filter((absence) => absence.person_id === personId);
 }
 
 function absencePlanningItemsForDay(absences: Absence[], date: string): PlanningAbsenceItem[] {

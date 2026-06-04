@@ -1452,6 +1452,7 @@ button.entity-card:focus-visible,
 .absence-chip {
   display: inline-flex;
   align-items: center;
+  width: 38px;
   max-width: 92px;
   min-height: 17px;
   overflow: hidden;
@@ -1596,6 +1597,7 @@ button.person-chip:focus-visible {
   left: 0;
   z-index: 2;
   justify-content: flex-start;
+  width: var(--assignment-run-width, auto);
   max-width: none;
   overflow: visible;
   box-shadow: 0 1px 0 rgb(20 60 109 / 8%);
@@ -1616,6 +1618,7 @@ button.person-chip:focus-visible {
 
 
 .absence-chip {
+  width: auto;
   background: #fff1f0;
   color: #9f1f16;
 }
@@ -2231,6 +2234,7 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .person-chip,
 .matrix-page.is-compact .absence-chip {
+  width: 34px;
   max-width: 80px;
   min-height: 15px;
   border-radius: 5px;
@@ -2248,8 +2252,13 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .person-chip.is-assignment-run {
   top: calc(var(--assignment-layer) * 17px);
+  width: var(--assignment-run-width, auto);
   max-width: none;
   overflow: visible;
+}
+
+.matrix-page.is-compact .absence-chip {
+  width: auto;
 }
 
 .matrix-page.is-compact .save-dot {
