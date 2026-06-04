@@ -716,6 +716,14 @@ export const api = {
     return requestBlob(`/exports/weekly-plan?${search.toString()}`);
   },
 
+  async monthlyTimeEntriesXlsx(params: { year: number; month: number }): Promise<Blob> {
+    const search = new URLSearchParams({
+      year: String(params.year),
+      month: String(params.month),
+    });
+    return requestBlob(`/exports/time-entries/monthly-xlsx?${search.toString()}`);
+  },
+
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`);

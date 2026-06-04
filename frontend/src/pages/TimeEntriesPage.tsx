@@ -56,6 +56,10 @@ type CalendarWeekOption = CalendarWeekSelection & {
   end: string;
   isCurrent: boolean;
 };
+type ExportMonthSelection = {
+  year: number;
+  month: number;
+};
 type TimeReviewTableRow = {
   id: number;
   entry: TimeEntry;
@@ -128,6 +132,20 @@ type ExportPreviewSummary = {
 
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
+const EXPORT_MONTH_LABELS = [
+  "Januar",
+  "Februar",
+  "März",
+  "April",
+  "Mai",
+  "Juni",
+  "Juli",
+  "August",
+  "September",
+  "Oktober",
+  "November",
+  "Dezember",
+];
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
   { key: "gpsVerification", label: "GPS-Prüfung" },
@@ -215,8 +233,11 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
+  const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
   const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
+  const [isDownloadingExport, setIsDownloadingExport] = useState(false);
+  const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
   const [isCheckingTestDataTool, setIsCheckingTestDataTool] = useState(false);
   const [isTestDataToolEnabled, setIsTestDataToolEnabled] = useState(false);
   const [testDataForm, setTestDataForm] = useState<TestDataFormState>(() => defaultTestDataForm());
@@ -338,10 +359,21 @@ export function TimeEntriesPage() {
     () => isoWeekRange(selectedReviewWeek.year, selectedReviewWeek.week),
     [selectedReviewWeek.week, selectedReviewWeek.year],
   );
+  const exportMonthRange = useMemo(
+    () => monthRange(selectedExportMonth.year, selectedExportMonth.month),
+    [selectedExportMonth.month, selectedExportMonth.year],
+  );
+  const reviewDataRange = activeTimeSubtab === "export" ? exportMonthRange : reviewWeekRange;
+  const exportMonthLabel = `${EXPORT_MONTH_LABELS[selectedExportMonth.month - 1]} ${selectedExportMonth.year}`;
+  const exportYearOptions = useMemo(
+    () => buildExportYearOptions(selectedExportMonth.year),
+    [selectedExportMonth.year],
+  );
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
     [currentReviewWeek],
   );
+  const currentExportMonthSelection = useMemo(() => currentExportMonth(), []);
   const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
   const siteOptions = useMemo(
     () => [...sites].sort((left, right) => siteOptionLabel(left).localeCompare(siteOptionLabel(right), "de")),
@@ -451,8 +483,8 @@ export function TimeEntriesPage() {
     setReviewEntriesError(null);
 
     api.timeEntries({
-      dateFrom: reviewWeekRange.start,
-      dateTo: reviewWeekRange.end,
+      dateFrom: reviewDataRange.start,
+      dateTo: reviewDataRange.end,
       includeGpsStatus: true,
       reviewOpenOnly: true,
     })
@@ -476,10 +508,10 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
+  }, [activeTimeSubtab, entriesRefreshKey, reviewDataRange.end, reviewDataRange.start]);
 
   useLayoutEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "export") {
+    if (activeTimeSubtab !== "review") {
       hasAutoScrolledVisibleReviewWeekRef.current = false;
       return;
     }
@@ -504,8 +536,8 @@ export function TimeEntriesPage() {
     setReviewAllEntriesError(null);
 
     api.timeEntries({
-      dateFrom: reviewWeekRange.start,
-      dateTo: reviewWeekRange.end,
+      dateFrom: reviewDataRange.start,
+      dateTo: reviewDataRange.end,
       includeGpsStatus: true,
     })
       .then((entryData) => {
@@ -528,7 +560,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, entriesRefreshKey, reviewWeekRange.end, reviewWeekRange.start]);
+  }, [activeTimeSubtab, entriesRefreshKey, reviewDataRange.end, reviewDataRange.start]);
 
   useEffect(() => {
     if (selectedPersonId === null) {
@@ -809,15 +841,23 @@ export function TimeEntriesPage() {
     }
   }
 
-  function downloadTimeExportXml(): void {
-    if (!exportableRows.length) {
+  async function downloadTimeExportXlsx(): Promise<void> {
+    if (!exportableRows.length || isDownloadingExport) {
       return;
     }
-    const xml = buildTimeExportXml(exportableRows, {
-      exportedAt: new Date().toISOString(),
-      periodLabel: `KW ${selectedReviewWeek.week} ${selectedReviewWeek.year}`,
-    });
-    downloadTextFile(xml, `zeiten_export_KW_${selectedReviewWeek.week}_${selectedReviewWeek.year}.xml`, "application/xml");
+    setIsDownloadingExport(true);
+    setExportDownloadError(null);
+    try {
+      const blob = await api.monthlyTimeEntriesXlsx({
+        year: selectedExportMonth.year,
+        month: selectedExportMonth.month,
+      });
+      downloadBlobFile(blob, `zeiten_export_${selectedExportMonth.year}_${String(selectedExportMonth.month).padStart(2, "0")}.xlsx`);
+    } catch (requestError) {
+      setExportDownloadError(readApiError(requestError, "XLSX-Export konnte nicht erstellt werden."));
+    } finally {
+      setIsDownloadingExport(false);
+    }
   }
 
   async function generateTestDataBatch(): Promise<void> {
@@ -1216,27 +1256,47 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "export" && (
         <div className="time-entries-main time-export-main">
-          <div className="time-week-nav-panel" aria-label="Kalenderwochen">
-            <div className="time-week-nav-title">
-              <span>Exportzeitraum</span>
-              <strong>KW {selectedReviewWeek.week}</strong>
+          <div className="time-export-period-panel" aria-label="Exportmonat">
+            <div className="time-export-period-header">
+              <div>
+                <span>Exportmonat</span>
+                <strong>{exportMonthLabel}</strong>
+              </div>
+              <label>
+                Jahr
+                <select
+                  value={selectedExportMonth.year}
+                  onChange={(event) => {
+                    setSelectedExportMonth((current) => ({ ...current, year: Number(event.target.value) }));
+                    setExportDownloadError(null);
+                  }}
+                >
+                  {exportYearOptions.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <div className="time-week-strip" ref={reviewWeekStripRef}>
-              {reviewWeekOptions.map((option, index) => (
+            <div className="time-export-month-grid">
+              {EXPORT_MONTH_LABELS.map((label, index) => {
+                const month = index + 1;
+                return (
                 <button
                   className={[
-                    option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
-                    option.isCurrent ? "is-current" : "",
+                    month === selectedExportMonth.month ? "is-active" : "",
+                    currentExportMonthSelection.year === selectedExportMonth.year && currentExportMonthSelection.month === month ? "is-current" : "",
                   ].filter(Boolean).join(" ")}
-                  data-week-index={index}
-                  key={`${option.year}-${option.week}`}
-                  title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                  key={label}
                   type="button"
-                  onClick={() => selectReviewWeek(option)}
+                  onClick={() => {
+                    setSelectedExportMonth((current) => ({ ...current, month }));
+                    setExportDownloadError(null);
+                  }}
                 >
-                  {option.label}
+                  {label}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1244,7 +1304,7 @@ export function TimeEntriesPage() {
             <div className="time-entries-toolbar">
               <div>
                 <h2>Exportvorschau</h2>
-                <p>{formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)} · Vorschau ohne Download.</p>
+                <p>{exportMonthLabel} · {formatRangeLabel(exportMonthRange.start, exportMonthRange.end)}.</p>
               </div>
             </div>
 
@@ -1270,9 +1330,10 @@ export function TimeEntriesPage() {
             <div className="time-export-download-panel">
               {notExportableRows.length > 0 && (
                 <p>
-                  Achtung: Es gibt noch offene Einträge mit Prüfung empfohlen. Der XML-Export enthält nur automatisch oder manuell geprüfte Zeiten.
+                  Achtung: Es gibt noch offene Einträge mit Prüfung empfohlen. Der XLSX-Export enthält nur automatisch oder manuell geprüfte Zeiten.
                 </p>
               )}
+              {exportDownloadError && <p>{exportDownloadError}</p>}
               <div className="time-export-download-actions">
                 <div>
                   <strong>{exportPreviewSummary.exportable}</strong>
@@ -1284,11 +1345,11 @@ export function TimeEntriesPage() {
                 </div>
                 <button
                   className="icon-button"
-                  disabled={exportableRows.length === 0}
+                  disabled={exportableRows.length === 0 || isDownloadingExport}
                   type="button"
-                  onClick={downloadTimeExportXml}
+                  onClick={() => void downloadTimeExportXlsx()}
                 >
-                  Geprüfte Zeiten als XML exportieren
+                  {isDownloadingExport ? "XLSX wird erstellt..." : "Geprüfte Zeiten als XLSX exportieren"}
                 </button>
               </div>
             </div>
@@ -2116,6 +2177,24 @@ function currentMonthRange(): { start: string; end: string } {
   };
 }
 
+function currentExportMonth(): ExportMonthSelection {
+  const today = new Date();
+  return { year: today.getFullYear(), month: today.getMonth() + 1 };
+}
+
+function monthRange(year: number, month: number): { start: string; end: string } {
+  return {
+    start: toDateInputValue(new Date(year, month - 1, 1)),
+    end: toDateInputValue(new Date(year, month, 0)),
+  };
+}
+
+function buildExportYearOptions(selectedYear: number): number[] {
+  const currentYear = new Date().getFullYear();
+  const years = new Set([currentYear - 1, currentYear, currentYear + 1, selectedYear]);
+  return [...years].sort((left, right) => left - right);
+}
+
 function currentWeekRange(): { start: string; end: string } {
   const today = new Date();
   const mondayOffset = (today.getDay() + 6) % 7;
@@ -2863,77 +2942,7 @@ function calculateExportPreviewSummary(rows: ExportPreviewRow[]): ExportPreviewS
   });
 }
 
-function buildTimeExportXml(rows: ExportPreviewRow[], meta: { exportedAt: string; periodLabel: string }): string {
-  const lines = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    "<zeitenExport>",
-    "  <meta>",
-    `    <exportiertAm>${escapeXml(meta.exportedAt)}</exportiertAm>`,
-    `    <zeitraum>${escapeXml(meta.periodLabel)}</zeitraum>`,
-    `    <anzahlEintraege>${rows.length}</anzahlEintraege>`,
-    "  </meta>",
-    "  <eintraege>",
-    ...rows.flatMap((row) => buildTimeExportEntryXmlLines(row)),
-    "  </eintraege>",
-    "</zeitenExport>",
-  ];
-  return `${lines.join("\n")}\n`;
-}
-
-function buildTimeExportEntryXmlLines(row: ExportPreviewRow): string[] {
-  const entry = row.entry;
-  const lines = [
-    "    <eintrag>",
-    `      <datum>${escapeXml(row.workDate)}</datum>`,
-    `      <tag>${escapeXml(formatWeekday(row.workDate).replace(".", ""))}</tag>`,
-    `      <monteur>${escapeXml(row.personName)}</monteur>`,
-    `      <baustellennummer>${escapeXml(row.siteNumber)}</baustellennummer>`,
-    `      <baustellenname>${escapeXml(row.siteName)}</baustellenname>`,
-    `      <gemeldeteZeit>${escapeXml(formatXmlHours(row.reportedMinutes))}</gemeldeteZeit>`,
-    `      <gpsZeit>${escapeXml(formatXmlHours(row.gpsMinutes))}</gpsZeit>`,
-    `      <korrigierteZeit>${escapeXml(formatXmlHours(row.correctedMinutes))}</korrigierteZeit>`,
-    `      <gueltigeArbeitszeit>${escapeXml(formatXmlHours(row.validMinutes))}</gueltigeArbeitszeit>`,
-    `      <exportstatus>${escapeXml(row.statusLabel)}</exportstatus>`,
-    `      <pruefhinweis>${escapeXml(row.instruction)}</pruefhinweis>`,
-    `      <personId>${entry.person_id}</personId>`,
-  ];
-  if (entry.site_id !== null) {
-    lines.push(`      <baustelleId>${entry.site_id}</baustelleId>`);
-  }
-  if (entry.reviewed_by_user_id !== null) {
-    lines.push(`      <geprueftVon>${entry.reviewed_by_user_id}</geprueftVon>`);
-  }
-  if (entry.reviewed_at) {
-    lines.push(`      <geprueftAm>${escapeXml(entry.reviewed_at)}</geprueftAm>`);
-  }
-  if (entry.note) {
-    lines.push(`      <korrekturhinweis>${escapeXml(entry.note)}</korrekturhinweis>`);
-  }
-  lines.push("    </eintrag>");
-  return lines;
-}
-
-function formatXmlHours(minutes: number | null): string {
-  if (minutes === null) {
-    return "";
-  }
-  return (minutes / 60).toFixed(1);
-}
-
-function escapeXml(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function downloadTextFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+function downloadBlobFile(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

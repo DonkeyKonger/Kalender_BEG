@@ -7263,6 +7263,89 @@ button.person-chip:focus-visible {
   padding: 12px;
 }
 
+.time-export-period-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.time-export-period-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.time-export-period-header div,
+.time-export-period-header label {
+  display: grid;
+  gap: 4px;
+}
+
+.time-export-period-header span,
+.time-export-period-header label {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.time-export-period-header strong {
+  color: #172033;
+  font-size: 1rem;
+}
+
+.time-export-period-header select {
+  height: 34px;
+  min-width: 118px;
+  border: 1px solid #cbd7e5;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.time-export-month-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.time-export-month-grid button {
+  min-height: 34px;
+  border: 1px solid #cbd7e5;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.time-export-month-grid button.is-current {
+  border-color: #9bbce0;
+  background: #eef5ff;
+}
+
+.time-export-month-grid button.is-active {
+  border-color: #2167ae;
+  background: #2167ae;
+  color: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .time-export-month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .time-export-readiness {
   margin: 0;
   border: 1px solid #dce6f2;
