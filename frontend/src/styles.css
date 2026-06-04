@@ -7254,6 +7254,10 @@ button.person-chip:focus-visible {
   border-bottom-color: #e2e8f0;
 }
 
+.time-review-compact-table .time-review-entry-row.is-day-group-odd td {
+  background: #f6f9fc;
+}
+
 .time-review-compact-table .time-review-entry-row.is-review-checked td:first-child {
   border-left: 3px solid #1f7a4d;
 }
@@ -7272,6 +7276,10 @@ button.person-chip:focus-visible {
 
 .time-review-compact-table .time-review-entry-row.same-day-has-next td {
   border-bottom-color: #ffffff;
+}
+
+.time-review-compact-table .time-review-entry-row.is-day-group-odd.same-day-has-next td {
+  border-bottom-color: #f6f9fc;
 }
 
 .time-review-compact-table .time-review-entry-row.same-day-continuation td {
@@ -8300,6 +8308,10 @@ button.person-chip:focus-visible {
   background: #ffffff;
 }
 
+.time-entries-page.is-figma-times-workspace .time-review-compact-table tbody tr.time-review-entry-row.is-day-group-odd td {
+  background: #f6f9fc;
+}
+
 .time-entries-page.is-figma-times-workspace .time-review-detail-row td {
   background: #f8fbff;
 }
@@ -8403,6 +8415,10 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-entries-table.time-review-compact-table tbody tr.time-review-entry-row.same-day-has-next td {
   border-bottom-color: #ffffff;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table.time-review-compact-table tbody tr.time-review-entry-row.is-day-group-odd.same-day-has-next td {
+  border-bottom-color: #f6f9fc;
 }
 
 .time-entries-page.is-figma-times-workspace .time-entries-table thead th {

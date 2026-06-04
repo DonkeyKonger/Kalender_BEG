@@ -1789,6 +1789,10 @@ function renderReviewTableRows({
     options?: { finalMinutes?: number | null; reviewedSiteId?: number | null },
   ) => Promise<void>;
 }) {
+  let currentPersonId: number | null = null;
+  let currentWorkDate: string | null = null;
+  let dayGroupIndex = -1;
+
   return rows.map((row, index) => {
     const issue = row.issue;
     const isExpanded = showDecisionColumn && expandedReviewEntryId === row.id && issue !== null;
@@ -1800,6 +1804,14 @@ function renderReviewTableRows({
     const showPersonGroup = !isSamePersonAsPrevious;
     const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
     const hasNextSameDay = isSamePersonAsNext && nextRow?.workDate === row.workDate;
+    if (currentPersonId !== row.entry.person_id) {
+      currentPersonId = row.entry.person_id;
+      currentWorkDate = row.workDate;
+      dayGroupIndex = 0;
+    } else if (currentWorkDate !== row.workDate) {
+      currentWorkDate = row.workDate;
+      dayGroupIndex += 1;
+    }
     const isWeekend = isWeekendDate(row.workDate);
     const isCheckedRow = isCheckedReviewRow(row);
     const rowClassName = [
@@ -1807,6 +1819,7 @@ function renderReviewTableRows({
       isExpanded ? "is-expanded" : "",
       showDayGroup ? "is-day-start" : "is-same-day-continuation same-day-continuation",
       hasNextSameDay ? "has-same-day-next same-day-has-next" : "",
+      dayGroupIndex % 2 === 0 ? "is-day-group-even" : "is-day-group-odd",
       isWeekend ? "is-weekend-row" : "",
       isCheckedRow ? "is-review-checked" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
