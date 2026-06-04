@@ -1826,16 +1826,18 @@ function renderReviewTableRows({
     const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
     const previousRow = rows[index - 1] ?? null;
     const nextRow = rows[index + 1] ?? null;
-    const showPersonGroup = previousRow?.personName !== row.personName;
+    const isSamePersonAsPrevious = previousRow?.entry.person_id === row.entry.person_id;
+    const isSamePersonAsNext = nextRow?.entry.person_id === row.entry.person_id;
+    const showPersonGroup = !isSamePersonAsPrevious;
     const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
-    const hasNextSameDay = nextRow?.personName === row.personName && nextRow.workDate === row.workDate;
+    const hasNextSameDay = isSamePersonAsNext && nextRow?.workDate === row.workDate;
     const isWeekend = isWeekendDate(row.workDate);
     const isCheckedRow = isCheckedReviewRow(row);
     const rowClassName = [
       "time-review-entry-row",
       isExpanded ? "is-expanded" : "",
-      showDayGroup ? "is-day-start" : "is-same-day-continuation",
-      hasNextSameDay ? "has-same-day-next" : "",
+      showDayGroup ? "is-day-start" : "is-same-day-continuation same-day-continuation",
+      hasNextSameDay ? "has-same-day-next same-day-has-next" : "",
       isWeekend ? "is-weekend-row" : "",
       isCheckedRow ? "is-review-checked" : "",
       row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",

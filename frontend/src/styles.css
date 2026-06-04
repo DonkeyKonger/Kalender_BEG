@@ -7088,11 +7088,11 @@ button.person-chip:focus-visible {
   border-top: 0;
 }
 
-.time-review-compact-table .time-review-entry-row.has-same-day-next td {
-  border-bottom-color: transparent;
+.time-review-compact-table .time-review-entry-row.same-day-has-next td {
+  border-bottom-color: #ffffff;
 }
 
-.time-review-compact-table .time-review-entry-row.is-same-day-continuation td {
+.time-review-compact-table .time-review-entry-row.same-day-continuation td {
   border-top: 0;
 }
 
@@ -8217,6 +8217,10 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .time-entries-table td {
   border-bottom-color: var(--time-border-soft);
   padding: 11px 12px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-table.time-review-compact-table tbody tr.time-review-entry-row.same-day-has-next td {
+  border-bottom-color: #ffffff;
 }
 
 .time-entries-page.is-figma-times-workspace .time-entries-table thead th {
