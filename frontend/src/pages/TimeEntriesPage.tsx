@@ -1089,6 +1089,13 @@ export function TimeEntriesPage() {
 
           <div className="time-review-summary-cards">
             <ReviewSummaryCard
+              active={reviewStatusFilter === "needs_review"}
+              label="Prüfung empfohlen"
+              onClick={() => setReviewStatusFilter("needs_review")}
+              tone="planned"
+              value={reviewSummary.reviewRecommended}
+            />
+            <ReviewSummaryCard
               active={reviewStatusFilter === "all"}
               label="Alle"
               onClick={() => setReviewStatusFilter("all")}
@@ -1097,17 +1104,10 @@ export function TimeEntriesPage() {
             />
             <ReviewSummaryCard
               active={reviewStatusFilter === "matches"}
-              label="Passt"
+              label="Automatisch geprüft"
               onClick={() => setReviewStatusFilter("matches")}
               tone="active"
               value={reviewSummary.autoPlausible}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "needs_review"}
-              label="Prüfung empfohlen"
-              onClick={() => setReviewStatusFilter("needs_review")}
-              tone="planned"
-              value={reviewSummary.reviewRecommended}
             />
             <ReviewSummaryCard
               active={reviewStatusFilter === "verified"}
