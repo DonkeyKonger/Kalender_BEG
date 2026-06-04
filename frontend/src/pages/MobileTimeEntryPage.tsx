@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { MobileAssignment } from "../types/mobile";
+import type { Site } from "../types/site";
 import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
 
 type MobileTimeView = "month" | "day";
@@ -23,6 +24,8 @@ type TimeFormState = {
   endTime: string;
 };
 
+type SiteSelectionMode = "planned" | "other";
+
 type MobileTimeSiteOption = {
   id: number;
   site_number: string | null;
@@ -33,6 +36,19 @@ type DayWorkSummary = {
   key: string;
   siteLabel: string;
   minutes: number;
+};
+
+type TimeOverlapConflictEntry = {
+  id: number;
+  site_id: number | null;
+  site_label: string;
+  start_time: string | null;
+  end_time: string | null;
+};
+
+type TimeOverlapConflict = {
+  message: string;
+  conflicts: TimeOverlapConflictEntry[];
 };
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -50,7 +66,11 @@ export function MobileTimeEntryPage() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
+  const [activeSites, setActiveSites] = useState<Site[]>([]);
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "" });
+  const [siteSelectionMode, setSiteSelectionMode] = useState<SiteSelectionMode>("planned");
+  const [timeConflict, setTimeConflict] = useState<TimeOverlapConflict | null>(null);
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -76,12 +96,14 @@ export function MobileTimeEntryPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [timeEntries, assignmentResponse] = await Promise.all([
+      const [timeEntries, assignmentResponse, sites] = await Promise.all([
         api.timeEntries({ personId, dateFrom: loadRange.start, dateTo: loadRange.end }),
         api.myAssignmentHistory({ start: loadRange.start, end: loadRange.end }),
+        api.sites({ includeClosed: false }),
       ]);
       setEntries(timeEntries.filter(isEditableManualEntry).sort(compareEntries));
       setAssignments(assignmentResponse.assignments);
+      setActiveSites(sites);
     } catch (error) {
       setLoadError(getErrorMessage(error, "Arbeitszeiten konnten nicht geladen werden."));
     } finally {
@@ -103,8 +125,8 @@ export function MobileTimeEntryPage() {
     return grouped;
   }, [entries]);
 
-  const entryForSelectedDate = entriesByDate.get(selectedDate)?.[0] ?? null;
   const selectedDateEntries = entriesByDate.get(selectedDate) ?? [];
+  const editingEntry = selectedDateEntries.find((entry) => entry.id === editingEntryId) ?? null;
   const assignmentsForSelectedDate = useMemo(
     () => assignments.filter((assignment) => assignmentCoversDate(assignment, selectedDate)),
     [assignments, selectedDate],
@@ -113,20 +135,20 @@ export function MobileTimeEntryPage() {
     () => uniqueNumbers(assignmentsForSelectedDate.map((assignment) => assignment.site.id)),
     [assignmentsForSelectedDate],
   );
-  const siteById = useMemo(() => buildSiteOptionMap(assignments, entries), [assignments, entries]);
+  const siteById = useMemo(() => buildSiteOptionMap(assignments, entries, activeSites), [activeSites, assignments, entries]);
   const prefillEntry = useMemo(
-    () => (entryForSelectedDate ? null : findPrefillEntry(entries, selectedDate)),
-    [entries, entryForSelectedDate, selectedDate],
+    () => (editingEntry ? null : findPrefillEntry(entries, selectedDate)),
+    [editingEntry, entries, selectedDate],
   );
 
   useEffect(() => {
-    const existingStart = normalizeTimeInput(entryForSelectedDate?.start_time);
-    const existingEnd = normalizeTimeInput(entryForSelectedDate?.end_time);
+    const existingStart = normalizeTimeInput(editingEntry?.start_time);
+    const existingEnd = normalizeTimeInput(editingEntry?.end_time);
     const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
     const suggestedEnd = normalizeTimeInput(prefillEntry?.end_time);
     const plannedSiteId = plannedSiteIds.length === 1 ? String(plannedSiteIds[0]) : "";
-    const initialSiteId = entryForSelectedDate
-      ? entryForSelectedDate.site_id !== null ? String(entryForSelectedDate.site_id) : ""
+    const initialSiteId = editingEntry
+      ? editingEntry.site_id !== null ? String(editingEntry.site_id) : ""
       : plannedSiteId;
 
     setForm({
@@ -134,10 +156,12 @@ export function MobileTimeEntryPage() {
       startTime: existingStart ?? suggestedStart ?? "",
       endTime: existingEnd ?? suggestedEnd ?? "",
     });
-    setSuggestionMessage(!entryForSelectedDate && suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
+    setSiteSelectionMode(initialSiteId && !plannedSiteIds.includes(Number(initialSiteId)) ? "other" : "planned");
+    setSuggestionMessage(!editingEntry && suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
+    setTimeConflict(null);
     setFormError(null);
     setSaveMessage(null);
-  }, [entryForSelectedDate, plannedSiteIds, prefillEntry]);
+  }, [editingEntry, plannedSiteIds, prefillEntry]);
 
   const relevantSiteIds = useMemo(() => {
     const ids = new Set<number>();
@@ -149,15 +173,27 @@ export function MobileTimeEntryPage() {
         ids.add(entry.site_id);
       }
     }
+    for (const site of activeSites) {
+      ids.add(site.id);
+    }
     return ids;
-  }, [assignments, entries]);
+  }, [activeSites, assignments, entries]);
 
-  const siteOptions = useMemo(
+  const plannedSiteOptions = useMemo(
+    () => plannedSiteIds
+      .map((siteId) => siteById.get(siteId))
+      .filter((site): site is MobileTimeSiteOption => Boolean(site))
+      .sort(compareSites),
+    [plannedSiteIds, siteById],
+  );
+
+  const otherSiteOptions = useMemo(
     () => Array.from(siteById.values())
       .filter((site) => relevantSiteIds.has(site.id))
       .sort(compareSites),
     [relevantSiteIds, siteById],
   );
+  const visibleSiteOptions = siteSelectionMode === "planned" ? plannedSiteOptions : otherSiteOptions;
 
   const calendarDays = useMemo(() => buildMonthGrid(visibleMonth, today), [today, visibleMonth]);
   const weekDays = useMemo(() => buildWeekDays(selectedDate, today), [selectedDate, today]);
@@ -171,12 +207,14 @@ export function MobileTimeEntryPage() {
     const monthStart = startOfMonth(month);
     setVisibleMonth(monthStart);
     setSelectedDate(toIsoDate(monthStart));
+    setEditingEntryId(null);
     setActiveView("month");
   }
 
   function showToday() {
     setVisibleMonth(currentMonth);
     setSelectedDate(today);
+    setEditingEntryId(null);
     setActiveView("month");
   }
 
@@ -186,13 +224,19 @@ export function MobileTimeEntryPage() {
     if (dateMonth.getFullYear() !== visibleMonth.getFullYear() || dateMonth.getMonth() !== visibleMonth.getMonth()) {
       setVisibleMonth(dateMonth);
     }
+    setEditingEntryId(null);
     setActiveView("day");
   }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await saveCurrentForm();
+  }
+
+  async function saveCurrentForm(options: { replaceEntryId?: number; skipLocalConflict?: boolean } = {}) {
     setSaveMessage(null);
     setFormError(null);
+    setTimeConflict(null);
 
     if (personId === null) {
       setFormError("Für deinen Benutzer ist kein Monteurprofil hinterlegt.");
@@ -207,6 +251,21 @@ export function MobileTimeEntryPage() {
       return;
     }
 
+    const targetEntryId = options.replaceEntryId ?? editingEntry?.id ?? null;
+    if (!options.skipLocalConflict) {
+      const localConflict = findTimeOverlapConflict({
+        entries: selectedDateEntries,
+        siteById,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        excludeEntryId: targetEntryId,
+      });
+      if (localConflict) {
+        setTimeConflict(localConflict);
+        return;
+      }
+    }
+
     const payload: TimeEntryCreate = {
       person_id: personId,
       site_id: form.siteId ? Number(form.siteId) : null,
@@ -215,25 +274,72 @@ export function MobileTimeEntryPage() {
       start_time: form.startTime,
       end_time: form.endTime,
       break_minutes: breakMinutes,
-      travel_minutes: entryForSelectedDate?.travel_minutes ?? 0,
+      travel_minutes: editingEntry?.travel_minutes ?? 0,
       work_minutes: netMinutes,
-      note: entryForSelectedDate?.note ?? null,
+      note: editingEntry?.note ?? null,
       source: "manual",
       status: "submitted",
     };
 
     setIsSaving(true);
     try {
-      const savedEntry = entryForSelectedDate
-        ? await api.updateTimeEntry(entryForSelectedDate.id, payload)
+      const savedEntry = targetEntryId
+        ? await api.updateTimeEntry(targetEntryId, payload)
         : await api.createTimeEntry(payload);
       setEntries((currentEntries) => upsertEntry(currentEntries, savedEntry));
-      setSaveMessage("Gespeichert.");
+      if (targetEntryId) {
+        setEditingEntryId(savedEntry.id);
+        setSaveMessage(options.replaceEntryId ? "Alter Eintrag wurde ersetzt." : "Eintrag aktualisiert.");
+      } else {
+        resetFormForNewEntry(plannedSiteIds);
+        setSaveMessage("Zeit hinzugefügt.");
+      }
     } catch (error) {
-      setFormError(getErrorMessage(error, "Arbeitszeit konnte nicht gespeichert werden."));
+      const apiConflict = parseApiOverlapConflict(error, siteById);
+      if (apiConflict) {
+        setTimeConflict(apiConflict);
+      } else {
+        setFormError(getErrorMessage(error, "Arbeitszeit konnte nicht gespeichert werden."));
+      }
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function startNewEntry() {
+    resetFormForNewEntry(plannedSiteIds);
+    setEditingEntryId(null);
+    setFormError(null);
+    setSaveMessage(null);
+    setTimeConflict(null);
+  }
+
+  function switchSiteSelectionMode(mode: SiteSelectionMode) {
+    setSiteSelectionMode(mode);
+    setForm((currentForm) => {
+      if (mode === "planned") {
+        const plannedSiteId = plannedSiteIds.length === 1 ? String(plannedSiteIds[0]) : "";
+        return { ...currentForm, siteId: plannedSiteId };
+      }
+      return currentForm;
+    });
+    setFormError(null);
+    setSaveMessage(null);
+    setTimeConflict(null);
+  }
+
+  function editEntry(entry: TimeEntry) {
+    setEditingEntryId(entry.id);
+    setFormError(null);
+    setSaveMessage(null);
+    setTimeConflict(null);
+  }
+
+  function resetFormForNewEntry(nextPlannedSiteIds: number[]) {
+    const plannedSiteId = nextPlannedSiteIds.length === 1 ? String(nextPlannedSiteIds[0]) : "";
+    setForm({ siteId: plannedSiteId, startTime: "", endTime: "" });
+    setSiteSelectionMode("planned");
+    setSuggestionMessage(null);
   }
 
   return (
@@ -339,39 +445,59 @@ export function MobileTimeEntryPage() {
           </section>
 
           <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
-            <div className="mobile-time-entry-heading">
-              <span>{formatCalendarWeek(selectedDate)}</span>
-              <h1>{formatDetailDate(selectedDate)}</h1>
-              {entryForSelectedDate ? <p>Gespeicherter Eintrag wird bearbeitet.</p> : null}
-              {!entryForSelectedDate && suggestionMessage ? <p>{suggestionMessage}</p> : null}
-            </div>
+	            <div className="mobile-time-entry-heading">
+	              <span>{formatCalendarWeek(selectedDate)}</span>
+	              <h1>{formatDetailDate(selectedDate)}</h1>
+	              {editingEntry ? <p>Gespeicherter Eintrag wird bearbeitet.</p> : null}
+	              {!editingEntry && suggestionMessage ? <p>{suggestionMessage}</p> : null}
+	            </div>
 
-            {selectedDateEntries.length > 1 ? (
-              <p className="form-info">
-                Für diesen Tag gibt es mehrere Einträge. Diese mobile V1 bearbeitet den ersten Tages-Eintrag.
-              </p>
-            ) : null}
+	            <div className="mobile-time-plan-note">
+	              {plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Du kannst eine Baustelle auswählen." : null}
+	              {plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
+	              {plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
+	            </div>
 
-            <div className="mobile-time-plan-note">
-              {plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Du kannst eine Baustelle auswählen." : null}
-              {plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
-              {plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
-            </div>
-
-            <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
-              <label className="mobile-time-field">
-                <span>Baustelle</span>
-                <select value={form.siteId} onChange={(event) => {
-                  setForm((currentForm) => ({ ...currentForm, siteId: event.target.value }));
-                  setFormError(null);
-                  setSaveMessage(null);
-                }}>
-                  <option value="">Keine Baustelle ausgewählt</option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
-                  ))}
-                </select>
-              </label>
+	            <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
+	              <label className="mobile-time-field">
+	                <span>Baustelle</span>
+	                <div className="mobile-time-site-mode" aria-label="Baustellen-Auswahlmodus">
+	                  <button
+	                    className={classNames(siteSelectionMode === "planned" && "active")}
+	                    type="button"
+	                    onClick={() => switchSiteSelectionMode("planned")}
+	                  >
+	                    Geplante Baustelle
+	                  </button>
+	                  <button
+	                    className={classNames(siteSelectionMode === "other" && "active")}
+	                    type="button"
+	                    onClick={() => switchSiteSelectionMode("other")}
+	                  >
+	                    Andere Baustelle auswählen
+	                  </button>
+	                </div>
+	                <select value={form.siteId} onChange={(event) => {
+	                  setForm((currentForm) => ({ ...currentForm, siteId: event.target.value }));
+	                  setFormError(null);
+	                  setSaveMessage(null);
+	                  setTimeConflict(null);
+	                }}>
+	                  <option value="">
+	                    {siteSelectionMode === "planned" && plannedSiteOptions.length === 0
+	                      ? "Keine Baustelle geplant"
+	                      : "Keine Baustelle ausgewählt"}
+	                  </option>
+	                  {visibleSiteOptions.map((site) => (
+	                    <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
+	                  ))}
+	                </select>
+	              </label>
+	              {siteSelectionMode === "other" && plannedSiteIds.length > 0 ? (
+	                <p className="form-info mobile-time-deviation-note">
+	                  Andere Baustelle: Die spätere Prüfung erkennt die Abweichung zur Planmatrix.
+	                </p>
+	              ) : null}
 
               <div className="mobile-time-form-grid">
                 <label className="mobile-time-field">
@@ -417,20 +543,77 @@ export function MobileTimeEntryPage() {
                 </div>
               </div>
 
-              {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
-              {formError ? <p className="form-error">{formError}</p> : null}
-              {saveMessage ? (
-                <p className="form-info mobile-time-save-message">
-                  <CheckCircle2 aria-hidden="true" size={16} />
+	              {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
+	              {formError ? <p className="form-error">{formError}</p> : null}
+	              {timeConflict ? (
+	                <div className="mobile-time-conflict" role="alert">
+	                  <strong>{timeConflict.message}</strong>
+	                  {timeConflict.conflicts.map((conflict) => (
+	                    <p key={conflict.id}>
+	                      {conflict.site_label} · {formatTimeRange(conflict.start_time, conflict.end_time)}
+	                    </p>
+	                  ))}
+	                  <div className="mobile-time-conflict-actions">
+	                    <button type="button" onClick={() => setTimeConflict(null)}>Abbrechen</button>
+	                    {timeConflict.conflicts[0] ? (
+	                      <button type="button" onClick={() => {
+	                        const conflictEntry = selectedDateEntries.find((entry) => entry.id === timeConflict.conflicts[0]?.id);
+	                        if (conflictEntry) {
+	                          editEntry(conflictEntry);
+	                        }
+	                      }}>
+	                        Vorhandenen Eintrag bearbeiten
+	                      </button>
+	                    ) : null}
+	                    {timeConflict.conflicts.length === 1 ? (
+	                      <button type="button" onClick={() => void saveCurrentForm({ replaceEntryId: timeConflict.conflicts[0].id, skipLocalConflict: true })}>
+	                        Alten Eintrag ersetzen
+	                      </button>
+	                    ) : null}
+	                  </div>
+	                </div>
+	              ) : null}
+	              {saveMessage ? (
+	                <p className="form-info mobile-time-save-message">
+	                  <CheckCircle2 aria-hidden="true" size={16} />
                   {saveMessage}
                 </p>
-              ) : null}
+	              ) : null}
 
-              <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
-                {isSaving ? "Speichert..." : entryForSelectedDate ? "Änderung speichern" : "Speichern"}
-              </button>
-            </form>
-          </section>
+	              <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
+	                {isSaving ? "Speichert..." : editingEntry ? "Eintrag aktualisieren" : "Zeit hinzufügen"}
+	              </button>
+	              {editingEntry ? (
+	                <button className="mobile-time-secondary-button" type="button" onClick={startNewEntry}>
+	                  Neuer Eintrag
+	                </button>
+	              ) : null}
+	            </form>
+
+	            <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
+	              <div className="mobile-time-day-entries-heading">
+	                <span>Einträge an diesem Tag</span>
+	                <strong>{selectedDateEntries.length}</strong>
+	              </div>
+	              {selectedDateEntries.length === 0 ? (
+	                <p>Noch keine Zeit für diesen Tag erfasst.</p>
+	              ) : (
+	                <div className="mobile-time-entry-bubbles">
+	                  {selectedDateEntries.map((entry) => (
+	                    <button
+	                      className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
+	                      key={entry.id}
+	                      type="button"
+	                      onClick={() => editEntry(entry)}
+	                    >
+	                      <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
+	                      <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
+	                    </button>
+	                  ))}
+	                </div>
+	              )}
+	            </section>
+	          </section>
         </>
       ) : null}
     </section>
@@ -454,8 +637,15 @@ function compareSites(first: MobileTimeSiteOption, second: MobileTimeSiteOption)
   return firstLabel.localeCompare(secondLabel, "de");
 }
 
-function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[]): Map<number, MobileTimeSiteOption> {
+function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[], activeSites: Site[]): Map<number, MobileTimeSiteOption> {
   const sites = new Map<number, MobileTimeSiteOption>();
+  for (const site of activeSites) {
+    sites.set(site.id, {
+      id: site.id,
+      site_number: site.site_number,
+      name: site.name,
+    });
+  }
   for (const assignment of assignments) {
     sites.set(assignment.site.id, {
       id: assignment.site.id,
@@ -490,6 +680,52 @@ function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, Mobil
     }
   }
   return Array.from(summaries.values()).sort((first, second) => first.siteLabel.localeCompare(second.siteLabel, "de"));
+}
+
+function findTimeOverlapConflict({
+  entries,
+  siteById,
+  startTime,
+  endTime,
+  excludeEntryId,
+}: {
+  entries: TimeEntry[];
+  siteById: Map<number, MobileTimeSiteOption>;
+  startTime: string;
+  endTime: string;
+  excludeEntryId: number | null;
+}): TimeOverlapConflict | null {
+  const start = parseTimeMinutes(startTime);
+  const end = parseTimeMinutes(endTime);
+  if (start === null || end === null || end <= start) {
+    return null;
+  }
+  const conflicts = entries
+    .filter((entry) => entry.id !== excludeEntryId)
+    .filter((entry) => {
+      const entryStart = parseTimeMinutes(entry.start_time);
+      const entryEnd = parseTimeMinutes(entry.end_time);
+      return entryStart !== null && entryEnd !== null && start < entryEnd && end > entryStart;
+    })
+    .map((entry) => timeOverlapConflictEntry(entry, siteById));
+
+  if (conflicts.length === 0) {
+    return null;
+  }
+  return {
+    message: "Der neue Eintrag überschneidet sich mit einem vorhandenen Zeiteintrag.",
+    conflicts,
+  };
+}
+
+function timeOverlapConflictEntry(entry: TimeEntry, siteById: Map<number, MobileTimeSiteOption>): TimeOverlapConflictEntry {
+  return {
+    id: entry.id,
+    site_id: entry.site_id,
+    site_label: entry.site_id !== null ? formatSiteLabel(entry.site_id, siteById) : "Ohne Baustelle",
+    start_time: entry.start_time,
+    end_time: entry.end_time,
+  };
 }
 
 function upsertEntry(entries: TimeEntry[], savedEntry: TimeEntry): TimeEntry[] {
@@ -693,6 +929,22 @@ function compactSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOp
   return label || `Baustelle ${siteId}`;
 }
 
+function formatEntryBubbleTitle(entry: TimeEntry, siteById: Map<number, MobileTimeSiteOption>): string {
+  if (entry.site_id === null) {
+    return "Ohne Baustelle";
+  }
+  return formatSiteLabel(entry.site_id, siteById);
+}
+
+function formatTimeRange(startTime: string | null | undefined, endTime: string | null | undefined): string {
+  const start = normalizeTimeInput(startTime);
+  const end = normalizeTimeInput(endTime);
+  if (!start || !end) {
+    return "ohne Uhrzeit";
+  }
+  return `${start}–${end}`;
+}
+
 function siteOptionLabel(site: MobileTimeSiteOption): string {
   return [site.site_number, site.name].filter(Boolean).join(" - ") || `Baustelle ${site.id}`;
 }
@@ -716,6 +968,47 @@ function getErrorMessage(error: unknown, fallback: string): string {
     return error.message;
   }
   return fallback;
+}
+
+function parseApiOverlapConflict(error: unknown, siteById: Map<number, MobileTimeSiteOption>): TimeOverlapConflict | null {
+  if (!(error instanceof ApiError) || error.status !== 409 || !isRecord(error.detail)) {
+    return null;
+  }
+  if (error.detail.code !== "time_entry_overlap") {
+    return null;
+  }
+  const rawConflicts = Array.isArray(error.detail.conflicts) ? error.detail.conflicts : [];
+  const conflicts = rawConflicts
+    .filter(isRecord)
+    .map((conflict): TimeOverlapConflictEntry | null => {
+      const id = typeof conflict.id === "number" ? conflict.id : null;
+      if (id === null) {
+        return null;
+      }
+      const siteId = typeof conflict.site_id === "number" ? conflict.site_id : null;
+      const siteLabel = typeof conflict.site_label === "string"
+        ? conflict.site_label
+        : siteId !== null ? formatSiteLabel(siteId, siteById) : "Ohne Baustelle";
+      return {
+        id,
+        site_id: siteId,
+        site_label: siteLabel,
+        start_time: typeof conflict.start_time === "string" ? conflict.start_time : null,
+        end_time: typeof conflict.end_time === "string" ? conflict.end_time : null,
+      };
+    })
+    .filter((conflict): conflict is TimeOverlapConflictEntry => conflict !== null);
+
+  return {
+    message: typeof error.detail.message === "string"
+      ? error.detail.message
+      : "Der neue Eintrag überschneidet sich mit einem vorhandenen Zeiteintrag.",
+    conflicts,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function classNames(...values: Array<string | false | null | undefined>): string {

@@ -68,6 +68,12 @@ class TimeEntryService:
             break_minutes=values["break_minutes"],
             work_minutes=values.get("work_minutes"),
         )
+        self._ensure_no_time_overlap(
+            person_id=values["person_id"],
+            work_date=values["work_date"],
+            start_time=values.get("start_time"),
+            end_time=values.get("end_time"),
+        )
         values["note"] = clean_optional_text(values.get("note"))
         entry = WorkTimeEntry(**values, created_by_user_id=current_user.id)
         self.db.add(entry)
@@ -88,6 +94,17 @@ class TimeEntryService:
             self._ensure_site_exists(next_site_id)
         if "assignment_id" in values or "person_id" in values or "site_id" in values:
             self._ensure_assignment_matches(values.get("assignment_id", entry.assignment_id), next_person_id, next_site_id)
+
+        next_work_date = values.get("work_date", entry.work_date)
+        next_start_time = values.get("start_time", entry.start_time)
+        next_end_time = values.get("end_time", entry.end_time)
+        self._ensure_no_time_overlap(
+            person_id=next_person_id,
+            work_date=next_work_date,
+            start_time=next_start_time,
+            end_time=next_end_time,
+            exclude_entry_id=entry.id,
+        )
 
         for field, value in values.items():
             if field == "note":
@@ -344,6 +361,65 @@ class TimeEntryService:
         if calculated < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pause darf die Arbeitszeit nicht uebersteigen.")
         return calculated
+
+    def _ensure_no_time_overlap(
+        self,
+        *,
+        person_id: int,
+        work_date: date,
+        start_time: time | None,
+        end_time: time | None,
+        exclude_entry_id: int | None = None,
+    ) -> None:
+        if start_time is None or end_time is None:
+            return
+        statement = (
+            select(WorkTimeEntry)
+            .options(selectinload(WorkTimeEntry.site))
+            .where(WorkTimeEntry.person_id == person_id)
+            .where(WorkTimeEntry.work_date == work_date)
+        )
+        if exclude_entry_id is not None:
+            statement = statement.where(WorkTimeEntry.id != exclude_entry_id)
+        conflicts = [
+            entry
+            for entry in self.db.scalars(statement)
+            if self._time_ranges_overlap(start_time, end_time, entry.start_time, entry.end_time)
+        ]
+        if not conflicts:
+            return
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "time_entry_overlap",
+                "message": "Der neue Eintrag überschneidet sich mit einem vorhandenen Zeiteintrag.",
+                "conflicts": [self._time_overlap_conflict_detail(entry) for entry in conflicts],
+            },
+        )
+
+    @staticmethod
+    def _time_ranges_overlap(
+        start_time: time,
+        end_time: time,
+        existing_start_time: time | None,
+        existing_end_time: time | None,
+    ) -> bool:
+        if existing_start_time is None or existing_end_time is None:
+            return False
+        return start_time < existing_end_time and end_time > existing_start_time
+
+    @staticmethod
+    def _time_overlap_conflict_detail(entry: WorkTimeEntry) -> dict[str, object]:
+        site_label = "Ohne Baustelle"
+        if entry.site is not None:
+            site_label = " - ".join(part for part in [entry.site.site_number, entry.site.name] if part)
+        return {
+            "id": entry.id,
+            "site_id": entry.site_id,
+            "site_label": site_label,
+            "start_time": entry.start_time.strftime("%H:%M") if entry.start_time else None,
+            "end_time": entry.end_time.strftime("%H:%M") if entry.end_time else None,
+        }
 
 
 def clean_optional_text(value: str | None) -> str | None:

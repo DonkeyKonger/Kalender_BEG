@@ -46,6 +46,35 @@ def test_end_time_must_be_after_start_time():
     assert error.value.status_code == 400
 
 
+def test_time_ranges_overlap_detects_real_overlap():
+    assert TimeEntryService._time_ranges_overlap(time(8, 0), time(12, 0), time(11, 0), time(14, 0)) is True
+    assert TimeEntryService._time_ranges_overlap(time(8, 0), time(12, 0), time(12, 0), time(14, 0)) is False
+
+
+def test_overlap_guard_returns_structured_conflict():
+    existing_entry = SimpleNamespace(
+        id=3,
+        site_id=9,
+        site=SimpleNamespace(site_number="1010", name="Firma BEG"),
+        start_time=time(6, 0),
+        end_time=time(15, 0),
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(scalars=lambda statement: [existing_entry])
+
+    with pytest.raises(HTTPException) as error:
+        item._ensure_no_time_overlap(
+            person_id=4,
+            work_date=date(2026, 6, 4),
+            start_time=time(11, 0),
+            end_time=time(18, 0),
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "time_entry_overlap"
+    assert error.value.detail["conflicts"][0]["site_label"] == "1010 - Firma BEG"
+
+
 def test_approve_time_review_marks_entry_with_user_audit():
     entry = SimpleNamespace(
         id=1,
