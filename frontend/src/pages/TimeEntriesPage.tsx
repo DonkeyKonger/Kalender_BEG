@@ -392,6 +392,15 @@ export function TimeEntriesPage() {
     () => calculateReviewSummary(timeReviewIssues, reviewAllEntries),
     [reviewAllEntries, timeReviewIssues],
   );
+  const reviewFilterTabs: Array<{ key: ReviewSummaryFilter; label: string; value: number }> = useMemo(
+    () => [
+      { key: "needs_review", label: "Prüfung empfohlen", value: reviewSummary.reviewRecommended },
+      { key: "all", label: "Alle", value: reviewSummary.all },
+      { key: "matches", label: "Automatisch geprüft", value: reviewSummary.autoPlausible },
+      { key: "verified", label: "Manuell geprüft", value: reviewSummary.verified },
+    ],
+    [reviewSummary],
+  );
   const isReadOnlyReviewOverview = reviewStatusFilter === "all" || reviewStatusFilter === "matches";
   const reviewTableClassName = [
     "time-entries-table",
@@ -1127,35 +1136,20 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
-          <div className="time-review-summary-cards">
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "needs_review"}
-              label="Prüfung empfohlen"
-              onClick={() => setReviewStatusFilter("needs_review")}
-              tone="planned"
-              value={reviewSummary.reviewRecommended}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "all"}
-              label="Alle"
-              onClick={() => setReviewStatusFilter("all")}
-              tone="warning"
-              value={reviewSummary.all}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "matches"}
-              label="Automatisch geprüft"
-              onClick={() => setReviewStatusFilter("matches")}
-              tone="active"
-              value={reviewSummary.autoPlausible}
-            />
-            <ReviewSummaryCard
-              active={reviewStatusFilter === "verified"}
-              label="Manuell geprüft"
-              onClick={() => setReviewStatusFilter("verified")}
-              tone="active"
-              value={reviewSummary.verified}
-            />
+          <div className="project-record-subtabs time-review-filter-tabs" role="tablist" aria-label="Stundenprüfung Filter">
+            {reviewFilterTabs.map((tab) => (
+              <button
+                className={reviewStatusFilter === tab.key ? "is-active" : ""}
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={reviewStatusFilter === tab.key}
+                onClick={() => setReviewStatusFilter(tab.key)}
+              >
+                <span>{tab.label}</span>
+                <strong className="time-review-filter-count">{tab.value}</strong>
+              </button>
+            ))}
           </div>
 
           <div className="time-review-filters">
@@ -1757,31 +1751,6 @@ export function TimeEntriesPage() {
       </div>
       )}
     </section>
-  );
-}
-
-function ReviewSummaryCard({
-  active,
-  label,
-  onClick,
-  tone,
-  value,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  tone: StatusBadgeTone;
-  value: number;
-}) {
-  return (
-    <button
-      className={`time-review-summary-card time-review-summary-card-${tone}${active ? " is-active" : ""}`}
-      type="button"
-      onClick={onClick}
-    >
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </button>
   );
 }
 

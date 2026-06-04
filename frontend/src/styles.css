@@ -6574,6 +6574,36 @@ button.person-chip:focus-visible {
   justify-self: start;
 }
 
+.time-review-filter-tabs {
+  justify-self: start;
+  width: auto;
+}
+
+.time-review-filter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.time-review-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e5edf7;
+  color: #143c6d;
+  font-size: 0.74rem;
+  line-height: 1;
+  padding: 0 7px;
+}
+
+.time-review-filter-tabs button.is-active .time-review-filter-count {
+  background: #143c6d;
+  color: #ffffff;
+}
+
 .time-entries-layout {
   display: grid;
   gap: 16px;
