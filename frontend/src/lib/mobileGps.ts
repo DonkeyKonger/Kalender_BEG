@@ -16,6 +16,7 @@ export type AndroidBackgroundGpsStatus = {
   queuedCount: number;
   lastSentAt?: string | null;
   lastError?: string | null;
+  lastQueuedAt?: string | null;
   lastServiceStartAt?: string | null;
   lastServiceStopAt?: string | null;
   nextPingAt?: string | null;
@@ -157,6 +158,7 @@ function backgroundGpsUnavailableStatus(): AndroidBackgroundGpsStatus {
     queuedCount: 0,
     lastSentAt: null,
     lastError: null,
+    lastQueuedAt: null,
     lastServiceStartAt: null,
     lastServiceStopAt: null,
     nextPingAt: null,

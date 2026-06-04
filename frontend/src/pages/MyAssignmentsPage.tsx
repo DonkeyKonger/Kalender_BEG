@@ -658,6 +658,7 @@ function MobileGpsDebugCard({
         <div><dt>Letzte manuelle Sendung</dt><dd>{formatOptionalDateTime(lastManualSentAt)}</dd></div>
         <div><dt>Letzte automatische Sendung</dt><dd>{formatOptionalDateTime(lastAutomaticSentAt)}</dd></div>
         <div><dt>Offline-Queue</dt><dd>{status?.queuedCount ?? 0}</dd></div>
+        <div><dt>Zuletzt gepuffert</dt><dd>{formatOptionalDateTime(status?.lastQueuedAt ?? null)}</dd></div>
         <div><dt>Service-Start</dt><dd>{formatOptionalDateTime(status?.lastServiceStartAt ?? null)}</dd></div>
         <div><dt>Service-Stop</dt><dd>{formatOptionalDateTime(status?.lastServiceStopAt ?? null)}</dd></div>
         <div><dt>Nächster Ping</dt><dd>{nextPingLabel}</dd></div>

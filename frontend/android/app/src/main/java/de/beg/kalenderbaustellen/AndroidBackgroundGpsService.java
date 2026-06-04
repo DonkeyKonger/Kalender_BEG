@@ -1,6 +1,7 @@
 package de.beg.kalenderbaustellen;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -19,6 +20,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
 
@@ -55,6 +57,8 @@ public class AndroidBackgroundGpsService extends Service {
     private static final String TAG = "KbAndroidGps";
     private static final String ACTION_START = "de.beg.kalenderbaustellen.gps.START";
     private static final String ACTION_STOP = "de.beg.kalenderbaustellen.gps.STOP";
+    private static final String ACTION_PING = "de.beg.kalenderbaustellen.gps.PING";
+    static final String ACTION_ALARM_TICK = "de.beg.kalenderbaustellen.gps.ALARM_TICK";
     private static final String EXTRA_API_BASE_URL = "apiBaseUrl";
     private static final String EXTRA_ACCESS_TOKEN = "accessToken";
     private static final String EXTRA_SOURCE = "source";
@@ -71,8 +75,10 @@ public class AndroidBackgroundGpsService extends Service {
     private static final String KEY_NEXT_PING_AT = "next_ping_at";
     private static final String KEY_FOREGROUND_SERVICE_RUNNING = "foreground_service_running";
     private static final String KEY_QUEUE = "queue";
+    private static final String KEY_LAST_QUEUED_AT = "last_queued_at";
     private static final String NOTIFICATION_CHANNEL_ID = "kb_android_gps_tracking";
     private static final int NOTIFICATION_ID = 7201;
+    private static final int ALARM_REQUEST_CODE = 7202;
     private static final int MAX_QUEUE_ITEMS = 672;
 
     private static volatile boolean serviceInstanceRunning = false;
@@ -133,6 +139,25 @@ public class AndroidBackgroundGpsService extends Service {
         }
     }
 
+    public static void triggerScheduledTick(Context context) {
+        Log.i(TAG, "Scheduled alarm received for Android background GPS.");
+        if (!preferences(context).getBoolean(KEY_TRACKING, false)) {
+            Log.i(TAG, "Scheduled alarm ignored because tracking is disabled.");
+            return;
+        }
+        Intent intent = new Intent(context, AndroidBackgroundGpsService.class);
+        intent.setAction(ACTION_PING);
+        try {
+            ContextCompat.startForegroundService(context, intent);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Scheduled alarm could not start foreground GPS service.", error);
+            preferences(context)
+                .edit()
+                .putString(KEY_LAST_ERROR, "Background-GPS konnte durch Android nicht neu gestartet werden: " + error.getMessage())
+                .apply();
+        }
+    }
+
     public static BackgroundGpsStatus readStatus(Context context) {
         SharedPreferences prefs = preferences(context);
         boolean storedForegroundRunning = prefs.getBoolean(KEY_FOREGROUND_SERVICE_RUNNING, false);
@@ -144,6 +169,7 @@ public class AndroidBackgroundGpsService extends Service {
             readQueueCount(prefs),
             prefs.getString(KEY_LAST_SENT_AT, null),
             prefs.getString(KEY_LAST_ERROR, null),
+            prefs.getString(KEY_LAST_QUEUED_AT, null),
             prefs.getString(KEY_LAST_SERVICE_START_AT, null),
             prefs.getString(KEY_LAST_SERVICE_STOP_AT, null),
             prefs.getString(KEY_NEXT_PING_AT, null),
@@ -176,6 +202,8 @@ public class AndroidBackgroundGpsService extends Service {
         }
         if (ACTION_START.equals(action)) {
             saveTrackingConfig(intent);
+        } else if (ACTION_PING.equals(action)) {
+            Log.i(TAG, "Service restarted by scheduled Android alarm.");
         }
 
         if (!isTrackingEnabled()) {
@@ -220,6 +248,10 @@ public class AndroidBackgroundGpsService extends Service {
         if (handlerThread != null) {
             handlerThread.quitSafely();
         }
+        if (isTrackingEnabled()) {
+            Log.i(TAG, "Service destroyed while tracking is enabled; keeping Android alarm fallback scheduled.");
+            scheduleAlarm(GPS_INTERVAL_MS);
+        }
         super.onDestroy();
     }
 
@@ -258,6 +290,7 @@ public class AndroidBackgroundGpsService extends Service {
             .putString(KEY_LAST_SERVICE_STOP_AT, nowIso())
             .remove(KEY_NEXT_PING_AT)
             .apply();
+        cancelScheduledAlarm();
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
@@ -486,6 +519,7 @@ public class AndroidBackgroundGpsService extends Service {
         JSONArray queue = readQueue();
         queue.put(payload);
         writeQueue(trimQueue(queue));
+        preferences(this).edit().putString(KEY_LAST_QUEUED_AT, nowIso()).apply();
         Log.i(TAG, "Queued offline background GPS point. Queue size: " + readQueue().length() + ".");
     }
 
@@ -550,6 +584,7 @@ public class AndroidBackgroundGpsService extends Service {
             return;
         }
         handler.removeCallbacks(tickRunnable);
+        cancelScheduledAlarm();
         preferences(this).edit().putString(KEY_NEXT_PING_AT, nowIso()).apply();
         Log.i(TAG, "Timer/location request scheduled immediately.");
         handler.post(tickRunnable);
@@ -563,7 +598,42 @@ public class AndroidBackgroundGpsService extends Service {
         String nextPingAt = toIso(System.currentTimeMillis() + GPS_INTERVAL_MS);
         preferences(this).edit().putString(KEY_NEXT_PING_AT, nextPingAt).apply();
         Log.i(TAG, "Timer/location request scheduled for " + nextPingAt + ".");
+        scheduleAlarm(GPS_INTERVAL_MS);
         handler.postDelayed(tickRunnable, GPS_INTERVAL_MS);
+    }
+
+    private void scheduleAlarm(long delayMs) {
+        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null || !isTrackingEnabled()) {
+            return;
+        }
+        long triggerAt = SystemClock.elapsedRealtime() + Math.max(60_000L, delayMs);
+        PendingIntent pendingIntent = scheduledTickPendingIntent(this, PendingIntent.FLAG_UPDATE_CURRENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
+        } else {
+            alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
+        }
+        Log.i(TAG, "Android alarm fallback scheduled for background GPS.");
+    }
+
+    private void cancelScheduledAlarm() {
+        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) {
+            return;
+        }
+        PendingIntent pendingIntent = scheduledTickPendingIntent(this, PendingIntent.FLAG_NO_CREATE);
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent);
+        }
+    }
+
+    @Nullable
+    private static PendingIntent scheduledTickPendingIntent(Context context, int flags) {
+        Intent intent = new Intent(context, AndroidBackgroundGpsAlarmReceiver.class);
+        intent.setAction(ACTION_ALARM_TICK);
+        int pendingIntentFlags = flags | PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getBroadcast(context, ALARM_REQUEST_CODE, intent, pendingIntentFlags);
     }
 
     private void finishTick() {
@@ -754,6 +824,7 @@ public class AndroidBackgroundGpsService extends Service {
         public final int queuedCount;
         @Nullable public final String lastSentAt;
         @Nullable public final String lastError;
+        @Nullable public final String lastQueuedAt;
         @Nullable public final String lastServiceStartAt;
         @Nullable public final String lastServiceStopAt;
         @Nullable public final String nextPingAt;
@@ -767,6 +838,7 @@ public class AndroidBackgroundGpsService extends Service {
             int queuedCount,
             @Nullable String lastSentAt,
             @Nullable String lastError,
+            @Nullable String lastQueuedAt,
             @Nullable String lastServiceStartAt,
             @Nullable String lastServiceStopAt,
             @Nullable String nextPingAt,
@@ -779,6 +851,7 @@ public class AndroidBackgroundGpsService extends Service {
             this.queuedCount = queuedCount;
             this.lastSentAt = lastSentAt;
             this.lastError = lastError;
+            this.lastQueuedAt = lastQueuedAt;
             this.lastServiceStartAt = lastServiceStartAt;
             this.lastServiceStopAt = lastServiceStopAt;
             this.nextPingAt = nextPingAt;

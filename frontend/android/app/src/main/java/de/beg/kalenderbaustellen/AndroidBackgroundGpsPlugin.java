@@ -133,6 +133,7 @@ public class AndroidBackgroundGpsPlugin extends Plugin {
         result.put("queuedCount", status.queuedCount);
         result.put("lastSentAt", status.lastSentAt);
         result.put("lastError", status.lastError);
+        result.put("lastQueuedAt", status.lastQueuedAt);
         result.put("lastServiceStartAt", status.lastServiceStartAt);
         result.put("lastServiceStopAt", status.lastServiceStopAt);
         result.put("nextPingAt", status.nextPingAt);
