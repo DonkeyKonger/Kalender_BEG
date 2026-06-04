@@ -12,7 +12,7 @@ from app.schemas.measurement import (
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
-from app.schemas.mobile import MobileAssignmentsResponse
+from app.schemas.mobile import MobileAssignmentsResponse, MobileSite
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 
@@ -46,6 +46,14 @@ def list_my_assignment_history(
         end=end,
         allow_history=True,
     )
+
+
+@router.get("/sites", response_model=list[MobileSite])
+def list_my_mobile_sites(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MobileSite]:
+    return MobileAssignmentService(db).list_active_sites_for_mobile(current_user=current_user)
 
 
 @router.get(

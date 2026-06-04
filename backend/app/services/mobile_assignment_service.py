@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
+from app.models.enums import SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -65,6 +66,21 @@ class MobileAssignmentService:
             end_date=end,
             assignments=[self._build_assignment(item) for item in assignments],
         )
+
+    def list_active_sites_for_mobile(self, *, current_user: User) -> list[MobileSite]:
+        if current_user.role == UserRole.MONTEUR and current_user.person_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Dieser Benutzer ist keiner Person zugeordnet.",
+            )
+
+        statement = (
+            select(Site)
+            .options(selectinload(Site.project_manager))
+            .where(Site.status == SiteStatus.ACTIVE)
+            .order_by(Site.site_number, Site.name, Site.id)
+        )
+        return [self._build_site(site) for site in self.db.scalars(statement)]
 
     def _build_assignment(self, assignment: Assignment) -> MobileAssignment:
         return MobileAssignment(

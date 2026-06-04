@@ -8,7 +8,7 @@ import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMess
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
-import type { MobileAssignmentsResponse } from "../types/mobile";
+import type { MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
@@ -732,6 +732,10 @@ export const api = {
   async myAssignmentHistory(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`);
+  },
+
+  async mySites(): Promise<MobileSite[]> {
+    return request<MobileSite[]>("/me/sites");
   },
 
 

@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
-import type { MobileAssignment } from "../types/mobile";
-import type { Site } from "../types/site";
+import type { MobileAssignment, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
 
 type MobileTimeView = "month" | "day";
@@ -66,7 +65,7 @@ export function MobileTimeEntryPage() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
-  const [activeSites, setActiveSites] = useState<Site[]>([]);
+  const [activeSites, setActiveSites] = useState<MobileSite[]>([]);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "" });
   const [siteSelectionMode, setSiteSelectionMode] = useState<SiteSelectionMode>("planned");
@@ -75,6 +74,8 @@ export function MobileTimeEntryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
+  const [siteLoadError, setSiteLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -95,15 +96,35 @@ export function MobileTimeEntryPage() {
 
     setIsLoading(true);
     setLoadError(null);
+    setAssignmentLoadError(null);
+    setSiteLoadError(null);
     try {
-      const [timeEntries, assignmentResponse, sites] = await Promise.all([
+      const [timeEntriesResult, assignmentResult, sitesResult] = await Promise.allSettled([
         api.timeEntries({ personId, dateFrom: loadRange.start, dateTo: loadRange.end }),
         api.myAssignmentHistory({ start: loadRange.start, end: loadRange.end }),
-        api.sites({ includeClosed: false }),
+        api.mySites(),
       ]);
-      setEntries(timeEntries.filter(isEditableManualEntry).sort(compareEntries));
-      setAssignments(assignmentResponse.assignments);
-      setActiveSites(sites);
+
+      if (timeEntriesResult.status === "fulfilled") {
+        setEntries(timeEntriesResult.value.filter(isEditableManualEntry).sort(compareEntries));
+      } else {
+        setEntries([]);
+        setLoadError(getErrorMessage(timeEntriesResult.reason, "Arbeitszeiten konnten nicht geladen werden."));
+      }
+
+      if (assignmentResult.status === "fulfilled") {
+        setAssignments(assignmentResult.value.assignments);
+      } else {
+        setAssignments([]);
+        setAssignmentLoadError(getErrorMessage(assignmentResult.reason, "Planung konnte nicht geladen werden."));
+      }
+
+      if (sitesResult.status === "fulfilled") {
+        setActiveSites(sitesResult.value);
+      } else {
+        setActiveSites([]);
+        setSiteLoadError(getErrorMessage(sitesResult.reason, "Baustellenliste konnte nicht geladen werden."));
+      }
     } catch (error) {
       setLoadError(getErrorMessage(error, "Arbeitszeiten konnten nicht geladen werden."));
     } finally {
@@ -363,6 +384,7 @@ export function MobileTimeEntryPage() {
       )}
 
       {loadError ? <p className="form-error">{loadError}</p> : null}
+      {assignmentLoadError ? <p className="form-error">{assignmentLoadError}</p> : null}
       {isLoading ? <div className="empty-panel">Kalender wird geladen...</div> : null}
 
       {!isLoading && activeView === "month" ? (
@@ -453,9 +475,10 @@ export function MobileTimeEntryPage() {
 	            </div>
 
 	            <div className="mobile-time-plan-note">
-	              {plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Du kannst eine Baustelle auswählen." : null}
-	              {plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
-	              {plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
+	              {assignmentLoadError ? "Planung konnte nicht geladen werden." : null}
+	              {!assignmentLoadError && plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Du kannst eine Baustelle auswählen." : null}
+	              {!assignmentLoadError && plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
+	              {!assignmentLoadError && plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
 	            </div>
 
 	            <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
@@ -484,7 +507,9 @@ export function MobileTimeEntryPage() {
 	                  setTimeConflict(null);
 	                }}>
 	                  <option value="">
-	                    {siteSelectionMode === "planned" && plannedSiteOptions.length === 0
+	                    {assignmentLoadError && siteSelectionMode === "planned"
+	                      ? "Planung nicht geladen"
+	                      : siteSelectionMode === "planned" && plannedSiteOptions.length === 0
 	                      ? "Keine Baustelle geplant"
 	                      : "Keine Baustelle ausgewählt"}
 	                  </option>
@@ -493,6 +518,9 @@ export function MobileTimeEntryPage() {
 	                  ))}
 	                </select>
 	              </label>
+	              {siteLoadError && siteSelectionMode === "other" ? (
+	                <p className="form-error">{siteLoadError}</p>
+	              ) : null}
 	              {siteSelectionMode === "other" && plannedSiteIds.length > 0 ? (
 	                <p className="form-info mobile-time-deviation-note">
 	                  Andere Baustelle: Die spätere Prüfung erkennt die Abweichung zur Planmatrix.
@@ -637,7 +665,7 @@ function compareSites(first: MobileTimeSiteOption, second: MobileTimeSiteOption)
   return firstLabel.localeCompare(secondLabel, "de");
 }
 
-function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[], activeSites: Site[]): Map<number, MobileTimeSiteOption> {
+function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[], activeSites: MobileSite[]): Map<number, MobileTimeSiteOption> {
   const sites = new Map<number, MobileTimeSiteOption>();
   for (const site of activeSites) {
     sites.set(site.id, {
