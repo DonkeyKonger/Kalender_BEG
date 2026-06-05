@@ -7992,34 +7992,37 @@ button.person-chip:focus-visible {
   display: flex;
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid var(--time-border);
-  border-radius: 8px;
-  background: var(--time-surface);
-  gap: 6px;
-  padding: 6px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  border: 0;
+  border-bottom: 1px solid #d1d9e6;
+  border-radius: 0;
+  background: #ffffff;
+  gap: 0;
+  padding: 0 18px;
+  box-shadow: none;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button {
-  min-height: 34px;
-  border-radius: 6px;
+  min-height: 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
   color: #475569;
   font-size: 0.84rem;
   font-weight: 850;
-  padding: 7px 14px;
+  padding: 11px 15px 10px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button:hover,
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button:focus-visible {
-  background: var(--time-surface-soft);
-  color: #223044;
+  background: #f8fafc;
+  color: #334155;
   outline: none;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button.is-active {
-  background: var(--time-primary);
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(31, 95, 159, 0.22);
+  border-bottom-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
+  box-shadow: none;
 }
 
 .time-entries-page.is-figma-times-workspace .time-entries-sidebar,
