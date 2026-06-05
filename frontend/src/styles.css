@@ -1440,12 +1440,9 @@ button.entity-card:focus-visible,
 
 .cell-stack {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  align-items: center;
+  display: block;
   width: 100%;
-  min-height: calc(var(--assignment-layers, 1) * 20px);
+  min-height: calc(var(--assignment-layers, 1) * 20px + 10px);
 }
 
 .person-chip,
@@ -1465,7 +1462,10 @@ button.entity-card:focus-visible,
 }
 
 .person-chip {
-  position: relative;
+  position: absolute;
+  top: calc(var(--assignment-layer, 0) * 20px);
+  left: 0;
+  z-index: 2;
   flex: 0 0 100%;
   justify-content: flex-start;
   width: 100%;
@@ -1477,6 +1477,10 @@ button.entity-card:focus-visible,
 }
 
 .matrix-cell-typing-preview {
+  position: absolute;
+  top: calc(var(--typing-layer, 0) * 20px);
+  left: 0;
+  right: 0;
   display: inline-flex;
   align-items: center;
   max-width: 100%;
@@ -1596,10 +1600,7 @@ button.person-chip:focus-visible {
 }
 
 .person-chip.is-assignment-run {
-  position: absolute;
   top: calc(var(--assignment-layer) * 20px);
-  left: 0;
-  z-index: 2;
   justify-content: flex-start;
   flex: 0 0 auto;
   width: var(--assignment-run-width, auto);
@@ -2208,8 +2209,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .cell-stack {
-  gap: 2px;
-  min-height: calc(var(--assignment-layers, 1) * 17px);
+  min-height: calc(var(--assignment-layers, 1) * 17px + 8px);
 }
 .matrix-page.is-compact .matrix-absence-cell {
   height: calc(var(--absence-rows, 1) * 17px + 7px);
@@ -2248,12 +2248,14 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .person-chip {
+  top: calc(var(--assignment-layer, 0) * 17px);
   flex: 0 0 100%;
   width: 100%;
   max-width: 100%;
 }
 
 .matrix-page.is-compact .matrix-cell-typing-preview {
+  top: calc(var(--typing-layer, 0) * 17px);
   min-height: 15px;
   border-radius: 5px;
   padding: 1px 4px;

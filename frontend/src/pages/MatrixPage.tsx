@@ -1872,6 +1872,8 @@ function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { grou
 type MatrixTableRowProps = MatrixTableCalendarProps & { row: MatrixRow };
 
 function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
+  const assignmentRunLayout = useMemo(() => buildAssignmentRunLayout(row.cells), [row.cells]);
+
   return (
     <tr>
       <th className="sticky-col site-col row-heading" scope="row">
@@ -1950,6 +1952,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             <CellDisplay
               cell={cell}
               cellIndex={cellIndex}
+              assignmentRunLayout={assignmentRunLayout}
               isCompactView={props.isCompactView}
               isEditable={props.isEditable}
               rowCells={row.cells}
@@ -2091,6 +2094,7 @@ function MatrixStatusPicker({
 }
 
 function CellDisplay({
+  assignmentRunLayout,
   assignmentResize,
   cell,
   cellIndex,
@@ -2102,6 +2106,7 @@ function CellDisplay({
   onStartAssignmentDrag,
   onStartAssignmentResize,
 }: {
+  assignmentRunLayout: AssignmentRunLayout;
   assignmentResize: AssignmentResizeState | null;
   cell: MatrixCell;
   cellIndex: number;
@@ -2113,21 +2118,22 @@ function CellDisplay({
   onStartAssignmentDrag: (assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
 }) {
-  const visibleAssignmentCount = cell.assignments.filter(
-    (assignment) => assignmentRunSpan(rowCells, cellIndex, assignment.id) > 0,
-  ).length;
+  const stackLayerCount = assignmentRunLayout.maxLayers + (typingPreviewText ? 1 : 0);
 
   return (
     <div
       className="cell-stack"
-      style={{ "--assignment-layers": Math.max(1, visibleAssignmentCount) } as CSSProperties}
+      style={{
+        "--assignment-layers": stackLayerCount,
+        "--typing-layer": assignmentRunLayout.maxLayers,
+      } as CSSProperties}
     >
       {cell.assignments.map((assignment) => {
         const span = assignmentRunSpan(rowCells, cellIndex, assignment.id);
         if (span === 0) {
           return null;
         }
-        const layer = assignmentRunLayer(cell.assignments, rowCells, cellIndex, assignment.id);
+        const layer = assignmentRunLayout.layersByRunKey.get(assignmentRunKey(assignment.id, cellIndex)) ?? 0;
         const segmentStartDate = cell.date;
         const segmentEndDate = rowCells[cellIndex + span - 1]?.date ?? cell.date;
         const absenceConflict = assignmentAbsenceConflict(cell, assignment);
@@ -2572,11 +2578,40 @@ function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, assignmentId:
   return span;
 }
 
-function assignmentRunLayer(assignments: MatrixCell["assignments"], cells: MatrixCell[], cellIndex: number, assignmentId: number): number {
-  return assignments
-    .slice(0, assignments.findIndex((assignment) => assignment.id === assignmentId))
-    .filter((assignment) => assignmentRunSpan(cells, cellIndex, assignment.id) > 0)
-    .length;
+type AssignmentRunLayout = {
+  layersByRunKey: Map<string, number>;
+  maxLayers: number;
+};
+
+function buildAssignmentRunLayout(cells: MatrixCell[]): AssignmentRunLayout {
+  const layerEndIndexes: number[] = [];
+  const layersByRunKey = new Map<string, number>();
+
+  cells.forEach((cell, cellIndex) => {
+    cell.assignments.forEach((assignment) => {
+      const span = assignmentRunSpan(cells, cellIndex, assignment.id);
+      if (span === 0) {
+        return;
+      }
+
+      const endIndex = cellIndex + span - 1;
+      let layer = 0;
+      while (layerEndIndexes[layer] !== undefined && layerEndIndexes[layer] >= cellIndex) {
+        layer += 1;
+      }
+      layerEndIndexes[layer] = endIndex;
+      layersByRunKey.set(assignmentRunKey(assignment.id, cellIndex), layer);
+    });
+  });
+
+  return {
+    layersByRunKey,
+    maxLayers: Math.max(1, layerEndIndexes.length),
+  };
+}
+
+function assignmentRunKey(assignmentId: number, cellIndex: number): string {
+  return `${assignmentId}:${cellIndex}`;
 }
 
 function isFullAssignmentDrag(drag: AssignmentDragState): boolean {
