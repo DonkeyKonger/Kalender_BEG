@@ -4,6 +4,12 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
+import {
+  formatGermanDetailDate as formatDetailDate,
+  formatGermanMonthYear as formatMonth,
+  formatGermanWeekdayShortCompact as formatWeekdayShort,
+  formatHoursFromMinutes,
+} from "../lib/formatters";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
 
@@ -917,30 +923,9 @@ function addDays(value: Date, count: number): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
 }
 
-function formatMonth(value: Date): string {
-  return new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(value);
-}
-
-function formatDetailDate(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(parseDateInput(value));
-}
-
-function formatWeekdayShort(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseDateInput(value)).replace(".", "");
-}
-
 function formatCalendarWeek(value: string): string {
   const { week, year } = getIsoWeek(parseDateInput(value));
   return `KW ${week} · ${year}`;
-}
-
-function formatHoursFromMinutes(minutes: number): string {
-  return `${(minutes / 60).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
 function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {

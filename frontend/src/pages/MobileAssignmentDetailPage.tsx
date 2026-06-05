@@ -20,6 +20,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
@@ -932,10 +933,6 @@ function readApiError(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
-function formatDate(date: string): string {
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${date}T00:00:00`));
-}
-
 function readMeasurementViewMode(): MeasurementViewMode {
   if (typeof window === "undefined") {
     return "list";
@@ -1038,14 +1035,10 @@ function getMeasurementAreaSortRank(label: string, fallbackIndex: number): numbe
   return 1000 + fallbackIndex;
 }
 
-function formatRangeLabel(start: string, end: string): string {
-  return `${formatDate(start)} bis ${formatDate(end)}`;
-}
-
 function formatAssignmentRange(assignment: MobileAssignment): string {
   return assignment.start_date === assignment.end_date
-    ? formatDate(assignment.start_date)
-    : formatRangeLabel(assignment.start_date, assignment.end_date);
+    ? formatGermanDateKey(assignment.start_date, "numeric")
+    : formatGermanDateKeyRange(assignment.start_date, assignment.end_date, "numeric");
 }
 
 function formatMeasurementNumber(value: string | number | null): string {

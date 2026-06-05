@@ -7,6 +7,11 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import {
+  formatGermanDateKey as formatDateOnly,
+  formatGermanDateKeyRange as formatDateRange,
+  formatGermanDateTimeShort as formatDateTime,
+} from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
@@ -3851,18 +3856,6 @@ function getCurrentMonthRange(referenceDate = new Date()): { start: string; end:
   };
 }
 
-function formatDateRange(start: string, end: string): string {
-  return `${formatDateOnly(start)} bis ${formatDateOnly(end)}`;
-}
-
-function formatDateOnly(value: string): string {
-  const parsed = parseLocalDateKey(value);
-  if (!parsed) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parsed);
-}
-
 function formatPlannedWorkHours(minutes: number | null): string {
   if (minutes === null || minutes === undefined) {
     return "";
@@ -3991,10 +3984,6 @@ function formatLocationStatus(status: Site["location_status"]): string {
     failed: "Fehler",
   };
   return labels[status];
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 function readApiError(error: unknown, fallback: string): string {

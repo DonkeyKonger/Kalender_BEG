@@ -4,6 +4,16 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import {
+  formatGermanDateKey as formatDate,
+  formatGermanDateKeyRange as formatRangeLabel,
+  formatGermanDateTimeShort as formatDateTime,
+  formatGermanTimeShort as formatTime,
+  formatGermanWeekdayShort as formatWeekday,
+  formatHalfHourDeltaFromMinutes as formatHalfHourDelta,
+  formatHalfHourFromMinutes as formatHalfHour,
+  formatVerboseMinutes as formatMinutes,
+} from "../lib/formatters";
 import type { TimeGpsTestDataGenerateRequest, TimeGpsTestDataGenerateResponse } from "../types/devTestData";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AssignmentRead } from "../types/matrix";
@@ -2376,71 +2386,9 @@ function minDateString(left: string, right: string): string {
   return left < right ? left : right;
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(parseDateInput(value));
-}
-
-function formatWeekday(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseDateInput(value));
-}
-
 function isWeekendDate(value: string): boolean {
   const day = parseDateInput(value).getDay();
   return day === 0 || day === 6;
-}
-
-function formatRangeLabel(start: string, end: string): string {
-  return `${formatDate(start)} bis ${formatDate(end)}`;
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatMinutes(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) {
-    return "-";
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) {
-    return `${rest} Min.`;
-  }
-  return `${hours} Std. ${rest} Min.`;
-}
-
-function formatHalfHour(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) {
-    return "-";
-  }
-  const roundedHours = Math.round(minutes / 30) / 2;
-  const normalizedHours = Object.is(roundedHours, -0) ? 0 : roundedHours;
-  return `${normalizedHours.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
-}
-
-function formatHalfHourDelta(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) {
-    return "-";
-  }
-  const roundedSteps = Math.round(minutes / 30);
-  if (roundedSteps === 0) {
-    return "0,0 h";
-  }
-  const prefix = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
-  return `${prefix}${formatHalfHour(Math.abs(minutes))}`;
 }
 
 function formatGpsSignalRange(entry: TimeEntry): string {
