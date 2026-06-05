@@ -270,7 +270,8 @@ export function MyAssignmentsPage() {
   );
   const androidGpsPermissionPrompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
   const mobileGpsPlatform = getMobileGpsPlatform();
-  const showGpsDebugStatus = user?.role === "monteur";
+  const showGpsDebug = import.meta.env.DEV;
+  const showGpsDebugStatus = showGpsDebug && user?.role === "monteur";
 
   if (activeScreen === "assignments") {
     return (
@@ -385,7 +386,7 @@ export function MyAssignmentsPage() {
           <section className="mobile-home-section">
             <div className="mobile-section-heading">
               <h2>Standort</h2>
-              <span>Test</span>
+              {showGpsDebug ? <span>Test</span> : null}
             </div>
             {user?.role === "monteur" && isAndroidAppContext() && androidGpsPermissionPrompt ? (
               <div className="form-info mobile-gps-status">
@@ -410,13 +411,15 @@ export function MyAssignmentsPage() {
               </span>
             </button>
             {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
-            {user?.role === "monteur" && isAndroidAppContext() ? (
-              <p className="cache-note mobile-gps-status">
-                Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
-              </p>
+            {showGpsDebugStatus && isAndroidAppContext() ? (
+              <>
+                <p className="cache-note mobile-gps-status">
+                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
+                </p>
+                {lastManualGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt manuell gesendet: {formatDateTime(lastManualGpsSentAt)}</p> : null}
+                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
+              </>
             ) : null}
-            {lastManualGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt manuell gesendet: {formatDateTime(lastManualGpsSentAt)}</p> : null}
-            {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
             {showGpsDebugStatus ? (
               <MobileGpsDebugCard
                 platform={mobileGpsPlatform}
