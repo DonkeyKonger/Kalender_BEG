@@ -525,6 +525,19 @@ export const api = {
     );
   },
 
+  async projectFolderItemChildren(
+    siteId: number,
+    folderKey: string,
+    itemId: string,
+  ): Promise<ProjectFolderDocumentList> {
+    const encodedSiteId = encodeURIComponent(String(siteId));
+    const encodedFolderKey = encodeURIComponent(folderKey);
+    const encodedItemId = encodeURIComponent(itemId);
+    return request<ProjectFolderDocumentList>(
+      `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/children`,
+    );
+  },
+
   async downloadProjectFolderDocument(
     siteId: number,
     folderKey: string,
@@ -533,6 +546,21 @@ export const api = {
     return requestBlob(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}/download`,
     );
+  },
+
+  async projectFolderDocumentContent(
+    siteId: number,
+    folderKey: string,
+    itemId: string,
+    disposition: "inline" | "attachment" = "inline",
+  ): Promise<Blob> {
+    const encodedSiteId = encodeURIComponent(String(siteId));
+    const encodedFolderKey = encodeURIComponent(folderKey);
+    const encodedItemId = encodeURIComponent(itemId);
+    const encodedDisposition = encodeURIComponent(disposition);
+    const path = `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}`
+      + `/items/${encodedItemId}/content?disposition=${encodedDisposition}`;
+    return requestBlob(path);
   },
 
   async uploadProjectFolderDocument(

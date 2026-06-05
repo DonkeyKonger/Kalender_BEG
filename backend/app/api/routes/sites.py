@@ -47,6 +47,15 @@ CAN_FOLDER_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRo
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 
+SAFE_INLINE_CONTENT_TYPES = {
+    "application/pdf",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/plain",
+}
+
 
 @router.get("", response_model=list[SiteRead])
 def list_sites(
@@ -142,6 +151,32 @@ def list_project_folder_documents(
     )
 
 
+@router.get(
+    "/{site_id}/documents/folders/{folder_key}/items/{item_id}/children",
+    response_model=ProjectFolderDocumentList,
+)
+def list_project_folder_item_children(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentList:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+        site_id, folder_key, current_user
+    )
+    items = ProjectStorageService().list_folder_item_children(
+        drive_id=folder.external_drive_id,
+        root_folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    return ProjectFolderDocumentList(
+        folder_key=folder.folder_key,
+        folder_name=folder.name,
+        items=items,
+    )
+
+
 @router.get("/{site_id}/documents/folders/{folder_key}/items/{item_id}/download")
 def download_project_folder_document(
     site_id: int,
@@ -163,6 +198,47 @@ def download_project_folder_document(
         content=download["content"],
         media_type=str(download["content_type"]),
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+@router.get("/{site_id}/documents/folders/{folder_key}/items/{item_id}/content")
+def get_project_folder_document_content(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    disposition: str = Query(default="inline"),
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    if disposition not in {"inline", "attachment"}:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Content-Disposition.")
+
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+        site_id, folder_key, current_user
+    )
+    download = ProjectStorageService().download_file_from_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    filename = str(download["filename"])
+    content_type = str(download["content_type"] or "application/octet-stream")
+    normalized_content_type = content_type.split(";", 1)[0].strip().lower()
+    effective_disposition = disposition
+    media_type = content_type
+
+    if disposition == "inline" and normalized_content_type not in SAFE_INLINE_CONTENT_TYPES:
+        effective_disposition = "attachment"
+        media_type = "application/octet-stream"
+
+    return Response(
+        content=download["content"],
+        media_type=media_type,
+        headers={
+            "Content-Disposition": (
+                f"{effective_disposition}; filename*=UTF-8''{quote(filename, safe='')}"
+            )
+        },
     )
 
 

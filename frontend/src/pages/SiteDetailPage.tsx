@@ -27,6 +27,11 @@ type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteWorkTimeRangeMode = "week" | "month";
 type SiteWorkTimeBalanceStatus = "missing" | "within" | "near_limit" | "over";
+type ProjectFolderNavigationLevel = {
+  itemId: string;
+  name: string;
+  documents: ProjectFolderDocumentList;
+};
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
@@ -58,6 +63,7 @@ const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
 export function SiteDetailPage() {
   const { user } = useAuth();
   const canEditSite = user?.role === "admin" || user?.role === "project_manager";
+  const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
   const [searchParams] = useSearchParams();
   const requestedProjectTab = searchParams.get("tab");
@@ -810,6 +816,7 @@ export function SiteDetailPage() {
       {activeTab === "folders" ? (
         <ProjectFoldersPanel
           site={site}
+          canOpenSharePointDirectly={canOpenSharePointDirectly}
           folders={folders}
           isLoading={foldersLoading}
           error={foldersError}
@@ -1041,6 +1048,7 @@ function OverviewTab({
 
 function ProjectFoldersPanel({
   site,
+  canOpenSharePointDirectly,
   folders,
   isLoading,
   error,
@@ -1059,6 +1067,7 @@ function ProjectFoldersPanel({
   onRetryDocuments,
 }: {
   site: Site;
+  canOpenSharePointDirectly: boolean;
   folders: ProjectFolder[];
   isLoading: boolean;
   error: string | null;
@@ -1091,7 +1100,7 @@ function ProjectFoldersPanel({
 
   return (
     <div className="project-record-tab-panel">
-      {site.project_folder_web_url ? (
+      {canOpenSharePointDirectly && site.project_folder_web_url ? (
         <div className="project-folder-actions">
           <a
             className="secondary-action"
@@ -1150,6 +1159,7 @@ function ProjectFoldersPanel({
                 siteId={site.id}
                 folder={selectedFolder}
                 hasSharePointFolder={Boolean(site.project_folder_web_url)}
+                canOpenSharePointDirectly={canOpenSharePointDirectly}
                 documents={documents}
                 isLoading={documentsLoading}
                 error={documentsError}
@@ -1174,6 +1184,7 @@ function ProjectFolderDocumentBrowser({
   siteId,
   folder,
   hasSharePointFolder,
+  canOpenSharePointDirectly,
   documents,
   isLoading,
   error,
@@ -1187,6 +1198,7 @@ function ProjectFolderDocumentBrowser({
   siteId: number;
   folder: ProjectFolder;
   hasSharePointFolder: boolean;
+  canOpenSharePointDirectly: boolean;
   documents: ProjectFolderDocumentList | null;
   isLoading: boolean;
   error: string | null;
@@ -1198,13 +1210,65 @@ function ProjectFolderDocumentBrowser({
   onRetry: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [folderStack, setFolderStack] = useState<ProjectFolderNavigationLevel[]>([]);
+  const [folderNavigationLoading, setFolderNavigationLoading] = useState(false);
+  const [folderNavigationError, setFolderNavigationError] = useState<string | null>(null);
+  const [openingItemId, setOpeningItemId] = useState<string | null>(null);
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     setQuery("");
+    setFolderStack([]);
+    setFolderNavigationError(null);
+    setOpenError(null);
     setDownloadError(null);
   }, [folder.id]);
+
+  async function handleOpenFolder(item: ProjectFolderDocumentItem): Promise<void> {
+    if (!item.is_folder) {
+      return;
+    }
+    setFolderNavigationError(null);
+    setFolderNavigationLoading(true);
+    try {
+      const childDocuments = await api.projectFolderItemChildren(siteId, folder.folder_key, item.id);
+      setFolderStack((currentStack) => [
+        ...currentStack,
+        { itemId: item.id, name: item.name, documents: childDocuments },
+      ]);
+      setQuery("");
+    } catch (requestError) {
+      setFolderNavigationError(readApiError(requestError, "Unterordner konnte nicht geladen werden."));
+    } finally {
+      setFolderNavigationLoading(false);
+    }
+  }
+
+  function handleBackToParentFolder(): void {
+    setFolderStack((currentStack) => currentStack.slice(0, -1));
+    setFolderNavigationError(null);
+    setQuery("");
+  }
+
+  async function handleOpen(item: ProjectFolderDocumentItem): Promise<void> {
+    setOpenError(null);
+    setOpeningItemId(item.id);
+    const openedWindow = window.open("about:blank", "_blank");
+    if (openedWindow) {
+      openedWindow.opener = null;
+    }
+    try {
+      const blob = await api.projectFolderDocumentContent(siteId, folder.folder_key, item.id, "inline");
+      openBlobInNewTab(blob, openedWindow);
+    } catch (requestError) {
+      openedWindow?.close();
+      setOpenError(readApiError(requestError, "Datei konnte nicht geöffnet werden."));
+    } finally {
+      setOpeningItemId(null);
+    }
+  }
 
   async function handleDownload(item: ProjectFolderDocumentItem): Promise<void> {
     setDownloadError(null);
@@ -1219,8 +1283,12 @@ function ProjectFolderDocumentBrowser({
     }
   }
 
+  const currentLevel = folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined;
+  const currentDocuments = currentLevel?.documents ?? documents;
+  const isInSubfolder = Boolean(currentLevel);
+  const currentFolderTitle = currentLevel?.name ?? `${folder.sort_order}. ${folder.name}`;
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleItems = documents?.items.filter((item) => {
+  const visibleItems = currentDocuments?.items.filter((item) => {
     if (!normalizedQuery) {
       return true;
     }
@@ -1228,17 +1296,24 @@ function ProjectFolderDocumentBrowser({
       .filter(Boolean)
       .some((value) => value?.toLowerCase().includes(normalizedQuery));
   }) ?? [];
-  const hasLoadedItems = Boolean(documents && documents.items.length > 0);
+  const hasLoadedItems = Boolean(currentDocuments && currentDocuments.items.length > 0);
+  const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
 
   return (
     <aside className="project-document-browser" aria-live="polite">
       <div className="project-document-browser-header">
         <div className="project-document-browser-title">
           <span>Ordner {folder.sort_order}</span>
-          <h3>{folder.sort_order}. {folder.name}</h3>
+          <h3>{currentFolderTitle}</h3>
         </div>
         <div className="project-document-browser-actions">
-          {hasSharePointFolder ? (
+          {isInSubfolder ? (
+            <button type="button" className="secondary-action" onClick={handleBackToParentFolder}>
+              <ArrowLeft aria-hidden="true" size={15} />
+              <span>Zurück</span>
+            </button>
+          ) : null}
+          {hasSharePointFolder && !isInSubfolder ? (
             <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
               <UploadCloud aria-hidden="true" size={15} />
               <span>{isUploading ? "Wird hochgeladen..." : "Datei hochladen"}</span>
@@ -1255,7 +1330,7 @@ function ProjectFolderDocumentBrowser({
               />
             </label>
           ) : null}
-          {folder.external_web_url ? (
+          {canOpenSharePointDirectly && !isInSubfolder && folder.external_web_url ? (
             <a className="secondary-action project-document-open-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
               <ExternalLink aria-hidden="true" size={15} />
               <span>Ordner öffnen</span>
@@ -1267,6 +1342,8 @@ function ProjectFolderDocumentBrowser({
 
       {uploadMessage ? <div className="project-record-empty-state is-success">{uploadMessage}</div> : null}
       {uploadError ? <div className="project-record-empty-state is-error"><strong>{uploadError}</strong></div> : null}
+      {folderNavigationError ? <div className="project-record-empty-state is-error"><strong>{folderNavigationError}</strong></div> : null}
+      {openError ? <div className="project-record-empty-state is-error"><strong>{openError}</strong></div> : null}
       {downloadError ? <div className="project-record-empty-state is-error"><strong>{downloadError}</strong></div> : null}
 
       {!hasSharePointFolder ? (
@@ -1285,22 +1362,24 @@ function ProjectFolderDocumentBrowser({
           </label>
         </div>
       ) : null}
-      {hasSharePointFolder && isLoading ? (
+      {hasSharePointFolder && isCurrentLoading ? (
         <div className="project-record-empty-state">Dateien werden geladen...</div>
       ) : null}
-      {hasSharePointFolder && error ? (
+      {hasSharePointFolder && !isInSubfolder && error ? (
         <div className="project-record-empty-state is-error">
           <strong>{error}</strong>
           <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
         </div>
       ) : null}
-      {hasSharePointFolder && !isLoading && !error && documents?.items.length === 0 ? (
-        <div className="project-record-empty-state">Noch keine Dateien in diesem Ordner. Datei hochladen oder per Drag & Drop auf den Ordner ziehen.</div>
+      {hasSharePointFolder && !isCurrentLoading && !error && currentDocuments?.items.length === 0 ? (
+        <div className="project-record-empty-state">
+          {isInSubfolder ? "Noch keine Dateien in diesem Unterordner." : "Noch keine Dateien in diesem Ordner. Datei hochladen oder per Drag & Drop auf den Ordner ziehen."}
+        </div>
       ) : null}
-      {hasSharePointFolder && !isLoading && !error && hasLoadedItems && visibleItems.length === 0 ? (
+      {hasSharePointFolder && !isCurrentLoading && !error && hasLoadedItems && visibleItems.length === 0 ? (
         <div className="project-record-empty-state">Keine Dateien gefunden.</div>
       ) : null}
-      {hasSharePointFolder && !isLoading && !error && visibleItems.length > 0 ? (
+      {hasSharePointFolder && !isCurrentLoading && !error && visibleItems.length > 0 ? (
         <ul className="project-document-list">
           {visibleItems.map((item) => (
             <li key={item.id || item.name} className="project-document-item">
@@ -1312,6 +1391,28 @@ function ProjectFolderDocumentBrowser({
                 </div>
               </div>
               <div className="project-document-item-actions">
+                {item.is_folder ? (
+                  <button
+                    type="button"
+                    className="secondary-action project-document-open-action"
+                    disabled={folderNavigationLoading}
+                    onClick={() => void handleOpenFolder(item)}
+                  >
+                    <Folder aria-hidden="true" size={15} />
+                    <span>Öffnen</span>
+                  </button>
+                ) : null}
+                {!item.is_folder ? (
+                  <button
+                    type="button"
+                    className="secondary-action project-document-open-action"
+                    disabled={openingItemId === item.id}
+                    onClick={() => void handleOpen(item)}
+                  >
+                    <ExternalLink aria-hidden="true" size={15} />
+                    <span>{openingItemId === item.id ? "Öffnet..." : "Öffnen"}</span>
+                  </button>
+                ) : null}
                 {!item.is_folder ? (
                   <button
                     type="button"
@@ -1323,12 +1424,6 @@ function ProjectFolderDocumentBrowser({
                     <span>{downloadingItemId === item.id ? "Lädt..." : "Download"}</span>
                   </button>
                 ) : null}
-                {item.web_url ? (
-                  <a className="secondary-action project-document-open-action" href={item.web_url} target="_blank" rel="noreferrer">
-                    <ExternalLink aria-hidden="true" size={15} />
-                    <span>Öffnen</span>
-                  </a>
-                ) : null}
               </div>
             </li>
           ))}
@@ -1339,6 +1434,9 @@ function ProjectFolderDocumentBrowser({
 }
 
 function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
+  if (item.is_folder) {
+    return <Folder aria-hidden="true" size={20} />;
+  }
   const kind = getProjectDocumentKind(item);
   if (kind === "pdf") {
     return <FileText aria-hidden="true" className="is-pdf" size={20} />;
@@ -3689,6 +3787,16 @@ function triggerBrowserDownload(blob: Blob, filename: string): void {
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
+}
+
+function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
+  const url = window.URL.createObjectURL(blob);
+  if (openedWindow) {
+    openedWindow.location.href = url;
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
 
 function formatMeasurementPackageNumber(

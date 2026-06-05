@@ -37,6 +37,12 @@ type LocationState = {
   assignment?: MobileAssignment;
 };
 
+type MobileFolderNavigationLevel = {
+  itemId: string;
+  name: string;
+  documents: ProjectFolderDocumentList;
+};
+
 const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
   { key: "overview", label: "Übersicht", description: "Adresse, Kunde und Projektleiter", icon: ClipboardList },
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
@@ -168,13 +174,20 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
 }
 
 function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignment }) {
+  const { user } = useAuth();
+  const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<ProjectFolder | null>(null);
   const [documents, setDocuments] = useState<ProjectFolderDocumentList | null>(null);
+  const [folderStack, setFolderStack] = useState<MobileFolderNavigationLevel[]>([]);
   const [isLoadingFolders, setIsLoadingFolders] = useState(true);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isLoadingNestedFolder, setIsLoadingNestedFolder] = useState(false);
+  const [openingItemId, setOpeningItemId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [folderNavigationError, setFolderNavigationError] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -207,6 +220,9 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
   useEffect(() => {
     setDocuments(null);
     setDocumentsError(null);
+    setFolderStack([]);
+    setFolderNavigationError(null);
+    setOpenError(null);
     if (!selectedFolder) {
       return;
     }
@@ -238,20 +254,87 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     };
   }, [assignment.site.id, selectedFolder]);
 
+  async function handleOpenFolderItem(item: ProjectFolderDocumentItem): Promise<void> {
+    if (!selectedFolder || !item.is_folder) {
+      return;
+    }
+    setFolderNavigationError(null);
+    setIsLoadingNestedFolder(true);
+    try {
+      const childDocuments = await api.projectFolderItemChildren(
+        assignment.site.id,
+        selectedFolder.folder_key,
+        item.id,
+      );
+      setFolderStack((currentStack) => [
+        ...currentStack,
+        { itemId: item.id, name: item.name, documents: childDocuments },
+      ]);
+    } catch (requestError) {
+      setFolderNavigationError(readApiError(requestError, "Unterordner konnte nicht geladen werden."));
+    } finally {
+      setIsLoadingNestedFolder(false);
+    }
+  }
+
+  async function handleOpenDocument(item: ProjectFolderDocumentItem): Promise<void> {
+    if (!selectedFolder) {
+      return;
+    }
+    setOpenError(null);
+    setOpeningItemId(item.id);
+    const openedWindow = window.open("about:blank", "_blank");
+    if (openedWindow) {
+      openedWindow.opener = null;
+    }
+    try {
+      const blob = await api.projectFolderDocumentContent(
+        assignment.site.id,
+        selectedFolder.folder_key,
+        item.id,
+        "inline",
+      );
+      openBlobInNewTab(blob, openedWindow);
+    } catch (requestError) {
+      openedWindow?.close();
+      setOpenError(readApiError(requestError, "Datei konnte nicht geöffnet werden."));
+    } finally {
+      setOpeningItemId(null);
+    }
+  }
+
+  function handleBackFromFolderDetail(): void {
+    if (folderStack.length > 0) {
+      setFolderStack((currentStack) => currentStack.slice(0, -1));
+      setFolderNavigationError(null);
+      setOpenError(null);
+      return;
+    }
+    setSelectedFolder(null);
+  }
+
+  const currentLevel = folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined;
+  const currentDocuments = currentLevel?.documents ?? documents;
+  const isInSubfolder = Boolean(currentLevel);
+  const currentFolderTitle = currentLevel?.name ?? (
+    selectedFolder ? `${selectedFolder.sort_order}. ${selectedFolder.name}` : ""
+  );
+  const currentLoading = isInSubfolder ? isLoadingNestedFolder : isLoadingDocuments;
+
   if (selectedFolder) {
     return (
       <div className="mobile-detail-panel mobile-folder-panel">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setSelectedFolder(null)}>
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={handleBackFromFolderDetail}>
           <ArrowLeft aria-hidden="true" size={17} />
-          <span>Ordner</span>
+          <span>{isInSubfolder ? "Zurück" : "Ordner"}</span>
         </button>
 
         <div className="mobile-folder-detail-head">
           <div>
             <span>Ordner {selectedFolder.sort_order}</span>
-            <h2>{selectedFolder.sort_order}. {selectedFolder.name}</h2>
+            <h2>{currentFolderTitle}</h2>
           </div>
-          {selectedFolder.external_web_url ? (
+          {canOpenSharePointDirectly && !isInSubfolder && selectedFolder.external_web_url ? (
             <a className="mobile-folder-open-link" href={selectedFolder.external_web_url} target="_blank" rel="noreferrer">
               <ExternalLink aria-hidden="true" size={15} />
               <span>In SharePoint öffnen</span>
@@ -259,15 +342,28 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
           ) : null}
         </div>
 
-        {isLoadingDocuments ? <div className="empty-panel">Dateien werden geladen...</div> : null}
+        {currentLoading ? <div className="empty-panel">Dateien werden geladen...</div> : null}
         {documentsError ? <div className="form-error">{documentsError}</div> : null}
-        {!isLoadingDocuments && !documentsError && documents?.items.length === 0 ? (
+        {folderNavigationError ? <div className="form-error">{folderNavigationError}</div> : null}
+        {openError ? <div className="form-error">{openError}</div> : null}
+        {!currentLoading && !documentsError && currentDocuments?.items.length === 0 ? (
           <div className="empty-panel">Noch keine Dateien in diesem Ordner.</div>
         ) : null}
-        {!isLoadingDocuments && !documentsError && documents && documents.items.length > 0 ? (
+        {!currentLoading && !documentsError && currentDocuments && currentDocuments.items.length > 0 ? (
           <div className="mobile-folder-file-list">
-            {documents.items.map((item) => (
-              <MobileFolderFileItem item={item} key={item.id || item.name} />
+            {currentDocuments.items.map((item) => (
+              <MobileFolderFileItem
+                item={item}
+                key={item.id || item.name}
+                isOpening={openingItemId === item.id || (isLoadingNestedFolder && item.is_folder)}
+                onOpen={() => {
+                  if (item.is_folder) {
+                    void handleOpenFolderItem(item);
+                    return;
+                  }
+                  void handleOpenDocument(item);
+                }}
+              />
             ))}
           </div>
         ) : null}
@@ -298,27 +394,36 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
   );
 }
 
-function MobileFolderFileItem({ item }: { item: ProjectFolderDocumentItem }) {
+function MobileFolderFileItem({
+  item,
+  isOpening,
+  onOpen,
+}: {
+  item: ProjectFolderDocumentItem;
+  isOpening: boolean;
+  onOpen: () => void;
+}) {
   const content = (
     <>
-      <FileText aria-hidden="true" size={18} />
+      {item.is_folder ? <FolderOpen aria-hidden="true" size={18} /> : <FileText aria-hidden="true" size={18} />}
       <span>
         <strong>{item.name}</strong>
         <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
       </span>
-      {item.web_url ? <ExternalLink aria-hidden="true" size={15} /> : null}
+      {!item.is_folder ? <ExternalLink aria-hidden="true" size={15} /> : null}
     </>
   );
 
-  if (item.web_url) {
-    return (
-      <a className="mobile-folder-file-card" href={item.web_url} target="_blank" rel="noreferrer">
-        {content}
-      </a>
-    );
-  }
-
-  return <div className="mobile-folder-file-card">{content}</div>;
+  return (
+    <button
+      type="button"
+      className="mobile-folder-card mobile-folder-file-card"
+      disabled={isOpening}
+      onClick={onOpen}
+    >
+      {content}
+    </button>
+  );
 }
 
 function MobileMeasurementTab({
@@ -931,6 +1036,16 @@ function readApiError(error: unknown, fallback: string): string {
     return error.detail;
   }
   return error.message || fallback;
+}
+
+function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
+  const url = window.URL.createObjectURL(blob);
+  if (openedWindow) {
+    openedWindow.location.href = url;
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
 
 function readMeasurementViewMode(): MeasurementViewMode {

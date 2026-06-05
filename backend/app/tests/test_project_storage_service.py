@@ -67,6 +67,88 @@ class FakeGraphClient:
                     },
                 ]
             }
+        if path == (
+            "/drives/drive-1/items/folder-2/children"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+        ):
+            return {
+                "value": [
+                    {
+                        "id": "nested-file-1",
+                        "name": "Zeichnung.png",
+                        "webUrl": "https://example.invalid/zeichnung",
+                        "size": 2345,
+                        "lastModifiedDateTime": "2026-05-26T10:30:00Z",
+                        "file": {"mimeType": "image/png"},
+                    }
+                ]
+            }
+        if path == (
+            "/drives/drive-1/items/file-1"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "file-1",
+                "name": "Angebot.pdf",
+                "webUrl": "https://example.invalid/angebot",
+                "size": 123456,
+                "lastModifiedDateTime": "2026-05-26T08:30:00Z",
+                "file": {"mimeType": "application/pdf"},
+                "parentReference": {"id": "folder-1"},
+            }
+        if path == (
+            "/drives/drive-1/items/folder-2"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "folder-2",
+                "name": "Unterlagen",
+                "webUrl": "https://example.invalid/unterlagen",
+                "folder": {},
+                "parentReference": {"id": "folder-1"},
+            }
+        if path == (
+            "/drives/drive-1/items/nested-file-1"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "nested-file-1",
+                "name": "Zeichnung.png",
+                "webUrl": "https://example.invalid/zeichnung",
+                "size": 2345,
+                "lastModifiedDateTime": "2026-05-26T10:30:00Z",
+                "file": {"mimeType": "image/png"},
+                "parentReference": {"id": "folder-2"},
+            }
+        if path == (
+            "/drives/drive-1/items/foreign-file-1"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "foreign-file-1",
+                "name": "Fremd.pdf",
+                "file": {"mimeType": "application/pdf"},
+                "parentReference": {"id": "foreign-folder-1"},
+            }
+        if path == (
+            "/drives/drive-1/items/foreign-folder-1"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "foreign-folder-1",
+                "name": "Fremder Ordner",
+                "folder": {},
+                "parentReference": {"id": "drive-root"},
+            }
+        if path == (
+            "/drives/drive-1/items/drive-root"
+            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+        ):
+            return {
+                "id": "drive-root",
+                "name": "Drive Root",
+                "folder": {},
+            }
         raise AssertionError(f"unexpected get path: {path}")
 
     def post(self, path, payload):
@@ -91,6 +173,8 @@ class FakeGraphClient:
 
     def get_content(self, path):
         self.downloads.append(path)
+        if path == "/drives/drive-1/items/nested-file-1/content":
+            return b"image-bytes", "image/png"
         return b"pdf-bytes", "application/pdf"
 
 
@@ -304,6 +388,48 @@ def test_list_folder_children_returns_safe_document_items():
     assert "super-secret-value" not in str(result)
 
 
+def test_list_folder_item_children_verifies_subfolder_inside_root():
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FakeGraphClient(),
+    )
+
+    result = service.list_folder_item_children(
+        drive_id="drive-1",
+        root_folder_item_id="folder-1",
+        item_id="folder-2",
+    )
+
+    assert result == [
+        {
+            "id": "nested-file-1",
+            "name": "Zeichnung.png",
+            "web_url": "https://example.invalid/zeichnung",
+            "size": 2345,
+            "last_modified_date_time": "2026-05-26T10:30:00Z",
+            "mime_type": "image/png",
+            "file_extension": "png",
+            "is_folder": False,
+        }
+    ]
+
+
+def test_list_folder_item_children_rejects_file_item():
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FakeGraphClient(),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service.list_folder_item_children(
+            drive_id="drive-1",
+            root_folder_item_id="folder-1",
+            item_id="file-1",
+        )
+
+    assert error.value.status_code == 400
+
+
 def test_download_file_from_folder_verifies_child_and_returns_content():
     graph = FakeGraphClient()
     service = ProjectStorageService(
@@ -324,6 +450,40 @@ def test_download_file_from_folder_verifies_child_and_returns_content():
         "filename": "Angebot.pdf",
     }
     assert "super-secret-value" not in str(result)
+
+
+def test_download_file_from_folder_allows_nested_file_inside_root():
+    graph = FakeGraphClient()
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=graph,
+    )
+
+    result = service.download_file_from_folder(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        item_id="nested-file-1",
+    )
+
+    assert graph.downloads == ["/drives/drive-1/items/nested-file-1/content"]
+    assert result["filename"] == "Zeichnung.png"
+    assert result["content_type"] == "image/png"
+
+
+def test_download_file_from_folder_rejects_item_outside_root_folder():
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=FakeGraphClient(),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service.download_file_from_folder(
+            drive_id="drive-1",
+            folder_item_id="folder-1",
+            item_id="foreign-file-1",
+        )
+
+    assert error.value.status_code == 404
 
 
 def test_download_file_from_folder_rejects_subfolder_item():

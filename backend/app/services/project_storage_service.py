@@ -246,6 +246,30 @@ class ProjectStorageService:
             return []
         return [_document_item(item) for item in items if isinstance(item, dict)]
 
+    def list_folder_item_children(
+        self,
+        *,
+        drive_id: str | None,
+        root_folder_item_id: str | None,
+        item_id: str,
+    ) -> list[dict[str, Any]]:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not root_folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+
+        folder_item = self._get_descendant_drive_item(
+            drive_id=drive_id,
+            root_folder_item_id=root_folder_item_id,
+            item_id=item_id,
+        )
+        if not isinstance(folder_item.get("folder"), dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ausgewähltes Element ist kein Ordner.")
+        return self.list_folder_children(drive_id=drive_id, folder_item_id=item_id)
+
     def download_file_from_folder(
         self,
         *,
@@ -261,12 +285,14 @@ class ProjectStorageService:
                 "SharePoint-Ordner ist noch nicht angebunden.",
             )
 
-        folder_items = self.list_folder_children(drive_id=drive_id, folder_item_id=folder_item_id)
-        document = next((item for item in folder_items if item.get("id") == item_id), None)
-        if document is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei nicht gefunden.")
-        if document.get("is_folder"):
+        drive_item = self._get_descendant_drive_item(
+            drive_id=drive_id,
+            root_folder_item_id=folder_item_id,
+            item_id=item_id,
+        )
+        if isinstance(drive_item.get("folder"), dict):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
+        document = _document_item(drive_item)
 
         encoded_item_id = quote(item_id, safe="")
         try:
@@ -281,6 +307,58 @@ class ProjectStorageService:
             "content_type": content_type or document.get("mime_type") or "application/octet-stream",
             "filename": document.get("name") or "download",
         }
+
+    def _get_descendant_drive_item(
+        self,
+        *,
+        drive_id: str,
+        root_folder_item_id: str,
+        item_id: str,
+    ) -> dict[str, Any]:
+        drive_item = self._get_drive_item(drive_id=drive_id, item_id=item_id)
+        if drive_item.get("id") == root_folder_item_id:
+            return drive_item
+        if not self._is_item_inside_folder(
+            drive_id=drive_id,
+            root_folder_item_id=root_folder_item_id,
+            item=drive_item,
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei nicht gefunden.")
+        return drive_item
+
+    def _is_item_inside_folder(
+        self,
+        *,
+        drive_id: str,
+        root_folder_item_id: str,
+        item: dict[str, Any],
+    ) -> bool:
+        parent_id = _parent_reference_id(item)
+        seen: set[str] = set()
+        for _ in range(40):
+            if not parent_id:
+                return False
+            if parent_id == root_folder_item_id:
+                return True
+            if parent_id in seen:
+                return False
+            seen.add(parent_id)
+            parent = self._get_drive_item(drive_id=drive_id, item_id=parent_id)
+            parent_id = _parent_reference_id(parent)
+        return False
+
+    def _get_drive_item(self, *, drive_id: str, item_id: str) -> dict[str, Any]:
+        encoded_item_id = quote(item_id, safe="")
+        try:
+            drive_item = self.graph_client.get(
+                f"/drives/{drive_id}/items/{encoded_item_id}"
+                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            )
+        except MicrosoftGraphRequestError as error:
+            raise _safe_graph_files_exception(error) from error
+        if not isinstance(drive_item, dict) or not drive_item.get("id"):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei nicht gefunden.")
+        return drive_item
 
     def upload_file_to_folder(
         self,
@@ -404,6 +482,14 @@ def _file_extension(name: str) -> str | None:
         return None
     extension = name.rsplit(".", 1)[-1].strip().lower()
     return extension or None
+
+
+def _parent_reference_id(item: dict[str, Any]) -> str | None:
+    parent_reference = item.get("parentReference")
+    if not isinstance(parent_reference, dict):
+        return None
+    parent_id = parent_reference.get("id")
+    return parent_id if isinstance(parent_id, str) and parent_id else None
 
 
 def _safe_upload_filename(filename: str | None) -> str:
