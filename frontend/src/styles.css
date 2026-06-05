@@ -1466,6 +1466,10 @@ button.entity-card:focus-visible,
 
 .person-chip {
   position: relative;
+  flex: 0 0 100%;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 100%;
   border: 0;
   background: #e9f1fb;
   color: #143c6d;
@@ -1597,6 +1601,7 @@ button.person-chip:focus-visible {
   left: 0;
   z-index: 2;
   justify-content: flex-start;
+  flex: 0 0 auto;
   width: var(--assignment-run-width, auto);
   max-width: none;
   overflow: visible;
@@ -2242,6 +2247,12 @@ button.person-chip:focus-visible {
   font-size: 0.6rem;
 }
 
+.matrix-page.is-compact .person-chip {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
 .matrix-page.is-compact .matrix-cell-typing-preview {
   min-height: 15px;
   border-radius: 5px;
@@ -2252,6 +2263,7 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .person-chip.is-assignment-run {
   top: calc(var(--assignment-layer) * 17px);
+  flex: 0 0 auto;
   width: var(--assignment-run-width, auto);
   max-width: none;
   overflow: visible;
