@@ -2,6 +2,8 @@ import {
   ArrowLeft,
   CalendarClock,
   ClipboardList,
+  ExternalLink,
+  FileText,
   FolderOpen,
   Hammer,
   MapPin,
@@ -19,7 +21,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { MobileMeasurementBatch, MobileMeasurementItem } from "../types/site";
+import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -35,7 +37,7 @@ type LocationState = {
 
 const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
   { key: "overview", label: "Übersicht", description: "Adresse, Kunde und Projektleiter", icon: ClipboardList },
-  { key: "folders", label: "Ordner", description: "Projektordner vorbereitet", icon: FolderOpen },
+  { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
   { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
 ];
@@ -126,7 +128,7 @@ export function MobileAssignmentDetailPage() {
       ) : null}
 
       {activeTab === "overview" && <OverviewPanel assignment={assignment} />}
-      {activeTab === "folders" && <PlaceholderPanel icon={FolderOpen} text="Diese Funktion ist vorbereitet und wird später aktiviert." />}
+      {activeTab === "folders" && <MobileProjectFoldersPanel assignment={assignment} />}
       {activeTab === "measurement" && (
         <MobileMeasurementTab
           assignment={assignment}
@@ -161,6 +163,160 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
       {assignment.note && <p className="assignment-note">{assignment.note}</p>}
     </div>
   );
+}
+
+function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignment }) {
+  const [folders, setFolders] = useState<ProjectFolder[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<ProjectFolder | null>(null);
+  const [documents, setDocuments] = useState<ProjectFolderDocumentList | null>(null);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(true);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadFolders(): Promise<void> {
+      setIsLoadingFolders(true);
+      setError(null);
+      try {
+        const response = await api.projectFolders(assignment.site.id);
+        if (isCurrent) {
+          setFolders(response);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setError(readApiError(requestError, "Ordnerstruktur konnte nicht geladen werden."));
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingFolders(false);
+        }
+      }
+    }
+
+    void loadFolders();
+    return () => {
+      isCurrent = false;
+    };
+  }, [assignment.site.id]);
+
+  useEffect(() => {
+    setDocuments(null);
+    setDocumentsError(null);
+    if (!selectedFolder) {
+      return;
+    }
+
+    const folder = selectedFolder;
+    let isCurrent = true;
+
+    async function loadDocuments(): Promise<void> {
+      setIsLoadingDocuments(true);
+      try {
+        const response = await api.projectFolderDocuments(assignment.site.id, folder.folder_key);
+        if (isCurrent) {
+          setDocuments(response);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setDocumentsError(readApiError(requestError, "Dateien konnten nicht geladen werden."));
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingDocuments(false);
+        }
+      }
+    }
+
+    void loadDocuments();
+    return () => {
+      isCurrent = false;
+    };
+  }, [assignment.site.id, selectedFolder]);
+
+  if (selectedFolder) {
+    return (
+      <div className="mobile-detail-panel mobile-folder-panel">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setSelectedFolder(null)}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Ordner</span>
+        </button>
+
+        <div className="mobile-folder-detail-head">
+          <div>
+            <span>Ordner {selectedFolder.sort_order}</span>
+            <h2>{selectedFolder.sort_order}. {selectedFolder.name}</h2>
+          </div>
+          {selectedFolder.external_web_url ? (
+            <a className="mobile-folder-open-link" href={selectedFolder.external_web_url} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden="true" size={15} />
+              <span>In SharePoint öffnen</span>
+            </a>
+          ) : null}
+        </div>
+
+        {isLoadingDocuments ? <div className="empty-panel">Dateien werden geladen...</div> : null}
+        {documentsError ? <div className="form-error">{documentsError}</div> : null}
+        {!isLoadingDocuments && !documentsError && documents?.items.length === 0 ? (
+          <div className="empty-panel">Noch keine Dateien in diesem Ordner.</div>
+        ) : null}
+        {!isLoadingDocuments && !documentsError && documents && documents.items.length > 0 ? (
+          <div className="mobile-folder-file-list">
+            {documents.items.map((item) => (
+              <MobileFolderFileItem item={item} key={item.id || item.name} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mobile-detail-panel mobile-folder-panel">
+      <h2>Ordner</h2>
+      {isLoadingFolders ? <div className="empty-panel">Ordnerstruktur wird geladen...</div> : null}
+      {error ? <div className="form-error">{error}</div> : null}
+      {!isLoadingFolders && !error && folders.length === 0 ? (
+        <div className="empty-panel">Keine Ordner vorhanden.</div>
+      ) : null}
+      {!isLoadingFolders && !error && folders.length > 0 ? (
+        <div className="mobile-folder-list" aria-label="Projektordner">
+          {folders.map((folder) => (
+            <button className="mobile-folder-card" key={folder.id} type="button" onClick={() => setSelectedFolder(folder)}>
+              <FolderOpen aria-hidden="true" size={19} />
+              <span>{folder.sort_order}.</span>
+              <strong>{folder.name}</strong>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MobileFolderFileItem({ item }: { item: ProjectFolderDocumentItem }) {
+  const content = (
+    <>
+      <FileText aria-hidden="true" size={18} />
+      <span>
+        <strong>{item.name}</strong>
+        <small>{formatMobileDocumentMeta(item)}</small>
+      </span>
+      {item.web_url ? <ExternalLink aria-hidden="true" size={15} /> : null}
+    </>
+  );
+
+  if (item.web_url) {
+    return (
+      <a className="mobile-folder-file-card" href={item.web_url} target="_blank" rel="noreferrer">
+        {content}
+      </a>
+    );
+  }
+
+  return <div className="mobile-folder-file-card">{content}</div>;
 }
 
 function MobileMeasurementTab({
@@ -775,8 +931,37 @@ function readApiError(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
+function formatMobileDocumentMeta(item: ProjectFolderDocumentItem): string {
+  const parts = [
+    item.is_folder ? "Ordner" : item.file_extension?.toUpperCase(),
+    item.last_modified_date_time ? `Geändert ${formatDateTime(item.last_modified_date_time)}` : null,
+    item.size !== null ? formatFileSize(item.size) : null,
+  ].filter(Boolean);
+  return parts.join(" · ") || "Datei";
+}
+
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${date}T00:00:00`));
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function readMeasurementViewMode(): MeasurementViewMode {
