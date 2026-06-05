@@ -218,7 +218,14 @@ export function SiteDetailPage() {
       setFoldersLoading(true);
       setFoldersError(null);
       try {
-        setFolders(await api.projectFolders(site.id));
+        const loadedFolders = await api.projectFolders(site.id);
+        setFolders(loadedFolders);
+        setSelectedFolder((currentFolder) => {
+          if (currentFolder && loadedFolders.some((folder) => folder.id === currentFolder.id)) {
+            return currentFolder;
+          }
+          return loadedFolders[0] ?? null;
+        });
         setFoldersLoaded(true);
       } catch (requestError) {
         setFoldersError(readApiError(requestError, "Ordnerstruktur konnte nicht geladen werden."));
@@ -1098,53 +1105,61 @@ function ProjectFoldersPanel({
       {folders.length === 0 ? (
         <div className="project-record-empty-state">Keine Ordner vorhanden.</div>
       ) : (
-        <div className="project-folder-grid">
-          {folders.map((folder) => {
-            const isSelected = selectedFolder?.id === folder.id;
-            return (
-              <button
-                key={folder.id}
-                type="button"
-                className={`project-folder-card${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
-                onClick={() => onSelectFolder(folder)}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  onDragOverFolder(folder.folder_key);
-                }}
-                onDragLeave={() => onDragOverFolder(null)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDragOverFolder(null);
-                  onUploadFiles(folder, event.dataTransfer.files);
-                }}
-                title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
-              >
-                <Folder aria-hidden="true" size={18} />
-                <span>{folder.sort_order}.</span>
-                <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
-              </button>
-            );
-          })}
+        <div className="project-folder-workspace">
+          <nav className="project-folder-sidebar" aria-label="Standardordner">
+            <div className="project-folder-grid is-folder-list">
+              {folders.map((folder) => {
+                const isSelected = selectedFolder?.id === folder.id;
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    className={`project-folder-card${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
+                    onClick={() => onSelectFolder(folder)}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      onDragOverFolder(folder.folder_key);
+                    }}
+                    onDragLeave={() => onDragOverFolder(null)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDragOverFolder(null);
+                      onUploadFiles(folder, event.dataTransfer.files);
+                    }}
+                    title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
+                  >
+                    <Folder aria-hidden="true" size={18} />
+                    <span>{folder.sort_order}.</span>
+                    <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="project-folder-content">
+            {selectedFolder ? (
+              <ProjectFolderDocumentBrowser
+                siteId={site.id}
+                folder={selectedFolder}
+                hasSharePointFolder={Boolean(site.project_folder_web_url)}
+                documents={documents}
+                isLoading={documentsLoading}
+                error={documentsError}
+                isUploading={uploadingFolderKey === selectedFolder.folder_key}
+                uploadMessage={uploadMessage}
+                uploadError={uploadError}
+                onUpload={(files) => onUploadFiles(selectedFolder, files)}
+                onClose={() => onSelectFolder(null)}
+                onRetry={onRetryDocuments}
+              />
+            ) : (
+              <div className="project-record-empty-state">Ordner auswählen, um Dateien anzuzeigen.</div>
+            )}
+          </div>
         </div>
       )}
-
-      {selectedFolder ? (
-        <ProjectFolderDocumentBrowser
-          siteId={site.id}
-          folder={selectedFolder}
-          hasSharePointFolder={Boolean(site.project_folder_web_url)}
-          documents={documents}
-          isLoading={documentsLoading}
-          error={documentsError}
-          isUploading={uploadingFolderKey === selectedFolder.folder_key}
-          uploadMessage={uploadMessage}
-          uploadError={uploadError}
-          onUpload={(files) => onUploadFiles(selectedFolder, files)}
-          onClose={() => onSelectFolder(null)}
-          onRetry={onRetryDocuments}
-        />
-      ) : null}
     </div>
   );
 }
@@ -1212,6 +1227,10 @@ function ProjectFolderDocumentBrowser({
   return (
     <aside className="project-document-browser" aria-live="polite">
       <div className="project-document-browser-header">
+        <div className="project-document-browser-title">
+          <span>Ordner {folder.sort_order}</span>
+          <h3>{folder.sort_order}. {folder.name}</h3>
+        </div>
         <div className="project-document-browser-actions">
           {hasSharePointFolder ? (
             <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
