@@ -20,6 +20,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { formatProjectDocumentMeta } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
@@ -302,7 +303,7 @@ function MobileFolderFileItem({ item }: { item: ProjectFolderDocumentItem }) {
       <FileText aria-hidden="true" size={18} />
       <span>
         <strong>{item.name}</strong>
-        <small>{formatMobileDocumentMeta(item)}</small>
+        <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
       </span>
       {item.web_url ? <ExternalLink aria-hidden="true" size={15} /> : null}
     </>
@@ -931,37 +932,8 @@ function readApiError(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
-function formatMobileDocumentMeta(item: ProjectFolderDocumentItem): string {
-  const parts = [
-    item.is_folder ? "Ordner" : item.file_extension?.toUpperCase(),
-    item.last_modified_date_time ? `Geändert ${formatDateTime(item.last_modified_date_time)}` : null,
-    item.size !== null ? formatFileSize(item.size) : null,
-  ].filter(Boolean);
-  return parts.join(" · ") || "Datei";
-}
-
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${date}T00:00:00`));
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatFileSize(size: number): string {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function readMeasurementViewMode(): MeasurementViewMode {

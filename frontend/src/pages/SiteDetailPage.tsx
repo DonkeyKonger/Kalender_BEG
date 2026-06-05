@@ -7,6 +7,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
@@ -1302,7 +1303,7 @@ function ProjectFolderDocumentBrowser({
                 <DocumentTypeIcon item={item} />
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{formatDocumentMeta(item)}</span>
+                  <span>{formatProjectDocumentMeta(item)}</span>
                 </div>
               </div>
               <div className="project-document-item-actions">
@@ -1333,21 +1334,20 @@ function ProjectFolderDocumentBrowser({
 }
 
 function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
-  const extension = item.file_extension?.toLowerCase();
-  const mimeType = item.mime_type?.toLowerCase() ?? "";
-  if (extension === "pdf" || mimeType.includes("pdf")) {
+  const kind = getProjectDocumentKind(item);
+  if (kind === "pdf") {
     return <FileText aria-hidden="true" className="is-pdf" size={20} />;
   }
-  if (["doc", "docx"].includes(extension ?? "") || mimeType.includes("word")) {
+  if (kind === "word") {
     return <FileText aria-hidden="true" className="is-word" size={20} />;
   }
-  if (["xls", "xlsx", "xlsm", "csv"].includes(extension ?? "") || mimeType.includes("spreadsheet") || mimeType.includes("excel")) {
+  if (kind === "excel") {
     return <FileSpreadsheet aria-hidden="true" className="is-excel" size={20} />;
   }
-  if (["jpg", "jpeg", "png", "webp"].includes(extension ?? "") || mimeType.startsWith("image/")) {
+  if (kind === "image") {
     return <FileImage aria-hidden="true" className="is-image" size={20} />;
   }
-  if (["msg", "eml"].includes(extension ?? "") || mimeType.includes("message")) {
+  if (kind === "mail") {
     return <Mail aria-hidden="true" className="is-mail" size={20} />;
   }
   return <FileIcon aria-hidden="true" size={20} />;
@@ -3685,27 +3685,6 @@ function triggerBrowserDownload(blob: Blob, filename: string): void {
   link.remove();
   window.URL.revokeObjectURL(url);
 }
-
-function formatDocumentMeta(item: ProjectFolderDocumentItem): string {
-  const type = item.is_folder ? "Ordner" : item.file_extension?.toUpperCase() ?? item.mime_type ?? "Datei";
-  const changed = item.last_modified_date_time ? `Geändert ${formatDateTime(item.last_modified_date_time)}` : null;
-  const size = item.is_folder ? null : formatFileSize(item.size);
-  return [type, changed, size].filter(Boolean).join(" · ");
-}
-
-function formatFileSize(size: number | null): string | null {
-  if (typeof size !== "number") {
-    return null;
-  }
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
 
 function formatMeasurementPackageNumber(
   siteNumber: string | null,
