@@ -10853,6 +10853,19 @@ button.person-chip:focus-visible {
   transform: translateY(-1px);
 }
 
+.mobile-measurement-card.is-old-offer {
+  border-color: #d7dee9;
+  background: #f1f5f9;
+  opacity: 0.68;
+}
+
+.mobile-measurement-card.is-old-offer:hover,
+.mobile-measurement-card.is-old-offer:focus-visible {
+  border-color: #b9c7d8;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 8%);
+  opacity: 0.82;
+}
+
 .mobile-measurement-card strong,
 .mobile-measurement-detail-head h2,
 .mobile-panel-title-row h3 {

@@ -137,13 +137,11 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.measurement_base),
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
-                .join(SiteMeasurementBatch.measurement_base)
-                .where(
-                    SiteMeasurementBatch.site_id == assignment.site_id,
-                    SiteMeasurementBase.status == "active",
-                    SiteMeasurementBase.released_to_mobile.is_(True),
+                .where(SiteMeasurementBatch.site_id == assignment.site_id)
+                .order_by(
+                    SiteMeasurementBatch.created_at.desc(),
+                    SiteMeasurementBatch.id.desc(),
                 )
-                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
         active_base_id = self._get_active_measurement_base_id(assignment.site_id)

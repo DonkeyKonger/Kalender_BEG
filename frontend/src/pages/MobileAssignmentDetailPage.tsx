@@ -655,9 +655,10 @@ function MobileMeasurementTab({
     setError(null);
     try {
       const response = await api.mobileMeasurementBatches(assignment.id);
-      setBatches(response);
+      const sortedBatches = sortMobileMeasurementBatches(response);
+      setBatches(sortedBatches);
       if (selectBatchId) {
-        const batch = response.find((item) => item.id === selectBatchId) ?? null;
+        const batch = sortedBatches.find((item) => item.id === selectBatchId) ?? null;
         setSelectedBatch(batch);
       }
     } catch (requestError) {
@@ -855,7 +856,7 @@ function MobileMeasurementTab({
         <div className="mobile-measurement-list">
           {batches.map((batch) => (
             <button
-              className="mobile-measurement-card"
+              className={batch.is_current_offer ? "mobile-measurement-card" : "mobile-measurement-card is-old-offer"}
               key={batch.id}
               type="button"
               onClick={() => {
@@ -864,7 +865,7 @@ function MobileMeasurementTab({
               }}
             >
               <span className={`measurement-status mobile-status-${batch.status}`}>{batchStatusLabel(batch.status)}</span>
-              <strong>{batch.title}</strong>
+              <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
               <span>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen</span>
               <small>Summe: {formatMeasurementNumber(batch.reported_hours)} Sollstunden</small>
             </button>
@@ -918,7 +919,7 @@ function MeasurementBatchDetail({
 
       <div className="mobile-measurement-detail-head">
         <span className={`measurement-status mobile-status-${batch.status}`}>{batchStatusLabel(batch.status)}</span>
-        <h2>{batch.title}</h2>
+        <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
         <p>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen · {formatMeasurementNumber(batch.reported_hours)} Sollstunden</p>
       </div>
 
@@ -1365,6 +1366,22 @@ function formatMeasurementNumber(value: string | number | null): string {
     return String(value);
   }
   return new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
+}
+
+function sortMobileMeasurementBatches(batches: MobileMeasurementBatch[]): MobileMeasurementBatch[] {
+  return [...batches].sort((left, right) => {
+    const leftCreatedAt = Date.parse(left.created_at);
+    const rightCreatedAt = Date.parse(right.created_at);
+    const leftRank = Number.isFinite(leftCreatedAt) ? leftCreatedAt : left.id;
+    const rightRank = Number.isFinite(rightCreatedAt) ? rightCreatedAt : right.id;
+    return rightRank - leftRank || right.id - left.id;
+  });
+}
+
+function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch): string {
+  const title = batch.title?.trim() || `Aufmaß ${batch.number}`;
+  const offerName = batch.offer_name?.trim() || batch.measurement_base_name?.trim() || "Angebot ohne Namen";
+  return `${title} - ${offerName}`;
 }
 
 function batchStatusLabel(status: string): string {
