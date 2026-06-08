@@ -16,6 +16,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -347,6 +348,37 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
       return;
     }
 
+    if (kind === "pdf" && isNativeAndroidApp()) {
+      setDocumentPreview({
+        item,
+        kind,
+        status: "unsupported",
+        url: null,
+        error: "PDFs werden in der Android-App nicht in der WebView angezeigt. Die Datei wird stattdessen über den Android-Download geöffnet.",
+      });
+      setDownloadingItemId(item.id);
+      try {
+        const blob = await api.downloadProjectFolderDocument(
+          assignment.site.id,
+          selectedFolder.folder_key,
+          item.id,
+        );
+        downloadBlobFile(blob, item.name || "download.pdf");
+      } catch (requestError) {
+        setDocumentPreview({
+          item,
+          kind,
+          status: "error",
+          url: null,
+          error: readApiError(requestError, "PDF konnte nicht heruntergeladen werden."),
+        });
+      } finally {
+        setDownloadingItemId(null);
+        setOpeningItemId(null);
+      }
+      return;
+    }
+
     setDocumentPreview({
       item,
       kind,
@@ -545,7 +577,7 @@ function MobileDocumentPreview({
 
         {preview.status === "unsupported" ? (
           <div className="mobile-document-preview-note">
-            Diese Datei kann mobil nicht direkt angezeigt werden. Bitte lade sie über den Baustellenplaner herunter.
+            {preview.error || "Diese Datei kann mobil nicht direkt angezeigt werden. Bitte lade sie über den Baustellenplaner herunter."}
           </div>
         ) : null}
 
@@ -573,6 +605,10 @@ function MobileDocumentPreview({
 
 function isMobileInlineDocumentKind(kind: ProjectDocumentKind): boolean {
   return kind === "pdf" || kind === "image";
+}
+
+function isNativeAndroidApp(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 }
 
 function documentKindLabel(kind: ProjectDocumentKind): string {
