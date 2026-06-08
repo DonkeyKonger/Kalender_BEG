@@ -45,6 +45,37 @@ type AssignmentSegmentMovePayload = {
   target_start_date: string;
 };
 
+export type VehicleLatestPositionItem = {
+  vehicle: {
+    id: number;
+    source: string;
+    external_id: string;
+    ctrack_node_id: number | null;
+    label: string | null;
+    vehicle_registration: string | null;
+    fleet_number: string | null;
+    description: string | null;
+    is_active: boolean;
+    created_at: string | null;
+    updated_at: string | null;
+  };
+  position: {
+    id: number;
+    vehicle_asset_id: number;
+    source: string;
+    event_time_utc: string | null;
+    latitude: number;
+    longitude: number;
+    speed: number | null;
+    ignition: boolean | null;
+    odometer: number | null;
+    driver_id: string | null;
+    driver_name: string | null;
+    location_text: string | null;
+    updated_at: string | null;
+  };
+};
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -256,6 +287,10 @@ export const api = {
 
   async personMap(): Promise<PersonMapResponse> {
     return request<PersonMapResponse>("/persons/map");
+  },
+
+  async vehicleLatestPositions(): Promise<VehicleLatestPositionItem[]> {
+    return request<VehicleLatestPositionItem[]>("/vehicles/latest-positions");
   },
 
   async searchPersonAddress(query: string): Promise<PersonGeocodeSearchResult[]> {

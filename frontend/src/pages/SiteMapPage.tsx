@@ -5,7 +5,8 @@ import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
+import { formatGermanDateTimeShort } from "../lib/formatters";
 import type { PersonMapItem, PersonMapResponse, PersonType } from "../types/person";
 import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
@@ -13,6 +14,9 @@ const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
 const DEFAULT_ZOOM = 6;
 const ALL_FILTER = "all";
 const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18, -18], [18, 6], [-18, 6]];
+const EMPTY_SITES: SiteMapItem[] = [];
+const EMPTY_PEOPLE: PersonMapItem[] = [];
+const EMPTY_VEHICLES: VehicleLatestPositionItem[] = [];
 
 type SiteLabelMode = "full" | "number" | "points";
 type PersonLabelMode = "full" | "short" | "points";
@@ -40,11 +44,15 @@ export function SiteMapPage() {
   const { user } = useAuth();
   const [data, setData] = useState<SiteMapResponse | null>(null);
   const [personData, setPersonData] = useState<PersonMapResponse | null>(null);
+  const [vehicleData, setVehicleData] = useState<VehicleLatestPositionItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPeople, setIsLoadingPeople] = useState(false);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [personError, setPersonError] = useState<string | null>(null);
+  const [vehicleError, setVehicleError] = useState<string | null>(null);
   const [showPersons, setShowPersons] = useState(false);
+  const [showVehicles, setShowVehicles] = useState(false);
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [personFilter, setPersonFilter] = useState(ALL_FILTER);
   const [visibleMarkers, setVisibleMarkers] = useState<VisibleMarkerState>({
@@ -56,12 +64,14 @@ export function SiteMapPage() {
   });
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) {
       return;
     }
     setShowPersons(readMapBooleanPreference(user.id, "map_show_persons", false));
+    setShowVehicles(readMapBooleanPreference(user.id, "map_show_vehicles", false));
     setProjectFilter(readMapPreference(user.id, "map_project_filter", ALL_FILTER));
     setPersonFilter(readMapPreference(user.id, "map_person_filter", ALL_FILTER));
   }, [user]);
@@ -134,11 +144,55 @@ export function SiteMapPage() {
   }, [personData, showPersons]);
 
   useEffect(() => {
+    if (!showVehicles || vehicleData) {
+      if (!showVehicles) {
+        setVehicleError(null);
+      }
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingVehicles(true);
+    setVehicleError(null);
+    api
+      .vehicleLatestPositions()
+      .then((response) => {
+        if (!cancelled) {
+          setVehicleData(response);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (caught instanceof ApiError) {
+          setVehicleError(caught.message);
+          return;
+        }
+        setVehicleError("Fahrzeugpositionen konnten nicht geladen werden.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingVehicles(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showVehicles, vehicleData]);
+
+  useEffect(() => {
     if (!user) {
       return;
     }
     writeMapPreference(user.id, "map_show_persons", showPersons ? "true" : "false");
   }, [showPersons, user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    writeMapPreference(user.id, "map_show_vehicles", showVehicles ? "true" : "false");
+  }, [showVehicles, user]);
 
   useEffect(() => {
     if (!user) {
@@ -154,8 +208,9 @@ export function SiteMapPage() {
     writeMapPreference(user.id, "map_person_filter", personFilter);
   }, [personFilter, user]);
 
-  const sites = data?.sites ?? [];
-  const people = personData?.people ?? [];
+  const sites = data?.sites ?? EMPTY_SITES;
+  const people = personData?.people ?? EMPTY_PEOPLE;
+  const vehicles = vehicleData ?? EMPTY_VEHICLES;
   const projectManagers = useMemo(() => mapProjectManagerOptions(sites), [sites]);
   const personProjectManagers = useMemo(() => personProjectManagerOptions(people, projectManagers), [people, projectManagers]);
   const filteredSites = useMemo(
@@ -171,6 +226,7 @@ export function SiteMapPage() {
   const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
   const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
   const visiblePeopleForMap = useMemo(() => showPersons ? filteredPeople : [], [filteredPeople, showPersons]);
+  const visibleVehiclesForMap = useMemo(() => showVehicles ? vehicles : [], [showVehicles, vehicles]);
   const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerState) => {
     setVisibleMarkers((current) => areVisibleMarkerStatesEqual(current, nextMarkers) ? current : nextMarkers);
   }, []);
@@ -212,16 +268,22 @@ export function SiteMapPage() {
           <input checked={showPersons} type="checkbox" onChange={(event) => setShowPersons(event.target.checked)} />
           <span>Personen auf Karte anzeigen</span>
         </label>
+        <label className="checkbox-field site-map-toggle">
+          <input checked={showVehicles} type="checkbox" onChange={(event) => setShowVehicles(event.target.checked)} />
+          <span>Fahrzeuge auf Karte anzeigen</span>
+        </label>
         {isLoadingPeople && <span className="site-map-loading-note">Personen werden geladen...</span>}
+        {isLoadingVehicles && <span className="site-map-loading-note">Fahrzeuge werden geladen...</span>}
       </section>
 
       {error ? <p className="form-error">{error}</p> : null}
       {personError ? <p className="form-error">{personError}</p> : null}
+      {vehicleError ? <p className="form-error">{vehicleError}</p> : null}
 
       <section className="site-map-card">
         {isLoading ? (
           <div className="empty-state">Baustellenkarte wird geladen...</div>
-        ) : filteredSites.length === 0 && (!showPersons || filteredPeople.length === 0) ? (
+        ) : filteredSites.length === 0 && visiblePeopleForMap.length === 0 && visibleVehiclesForMap.length === 0 ? (
           <div className="empty-state">Keine Marker fuer die aktuellen Filter vorhanden.</div>
         ) : (
           <MapContainer center={GERMANY_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom className="site-map-canvas">
@@ -248,6 +310,7 @@ export function SiteMapPage() {
                     click: () => {
                       setSelectedSiteId(site.id);
                       setSelectedPersonId(null);
+                      setSelectedVehicleId(null);
                     },
                   }}
                 >
@@ -284,6 +347,7 @@ export function SiteMapPage() {
                     click: () => {
                       setSelectedPersonId(person.id);
                       setSelectedSiteId(null);
+                      setSelectedVehicleId(null);
                     },
                   }}
                 >
@@ -298,6 +362,42 @@ export function SiteMapPage() {
                   </Tooltip>
                   <Popup>
                     <PersonMapPopup person={person} />
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+            {visibleVehiclesForMap.map((item) => {
+              const isSelected = selectedVehicleId === item.vehicle.id;
+              return (
+                <CircleMarker
+                  key={`vehicle-${item.vehicle.id}`}
+                  center={[item.position.latitude, item.position.longitude]}
+                  radius={isSelected ? 6.5 : 4.6}
+                  pathOptions={{
+                    color: isSelected ? "#ffffff" : vehicleMarkerFill(),
+                    fillColor: vehicleMarkerFill(),
+                    fillOpacity: 0.86,
+                    opacity: 0.95,
+                    weight: isSelected ? 2 : 0,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedVehicleId(item.vehicle.id);
+                      setSelectedSiteId(null);
+                      setSelectedPersonId(null);
+                    },
+                  }}
+                >
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -9]}
+                    opacity={1}
+                    className="site-map-marker-label site-map-marker-label-hover"
+                  >
+                    {vehicleMarkerLabel(item)}
+                  </Tooltip>
+                  <Popup>
+                    <VehicleMapPopup item={item} />
                   </Popup>
                 </CircleMarker>
               );
@@ -374,6 +474,23 @@ function PersonMapPopup({ person }: { person: PersonMapItem }) {
   );
 }
 
+function VehicleMapPopup({ item }: { item: VehicleLatestPositionItem }) {
+  const vehicle = item.vehicle;
+  const position = item.position;
+  const title = vehicleMarkerLabel(item);
+  return (
+    <div className="site-map-popup">
+      <strong>{title}</strong>
+      {vehicle.vehicle_registration ? <span>Kennzeichen: {vehicle.vehicle_registration}</span> : null}
+      {vehicle.fleet_number ? <span>Flottennr.: {vehicle.fleet_number}</span> : null}
+      <span>Letztes Signal: {formatVehicleEventTime(position.event_time_utc)}</span>
+      <span>Geschwindigkeit: {formatVehicleSpeed(position.speed)}</span>
+      <span>Zündung: {formatVehicleIgnition(position.ignition)}</span>
+      {position.location_text ? <span>Ort: {position.location_text}</span> : null}
+    </div>
+  );
+}
+
 function formatAddress(site: SiteMapItem): string {
   const streetLine = [site.street, site.house_number].filter(Boolean).join(" ");
   const cityLine = [site.postal_code, site.city].filter(Boolean).join(" ");
@@ -395,6 +512,13 @@ function personMarkerLabel(person: PersonMapItem, mode: PersonLabelMode): string
   }
   const place = person.address_city ? truncateLabel(person.address_city, 18) : "Startort";
   return `${name} · ${place}`;
+}
+
+function vehicleMarkerLabel(item: VehicleLatestPositionItem): string {
+  return item.vehicle.label
+    || item.vehicle.vehicle_registration
+    || item.vehicle.fleet_number
+    || `Fahrzeug ${item.vehicle.ctrack_node_id ?? item.vehicle.external_id}`;
 }
 
 function truncateLabel(value: string, max = 24): string {
@@ -428,6 +552,35 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
 
 function personMarkerFill(mode: PersonLabelMode): string {
   return mode === "points" ? "#b45309" : "#f97316";
+}
+
+function vehicleMarkerFill(): string {
+  return "#0f766e";
+}
+
+function formatVehicleEventTime(value: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return formatGermanDateTimeShort(value);
+}
+
+function formatVehicleSpeed(value: number | null): string {
+  if (value === null) {
+    return "-";
+  }
+  return `${value.toLocaleString("de-DE", { maximumFractionDigits: 1 })} km/h`;
+}
+
+function formatVehicleIgnition(value: boolean | null): string {
+  if (value === null) {
+    return "-";
+  }
+  return value ? "an" : "aus";
 }
 
 function siteLabelModeForVisibleMarkers(markers: VisibleMarkerState): SiteLabelMode {
