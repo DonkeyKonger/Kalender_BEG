@@ -30,7 +30,6 @@ import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, Proj
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
-type MeasurementFilter = "all" | "open" | "edited" | "mine" | "approved";
 type MeasurementViewMode = "list" | "table";
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
@@ -57,14 +56,6 @@ const detailTabs: Array<{ key: MobileDetailTab; label: string; description: stri
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
   { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
-];
-
-const measurementFilters: Array<{ key: MeasurementFilter; label: string }> = [
-  { key: "all", label: "Alle" },
-  { key: "open", label: "Offen" },
-  { key: "edited", label: "Bearbeitet" },
-  { key: "mine", label: "Meine Meldungen" },
-  { key: "approved", label: "Freigegeben" },
 ];
 
 export function MobileAssignmentDetailPage() {
@@ -644,13 +635,11 @@ function MobileMeasurementTab({
   onBackToProject: () => void;
   onEntryModeChange?: (isActive: boolean) => void;
 }) {
-  const { user } = useAuth();
   const [batches, setBatches] = useState<MobileMeasurementBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<MobileMeasurementBatch | null>(null);
   const [items, setItems] = useState<MobileMeasurementItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MobileMeasurementItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filter, setFilter] = useState<MeasurementFilter>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isItemsLoading, setIsItemsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -682,7 +671,6 @@ function MobileMeasurementTab({
     setIsItemsLoading(true);
     setError(null);
     setSearchTerm("");
-    setFilter("all");
     try {
       const response = await api.mobileMeasurementBatchItems(assignment.id, batch.id);
       setItems(response);
@@ -711,14 +699,9 @@ function MobileMeasurementTab({
         || item.position.toLowerCase().includes(needle)
         || item.description.toLowerCase().includes(needle)
         || (item.unit ?? "").toLowerCase().includes(needle);
-      const matchesFilter = filter === "all"
-        || (filter === "mine" && item.entries.some((entry) => entry.created_by_user_id === user?.id))
-        || (filter === "open" && item.mobile_status === "open")
-        || (filter === "edited" && item.mobile_status === "edited")
-        || (filter === "approved" && item.mobile_status === "approved");
-      return matchesSearch && matchesFilter;
+      return matchesSearch;
     });
-  }, [filter, items, searchTerm, user?.id]);
+  }, [items, searchTerm]);
 
   useEffect(() => {
     onEntryModeChange?.(Boolean(selectedBatch && selectedItem));
@@ -786,7 +769,6 @@ function MobileMeasurementTab({
         isItemsLoading={isItemsLoading}
         error={error}
         searchTerm={searchTerm}
-        filter={filter}
         onBack={() => {
           setSelectedBatch(null);
           setSelectedItem(null);
@@ -796,7 +778,6 @@ function MobileMeasurementTab({
         viewMode={viewMode}
         onViewModeChange={updateViewMode}
         onSearchChange={setSearchTerm}
-        onFilterChange={setFilter}
         onSelectItem={(item) => {
           setSelectedItem(item);
           setFormComment("");
@@ -900,13 +881,11 @@ function MeasurementBatchDetail({
   isItemsLoading,
   error,
   searchTerm,
-  filter,
   isSaving,
   viewMode,
   onBack,
   onViewModeChange,
   onSearchChange,
-  onFilterChange,
   onSelectItem,
   onSubmit,
 }: {
@@ -916,39 +895,44 @@ function MeasurementBatchDetail({
   isItemsLoading: boolean;
   error: string | null;
   searchTerm: string;
-  filter: MeasurementFilter;
   isSaving: boolean;
   viewMode: MeasurementViewMode;
   onBack: () => void;
   onViewModeChange: (mode: MeasurementViewMode) => void;
   onSearchChange: (value: string) => void;
-  onFilterChange: (value: MeasurementFilter) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
   onSubmit: () => void;
 }) {
   const isDraft = batch.status === "draft";
   const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
+  const displayDate = formatMobileMeasurementBatchDate(batch);
   return (
     <div className="mobile-detail-panel mobile-measurement-panel">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Aufmaße</span>
-      </button>
-
-      <div className="mobile-measurement-detail-head">
-        <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-        <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
-        <p>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen · {formatMeasurementNumber(batch.reported_hours)} Sollstunden</p>
-      </div>
-
-      {isDraft ? (
-        <button className="primary-action" type="button" onClick={onSubmit} disabled={isSaving || batch.entry_count === 0}>
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Aufmaße</span>
+        </button>
+        <button
+          className="primary-action mobile-measurement-submit-action"
+          type="button"
+          onClick={onSubmit}
+          disabled={!isDraft || isSaving || batch.entry_count === 0}
+        >
           <Send aria-hidden="true" size={15} />
           <span>{isSaving ? "Sende..." : "Zur Prüfung senden"}</span>
         </button>
-      ) : (
-        <p className="form-info">Dieses Aufmaß wurde zur Prüfung gesendet und ist mobil schreibgeschützt.</p>
-      )}
+      </div>
+
+      <div className="mobile-measurement-summary-card">
+        <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+        <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
+        <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
+        <span className="mobile-measurement-card-meta">
+          <span>Positionen: {batch.position_count}</span>
+          <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+        </span>
+      </div>
 
       <div className="mobile-measurement-search">
         <Search aria-hidden="true" size={17} />
@@ -958,19 +942,6 @@ function MeasurementBatchDetail({
           value={searchTerm}
           onChange={(event) => onSearchChange(event.target.value)}
         />
-      </div>
-
-      <div className="mobile-filter-row" role="group" aria-label="Aufmaßfilter">
-        {measurementFilters.map((item) => (
-          <button
-            className={filter === item.key ? "active" : ""}
-            key={item.key}
-            type="button"
-            onClick={() => onFilterChange(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
       </div>
 
       <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />

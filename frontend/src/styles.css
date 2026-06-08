@@ -10746,36 +10746,6 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
-.mobile-filter-row {
-  display: flex;
-  gap: 7px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.mobile-filter-row::-webkit-scrollbar {
-  display: none;
-}
-
-.mobile-filter-row button {
-  flex: 0 0 auto;
-  min-height: 36px;
-  border: 1px solid #cbd7e6;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #42526b;
-  padding: 0 11px;
-  font-weight: 800;
-}
-
-.mobile-filter-row button.active {
-  border-color: #143c6d;
-  background: #eaf2fb;
-  color: #143c6d;
-  box-shadow: 0 8px 16px rgb(20 60 109 / 10%);
-}
-
 .mobile-measurement-new-action {
   border-color: #2d5d8f;
   background: #2d5d8f;
@@ -10838,7 +10808,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-card strong,
-.mobile-measurement-detail-head h2,
+.mobile-measurement-summary-card h2,
 .mobile-panel-title-row h3 {
   margin: 0;
   color: #111827;
@@ -10846,7 +10816,6 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-card span:not(.measurement-status),
-.mobile-measurement-detail-head p,
 .mobile-measurement-entry small {
   color: #65738a;
 }
@@ -10968,9 +10937,47 @@ button.person-chip:focus-visible {
   font-size: 0.95rem;
 }
 
-.mobile-measurement-detail-head {
+.mobile-measurement-detail-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.mobile-measurement-detail-topbar .mobile-back-button {
+  min-width: 0;
+}
+
+.mobile-measurement-submit-action {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border-color: #2d5d8f;
+  background: #2d5d8f;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+.mobile-measurement-submit-action:hover,
+.mobile-measurement-submit-action:focus-visible {
+  background: #244d78;
+}
+
+.mobile-measurement-summary-card {
   display: grid;
-  gap: 7px;
+  gap: 6px;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 11px;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+}
+
+.mobile-measurement-summary-card h2 {
+  overflow: hidden;
+  font-size: 1rem;
+  line-height: 1.18;
+  text-overflow: ellipsis;
 }
 
 .mobile-measurement-quick-facts {
