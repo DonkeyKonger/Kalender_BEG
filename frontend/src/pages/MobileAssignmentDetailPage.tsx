@@ -1135,26 +1135,7 @@ function MeasurementDetail({
 }) {
   const isDraft = batch.status === "draft";
   const areaInputRef = useRef<HTMLInputElement>(null);
-  const quantityInputRef = useRef<HTMLInputElement>(null);
   const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
-
-  useEffect(() => {
-    if (!isDraft) {
-      return;
-    }
-    let timeoutId: number | undefined;
-    const frame = window.requestAnimationFrame(() => {
-      timeoutId = window.setTimeout(() => {
-        quantityInputRef.current?.focus({ preventScroll: true });
-      }, 80);
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [isDraft, item.id]);
 
   return (
     <div className="mobile-measurement-entry-page">
@@ -1185,7 +1166,7 @@ function MeasurementDetail({
                       type="button"
                       onClick={() => {
                         onCommentChange(area);
-                        areaInputRef.current?.focus({ preventScroll: true });
+                        blurActiveFormElement();
                       }}
                     >
                       {area}
@@ -1203,13 +1184,15 @@ function MeasurementDetail({
             <label>
               <span>Menge ({item.unit ?? "Einheit"})</span>
               <input
-                ref={quantityInputRef}
-                type="number"
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
+                type="text"
+                inputMode="none"
+                readOnly
                 value={formQuantity}
-                onChange={(event) => onQuantityChange(event.target.value)}
+                aria-label={`Menge in ${item.unit ?? "Einheit"}`}
+              />
+              <MeasurementQuantityKeypad
+                disabled={isSaving}
+                onKeyPress={(key) => onQuantityChange(applyMeasurementQuantityKey(formQuantity, key))}
               />
             </label>
           </div>
@@ -1248,6 +1231,50 @@ function MeasurementDetail({
           <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
         </div>
       </details>
+    </div>
+  );
+}
+
+type MeasurementQuantityKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "," | "." | "backspace" | "clear";
+
+function MeasurementQuantityKeypad({
+  disabled,
+  onKeyPress,
+}: {
+  disabled: boolean;
+  onKeyPress: (key: MeasurementQuantityKey) => void;
+}) {
+  const keys: Array<{ key: MeasurementQuantityKey; label: string; className?: string; ariaLabel?: string }> = [
+    { key: "1", label: "1" },
+    { key: "2", label: "2" },
+    { key: "3", label: "3" },
+    { key: "4", label: "4" },
+    { key: "5", label: "5" },
+    { key: "6", label: "6" },
+    { key: "7", label: "7" },
+    { key: "8", label: "8" },
+    { key: "9", label: "9" },
+    { key: "0", label: "0" },
+    { key: ",", label: "," },
+    { key: ".", label: "." },
+    { key: "backspace", label: "Zurück", className: "is-muted", ariaLabel: "Letzte Ziffer entfernen" },
+    { key: "clear", label: "Leeren", className: "is-muted is-wide", ariaLabel: "Menge leeren" },
+  ];
+
+  return (
+    <div className="mobile-quantity-keypad" aria-label="Menge eingeben">
+      {keys.map((keyConfig) => (
+        <button
+          aria-label={keyConfig.ariaLabel}
+          className={keyConfig.className ? `mobile-quantity-key ${keyConfig.className}` : "mobile-quantity-key"}
+          disabled={disabled}
+          key={keyConfig.key}
+          type="button"
+          onClick={() => onKeyPress(keyConfig.key)}
+        >
+          {keyConfig.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1347,6 +1374,38 @@ function getMobileMeasurementAreaQuantity(item: MobileMeasurementItem, areaLabel
     const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
     return Number.isFinite(quantity) ? sum + quantity : sum;
   }, 0);
+}
+
+function applyMeasurementQuantityKey(value: string, key: MeasurementQuantityKey): string {
+  const normalizedValue = value.replace(".", ",");
+
+  if (key === "clear") {
+    return "";
+  }
+  if (key === "backspace") {
+    return normalizedValue.slice(0, -1);
+  }
+  if (key === "," || key === ".") {
+    if (normalizedValue.includes(",")) {
+      return normalizedValue;
+    }
+    return normalizedValue ? `${normalizedValue},` : "0,";
+  }
+
+  if (normalizedValue === "0") {
+    return key === "0" ? normalizedValue : key;
+  }
+  return `${normalizedValue}${key}`;
+}
+
+function blurActiveFormElement(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+    activeElement.blur();
+  }
 }
 
 function normalizeMeasurementArea(input: string): string {
