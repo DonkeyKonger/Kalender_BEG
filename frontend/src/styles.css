@@ -10370,6 +10370,42 @@ button.person-chip:focus-visible {
   box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
+.mobile-detail-summary-button {
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.mobile-detail-summary-button:hover,
+.mobile-detail-summary-button:focus-visible {
+  border-color: #9db7d6;
+  box-shadow: 0 16px 34px rgb(18 29 52 / 11%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mobile-detail-summary-button:active {
+  transform: translateY(0);
+}
+
+.mobile-detail-summary-button .assignment-date {
+  justify-content: space-between;
+}
+
+.mobile-detail-summary-button .assignment-date span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-detail-summary-button .assignment-date .mobile-detail-summary-chevron {
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  background: transparent;
+  color: #55708f;
+  padding: 0;
+}
+
 .mobile-detail-hero h1,
 .mobile-detail-panel h2,
 .mobile-detail-panel p {

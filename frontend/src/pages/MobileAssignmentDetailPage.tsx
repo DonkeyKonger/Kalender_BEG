@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CalendarClock,
+  ChevronRight,
   ClipboardList,
   Download,
   ExternalLink,
@@ -53,7 +54,6 @@ type MobileDocumentPreviewState = {
 };
 
 const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
-  { key: "overview", label: "Übersicht", description: "Adresse, Kunde und Projektleiter", icon: ClipboardList },
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
   { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
@@ -71,7 +71,7 @@ export function MobileAssignmentDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { assignmentId } = useParams();
-  const [activeTab, setActiveTab] = useState<MobileDetailTab>("overview");
+  const [activeTab, setActiveTab] = useState<MobileDetailTab | null>(null);
   const [isMeasurementEntryMode, setIsMeasurementEntryMode] = useState(false);
 
   const assignment = useMemo(() => {
@@ -94,19 +94,43 @@ export function MobileAssignmentDetailPage() {
     );
   }
 
+  const isOverviewFlow = activeTab === "overview";
   const isMeasurementFlow = activeTab === "measurement";
   const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
 
+  function openOverview(): void {
+    setActiveTab("overview");
+    setIsMeasurementEntryMode(false);
+  }
+
   return (
     <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}`}>
-      {!isMeasurementFlow ? (
+      {isOverviewFlow ? (
+        <>
+          <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveTab(null)}>
+            <ArrowLeft aria-hidden="true" size={17} />
+            <span>Projektakte</span>
+          </button>
+        </>
+      ) : !isMeasurementFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
             <ArrowLeft aria-hidden="true" size={17} />
             <span>Zurück</span>
           </button>
 
-          <header className="mobile-detail-hero mobile-detail-summary">
+          <header
+            className="mobile-detail-hero mobile-detail-summary mobile-detail-summary-button"
+            role="button"
+            tabIndex={0}
+            onClick={openOverview}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openOverview();
+              }
+            }}
+          >
             <div className="assignment-card-main">
               <div>
                 <h1>{assignment.site.name}</h1>
@@ -114,7 +138,10 @@ export function MobileAssignmentDetailPage() {
               </div>
               <SiteStatusBadge status={assignment.site.status} />
             </div>
-            <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</p>
+            <p className="assignment-date">
+              <span><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</span>
+              <ChevronRight aria-hidden="true" className="mobile-detail-summary-chevron" size={17} />
+            </p>
           </header>
 
           <div className="mobile-detail-actions" aria-label="Baustellendetails">
@@ -151,7 +178,7 @@ export function MobileAssignmentDetailPage() {
           assignment={assignment}
           onBackToProject={() => {
             setIsMeasurementEntryMode(false);
-            setActiveTab("overview");
+            setActiveTab(null);
           }}
           onEntryModeChange={setIsMeasurementEntryMode}
         />
