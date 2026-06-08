@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   CalendarClock,
   ClipboardList,
+  Download,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -14,14 +15,14 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
-import { formatProjectDocumentMeta } from "../lib/projectFiles";
+import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
@@ -41,6 +42,14 @@ type MobileFolderNavigationLevel = {
   itemId: string;
   name: string;
   documents: ProjectFolderDocumentList;
+};
+
+type MobileDocumentPreviewState = {
+  item: ProjectFolderDocumentItem;
+  kind: ProjectDocumentKind;
+  status: "loading" | "ready" | "unsupported" | "error";
+  url: string | null;
+  error: string | null;
 };
 
 const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
@@ -188,6 +197,25 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [folderNavigationError, setFolderNavigationError] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [documentPreview, setDocumentPreview] = useState<MobileDocumentPreviewState | null>(null);
+  const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
+  const documentPreviewUrlRef = useRef<string | null>(null);
+
+  const revokeDocumentPreviewUrl = useCallback((): void => {
+    if (documentPreviewUrlRef.current) {
+      window.URL.revokeObjectURL(documentPreviewUrlRef.current);
+      documentPreviewUrlRef.current = null;
+    }
+  }, []);
+
+  const clearDocumentPreview = useCallback((): void => {
+    revokeDocumentPreviewUrl();
+    setDocumentPreview(null);
+  }, [revokeDocumentPreviewUrl]);
+
+  useEffect(() => () => {
+    revokeDocumentPreviewUrl();
+  }, [revokeDocumentPreviewUrl]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -223,6 +251,7 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     setFolderStack([]);
     setFolderNavigationError(null);
     setOpenError(null);
+    clearDocumentPreview();
     if (!selectedFolder) {
       return;
     }
@@ -252,13 +281,15 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     return () => {
       isCurrent = false;
     };
-  }, [assignment.site.id, selectedFolder]);
+  }, [assignment.site.id, clearDocumentPreview, selectedFolder]);
 
   async function handleOpenFolderItem(item: ProjectFolderDocumentItem): Promise<void> {
     if (!selectedFolder || !item.is_folder) {
       return;
     }
     setFolderNavigationError(null);
+    setOpenError(null);
+    clearDocumentPreview();
     setIsLoadingNestedFolder(true);
     try {
       const childDocuments = await api.projectFolderItemChildren(
@@ -281,12 +312,30 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     if (!selectedFolder) {
       return;
     }
+    const kind = getProjectDocumentKind(item);
     setOpenError(null);
     setOpeningItemId(item.id);
-    const openedWindow = window.open("about:blank", "_blank");
-    if (openedWindow) {
-      openedWindow.opener = null;
+    revokeDocumentPreviewUrl();
+
+    if (!isMobileInlineDocumentKind(kind)) {
+      setDocumentPreview({
+        item,
+        kind,
+        status: "unsupported",
+        url: null,
+        error: null,
+      });
+      setOpeningItemId(null);
+      return;
     }
+
+    setDocumentPreview({
+      item,
+      kind,
+      status: "loading",
+      url: null,
+      error: null,
+    });
     try {
       const blob = await api.projectFolderDocumentContent(
         assignment.site.id,
@@ -294,12 +343,45 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
         item.id,
         "inline",
       );
-      openBlobInNewTab(blob, openedWindow);
+      const url = window.URL.createObjectURL(blob);
+      documentPreviewUrlRef.current = url;
+      setDocumentPreview({
+        item,
+        kind,
+        status: "ready",
+        url,
+        error: null,
+      });
     } catch (requestError) {
-      openedWindow?.close();
-      setOpenError(readApiError(requestError, "Datei konnte nicht geöffnet werden."));
+      setDocumentPreview({
+        item,
+        kind,
+        status: "error",
+        url: null,
+        error: readApiError(requestError, "Dokument konnte nicht geladen werden."),
+      });
     } finally {
       setOpeningItemId(null);
+    }
+  }
+
+  async function handleDownloadDocument(item: ProjectFolderDocumentItem): Promise<void> {
+    if (!selectedFolder) {
+      return;
+    }
+    setOpenError(null);
+    setDownloadingItemId(item.id);
+    try {
+      const blob = await api.downloadProjectFolderDocument(
+        assignment.site.id,
+        selectedFolder.folder_key,
+        item.id,
+      );
+      downloadBlobFile(blob, item.name || "download");
+    } catch (requestError) {
+      setOpenError(readApiError(requestError, "Datei konnte nicht heruntergeladen werden."));
+    } finally {
+      setDownloadingItemId(null);
     }
   }
 
@@ -308,8 +390,10 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
       setFolderStack((currentStack) => currentStack.slice(0, -1));
       setFolderNavigationError(null);
       setOpenError(null);
+      clearDocumentPreview();
       return;
     }
+    clearDocumentPreview();
     setSelectedFolder(null);
   }
 
@@ -346,6 +430,14 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
         {documentsError ? <div className="form-error">{documentsError}</div> : null}
         {folderNavigationError ? <div className="form-error">{folderNavigationError}</div> : null}
         {openError ? <div className="form-error">{openError}</div> : null}
+        {documentPreview ? (
+          <MobileDocumentPreview
+            preview={documentPreview}
+            isDownloading={downloadingItemId === documentPreview.item.id}
+            onClose={clearDocumentPreview}
+            onDownload={() => void handleDownloadDocument(documentPreview.item)}
+          />
+        ) : null}
         {!currentLoading && !documentsError && currentDocuments?.items.length === 0 ? (
           <div className="empty-panel">Noch keine Dateien in diesem Ordner.</div>
         ) : null}
@@ -392,6 +484,86 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
       ) : null}
     </div>
   );
+}
+
+function MobileDocumentPreview({
+  preview,
+  isDownloading,
+  onClose,
+  onDownload,
+}: {
+  preview: MobileDocumentPreviewState;
+  isDownloading: boolean;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  const canRenderInline = preview.status === "ready" && preview.url && isMobileInlineDocumentKind(preview.kind);
+  return (
+    <section className="mobile-document-preview" aria-label="Dokumentenvorschau">
+      <div className="mobile-document-preview-head">
+        <div>
+          <span>{documentKindLabel(preview.kind)}</span>
+          <h3>{preview.item.name}</h3>
+          <p>{formatProjectDocumentMeta(preview.item, { includeFallbackType: false })}</p>
+        </div>
+        <button className="icon-button secondary" type="button" onClick={onClose}>Schließen</button>
+      </div>
+
+      {preview.status === "loading" ? (
+        <div className="empty-panel">Dokument wird geladen...</div>
+      ) : null}
+
+      {preview.status === "error" ? (
+        <div className="form-error">{preview.error || "Dokument konnte nicht geladen werden."}</div>
+      ) : null}
+
+      {preview.status === "unsupported" ? (
+        <div className="mobile-document-preview-note">
+          Diese Datei kann mobil nicht direkt angezeigt werden. Bitte lade sie über den Baustellenplaner herunter.
+        </div>
+      ) : null}
+
+      {canRenderInline && preview.kind === "image" ? (
+        <div className="mobile-document-preview-frame is-image">
+          <img src={preview.url ?? ""} alt={preview.item.name} />
+        </div>
+      ) : null}
+
+      {canRenderInline && preview.kind === "pdf" ? (
+        <div className="mobile-document-preview-frame">
+          <iframe title={preview.item.name} src={preview.url ?? ""} />
+        </div>
+      ) : null}
+
+      <button className="mobile-document-download-action" type="button" disabled={isDownloading} onClick={onDownload}>
+        <Download aria-hidden="true" size={16} />
+        <span>{isDownloading ? "Lädt..." : "Datei herunterladen"}</span>
+      </button>
+    </section>
+  );
+}
+
+function isMobileInlineDocumentKind(kind: ProjectDocumentKind): boolean {
+  return kind === "pdf" || kind === "image";
+}
+
+function documentKindLabel(kind: ProjectDocumentKind): string {
+  if (kind === "pdf") {
+    return "PDF";
+  }
+  if (kind === "image") {
+    return "Bild";
+  }
+  if (kind === "word") {
+    return "Word-Dokument";
+  }
+  if (kind === "excel") {
+    return "Excel-Datei";
+  }
+  if (kind === "mail") {
+    return "E-Mail";
+  }
+  return "Datei";
 }
 
 function MobileFolderFileItem({
@@ -1038,14 +1210,15 @@ function readApiError(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
-function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
+function downloadBlobFile(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob);
-  if (openedWindow) {
-    openedWindow.location.href = url;
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
 }
 
 function readMeasurementViewMode(): MeasurementViewMode {
