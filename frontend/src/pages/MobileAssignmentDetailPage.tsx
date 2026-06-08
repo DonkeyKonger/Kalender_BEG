@@ -16,7 +16,9 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
+import { FileOpener } from "@capacitor-community/file-opener";
 import { Capacitor } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -352,28 +354,26 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
       setDocumentPreview({
         item,
         kind,
-        status: "unsupported",
+        status: "loading",
         url: null,
-        error: "PDFs werden in der Android-App nicht in der WebView angezeigt. Die Datei wird stattdessen über den Android-Download geöffnet.",
+        error: null,
       });
-      setDownloadingItemId(item.id);
       try {
-        const blob = await api.downloadProjectFolderDocument(
+        await openAndroidPdfFromProjectFolder(
           assignment.site.id,
           selectedFolder.folder_key,
-          item.id,
+          item,
         );
-        downloadBlobFile(blob, item.name || "download.pdf");
+        clearDocumentPreview();
       } catch (requestError) {
         setDocumentPreview({
           item,
           kind,
           status: "error",
           url: null,
-          error: readApiError(requestError, "PDF konnte nicht heruntergeladen werden."),
+          error: readAndroidPdfOpenError(requestError),
         });
       } finally {
-        setDownloadingItemId(null);
         setOpeningItemId(null);
       }
       return;
@@ -419,9 +419,18 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     if (!selectedFolder) {
       return;
     }
+    const kind = getProjectDocumentKind(item);
     setOpenError(null);
     setDownloadingItemId(item.id);
     try {
+      if (kind === "pdf" && isNativeAndroidApp()) {
+        await openAndroidPdfFromProjectFolder(
+          assignment.site.id,
+          selectedFolder.folder_key,
+          item,
+        );
+        return;
+      }
       const blob = await api.downloadProjectFolderDocument(
         assignment.site.id,
         selectedFolder.folder_key,
@@ -429,7 +438,9 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
       );
       downloadBlobFile(blob, item.name || "download");
     } catch (requestError) {
-      setOpenError(readApiError(requestError, "Datei konnte nicht heruntergeladen werden."));
+      setOpenError(kind === "pdf" && isNativeAndroidApp()
+        ? readAndroidPdfOpenError(requestError)
+        : readApiError(requestError, "Datei konnte nicht heruntergeladen werden."));
     } finally {
       setDownloadingItemId(null);
     }
@@ -609,6 +620,67 @@ function isMobileInlineDocumentKind(kind: ProjectDocumentKind): boolean {
 
 function isNativeAndroidApp(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+}
+
+async function openAndroidPdfFromProjectFolder(
+  siteId: number,
+  folderKey: string,
+  item: ProjectFolderDocumentItem,
+): Promise<void> {
+  const blob = await api.projectFolderDocumentContent(siteId, folderKey, item.id, "inline");
+  await openAndroidPdfBlob(blob, item.name || "dokument.pdf");
+}
+
+async function openAndroidPdfBlob(blob: Blob, filename: string): Promise<void> {
+  const data = await blobToBase64(blob);
+  const safeFilename = toSafePdfFilename(filename);
+  const writtenFile = await Filesystem.writeFile({
+    path: `pdf-cache/${Date.now()}-${safeFilename}`,
+    data,
+    directory: Directory.Cache,
+    recursive: true,
+  });
+  await FileOpener.open({
+    filePath: writtenFile.uri,
+    contentType: "application/pdf",
+    openWithDefault: true,
+  });
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Datei konnte nicht gelesen werden."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const [, base64Data] = result.split(",", 2);
+      if (!base64Data) {
+        reject(new Error("Datei konnte nicht für Android vorbereitet werden."));
+        return;
+      }
+      resolve(base64Data);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function toSafePdfFilename(filename: string): string {
+  const withoutPath = filename.split(/[\\/]/).pop() ?? "dokument.pdf";
+  const sanitized = withoutPath
+    .trim()
+    .replace(/[^\p{L}\p{N}._ -]+/gu, "_")
+    .replace(/\s+/g, " ")
+    .slice(0, 90);
+  const fallback = sanitized || "dokument.pdf";
+  return fallback.toLocaleLowerCase("de-DE").endsWith(".pdf") ? fallback : `${fallback}.pdf`;
+}
+
+function readAndroidPdfOpenError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/activity not found|no application|no app|viewer|pdf-viewer/i.test(message)) {
+    return "Kein PDF-Viewer installiert.";
+  }
+  return readApiError(error, "PDF konnte nicht mit Android geöffnet werden.");
 }
 
 function documentKindLabel(kind: ProjectDocumentKind): string {
