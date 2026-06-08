@@ -11103,6 +11103,21 @@ button.person-chip:focus-visible {
   color: #42526b;
 }
 
+.mobile-batch-status-draft {
+  background: #eef2f7;
+  color: #42526b;
+}
+
+.mobile-batch-status-submitted {
+  background: #e8f1ff;
+  color: #1d4f91;
+}
+
+.mobile-batch-status-reviewed {
+  background: #e4f7e9;
+  color: #166534;
+}
+
 .mobile-status-submitted,
 .mobile-status-in_review {
   background: #fff4de;

@@ -854,22 +854,25 @@ function MobileMeasurementTab({
       ) : null}
       {!isLoading && batches.length > 0 ? (
         <div className="mobile-measurement-list">
-          {batches.map((batch) => (
-            <button
-              className={batch.is_current_offer ? "mobile-measurement-card" : "mobile-measurement-card is-old-offer"}
-              key={batch.id}
-              type="button"
-              onClick={() => {
-                setSelectedBatch(batch);
-                void loadBatchItems(batch);
-              }}
-            >
-              <span className={`measurement-status mobile-status-${batch.status}`}>{batchStatusLabel(batch.status)}</span>
-              <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
-              <span>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen</span>
-              <small>Summe: {formatMeasurementNumber(batch.reported_hours)} Sollstunden</small>
-            </button>
-          ))}
+          {batches.map((batch) => {
+            const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
+            return (
+              <button
+                className={batch.is_current_offer ? "mobile-measurement-card" : "mobile-measurement-card is-old-offer"}
+                key={batch.id}
+                type="button"
+                onClick={() => {
+                  setSelectedBatch(batch);
+                  void loadBatchItems(batch);
+                }}
+              >
+                <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
+                <span>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen</span>
+                <small>Summe: {formatMeasurementNumber(batch.reported_hours)} Sollstunden</small>
+              </button>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -910,6 +913,7 @@ function MeasurementBatchDetail({
   onSubmit: () => void;
 }) {
   const isDraft = batch.status === "draft";
+  const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
   return (
     <div className="mobile-detail-panel mobile-measurement-panel">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
@@ -918,7 +922,7 @@ function MeasurementBatchDetail({
       </button>
 
       <div className="mobile-measurement-detail-head">
-        <span className={`measurement-status mobile-status-${batch.status}`}>{batchStatusLabel(batch.status)}</span>
+        <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
         <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
         <p>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen · {formatMeasurementNumber(batch.reported_hours)} Sollstunden</p>
       </div>
@@ -1391,20 +1395,23 @@ function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch): strin
   return `${title} - ${offerName}`;
 }
 
-function batchStatusLabel(status: string): string {
-  if (status === "submitted") {
-    return "Zur Prüfung gesendet";
+function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { label: string; className: string } {
+  const status = batch.status.toLowerCase();
+  if (isReviewedMobileMeasurementBatchStatus(status)) {
+    return { label: "Geprüft", className: "mobile-batch-status-reviewed" };
   }
-  if (status === "approved") {
-    return "Freigegeben";
+  if (isSubmittedMobileMeasurementBatchStatus(status) || batch.submitted_at) {
+    return { label: "Eingereicht", className: "mobile-batch-status-submitted" };
   }
-  if (status === "rejected") {
-    return "Zurückgewiesen";
-  }
-  if (status === "closed") {
-    return "Abgeschlossen";
-  }
-  return "Entwurf";
+  return { label: "Entwurf", className: "mobile-batch-status-draft" };
+}
+
+function isReviewedMobileMeasurementBatchStatus(status: string): boolean {
+  return ["approved", "billed", "reviewed", "checked", "closed"].includes(status);
+}
+
+function isSubmittedMobileMeasurementBatchStatus(status: string): boolean {
+  return ["submitted", "in_review", "rejected"].includes(status);
 }
 
 function mobileStatusLabel(status: string): string {
