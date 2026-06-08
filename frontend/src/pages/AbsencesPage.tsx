@@ -1,6 +1,6 @@
 import { CalendarDays, CalendarX, ChevronLeft, ChevronRight, PlusCircle, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
+import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { AbsenceTypeBadge, StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
@@ -25,6 +25,18 @@ const absenceStatusLabels: Record<AbsenceStatus, string> = {
 type EditableAbsence = AbsenceCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; absenceId: number } | null;
 type AbsenceViewMode = "planning" | "year";
+type AbsenceSelectionRange = {
+  personId: number;
+  startDate: string;
+  endDate: string;
+};
+type ActiveAbsenceSelection = AbsenceSelectionRange & {
+  isSelecting: boolean;
+};
+type AbsenceSelectionPopup = AbsenceSelectionRange & {
+  x: number;
+  y: number;
+};
 type AbsenceCell = {
   date: string;
   absences: Absence[];
@@ -60,6 +72,9 @@ export function AbsencesPage() {
   const [savingAbsenceId, setSavingAbsenceId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activeSelection, setActiveSelection] = useState<ActiveAbsenceSelection | null>(null);
+  const [selectionPopup, setSelectionPopup] = useState<AbsenceSelectionPopup | null>(null);
+  const [isSavingSelection, setIsSavingSelection] = useState(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const planningRange = useMemo(() => getDefaultPlanningRange(), []);
   const today = useMemo(() => toDateInputValue(new Date()), []);
@@ -136,6 +151,30 @@ export function AbsencesPage() {
     }
   }, [today, viewMode, visibleDays]);
 
+  useEffect(() => {
+    if (!activeSelection?.isSelecting) {
+      return;
+    }
+
+    function handleMouseUp(event: MouseEvent): void {
+      setActiveSelection((current) => {
+        if (!current) {
+          return null;
+        }
+        setSelectionPopup({
+          personId: current.personId,
+          startDate: current.startDate,
+          endDate: current.endDate,
+          ...boundedAbsencePopupPosition(event.clientX, event.clientY),
+        });
+        return { ...current, isSelecting: false };
+      });
+    }
+
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [activeSelection?.isSelecting]);
+
   async function createAbsence() {
     const validationError = validateAbsencePayload(createForm);
     if (validationError) {
@@ -157,6 +196,51 @@ export function AbsencesPage() {
       setError(readApiError(requestError, "Abwesenheit konnte nicht angelegt werden."));
     } finally {
       setSavingAbsenceId(null);
+    }
+  }
+
+  async function createAbsencesFromSelection(absenceType: AbsenceType) {
+    if (!selectionPopup || isSavingSelection) {
+      return;
+    }
+    const { startDate, endDate } = normalizedDateRange(selectionPopup.startDate, selectionPopup.endDate);
+    const selectedDays = daysBetween(startDate, endDate);
+    const openDays = selectedDays.filter((date) => !hasAbsenceForPersonDate(absences, selectionPopup.personId, date));
+    const skippedCount = selectedDays.length - openDays.length;
+    if (!openDays.length) {
+      setError("Im markierten Bereich ist bereits ueberall eine Abwesenheit eingetragen.");
+      setMessage(null);
+      return;
+    }
+
+    setIsSavingSelection(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const createdAbsences = await Promise.all(
+        openDays.map((date) => api.createAbsence({
+          person_id: selectionPopup.personId,
+          absence_type: absenceType,
+          start_date: date,
+          end_date: date,
+          status: "active",
+          note: null,
+        })),
+      );
+      setAbsences((current) => [...current, ...createdAbsences].sort(compareAbsences));
+      setDrafts((current) => ({
+        ...current,
+        ...toEditableAbsences(createdAbsences),
+      }));
+      setActiveSelection(null);
+      setSelectionPopup(null);
+      setMessage(skippedCount > 0
+        ? `Abwesenheiten angelegt. ${skippedCount} bereits belegte Tage wurden uebersprungen.`
+        : "Abwesenheiten angelegt.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Abwesenheiten konnten nicht angelegt werden."));
+    } finally {
+      setIsSavingSelection(false);
     }
   }
 
@@ -206,6 +290,62 @@ export function AbsencesPage() {
     }
   }
 
+  async function deleteAbsenceDay(absence: Absence, date: string) {
+    if (!window.confirm(`${absenceTypeLabels[absence.absence_type]} am ${formatDate(date)} loeschen?`)) {
+      return;
+    }
+    setSavingAbsenceId(absence.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const { updated, created } = await removeAbsenceDate(absence, date);
+      setAbsences((current) => {
+        const withoutOriginal = current.filter((item) => item.id !== absence.id);
+        return [...withoutOriginal, ...updated, ...created].sort(compareAbsences);
+      });
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[absence.id];
+        for (const item of [...updated, ...created]) {
+          next[item.id] = toEditableAbsence(item);
+        }
+        return next;
+      });
+      setMessage("Abwesenheit geloescht.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Abwesenheit konnte nicht geloescht werden."));
+    } finally {
+      setSavingAbsenceId(null);
+    }
+  }
+
+  async function removeAbsenceDate(absence: Absence, date: string): Promise<{ updated: Absence[]; created: Absence[] }> {
+    if (absence.start_date === absence.end_date) {
+      await api.deleteAbsence(absence.id);
+      return { updated: [], created: [] };
+    }
+    if (date === absence.start_date) {
+      const updated = await api.updateAbsence(absence.id, { start_date: addDays(date, 1) });
+      return { updated: [updated], created: [] };
+    }
+    if (date === absence.end_date) {
+      const updated = await api.updateAbsence(absence.id, { end_date: addDays(date, -1) });
+      return { updated: [updated], created: [] };
+    }
+
+    const originalEndDate = absence.end_date;
+    const updated = await api.updateAbsence(absence.id, { end_date: addDays(date, -1) });
+    const created = await api.createAbsence({
+      person_id: absence.person_id,
+      absence_type: absence.absence_type,
+      start_date: addDays(date, 1),
+      end_date: originalEndDate,
+      status: absence.status,
+      note: absence.note,
+    });
+    return { updated: [updated], created: [created] };
+  }
+
   function replaceAbsence(updated: Absence) {
     setAbsences((current) =>
       current.map((absence) => absence.id === updated.id ? updated : absence).sort(compareAbsences),
@@ -221,6 +361,8 @@ export function AbsencesPage() {
   }
 
   function openCreateDrawer(personId = 0, date = today) {
+    setActiveSelection(null);
+    setSelectionPopup(null);
     setCreateForm(emptyAbsence(personId, date));
     setDrawer({ mode: "new" });
   }
@@ -228,6 +370,29 @@ export function AbsencesPage() {
   function closeDrawer() {
     setDrawer(null);
   }
+
+  function startSelection(personId: number, date: string, event: ReactMouseEvent) {
+    if (!canEdit || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    setDrawer(null);
+    setError(null);
+    setMessage(null);
+    setSelectionPopup(null);
+    setActiveSelection({ personId, startDate: date, endDate: date, isSelecting: true });
+  }
+
+  function extendSelection(personId: number, date: string) {
+    setActiveSelection((current) => {
+      if (!current?.isSelecting || current.personId !== personId) {
+        return current;
+      }
+      return { ...current, endDate: date };
+    });
+  }
+
+  const visibleSelection = selectionPopup ?? activeSelection;
 
   return (
     <section className="absences-page">
@@ -296,16 +461,53 @@ export function AbsencesPage() {
 
       {!isLoading && (
         <AbsenceMatrix
+          activeSelection={visibleSelection}
           canEdit={canEdit}
           days={visibleDays}
           mode={viewMode}
           rows={rows}
           scrollRef={matrixScrollRef}
           today={today}
-          onCreate={openCreateDrawer}
+          onDeleteAbsenceDay={(absence, date) => void deleteAbsenceDay(absence, date)}
+          onExtendSelection={extendSelection}
           onOpenAbsence={(absenceId) => setDrawer({ mode: "edit", absenceId })}
+          onStartSelection={startSelection}
         />
       )}
+
+      {selectionPopup ? (
+        <div
+          className="absence-selection-popover"
+          style={{ left: selectionPopup.x, top: selectionPopup.y }}
+        >
+          <strong>Abwesenheit eintragen</strong>
+          <span>{formatAbsenceSelectionLabel(selectionPopup)}</span>
+          <div>
+            {Object.entries(absenceTypeLabels).map(([type, label]) => (
+              <button
+                className={`absence-selection-type absence-block-${type}`}
+                disabled={isSavingSelection}
+                key={type}
+                type="button"
+                onClick={() => void createAbsencesFromSelection(type as AbsenceType)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="absence-selection-cancel"
+            disabled={isSavingSelection}
+            type="button"
+            onClick={() => {
+              setActiveSelection(null);
+              setSelectionPopup(null);
+            }}
+          >
+            Abbrechen
+          </button>
+        </div>
+      ) : null}
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "new"}
@@ -376,23 +578,29 @@ export function AbsencesPage() {
 }
 
 function AbsenceMatrix({
+  activeSelection,
   canEdit,
   days,
   mode,
   rows,
   scrollRef,
   today,
-  onCreate,
+  onDeleteAbsenceDay,
+  onExtendSelection,
   onOpenAbsence,
+  onStartSelection,
 }: {
+  activeSelection: AbsenceSelectionRange | null;
   canEdit: boolean;
   days: string[];
   mode: AbsenceViewMode;
   rows: PersonAbsenceRow[];
   scrollRef: RefObject<HTMLDivElement | null>;
   today: string;
-  onCreate: (personId?: number, date?: string) => void;
+  onDeleteAbsenceDay: (absence: Absence, date: string) => void;
+  onExtendSelection: (personId: number, date: string) => void;
   onOpenAbsence: (absenceId: number) => void;
+  onStartSelection: (personId: number, date: string, event: ReactMouseEvent) => void;
 }) {
   if (!rows.length) {
     return (
@@ -431,11 +639,24 @@ function AbsenceMatrix({
               </th>
               {row.cells.map((cell) => (
                 <td
-                  className={absenceCellClassName(cell.date, today)}
+                  className={absenceCellClassName(
+                    cell.date,
+                    today,
+                    Boolean(
+                      activeSelection
+                      && activeSelection.personId === row.person.id
+                      && isDateWithinAbsenceSelection(cell.date, activeSelection),
+                    ),
+                  )}
                   key={`${row.person.id}-${cell.date}`}
-                  onClick={() => {
+                  onMouseDown={(event) => {
                     if (canEdit && !cell.absences.length) {
-                      onCreate(row.person.id, cell.date);
+                      onStartSelection(row.person.id, cell.date, event);
+                    }
+                  }}
+                  onMouseEnter={() => {
+                    if (canEdit) {
+                      onExtendSelection(row.person.id, cell.date);
                     }
                   }}
                 >
@@ -446,6 +667,13 @@ function AbsenceMatrix({
                         key={absence.id}
                         title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
                         type="button"
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (canEdit) {
+                            onDeleteAbsenceDay(absence, cell.date);
+                          }
+                        }}
                         onClick={(event) => {
                           event.stopPropagation();
                           onOpenAbsence(absence.id);
@@ -578,6 +806,31 @@ function daysBetween(start: string, end: string): string[] {
   return days;
 }
 
+function addDays(value: string, offset: number): string {
+  const date = parseLocalDate(value);
+  date.setDate(date.getDate() + offset);
+  return toDateInputValue(date);
+}
+
+function normalizedDateRange(firstDate: string, secondDate: string): { startDate: string; endDate: string } {
+  return firstDate <= secondDate
+    ? { startDate: firstDate, endDate: secondDate }
+    : { startDate: secondDate, endDate: firstDate };
+}
+
+function isDateWithinAbsenceSelection(date: string, selection: AbsenceSelectionRange): boolean {
+  const { startDate, endDate } = normalizedDateRange(selection.startDate, selection.endDate);
+  return date >= startDate && date <= endDate;
+}
+
+function hasAbsenceForPersonDate(absences: Absence[], personId: number, date: string): boolean {
+  return absences.some((absence) =>
+    absence.person_id === personId
+    && absence.start_date <= date
+    && absence.end_date >= date,
+  );
+}
+
 function absenceOverlapsDays(absence: Absence, days: string[]): boolean {
   const firstDay = days[0];
   const lastDay = days.at(-1);
@@ -678,8 +931,13 @@ function absenceDayClassName(date: string, today: string): string {
   return ["absence-day-col", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
 }
 
-function absenceCellClassName(date: string, today: string): string {
-  return ["absence-day-cell", isWeekendDate(date) ? "weekend" : "", date === today ? "today" : ""].filter(Boolean).join(" ");
+function absenceCellClassName(date: string, today: string, isSelected = false): string {
+  return [
+    "absence-day-cell",
+    isWeekendDate(date) ? "weekend" : "",
+    date === today ? "today" : "",
+    isSelected ? "is-selected" : "",
+  ].filter(Boolean).join(" ");
 }
 
 function formatDateRange(absence: Absence): string {
@@ -691,6 +949,27 @@ function formatDateRange(absence: Absence): string {
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatAbsenceSelectionLabel(selection: AbsenceSelectionRange): string {
+  const { startDate, endDate } = normalizedDateRange(selection.startDate, selection.endDate);
+  if (startDate === endDate) {
+    return formatDate(startDate);
+  }
+  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+}
+
+function boundedAbsencePopupPosition(clientX: number, clientY: number): { x: number; y: number } {
+  const popoverWidth = 240;
+  const popoverHeight = 238;
+  const spacing = 12;
+  if (typeof window === "undefined") {
+    return { x: clientX, y: clientY };
+  }
+  return {
+    x: Math.min(Math.max(clientX, spacing), Math.max(spacing, window.innerWidth - popoverWidth - spacing)),
+    y: Math.min(Math.max(clientY, spacing), Math.max(spacing, window.innerHeight - popoverHeight - spacing)),
+  };
 }
 
 function readApiError(error: unknown, fallback: string): string {
