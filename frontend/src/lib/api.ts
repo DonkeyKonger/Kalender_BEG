@@ -785,6 +785,16 @@ export const api = {
     });
   },
 
+  async deleteMobileMeasurementEntry(
+    assignmentId: number,
+    batchId: number,
+    entryId: number,
+  ): Promise<void> {
+    return request<void>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/entries/${entryId}`, {
+      method: "DELETE",
+    });
+  },
+
   async createAssignment(payload: Required<Pick<AssignmentPayload, "site_id" | "person_id" | "start_date" | "end_date">> & AssignmentPayload): Promise<AssignmentMutationApiResponse> {
     return request<AssignmentMutationApiResponse>("/assignments", {
       method: "POST",

@@ -277,6 +277,26 @@ class MeasurementService:
         self.db.refresh(entry)
         return self._build_entry(entry)
 
+    def delete_mobile_entry(
+        self, *, assignment_id: int, batch_id: int, entry_id: int, current_user: User
+    ) -> None:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.status != "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
+            )
+
+        entry = self.db.get(SiteMeasurementEntry, entry_id)
+        if entry is None or entry.measurement_batch_id != batch.id or entry.site_id != assignment.site_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßzeile nicht gefunden.")
+        if entry.created_by_user_id is not None and entry.created_by_user_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diese Aktion.")
+
+        self.db.delete(entry)
+        self.db.commit()
+
     def submit_mobile_batch(
         self, *, assignment_id: int, batch_id: int, current_user: User
     ) -> MobileMeasurementBatchRead:

@@ -28,7 +28,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { MeasurementEntry, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -832,10 +832,21 @@ function MobileMeasurementTab({
         }}
         onCommentChange={setFormComment}
         onQuantityChange={setFormQuantity}
-        onCancelForm={() => {
-          setFormComment("");
-          setFormQuantity("");
+        onDeleteEntries={async (entries) => {
+          if (!window.confirm("Aufmaß für diesen Ort löschen?")) {
+            return;
+          }
+          setIsSaving(true);
           setFormError(null);
+          try {
+            await Promise.all(entries.map((entry) => api.deleteMobileMeasurementEntry(assignment.id, selectedBatch.id, entry.id)));
+            await loadBatches(selectedBatch.id);
+            await loadBatchItems(selectedBatch, selectedItem.id);
+          } catch (requestError) {
+            setFormError(readApiError(requestError, "Aufmaß konnte nicht gelöscht werden."));
+          } finally {
+            setIsSaving(false);
+          }
         }}
         onSave={async () => {
           const quantity = Number(formQuantity.replace(",", "."));
@@ -1187,8 +1198,8 @@ function MeasurementDetail({
   formQuantity,
   formError,
   onBack,
-  onCancelForm,
   onCommentChange,
+  onDeleteEntries,
   onQuantityChange,
   onSave,
 }: {
@@ -1200,14 +1211,16 @@ function MeasurementDetail({
   formQuantity: string;
   formError: string | null;
   onBack: () => void;
-  onCancelForm: () => void;
   onCommentChange: (value: string) => void;
+  onDeleteEntries: (entries: MeasurementEntry[]) => Promise<void>;
   onQuantityChange: (value: string) => void;
   onSave: () => void;
 }) {
   const isDraft = batch.status === "draft";
   const areaInputRef = useRef<HTMLInputElement>(null);
   const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
+  const measuredAreas = useMemo(() => groupMeasurementEntriesByArea(item.entries), [item.entries]);
+  const measuredQuantity = useMemo(() => sumMeasurementEntryQuantities(item.entries), [item.entries]);
 
   return (
     <div className="mobile-measurement-entry-page">
@@ -1271,7 +1284,6 @@ function MeasurementDetail({
 
           {formError ? <p className="form-error">{formError}</p> : null}
           <div className="mobile-form-actions">
-            <button className="secondary-action" type="button" onClick={onCancelForm} disabled={isSaving}>Leeren</button>
             <button className="primary-action" type="button" onClick={onSave} disabled={isSaving}>{isSaving ? "Speichern..." : "Speichern"}</button>
           </div>
         </div>
@@ -1284,23 +1296,42 @@ function MeasurementDetail({
           <h3>Bisher erfasst</h3>
         </div>
 
-        {item.entries.length === 0 ? <p className="empty-inline">Noch keine Aufmaßzeilen erfasst.</p> : null}
-        {item.entries.map((entry) => (
-          <article className="mobile-measurement-entry" key={entry.id}>
-            <strong>{entry.area_or_comment}</strong>
-            <span>{formatMeasurementNumber(entry.quantity)} {item.unit ?? ""}</span>
+        {measuredAreas.length === 0 ? <p className="empty-inline">Noch keine Aufmaßzeilen erfasst.</p> : null}
+        {measuredAreas.map((area) => (
+          <article className="mobile-measurement-entry" key={area.key}>
+            <strong>{area.label}</strong>
+            <span>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</span>
+            {isDraft ? (
+              <button
+                aria-label={`Aufmaß für ${area.label} löschen`}
+                className="mobile-measurement-entry-delete"
+                disabled={isSaving}
+                type="button"
+                onClick={() => void onDeleteEntries(area.entries)}
+              >
+                ×
+              </button>
+            ) : null}
           </article>
         ))}
       </div>
 
       <details className="mobile-measurement-secondary-details">
         <summary>Details anzeigen</summary>
-        <div>
-          <span>Paket <strong>{batch.title}</strong></span>
+        <div className="mobile-measurement-detail-grid">
+          <span>Aufmaßnummer <strong>Aufmaß {batch.number}</strong></span>
           <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
-          <span>Menge Liste <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
-          <span>Minuten <strong>{formatMeasurementNumber(item.reported_minutes)}</strong></span>
-          <span>Stunden <strong>{formatMeasurementNumber(item.reported_hours)}</strong></span>
+          <span>Menge laut Angebot <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
+          <span>Menge nach Aufmaß <strong>{formatMeasurementNumber(measuredQuantity)}</strong></span>
+        </div>
+        <div className="mobile-measurement-detail-areas">
+          <strong>Verbaute Orte:</strong>
+          {measuredAreas.length > 0 ? measuredAreas.map((area) => (
+            <span key={area.key}>
+              <span>{area.label}:</span>
+              <strong>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</strong>
+            </span>
+          )) : <span>Noch keine Orte erfasst.</span>}
         </div>
       </details>
     </div>
@@ -1443,9 +1474,52 @@ function getMobileMeasurementAreaQuantity(item: MobileMeasurementItem, areaLabel
     if (getMeasurementAreaKey(entry.area_or_comment) !== areaKey) {
       return sum;
     }
-    const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
-    return Number.isFinite(quantity) ? sum + quantity : sum;
+    return sum + getMeasurementEntryQuantity(entry);
   }, 0);
+}
+
+type MeasurementAreaSummary = {
+  key: string;
+  label: string;
+  quantity: number;
+  entries: MeasurementEntry[];
+  sortIndex: number;
+};
+
+function groupMeasurementEntriesByArea(entries: MeasurementEntry[]): MeasurementAreaSummary[] {
+  const grouped = new Map<string, MeasurementAreaSummary>();
+
+  entries.forEach((entry, index) => {
+    const label = normalizeMeasurementArea(entry.area_or_comment) || "Ohne Ort";
+    const key = getMeasurementAreaKey(label);
+    const current = grouped.get(key);
+    if (current) {
+      current.quantity += getMeasurementEntryQuantity(entry);
+      current.entries.push(entry);
+      return;
+    }
+    grouped.set(key, {
+      key,
+      label,
+      quantity: getMeasurementEntryQuantity(entry),
+      entries: [entry],
+      sortIndex: index,
+    });
+  });
+
+  return [...grouped.values()].sort((left, right) => (
+    getMeasurementAreaSortRank(left.label, left.sortIndex) - getMeasurementAreaSortRank(right.label, right.sortIndex)
+    || left.sortIndex - right.sortIndex
+  ));
+}
+
+function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
+  return entries.reduce((sum, entry) => sum + getMeasurementEntryQuantity(entry), 0);
+}
+
+function getMeasurementEntryQuantity(entry: MeasurementEntry): number {
+  const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
+  return Number.isFinite(quantity) ? quantity : 0;
 }
 
 function applyMeasurementQuantityKey(value: string, key: MeasurementQuantityKey): string {

@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -138,4 +138,23 @@ def create_my_assignment_measurement_entry(
         measurement_item_id=measurement_item_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.delete(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/entries/{entry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_my_assignment_measurement_entry(
+    assignment_id: int,
+    batch_id: int,
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    MeasurementService(db).delete_mobile_entry(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        entry_id=entry_id,
+        current_user=current_user,
     )
