@@ -1,7 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
-import type { TimeGpsTestDataClearResponse, TimeGpsTestDataGenerateRequest, TimeGpsTestDataGenerateResponse, TimeGpsTestDataStatus } from "../types/devTestData";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
@@ -236,27 +235,6 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<GpsRecentLocationPoint[]>(`/gps/location-points/recent${suffix}`);
-  },
-
-  async timeGpsTestDataStatus(): Promise<TimeGpsTestDataStatus> {
-    return request<TimeGpsTestDataStatus>("/dev/time-gps-test-data/status");
-  },
-
-  async generateTimeGpsTestData(payload: TimeGpsTestDataGenerateRequest): Promise<TimeGpsTestDataGenerateResponse> {
-    return request<TimeGpsTestDataGenerateResponse>("/dev/time-gps-test-data/generate", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async deleteTimeGpsTestDataBatch(batchId: string): Promise<TimeGpsTestDataClearResponse> {
-    return request<TimeGpsTestDataClearResponse>(`/dev/time-gps-test-data/${encodeURIComponent(batchId)}`, {
-      method: "DELETE",
-    });
-  },
-
-  async deleteAllTimeGpsTestData(): Promise<TimeGpsTestDataClearResponse> {
-    return request<TimeGpsTestDataClearResponse>("/dev/time-gps-test-data", { method: "DELETE" });
   },
 
   async dashboardWeather(): Promise<WeatherSummary> {

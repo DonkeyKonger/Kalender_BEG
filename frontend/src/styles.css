@@ -8247,9 +8247,7 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .gps-verification-panel,
 .time-entries-page.is-figma-times-workspace .time-review-case-card,
 .time-entries-page.is-figma-times-workspace .time-final-hours-panel,
-.time-entries-page.is-figma-times-workspace .time-entry-editor,
-.time-entries-page.is-figma-times-workspace .time-test-data-panel,
-.time-entries-page.is-figma-times-workspace .time-test-data-status {
+.time-entries-page.is-figma-times-workspace .time-entry-editor {
   border-color: var(--time-border);
   border-radius: 8px;
   background: var(--time-surface);
@@ -8428,8 +8426,7 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .entity-search,
 .time-entries-page.is-figma-times-workspace .time-entry-form-grid input,
 .time-entries-page.is-figma-times-workspace .time-entry-form-grid select,
-.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea,
-.time-entries-page.is-figma-times-workspace .time-test-data-form input {
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea {
   border-color: var(--time-border);
   border-radius: 6px;
   background: #ffffff;
@@ -8441,118 +8438,10 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .entity-search:focus,
 .time-entries-page.is-figma-times-workspace .time-entry-form-grid input:focus,
 .time-entries-page.is-figma-times-workspace .time-entry-form-grid select:focus,
-.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea:focus,
-.time-entries-page.is-figma-times-workspace .time-test-data-form input:focus {
+.time-entries-page.is-figma-times-workspace .time-entry-form-grid textarea:focus {
   border-color: #7aa7d7;
   box-shadow: 0 0 0 3px rgba(31, 95, 159, 0.12);
   outline: none;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-status {
-  color: var(--time-muted);
-  font-size: 0.84rem;
-  font-weight: 800;
-  padding: 12px 14px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel {
-  padding: 0;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 12px 14px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel summary::-webkit-details-marker {
-  display: none;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel summary span {
-  display: grid;
-  gap: 2px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel summary strong {
-  color: var(--time-text);
-  font-size: 0.95rem;
-  font-weight: 900;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-panel summary small,
-.time-entries-page.is-figma-times-workspace .time-test-data-content > p,
-.time-entries-page.is-figma-times-workspace .time-test-data-batch {
-  color: var(--time-muted);
-  font-size: 0.8rem;
-  font-weight: 750;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-content {
-  display: grid;
-  gap: 12px;
-  border-top: 1px solid var(--time-border-soft);
-  padding: 0 14px 14px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  align-items: end;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-form .matrix-pm-filter {
-  align-self: end;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-form label {
-  display: grid;
-  gap: 5px;
-  color: var(--time-muted);
-  font-size: 0.74rem;
-  font-weight: 850;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-form input {
-  min-height: 34px;
-  padding: 7px 9px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-checkbox {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-checkbox input {
-  min-height: auto;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-result {
-  display: grid;
-  gap: 10px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-scenarios {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.time-entries-page.is-figma-times-workspace .time-test-data-scenarios span {
-  border: 1px solid var(--time-border-soft);
-  border-radius: 999px;
-  background: var(--time-surface-soft);
-  color: #52627a;
-  font-size: 0.74rem;
-  font-weight: 800;
-  padding: 5px 8px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-case-list {

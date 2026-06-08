@@ -2004,60 +2004,6 @@ function toUtcDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function defaultTestDataForm(): TestDataFormState {
-  const weekRange = currentWeekRange();
-  return {
-    rangeMode: "week",
-    start_date: weekRange.start,
-    end_date: weekRange.end,
-    error_rate_percent: "30",
-    seed: defaultTestDataSeed(),
-    clear_previous_test_data: false,
-  };
-}
-
-function defaultTestDataSeed(): string {
-  const today = new Date();
-  return `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-}
-
-function buildTestDataGeneratePayload(
-  form: TestDataFormState,
-): { ok: true; payload: TimeGpsTestDataGenerateRequest } | { ok: false; error: string } {
-  if (!form.start_date || !form.end_date) {
-    return { ok: false, error: "Bitte einen Zeitraum auswaehlen." };
-  }
-  if (form.end_date < form.start_date) {
-    return { ok: false, error: "Das Enddatum darf nicht vor dem Startdatum liegen." };
-  }
-
-  const errorRatePercent = Number(form.error_rate_percent.trim().replace(",", "."));
-  if (!Number.isFinite(errorRatePercent) || errorRatePercent < 0 || errorRatePercent > 100) {
-    return { ok: false, error: "Die Fehlerquote muss zwischen 0 und 100 Prozent liegen." };
-  }
-
-  let seed: number | null = null;
-  const seedValue = form.seed.trim();
-  if (seedValue) {
-    const parsedSeed = Number(seedValue);
-    if (!Number.isInteger(parsedSeed)) {
-      return { ok: false, error: "Der Seed muss eine ganze Zahl sein." };
-    }
-    seed = parsedSeed;
-  }
-
-  return {
-    ok: true,
-    payload: {
-      start_date: form.start_date,
-      end_date: form.end_date,
-      error_rate: errorRatePercent / 100,
-      seed,
-      clear_previous_test_data: form.clear_previous_test_data,
-    },
-  };
-}
-
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -2732,29 +2678,6 @@ function finalNoteLabel(entry: TimeEntry): string {
     return "GPS konnte nicht verlässlich geprüft werden.";
   }
   return "-";
-}
-
-function scenarioLabel(scenario: string): string {
-  const labels: Record<string, string> = {
-    absence_conflict: "Abwesenheit + Arbeitszeit",
-    already_reviewed: "Bereits geprüft",
-    critical_deviation: "Kritische Abweichung",
-    extreme_hours: "Extreme Arbeitszeit",
-    missing_gps: "Kein GPS",
-    new_device: "Neues Gerät",
-    offline_resync: "Offline nachgesendet",
-    outside_geofence: "Außerhalb Geofence",
-    partial_gps: "GPS teilweise",
-    plausible_normal: "Plausibel",
-    poor_accuracy: "Ungenaue GPS-Punkte",
-    review_recommended: "Prüfung empfohlen",
-    site_without_coordinates: "Baustelle ohne Koordinaten",
-    small_deviation: "Kleine Abweichung",
-    two_sites: "Zwei Baustellen",
-    weekend_work: "Wochenende",
-    wrong_site: "Andere Baustelle",
-  };
-  return labels[scenario] ?? scenario;
 }
 
 function defaultEntryDate(dateFrom: string, dateTo: string): string {
