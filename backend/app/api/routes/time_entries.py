@@ -33,6 +33,7 @@ def list_time_entries(
     date_to: date | None = None,
     include_gps_status: bool = False,
     review_open_only: bool = False,
+    project_mounting_only: bool = False,
     current_user: User = Depends(CAN_ACCESS),
     db: Session = Depends(get_db),
 ) -> list[TimeEntryRead]:
@@ -44,7 +45,7 @@ def list_time_entries(
         date_from=date_from,
         date_to=date_to,
     )
-    gps_service = GpsPresenceService(db) if include_gps_status or review_open_only else None
+    gps_service = GpsPresenceService(db) if include_gps_status or review_open_only or project_mounting_only else None
     gps_evaluations: dict[int, GpsPresenceEvaluation] = {}
     if gps_service is not None:
         gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
@@ -67,8 +68,20 @@ def list_time_entries(
             ):
                 open_entries.append(entry)
         entries = open_entries
+    if project_mounting_only:
+        entries = [
+            entry
+            for entry in entries
+            if service.is_project_mounting_time_relevant(entry, gps_evaluations.get(entry.id))
+        ]
     response_entries = [time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id)) for entry in entries]
-    if review_open_only and gps_service is not None and date_from is not None and date_to is not None:
+    if (
+        review_open_only
+        and not project_mounting_only
+        and gps_service is not None
+        and date_from is not None
+        and date_to is not None
+    ):
         gps_person_id = current_user.person_id if current_user.role == UserRole.MONTEUR else person_id
         gps_suggestions = [
             stay

@@ -397,6 +397,7 @@ export const api = {
     dateTo?: string;
     includeGpsStatus?: boolean;
     reviewOpenOnly?: boolean;
+    projectMountingOnly?: boolean;
   } = {}): Promise<TimeEntry[]> {
     const search = new URLSearchParams();
     if (params.personId !== undefined) {
@@ -416,6 +417,9 @@ export const api = {
     }
     if (params.reviewOpenOnly) {
       search.set("review_open_only", "true");
+    }
+    if (params.projectMountingOnly) {
+      search.set("project_mounting_only", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<TimeEntry[]>(`/time-entries${suffix}`);

@@ -3480,6 +3480,7 @@ function SiteWorkTimesPanel({
       siteId: site.id,
       dateFrom: activeRange.start,
       dateTo: activeRange.end,
+      projectMountingOnly: true,
     })
       .then((entryData) => {
         if (!ignore) {
@@ -3546,7 +3547,7 @@ function SiteWorkTimesPanel({
       <div className="project-record-toolbar">
         <div>
           <h2><CalendarClock aria-hidden="true" size={18} />Montagezeiten</h2>
-          <p>Gemeldete Ist-Arbeitszeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
+          <p>Geprüfte Ist-Montagezeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
         </div>
         <div className="site-worktime-range">
           <div className="matrix-pm-filter" aria-label="Zeitraum">
@@ -3573,7 +3574,7 @@ function SiteWorkTimesPanel({
         <div className="site-worktime-balance-header">
           <div>
             <h3>Soll/Ist im aktuellen Zeitraum</h3>
-            <p>Ist-Stunden aus Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}. Keine Projektfortschrittsbewertung.</p>
+            <p>Ist-Stunden aus geprüften Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}. Keine Projektfortschrittsbewertung.</p>
           </div>
           {canEdit && !isEditingPlanned ? (
             <button className="secondary-action" type="button" onClick={startPlannedEdit}>
@@ -3638,7 +3639,7 @@ function SiteWorkTimesPanel({
         {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
         {isLoading ? <div className="project-record-empty-state">Arbeitszeiten werden geladen...</div> : null}
         {!isLoading && !error && entries.length === 0 ? (
-          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine Arbeitszeiten auf diese Baustelle gemeldet.</div>
+          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine geprüften Montagezeiten auf diese Baustelle erfasst.</div>
         ) : null}
         {!isLoading && !error && entries.length > 0 ? (
           <div className="site-worktime-table-wrap">

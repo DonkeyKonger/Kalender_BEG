@@ -21,6 +21,17 @@ TERMINAL_TIME_REVIEW_STATUSES = {
     "clarification",
     "auto_closed_by_deadline",
 }
+PROJECT_MOUNTING_REVIEW_STATUSES = {
+    "manually_approved",
+    "corrected",
+}
+PROJECT_MOUNTING_REVIEW_METHODS = {
+    "accept_manual",
+    "accept_gps",
+    "manual_confirmed",
+    "manual_correction",
+    "assign_site",
+}
 
 
 class TimeEntryService:
@@ -270,6 +281,33 @@ class TimeEntryService:
         if manual_minutes is None or gps_minutes is None:
             return True
         return abs(gps_minutes - manual_minutes) > GPS_TIME_REVIEW_TOLERANCE_MINUTES
+
+    @staticmethod
+    def is_project_mounting_time_relevant(entry: WorkTimeEntry, gps_evaluation: object | None = None) -> bool:
+        review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
+        review_method = getattr(entry, "time_review_method", None)
+        if review_status in PROJECT_MOUNTING_REVIEW_STATUSES:
+            return True
+        if getattr(entry, "corrected_work_minutes", None) is not None:
+            return True
+        if review_method in PROJECT_MOUNTING_REVIEW_METHODS:
+            return True
+        return TimeEntryService.is_auto_plausible_time_entry(entry, gps_evaluation)
+
+    @staticmethod
+    def is_auto_plausible_time_entry(entry: WorkTimeEntry, gps_evaluation: object | None) -> bool:
+        if gps_evaluation is None:
+            return False
+        gps_minutes = getattr(gps_evaluation, "work_minutes", None)
+        if gps_minutes is None:
+            return False
+        review_notices = getattr(gps_evaluation, "review_notices", ())
+        if review_notices:
+            return False
+        manual_minutes = getattr(entry, "work_minutes", None)
+        if manual_minutes is None:
+            return False
+        return abs(gps_minutes - manual_minutes) <= GPS_TIME_REVIEW_TOLERANCE_MINUTES
 
     def _get_entry(self, entry_id: int) -> WorkTimeEntry:
         entry = self.db.get(WorkTimeEntry, entry_id)

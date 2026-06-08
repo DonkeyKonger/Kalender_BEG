@@ -216,3 +216,78 @@ def test_deadline_does_not_close_current_month_review_case():
 
     assert changed is False
     assert entry.time_review_status == "open"
+
+
+def test_project_mounting_times_exclude_unreviewed_manual_entry():
+    entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=None,
+        time_review_status="open",
+        time_review_method=None,
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is False
+
+
+def test_project_mounting_times_include_manually_approved_entry():
+    entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=None,
+        time_review_status="manually_approved",
+        time_review_method="manual_confirmed",
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is True
+
+
+def test_project_mounting_times_include_corrected_entry():
+    entry = SimpleNamespace(
+        work_minutes=450,
+        corrected_work_minutes=450,
+        time_review_status="corrected",
+        time_review_method="manual_correction",
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is True
+
+
+def test_project_mounting_times_include_accepted_gps_entry():
+    entry = SimpleNamespace(
+        work_minutes=420,
+        corrected_work_minutes=420,
+        time_review_status="corrected",
+        time_review_method="accept_gps",
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is True
+
+
+def test_project_mounting_times_include_auto_plausible_entry():
+    entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=None,
+        time_review_status="open",
+        time_review_method=None,
+    )
+    gps_evaluation = SimpleNamespace(work_minutes=470, review_notices=())
+
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, gps_evaluation) is True
+
+
+def test_project_mounting_times_exclude_gps_conflict_and_not_verifiable_entries():
+    conflicting_entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=None,
+        time_review_status="open",
+        time_review_method=None,
+    )
+    gps_evaluation = SimpleNamespace(work_minutes=480, review_notices=("GPS weicht von Planungsmatrix ab",))
+    not_verifiable_entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=None,
+        time_review_status="not_verifiable",
+        time_review_method="mark_not_verifiable",
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(conflicting_entry, gps_evaluation) is False
+    assert TimeEntryService.is_project_mounting_time_relevant(not_verifiable_entry, None) is False

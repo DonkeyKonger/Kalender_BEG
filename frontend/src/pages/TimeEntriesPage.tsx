@@ -758,10 +758,15 @@ export function TimeEntriesPage() {
           travel_minutes: 0,
           note: "Aus GPS-Vorschlag in der Stundenprüfung übernommen.",
         });
+        const reviewedEntry = await api.decideTimeEntryReview(createdEntry.id, {
+          decision: "accept_gps",
+          final_work_minutes: finalMinutes,
+          reviewed_site_id: reviewedSiteId,
+        });
         setExpandedReviewEntryId(null);
         setReviewEditorMode(null);
         setReviewDecisionForm({ hours: "", site_id: "" });
-        applyCreatedTimeEntryFromGpsSuggestion(issue.entry, createdEntry);
+        applyCreatedTimeEntryFromGpsSuggestion(issue.entry, reviewedEntry);
         return;
       }
       const updatedEntry = await api.decideTimeEntryReview(issue.id, {
