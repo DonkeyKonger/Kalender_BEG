@@ -713,6 +713,7 @@ function MobileMeasurementTab({
       <MeasurementDetail
         batch={selectedBatch}
         item={selectedItem}
+        allItems={items}
         isSaving={isSaving}
         formComment={formComment}
         formQuantity={formQuantity}
@@ -1072,6 +1073,7 @@ function MobileMeasurementTable({
 function MeasurementDetail({
   batch,
   item,
+  allItems,
   isSaving,
   formComment,
   formQuantity,
@@ -1084,6 +1086,7 @@ function MeasurementDetail({
 }: {
   batch: MobileMeasurementBatch;
   item: MobileMeasurementItem;
+  allItems: MobileMeasurementItem[];
   isSaving: boolean;
   formComment: string;
   formQuantity: string;
@@ -1097,6 +1100,7 @@ function MeasurementDetail({
   const isDraft = batch.status === "draft";
   const areaInputRef = useRef<HTMLInputElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
+  const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
 
   useEffect(() => {
     if (!isDraft) {
@@ -1129,10 +1133,6 @@ function MeasurementDetail({
           <h1>Pos. {item.position}</h1>
           <p>{item.description}</p>
         </div>
-        <div className="mobile-entry-facts">
-          <span>Einheit <strong>{item.unit ?? "-"}</strong></span>
-          <span>Gemeldet <strong>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong></span>
-        </div>
       </header>
 
       {isDraft ? (
@@ -1140,6 +1140,23 @@ function MeasurementDetail({
           <div className="mobile-measurement-form-grid">
             <label>
               <span>Bereich / Ort</span>
+              {areaSuggestions.length > 0 ? (
+                <div className="mobile-area-tag-list" aria-label="Bereichsvorschläge">
+                  {areaSuggestions.map((area) => (
+                    <button
+                      className={getMeasurementAreaKey(formComment) === getMeasurementAreaKey(area) ? "mobile-area-tag is-selected" : "mobile-area-tag"}
+                      key={area}
+                      type="button"
+                      onClick={() => {
+                        onCommentChange(area);
+                        areaInputRef.current?.focus({ preventScroll: true });
+                      }}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <input
                 ref={areaInputRef}
                 value={formComment}

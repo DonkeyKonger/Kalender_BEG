@@ -10893,9 +10893,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-entry-head h1,
-.mobile-entry-head p,
-.mobile-entry-facts span,
-.mobile-entry-facts strong {
+.mobile-entry-head p {
   margin: 0;
 }
 
@@ -10911,30 +10909,6 @@ button.person-chip:focus-visible {
   color: #334155;
   font-size: 0.9rem;
   line-height: 1.35;
-}
-
-.mobile-entry-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.mobile-entry-facts span {
-  display: grid;
-  gap: 2px;
-  border: 1px solid #d8e3ef;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 8px 9px;
-  color: #65738a;
-  font-size: 0.75rem;
-  font-weight: 750;
-  box-shadow: 0 8px 16px rgb(18 29 52 / 5%);
-}
-
-.mobile-entry-facts strong {
-  color: #111827;
-  font-size: 0.95rem;
 }
 
 .mobile-measurement-detail-topbar {
@@ -11097,11 +11071,19 @@ button.person-chip:focus-visible {
 
 .mobile-area-tag-list {
   display: flex;
-  flex-wrap: wrap;
+  overflow-x: auto;
   gap: 7px;
+  max-width: 100%;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.mobile-area-tag-list::-webkit-scrollbar {
+  display: none;
 }
 
 .mobile-area-tag {
+  flex: 0 0 auto;
   min-height: 34px;
   border: 1px solid #cbd7e6;
   border-radius: 999px;
