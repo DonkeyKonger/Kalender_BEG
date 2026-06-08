@@ -15,7 +15,13 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
-from app.models.vehicle import SiteVehicleAssignment, Vehicle
+from app.models.vehicle import (
+    SiteVehicleAssignment,
+    Vehicle,
+    VehicleAsset,
+    VehicleLatestPosition,
+    VehiclePositionLog,
+)
 from app.models.work_time_entry import WorkTimeEntry
 
 __all__ = [
@@ -37,5 +43,8 @@ __all__ = [
     "SiteVehicleAssignment",
     "User",
     "Vehicle",
+    "VehicleAsset",
+    "VehicleLatestPosition",
+    "VehiclePositionLog",
     "WorkTimeEntry",
 ]

@@ -53,6 +53,8 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router, prefix="/api")
     app.include_router(admin_ctrack.router, prefix="/api")
+    app.include_router(admin_ctrack.integration_router, prefix="/api")
+    app.include_router(admin_ctrack.vehicles_router, prefix="/api")
     app.include_router(admin_integrations.router, prefix="/api")
     app.include_router(customers.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
