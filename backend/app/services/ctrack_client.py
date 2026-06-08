@@ -125,13 +125,17 @@ class CtrackVehicleSyncService:
             ),
         )
         assets_by_external_id: dict[str, VehicleAsset] = {}
+        vehicles_received = len(vehicle_items)
         vehicles_upserted = 0
+        vehicles_skipped = 0
 
         for item in vehicle_items:
             if not isinstance(item, dict):
+                vehicles_skipped += 1
                 continue
             asset = self._upsert_vehicle_asset(item)
             if asset is None:
+                vehicles_skipped += 1
                 continue
             assets_by_external_id[asset.external_id] = asset
             vehicles_upserted += 1
@@ -150,14 +154,18 @@ class CtrackVehicleSyncService:
                 "Data",
             ),
         )
+        positions_received = len(position_items)
         positions_inserted = 0
         latest_positions_updated = 0
+        positions_skipped = 0
 
         for item in position_items:
             if not isinstance(item, dict):
+                positions_skipped += 1
                 continue
             external_id = _extract_external_id(item)
             if external_id is None:
+                positions_skipped += 1
                 continue
             asset = assets_by_external_id.get(external_id)
             if asset is None:
@@ -166,6 +174,7 @@ class CtrackVehicleSyncService:
 
             position = _parse_position_payload(item)
             if position is None:
+                positions_skipped += 1
                 continue
             if self._insert_position_log(asset, position):
                 positions_inserted += 1
@@ -174,9 +183,13 @@ class CtrackVehicleSyncService:
 
         self.db.commit()
         return {
+            "vehicles_received": vehicles_received,
             "vehicles_upserted": vehicles_upserted,
+            "vehicles_skipped": vehicles_skipped,
+            "positions_received": positions_received,
             "positions_inserted": positions_inserted,
             "latest_positions_updated": latest_positions_updated,
+            "positions_skipped": positions_skipped,
         }
 
     def list_vehicle_assets(self) -> list[dict[str, Any]]:
