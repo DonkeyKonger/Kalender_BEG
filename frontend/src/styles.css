@@ -10940,11 +10940,14 @@ button.person-chip:focus-visible {
 .mobile-measurement-summary-card {
   display: grid;
   gap: 6px;
-  border: 1px solid #d8e3ef;
+  border: 1px solid #d5e2f1;
+  border-top: 4px solid #f4b73f;
   border-radius: 8px;
-  background: #ffffff;
-  padding: 10px 11px;
-  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%) 0%, rgb(238 246 255 / 96%) 100%),
+    #ffffff;
+  padding: 14px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
 .mobile-measurement-summary-card h2 {
