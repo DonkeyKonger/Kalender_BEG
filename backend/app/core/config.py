@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     database_url: str = Field(alias="DATABASE_URL")
     secret_key: str = Field(alias="SECRET_KEY")
     environment: str = Field(default="local", alias="ENVIRONMENT")
-    access_token_expire_minutes: int = Field(default=480, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    access_token_expire_minutes: int = Field(default=43200, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     access_token_refresh_grace_minutes: int = Field(
         default=0, alias="ACCESS_TOKEN_REFRESH_GRACE_MINUTES"
     )
