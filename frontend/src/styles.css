@@ -10767,6 +10767,17 @@ button.person-chip:focus-visible {
   box-shadow: 0 8px 16px rgb(20 60 109 / 10%);
 }
 
+.mobile-measurement-new-action {
+  border-color: #2d5d8f;
+  background: #2d5d8f;
+  color: #ffffff;
+}
+
+.mobile-measurement-new-action:hover,
+.mobile-measurement-new-action:focus-visible {
+  background: #244d78;
+}
+
 .mobile-measurement-list {
   display: grid;
   gap: 7px;
@@ -10829,6 +10840,28 @@ button.person-chip:focus-visible {
 .mobile-measurement-detail-head p,
 .mobile-measurement-entry small {
   color: #65738a;
+}
+
+.mobile-measurement-card-date {
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.mobile-measurement-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  color: #42526b;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.mobile-measurement-card-meta span:last-child {
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .mobile-measurement-row-top {

@@ -834,7 +834,7 @@ function MobileMeasurementTab({
           <p>{[assignment.site.site_number, assignment.site.name].filter(Boolean).join(" · ")}</p>
         </div>
         <button
-          className="primary-action"
+          className="primary-action mobile-measurement-new-action"
           type="button"
           onClick={async () => {
             setIsSaving(true);
@@ -866,6 +866,7 @@ function MobileMeasurementTab({
         <div className="mobile-measurement-list">
           {batches.map((batch) => {
             const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
+            const displayDate = formatMobileMeasurementBatchDate(batch);
             return (
               <button
                 className={batch.is_current_offer ? "mobile-measurement-card" : "mobile-measurement-card is-old-offer"}
@@ -878,8 +879,11 @@ function MobileMeasurementTab({
               >
                 <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
-                <span>{batch.position_count} Positionen / {batch.entry_count} Aufmaßzeilen</span>
-                <small>Summe: {formatMeasurementNumber(batch.reported_hours)} Sollstunden</small>
+                <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
+                <span className="mobile-measurement-card-meta">
+                  <span>Positionen: {batch.position_count}</span>
+                  <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+                </span>
               </button>
             );
           })}
@@ -1414,6 +1418,29 @@ function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { 
     return { label: "Eingereicht", className: "mobile-batch-status-submitted" };
   }
   return { label: "Entwurf", className: "mobile-batch-status-draft" };
+}
+
+function formatMobileMeasurementBatchDate(batch: MobileMeasurementBatch): string {
+  const status = batch.status.toLowerCase();
+  const dateValue = isReviewedMobileMeasurementBatchStatus(status)
+    ? batch.updated_at
+    : batch.submitted_at || batch.created_at;
+  return formatMobileDateValue(dateValue);
+}
+
+function formatMobileDateValue(value: string | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsed);
 }
 
 function isReviewedMobileMeasurementBatchStatus(status: string): boolean {
