@@ -1222,6 +1222,13 @@ function MeasurementDetail({
   const measuredAreas = useMemo(() => groupMeasurementEntriesByArea(item.entries), [item.entries]);
   const measuredQuantity = useMemo(() => sumMeasurementEntryQuantities(item.entries), [item.entries]);
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [batch.id, item.id]);
+
   return (
     <div className="mobile-measurement-entry-page">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
