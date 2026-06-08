@@ -3543,14 +3543,19 @@ function SiteWorkTimesPanel({
   }
 
   return (
-    <div className="project-record-tab-panel">
-      <div className="project-record-toolbar">
-        <div>
-          <h2><CalendarClock aria-hidden="true" size={18} />Montagezeiten</h2>
-          <p>Geprüfte Ist-Montagezeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
+    <div className="project-record-tab-panel site-times-shell">
+      <section className="site-times-hero" aria-label="Montagezeiten Zeitraum">
+        <div className="site-times-hero-copy">
+          <span className="site-times-hero-icon">
+            <CalendarClock aria-hidden="true" size={22} />
+          </span>
+          <div>
+            <h2>Montagezeiten</h2>
+            <p>Erfasste Ist-Arbeitszeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
+          </div>
         </div>
-        <div className="site-worktime-range">
-          <div className="matrix-pm-filter" aria-label="Zeitraum">
+        <div className="site-times-period">
+          <div className="site-times-period-toggle" aria-label="Zeitraum">
             <button className={rangeMode === "week" ? "is-active" : ""} type="button" onClick={() => setRangeMode("week")}>
               Aktuelle Woche
             </button>
@@ -3560,82 +3565,111 @@ function SiteWorkTimesPanel({
           </div>
           <small>{formatDateRange(activeRange.start, activeRange.end)}</small>
         </div>
-      </div>
-
-      <div className="site-worktime-kpis" aria-label="Arbeitszeiten Kennzahlen">
-        <div><span>Einträge</span><strong>{summary.count}</strong></div>
-        <div><span>Monteure</span><strong>{summary.workerCount}</strong></div>
-        <div><span>Arbeitszeit</span><strong>{formatMeasurementDuration(summary.workMinutes)}</strong></div>
-        <div><span>Pause</span><strong>{formatMeasurementDuration(summary.breakMinutes)}</strong></div>
-        <div><span>Fahrtzeit</span><strong>{formatMeasurementDuration(summary.travelMinutes)}</strong></div>
-      </div>
-
-      <section className="site-worktime-balance-panel" aria-label="Soll-Ist-Auswertung">
-        <div className="site-worktime-balance-header">
-          <div>
-            <h3>Soll/Ist im aktuellen Zeitraum</h3>
-            <p>Ist-Stunden aus geprüften Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}. Keine Projektfortschrittsbewertung.</p>
-          </div>
-          {canEdit && !isEditingPlanned ? (
-            <button className="secondary-action" type="button" onClick={startPlannedEdit}>
-              Soll-Stunden bearbeiten
-            </button>
-          ) : null}
-        </div>
-
-        {isEditingPlanned ? (
-          <div className="site-worktime-planned-edit">
-            <label>
-              <span>Soll-Stunden für Auswertung</span>
-              <input
-                inputMode="decimal"
-                placeholder="z. B. 120,5"
-                value={plannedInput}
-                onChange={(event) => setPlannedInput(event.target.value)}
-              />
-            </label>
-            <div className="site-worktime-planned-actions">
-              <button className="icon-button secondary" disabled={isSavingPlanned} type="button" onClick={cancelPlannedEdit}>
-                Abbrechen
-              </button>
-              <button className="icon-button" disabled={isSavingPlanned} type="button" onClick={() => void savePlannedWorkMinutes()}>
-                {isSavingPlanned ? "Speichert..." : "Speichern"}
-              </button>
-            </div>
-          </div>
-        ) : null}
-        {plannedSaveError ? <div className="project-record-empty-state is-error">{plannedSaveError}</div> : null}
-        {plannedSaveMessage ? <div className="project-record-empty-state is-success">{plannedSaveMessage}</div> : null}
-
-        <div className="site-worktime-balance-grid">
-          <div>
-            <span>Soll-Stunden</span>
-            <strong>{hasPlannedMinutes ? formatMeasurementDuration(plannedMinutes ?? 0) : "Nicht hinterlegt"}</strong>
-          </div>
-          <div>
-            <span>Ist-Stunden im Zeitraum</span>
-            <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
-          </div>
-          <div>
-            <span>Differenz Ist - Soll</span>
-            <strong>{differenceMinutes !== null ? formatMeasurementDuration(differenceMinutes) : "-"}</strong>
-          </div>
-          <div>
-            <span>Verbrauch</span>
-            <strong>{usagePercent !== null ? formatMeasurementPercent(usagePercent) : "-"}</strong>
-          </div>
-          <div>
-            <span>Hinweisstatus</span>
-            <strong>
-              <StatusBadge tone={siteWorkTimeBalanceTone(balanceStatus)}>
-                {siteWorkTimeBalanceLabel(balanceStatus)}
-              </StatusBadge>
-            </strong>
-          </div>
-        </div>
       </section>
 
-      <section className="site-worktime-table-panel" aria-label="Gemeldete Arbeitszeiten">
+      <div className="site-times-kpi-strip" aria-label="Arbeitszeiten Kennzahlen">
+        <div className="site-times-kpi-item"><span>Einträge</span><strong>{summary.count}</strong></div>
+        <div className="site-times-kpi-item"><span>Monteure</span><strong>{summary.workerCount}</strong></div>
+        <div className="site-times-kpi-item"><span>Arbeitszeit</span><strong>{formatMeasurementDuration(summary.workMinutes)}</strong></div>
+        <div className="site-times-kpi-item"><span>Pause</span><strong>{formatMeasurementDuration(summary.breakMinutes)}</strong></div>
+        <div className="site-times-kpi-item"><span>Fahrtzeit</span><strong>{formatMeasurementDuration(summary.travelMinutes)}</strong></div>
+      </div>
+
+      <div className="site-times-insights">
+        <section className="site-times-panel site-times-overview-panel" aria-label="Ist-Zeiten Überblick">
+          <div className="site-times-panel-heading">
+            <h3>Ist-Zeiten Überblick</h3>
+            <p>Zusammenfassung der erfassten Zeiten im gewählten Zeitraum</p>
+          </div>
+          <div className="site-times-summary-list">
+            <div className="site-times-summary-row">
+              <span><i className="is-work" aria-hidden="true" />Arbeitszeit</span>
+              <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
+            </div>
+            <div className="site-times-summary-row">
+              <span><i className="is-break" aria-hidden="true" />Pause</span>
+              <strong>{formatMeasurementDuration(summary.breakMinutes)}</strong>
+            </div>
+            <div className="site-times-summary-row">
+              <span><i className="is-travel" aria-hidden="true" />Fahrtzeit</span>
+              <strong>{formatMeasurementDuration(summary.travelMinutes)}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="site-times-panel site-times-balance-panel" aria-label="Soll-Ist-Auswertung">
+          <div className="site-times-panel-heading site-times-panel-heading-with-action">
+            <div>
+              <h3>Soll / Ist Vergleich</h3>
+              <p>Ist-Stunden aus geprüften Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}</p>
+            </div>
+            {canEdit && !isEditingPlanned ? (
+              <button className="secondary-action" type="button" onClick={startPlannedEdit}>
+                Soll-Stunden bearbeiten
+              </button>
+            ) : null}
+          </div>
+
+          {isEditingPlanned ? (
+            <div className="site-worktime-planned-edit">
+              <label>
+                <span>Soll-Stunden für Auswertung</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="z. B. 120,5"
+                  value={plannedInput}
+                  onChange={(event) => setPlannedInput(event.target.value)}
+                />
+              </label>
+              <div className="site-worktime-planned-actions">
+                <button className="icon-button secondary" disabled={isSavingPlanned} type="button" onClick={cancelPlannedEdit}>
+                  Abbrechen
+                </button>
+                <button className="icon-button" disabled={isSavingPlanned} type="button" onClick={() => void savePlannedWorkMinutes()}>
+                  {isSavingPlanned ? "Speichert..." : "Speichern"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {plannedSaveError ? <div className="project-record-empty-state is-error">{plannedSaveError}</div> : null}
+          {plannedSaveMessage ? <div className="project-record-empty-state is-success">{plannedSaveMessage}</div> : null}
+
+          <div className="site-times-balance-grid">
+            <div>
+              <span>Soll-Stunden</span>
+              <strong>{hasPlannedMinutes ? formatMeasurementDuration(plannedMinutes ?? 0) : "Nicht hinterlegt"}</strong>
+            </div>
+            <div>
+              <span>Ist-Stunden im Zeitraum</span>
+              <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
+            </div>
+            <div>
+              <span>Differenz Ist - Soll</span>
+              <strong>{differenceMinutes !== null ? formatMeasurementDuration(differenceMinutes) : "-"}</strong>
+            </div>
+            <div>
+              <span>Verbrauch</span>
+              <strong>{usagePercent !== null ? formatMeasurementPercent(usagePercent) : "-"}</strong>
+            </div>
+            <div>
+              <span>Hinweisstatus</span>
+              <strong>
+                <StatusBadge tone={siteWorkTimeBalanceTone(balanceStatus)}>
+                  {siteWorkTimeBalanceLabel(balanceStatus)}
+                </StatusBadge>
+              </strong>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="site-times-table-card" aria-label="Geprüfte Montagezeiten">
+        <div className="site-times-table-toolbar">
+          <div>
+            <h3>Geprüfte Montagezeiten</h3>
+            <p>Finale, abrechnungsfähige Ist-Zeiten im gewählten Zeitraum</p>
+          </div>
+        </div>
         {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
         {isLoading ? <div className="project-record-empty-state">Arbeitszeiten werden geladen...</div> : null}
         {!isLoading && !error && entries.length === 0 ? (
