@@ -461,6 +461,7 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
           <MobileDocumentPreview
             preview={documentPreview}
             isDownloading={downloadingItemId === documentPreview.item.id}
+            downloadError={openError}
             onClose={clearDocumentPreview}
             onDownload={() => void handleDownloadDocument(documentPreview.item)}
           />
@@ -516,56 +517,65 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
 function MobileDocumentPreview({
   preview,
   isDownloading,
+  downloadError,
   onClose,
   onDownload,
 }: {
   preview: MobileDocumentPreviewState;
   isDownloading: boolean;
+  downloadError: string | null;
   onClose: () => void;
   onDownload: () => void;
 }) {
   const canRenderInline = preview.status === "ready" && preview.url && isMobileInlineDocumentKind(preview.kind);
+  const downloadLabel = preview.kind === "pdf" ? "PDF" : "Download";
   return (
-    <section className="mobile-document-preview" aria-label="Dokumentenvorschau">
+    <section className="mobile-document-preview" role="dialog" aria-modal="true" aria-label="Dokumentenvorschau">
       <div className="mobile-document-preview-head">
+        <button className="icon-button secondary mobile-document-preview-back" type="button" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Dokumente</span>
+        </button>
         <div>
           <span>{documentKindLabel(preview.kind)}</span>
           <h3>{preview.item.name}</h3>
           <p>{formatProjectDocumentMeta(preview.item, { includeFallbackType: false })}</p>
         </div>
-        <button className="icon-button secondary" type="button" onClick={onClose}>Schließen</button>
       </div>
 
-      {preview.status === "loading" ? (
-        <div className="empty-panel">Dokument wird geladen...</div>
-      ) : null}
+      <div className="mobile-document-preview-body">
+        {preview.status === "loading" ? (
+          <div className="empty-panel">Dokument wird geladen...</div>
+        ) : null}
 
-      {preview.status === "error" ? (
-        <div className="form-error">{preview.error || "Dokument konnte nicht geladen werden."}</div>
-      ) : null}
+        {preview.status === "error" ? (
+          <div className="form-error">{preview.error || "Dokument konnte nicht geladen werden."}</div>
+        ) : null}
 
-      {preview.status === "unsupported" ? (
-        <div className="mobile-document-preview-note">
-          Diese Datei kann mobil nicht direkt angezeigt werden. Bitte lade sie über den Baustellenplaner herunter.
-        </div>
-      ) : null}
+        {preview.status === "unsupported" ? (
+          <div className="mobile-document-preview-note">
+            Diese Datei kann mobil nicht direkt angezeigt werden. Bitte lade sie über den Baustellenplaner herunter.
+          </div>
+        ) : null}
 
-      {canRenderInline && preview.kind === "image" ? (
-        <div className="mobile-document-preview-frame is-image">
-          <img src={preview.url ?? ""} alt={preview.item.name} />
-        </div>
-      ) : null}
+        {canRenderInline && preview.kind === "image" ? (
+          <div className="mobile-document-preview-frame is-image">
+            <img src={preview.url ?? ""} alt={preview.item.name} />
+          </div>
+        ) : null}
 
-      {canRenderInline && preview.kind === "pdf" ? (
-        <div className="mobile-document-preview-frame">
-          <iframe title={preview.item.name} src={preview.url ?? ""} />
-        </div>
-      ) : null}
+        {canRenderInline && preview.kind === "pdf" ? (
+          <div className="mobile-document-preview-frame">
+            <iframe title={preview.item.name} src={preview.url ?? ""} />
+          </div>
+        ) : null}
+      </div>
 
       <button className="mobile-document-download-action" type="button" disabled={isDownloading} onClick={onDownload}>
         <Download aria-hidden="true" size={16} />
-        <span>{isDownloading ? "Lädt..." : "Datei herunterladen"}</span>
+        <span>{isDownloading ? "Lädt..." : downloadLabel}</span>
       </button>
+      {downloadError ? <div className="mobile-document-viewer-error">{downloadError}</div> : null}
     </section>
   );
 }
