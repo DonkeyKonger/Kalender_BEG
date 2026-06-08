@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     ms_graph_base_url: str = Field(
         default="https://graph.microsoft.com/v1.0", alias="MS_GRAPH_BASE_URL"
     )
+    ctrack_base_url: str | None = Field(default=None, alias="CTRACK_BASE_URL")
+    ctrack_username: str | None = Field(default=None, alias="CTRACK_USERNAME")
+    ctrack_password: str | None = Field(default=None, alias="CTRACK_PASSWORD")
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
