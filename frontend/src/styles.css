@@ -8138,54 +8138,51 @@ button.person-chip:focus-visible {
 }
 
 .time-entries-page.is-figma-times-workspace {
-  --time-bg: #f5f7fb;
+  --time-bg: #f5f7fa;
   --time-surface: #ffffff;
   --time-surface-soft: #f8fafc;
-  --time-border: #dbe4ef;
-  --time-border-soft: #e7edf5;
-  --time-text: #172033;
+  --time-border: #d1d9e6;
+  --time-border-soft: #e2e8f0;
+  --time-text: #0f172a;
   --time-muted: #64748b;
   --time-primary: #1f5f9f;
   --time-primary-soft: #e9f3ff;
   --time-success: #1f7a4d;
   --time-warning: #b7791f;
   --time-danger: #b42318;
-  gap: 14px;
+  gap: 0;
   align-content: start;
   align-items: start;
   grid-auto-rows: max-content;
+  overflow: hidden;
   min-height: calc(100vh - 112px);
   margin: -4px -6px 0;
   border: 1px solid var(--time-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--time-bg);
-  padding: 14px;
+  padding: 0;
 }
 
 .time-entries-page.is-figma-times-workspace .page-header {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--time-border);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(31, 95, 159, 0.08) 0%, rgba(31, 122, 77, 0.04) 46%, rgba(255, 255, 255, 0.96) 100%),
-    var(--time-surface);
-  padding: 18px 20px;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--time-border);
+  border-radius: 0;
+  background: var(--time-surface);
+  padding: 13px 18px;
+  box-shadow: none;
 }
 
 .time-entries-page.is-figma-times-workspace .page-header::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: linear-gradient(180deg, #1f5f9f 0%, #2f8a61 100%);
+  display: none;
 }
 
 .time-entries-page.is-figma-times-workspace .page-header h1 {
-  margin: 2px 0 0;
+  margin: 0 0 3px;
   color: var(--time-text);
-  font-size: clamp(1.55rem, 2vw, 2rem);
+  font-size: 1.18rem;
+  line-height: 1.2;
   font-weight: 900;
   letter-spacing: 0;
 }
@@ -8199,9 +8196,10 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .page-subtitle {
   max-width: 680px;
+  margin: 0;
   color: var(--time-muted);
-  font-size: 0.92rem;
-  line-height: 1.45;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs {
@@ -8215,6 +8213,17 @@ button.person-chip:focus-visible {
   gap: 0;
   padding: 0 18px;
   box-shadow: none;
+}
+
+.time-entries-page.is-figma-times-workspace > .form-error {
+  margin: 14px 14px 0;
+}
+
+.time-entries-page.is-figma-times-workspace > .time-entries-main,
+.time-entries-page.is-figma-times-workspace > .time-entries-layout {
+  box-sizing: border-box;
+  width: calc(100% - 28px);
+  margin: 14px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button {

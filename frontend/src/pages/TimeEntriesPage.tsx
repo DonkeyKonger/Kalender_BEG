@@ -816,7 +816,6 @@ export function TimeEntriesPage() {
     <section className="time-entries-page is-figma-times-workspace">
       <div className="page-header entity-page-header">
         <div>
-          <p className="eyebrow">Arbeitszeiten</p>
           <h1>Zeiten</h1>
           <p className="page-subtitle">Arbeitszeiten der Monteure wochen- oder monatsweise pruefen.</p>
         </div>
