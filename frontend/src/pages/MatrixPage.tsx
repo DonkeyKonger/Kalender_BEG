@@ -1963,7 +1963,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
               onStartAssignmentResize={(assignment, edge, event) => props.onStartAssignmentResize(row, assignment, edge, event)}
             />
             {props.saveStatus[key] && <span className={`save-dot ${props.saveStatus[key]}`} />}
-            {props.cellMessage[key] && (
+            {props.saveStatus[key] === "error" && props.cellMessage[key] && (
               <small className="cell-message">{props.cellMessage[key]}</small>
             )}
           </td>
