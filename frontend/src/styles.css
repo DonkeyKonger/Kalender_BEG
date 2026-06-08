@@ -10866,6 +10866,15 @@ button.person-chip:focus-visible {
   opacity: 0.82;
 }
 
+.mobile-measurement-card.is-empty-position {
+  background: #f1f5f9;
+  box-shadow: 0 6px 14px rgb(18 29 52 / 5%);
+}
+
+.mobile-measurement-card.is-captured-position {
+  background: #ffffff;
+}
+
 .mobile-measurement-card strong,
 .mobile-measurement-detail-head h2,
 .mobile-panel-title-row h3 {
@@ -10882,15 +10891,9 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-row-top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-}
-
-.mobile-measurement-row-top .measurement-status {
-  min-height: 20px;
-  padding: 2px 7px;
-  font-size: 0.68rem;
 }
 
 .mobile-measurement-row-quantity {

@@ -967,16 +967,23 @@ function MeasurementBatchDetail({
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "list" ? (
         <div className="mobile-measurement-list">
-          {items.map((item) => (
-            <button className="mobile-measurement-card" key={item.id} type="button" onClick={() => onSelectItem(item)}>
-              <div className="mobile-measurement-row-top">
-                <span className={`measurement-status ${mobilePositionStatusClass(item)}`}>{mobilePositionStatusLabel(item)}</span>
-                <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
-              </div>
-              <strong className="mobile-measurement-row-position">{item.position}</strong>
-              <span className="mobile-measurement-row-description">{item.description}</span>
-            </button>
-          ))}
+          {items.map((item) => {
+            const isCaptured = isMobileMeasurementItemCaptured(item);
+            return (
+              <button
+                className={isCaptured ? "mobile-measurement-card is-captured-position" : "mobile-measurement-card is-empty-position"}
+                key={item.id}
+                type="button"
+                onClick={() => onSelectItem(item)}
+              >
+                <div className="mobile-measurement-row-top">
+                  <strong className="mobile-measurement-row-position">{item.position}</strong>
+                  <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
+                </div>
+                <span className="mobile-measurement-row-description">{item.description}</span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
@@ -1405,14 +1412,6 @@ function mobileStatusLabel(status: string): string {
     return "Erfasst";
   }
   return "Offen";
-}
-
-function mobilePositionStatusLabel(item: MobileMeasurementItem): string {
-  return isMobileMeasurementItemCaptured(item) ? "Erfasst" : "Offen";
-}
-
-function mobilePositionStatusClass(item: MobileMeasurementItem): string {
-  return isMobileMeasurementItemCaptured(item) ? "mobile-status-edited" : "mobile-status-open";
 }
 
 function isMobileMeasurementItemCaptured(item: MobileMeasurementItem): boolean {
