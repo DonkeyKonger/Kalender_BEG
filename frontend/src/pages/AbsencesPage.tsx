@@ -31,11 +31,19 @@ type AbsenceSelectionRange = {
   endDate: string;
 };
 type ActiveAbsenceSelection = AbsenceSelectionRange & {
+  anchorKey: string;
+  anchorRect: AbsencePopupAnchorRect;
   isSelecting: boolean;
 };
 type AbsenceSelectionPopup = AbsenceSelectionRange & {
+  anchorKey: string;
   x: number;
   y: number;
+};
+type AbsencePopupAnchorRect = {
+  bottom: number;
+  left: number;
+  top: number;
 };
 type AbsenceCell = {
   date: string;
@@ -156,16 +164,17 @@ export function AbsencesPage() {
       return;
     }
 
-    function handleMouseUp(event: MouseEvent): void {
+    function handleMouseUp(): void {
       setActiveSelection((current) => {
         if (!current) {
           return null;
         }
         setSelectionPopup({
+          anchorKey: current.anchorKey,
           personId: current.personId,
           startDate: current.startDate,
           endDate: current.endDate,
-          ...boundedAbsencePopupPosition(event.clientX, event.clientY),
+          ...boundedAbsencePopupPosition(current.anchorRect),
         });
         return { ...current, isSelecting: false };
       });
@@ -371,16 +380,29 @@ export function AbsencesPage() {
     setDrawer(null);
   }
 
-  function startSelection(personId: number, date: string, event: ReactMouseEvent) {
+  function startSelection(personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) {
     if (!canEdit || event.button !== 0) {
       return;
     }
     event.preventDefault();
+    const anchorKey = buildAbsenceCellKey(personId, date);
+    if (selectionPopup?.anchorKey === anchorKey) {
+      setActiveSelection(null);
+      setSelectionPopup(null);
+      return;
+    }
     setDrawer(null);
     setError(null);
     setMessage(null);
     setSelectionPopup(null);
-    setActiveSelection({ personId, startDate: date, endDate: date, isSelecting: true });
+    setActiveSelection({
+      anchorKey,
+      anchorRect: toAbsencePopupAnchorRect(event.currentTarget.getBoundingClientRect()),
+      personId,
+      startDate: date,
+      endDate: date,
+      isSelecting: true,
+    });
   }
 
   function extendSelection(personId: number, date: string) {
@@ -600,7 +622,7 @@ function AbsenceMatrix({
   onDeleteAbsenceDay: (absence: Absence, date: string) => void;
   onExtendSelection: (personId: number, date: string) => void;
   onOpenAbsence: (absenceId: number) => void;
-  onStartSelection: (personId: number, date: string, event: ReactMouseEvent) => void;
+  onStartSelection: (personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) => void;
 }) {
   if (!rows.length) {
     return (
@@ -831,6 +853,18 @@ function hasAbsenceForPersonDate(absences: Absence[], personId: number, date: st
   );
 }
 
+function buildAbsenceCellKey(personId: number, date: string): string {
+  return `${personId}|${date}`;
+}
+
+function toAbsencePopupAnchorRect(rect: DOMRect): AbsencePopupAnchorRect {
+  return {
+    bottom: rect.bottom,
+    left: rect.left,
+    top: rect.top,
+  };
+}
+
 function absenceOverlapsDays(absence: Absence, days: string[]): boolean {
   const firstDay = days[0];
   const lastDay = days.at(-1);
@@ -959,16 +993,22 @@ function formatAbsenceSelectionLabel(selection: AbsenceSelectionRange): string {
   return `${formatDate(startDate)} - ${formatDate(endDate)}`;
 }
 
-function boundedAbsencePopupPosition(clientX: number, clientY: number): { x: number; y: number } {
+function boundedAbsencePopupPosition(rect: AbsencePopupAnchorRect): { x: number; y: number } {
   const popoverWidth = 240;
   const popoverHeight = 238;
   const spacing = 12;
+  const gap = 6;
   if (typeof window === "undefined") {
-    return { x: clientX, y: clientY };
+    return { x: rect.left, y: rect.bottom + gap };
   }
+  const maxLeft = Math.max(spacing, window.innerWidth - popoverWidth - spacing);
+  const maxTop = Math.max(spacing, window.innerHeight - popoverHeight - spacing);
+  const preferredTop = rect.bottom + gap;
+  const fallbackTop = rect.top - popoverHeight - gap;
+  const top = preferredTop + popoverHeight > window.innerHeight - spacing ? fallbackTop : preferredTop;
   return {
-    x: Math.min(Math.max(clientX, spacing), Math.max(spacing, window.innerWidth - popoverWidth - spacing)),
-    y: Math.min(Math.max(clientY, spacing), Math.max(spacing, window.innerHeight - popoverHeight - spacing)),
+    x: Math.min(Math.max(rect.left, spacing), maxLeft),
+    y: Math.min(Math.max(top, spacing), maxTop),
   };
 }
 
