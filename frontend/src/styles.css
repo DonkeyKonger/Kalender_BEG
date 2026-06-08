@@ -10144,6 +10144,12 @@ button.person-chip:focus-visible {
   color: #7c2d12;
 }
 
+.site-map-vehicle-label {
+  border-color: rgb(94 234 212 / 78%);
+  background: rgb(240 253 250 / 92%);
+  color: #0f766e;
+}
+
 .site-map-marker-label::before {
   display: none;
 }

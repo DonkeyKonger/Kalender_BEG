@@ -226,7 +226,10 @@ export function SiteMapPage() {
   const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
   const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
   const visiblePeopleForMap = useMemo(() => showPersons ? filteredPeople : [], [filteredPeople, showPersons]);
-  const visibleVehiclesForMap = useMemo(() => showVehicles ? vehicles : [], [showVehicles, vehicles]);
+  const visibleVehiclesForMap = useMemo(
+    () => showVehicles ? vehicles.filter(hasValidVehicleCoordinates) : [],
+    [showVehicles, vehicles],
+  );
   const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerState) => {
     setVisibleMarkers((current) => areVisibleMarkerStatesEqual(current, nextMarkers) ? current : nextMarkers);
   }, []);
@@ -274,6 +277,12 @@ export function SiteMapPage() {
         </label>
         {isLoadingPeople && <span className="site-map-loading-note">Personen werden geladen...</span>}
         {isLoadingVehicles && <span className="site-map-loading-note">Fahrzeuge werden geladen...</span>}
+        {showVehicles && !isLoadingVehicles && vehicleData && vehicles.length === 0 ? (
+          <span className="site-map-loading-note">Keine Fahrzeugpositionen gespeichert.</span>
+        ) : null}
+        {showVehicles && !isLoadingVehicles && vehicles.length > 0 && visibleVehiclesForMap.length === 0 ? (
+          <span className="site-map-loading-note">Fahrzeugpositionen ohne gueltige Koordinaten.</span>
+        ) : null}
       </section>
 
       {error ? <p className="form-error">{error}</p> : null}
@@ -368,17 +377,18 @@ export function SiteMapPage() {
             })}
             {visibleVehiclesForMap.map((item) => {
               const isSelected = selectedVehicleId === item.vehicle.id;
+              const center = vehicleMarkerCenter(item);
               return (
                 <CircleMarker
                   key={`vehicle-${item.vehicle.id}`}
-                  center={[item.position.latitude, item.position.longitude]}
-                  radius={isSelected ? 6.5 : 4.6}
+                  center={center}
+                  radius={isSelected ? 9 : 7}
                   pathOptions={{
-                    color: isSelected ? "#ffffff" : vehicleMarkerFill(),
+                    color: "#ffffff",
                     fillColor: vehicleMarkerFill(),
-                    fillOpacity: 0.86,
-                    opacity: 0.95,
-                    weight: isSelected ? 2 : 0,
+                    fillOpacity: 0.94,
+                    opacity: 1,
+                    weight: isSelected ? 3 : 2,
                   }}
                   eventHandlers={{
                     click: () => {
@@ -392,7 +402,7 @@ export function SiteMapPage() {
                     direction="top"
                     offset={[0, -9]}
                     opacity={1}
-                    className="site-map-marker-label site-map-marker-label-hover"
+                    className="site-map-marker-label site-map-marker-label-hover site-map-vehicle-label"
                   >
                     {vehicleMarkerLabel(item)}
                   </Tooltip>
@@ -519,6 +529,21 @@ function vehicleMarkerLabel(item: VehicleLatestPositionItem): string {
     || item.vehicle.vehicle_registration
     || item.vehicle.fleet_number
     || `Fahrzeug ${item.vehicle.ctrack_node_id ?? item.vehicle.external_id}`;
+}
+
+function hasValidVehicleCoordinates(item: VehicleLatestPositionItem): boolean {
+  const latitude = Number(item.position.latitude);
+  const longitude = Number(item.position.longitude);
+  return Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180;
+}
+
+function vehicleMarkerCenter(item: VehicleLatestPositionItem): [number, number] {
+  return [Number(item.position.latitude), Number(item.position.longitude)];
 }
 
 function truncateLabel(value: string, max = 24): string {
