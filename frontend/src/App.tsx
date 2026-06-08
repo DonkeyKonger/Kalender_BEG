@@ -1,7 +1,8 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./layout/AppShell";
 import { AbsencesPage } from "./pages/AbsencesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
@@ -28,7 +29,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
+          <Route index element={<HomeRoute />} />
           <Route
             element={<ProtectedRoute roles={["admin", "project_manager", "office"]} />}
           >
@@ -63,4 +64,12 @@ export function App() {
       </Route>
     </Routes>
   );
+}
+
+function HomeRoute() {
+  const { user } = useAuth();
+  if (user?.role === "monteur") {
+    return <Navigate to="/me/assignments" replace />;
+  }
+  return <DashboardPage />;
 }
