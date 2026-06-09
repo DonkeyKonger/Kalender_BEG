@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -59,6 +59,7 @@ PERSON_LOCATION_DEPENDENCY_FIELDS = (
     "address_latitude",
     "address_longitude",
 )
+DELETED_PERSON_LABEL = "gelöscht"
 
 
 class PersonService:
@@ -133,49 +134,20 @@ class PersonService:
         person = self.people.get(person_id)
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
-        return "deactivate" if self._person_has_dependencies(person) else "delete"
+        return "delete"
 
     def remove_person(self, person_id: int, user_id: int) -> tuple[str, Person | None]:
         person = self.people.get(person_id)
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
-        if self._person_has_dependencies(person):
-            return "deactivated", self._deactivate_person(person, user_id)
-
-        old_value = person_snapshot(person)
-        self.audit.record(
-            user_id=user_id,
-            action="person.deleted",
-            entity_type="person",
-            entity_id=person.id,
-            old_value=old_value,
-            new_value=None,
-        )
-        self.db.delete(person)
-        self.db.commit()
+        self._soft_delete_person(person, user_id)
         return "deleted", None
 
     def delete_person(self, person_id: int, user_id: int) -> None:
         person = self.people.get(person_id)
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
-        if self._person_has_hard_delete_references(person):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Kann nicht geloescht werden, weil der Eintrag noch verwendet wird.",
-            )
-
-        old_value = person_snapshot(person)
-        self.audit.record(
-            user_id=user_id,
-            action="person.deleted",
-            entity_type="person",
-            entity_id=person.id,
-            old_value=old_value,
-            new_value=None,
-        )
-        self.db.delete(person)
-        self.db.commit()
+        self._soft_delete_person(person, user_id)
 
     def _deactivate_person(self, person: Person, user_id: int) -> Person:
         if not person.is_active:
@@ -185,6 +157,39 @@ class PersonService:
         self.audit.record(
             user_id=user_id,
             action="person.deactivated",
+            entity_type="person",
+            entity_id=person.id,
+            old_value=old_value,
+            new_value=person_snapshot(person),
+        )
+        self.db.commit()
+        self.db.refresh(person)
+        return person
+
+    def _soft_delete_person(self, person: Person, user_id: int) -> Person:
+        old_value = person_snapshot(person)
+        person.first_name = DELETED_PERSON_LABEL
+        person.last_name = DELETED_PERSON_LABEL
+        person.display_name = DELETED_PERSON_LABEL
+        person.short_code = DELETED_PERSON_LABEL
+        person.is_active = False
+        person.email = None
+        person.phone = None
+        person.address_postal_code = None
+        person.address_city = None
+        person.address_street = None
+        person.address_house_number = None
+        person.address_extra = None
+        person.address_formatted = None
+        person.address_latitude = None
+        person.address_longitude = None
+        person.address_location_status = SiteLocationStatus.UNCHECKED
+        person.company_phone_device_id = None
+        person.notes = None
+        person.deleted_at = datetime.now(timezone.utc)
+        self.audit.record(
+            user_id=user_id,
+            action="person.deleted",
             entity_type="person",
             entity_id=person.id,
             old_value=old_value,
@@ -261,6 +266,7 @@ def person_snapshot(person: Person) -> dict:
         "short_code": person.short_code,
         "person_type": person.person_type.value,
         "is_active": person.is_active,
+        "deleted_at": person.deleted_at.isoformat() if person.deleted_at else None,
         "email": person.email,
         "phone": person.phone,
         "address_postal_code": getattr(person, "address_postal_code", None),

@@ -10,18 +10,22 @@ class PersonRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get(self, person_id: int) -> Person | None:
-        return self.db.get(Person, person_id)
+    def get(self, person_id: int, *, include_deleted: bool = False) -> Person | None:
+        person = self.db.get(Person, person_id)
+        if person is not None and person.deleted_at is not None and not include_deleted:
+            return None
+        return person
 
     def list(self, is_active: bool | None = None) -> list[Person]:
-        statement = select(Person).order_by(Person.display_name)
+        statement = select(Person).where(Person.deleted_at.is_(None)).order_by(Person.display_name)
         if is_active is not None:
             statement = statement.where(Person.is_active == is_active)
         return list(self.db.scalars(statement))
 
     def find_by_display_or_short_code(self, value: str) -> list[Person]:
         statement = select(Person).where(
-            (Person.display_name == value) | (Person.short_code == value)
+            Person.deleted_at.is_(None),
+            (Person.display_name == value) | (Person.short_code == value),
         )
         return list(self.db.scalars(statement))
 

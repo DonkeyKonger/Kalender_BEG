@@ -23,6 +23,7 @@ export type Person = {
   address_longitude: number | null;
   address_location_status: PersonLocationStatus;
   notes: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };

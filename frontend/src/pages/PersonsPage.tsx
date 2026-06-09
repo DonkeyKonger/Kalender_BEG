@@ -144,7 +144,7 @@ export function PersonsPage() {
 
   async function deletePerson(personId: number) {
     const confirmed = window.confirm(
-      "Person wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.",
+      "Diese Person wird gelöscht. Bestehende Einsätze, Zeiten und Abwesenheiten bleiben historisch erhalten und werden künftig als \"gelöscht\" angezeigt. Wirklich löschen?",
     );
     if (!confirmed) {
       return;
@@ -154,7 +154,7 @@ export function PersonsPage() {
     setError(null);
     setMessage(null);
     try {
-      await api.deletePerson(personId);
+      await api.removePerson(personId);
       setPeople((current) => current.filter((person) => person.id !== personId));
       setDrafts((current) => {
         const next = { ...current };
@@ -163,7 +163,7 @@ export function PersonsPage() {
       });
       setDrawer(null);
       setIsEditingPerson(false);
-      setMessage("Person geloescht.");
+      setMessage("Person gelöscht. Historische Daten bleiben erhalten.");
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht geloescht werden."));
     } finally {

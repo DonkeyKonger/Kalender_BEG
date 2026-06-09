@@ -54,6 +54,7 @@ class PersonUpdate(BaseModel):
 
 class PersonRead(PersonBase):
     id: int
+    deleted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

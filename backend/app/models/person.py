@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Enum, Float, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -36,6 +38,7 @@ class Person(TimestampMixin, Base):
     )
     company_phone_device_id: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     users = relationship("User", back_populates="person")
     assignments = relationship("Assignment", back_populates="person")

@@ -2,6 +2,8 @@ from app.models.person import Person
 
 
 def calendar_short_code(person: Person) -> str:
+    if getattr(person, "deleted_at", None) is not None:
+        return "gelöscht"
     display_name = person.display_name.strip()
     display_parts = name_parts(display_name)
     if len(display_parts) >= 2:
