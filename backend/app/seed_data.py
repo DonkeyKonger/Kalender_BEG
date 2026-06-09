@@ -187,7 +187,7 @@ def get_or_create_absence(
     end_date: date,
     created_by_user_id: int,
     note: str | None = None,
-) -> Absence:
+) -> Absence | None:
     statement = select(Absence).filter_by(
         person_id=person.id,
         absence_type=absence_type,
@@ -198,6 +198,15 @@ def get_or_create_absence(
     absence = db.scalar(statement)
     if absence is not None:
         return absence
+    if seed_absence_was_changed_or_removed(
+        db,
+        person_id=person.id,
+        absence_type=absence_type,
+        start_date=start_date,
+        end_date=end_date,
+        note=note,
+    ):
+        return None
 
     absence = Absence(
         person_id=person.id,
@@ -212,6 +221,35 @@ def get_or_create_absence(
     db.add(absence)
     db.flush()
     return absence
+
+
+def seed_absence_was_changed_or_removed(
+    db: Session,
+    *,
+    person_id: int,
+    absence_type: AbsenceType,
+    start_date: date,
+    end_date: date,
+    note: str | None,
+) -> bool:
+    signature = {
+        "person_id": person_id,
+        "absence_type": absence_type.value,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "note": note,
+    }
+    statement = select(AuditLog.old_value_json).where(
+        AuditLog.entity_type == "absence",
+        AuditLog.action.in_(["absence.deleted", "absence.updated"]),
+    )
+    return any(absence_seed_signature_matches(old_value, signature) for old_value in db.scalars(statement))
+
+
+def absence_seed_signature_matches(old_value: dict | None, signature: dict) -> bool:
+    if not isinstance(old_value, dict):
+        return False
+    return all(old_value.get(key) == expected for key, expected in signature.items())
 
 
 def get_or_create_vehicle(

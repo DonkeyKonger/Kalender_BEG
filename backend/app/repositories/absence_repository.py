@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
+from app.models.enums import AbsenceStatus
+from app.models.person import Person
 
 
 class AbsenceRepository:
@@ -22,7 +24,13 @@ class AbsenceRepository:
     ) -> list[Absence]:
         statement = (
             select(Absence)
+            .join(Absence.person)
             .options(selectinload(Absence.person))
+            .where(
+                Absence.status == AbsenceStatus.ACTIVE,
+                Person.deleted_at.is_(None),
+                Person.is_active.is_(True),
+            )
             .order_by(Absence.start_date, Absence.id)
         )
         if start is not None and end is not None:
