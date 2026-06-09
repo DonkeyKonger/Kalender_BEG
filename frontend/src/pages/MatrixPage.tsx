@@ -1743,20 +1743,22 @@ function MatrixTable(props: MatrixTableProps) {
 type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<string, HolidayInfo> };
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
-  const days = props.matrix.days.map((day) => day.date);
-  const absenceItemsByDate = new Map(
-    days.map((date) => [date, absencePlanningItemsForDay(props.absences, date)]),
-  );
-  const rowCount = Math.max(
-    1,
-    ...Array.from(absenceItemsByDate.values()).map((items) => {
-      if (items.length > MAX_VISIBLE_ABSENCES_PER_DAY) {
-        return MAX_VISIBLE_ABSENCES_PER_DAY + 1;
-      }
-      return items.length;
-    }),
-  );
-  const rowStyle = { "--absence-rows": rowCount } as CSSProperties;
+  const absencePlanning = useMemo(() => {
+    const itemsByDate = new Map(
+      props.matrix.days.map((day) => [day.date, absencePlanningItemsForDay(props.absences, day.date)]),
+    );
+    const rowCount = Math.max(
+      1,
+      ...Array.from(itemsByDate.values()).map((items) => {
+        if (items.length > MAX_VISIBLE_ABSENCES_PER_DAY) {
+          return MAX_VISIBLE_ABSENCES_PER_DAY + 1;
+        }
+        return items.length;
+      }),
+    );
+    return { itemsByDate, rowCount };
+  }, [props.absences, props.matrix.days]);
+  const rowStyle = { "--absence-rows": absencePlanning.rowCount } as CSSProperties;
 
   return (
     <tr className="matrix-absence-row" style={rowStyle}>
@@ -1771,7 +1773,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
       <td className="sticky-col status-col matrix-absence-empty" />
       {props.matrix.days.map((day, cellIndex) => {
         const date = day.date;
-        const dayAbsenceItems = absenceItemsByDate.get(date) ?? [];
+        const dayAbsenceItems = absencePlanning.itemsByDate.get(date) ?? [];
         const visibleAbsenceItems = dayAbsenceItems.slice(0, MAX_VISIBLE_ABSENCES_PER_DAY);
         const hiddenAbsenceCount = Math.max(0, dayAbsenceItems.length - visibleAbsenceItems.length);
         const hasOverflow = hiddenAbsenceCount > 0;
@@ -2129,11 +2131,12 @@ function CellDisplay({
       } as CSSProperties}
     >
       {cell.assignments.map((assignment) => {
-        const span = assignmentRunSpan(rowCells, cellIndex, assignment.id);
+        const runKey = assignmentRunKey(assignment.id, cellIndex);
+        const span = assignmentRunLayout.spansByRunKey.get(runKey) ?? 0;
         if (span === 0) {
           return null;
         }
-        const layer = assignmentRunLayout.layersByRunKey.get(assignmentRunKey(assignment.id, cellIndex)) ?? 0;
+        const layer = assignmentRunLayout.layersByRunKey.get(runKey) ?? 0;
         const segmentStartDate = cell.date;
         const segmentEndDate = rowCells[cellIndex + span - 1]?.date ?? cell.date;
         const absenceConflict = assignmentAbsenceConflict(cell, assignment);
@@ -2581,11 +2584,13 @@ function assignmentRunSpan(cells: MatrixCell[], cellIndex: number, assignmentId:
 type AssignmentRunLayout = {
   layersByRunKey: Map<string, number>;
   maxLayers: number;
+  spansByRunKey: Map<string, number>;
 };
 
 function buildAssignmentRunLayout(cells: MatrixCell[]): AssignmentRunLayout {
   const layerEndIndexes: number[] = [];
   const layersByRunKey = new Map<string, number>();
+  const spansByRunKey = new Map<string, number>();
 
   cells.forEach((cell, cellIndex) => {
     cell.assignments.forEach((assignment) => {
@@ -2600,13 +2605,16 @@ function buildAssignmentRunLayout(cells: MatrixCell[]): AssignmentRunLayout {
         layer += 1;
       }
       layerEndIndexes[layer] = endIndex;
-      layersByRunKey.set(assignmentRunKey(assignment.id, cellIndex), layer);
+      const runKey = assignmentRunKey(assignment.id, cellIndex);
+      layersByRunKey.set(runKey, layer);
+      spansByRunKey.set(runKey, span);
     });
   });
 
   return {
     layersByRunKey,
     maxLayers: Math.max(1, layerEndIndexes.length),
+    spansByRunKey,
   };
 }
 
