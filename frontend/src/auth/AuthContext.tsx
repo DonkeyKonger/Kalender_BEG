@@ -16,7 +16,8 @@ type AuthStatus = "loading" | "authenticated" | "anonymous";
 type AuthContextValue = {
   user: CurrentUser | null;
   status: AuthStatus;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<CurrentUser>;
+  changePassword: (newPassword: string) => Promise<CurrentUser>;
   logout: () => Promise<void>;
 };
 
@@ -56,6 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUser = await api.me();
     setUser(currentUser);
     setStatus("authenticated");
+    return currentUser;
+  }, []);
+
+  const changePassword = useCallback(async (newPassword: string) => {
+    const currentUser = await api.changePassword(newPassword);
+    setUser(currentUser);
+    setStatus("authenticated");
+    return currentUser;
   }, []);
 
   const logout = useCallback(async () => {
@@ -69,8 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, login, logout }),
-    [user, status, login, logout],
+    () => ({ user, status, login, changePassword, logout }),
+    [user, status, login, changePassword, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

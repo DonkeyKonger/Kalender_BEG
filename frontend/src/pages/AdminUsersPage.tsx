@@ -104,7 +104,7 @@ export function AdminUsersPage() {
       setDrafts((current) => ({ ...current, [created.id]: toEditableUser(created) }));
       setCreateForm(emptyCreateForm);
       setDrawer(null);
-      setMessage("Benutzer angelegt.");
+      setMessage("Benutzer angelegt. Beim ersten Login muss ein eigenes Passwort festgelegt werden.");
     } catch (requestError) {
       setError(readApiError(requestError, "Benutzer konnte nicht angelegt werden."));
     } finally {
@@ -154,7 +154,7 @@ export function AdminUsersPage() {
         ...current,
         [userId]: { ...toEditableUser(updated), reset_password: "" },
       }));
-      setMessage("Passwort gesetzt.");
+      setMessage("Temporaeres Passwort gesetzt. Beim naechsten Login muss ein eigenes Passwort festgelegt werden.");
     } catch (requestError) {
       setError(readApiError(requestError, "Passwort konnte nicht gesetzt werden."));
     } finally {
@@ -409,7 +409,7 @@ export function AdminUsersPage() {
               onClick={() => void resetPassword(selectedUser.id)}
             >
               <KeyRound aria-hidden="true" size={16} />
-              <span>Passwort setzen</span>
+              <span>Benutzerpasswort zuruecksetzen</span>
             </button>
           </>
         ) : undefined}
@@ -422,7 +422,7 @@ export function AdminUsersPage() {
               onChange={(values) => updateDraft(selectedUser.id, values)}
             />
             <label className="drawer-field">
-              <span>Neues Passwort</span>
+              <span>Neues temporaeres Startpasswort</span>
               <input
                 type="password"
                 value={selectedDraft.reset_password}

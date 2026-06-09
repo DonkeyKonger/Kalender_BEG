@@ -36,6 +36,7 @@ class UserService:
             password_hash=hash_password(payload.password),
             role=payload.role,
             is_active=payload.is_active,
+            must_change_password=True,
             person_id=payload.person_id,
         )
         self.users.add(user)
@@ -78,6 +79,15 @@ class UserService:
     def reset_password(self, user_id: int, payload: UserPasswordReset) -> User:
         user = self._get_user(user_id)
         user.password_hash = hash_password(payload.password)
+        user.must_change_password = True
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def change_own_password(self, user_id: int, new_password: str) -> User:
+        user = self._get_user(user_id)
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
         self.db.commit()
         self.db.refresh(user)
         return user

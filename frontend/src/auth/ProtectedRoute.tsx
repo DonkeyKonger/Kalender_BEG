@@ -3,7 +3,13 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import type { UserRole } from "../types/auth";
 
-export function ProtectedRoute({ roles }: { roles?: UserRole[] }) {
+export function ProtectedRoute({
+  roles,
+  allowPasswordChange = false,
+}: {
+  roles?: UserRole[];
+  allowPasswordChange?: boolean;
+}) {
   const { user, status } = useAuth();
   const location = useLocation();
 
@@ -13,6 +19,10 @@ export function ProtectedRoute({ roles }: { roles?: UserRole[] }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (user.must_change_password && !allowPasswordChange) {
+    return <Navigate to="/change-password" replace state={{ from: location }} />;
   }
 
   if (roles && !roles.includes(user.role)) {

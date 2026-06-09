@@ -42,7 +42,7 @@ def get_current_user(
 
 
 def require_roles(*roles: UserRole) -> Callable[[User], User]:
-    def dependency(current_user: User = Depends(get_current_user)) -> User:
+    def dependency(current_user: User = Depends(get_current_app_user)) -> User:
         if current_user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -51,6 +51,15 @@ def require_roles(*roles: UserRole) -> Callable[[User], User]:
         return current_user
 
     return dependency
+
+
+def get_current_app_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Passwortwechsel erforderlich.",
+        )
+    return current_user
 
 
 def require_admin(current_user: User = Depends(require_roles(UserRole.ADMIN))) -> User:

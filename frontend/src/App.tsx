@@ -9,7 +9,7 @@ import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
-import { LoginPage } from "./pages/LoginPage";
+import { LoginPage, PasswordChangePage } from "./pages/LoginPage";
 import { MobileAssignmentDetailPage } from "./pages/MobileAssignmentDetailPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
@@ -33,6 +33,9 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute allowPasswordChange />}>
+        <Route path="/change-password" element={<PasswordChangePage />} />
+      </Route>
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route index element={<HomeRoute />} />

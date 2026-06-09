@@ -8,9 +8,10 @@ from app.api.dependencies import get_current_user, oauth2_scheme
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.schemas.auth import CurrentUserResponse, LoginRequest, TokenResponse
+from app.schemas.auth import CurrentUserResponse, LoginRequest, PasswordChangeRequest, TokenResponse
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthenticationError, AuthService, InactiveUserError
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,7 +32,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
             detail="Der Benutzer ist deaktiviert.",
         ) from None
 
-    return TokenResponse(access_token=auth_service.create_user_token(user))
+    return TokenResponse(
+        access_token=auth_service.create_user_token(user),
+        must_change_password=getattr(user, "must_change_password", False),
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -69,7 +73,20 @@ def refresh_token(
             detail="Der Benutzer ist deaktiviert.",
         )
 
-    return TokenResponse(access_token=AuthService(db).create_user_token(user))
+    return TokenResponse(
+        access_token=AuthService(db).create_user_token(user),
+        must_change_password=getattr(user, "must_change_password", False),
+    )
+
+
+@router.post("/change-password", response_model=CurrentUserResponse)
+def change_password(
+    payload: PasswordChangeRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CurrentUserResponse:
+    user = UserService(db).change_own_password(current_user.id, payload.new_password)
+    return CurrentUserResponse.model_validate(user)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

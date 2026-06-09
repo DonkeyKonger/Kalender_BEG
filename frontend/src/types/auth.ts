@@ -6,10 +6,12 @@ export type CurrentUser = {
   display_name: string;
   role: UserRole;
   is_active: boolean;
+  must_change_password: boolean;
   person_id: number | null;
 };
 
 export type LoginResponse = {
   access_token: string;
   token_type: "bearer";
+  must_change_password: boolean;
 };

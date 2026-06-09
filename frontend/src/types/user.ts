@@ -6,6 +6,7 @@ export type AdminUser = {
   display_name: string;
   role: UserRole;
   is_active: boolean;
+  must_change_password: boolean;
   person_id: number | null;
   last_login_at: string | null;
   created_at: string;

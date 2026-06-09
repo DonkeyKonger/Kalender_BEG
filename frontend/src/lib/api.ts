@@ -248,6 +248,13 @@ export const api = {
     return request<CurrentUser>("/auth/me");
   },
 
+  async changePassword(newPassword: string): Promise<CurrentUser> {
+    return request<CurrentUser>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ new_password: newPassword }),
+    });
+  },
+
   async logout(): Promise<void> {
     return request<void>("/auth/logout", { method: "POST" }, false);
   },
