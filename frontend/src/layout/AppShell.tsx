@@ -15,7 +15,9 @@ export function AppShell() {
     <div className="app-shell">
       <aside className="sidebar" aria-label="Hauptnavigation">
         <div className="brand-block">
-          <span className="brand-mark">KB</span>
+          <span className="brand-mark brand-logo-mark">
+            <img src="/beg-logo.png" alt="BEG Logo" />
+          </span>
           <div className="brand-copy">
             <p className="brand-name">Kalender Baustellen</p>
             <p className="brand-subtitle">Einsatzplanung</p>

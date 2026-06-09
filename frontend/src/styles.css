@@ -75,6 +75,19 @@ button:disabled {
   height: 48px;
 }
 
+.brand-logo-mark {
+  overflow: hidden;
+  background: #ffffff;
+  padding: 3px;
+}
+
+.brand-logo-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .login-heading-block h1,
 .login-heading-block p,
 .brand-name,
@@ -181,6 +194,10 @@ button:disabled {
 .sidebar .brand-mark {
   background: linear-gradient(135deg, #1b6fbb 0%, #0b4b8f 100%);
   box-shadow: 0 10px 22px rgb(0 0 0 / 18%);
+}
+
+.sidebar .brand-logo-mark {
+  background: #ffffff;
 }
 
 .sidebar .brand-subtitle {
