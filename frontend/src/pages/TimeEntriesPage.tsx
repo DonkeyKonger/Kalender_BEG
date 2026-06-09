@@ -2149,24 +2149,32 @@ function reviewRowsForStatus(
   allEntries: TimeEntry[],
   status: ReviewSummaryFilter,
 ): TimeReviewTableRow[] {
-  if (status === "all") {
-    return [
-      ...allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Passt", "active")),
-      ...openIssues.map(timeReviewIssueToTableRow),
-      ...allEntries
-        .filter((entry) => entry.time_review_status !== "open")
-        .map((entry) => timeEntryToTableRow(entry, finalStatusLabel(entry), "active")),
-    ];
-  }
   if (status === "needs_review") {
     return openIssues.map(timeReviewIssueToTableRow);
   }
-  if (status === "matches") {
-    return allEntries.filter(isAutoPlausibleEntry).map((entry) => timeEntryToTableRow(entry, "Passt", "active"));
+
+  const autoPlausibleRows: TimeReviewTableRow[] = [];
+  const verifiedRows: TimeReviewTableRow[] = [];
+
+  for (const entry of allEntries) {
+    if (isAutoPlausibleEntry(entry)) {
+      autoPlausibleRows.push(timeEntryToTableRow(entry, "Passt", "active"));
+    } else if (entry.time_review_status !== "open") {
+      verifiedRows.push(timeEntryToTableRow(entry, finalStatusLabel(entry), "active"));
+    }
   }
-  return allEntries
-    .filter((entry) => entry.time_review_status !== "open")
-    .map((entry) => timeEntryToTableRow(entry, finalStatusLabel(entry), "active"));
+
+  if (status === "all") {
+    return [
+      ...autoPlausibleRows,
+      ...openIssues.map(timeReviewIssueToTableRow),
+      ...verifiedRows,
+    ];
+  }
+  if (status === "matches") {
+    return autoPlausibleRows;
+  }
+  return verifiedRows;
 }
 
 function timeReviewIssueToTableRow(issue: TimeReviewIssue): TimeReviewTableRow {
@@ -2392,6 +2400,10 @@ function formatHumanDeviation(minutes: number | null): string {
 function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntry[]) {
   let autoPlausible = 0;
   let verified = 0;
+  let needsReview = 0;
+  let critical = 0;
+  let notVerifiable = 0;
+
   for (const entry of entries) {
     if (entry.time_review_status !== "open") {
       verified += 1;
@@ -2405,15 +2417,24 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
       autoPlausible += 1;
     }
   }
+  for (const issue of openIssues) {
+    if (issue.status === "needs_review") {
+      needsReview += 1;
+    } else if (issue.status === "critical") {
+      critical += 1;
+    } else if (issue.status === "not_verifiable") {
+      notVerifiable += 1;
+    }
+  }
   const reviewRecommended = openIssues.length;
   return {
     all: autoPlausible + reviewRecommended + verified,
     autoPlausible,
     verified,
     reviewRecommended,
-    needsReview: openIssues.filter((issue) => issue.status === "needs_review").length,
-    critical: openIssues.filter((issue) => issue.status === "critical").length,
-    notVerifiable: openIssues.filter((issue) => issue.status === "not_verifiable").length,
+    needsReview,
+    critical,
+    notVerifiable,
   };
 }
 
