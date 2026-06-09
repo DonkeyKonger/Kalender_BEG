@@ -15,11 +15,9 @@ class ExternalPersonService:
         if not cleaned:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Externer Name fehlt.")
 
-        matches = self.people.find_by_display_or_short_code(cleaned)
-        if len(matches) > 1:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Eingabe ist nicht eindeutig.")
-        if len(matches) == 1:
-            return matches[0]
+        existing = self.people.find_active_external_by_display_name(cleaned)
+        if existing is not None:
+            return existing
 
         name_parts = external_person_name_parts(cleaned)
         person = Person(

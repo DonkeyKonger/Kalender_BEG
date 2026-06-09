@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
-from app.models.enums import SiteLocationStatus
+from app.models.enums import PersonType, SiteLocationStatus
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.repositories.person_repository import PersonRepository
-from app.schemas.person import PersonCreate, PersonMapItem, PersonMapProjectManager, PersonMapResponse, PersonUpdate
+from app.schemas.person import ExternalPersonCreate, PersonCreate, PersonMapItem, PersonMapProjectManager, PersonMapResponse, PersonUpdate
 from app.services.audit_service import AuditService
 from app.services.geo_service import has_valid_coordinates
 from app.services.person_display import calendar_short_code
@@ -60,6 +60,7 @@ PERSON_LOCATION_DEPENDENCY_FIELDS = (
     "address_longitude",
 )
 DELETED_PERSON_LABEL = "gelöscht"
+EXTERNAL_INACTIVITY_DAYS = 62
 
 
 class PersonService:
@@ -69,6 +70,8 @@ class PersonService:
         self.audit = AuditService(db)
 
     def list_people(self, is_active: bool | None = None) -> list[Person]:
+        if is_active is not False:
+            self.deactivate_stale_external_people()
         return self.people.list(is_active=is_active)
 
     def person_map(self) -> PersonMapResponse:
@@ -92,6 +95,30 @@ class PersonService:
         self.audit.record(
             user_id=user_id,
             action="person.created",
+            entity_type="person",
+            entity_id=person.id,
+            old_value=None,
+            new_value=person_snapshot(person),
+        )
+        self.db.commit()
+        self.db.refresh(person)
+        return person
+
+    def create_external_person(self, payload: ExternalPersonCreate, user_id: int) -> Person:
+        display_name = payload.display_name.strip()
+        if not display_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Name darf nicht leer sein.")
+
+        existing = self.people.find_active_external_by_display_name(display_name)
+        if existing is not None:
+            return existing
+
+        person = Person(**external_person_values(display_name))
+        self.people.add(person)
+        self.db.flush()
+        self.audit.record(
+            user_id=user_id,
+            action="person.external.created",
             entity_type="person",
             entity_id=person.id,
             old_value=None,
@@ -225,6 +252,35 @@ class PersonService:
         statement = select(model.id).where(*criteria).limit(1)
         return self.db.scalar(statement) is not None
 
+    def deactivate_stale_external_people(self) -> None:
+        cutoff_date = date.today() - timedelta(days=EXTERNAL_INACTIVITY_DAYS)
+        cutoff_datetime = datetime.now(timezone.utc) - timedelta(days=EXTERNAL_INACTIVITY_DAYS)
+        recent_external_person_ids = select(Assignment.person_id).where(
+            Assignment.end_date >= cutoff_date,
+        )
+        statement = select(Person).where(
+            Person.deleted_at.is_(None),
+            Person.is_active.is_(True),
+            Person.person_type.in_([PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP]),
+            Person.created_at < cutoff_datetime,
+            ~Person.id.in_(recent_external_person_ids),
+        )
+        stale_people = list(self.db.scalars(statement))
+        if not stale_people:
+            return
+        for person in stale_people:
+            old_value = person_snapshot(person)
+            person.is_active = False
+            self.audit.record(
+                user_id=None,
+                action="person.external.auto_deactivated",
+                entity_type="person",
+                entity_id=person.id,
+                old_value=old_value,
+                new_value=person_snapshot(person),
+            )
+        self.db.commit()
+
     def _last_project_manager_by_person(self, day: date) -> dict[int, Person]:
         statement = (
             select(Assignment)
@@ -257,7 +313,23 @@ def clean_person_values(values: dict) -> dict:
     return cleaned
 
 
+def external_person_values(display_name: str) -> dict:
+    parts = [part for part in display_name.replace(",", " ").split() if part]
+    first_name = parts[0] if parts else display_name
+    last_name = parts[-1] if len(parts) >= 2 else first_name
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "display_name": display_name,
+        "short_code": f"{first_name[:1]}.{last_name}",
+        "person_type": PersonType.EXTERNAL_TEMP,
+        "is_active": True,
+        "notes": "Aus Matrix-Schnelleingabe erzeugt.",
+    }
+
+
 def person_snapshot(person: Person) -> dict:
+    deleted_at = getattr(person, "deleted_at", None)
     return {
         "id": person.id,
         "first_name": person.first_name,
@@ -266,7 +338,7 @@ def person_snapshot(person: Person) -> dict:
         "short_code": person.short_code,
         "person_type": person.person_type.value,
         "is_active": person.is_active,
-        "deleted_at": person.deleted_at.isoformat() if person.deleted_at else None,
+        "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
         "phone": person.phone,
         "address_postal_code": getattr(person, "address_postal_code", None),

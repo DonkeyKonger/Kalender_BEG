@@ -31,6 +31,10 @@ class PersonCreate(PersonBase):
     pass
 
 
+class ExternalPersonCreate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=200)
+
+
 class PersonUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)

@@ -13,6 +13,7 @@ export type MatrixPerson = {
   id: number;
   display_name: string;
   short_code: string;
+  person_type: "internal" | "external" | "external_temp";
 };
 
 export type MatrixAssignment = {

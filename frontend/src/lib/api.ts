@@ -335,6 +335,13 @@ export const api = {
     });
   },
 
+  async createExternalPerson(displayName: string): Promise<Person> {
+    return request<Person>("/persons/external", {
+      method: "POST",
+      body: JSON.stringify({ display_name: displayName }),
+    });
+  },
+
   async updatePerson(personId: number, payload: PersonUpdate): Promise<Person> {
     return request<Person>(`/persons/${personId}`, {
       method: "PATCH",

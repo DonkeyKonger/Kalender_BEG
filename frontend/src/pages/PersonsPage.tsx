@@ -17,6 +17,7 @@ const personTypeLabels: Record<PersonType, string> = {
 
 type EditablePerson = PersonCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
+type PersonScope = "internal" | "external";
 
 const emptyPerson: PersonCreate = {
   first_name: "",
@@ -48,6 +49,7 @@ export function PersonsPage() {
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingPerson, setIsEditingPerson] = useState(false);
+  const [personScope, setPersonScope] = useState<PersonScope>("internal");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
@@ -74,11 +76,18 @@ export function PersonsPage() {
 
   const filteredPeople = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
-    if (!needle) {
-      return people;
-    }
-    return people.filter((person) => personSearchText(person).includes(needle));
-  }, [people, searchTerm]);
+    return people
+      .filter((person) => personInScope(person, personScope))
+      .filter((person) => !needle || personSearchText(person).includes(needle));
+  }, [people, personScope, searchTerm]);
+  const internalPeopleCount = useMemo(
+    () => people.filter((person) => personInScope(person, "internal")).length,
+    [people],
+  );
+  const externalPeopleCount = useMemo(
+    () => people.filter((person) => personInScope(person, "external")).length,
+    [people],
+  );
 
   const selectedPerson = drawer?.mode === "edit"
     ? people.find((person) => person.id === drawer.personId) ?? null
@@ -203,7 +212,10 @@ export function PersonsPage() {
   }
 
   function openNewPersonDrawer() {
-    setCreateForm(emptyPerson);
+    setCreateForm({
+      ...emptyPerson,
+      person_type: personScope === "external" ? "external_temp" : "internal",
+    });
     setIsEditingPerson(false);
     setDrawer({ mode: "new" });
   }
@@ -249,6 +261,29 @@ export function PersonsPage() {
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
+
+      <div className="person-scope-tabs" role="tablist" aria-label="Personenbereich">
+        <button
+          className={personScope === "internal" ? "is-active" : ""}
+          role="tab"
+          type="button"
+          aria-selected={personScope === "internal"}
+          onClick={() => setPersonScope("internal")}
+        >
+          Eigenes Personal
+          <span>{internalPeopleCount}</span>
+        </button>
+        <button
+          className={personScope === "external" ? "is-active" : ""}
+          role="tab"
+          type="button"
+          aria-selected={personScope === "external"}
+          onClick={() => setPersonScope("external")}
+        >
+          Externe / Leiharbeiter
+          <span>{externalPeopleCount}</span>
+        </button>
+      </div>
 
       <input
         className="entity-search"
@@ -728,6 +763,13 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
 
 function comparePeople(left: Person, right: Person): number {
   return left.display_name.localeCompare(right.display_name);
+}
+
+function personInScope(person: Person, scope: PersonScope): boolean {
+  if (scope === "internal") {
+    return person.person_type === "internal";
+  }
+  return person.person_type !== "internal";
 }
 
 function formatPersonAddress(person: Pick<Person, "address_formatted" | "address_postal_code" | "address_city" | "address_street" | "address_house_number" | "address_extra">): string {

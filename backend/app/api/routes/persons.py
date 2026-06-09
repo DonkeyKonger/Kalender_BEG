@@ -5,6 +5,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.person import (
+    ExternalPersonCreate,
     PersonCreate,
     PersonGeocodeSearchResult,
     PersonMapResponse,
@@ -99,6 +100,16 @@ def create_person(
     db: Session = Depends(get_db),
 ) -> PersonRead:
     person = PersonService(db).create_person(payload, current_user.id)
+    return PersonRead.model_validate(person)
+
+
+@router.post("/external", response_model=PersonRead, status_code=201)
+def create_external_person(
+    payload: ExternalPersonCreate,
+    current_user=Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> PersonRead:
+    person = PersonService(db).create_external_person(payload, current_user.id)
     return PersonRead.model_validate(person)
 
 

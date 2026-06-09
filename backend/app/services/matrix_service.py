@@ -207,6 +207,7 @@ class MatrixService:
             id=person.id,
             display_name=person.display_name,
             short_code=calendar_short_code(person),
+            person_type=person.person_type,
         )
 
     def _build_day(self, day: date) -> MatrixDay:

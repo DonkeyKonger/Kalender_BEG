@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.enums import PersonType
 from app.models.person import Person
 
 
@@ -28,6 +29,20 @@ class PersonRepository:
             (Person.display_name == value) | (Person.short_code == value),
         )
         return list(self.db.scalars(statement))
+
+    def find_active_external_by_display_name(self, value: str) -> Person | None:
+        statement = (
+            select(Person)
+            .where(
+                Person.deleted_at.is_(None),
+                Person.is_active.is_(True),
+                Person.person_type.in_([PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP]),
+                Person.display_name == value,
+            )
+            .order_by(Person.id)
+            .limit(1)
+        )
+        return self.db.scalar(statement)
 
     def add(self, person: Person) -> Person:
         self.db.add(person)

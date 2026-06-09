@@ -1476,6 +1476,12 @@ button.entity-card:focus-visible,
   cursor: grab;
 }
 
+.person-chip.is-external-person {
+  background: #fff3c4;
+  color: #6d4b00;
+  box-shadow: 0 1px 0 rgb(109 75 0 / 10%);
+}
+
 .matrix-cell-typing-preview {
   position: absolute;
   top: calc(var(--typing-layer, 0) * 20px);
@@ -6355,6 +6361,41 @@ button.person-chip:focus-visible {
   gap: 18px;
 }
 
+.person-scope-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid #dce3ee;
+}
+
+.person-scope-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #52627a;
+  padding: 10px 12px 9px;
+  font-weight: 800;
+}
+
+.person-scope-tabs button.is-active {
+  border-bottom-color: #2563eb;
+  color: #123f73;
+}
+
+.person-scope-tabs span {
+  display: inline-flex;
+  min-width: 22px;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #52627a;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+}
+
 .admin-create-panel,
 .admin-user-row {
   display: grid;
@@ -9501,6 +9542,11 @@ button.person-chip:focus-visible {
   font-size: 0.8125rem;
   line-height: 1.2;
   text-align: left;
+}
+
+.assignment-autocomplete-item.is-create-action {
+  border-top: 1px solid #dce3ee;
+  color: #6d4b00;
 }
 
 .assignment-autocomplete-item:hover,

@@ -34,6 +34,9 @@ import {
 type CellKey = `${number}-${string}`;
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 type DraftEntry = MatrixEntryInput & { key: string; label: string };
+type AssignmentSuggestion =
+  | { kind: "person"; person: Person }
+  | { kind: "create_external"; key: "create-external"; displayName: string };
 type ActiveCell = { siteId: number; date: string; endDate: string; key: CellKey };
 type ActiveAbsenceCell = { date: string; endDate: string };
 type EditorAnchor = { bottom: number; left: number; top: number; width: number };
@@ -166,17 +169,34 @@ export function MatrixPage() {
   const isResizingAssignment = assignmentResize !== null;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const assignmentSuggestions = useMemo(() => {
-    const query = personSearchSeed.trim().toLowerCase();
+    const rawQuery = personSearchSeed.trim();
+    const query = rawQuery.toLowerCase();
     if (!query) {
       return [];
     }
     const assignedKeys = new Set(draftEntries.map((entry) => entry.key));
-    return people
-      .filter((person) => person.is_active && person.person_type === "internal")
+    const matches = people
+      .filter((person) => person.is_active)
       .filter((person) => !assignedKeys.has(`p-${person.id}`))
-      .filter((person) => [person.display_name, person.first_name, person.last_name, person.short_code]
-        .some((value) => value.toLowerCase().includes(query)))
-      .slice(0, 8);
+      .filter((person) => personMatchesQuery(person, query));
+    const internalMatches = matches
+      .filter((person) => person.person_type === "internal")
+      .sort(compareAssignmentPeople)
+      .slice(0, 6);
+    const externalMatches = matches
+      .filter((person) => person.person_type !== "internal")
+      .sort(compareAssignmentPeople)
+      .slice(0, Math.max(0, 8 - internalMatches.length));
+    const createExternalSuggestion: AssignmentSuggestion = {
+      kind: "create_external",
+      key: "create-external",
+      displayName: rawQuery,
+    };
+    return [
+      ...internalMatches.map((person): AssignmentSuggestion => ({ kind: "person", person })),
+      ...externalMatches.map((person): AssignmentSuggestion => ({ kind: "person", person })),
+      createExternalSuggestion,
+    ];
   }, [draftEntries, people, personSearchSeed]);
 
   const loadMatrix = useCallback(async () => {
@@ -346,7 +366,7 @@ export function MatrixPage() {
             ? assignmentSuggestions[highlightedPersonIndex]
             : assignmentSuggestions.length === 1 ? assignmentSuggestions[0] : null;
           if (selectedPerson) {
-            addSelectedPersonAndSave(String(selectedPerson.id));
+            void applyAssignmentSuggestion(selectedPerson);
           }
           return;
         }
@@ -410,6 +430,36 @@ export function MatrixPage() {
     setPersonSearchSeed("");
     setHighlightedPersonIndex(-1);
     void saveActiveCell({ closeOnSuccess: true }, nextEntries);
+  }
+
+  async function createExternalPersonAndSave(displayName: string) {
+    if (!activeCell) {
+      return;
+    }
+    try {
+      const person = await api.createExternalPerson(displayName);
+      setPeople((current) => upsertPerson(current, person));
+      const nextEntries = addDraftEntry(draftEntries, {
+        key: `p-${person.id}`,
+        label: calendarPersonCode(person),
+        person_id: person.id,
+      });
+      skipNextDraftAutosaveRef.current = true;
+      setDraftEntries(nextEntries);
+      setPersonSearchSeed("");
+      setHighlightedPersonIndex(-1);
+      void saveActiveCell({ closeOnSuccess: true }, nextEntries);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Externe Person konnte nicht angelegt werden."));
+    }
+  }
+
+  function applyAssignmentSuggestion(suggestion: AssignmentSuggestion) {
+    if (suggestion.kind === "create_external") {
+      void createExternalPersonAndSave(suggestion.displayName);
+      return;
+    }
+    addSelectedPersonAndSave(String(suggestion.person.id));
   }
   function openAbsenceCell(date: string, anchor: EditorAnchor) {
     if (!isEditable) {
@@ -1268,7 +1318,7 @@ export function MatrixPage() {
               items={assignmentSuggestions}
               onClose={closeKeyboardEntry}
               onHighlight={setHighlightedPersonIndex}
-              onSelect={(person) => addSelectedPersonAndSave(String(person.id))}
+              onSelect={applyAssignmentSuggestion}
             />
           )}
 
@@ -1311,10 +1361,10 @@ export function MatrixPage() {
 type AssignmentAutocompleteDropdownProps = {
   anchor: EditorAnchor;
   highlightedIndex: number;
-  items: Person[];
+  items: AssignmentSuggestion[];
   onClose: () => void;
   onHighlight: (index: number) => void;
-  onSelect: (person: Person) => void;
+  onSelect: (suggestion: AssignmentSuggestion) => void;
 };
 
 function AssignmentAutocompleteDropdown({
@@ -1351,20 +1401,39 @@ function AssignmentAutocompleteDropdown({
       role="listbox"
       style={autocompleteDropdownPosition(anchor)}
     >
-      {items.map((person, index) => (
-        <button
-          aria-selected={highlightedIndex === index}
-          className={highlightedIndex === index ? "assignment-autocomplete-item is-active" : "assignment-autocomplete-item"}
-          key={person.id}
-          role="option"
-          type="button"
-          onClick={() => onSelect(person)}
-          onMouseEnter={() => onHighlight(index)}
-        >
-          <span className="assignment-autocomplete-name">{person.display_name}</span>
-          {person.short_code && <span className="assignment-autocomplete-short">{person.short_code}</span>}
-        </button>
-      ))}
+      {items.map((item, index) => {
+        const isCreateAction = item.kind === "create_external";
+        const key = isCreateAction ? item.key : item.person.id;
+        return (
+          <button
+            aria-selected={highlightedIndex === index}
+            className={[
+              "assignment-autocomplete-item",
+              highlightedIndex === index ? "is-active" : "",
+              isCreateAction ? "is-create-action" : "",
+            ].filter(Boolean).join(" ")}
+            key={key}
+            role="option"
+            type="button"
+            onClick={() => onSelect(item)}
+            onMouseEnter={() => onHighlight(index)}
+          >
+            {isCreateAction ? (
+              <>
+                <span className="assignment-autocomplete-name">Extern anlegen</span>
+                <span className="assignment-autocomplete-short">{item.displayName}</span>
+              </>
+            ) : (
+              <>
+                <span className="assignment-autocomplete-name">{item.person.display_name}</span>
+                <span className="assignment-autocomplete-short">
+                  {item.person.person_type === "internal" ? item.person.short_code : `Extern · ${item.person.short_code}`}
+                </span>
+              </>
+            )}
+          </button>
+        );
+      })}
     </div>,
     document.body,
   );
@@ -2145,7 +2214,7 @@ function CellDisplay({
         const canResizeEnd = isEditable && isAssignmentResizeEdgeVisible(rowCells, cellIndex, assignment, span, "end");
         return (
           <button
-            className={assignmentChipClassName(span, absenceConflict !== null, isResizing)}
+            className={assignmentChipClassName(span, absenceConflict !== null, isResizing, assignment.person.person_type !== "internal")}
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
@@ -2664,10 +2733,11 @@ function matrixAbsenceTypePriority(absenceType: AbsenceType): number {
   return 2;
 }
 
-function assignmentChipClassName(span: number, hasAbsenceConflict: boolean, isResizing: boolean): string {
+function assignmentChipClassName(span: number, hasAbsenceConflict: boolean, isResizing: boolean, isExternalPerson: boolean): string {
   return [
     "person-chip",
     span > 1 ? "is-assignment-run" : "",
+    isExternalPerson ? "is-external-person" : "",
     hasAbsenceConflict ? "is-absence-conflict" : "",
     isResizing ? "is-resizing" : "",
   ].filter(Boolean).join(" ");
@@ -2866,6 +2936,33 @@ function addDraftEntry(entries: DraftEntry[], entry: DraftEntry): DraftEntry[] {
     return entries;
   }
   return [...entries, entry];
+}
+
+function upsertPerson(people: Person[], person: Person): Person[] {
+  const exists = people.some((item) => item.id === person.id);
+  const next = exists
+    ? people.map((item) => item.id === person.id ? person : item)
+    : [...people, person];
+  return next.sort(compareAssignmentPeople);
+}
+
+function personMatchesQuery(person: Person, query: string): boolean {
+  return [
+    person.display_name,
+    person.first_name,
+    person.last_name,
+    person.short_code,
+    calendarPersonCode(person),
+  ].some((value) => value.toLowerCase().includes(query));
+}
+
+function compareAssignmentPeople(left: Person, right: Person): number {
+  const typePriority = personTypePriority(left.person_type) - personTypePriority(right.person_type);
+  return typePriority || left.display_name.localeCompare(right.display_name);
+}
+
+function personTypePriority(personType: Person["person_type"]): number {
+  return personType === "internal" ? 0 : 1;
 }
 
 function toMatrixEntryInput(entry: DraftEntry): MatrixEntryInput {
