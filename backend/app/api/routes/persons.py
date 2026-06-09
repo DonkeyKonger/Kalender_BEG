@@ -31,7 +31,7 @@ def list_persons(
     db: Session = Depends(get_db),
 ) -> list[PersonRead]:
     people = PersonService(db).list_people(is_active=is_active)
-    return [PersonRead.model_validate(person) for person in people]
+    return [PersonRead.model_validate(person) for person in people if person.deleted_at is None]
 
 
 @router.get("/map", response_model=PersonMapResponse)

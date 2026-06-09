@@ -289,7 +289,8 @@ export const api = {
       search.set("is_active", String(params.isActive));
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<Person[]>(`/persons${suffix}`);
+    const people = await request<Person[]>(`/persons${suffix}`);
+    return people.filter((person) => person.deleted_at === null);
   },
 
   async personMap(): Promise<PersonMapResponse> {
