@@ -451,11 +451,12 @@ function buildDashboardData(matrix: MatrixResponse, people: Person[], range: Dat
     !todayAssignedPersonIds.has(person.id) && !todayAbsentPersonIds.has(person.id)
   ));
 
-  const freeWorkerGroups = groupFreeWorkersByLastManager(matrix.rows, freeWorkers, range.today);
+  const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
+  const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
   const openStaffingNeeds = getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
   const conflicts = getDashboardConflicts(matrix.rows, range.today, range.nextWeekEnd);
   const tomorrowAssignedSites = getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById);
-  const workerLookup = buildWorkerLookup(matrix.rows, activeWorkers, range.today);
+  const workerLookup = buildWorkerLookup(matrix.rows, activeWorkers, range.today, lastManagerByPersonId);
 
   return {
     todayAssignedSites: getAssignedSitesForDay(matrix.rows, range.today, peopleById),
@@ -500,11 +501,11 @@ function getAssignedSitesForDay(
     .sort((first, second) => first.managerLabel.localeCompare(second.managerLabel, "de") || first.site.name.localeCompare(second.site.name, "de"));
 }
 
-function groupFreeWorkersByLastManager(rows: MatrixRow[], workers: Person[], date: string): FreeWorkerGroup[] {
+function groupFreeWorkersByLastManager(workers: Person[], lastManagerByPersonId: Map<number, ManagerSummary>): FreeWorkerGroup[] {
   const groups = new Map<string, FreeWorkerGroup>();
 
   workers.forEach((person) => {
-    const manager = findLastManagerForPerson(rows, person.id, date) ?? {
+    const manager = lastManagerByPersonId.get(person.id) ?? {
       key: "unassigned",
       label: "Ohne Zuordnung",
       name: "Ohne letzte Kalenderzuordnung",
@@ -522,25 +523,23 @@ function groupFreeWorkersByLastManager(rows: MatrixRow[], workers: Person[], dat
     .sort((first, second) => first.manager.label.localeCompare(second.manager.label, "de"));
 }
 
-function findLastManagerForPerson(rows: MatrixRow[], personId: number, date: string): ManagerSummary | null {
-  let latestDate: string | null = null;
-  let latestManager: ManagerSummary | null = null;
-
+function buildLastManagerByPersonId(rows: MatrixRow[], date: string): Map<number, ManagerSummary> {
+  const latestByPersonId = new Map<number, { date: string; manager: ManagerSummary }>();
   rows.forEach((row) => {
+    const manager = getManagerSummary(row.site.project_manager);
     row.cells.forEach((cell) => {
-      if (cell.date > date || (latestDate !== null && cell.date < latestDate)) {
+      if (cell.date > date) {
         return;
       }
-      const hasPerson = cell.assignments.some((assignment) => assignment.person.id === personId);
-      if (!hasPerson) {
-        return;
-      }
-      latestDate = cell.date;
-      latestManager = getManagerSummary(row.site.project_manager);
+      cell.assignments.forEach((assignment) => {
+        const existing = latestByPersonId.get(assignment.person.id);
+        if (!existing || cell.date >= existing.date) {
+          latestByPersonId.set(assignment.person.id, { date: cell.date, manager });
+        }
+      });
     });
   });
-
-  return latestManager;
+  return new Map(Array.from(latestByPersonId, ([personId, entry]) => [personId, entry.manager]));
 }
 
 function getOpenStaffingNeeds(rows: MatrixRow[], start: string, end: string): StaffingNeed[] {
@@ -627,7 +626,12 @@ function getDashboardConflicts(rows: MatrixRow[], start: string, end: string): D
   return Array.from(conflicts.values()).sort((first, second) => first.date.localeCompare(second.date));
 }
 
-function buildWorkerLookup(rows: MatrixRow[], workers: Person[], date: string): WorkerLookup[] {
+function buildWorkerLookup(
+  rows: MatrixRow[],
+  workers: Person[],
+  date: string,
+  lastManagerByPersonId: Map<number, ManagerSummary>,
+): WorkerLookup[] {
   const assignedToday = new Map<number, { siteName: string; managerLabel: string }>();
   const absentToday = new Map<number, string>();
 
@@ -663,14 +667,14 @@ function buildWorkerLookup(rows: MatrixRow[], workers: Person[], date: string): 
         person,
         status: "Abwesend",
         detail: getAbsenceLabel(absence),
-        managerLabel: findLastManagerForPerson(rows, person.id, date)?.label ?? "Ohne Zuordnung",
+        managerLabel: lastManagerByPersonId.get(person.id)?.label ?? "Ohne Zuordnung",
       };
     }
     return {
       person,
       status: "Frei",
       detail: "kein Einsatz heute",
-      managerLabel: findLastManagerForPerson(rows, person.id, date)?.label ?? "Ohne Zuordnung",
+      managerLabel: lastManagerByPersonId.get(person.id)?.label ?? "Ohne Zuordnung",
     };
   }).sort((first, second) => first.person.display_name.localeCompare(second.person.display_name, "de"));
 }
