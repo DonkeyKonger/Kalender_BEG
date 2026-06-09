@@ -19,15 +19,7 @@ const EMPTY_SITES: SiteMapItem[] = [];
 const EMPTY_PEOPLE: PersonMapItem[] = [];
 const EMPTY_VEHICLES: VehicleLatestPositionItem[] = [];
 const VEHICLE_ICON_HTML = `
-  <span class="site-map-vehicle-marker-body" aria-hidden="true">
-    <svg viewBox="0 0 24 24" focusable="false">
-      <path d="M5 13l1.35-4.05A2.4 2.4 0 0 1 8.63 7.3h6.74a2.4 2.4 0 0 1 2.28 1.65L19 13" />
-      <path d="M4.5 13.2h15v4.9h-15z" />
-      <path d="M7.3 13.2h9.4" />
-      <circle cx="7.6" cy="18.1" r="1.35" />
-      <circle cx="16.4" cy="18.1" r="1.35" />
-    </svg>
-  </span>
+  <span class="site-map-vehicle-icon-symbol" aria-hidden="true">🚗</span>
 `;
 
 type SiteLabelMode = "full" | "number" | "points";
@@ -553,12 +545,12 @@ function vehicleMarkerCenter(item: VehicleLatestPositionItem): [number, number] 
 
 function vehicleMarkerIcon(isSelected: boolean) {
   return divIcon({
-    className: isSelected ? "site-map-vehicle-marker is-selected" : "site-map-vehicle-marker",
+    className: isSelected ? "site-map-vehicle-icon is-selected" : "site-map-vehicle-icon",
     html: VEHICLE_ICON_HTML,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -16],
-    tooltipAnchor: [0, -18],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
+    tooltipAnchor: [0, -20],
   });
 }
 
