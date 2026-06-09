@@ -21,6 +21,22 @@ const EMPTY_VEHICLES: VehicleLatestPositionItem[] = [];
 const VEHICLE_ICON_HTML = `
   <span class="site-map-vehicle-icon-symbol" aria-hidden="true">🚗</span>
 `;
+const VEHICLE_MARKER_ICON = divIcon({
+  className: "site-map-vehicle-icon",
+  html: VEHICLE_ICON_HTML,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
+  tooltipAnchor: [0, -20],
+});
+const SELECTED_VEHICLE_MARKER_ICON = divIcon({
+  className: "site-map-vehicle-icon is-selected",
+  html: VEHICLE_ICON_HTML,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
+  tooltipAnchor: [0, -20],
+});
 
 type SiteLabelMode = "full" | "number" | "points";
 type PersonLabelMode = "full" | "short" | "points";
@@ -544,14 +560,7 @@ function vehicleMarkerCenter(item: VehicleLatestPositionItem): [number, number] 
 }
 
 function vehicleMarkerIcon(isSelected: boolean) {
-  return divIcon({
-    className: isSelected ? "site-map-vehicle-icon is-selected" : "site-map-vehicle-icon",
-    html: VEHICLE_ICON_HTML,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -18],
-    tooltipAnchor: [0, -20],
-  });
+  return isSelected ? SELECTED_VEHICLE_MARKER_ICON : VEHICLE_MARKER_ICON;
 }
 
 function truncateLabel(value: string, max = 24): string {

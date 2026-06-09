@@ -10,17 +10,23 @@ import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage } from "./pages/LoginPage";
-import { MatrixPage } from "./pages/MatrixPage";
 import { MobileAssignmentDetailPage } from "./pages/MobileAssignmentDetailPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
-import { SiteDetailPage } from "./pages/SiteDetailPage";
 import { SitesPage } from "./pages/SitesPage";
-import { TimeEntriesPage } from "./pages/TimeEntriesPage";
 
+const MatrixPage = lazy(() =>
+  import("./pages/MatrixPage").then((module) => ({ default: module.MatrixPage })),
+);
 const SiteMapPage = lazy(() =>
   import("./pages/SiteMapPage").then((module) => ({ default: module.SiteMapPage })),
+);
+const SiteDetailPage = lazy(() =>
+  import("./pages/SiteDetailPage").then((module) => ({ default: module.SiteDetailPage })),
+);
+const TimeEntriesPage = lazy(() =>
+  import("./pages/TimeEntriesPage").then((module) => ({ default: module.TimeEntriesPage })),
 );
 
 export function App() {
@@ -33,8 +39,22 @@ export function App() {
           <Route
             element={<ProtectedRoute roles={["admin", "project_manager", "office"]} />}
           >
-            <Route path="matrix" element={<MatrixPage />} />
-            <Route path="time-entries" element={<TimeEntriesPage />} />
+            <Route
+              path="matrix"
+              element={
+                <Suspense fallback={<div className="empty-state">Planmatrix wird geladen...</div>}>
+                  <MatrixPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="time-entries"
+              element={
+                <Suspense fallback={<div className="empty-state">Zeiten werden geladen...</div>}>
+                  <TimeEntriesPage />
+                </Suspense>
+              }
+            />
             <Route path="sites" element={<SitesPage />} />
             <Route
               path="site-map"
@@ -44,7 +64,14 @@ export function App() {
                 </Suspense>
               }
             />
-            <Route path="sites/:siteId" element={<SiteDetailPage />} />
+            <Route
+              path="sites/:siteId"
+              element={
+                <Suspense fallback={<div className="empty-state">Projektakte wird geladen...</div>}>
+                  <SiteDetailPage />
+                </Suspense>
+              }
+            />
             <Route path="absences" element={<AbsencesPage />} />
             <Route path="exports" element={<ExportsPage />} />
           </Route>
