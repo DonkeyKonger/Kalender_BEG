@@ -10150,6 +10150,43 @@ button.person-chip:focus-visible {
   color: #0f766e;
 }
 
+.site-map-vehicle-marker {
+  border: 0;
+  background: transparent;
+}
+
+.site-map-vehicle-marker-body {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #0f766e;
+  box-shadow: 0 5px 14px rgb(15 23 42 / 24%);
+  color: #ffffff;
+}
+
+.site-map-vehicle-marker.is-selected .site-map-vehicle-marker-body {
+  transform: scale(1.12);
+  box-shadow: 0 7px 18px rgb(15 23 42 / 30%);
+}
+
+.site-map-vehicle-marker-body svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.site-map-vehicle-marker-body circle {
+  fill: currentcolor;
+}
+
 .site-map-marker-label::before {
   display: none;
 }

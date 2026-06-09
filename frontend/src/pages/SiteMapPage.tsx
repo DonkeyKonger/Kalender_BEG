@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
+import { divIcon } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
@@ -17,6 +18,17 @@ const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18
 const EMPTY_SITES: SiteMapItem[] = [];
 const EMPTY_PEOPLE: PersonMapItem[] = [];
 const EMPTY_VEHICLES: VehicleLatestPositionItem[] = [];
+const VEHICLE_ICON_HTML = `
+  <span class="site-map-vehicle-marker-body" aria-hidden="true">
+    <svg viewBox="0 0 24 24" focusable="false">
+      <path d="M5 13l1.35-4.05A2.4 2.4 0 0 1 8.63 7.3h6.74a2.4 2.4 0 0 1 2.28 1.65L19 13" />
+      <path d="M4.5 13.2h15v4.9h-15z" />
+      <path d="M7.3 13.2h9.4" />
+      <circle cx="7.6" cy="18.1" r="1.35" />
+      <circle cx="16.4" cy="18.1" r="1.35" />
+    </svg>
+  </span>
+`;
 
 type SiteLabelMode = "full" | "number" | "points";
 type PersonLabelMode = "full" | "short" | "points";
@@ -379,17 +391,10 @@ export function SiteMapPage() {
               const isSelected = selectedVehicleId === item.vehicle.id;
               const center = vehicleMarkerCenter(item);
               return (
-                <CircleMarker
+                <Marker
                   key={`vehicle-${item.vehicle.id}`}
-                  center={center}
-                  radius={isSelected ? 9 : 7}
-                  pathOptions={{
-                    color: "#ffffff",
-                    fillColor: vehicleMarkerFill(),
-                    fillOpacity: 0.94,
-                    opacity: 1,
-                    weight: isSelected ? 3 : 2,
-                  }}
+                  position={center}
+                  icon={vehicleMarkerIcon(isSelected)}
                   eventHandlers={{
                     click: () => {
                       setSelectedVehicleId(item.vehicle.id);
@@ -409,7 +414,7 @@ export function SiteMapPage() {
                   <Popup>
                     <VehicleMapPopup item={item} />
                   </Popup>
-                </CircleMarker>
+                </Marker>
               );
             })}
           </MapContainer>
@@ -546,6 +551,17 @@ function vehicleMarkerCenter(item: VehicleLatestPositionItem): [number, number] 
   return [Number(item.position.latitude), Number(item.position.longitude)];
 }
 
+function vehicleMarkerIcon(isSelected: boolean) {
+  return divIcon({
+    className: isSelected ? "site-map-vehicle-marker is-selected" : "site-map-vehicle-marker",
+    html: VEHICLE_ICON_HTML,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -16],
+    tooltipAnchor: [0, -18],
+  });
+}
+
 function truncateLabel(value: string, max = 24): string {
   if (value.length <= max) {
     return value;
@@ -577,10 +593,6 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
 
 function personMarkerFill(mode: PersonLabelMode): string {
   return mode === "points" ? "#b45309" : "#f97316";
-}
-
-function vehicleMarkerFill(): string {
-  return "#0f766e";
 }
 
 function formatVehicleEventTime(value: string | null): string {

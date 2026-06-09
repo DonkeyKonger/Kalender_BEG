@@ -24,6 +24,10 @@ from app.api.routes import (
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.seed_admin import seed_admin
+from app.services.ctrack_scheduler import (
+    start_ctrack_sync_scheduler,
+    stop_ctrack_sync_scheduler,
+)
 
 
 def ensure_site_status_enum_values() -> None:
@@ -72,12 +76,16 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix="/api")
 
     @app.on_event("startup")
-    def ensure_startup_state() -> None:
+    async def ensure_startup_state() -> None:
         ensure_site_status_enum_values()
-        if not settings.admin_username or not settings.admin_password:
-            return
-        with SessionLocal() as db:
-            seed_admin(db)
+        if settings.admin_username and settings.admin_password:
+            with SessionLocal() as db:
+                seed_admin(db)
+        start_ctrack_sync_scheduler()
+
+    @app.on_event("shutdown")
+    async def stop_background_tasks() -> None:
+        await stop_ctrack_sync_scheduler()
 
     return app
 
