@@ -54,7 +54,7 @@ def require_roles(*roles: UserRole) -> Callable[[User], User]:
 
 
 def get_current_app_user(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.must_change_password:
+    if getattr(current_user, "must_change_password", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Passwortwechsel erforderlich.",
