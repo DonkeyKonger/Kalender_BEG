@@ -1,4 +1,4 @@
-import { Save, Trash2, UserPlus, Users } from "lucide-react";
+import { ChevronDown, Save, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
@@ -80,6 +80,7 @@ export function PersonsPage() {
       .filter((person) => personInScope(person, personScope))
       .filter((person) => !needle || personSearchText(person).includes(needle));
   }, [people, personScope, searchTerm]);
+  const personGroups = useMemo(() => groupPeopleForOverview(filteredPeople, personScope), [filteredPeople, personScope]);
   const internalPeopleCount = useMemo(
     () => people.filter((person) => personInScope(person, "internal")).length,
     [people],
@@ -245,14 +246,14 @@ export function PersonsPage() {
   }
 
   return (
-    <section className="persons-page">
-      <div className="page-header entity-page-header">
+    <section className="persons-page overview-page">
+      <div className="page-header entity-page-header overview-header">
         <div>
           <p className="eyebrow">Stammdaten</p>
           <h1>Personen</h1>
         </div>
         {canEdit && (
-          <button className="icon-button" type="button" onClick={openNewPersonDrawer}>
+          <button className="icon-button overview-create" type="button" onClick={openNewPersonDrawer}>
             <UserPlus aria-hidden="true" size={17} />
             <span>Neue Person</span>
           </button>
@@ -262,58 +263,83 @@ export function PersonsPage() {
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <div className="person-scope-tabs" role="tablist" aria-label="Personenbereich">
-        <button
-          className={personScope === "internal" ? "is-active" : ""}
-          role="tab"
-          type="button"
-          aria-selected={personScope === "internal"}
-          onClick={() => setPersonScope("internal")}
-        >
-          Eigenes Personal
-          <span>{internalPeopleCount}</span>
-        </button>
-        <button
-          className={personScope === "external" ? "is-active" : ""}
-          role="tab"
-          type="button"
-          aria-selected={personScope === "external"}
-          onClick={() => setPersonScope("external")}
-        >
-          Externe / Leiharbeiter
-          <span>{externalPeopleCount}</span>
-        </button>
+      <div className="overview-toolbar">
+        <div className="overview-toolbar-left">
+          <label className="overview-search">
+            <Search aria-hidden="true" size={17} />
+            <input
+              placeholder="Person suchen"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="overview-toolbar-right">
+          <div className="person-scope-tabs overview-filter-tabs" role="tablist" aria-label="Personenbereich">
+            <button
+              className={personScope === "internal" ? "is-active" : ""}
+              role="tab"
+              type="button"
+              aria-selected={personScope === "internal"}
+              onClick={() => setPersonScope("internal")}
+            >
+              Eigenes Personal
+              <span>{internalPeopleCount}</span>
+            </button>
+            <button
+              className={personScope === "external" ? "is-active" : ""}
+              role="tab"
+              type="button"
+              aria-selected={personScope === "external"}
+              onClick={() => setPersonScope("external")}
+            >
+              Externe / Leiharbeiter
+              <span>{externalPeopleCount}</span>
+            </button>
+          </div>
+        </div>
       </div>
-
-      <input
-        className="entity-search"
-        placeholder="Person suchen"
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-      />
 
       {isLoading && <div className="matrix-state">Personen werden geladen...</div>}
 
       {!isLoading && (
-        <div className="entity-card-list">
-          {filteredPeople.map((person) => (
-            <EntityCard
-              key={person.id}
-              title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
-              subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
-              meta={personCardMeta(person)}
-              icon={<Users aria-hidden="true" size={17} />}
-              status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
-              isInactive={!person.is_active}
-              onClick={() => openPersonDrawer(person.id)}
-            />
-          ))}
-          {!filteredPeople.length && (
+        <>
+          {personGroups.length ? (
+            <div className="overview-group-list">
+              {personGroups.map((group) => (
+                <section className="overview-group-section" key={group.key}>
+                  <div className="overview-group-header">
+                    <h2>
+                      <ChevronDown aria-hidden="true" size={16} />
+                      <span>{group.label}</span>
+                    </h2>
+                    <span className="overview-group-count">{group.people.length}</span>
+                  </div>
+                  <div className="entity-card-list overview-card-grid">
+                    {group.people.map((person) => (
+                      <EntityCard
+                        key={person.id}
+                        className={`overview-card person-overview-card ${person.person_type !== "internal" ? "is-external-person" : ""}`}
+                        color={personCardColor(person)}
+                        title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
+                        subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
+                        meta={personCardMeta(person)}
+                        icon={<Users aria-hidden="true" size={17} />}
+                        status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                        isInactive={!person.is_active}
+                        onClick={() => openPersonDrawer(person.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
             <div className="empty-panel">
               <p>{people.length ? "Keine Treffer gefunden." : "Noch keine Personen vorhanden."}</p>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <EntityDetailDrawer
@@ -770,6 +796,30 @@ function personInScope(person: Person, scope: PersonScope): boolean {
     return person.person_type === "internal";
   }
   return person.person_type !== "internal";
+}
+
+function groupPeopleForOverview(people: Person[], scope: PersonScope): Array<{ key: string; label: string; people: Person[] }> {
+  if (scope === "external") {
+    return [
+      { key: "external", label: "Externe / Leiharbeiter", people: people.filter((person) => person.is_active && person.person_type === "external") },
+      { key: "external-temp", label: "Schnell angelegt", people: people.filter((person) => person.is_active && person.person_type === "external_temp") },
+      { key: "inactive-external", label: "Inaktive Externe", people: people.filter((person) => !person.is_active) },
+    ].filter((group) => group.people.length > 0);
+  }
+  return [
+    { key: "internal", label: "Eigenes Personal", people: people.filter((person) => person.is_active) },
+    { key: "inactive-internal", label: "Inaktive", people: people.filter((person) => !person.is_active) },
+  ].filter((group) => group.people.length > 0);
+}
+
+function personCardColor(person: Person): string {
+  if (!person.is_active) {
+    return "#94a3b8";
+  }
+  if (person.person_type !== "internal") {
+    return "#f2b84b";
+  }
+  return "#1d5c99";
 }
 
 function formatPersonAddress(person: Pick<Person, "address_formatted" | "address_postal_code" | "address_city" | "address_street" | "address_house_number" | "address_extra">): string {

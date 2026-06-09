@@ -1,4 +1,4 @@
-import { KeyRound, PlugZap, Save, Trash2, UserCog, UserPlus } from "lucide-react";
+import { ChevronDown, KeyRound, PlugZap, Save, Search, Trash2, UserCog, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
@@ -82,6 +82,7 @@ export function AdminUsersPage() {
     }
     return users.filter((user) => userSearchText(user, peopleById).includes(needle));
   }, [peopleById, searchTerm, users]);
+  const userGroups = useMemo(() => groupUsersByRole(filteredUsers), [filteredUsers]);
 
   const selectedUser = drawer?.mode === "edit"
     ? users.find((item) => item.id === drawer.userId) ?? null
@@ -276,13 +277,13 @@ export function AdminUsersPage() {
   }
 
   return (
-    <section className="admin-users-page">
-      <div className="page-header entity-page-header">
+    <section className="admin-users-page overview-page">
+      <div className="page-header entity-page-header overview-header">
         <div>
           <p className="eyebrow">Admin</p>
           <h1>Benutzer</h1>
         </div>
-        <button className="icon-button" type="button" onClick={() => setDrawer({ mode: "new" })}>
+        <button className="icon-button overview-create" type="button" onClick={() => setDrawer({ mode: "new" })}>
           <UserPlus aria-hidden="true" size={17} />
           <span>Neuer Benutzer</span>
         </button>
@@ -290,6 +291,19 @@ export function AdminUsersPage() {
 
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
+
+      <div className="overview-toolbar">
+        <div className="overview-toolbar-left">
+          <label className="overview-search">
+            <Search aria-hidden="true" size={17} />
+            <input
+              placeholder="Benutzer suchen"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+        </div>
+      </div>
 
       <MicrosoftGraphTestPanel
         result={graphTestResult}
@@ -306,38 +320,49 @@ export function AdminUsersPage() {
         onBackfill={() => void backfillMicrosoftGraphProjectFolders()}
       />
 
-      <input
-        className="entity-search"
-        placeholder="Benutzer suchen"
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-      />
-
       {isLoading && <div className="matrix-state">Benutzer werden geladen...</div>}
 
       {!isLoading && (
-        <div className="entity-card-list">
-          {filteredUsers.map((adminUser) => {
-            const linkedPerson = adminUser.person_id ? peopleById.get(adminUser.person_id) : null;
-            return (
-              <EntityCard
-                key={adminUser.id}
-                title={adminUser.display_name}
-                subtitle={`${adminUser.username} · Rolle: ${roleLabels[adminUser.role]}`}
-                meta={[linkedPerson?.display_name ?? "Keine Person"]}
-                icon={<UserCog aria-hidden="true" size={17} />}
-                status={adminUser.is_active ? <RoleBadge role={adminUser.role} /> : <StatusBadge tone="inactive">Inaktiv</StatusBadge>}
-                isInactive={!adminUser.is_active}
-                onClick={() => setDrawer({ mode: "edit", userId: adminUser.id })}
-              />
-            );
-          })}
-          {!filteredUsers.length && (
+        <>
+          {userGroups.length ? (
+            <div className="overview-group-list">
+              {userGroups.map((group) => (
+                <section className="overview-group-section" key={group.key}>
+                  <div className="overview-group-header">
+                    <h2>
+                      <ChevronDown aria-hidden="true" size={16} />
+                      <span>{group.label}</span>
+                    </h2>
+                    <span className="overview-group-count">{group.users.length}</span>
+                  </div>
+                  <div className="entity-card-list overview-card-grid">
+                    {group.users.map((adminUser) => {
+                      const linkedPerson = adminUser.person_id ? peopleById.get(adminUser.person_id) : null;
+                      return (
+                        <EntityCard
+                          key={adminUser.id}
+                          className="overview-card user-overview-card"
+                          color={userRoleColor(adminUser.role)}
+                          title={adminUser.display_name}
+                          subtitle={adminUser.username}
+                          meta={[`Rolle: ${roleLabels[adminUser.role]}`, linkedPerson?.display_name ?? "Keine Person"]}
+                          icon={<UserCog aria-hidden="true" size={17} />}
+                          status={adminUser.is_active ? <RoleBadge role={adminUser.role} /> : <StatusBadge tone="inactive">Inaktiv</StatusBadge>}
+                          isInactive={!adminUser.is_active}
+                          onClick={() => setDrawer({ mode: "edit", userId: adminUser.id })}
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
             <div className="empty-panel">
               <p>{users.length ? "Keine Treffer gefunden." : "Noch keine Benutzer vorhanden."}</p>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <EntityDetailDrawer
@@ -777,6 +802,31 @@ function personOptions(people: Person[]) {
 
 function compareUsers(left: AdminUser, right: AdminUser): number {
   return left.username.localeCompare(right.username);
+}
+
+const userRoleOrder: UserRole[] = ["admin", "project_manager", "office", "monteur"];
+
+function groupUsersByRole(users: AdminUser[]): Array<{ key: UserRole; label: string; users: AdminUser[] }> {
+  return userRoleOrder
+    .map((role) => ({
+      key: role,
+      label: roleLabels[role],
+      users: users.filter((user) => user.role === role),
+    }))
+    .filter((group) => group.users.length > 0);
+}
+
+function userRoleColor(role: UserRole): string {
+  if (role === "admin") {
+    return "#0f3d6b";
+  }
+  if (role === "project_manager") {
+    return "#1d5c99";
+  }
+  if (role === "office") {
+    return "#0f766e";
+  }
+  return "#64748b";
 }
 
 function userSearchText(user: AdminUser, peopleById: Map<number, Person>): string {

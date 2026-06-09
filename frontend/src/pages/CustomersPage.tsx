@@ -1,4 +1,4 @@
-import { Building2, Plus, Save, Trash2, UserPlus } from "lucide-react";
+import { Building2, ChevronDown, Plus, Save, Search, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -82,6 +82,7 @@ export function CustomersPage() {
     }
     return customers.filter((customer) => customerSearchText(customer).includes(needle));
   }, [customers, searchTerm]);
+  const customerGroups = useMemo(() => groupCustomersAlphabetically(filteredCustomers), [filteredCustomers]);
 
   const selectedCustomer = drawer?.mode === "edit"
     ? customers.find((customer) => customer.id === drawer.customerId) ?? null
@@ -209,14 +210,14 @@ export function CustomersPage() {
   }
 
   return (
-    <section className="persons-page customers-page">
-      <div className="page-header entity-page-header">
+    <section className="persons-page customers-page overview-page">
+      <div className="page-header entity-page-header overview-header">
         <div>
           <p className="eyebrow">Stammdaten</p>
           <h1>Kunden</h1>
         </div>
         {canEdit && (
-          <button className="icon-button" type="button" onClick={openNewCustomerDrawer}>
+          <button className="icon-button overview-create" type="button" onClick={openNewCustomerDrawer}>
             <UserPlus aria-hidden="true" size={17} />
             <span>Neuer Kunde</span>
           </button>
@@ -226,35 +227,59 @@ export function CustomersPage() {
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <input
-        className="entity-search"
-        placeholder="Kunde suchen"
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-      />
+      <div className="overview-toolbar">
+        <div className="overview-toolbar-left">
+          <label className="overview-search">
+            <Search aria-hidden="true" size={17} />
+            <input
+              placeholder="Kunde suchen"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+        </div>
+      </div>
 
       {isLoading && <div className="matrix-state">Kunden werden geladen...</div>}
 
       {!isLoading && (
-        <div className="entity-card-list">
-          {filteredCustomers.map((customer) => (
-            <EntityCard
-              key={customer.id}
-              title={customer.company_name}
-              subtitle={formatCustomerAddress(customer) || "Keine Adresse hinterlegt"}
-              meta={customerCardMeta(customer)}
-              icon={<Building2 aria-hidden="true" size={17} />}
-              status={<StatusBadge tone={customer.is_active ? "active" : "inactive"}>{customer.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
-              isInactive={!customer.is_active}
-              onClick={() => openCustomerDrawer(customer.id)}
-            />
-          ))}
-          {!filteredCustomers.length && (
+        <>
+          {customerGroups.length ? (
+            <div className="overview-group-list">
+              {customerGroups.map((group) => (
+                <section className="overview-group-section" key={group.key}>
+                  <div className="overview-group-header">
+                    <h2>
+                      <ChevronDown aria-hidden="true" size={16} />
+                      <span>{group.label}</span>
+                    </h2>
+                    <span className="overview-group-count">{group.customers.length}</span>
+                  </div>
+                  <div className="entity-card-list overview-card-grid">
+                    {group.customers.map((customer) => (
+                      <EntityCard
+                        key={customer.id}
+                        className="overview-card customer-overview-card"
+                        color={customer.is_active ? "#1d5c99" : "#94a3b8"}
+                        title={customer.company_name}
+                        subtitle={formatCustomerAddress(customer) || "Keine Adresse hinterlegt"}
+                        meta={customerCardMeta(customer)}
+                        icon={<Building2 aria-hidden="true" size={17} />}
+                        status={<StatusBadge tone={customer.is_active ? "active" : "inactive"}>{customer.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                        isInactive={!customer.is_active}
+                        onClick={() => openCustomerDrawer(customer.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
             <div className="empty-panel">
               <p>{customers.length ? "Keine Treffer gefunden." : "Noch keine Kunden vorhanden."}</p>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <EntityDetailDrawer
@@ -661,6 +686,22 @@ function isValidOptionalEmail(value: string | null): boolean {
 
 function compareCustomers(left: Customer, right: Customer): number {
   return left.company_name.localeCompare(right.company_name, "de");
+}
+
+function groupCustomersAlphabetically(customers: Customer[]): Array<{ key: string; label: string; customers: Customer[] }> {
+  const groups = new Map<string, Customer[]>();
+  customers.forEach((customer) => {
+    const firstLetter = customer.company_name.trim().charAt(0).toUpperCase();
+    const key = /^[A-ZÄÖÜ]$/.test(firstLetter) ? firstLetter : "#";
+    groups.set(key, [...(groups.get(key) ?? []), customer]);
+  });
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => left.localeCompare(right, "de"))
+    .map(([key, groupCustomers]) => ({
+      key,
+      label: key === "#" ? "Sonstige" : key,
+      customers: groupCustomers,
+    }));
 }
 
 function formatCustomerAddress(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country">): string {

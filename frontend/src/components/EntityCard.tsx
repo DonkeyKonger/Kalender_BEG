@@ -8,6 +8,7 @@ export type EntityCardProps = {
   color?: string | null;
   icon?: ReactNode;
   isInactive?: boolean;
+  className?: string;
   onClick?: () => void;
 };
 
@@ -19,6 +20,7 @@ export function EntityCard({
   color,
   icon,
   isInactive = false,
+  className,
   onClick,
 }: EntityCardProps) {
   const content = (
@@ -40,7 +42,7 @@ export function EntityCard({
     </>
   );
 
-  const classes = ["entity-card", isInactive ? "is-inactive" : ""].filter(Boolean).join(" ");
+  const classes = ["entity-card", className, isInactive ? "is-inactive" : ""].filter(Boolean).join(" ");
 
   if (onClick) {
     return (
