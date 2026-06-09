@@ -1288,14 +1288,19 @@ function ProjectFolderDocumentBrowser({
   const isInSubfolder = Boolean(currentLevel);
   const currentFolderTitle = currentLevel?.name ?? `${folder.sort_order}. ${folder.name}`;
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleItems = currentDocuments?.items.filter((item) => {
-    if (!normalizedQuery) {
-      return true;
+  const visibleItems = useMemo(() => {
+    if (!currentDocuments) {
+      return [];
     }
-    return [item.name, item.file_extension, item.mime_type]
-      .filter(Boolean)
-      .some((value) => value?.toLowerCase().includes(normalizedQuery));
-  }) ?? [];
+    if (!normalizedQuery) {
+      return currentDocuments.items;
+    }
+    return currentDocuments.items.filter((item) => (
+      [item.name, item.file_extension, item.mime_type]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(normalizedQuery))
+    ));
+  }, [currentDocuments, normalizedQuery]);
   const hasLoadedItems = Boolean(currentDocuments && currentDocuments.items.length > 0);
   const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
 
@@ -2171,11 +2176,14 @@ function MeasurementBasesPanel({
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
 }) {
-  const sortedBases = bases.slice().sort((left, right) => (
+  const sortedBases = useMemo(() => bases.slice().sort((left, right) => (
     new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
     || left.id - right.id
-  ));
-  const offerNumberByBaseId = new Map(sortedBases.map((base, index) => [base.id, index + 1]));
+  )), [bases]);
+  const offerNumberByBaseId = useMemo(
+    () => new Map(sortedBases.map((base, index) => [base.id, index + 1])),
+    [sortedBases],
+  );
 
   return (
     <section className="measurement-bases-panel">
