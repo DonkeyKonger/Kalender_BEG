@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, PlusCircle, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, PlusCircle, Search, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -290,14 +290,14 @@ export function SitesPage() {
   }
 
   return (
-    <section className="site-page">
-      <div className="page-header entity-page-header">
-        <div>
+    <section className="site-page site-overview-page">
+      <div className="page-header entity-page-header site-overview-header">
+        <div className="site-overview-title">
           <p className="eyebrow">Projektakte</p>
           <h1>Baustellen</h1>
         </div>
         {canEdit && (
-          <button className="icon-button" type="button" onClick={openNewSiteDrawer}>
+          <button className="icon-button site-overview-create" type="button" onClick={openNewSiteDrawer}>
             <PlusCircle aria-hidden="true" size={17} />
             <span>Neue Baustelle</span>
           </button>
@@ -307,13 +307,16 @@ export function SitesPage() {
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <div className="site-list-toolbar">
+      <div className="site-list-toolbar site-overview-toolbar">
         <div className="site-list-toolbar-left">
-          <input
-            placeholder="Baustelle suchen"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+          <label className="site-overview-search">
+            <Search aria-hidden="true" size={17} />
+            <input
+              placeholder="Baustelle suchen"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
         </div>
         <div className="site-list-toolbar-right">
           {projectManagerOptions.length > 0 && (
@@ -362,15 +365,23 @@ export function SitesPage() {
             <div className="site-group-list" role="list">
               {siteGroups.map((group) => (
                 <section className="site-group-section" key={group.key}>
-                  {group.showHeading && <h2>{group.label}</h2>}
-                  <div className="entity-card-list">
+                  {group.showHeading && (
+                    <div className="site-group-header">
+                      <h2>
+                        <ChevronDown aria-hidden="true" size={16} />
+                        <span>{compactSiteGroupLabel(group.label)}</span>
+                      </h2>
+                      <span className="site-group-count">{group.sites.length}</span>
+                    </div>
+                  )}
+                  <div className="entity-card-list site-card-grid">
                     {group.sites.map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
                   </div>
                 </section>
               ))}
             </div>
           ) : (
-            <div className="entity-card-list" role="list">
+            <div className="entity-card-list site-card-grid" role="list">
               {siteGroups.flatMap((group) => group.sites).map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
             </div>
           )}
@@ -1085,8 +1096,8 @@ function renderSiteCard(
   return (
     <article className={classes} key={site.id}>
       <button className="site-card-main" type="button" onClick={() => openSiteDetail(site.id)}>
-        <span className="entity-card-color" style={{ backgroundColor: site.color ?? "#94a3b8" }} aria-hidden="true" />
-        <span className="entity-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
+        <span className="entity-card-color site-card-color" style={{ backgroundColor: site.color ?? "#94a3b8" }} aria-hidden="true" />
+        <span className="entity-card-icon site-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
         <span className="entity-card-body">
           <span className="entity-card-title">{site.name}</span>
           <span className="entity-card-subtitle">{[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</span>
@@ -1189,6 +1200,13 @@ function groupSites(sites: SiteSummary[], projectManagerFilter: string): SiteGro
 
 function siteProjectManagerLabel(site: SiteSummary): string {
   return site.project_manager?.short_code || site.project_manager?.display_name || "offen";
+}
+
+function compactSiteGroupLabel(label: string): string {
+  if (label === "Ohne Projektleiter") {
+    return label;
+  }
+  return compactCodeFromText(label);
 }
 
 function siteSearchText(site: SiteSummary): string {
