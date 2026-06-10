@@ -273,12 +273,8 @@ export function DashboardPage() {
                     >
                       <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
                       <div>
-                        <strong>{message.title} für {message.site_name} wurde zur Prüfung eingereicht.</strong>
-                        <span>
-                          {message.submitted_by_name ? `Von ${message.submitted_by_name} · ` : ""}
-                          {message.submitted_at ? formatDashboardDateTime(message.submitted_at) : "Zeitpunkt unbekannt"}
-                          {message.site_number ? ` · ${message.site_number}` : ""}
-                        </span>
+                        <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
+                        <span>{formatMeasurementDashboardMessageMeta(message)}</span>
                       </div>
                     </Link>
                   ))}
@@ -426,6 +422,27 @@ function DashboardNeedSection({ title, needs }: { title: string; needs: Staffing
 
 function EmptyDashboardText({ text }: { text: string }) {
   return <p className="dashboard-empty-text">{text}</p>;
+}
+
+function formatMeasurementDashboardMessageTitle(message: MeasurementDashboardSubmission): string {
+  if (message.message_type === "measurement_customer_signed") {
+    return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Prüfung erforderlich.`;
+  }
+  return `${message.title} für ${message.site_name} wurde zur Prüfung eingereicht.`;
+}
+
+function formatMeasurementDashboardMessageMeta(message: MeasurementDashboardSubmission): string {
+  const eventAt = message.event_at ?? message.customer_signed_at ?? message.submitted_at;
+  const timeLabel = eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt";
+  const siteLabel = message.site_number ? ` · ${message.site_number}` : "";
+  if (message.message_type === "measurement_customer_signed") {
+    const signerLabel = message.customer_signature_name
+      ? `Unterschrieben von ${message.customer_signature_name}`
+      : "Kundenunterschrift";
+    return `${signerLabel} · ${timeLabel}${siteLabel}`;
+  }
+  const submitterLabel = message.submitted_by_name ? `Von ${message.submitted_by_name} · ` : "";
+  return `${submitterLabel}${timeLabel}${siteLabel}`;
 }
 
 function formatDashboardDateTime(value: string): string {

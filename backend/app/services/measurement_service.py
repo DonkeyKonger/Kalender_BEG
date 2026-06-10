@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
@@ -538,9 +538,19 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries),
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
-                .where(SiteMeasurementBatch.status.in_(("submitted", "rejected")))
+                .where(
+                    SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
+                    or_(
+                        SiteMeasurementBatch.status.in_(("submitted", "rejected")),
+                        SiteMeasurementBatch.customer_signed_at.is_not(None),
+                    ),
+                )
                 .order_by(
-                    SiteMeasurementBatch.submitted_at.desc(),
+                    func.coalesce(
+                        SiteMeasurementBatch.customer_signed_at,
+                        SiteMeasurementBatch.submitted_at,
+                        SiteMeasurementBatch.updated_at,
+                    ).desc(),
                     SiteMeasurementBatch.updated_at.desc(),
                 )
                 .limit(limit)
@@ -918,6 +928,11 @@ class MeasurementService:
         self, batch: SiteMeasurementBatch
     ) -> MeasurementDashboardSubmissionRead:
         position_ids = {entry.measurement_item_id for entry in batch.entries}
+        is_customer_signed = batch.customer_signed_at is not None and batch.status not in {
+            "billed",
+            "approved",
+            "closed",
+        }
         return MeasurementDashboardSubmissionRead(
             batch_id=batch.id,
             site_id=batch.site_id,
@@ -925,8 +940,12 @@ class MeasurementService:
             site_number=batch.site.site_number if batch.site else None,
             title=batch.title,
             status=batch.status,
+            message_type="measurement_customer_signed" if is_customer_signed else "measurement_submitted",
+            event_at=batch.customer_signed_at if is_customer_signed else batch.submitted_at,
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
+            customer_signature_name=batch.customer_signature_name,
+            customer_signed_at=batch.customer_signed_at,
             entry_count=len(batch.entries),
             position_count=len(position_ids),
         )

@@ -132,8 +132,12 @@ class MeasurementDashboardSubmissionRead(BaseModel):
     site_number: str | None
     title: str
     status: str
+    message_type: str
+    event_at: datetime | None
     submitted_by_name: str | None
     submitted_at: datetime | None
+    customer_signature_name: str | None = None
+    customer_signed_at: datetime | None = None
     entry_count: int
     position_count: int
 

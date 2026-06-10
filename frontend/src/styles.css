@@ -5903,7 +5903,7 @@ button.person-chip:focus-visible {
 
 .measurement-review-card-open {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) auto;
+  grid-template-columns: 152px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -5924,7 +5924,16 @@ button.person-chip:focus-visible {
 
 .measurement-review-card-open > .measurement-status {
   justify-content: center;
+  min-width: 132px;
   width: 100%;
+  text-align: center;
+  white-space: normal;
+}
+
+.measurement-review-card-open > .measurement-status.is-two-line {
+  align-items: flex-start;
+  min-width: 144px;
+  text-align: left;
 }
 
 .measurement-review-pdf-action {

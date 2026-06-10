@@ -304,8 +304,12 @@ export type MeasurementDashboardSubmission = {
   site_number: string | null;
   title: string;
   status: string;
+  message_type: "measurement_submitted" | "measurement_customer_signed" | string;
+  event_at: string | null;
   submitted_by_name: string | null;
   submitted_at: string | null;
+  customer_signature_name: string | null;
+  customer_signed_at: string | null;
   entry_count: number;
   position_count: number;
 };

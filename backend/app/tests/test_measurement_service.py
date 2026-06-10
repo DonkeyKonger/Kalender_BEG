@@ -163,7 +163,7 @@ def test_new_measurement_base_import_becomes_only_active_base(monkeypatch):
 
 
 def test_site_measurement_lists_can_be_scoped_to_active_offer():
-    from app.models.site_measurement_item import SiteMeasurementBatch
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementItem
 
     db = db_session()
     site = create_site(db)
@@ -654,6 +654,94 @@ def test_site_measurement_billing_status_and_entry_update():
     assert stored_entry.status == "submitted"
     assert stored_entry.submitted_area_or_comment == "1. OG Flur"
     assert stored_entry.submitted_quantity == Decimal("10.00")
+
+
+def test_dashboard_submissions_include_customer_signed_batches_until_billed():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementBatch
+    from app.models.user import User
+    from app.schemas.measurement import CustomerSignatureCreate, MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    site.name = "Schüchtermann Klinik"
+    site.site_number = "8007"
+    base = create_measurement_base(db, site)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max-signature",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 6, 10),
+        end_date=date(2026, 6, 10),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, item])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="EG", quantity=Decimal("12.00")),
+    )
+    signed = service.sign_mobile_batch(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+        payload=CustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            signature_strokes=[
+                [{"x": 0.1, "y": 0.5}, {"x": 0.4, "y": 0.45}, {"x": 0.8, "y": 0.55}]
+            ],
+        ),
+    )
+
+    dashboard_messages = service.list_dashboard_submissions(limit=5)
+
+    assert dashboard_messages[0].batch_id == batch.id
+    assert dashboard_messages[0].message_type == "measurement_customer_signed"
+    assert dashboard_messages[0].event_at == signed.customer_signed_at
+    assert dashboard_messages[0].customer_signature_name == "Kunde Beispiel"
+    assert dashboard_messages[0].submitted_by_name is None
+
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    assert stored_batch is not None
+    stored_batch.status = "billed"
+    db.commit()
+
+    assert service.list_dashboard_submissions(limit=5) == []
 
 
 def test_measurement_pdf_matrix_separates_original_and_checked_values():
