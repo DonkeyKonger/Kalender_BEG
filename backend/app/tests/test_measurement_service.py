@@ -599,18 +599,26 @@ def test_site_measurement_billing_status_and_entry_update():
         current_user=user,
         payload=MeasurementEntryCreate(area_or_comment="Dach", quantity=Decimal("5.00")),
     )
+    with pytest.raises(HTTPException) as submitted_billing:
+        service.set_site_batch_billing_status(
+            site_id=site.id,
+            batch_id=submitted.id,
+            billing_status="billed",
+        )
+    assert submitted_billing.value.status_code == 409
+    reviewed = service.set_site_batch_reviewed(site_id=site.id, batch_id=submitted.id)
     billed = service.set_site_batch_billing_status(
         site_id=site.id,
-        batch_id=submitted.id,
+        batch_id=reviewed.id,
         billing_status="billed",
     )
     open_again = service.set_site_batch_billing_status(
         site_id=site.id,
-        batch_id=submitted.id,
+        batch_id=reviewed.id,
         billing_status="submitted",
     )
 
-    reset_items = service.reset_site_batch_to_submitted(site_id=site.id, batch_id=submitted.id)
+    reset_items = service.reset_site_batch_to_submitted(site_id=site.id, batch_id=reviewed.id)
     reset_entries = reset_items[0].entries
     reset_entry = reset_entries[0]
 
@@ -625,6 +633,7 @@ def test_site_measurement_billing_status_and_entry_update():
     assert len(reset_entries) == 1
     assert reset_entry.area_or_comment == "1. OG Flur"
     assert reset_entry.quantity == Decimal("10.00")
+    assert reviewed.status == "reviewed"
     assert billed.status == "billed"
     assert open_again.status == "submitted"
     assert stored_batch is not None

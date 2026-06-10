@@ -470,6 +470,15 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Entwürfe können noch nicht abgerechnet werden.",
             )
+        if normalized_status == "billed" and not (
+            batch.status == "reviewed"
+            or batch.status == "customer_signed"
+            or batch.customer_signed_at is not None
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Aufmaße müssen vor der Abrechnung durch den Projektleiter geprüft werden.",
+            )
 
         batch.status = normalized_status
         for entry in batch.entries:

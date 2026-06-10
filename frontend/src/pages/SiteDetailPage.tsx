@@ -25,6 +25,7 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
+type MeasurementReviewStatusFilter = "all" | "review-required" | "reviewed" | "signed" | "billed";
 type SiteWorkTimeRangeMode = "week" | "month";
 type SiteWorkTimeBalanceStatus = "missing" | "within" | "near_limit" | "over";
 type ProjectFolderNavigationLevel = {
@@ -433,7 +434,7 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage(
         billingStatus === "billed"
           ? `${batch.title} wurde als abgerechnet markiert.`
-          : `${batch.title} wurde wieder als noch offen markiert.`,
+          : `${batch.title} wurde wieder als prüfungspflichtig markiert.`,
       );
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Abrechnungsstatus konnte nicht gespeichert werden."));
@@ -454,7 +455,7 @@ export function SiteDetailPage() {
       setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setSelectedMeasurementBatch(updated);
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
-      setMeasurementReviewMessage(`${batch.title} wurde für die Kundenunterschrift freigegeben.`);
+      setMeasurementReviewMessage(`${batch.title} wurde als geprüft markiert.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Prüfstatus konnte nicht gespeichert werden."));
     } finally {
@@ -2514,6 +2515,7 @@ function MeasurementReviewPanel({
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
+  const [statusFilter, setStatusFilter] = useState<MeasurementReviewStatusFilter>("all");
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -2552,6 +2554,28 @@ function MeasurementReviewPanel({
     }
     return right.number - left.number;
   }), [batches]);
+  const statusFilterOptions = useMemo(() => ([
+    { key: "all" as const, label: "Alle", count: sortedBatches.length },
+    { key: "review-required" as const, label: "Prüfung erforderlich", count: sortedBatches.filter(isMeasurementBatchReviewRequired).length },
+    { key: "reviewed" as const, label: "Geprüft", count: sortedBatches.filter((batch) => isMeasurementBatchReviewed(batch.status)).length },
+    { key: "signed" as const, label: "Unterschrieben", count: sortedBatches.filter(isMeasurementBatchSignedOpen).length },
+    { key: "billed" as const, label: "Abgerechnet", count: sortedBatches.filter((batch) => isMeasurementBatchBilled(batch.status)).length },
+  ]), [sortedBatches]);
+  const visibleBatches = useMemo(() => sortedBatches.filter((batch) => {
+    if (statusFilter === "all") {
+      return true;
+    }
+    if (statusFilter === "review-required") {
+      return isMeasurementBatchReviewRequired(batch);
+    }
+    if (statusFilter === "reviewed") {
+      return isMeasurementBatchReviewed(batch.status);
+    }
+    if (statusFilter === "signed") {
+      return isMeasurementBatchSignedOpen(batch);
+    }
+    return isMeasurementBatchBilled(batch.status);
+  }), [sortedBatches, statusFilter]);
 
   function updateEntryDraft(entryId: number, field: keyof MeasurementEntryDraft, value: string): void {
     setEntryDrafts((current) => ({
@@ -2714,9 +2738,10 @@ function MeasurementReviewPanel({
             <span className="measurement-review-action-divider" aria-hidden="true" />
             <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
             <span className="measurement-review-action-divider" aria-hidden="true" />
-            <div className="measurement-review-filter-group" aria-label="Statusfilter">
-              <span>Alle</span>
-              <span className={!isBilled ? "is-active" : ""}>Prüfung erforderlich</span>
+            <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
+              <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Prüfung erforderlich</span>
+              <span className={isReviewed ? "is-active" : ""}>Geprüft</span>
+              <span className={isCustomerSigned && !isBilled ? "is-active" : ""}>Unterschrieben</span>
               <span className={isBilled ? "is-active" : ""}>Abgerechnet</span>
             </div>
           </div>
@@ -2745,14 +2770,16 @@ function MeasurementReviewPanel({
                 </button>
               ) : (
                 <>
-                  {!isReviewed && !isCustomerSigned ? (
-                    <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
-                      Für Kundenunterschrift freigeben
+                  {isMeasurementBatchReviewRequired(selectedBatch) ? (
+                    <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
+                      Prüfung abschließen
                     </button>
                   ) : null}
-                  <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
-                    Als abgerechnet markieren
-                  </button>
+                  {(isReviewed || isCustomerSigned) ? (
+                    <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
+                      Als abgerechnet markieren
+                    </button>
+                  ) : null}
                 </>
               )
             ) : null}
@@ -2849,7 +2876,7 @@ function MeasurementReviewPanel({
       <div className="project-record-toolbar">
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Prüfung</h2>
-          <p>Eingereichte Aufmaßpakete prüfen und als noch offen oder abgerechnet führen.</p>
+          <p>Eingereichte Aufmaßpakete prüfen und danach zur Unterschrift oder Abrechnung führen.</p>
         </div>
       </div>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
@@ -2863,8 +2890,28 @@ function MeasurementReviewPanel({
         <div className="project-record-empty-state">Noch keine Aufmaßpakete vorhanden.</div>
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
-        <div className="measurement-review-list">
-          {sortedBatches.map((batch) => {
+        <>
+          <div className="measurement-review-list-toolbar">
+            <div className="measurement-review-filter-group" aria-label="Statusfilter">
+              {statusFilterOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={statusFilter === option.key ? "is-active" : ""}
+                  onClick={() => setStatusFilter(option.key)}
+                >
+                  {option.label}
+                  <span>{option.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {visibleBatches.length === 0 ? (
+            <div className="project-record-empty-state">Keine Aufmaßpakete in diesem Status.</div>
+          ) : null}
+          {visibleBatches.length > 0 ? (
+            <div className="measurement-review-list">
+              {visibleBatches.map((batch) => {
             const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
             const isOldOffer = batch.is_current_offer === false;
             const checkedPdfKey = `${batch.id}:checked`;
@@ -2932,8 +2979,10 @@ function MeasurementReviewPanel({
                 </div>
               </div>
             );
-          })}
-        </div>
+              })}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </>
   );
@@ -3955,6 +4004,14 @@ function isMeasurementBatchPdfExportable(status: string): boolean {
 
 function isMeasurementBatchReviewed(status: string): boolean {
   return status === "reviewed";
+}
+
+function isMeasurementBatchReviewRequired(batch: MobileMeasurementBatch): boolean {
+  return isMeasurementBatchOpen(batch.status) && !isCustomerSignedMeasurementBatch(batch);
+}
+
+function isMeasurementBatchSignedOpen(batch: MobileMeasurementBatch): boolean {
+  return isCustomerSignedMeasurementBatch(batch) && !isMeasurementBatchBilled(batch.status);
 }
 
 function isMeasurementBatchOpen(status: string): boolean {
