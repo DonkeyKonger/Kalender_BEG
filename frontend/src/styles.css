@@ -11952,16 +11952,60 @@ button.person-chip:focus-visible {
   min-height: 100%;
 }
 
+.mobile-customer-signature-zoom-controls {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 2px 2px 6px;
+  background: linear-gradient(180deg, #f4f7fb 70%, rgb(244 247 251 / 0%));
+}
+
+.mobile-customer-signature-zoom-controls button,
+.mobile-customer-signature-zoom-controls span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 32px;
+  border: 1px solid #cbd7e6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #173966;
+  font-size: 0.78rem;
+  font-weight: 850;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 10%);
+}
+
+.mobile-customer-signature-zoom-controls button {
+  cursor: pointer;
+}
+
+.mobile-customer-signature-zoom-controls button:last-child {
+  min-width: 66px;
+  padding: 0 10px;
+}
+
+.mobile-customer-signature-zoom-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .mobile-customer-signature-pdf-pages {
   display: grid;
   align-content: start;
   justify-items: center;
   gap: 10px;
   min-height: 100%;
+  min-width: 100%;
+  transform-origin: top center;
 }
 
 .mobile-customer-signature-pdf-page {
-  max-width: 100%;
   overflow: hidden;
   border-radius: 8px;
   background: #ffffff;
@@ -11970,7 +12014,6 @@ button.person-chip:focus-visible {
 
 .mobile-customer-signature-canvas-page {
   display: block;
-  max-width: 100%;
   background: #ffffff;
 }
 

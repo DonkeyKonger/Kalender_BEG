@@ -21,7 +21,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -47,6 +47,9 @@ function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
 type MeasurementViewMode = "list" | "table";
+const PDF_MIN_ZOOM = 0.75;
+const PDF_MAX_ZOOM = 2.5;
+const PDF_ZOOM_STEP = 0.25;
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 
@@ -1468,7 +1471,11 @@ function MeasurementQuantityKeypad({
 function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
   const pagesRef = useRef<HTMLDivElement | null>(null);
   const lastObservedWidthRef = useRef<number | null>(null);
+  const pinchStateRef = useRef<{ initialDistance: number; initialZoom: number; latestScale: number } | null>(null);
+  const pinchPreviewScaleRef = useRef(1);
   const [renderVersion, setRenderVersion] = useState(0);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [pinchPreviewScale, setPinchPreviewScale] = useState(1);
   const [isRendering, setIsRendering] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1514,8 +1521,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     let isCancelled = false;
     let loadingTask: PDFDocumentLoadingTask | null = null;
     let pdfDocument: PDFDocumentProxy | null = null;
-    renderTarget.replaceChildren();
-    setIsRendering(true);
+    setIsRendering(renderTarget.childElementCount === 0);
     setRenderError(null);
 
     async function renderPdf(): Promise<void> {
@@ -1530,6 +1536,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
           return;
         }
 
+        const nextPageElements: HTMLDivElement[] = [];
         for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
           const page = await pdfDocument.getPage(pageNumber);
           if (isCancelled) {
@@ -1538,7 +1545,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
 
           const baseViewport = page.getViewport({ scale: 1 });
           const availableWidth = Math.max(renderTarget.clientWidth - 16, 260);
-          const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 2.2);
+          const scale = Math.min(Math.max((availableWidth / baseViewport.width) * zoomScale, 0.35), 3.5);
           const viewport = page.getViewport({ scale });
           const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
           const canvas = document.createElement("canvas");
@@ -1558,13 +1565,14 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
           const pageElement = document.createElement("div");
           pageElement.className = "mobile-customer-signature-pdf-page";
           pageElement.appendChild(canvas);
-          renderTarget.appendChild(pageElement);
+          nextPageElements.push(pageElement);
 
           const renderTask = page.render({ canvas, canvasContext, viewport });
           await renderTask.promise;
         }
 
         if (!isCancelled) {
+          renderTarget.replaceChildren(...nextPageElements);
           setIsRendering(false);
         }
       } catch (error) {
@@ -1579,17 +1587,97 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     void renderPdf();
     return () => {
       isCancelled = true;
-      renderTarget.replaceChildren();
       void loadingTask?.destroy();
       void pdfDocument?.cleanup();
     };
-  }, [data, renderVersion]);
+  }, [data, renderVersion, zoomScale]);
+
+  function updateZoom(nextZoom: number): void {
+    setZoomScale((currentZoom) => {
+      const clampedZoom = clampNumber(nextZoom, PDF_MIN_ZOOM, PDF_MAX_ZOOM);
+      return Math.abs(clampedZoom - currentZoom) < 0.01 ? currentZoom : clampedZoom;
+    });
+  }
+
+  function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>): void {
+    if (event.touches.length !== 2) {
+      return;
+    }
+    const distance = getTouchDistance(event.touches);
+    if (distance <= 0) {
+      return;
+    }
+    event.preventDefault();
+    pinchStateRef.current = {
+      initialDistance: distance,
+      initialZoom: zoomScale,
+      latestScale: 1,
+    };
+    pinchPreviewScaleRef.current = 1;
+    setPinchPreviewScale(1);
+  }
+
+  function handleTouchMove(event: ReactTouchEvent<HTMLDivElement>): void {
+    const pinchState = pinchStateRef.current;
+    if (!pinchState || event.touches.length !== 2) {
+      return;
+    }
+    event.preventDefault();
+    const distance = getTouchDistance(event.touches);
+    if (distance <= 0) {
+      return;
+    }
+    const nextPreviewScale = clampNumber(distance / pinchState.initialDistance, 0.65, 1.8);
+    pinchState.latestScale = nextPreviewScale;
+    if (Math.abs(nextPreviewScale - pinchPreviewScaleRef.current) >= 0.03) {
+      pinchPreviewScaleRef.current = nextPreviewScale;
+      setPinchPreviewScale(nextPreviewScale);
+    }
+  }
+
+  function finishPinch(): void {
+    const pinchState = pinchStateRef.current;
+    if (!pinchState) {
+      return;
+    }
+    pinchStateRef.current = null;
+    pinchPreviewScaleRef.current = 1;
+    setPinchPreviewScale(1);
+    updateZoom(pinchState.initialZoom * pinchState.latestScale);
+  }
 
   return (
-    <div className="mobile-customer-signature-pdfjs" aria-label="Aufmaß-PDF">
+    <div
+      className="mobile-customer-signature-pdfjs"
+      aria-label="Aufmaß-PDF"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={(event) => {
+        if (event.touches.length < 2) {
+          finishPinch();
+        }
+      }}
+      onTouchCancel={finishPinch}
+    >
+      <div className="mobile-customer-signature-zoom-controls" aria-label="PDF-Zoom">
+        <button type="button" onClick={() => updateZoom(zoomScale - PDF_ZOOM_STEP)} disabled={zoomScale <= PDF_MIN_ZOOM + 0.01}>
+          -
+        </button>
+        <span>{Math.round(zoomScale * 100)}%</span>
+        <button type="button" onClick={() => updateZoom(zoomScale + PDF_ZOOM_STEP)} disabled={zoomScale >= PDF_MAX_ZOOM - 0.01}>
+          +
+        </button>
+        <button type="button" onClick={() => updateZoom(1)}>
+          Breite
+        </button>
+      </div>
       {isRendering ? <div className="empty-panel">PDF wird vorbereitet...</div> : null}
       {renderError ? <div className="form-error">{renderError}</div> : null}
-      <div className="mobile-customer-signature-pdf-pages" ref={pagesRef} />
+      <div
+        className="mobile-customer-signature-pdf-pages"
+        ref={pagesRef}
+        style={{ transform: pinchPreviewScale === 1 ? undefined : `scale(${pinchPreviewScale})` }}
+      />
     </div>
   );
 }
@@ -1864,6 +1952,18 @@ function drawSignatureCanvas(canvas: HTMLCanvasElement | null, strokes: Customer
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>["touches"]): number {
+  if (touches.length < 2) {
+    return 0;
+  }
+  const firstTouch = touches[0];
+  const secondTouch = touches[1];
+  if (!firstTouch || !secondTouch) {
+    return 0;
+  }
+  return Math.hypot(firstTouch.clientX - secondTouch.clientX, firstTouch.clientY - secondTouch.clientY);
 }
 
 function PlaceholderPanel({ icon: Icon, text }: { icon: typeof ClipboardList; text: string }) {
