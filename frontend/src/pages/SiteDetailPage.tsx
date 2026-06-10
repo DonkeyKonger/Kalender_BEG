@@ -20,7 +20,7 @@ import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
-type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "tools-material";
+type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
@@ -54,6 +54,7 @@ const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "folders", label: "Ordnerstruktur" },
   { key: "assembly-times", label: "Montagezeiten" },
   { key: "measurement", label: "Aufmaß" },
+  { key: "extra-work", label: "Zusatzaufträge" },
   { key: "tools-material", label: "Werkzeuge & Material" },
 ];
 
@@ -902,6 +903,15 @@ export function SiteDetailPage() {
           onCreateEntry={createMeasurementEntry}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
           onExportPdf={downloadMeasurementBatchPdf}
+        />
+      ) : null}
+      {activeTab === "extra-work" ? (
+        <PlaceholderTab
+          icon={FileText}
+          title="Zusatzaufträge"
+          description="Hier werden später Stundenzettel und Zusatzarbeiten zur Baustelle erfasst, geprüft und als PDF ausgegeben."
+          emptyText="Stundenzettel und Zusatzarbeiten werden in einer späteren Ausbaustufe hier gesammelt."
+          sections={["Stundenzettel", "Zusatzarbeiten", "Prüfung", "PDF-Ausgabe"]}
         />
       ) : null}
       {activeTab === "tools-material" ? (

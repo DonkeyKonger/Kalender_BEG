@@ -45,7 +45,7 @@ function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
   return pdfJsLoader;
 }
 
-type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
+type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
 type MeasurementViewMode = "list" | "table";
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
@@ -93,6 +93,7 @@ type MobileDocumentPreviewState = {
 const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
+  { key: "extra-work", label: "Stundenzettel", description: "Zusatzstunden erfassen", icon: FileText },
   { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
 ];
 
@@ -212,8 +213,37 @@ export function MobileAssignmentDetailPage() {
           onEntryModeChange={setIsMeasurementEntryMode}
         />
       )}
+      {activeTab === "extra-work" && (
+        <MobileExtraWorkPlaceholder
+          assignment={assignment}
+          onBack={() => setActiveTab(null)}
+        />
+      )}
       {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird später Wagen-, Werkzeug- und Materialinformationen anzeigen." />}
     </section>
+  );
+}
+
+function MobileExtraWorkPlaceholder({
+  assignment,
+  onBack,
+}: {
+  assignment: MobileAssignment;
+  onBack: () => void;
+}) {
+  return (
+    <div className="mobile-detail-panel mobile-placeholder-panel">
+      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" size={17} />
+        <span>Zurück</span>
+      </button>
+      <FileText aria-hidden="true" size={24} />
+      <h2>Stundenzettel</h2>
+      <p className="muted-text">{[assignment.site.site_number, assignment.site.name].filter(Boolean).join(" · ")}</p>
+      <p>
+        Diese Funktion wird vorbereitet. Später können hier Zusatzstunden zur Baustelle erfasst und als Zettel/PDF übergeben werden.
+      </p>
+    </div>
   );
 }
 

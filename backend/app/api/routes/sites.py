@@ -8,6 +8,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
 from app.schemas.measurement import (
     MeasurementBaseRead,
     MeasurementBaseUpdate,
@@ -34,6 +35,7 @@ from app.schemas.site import (
     SiteRemoveResponse,
     SiteUpdate,
 )
+from app.services.extra_work_service import ExtraWorkService
 from app.services.geo_service import search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
@@ -317,6 +319,30 @@ def delete_measurement_base(
         site_id=site_id,
         measurement_base_id=measurement_base_id,
     )
+
+
+@router.get("/{site_id}/extra-work-tickets", response_model=list[ExtraWorkTicketRead])
+def list_extra_work_tickets(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[ExtraWorkTicketRead]:
+    return ExtraWorkService(db).list_site_tickets(site_id)
+
+
+@router.post("/{site_id}/extra-work-tickets", response_model=ExtraWorkTicketRead, status_code=status.HTTP_201_CREATED)
+def create_extra_work_ticket(
+    site_id: int,
+    payload: ExtraWorkTicketCreate,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).create_site_ticket(
+        site_id=site_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
 
 @router.get("/{site_id}/measurement-items", response_model=list[MeasurementItemRead])
 def list_measurement_items(
