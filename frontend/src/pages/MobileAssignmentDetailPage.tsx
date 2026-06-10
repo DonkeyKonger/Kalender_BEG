@@ -49,7 +49,9 @@ type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
 type MeasurementViewMode = "list" | "table";
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
-const PDF_ZOOM_STEP = 0.25;
+const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
+const PDF_MAX_RENDER_PIXEL_RATIO = 3.5;
+const PDF_MAX_CANVAS_PIXELS = 8_000_000;
 
 type PdfContentSize = {
   width: number;
@@ -1497,7 +1499,6 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
   const pendingScaleRef = useRef<{ scale: number; focal: PdfFocalPoint | null } | null>(null);
   const scaleFrameRef = useRef<number | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
-  const [zoomScale, setZoomScale] = useState(1);
   const [isRendering, setIsRendering] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1627,27 +1628,27 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
           const availableWidth = Math.max(viewportNode.clientWidth - 16, 260);
           const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 3.5);
           const viewport = page.getViewport({ scale });
-          const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+          const renderPixelRatio = getPdfCanvasRenderScale(viewport.width, viewport.height);
+          const renderViewport = page.getViewport({ scale: scale * renderPixelRatio });
           const canvas = document.createElement("canvas");
-          const canvasContext = canvas.getContext("2d");
+          const canvasContext = canvas.getContext("2d", { alpha: false });
 
           if (!canvasContext) {
             throw new Error("Canvas konnte nicht initialisiert werden.");
           }
 
           canvas.className = "mobile-customer-signature-canvas-page";
-          canvas.width = Math.floor(viewport.width * pixelRatio);
-          canvas.height = Math.floor(viewport.height * pixelRatio);
+          canvas.width = Math.floor(renderViewport.width);
+          canvas.height = Math.floor(renderViewport.height);
           canvas.style.width = `${viewport.width}px`;
           canvas.style.height = `${viewport.height}px`;
-          canvasContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
           const pageElement = document.createElement("div");
           pageElement.className = "mobile-customer-signature-pdf-page";
           pageElement.appendChild(canvas);
           nextPageElements.push(pageElement);
 
-          const renderTask = page.render({ canvas, canvasContext, viewport });
+          const renderTask = page.render({ canvas, canvasContext, viewport: renderViewport });
           await renderTask.promise;
         }
 
@@ -1680,21 +1681,6 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       void pdfDocument?.cleanup();
     };
   }, [data, renderVersion]);
-
-  function updateZoom(nextZoom: number): void {
-    const clampedZoom = clampNumber(nextZoom, PDF_MIN_ZOOM, PDF_MAX_ZOOM);
-    if (Math.abs(clampedZoom - zoomScaleRef.current) < 0.01) {
-      return;
-    }
-    const viewportElement = viewportRef.current;
-    const viewportRect = viewportElement?.getBoundingClientRect();
-    const focal = viewportRect
-      ? { clientX: viewportRect.left + (viewportRect.width / 2), clientY: viewportRect.top + (viewportRect.height / 2) }
-      : null;
-    zoomScaleRef.current = clampedZoom;
-    applyPdfScale(clampedZoom, focal);
-    setZoomScale(clampedZoom);
-  }
 
   function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>): void {
     if (event.touches.length !== 2) {
@@ -1738,7 +1724,6 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     pinchStateRef.current = null;
     zoomScaleRef.current = pinchState.latestZoom;
     applyPdfScale(pinchState.latestZoom, pinchState.latestFocal);
-    setZoomScale(pinchState.latestZoom);
   }
 
   return (
@@ -1746,18 +1731,6 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       className="mobile-customer-signature-pdfjs"
       aria-label="Aufmaß-PDF"
     >
-      <div className="mobile-customer-signature-zoom-controls" aria-label="PDF-Zoom">
-        <button type="button" onClick={() => updateZoom(zoomScale - PDF_ZOOM_STEP)} disabled={zoomScale <= PDF_MIN_ZOOM + 0.01}>
-          -
-        </button>
-        <span>{Math.round(zoomScale * 100)}%</span>
-        <button type="button" onClick={() => updateZoom(zoomScale + PDF_ZOOM_STEP)} disabled={zoomScale >= PDF_MAX_ZOOM - 0.01}>
-          +
-        </button>
-        <button type="button" onClick={() => updateZoom(1)}>
-          Breite
-        </button>
-      </div>
       {isRendering ? <div className="empty-panel">PDF wird vorbereitet...</div> : null}
       {renderError ? <div className="form-error">{renderError}</div> : null}
       <div
@@ -2050,6 +2023,16 @@ function drawSignatureCanvas(canvas: HTMLCanvasElement | null, strokes: Customer
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function getPdfCanvasRenderScale(cssWidth: number, cssHeight: number): number {
+  const deviceScale = window.devicePixelRatio || 1;
+  const targetScale = Math.min(
+    Math.max(deviceScale * PDF_RENDER_QUALITY_MULTIPLIER, 2.5),
+    PDF_MAX_RENDER_PIXEL_RATIO,
+  );
+  const pixelCapScale = Math.sqrt(PDF_MAX_CANVAS_PIXELS / Math.max(cssWidth * cssHeight, 1));
+  return Math.max(1, Math.min(targetScale, pixelCapScale));
 }
 
 function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>["touches"]): number {

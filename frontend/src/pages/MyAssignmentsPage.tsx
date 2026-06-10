@@ -26,7 +26,6 @@ import {
   openAndroidAppLocationSettings,
   isAndroidAppContext,
   requestForegroundLocationPermission,
-  sendCurrentGpsLocation,
   startAndroidBackgroundGpsTracking,
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
@@ -34,6 +33,7 @@ import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
+const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 
 type MobileViewMode = "two_weeks" | "year";
 
@@ -65,14 +65,14 @@ export function MyAssignmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
   const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
-  const [isSendingGps, setIsSendingGps] = useState(false);
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
-  const [lastManualGpsSentAt, setLastManualGpsSentAt] = useState<string | null>(null);
   const [lastAutomaticGpsSentAt, setLastAutomaticGpsSentAt] = useState<string | null>(null);
   const [androidGpsStatus, setAndroidGpsStatus] = useState<AndroidBackgroundGpsStatus | null>(null);
   const [androidGpsPermissions, setAndroidGpsPermissions] = useState<AndroidGpsPermissionStatus | null>(null);
   const [isHandlingGpsPermission, setIsHandlingGpsPermission] = useState(false);
+  const [isTogglingGpsTracking, setIsTogglingGpsTracking] = useState(false);
+  const [isGpsTrackingEnabled, setIsGpsTrackingEnabled] = useState(() => readGpsTrackingPreference());
 
   const range = useMemo(() => getRange(mode), [mode]);
 
@@ -137,6 +137,12 @@ export function MyAssignmentsPage() {
     }
 
     try {
+      if (!isGpsTrackingEnabled) {
+        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
+        setAndroidGpsStatus(stoppedStatus);
+        return;
+      }
+
       const permissions = await checkAndroidGpsPermissions();
       setAndroidGpsPermissions(permissions);
       if (!hasRequiredAndroidGpsPermissions(permissions)) {
@@ -159,7 +165,7 @@ export function MyAssignmentsPage() {
       setGpsMessageTone("error");
       await refreshAndroidGpsStatus();
     }
-  }, [refreshAndroidGpsStatus, status, user?.role]);
+  }, [isGpsTrackingEnabled, refreshAndroidGpsStatus, status, user?.role]);
 
   useEffect(() => {
     void syncAndroidGpsTracking();
@@ -200,23 +206,54 @@ export function MyAssignmentsPage() {
     };
   }, [refreshAndroidGpsStatus, status, user?.role]);
 
-  async function sendGpsNow(): Promise<void> {
-    if (isSendingGps) {
+  async function handleGpsTrackingToggle(nextEnabled: boolean): Promise<void> {
+    if (isTogglingGpsTracking) {
       return;
     }
-    setIsSendingGps(true);
+
+    setIsTogglingGpsTracking(true);
     setGpsMessageTone("info");
-    setGpsMessage("Standort wird gesendet ...");
+    setGpsMessage(nextEnabled ? "Ortung wird aktiviert ..." : "Ortung wird ausgeschaltet ...");
+    setIsGpsTrackingEnabled(nextEnabled);
+    writeGpsTrackingPreference(nextEnabled);
+
     try {
-      const result = await sendCurrentGpsLocation();
-      setLastManualGpsSentAt(result.sentAt);
-      setGpsMessage("Standort gesendet.");
+      if (!nextEnabled) {
+        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
+        setAndroidGpsStatus(stoppedStatus);
+        setGpsMessage("Ortung ausgeschaltet.");
+        setGpsMessageTone("info");
+        return;
+      }
+
+      if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
+        setGpsMessage("Ortung ist nur in der Android-App verfügbar.");
+        setGpsMessageTone("error");
+        return;
+      }
+
+      const permissions = await checkAndroidGpsPermissions();
+      setAndroidGpsPermissions(permissions);
+      if (!hasRequiredAndroidGpsPermissions(permissions)) {
+        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
+        setAndroidGpsStatus(stoppedStatus);
+        setGpsMessage("Für die Ortung fehlen noch Berechtigungen.");
+        setGpsMessageTone("error");
+        return;
+      }
+
+      const trackingStatus = await startAndroidBackgroundGpsTracking();
+      setAndroidGpsStatus(trackingStatus);
+      if (trackingStatus.lastSentAt) {
+        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
+      }
+      setGpsMessage(trackingStatus.isTracking ? "Ortung aktiv." : "Ortung konnte nicht aktiviert werden.");
       setGpsMessageTone("info");
     } catch (requestError) {
       setGpsMessage(formatMobileGpsError(requestError));
       setGpsMessageTone("error");
     } finally {
-      setIsSendingGps(false);
+      setIsTogglingGpsTracking(false);
     }
   }
 
@@ -272,6 +309,8 @@ export function MyAssignmentsPage() {
   const mobileGpsPlatform = getMobileGpsPlatform();
   const showGpsDebug = import.meta.env.DEV;
   const showGpsDebugStatus = showGpsDebug && user?.role === "monteur";
+  const canUseAndroidGpsTracking = user?.role === "monteur" && isAndroidAppContext();
+  const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
 
   if (activeScreen === "assignments") {
     return (
@@ -342,10 +381,8 @@ export function MyAssignmentsPage() {
         </button>
       </div>
 
-      <header className="mobile-home-hero">
-        <p className="eyebrow">Mobile Baustellen-App</p>
-        <h1>Meine Baustellen</h1>
-        <p>Einsätze, Meldungen und Standortprüfung kompakt für den Arbeitstag.</p>
+      <header className="mobile-home-title-card">
+        <h1>BEG Baustellenkalender</h1>
       </header>
 
       {loadedAt && (
@@ -381,54 +418,6 @@ export function MyAssignmentsPage() {
               <DayFocusCard date={today} label="Einsatz heute" assignments={dailyByDate.get(today) ?? []} />
               <DayFocusCard date={tomorrow} label="Einsatz morgen" assignments={dailyByDate.get(tomorrow) ?? []} />
             </div>
-          </section>
-
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Standort</h2>
-              {showGpsDebug ? <span>Test</span> : null}
-            </div>
-            {user?.role === "monteur" && isAndroidAppContext() && androidGpsPermissionPrompt ? (
-              <div className="form-info mobile-gps-status">
-                <strong>{androidGpsPermissionPrompt.title}</strong>
-                <p>{androidGpsPermissionPrompt.text}</p>
-                <button
-                  className="icon-button secondary"
-                  disabled={isHandlingGpsPermission}
-                  type="button"
-                  onClick={() => void handleAndroidGpsPermissionAction()}
-                >
-                  <MapPin aria-hidden="true" size={17} />
-                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
-                </button>
-              </div>
-            ) : null}
-            <button className="mobile-message-card mobile-gps-send-card" disabled={isSendingGps} type="button" onClick={() => void sendGpsNow()}>
-              <MapPin aria-hidden="true" size={20} />
-              <span>
-                <strong>{isSendingGps ? "Standort wird gesendet" : "Standort jetzt senden"}</strong>
-                <small>Standortdaten werden zur Plausibilitätsprüfung deiner Baustellenzeiten verwendet.</small>
-              </span>
-            </button>
-            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
-            {showGpsDebugStatus && isAndroidAppContext() ? (
-              <>
-                <p className="cache-note mobile-gps-status">
-                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
-                </p>
-                {lastManualGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt manuell gesendet: {formatDateTime(lastManualGpsSentAt)}</p> : null}
-                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
-              </>
-            ) : null}
-            {showGpsDebugStatus ? (
-              <MobileGpsDebugCard
-                platform={mobileGpsPlatform}
-                permissions={androidGpsPermissions}
-                status={androidGpsStatus}
-                lastManualSentAt={lastManualGpsSentAt}
-                lastAutomaticSentAt={lastAutomaticGpsSentAt}
-              />
-            ) : null}
           </section>
 
           <section className="mobile-home-section">
@@ -487,6 +476,60 @@ export function MyAssignmentsPage() {
               />
             </div>
           </section>
+
+          <section className="mobile-location-settings-card" aria-label="Standortprüfung">
+            <div className="mobile-location-settings-head">
+              <div>
+                <h2>Standortprüfung</h2>
+                <p>{gpsToggleLabel}</p>
+              </div>
+              <label className="mobile-toggle">
+                <input
+                  checked={isGpsTrackingEnabled}
+                  disabled={!canUseAndroidGpsTracking || isTogglingGpsTracking}
+                  type="checkbox"
+                  onChange={(event) => void handleGpsTrackingToggle(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            <p className="mobile-location-settings-text">
+              Standortdaten helfen dem Büro später zu prüfen, ob gemeldete Baustellenzeiten plausibel zur geplanten Baustelle passen. Es geht nicht um Live-Überwachung.
+            </p>
+            {canUseAndroidGpsTracking && isGpsTrackingEnabled && androidGpsPermissionPrompt ? (
+              <div className="form-info mobile-gps-status">
+                <strong>{androidGpsPermissionPrompt.title}</strong>
+                <p>{androidGpsPermissionPrompt.text}</p>
+                <button
+                  className="icon-button secondary"
+                  disabled={isHandlingGpsPermission}
+                  type="button"
+                  onClick={() => void handleAndroidGpsPermissionAction()}
+                >
+                  <MapPin aria-hidden="true" size={17} />
+                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
+                </button>
+              </div>
+            ) : null}
+            {!canUseAndroidGpsTracking ? <p className="cache-note mobile-gps-status">Ortung ist nur in der Android-App verfügbar.</p> : null}
+            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
+            {showGpsDebugStatus && isAndroidAppContext() ? (
+              <>
+                <p className="cache-note mobile-gps-status">
+                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
+                </p>
+                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
+              </>
+            ) : null}
+            {showGpsDebugStatus ? (
+              <MobileGpsDebugCard
+                platform={mobileGpsPlatform}
+                permissions={androidGpsPermissions}
+                status={androidGpsStatus}
+                lastAutomaticSentAt={lastAutomaticGpsSentAt}
+              />
+            ) : null}
+          </section>
         </>
       )}
 
@@ -508,6 +551,29 @@ function hasRequiredAndroidGpsPermissions(permissions: AndroidGpsPermissionStatu
       && permissions.backgroundLocationGranted
       && permissions.notificationsGranted,
   );
+}
+
+function readGpsTrackingPreference(): boolean {
+  try {
+    const stored = localStorage.getItem(GPS_TRACKING_ENABLED_KEY);
+    if (stored === "true") {
+      return true;
+    }
+    if (stored === "false") {
+      return false;
+    }
+  } catch {
+    return isAndroidAppContext();
+  }
+  return isAndroidAppContext();
+}
+
+function writeGpsTrackingPreference(isEnabled: boolean): void {
+  try {
+    localStorage.setItem(GPS_TRACKING_ENABLED_KEY, String(isEnabled));
+  } catch {
+    // Ignore storage failures; the in-memory toggle still controls this session.
+  }
 }
 
 function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus | null): AndroidGpsPermissionPrompt | null {
@@ -632,13 +698,11 @@ function MobileGpsDebugCard({
   platform,
   permissions,
   status,
-  lastManualSentAt,
   lastAutomaticSentAt,
 }: {
   platform: string;
   permissions: AndroidGpsPermissionStatus | null;
   status: AndroidBackgroundGpsStatus | null;
-  lastManualSentAt: string | null;
   lastAutomaticSentAt: string | null;
 }) {
   const backgroundAvailable = platform === "android" && isAndroidAppContext();
@@ -658,7 +722,6 @@ function MobileGpsDebugCard({
         <div><dt>Standort foreground</dt><dd>{formatYesNo(permissions?.foregroundLocationGranted)}</dd></div>
         <div><dt>Standort immer erlauben</dt><dd>{formatYesNo(permissions?.backgroundLocationGranted)}</dd></div>
         <div><dt>Benachrichtigung</dt><dd>{formatYesNo(permissions?.notificationsGranted)}</dd></div>
-        <div><dt>Letzte manuelle Sendung</dt><dd>{formatOptionalDateTime(lastManualSentAt)}</dd></div>
         <div><dt>Letzte automatische Sendung</dt><dd>{formatOptionalDateTime(lastAutomaticSentAt)}</dd></div>
         <div><dt>Offline-Queue</dt><dd>{status?.queuedCount ?? 0}</dd></div>
         <div><dt>Zuletzt gepuffert</dt><dd>{formatOptionalDateTime(status?.lastQueuedAt ?? null)}</dd></div>
