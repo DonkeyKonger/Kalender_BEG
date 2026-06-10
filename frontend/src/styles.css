@@ -5616,6 +5616,7 @@ button.person-chip:focus-visible {
 }
 
 .measurement-status.is-billed,
+.measurement-status.is-reviewed,
 .measurement-status.is-approved {
   background: #ecfdf3;
   color: #166534;

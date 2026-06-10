@@ -716,16 +716,28 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
         current_user=user,
         payload=MeasurementEntryCreate(area_or_comment="EG", quantity=Decimal("12.00")),
     )
+    signature_payload = CustomerSignatureCreate(
+        customer_name="Kunde Beispiel",
+        signature_strokes=[
+            [{"x": 0.1, "y": 0.5}, {"x": 0.4, "y": 0.45}, {"x": 0.8, "y": 0.55}]
+        ],
+    )
+    with pytest.raises(HTTPException) as blocked_signature:
+        service.sign_mobile_batch(
+            assignment_id=assignment.id,
+            batch_id=batch.id,
+            current_user=user,
+            payload=signature_payload,
+        )
+    assert blocked_signature.value.status_code == 403
+
+    person.can_sign_measurements_immediately = True
+    db.commit()
     signed = service.sign_mobile_batch(
         assignment_id=assignment.id,
         batch_id=batch.id,
         current_user=user,
-        payload=CustomerSignatureCreate(
-            customer_name="Kunde Beispiel",
-            signature_strokes=[
-                [{"x": 0.1, "y": 0.5}, {"x": 0.4, "y": 0.45}, {"x": 0.8, "y": 0.55}]
-            ],
-        ),
+        payload=signature_payload,
     )
 
     dashboard_messages = service.list_dashboard_submissions(limit=5)
@@ -738,6 +750,9 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
 
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
+    assert stored_batch.status == "customer_signed"
+    assert stored_batch.customer_signed_snapshot is not None
+    assert stored_batch.customer_signed_snapshot["version_label"] == "customer_signed"
     stored_batch.status = "billed"
     db.commit()
 
@@ -745,6 +760,8 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
 
 
 def test_measurement_pdf_matrix_separates_original_and_checked_values():
+    from datetime import datetime, timezone
+
     from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
     from app.services.measurement_pdf_service import MeasurementPdfService
 
@@ -812,6 +829,16 @@ def test_measurement_pdf_matrix_separates_original_and_checked_values():
     assert original_cell.original_quantity is None
     assert original_totals[item.id] == Decimal("10.00")
     assert checked_cell.quantity == Decimal("12.00")
-    assert checked_cell.original_quantity == Decimal("10.00")
-    assert checked_cell.is_corrected is True
+    assert checked_cell.original_quantity is None
+    assert checked_cell.is_corrected is False
     assert checked_totals[item.id] == Decimal("12.00")
+
+    batch.customer_signed_at = datetime.now(timezone.utc)
+    batch.customer_signed_snapshot = batch.original_submitted_snapshot
+    _positions, _areas, signed_checked_cells, signed_checked_totals = pdf_service._build_matrix(batch, mode="checked")
+
+    signed_checked_cell = signed_checked_cells[("eg", item.id)]
+    assert signed_checked_cell.quantity == Decimal("12.00")
+    assert signed_checked_cell.original_quantity == Decimal("10.00")
+    assert signed_checked_cell.is_corrected is True
+    assert signed_checked_totals[item.id] == Decimal("12.00")

@@ -26,6 +26,7 @@ const emptyPerson: PersonCreate = {
   short_code: "",
   person_type: "internal",
   is_active: true,
+  can_sign_measurements_immediately: false,
   email: null,
   phone: null,
   address_postal_code: null,
@@ -455,6 +456,10 @@ function PersonReadView({ person }: { person: Person }) {
             <span>Status</span>
             <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
           </div>
+          <ReadItem
+            label="Kundenunterschrift"
+            value={person.can_sign_measurements_immediately ? "Sofort erlaubt" : "Erst nach Prüfung"}
+          />
         </div>
       </section>
 
@@ -645,6 +650,14 @@ function PersonFields({
         />
         <span>Aktiv</span>
       </label>
+      <label className="checkbox-field">
+        <input
+          checked={draft.can_sign_measurements_immediately}
+          type="checkbox"
+          onChange={(event) => onChange({ can_sign_measurements_immediately: event.target.checked })}
+        />
+        <span>Darf Aufmaße sofort unterschreiben lassen</span>
+      </label>
 
       <section className="person-location-section site-location-section">
         <div>
@@ -741,6 +754,7 @@ function toEditablePerson(person: Person): EditablePerson {
     short_code: person.short_code,
     person_type: person.person_type,
     is_active: person.is_active,
+    can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     email: person.email,
     phone: person.phone,
     address_postal_code: person.address_postal_code,
@@ -772,6 +786,7 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
     last_name: lastName,
     display_name: person.display_name.trim() || `${firstName} ${lastName}`.trim(),
     short_code: person.short_code.trim() || `${firstName.slice(0, 1)}.${lastName}`.trim(),
+    can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,
     address_postal_code: person.address_postal_code?.trim() || null,

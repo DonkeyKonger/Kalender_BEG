@@ -11,6 +11,7 @@ export type Person = {
   short_code: string;
   person_type: PersonType;
   is_active: boolean;
+  can_sign_measurements_immediately: boolean;
   email: string | null;
   phone: string | null;
   address_postal_code: string | null;
@@ -39,6 +40,7 @@ export type PersonCreate = {
   short_code: string;
   person_type: PersonType;
   is_active: boolean;
+  can_sign_measurements_immediately: boolean;
   email: string | null;
   phone: string | null;
   address_postal_code: string | null;

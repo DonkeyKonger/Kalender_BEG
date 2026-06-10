@@ -21,6 +21,7 @@ class Person(TimestampMixin, Base):
         default=PersonType.INTERNAL,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    can_sign_measurements_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(80))
     address_postal_code: Mapped[str | None] = mapped_column(String(20))

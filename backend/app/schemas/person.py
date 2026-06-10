@@ -13,6 +13,7 @@ class PersonBase(BaseModel):
     short_code: str = Field(min_length=1, max_length=30)
     person_type: PersonType = PersonType.INTERNAL
     is_active: bool = True
+    can_sign_measurements_immediately: bool = False
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)
@@ -42,6 +43,7 @@ class PersonUpdate(BaseModel):
     short_code: str | None = Field(default=None, min_length=1, max_length=30)
     person_type: PersonType | None = None
     is_active: bool | None = None
+    can_sign_measurements_immediately: bool | None = None
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)

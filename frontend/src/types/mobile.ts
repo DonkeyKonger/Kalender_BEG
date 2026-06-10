@@ -5,6 +5,7 @@ export type MobilePerson = {
   display_name: string;
   phone: string | null;
   email: string | null;
+  can_sign_measurements_immediately: boolean;
 };
 
 export type MobileSite = {

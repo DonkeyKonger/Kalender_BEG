@@ -675,6 +675,12 @@ export const api = {
     });
   },
 
+  async markSiteMeasurementBatchReviewed(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-reviewed`, {
+      method: "POST",
+    });
+  },
+
   async resetSiteMeasurementBatchToSubmitted(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
     return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/reset-to-submitted`, {
       method: "POST",
@@ -820,7 +826,7 @@ export const api = {
   },
 
   async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<Blob> {
-    return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=original`);
+    return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
   },
 
   async signMobileMeasurementBatch(

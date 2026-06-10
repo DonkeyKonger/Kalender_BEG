@@ -392,6 +392,19 @@ def mark_measurement_batch_open(
 
 
 @router.post(
+    "/{site_id}/measurement-batches/{batch_id}/mark-reviewed",
+    response_model=MobileMeasurementBatchRead,
+)
+def mark_measurement_batch_reviewed(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).set_site_batch_reviewed(site_id=site_id, batch_id=batch_id)
+
+
+@router.post(
     "/{site_id}/measurement-batches/{batch_id}/reset-to-submitted",
     response_model=list[MobileMeasurementItemRead],
 )

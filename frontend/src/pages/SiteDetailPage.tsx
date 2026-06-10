@@ -442,6 +442,26 @@ export function SiteDetailPage() {
     }
   }
 
+  async function markMeasurementBatchReviewed(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const updated = await api.markSiteMeasurementBatchReviewed(site.id, batch.id);
+      setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setSelectedMeasurementBatch(updated);
+      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementReviewMessage(`${batch.title} wurde für die Kundenunterschrift freigegeben.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Prüfstatus konnte nicht gespeichert werden."));
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
   async function updateMeasurementEntry(
     batch: MobileMeasurementBatch,
     entryId: number,
@@ -890,6 +910,7 @@ export function SiteDetailPage() {
           }}
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
+          onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
@@ -1494,6 +1515,7 @@ function MeasurementTab({
   onBackToBatchList,
   onMarkBilled,
   onMarkOpen,
+  onMarkReviewed,
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
@@ -1530,6 +1552,7 @@ function MeasurementTab({
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -1586,6 +1609,7 @@ function MeasurementTab({
           onBackToBatchList={onBackToBatchList}
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
+          onMarkReviewed={onMarkReviewed}
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
           onResetToSubmitted={onResetToSubmitted}
@@ -2457,6 +2481,7 @@ function MeasurementReviewPanel({
   onBackToBatchList,
   onMarkBilled,
   onMarkOpen,
+  onMarkReviewed,
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
@@ -2477,6 +2502,7 @@ function MeasurementReviewPanel({
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -2667,6 +2693,8 @@ function MeasurementReviewPanel({
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
+    const isReviewed = isMeasurementBatchReviewed(selectedBatch.status);
+    const isCustomerSigned = isCustomerSignedMeasurementBatch(selectedBatch);
     const canEditRows = !isDraft;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
     const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
@@ -2713,12 +2741,19 @@ function MeasurementReviewPanel({
             {!isDraft ? (
               isBilled ? (
                 <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
-                  Wieder auf noch offen setzen
+                  Wieder auf Prüfung erforderlich setzen
                 </button>
               ) : (
-                <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
-                  Als abgerechnet markieren
-                </button>
+                <>
+                  {!isReviewed && !isCustomerSigned ? (
+                    <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
+                      Für Kundenunterschrift freigeben
+                    </button>
+                  ) : null}
+                  <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
+                    Als abgerechnet markieren
+                  </button>
+                </>
               )
             ) : null}
           </div>
@@ -2874,7 +2909,7 @@ function MeasurementReviewPanel({
                     type="button"
                     className="measurement-review-pdf-action"
                     disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
+                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst nach Prüfung oder Abrechnung verfügbar"}
                     onClick={() => {
                       setPdfExportingAction(checkedPdfKey);
                       void onExportPdf(batch, "checked").finally(() => setPdfExportingAction(null));
@@ -2886,7 +2921,7 @@ function MeasurementReviewPanel({
                     type="button"
                     className="measurement-review-pdf-action"
                     disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst bei abgerechneten Aufmaßen verfügbar"}
+                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abrechnung verfügbar"}
                     onClick={() => {
                       setPdfExportingAction(originalPdfKey);
                       void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
@@ -3900,6 +3935,7 @@ function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
   const labels: Record<string, string> = {
     draft: "Entwurf",
     in_review: "Prüfung erforderlich",
+    reviewed: "Geprüft",
     closed: "Abgeschlossen",
   };
   const normalizedStatus = status === "in_review" ? "review-required" : status;
@@ -3914,11 +3950,15 @@ function isMeasurementBatchBilled(status: string): boolean {
 }
 
 function isMeasurementBatchPdfExportable(status: string): boolean {
-  return isMeasurementBatchBilled(status);
+  return isMeasurementBatchBilled(status) || isMeasurementBatchReviewed(status) || status === "customer_signed";
+}
+
+function isMeasurementBatchReviewed(status: string): boolean {
+  return status === "reviewed";
 }
 
 function isMeasurementBatchOpen(status: string): boolean {
-  return status === "submitted" || status === "rejected";
+  return status === "submitted" || status === "rejected" || status === "customer_signed";
 }
 
 function isCustomerSignedMeasurementBatch(batch: MobileMeasurementBatch): boolean {

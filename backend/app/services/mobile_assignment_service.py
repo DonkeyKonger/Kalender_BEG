@@ -112,4 +112,5 @@ class MobileAssignmentService:
             display_name=person.display_name,
             phone=person.phone,
             email=person.email,
+            can_sign_measurements_immediately=person.can_sign_measurements_immediately,
         )

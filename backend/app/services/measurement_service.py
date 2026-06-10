@@ -347,18 +347,51 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaß wurde bereits vom Kunden unterschrieben.",
             )
+        if batch.status in {"billed", "approved", "closed"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß ist bereits abgeschlossen.",
+            )
+        can_sign_immediately = _can_sign_measurements_immediately(current_user)
+        if batch.status == "draft" and not can_sign_immediately:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
+            )
+        if batch.status not in {"draft", "submitted", "reviewed", "rejected"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß kann in diesem Status nicht unterschrieben werden.",
+            )
+        if not can_sign_immediately and batch.status != "reviewed":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
+            )
+        if not batch.entries:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Ein Aufmaß ohne Aufmaßzeilen kann nicht unterschrieben werden.",
+            )
 
         customer_name = " ".join(payload.customer_name.split())
         if not customer_name:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kundenname ist erforderlich.")
 
+        signed_at = datetime.now(timezone.utc)
         batch.customer_signature_name = customer_name
         batch.customer_signature_strokes = [
             [point.model_dump() for point in stroke]
             for stroke in payload.signature_strokes
             if len(stroke) >= 2
         ]
-        batch.customer_signed_at = datetime.now(timezone.utc)
+        batch.customer_signed_at = signed_at
+        batch.customer_signed_snapshot = self._build_measurement_snapshot(
+            batch=batch,
+            version_label="customer_signed",
+            event_at=signed_at,
+        )
+        batch.status = "customer_signed"
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
@@ -445,6 +478,34 @@ class MeasurementService:
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
 
+    def set_site_batch_reviewed(
+        self, *, site_id: int, batch_id: int
+    ) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        if batch.status == "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Entwürfe müssen zuerst zur Prüfung gesendet werden.",
+            )
+        if batch.status in {"billed", "approved", "closed"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß ist bereits abgeschlossen.",
+            )
+        if batch.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Unterschriebene Aufmaße bleiben bis zur Abrechnung prüfungspflichtig.",
+            )
+
+        batch.status = "reviewed"
+        for entry in batch.entries:
+            entry.status = "reviewed"
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
     def update_site_entry(
         self,
         *,
@@ -488,6 +549,11 @@ class MeasurementService:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Entwürfe haben noch keinen gespeicherten Monteurstand.",
+            )
+        if batch.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Unterschriebene Aufmaße behalten die unterschriebene Fassung als Grundlage.",
             )
 
         entries = list(batch.entries)
@@ -890,6 +956,27 @@ class MeasurementService:
         submitted_by: User,
         submitted_at: datetime,
     ) -> dict[str, object]:
+        snapshot = self._build_measurement_snapshot(
+            batch=batch,
+            version_label="submitted",
+            event_at=submitted_at,
+        )
+        snapshot.update(
+            {
+                "submitted_by_user_id": submitted_by.id,
+                "submitted_by_name": self._format_user_display_name(submitted_by),
+                "submitted_at": submitted_at.isoformat(),
+            }
+        )
+        return snapshot
+
+    def _build_measurement_snapshot(
+        self,
+        *,
+        batch: SiteMeasurementBatch,
+        version_label: str,
+        event_at: datetime,
+    ) -> dict[str, object]:
         entries: list[dict[str, object]] = []
         for entry in sorted(batch.entries, key=lambda row: (row.created_at, row.id)):
             item = entry.measurement_item
@@ -918,9 +1005,8 @@ class MeasurementService:
             "measurement_base_id": batch.measurement_base_id,
             "number": batch.number,
             "title": batch.title,
-            "submitted_by_user_id": submitted_by.id,
-            "submitted_by_name": self._format_user_display_name(submitted_by),
-            "submitted_at": submitted_at.isoformat(),
+            "version_label": version_label,
+            "event_at": event_at.isoformat(),
             "entries": entries,
         }
 
@@ -1050,3 +1136,7 @@ def _decimal_as_string(value: Decimal) -> str:
 
 def _datetime_as_string(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def _can_sign_measurements_immediately(user: User) -> bool:
+    return bool(user.person and user.person.can_sign_measurements_immediately)

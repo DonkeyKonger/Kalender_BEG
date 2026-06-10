@@ -248,12 +248,6 @@ class MeasurementPdfService:
         )
         if batch is None or batch.site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
-        if mode == "checked" and batch.status not in {"billed", "approved"}:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "PDF-Export ist erst für abgerechnete Aufmaße verfügbar.",
-            )
-
         pdf = SimplePdf()
         logo = _load_png_rgb(LOGO_PATH)
         if logo is not None:
@@ -327,34 +321,39 @@ class MeasurementPdfService:
             )
             totals_by_position[item.id] = totals_by_position.get(item.id, Decimal("0")) + entry.quantity
 
-        snapshot = _snapshot_matrix(batch.original_submitted_snapshot)
-        if mode == "original" and snapshot is not None:
+        submitted_snapshot = _snapshot_matrix(batch.original_submitted_snapshot)
+        if mode == "original" and submitted_snapshot is not None:
             snapshot_cells = {
                 key: MatrixCellValue(quantity=quantity)
-                for key, quantity in snapshot.quantities.items()
+                for key, quantity in submitted_snapshot.quantities.items()
             }
             return (
-                sorted(snapshot.positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
-                list(snapshot.areas_by_key.values()),
+                sorted(submitted_snapshot.positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
+                list(submitted_snapshot.areas_by_key.values()),
                 snapshot_cells,
-                _position_totals(snapshot.quantities),
+                _position_totals(submitted_snapshot.quantities),
             )
 
-        original_quantities = snapshot.quantities if snapshot is not None else {}
-        if snapshot is not None:
-            for item_id, position in snapshot.positions_by_id.items():
+        correction_snapshot = (
+            _snapshot_matrix(batch.customer_signed_snapshot)
+            if mode == "checked" and batch.customer_signed_at is not None
+            else None
+        )
+        original_quantities = correction_snapshot.quantities if correction_snapshot is not None else {}
+        if correction_snapshot is not None:
+            for item_id, position in correction_snapshot.positions_by_id.items():
                 positions_by_id.setdefault(item_id, position)
-            for area_key, area in snapshot.areas_by_key.items():
+            for area_key, area in correction_snapshot.areas_by_key.items():
                 area_by_key.setdefault(area_key, area)
         cells = {
             key: MatrixCellValue(
                 quantity=quantity,
                 original_quantity=original_quantities.get(key),
-                is_added=snapshot is not None and key not in original_quantities,
+                is_added=correction_snapshot is not None and key not in original_quantities,
             )
             for key, quantity in current_quantities.items()
         }
-        if snapshot is not None:
+        if correction_snapshot is not None:
             for key, quantity in original_quantities.items():
                 cells.setdefault(
                     key,
@@ -365,7 +364,7 @@ class MeasurementPdfService:
                     ),
                 )
             for item_id, position in list(positions_by_id.items()):
-                if item_id not in snapshot.positions_by_id:
+                if item_id not in correction_snapshot.positions_by_id:
                     positions_by_id[item_id] = MatrixPosition(
                         item_id=position.item_id,
                         position=position.position,
@@ -375,7 +374,7 @@ class MeasurementPdfService:
                         is_added=True,
                     )
             for area_key, area in list(area_by_key.items()):
-                if area_key not in snapshot.areas_by_key:
+                if area_key not in correction_snapshot.areas_by_key:
                     area_by_key[area_key] = MatrixArea(key=area.key, label=area.label, is_added=True)
         return (
             sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
@@ -937,8 +936,10 @@ def _status_label(status_value: str) -> str:
     return {
         "billed": "Abgerechnet",
         "approved": "Abgerechnet",
-        "submitted": "Noch offen",
-        "rejected": "Noch offen",
+        "reviewed": "Geprüft",
+        "submitted": "Prüfung erforderlich",
+        "rejected": "Prüfung erforderlich",
+        "customer_signed": "Unterschrieben / Prüfung erforderlich",
         "draft": "Entwurf",
     }.get(status_value, status_value)
 

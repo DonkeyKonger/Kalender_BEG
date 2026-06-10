@@ -252,7 +252,7 @@ export type MobileMeasurementBatch = {
   is_current_offer: boolean;
   number: number;
   title: string;
-  status: "draft" | "submitted" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
+  status: "draft" | "submitted" | "reviewed" | "customer_signed" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
   created_by_user_id: number | null;
   submitted_by_user_id: number | null;
   submitted_by_name: string | null;

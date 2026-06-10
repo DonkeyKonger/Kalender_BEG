@@ -200,6 +200,7 @@ class PersonService:
         person.display_name = DELETED_PERSON_LABEL
         person.short_code = DELETED_PERSON_LABEL
         person.is_active = False
+        person.can_sign_measurements_immediately = False
         person.email = None
         person.phone = None
         person.address_postal_code = None
@@ -338,6 +339,7 @@ def person_snapshot(person: Person) -> dict:
         "short_code": person.short_code,
         "person_type": person.person_type.value,
         "is_active": person.is_active,
+        "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
         "phone": person.phone,

@@ -12,6 +12,7 @@ class MobilePerson(BaseModel):
     display_name: str
     phone: str | None = None
     email: str | None = None
+    can_sign_measurements_immediately: bool = False
 
 
 class MobileSite(BaseModel):

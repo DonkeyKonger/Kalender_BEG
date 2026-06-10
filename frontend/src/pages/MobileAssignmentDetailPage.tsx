@@ -895,6 +895,8 @@ function MobileMeasurementTab({
   }
 
   if (selectedBatch) {
+    const canSignImmediately = Boolean(assignment.person.can_sign_measurements_immediately);
+    const customerSignatureAction = getCustomerSignatureActionState(selectedBatch, canSignImmediately);
     return (
       <>
         <MeasurementBatchDetail
@@ -912,7 +914,15 @@ function MobileMeasurementTab({
           }}
           viewMode={viewMode}
           onViewModeChange={updateViewMode}
-          onCustomerSignature={() => setSignatureBatch(selectedBatch)}
+          customerSignatureDisabled={customerSignatureAction.disabled}
+          customerSignatureHint={customerSignatureAction.hint}
+          onCustomerSignature={() => {
+            if (customerSignatureAction.disabled) {
+              setError(customerSignatureAction.hint);
+              return;
+            }
+            setSignatureBatch(selectedBatch);
+          }}
           onSearchChange={setSearchTerm}
           onSelectItem={(item) => {
             setSelectedItem(item);
@@ -1030,6 +1040,8 @@ function MeasurementBatchDetail({
   viewMode,
   onBack,
   onViewModeChange,
+  customerSignatureDisabled,
+  customerSignatureHint,
   onCustomerSignature,
   onSearchChange,
   onSelectItem,
@@ -1045,6 +1057,8 @@ function MeasurementBatchDetail({
   viewMode: MeasurementViewMode;
   onBack: () => void;
   onViewModeChange: (mode: MeasurementViewMode) => void;
+  customerSignatureDisabled: boolean;
+  customerSignatureHint: string | null;
   onCustomerSignature: () => void;
   onSearchChange: (value: string) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
@@ -1100,11 +1114,13 @@ function MeasurementBatchDetail({
           className="primary-action mobile-customer-signature-action"
           type="button"
           onClick={onCustomerSignature}
+          disabled={customerSignatureDisabled}
         >
           <FileText aria-hidden="true" size={14} />
           <span>Kundenunterschrift</span>
         </button>
       </div>
+      {customerSignatureHint ? <p className="form-info">{customerSignatureHint}</p> : null}
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
@@ -1984,9 +2000,44 @@ function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { 
   return { label: "Entwurf", className: "mobile-batch-status-draft" };
 }
 
+function getCustomerSignatureActionState(
+  batch: MobileMeasurementBatch,
+  canSignImmediately: boolean,
+): { disabled: boolean; hint: string | null } {
+  if (isCustomerSignedMobileMeasurementBatch(batch)) {
+    return { disabled: false, hint: null };
+  }
+  if (batch.entry_count === 0) {
+    return {
+      disabled: true,
+      hint: "Für die Kundenunterschrift muss mindestens eine Aufmaßzeile erfasst sein.",
+    };
+  }
+
+  const status = batch.status.toLowerCase();
+  if (["approved", "billed", "checked", "closed"].includes(status)) {
+    return {
+      disabled: true,
+      hint: "Dieses Aufmaß ist bereits intern erledigt.",
+    };
+  }
+  if (canSignImmediately && ["draft", "submitted", "reviewed", "rejected"].includes(status)) {
+    return { disabled: false, hint: null };
+  }
+  if (status === "reviewed") {
+    return { disabled: false, hint: null };
+  }
+  return {
+    disabled: true,
+    hint: "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
+  };
+}
+
 function formatMobileMeasurementBatchDate(batch: MobileMeasurementBatch): string {
   const status = batch.status.toLowerCase();
-  const dateValue = isReviewedMobileMeasurementBatchStatus(status)
+  const dateValue = isCustomerSignedMobileMeasurementBatch(batch)
+    ? batch.customer_signed_at
+    : isReviewedMobileMeasurementBatchStatus(status)
     ? batch.updated_at
     : batch.submitted_at || batch.created_at;
   return formatMobileDateValue(dateValue);
