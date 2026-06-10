@@ -16,6 +16,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.540.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",

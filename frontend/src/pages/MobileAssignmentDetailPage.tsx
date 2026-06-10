@@ -19,6 +19,8 @@ import {
 import { FileOpener } from "@capacitor-community/file-opener";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -31,6 +33,17 @@ import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobil
 import type { CustomerSignatureStroke, MeasurementEntry, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
+let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
+
+function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
+  if (!pdfJsLoader) {
+    pdfJsLoader = import("pdfjs-dist").then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      return pdfjsLib;
+    });
+  }
+  return pdfJsLoader;
+}
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "tools";
 type MeasurementViewMode = "list" | "table";
@@ -1452,6 +1465,127 @@ function MeasurementQuantityKeypad({
   );
 }
 
+function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
+  const pagesRef = useRef<HTMLDivElement | null>(null);
+  const [renderVersion, setRenderVersion] = useState(0);
+  const [isRendering, setIsRendering] = useState(true);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const pagesElement = pagesRef.current;
+    if (!pagesElement || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    let resizeTimer: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        setRenderVersion((currentVersion) => currentVersion + 1);
+      }, 160);
+    });
+
+    observer.observe(pagesElement);
+    return () => {
+      observer.disconnect();
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const pagesElement = pagesRef.current;
+    if (!pagesElement) {
+      return;
+    }
+    const renderTarget = pagesElement;
+
+    let isCancelled = false;
+    let loadingTask: PDFDocumentLoadingTask | null = null;
+    let pdfDocument: PDFDocumentProxy | null = null;
+    renderTarget.replaceChildren();
+    setIsRendering(true);
+    setRenderError(null);
+
+    async function renderPdf(): Promise<void> {
+      try {
+        const pdfjsLib = await loadPdfJs();
+        if (isCancelled) {
+          return;
+        }
+        loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
+        pdfDocument = await loadingTask.promise;
+        if (isCancelled || !pdfDocument) {
+          return;
+        }
+
+        for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+          const page = await pdfDocument.getPage(pageNumber);
+          if (isCancelled) {
+            return;
+          }
+
+          const baseViewport = page.getViewport({ scale: 1 });
+          const availableWidth = Math.max(renderTarget.clientWidth - 16, 260);
+          const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 2.2);
+          const viewport = page.getViewport({ scale });
+          const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+          const canvas = document.createElement("canvas");
+          const canvasContext = canvas.getContext("2d");
+
+          if (!canvasContext) {
+            throw new Error("Canvas konnte nicht initialisiert werden.");
+          }
+
+          canvas.className = "mobile-customer-signature-canvas-page";
+          canvas.width = Math.floor(viewport.width * pixelRatio);
+          canvas.height = Math.floor(viewport.height * pixelRatio);
+          canvas.style.width = `${viewport.width}px`;
+          canvas.style.height = `${viewport.height}px`;
+          canvasContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+          const pageElement = document.createElement("div");
+          pageElement.className = "mobile-customer-signature-pdf-page";
+          pageElement.appendChild(canvas);
+          renderTarget.appendChild(pageElement);
+
+          const renderTask = page.render({ canvas, canvasContext, viewport });
+          await renderTask.promise;
+        }
+
+        if (!isCancelled) {
+          setIsRendering(false);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Measurement PDF render failed", error);
+          setRenderError("Aufmaß-PDF konnte nicht angezeigt werden.");
+          setIsRendering(false);
+        }
+      }
+    }
+
+    void renderPdf();
+    return () => {
+      isCancelled = true;
+      renderTarget.replaceChildren();
+      void loadingTask?.destroy();
+      void pdfDocument?.cleanup();
+    };
+  }, [data, renderVersion]);
+
+  return (
+    <div className="mobile-customer-signature-pdfjs" aria-label="Aufmaß-PDF">
+      {isRendering ? <div className="empty-panel">PDF wird vorbereitet...</div> : null}
+      {renderError ? <div className="form-error">{renderError}</div> : null}
+      <div className="mobile-customer-signature-pdf-pages" ref={pagesRef} />
+    </div>
+  );
+}
+
 function CustomerSignatureOverlay({
   assignmentId,
   batch,
@@ -1464,7 +1598,7 @@ function CustomerSignatureOverlay({
   onSigned: (batch: MobileMeasurementBatch) => void;
 }) {
   const [activeBatch, setActiveBatch] = useState(batch);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [pdfReloadKey, setPdfReloadKey] = useState(0);
   const [isPdfLoading, setIsPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -1485,18 +1619,17 @@ function CustomerSignatureOverlay({
   }, [batch]);
 
   useEffect(() => {
-    let objectUrl: string | null = null;
     let isActive = true;
 
     async function loadPdf(): Promise<void> {
       setIsPdfLoading(true);
       setPdfError(null);
-      setPdfUrl(null);
+      setPdfData(null);
       try {
         const blob = await api.mobileMeasurementBatchPdf(assignmentId, batch.id);
-        objectUrl = URL.createObjectURL(blob);
+        const arrayBuffer = await blob.arrayBuffer();
         if (isActive) {
-          setPdfUrl(objectUrl);
+          setPdfData(arrayBuffer);
         }
       } catch (requestError) {
         if (isActive) {
@@ -1512,9 +1645,6 @@ function CustomerSignatureOverlay({
     void loadPdf();
     return () => {
       isActive = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
     };
   }, [assignmentId, batch.id, pdfReloadKey]);
 
@@ -1599,9 +1729,7 @@ function CustomerSignatureOverlay({
       <main className="mobile-customer-signature-pdf">
         {isPdfLoading ? <div className="empty-panel">PDF wird geladen...</div> : null}
         {pdfError ? <div className="form-error">{pdfError}</div> : null}
-        {!isPdfLoading && !pdfError && pdfUrl ? (
-          <iframe className="mobile-customer-signature-frame" src={pdfUrl} title="Aufmaß-PDF" />
-        ) : null}
+        {!isPdfLoading && !pdfError && pdfData ? <PdfCanvasPreview data={pdfData} /> : null}
       </main>
 
       {isSigning && !isSigned ? (

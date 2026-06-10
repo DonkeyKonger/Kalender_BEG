@@ -11931,7 +11931,9 @@ button.person-chip:focus-visible {
 
 .mobile-customer-signature-pdf {
   min-height: 0;
+  overflow: auto;
   padding: 8px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mobile-customer-signature-frame {
@@ -11942,6 +11944,32 @@ button.person-chip:focus-visible {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 14px 30px rgb(18 29 52 / 10%);
+}
+
+.mobile-customer-signature-pdfjs {
+  min-height: 100%;
+}
+
+.mobile-customer-signature-pdf-pages {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.mobile-customer-signature-pdf-page {
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgb(18 29 52 / 10%);
+}
+
+.mobile-customer-signature-canvas-page {
+  display: block;
+  max-width: 100%;
+  background: #ffffff;
 }
 
 .mobile-customer-signature-sheet {
