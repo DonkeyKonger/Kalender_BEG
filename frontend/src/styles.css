@@ -5610,6 +5610,22 @@ button.person-chip:focus-visible {
   font-weight: 800;
 }
 
+.measurement-review-status-badge {
+  justify-content: center;
+  width: 156px;
+  min-width: 156px;
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .measurement-status.is-draft {
   background: #f8fafc;
   color: #475569;
@@ -5921,20 +5937,6 @@ button.person-chip:focus-visible {
 .measurement-review-card-open:focus-visible {
   background: rgb(15 23 42 / 3%);
   outline: none;
-}
-
-.measurement-review-card-open > .measurement-status {
-  justify-content: center;
-  min-width: 132px;
-  width: 100%;
-  text-align: center;
-  white-space: normal;
-}
-
-.measurement-review-card-open > .measurement-status.is-two-line {
-  align-items: flex-start;
-  min-width: 144px;
-  text-align: left;
 }
 
 .measurement-review-pdf-action {
@@ -12857,52 +12859,6 @@ button.person-chip:focus-visible {
 .measurement-review-updated {
   color: #64748b;
   font-size: 0.8rem;
-}
-
-.measurement-review-filter-group {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.measurement-review-list-toolbar {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 8px;
-}
-
-.measurement-review-filter-group span,
-.measurement-review-filter-group button {
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 800;
-  padding: 3px 8px;
-  white-space: nowrap;
-}
-
-.measurement-review-filter-group button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-
-.measurement-review-filter-group button span {
-  min-width: 18px;
-  border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
-  font-size: 0.68rem;
-  padding: 1px 5px;
-  text-align: center;
-}
-
-.measurement-review-filter-group .is-active {
-  background: #e8f1ff;
-  color: #1d4f91;
 }
 
 /* Figma-style table mode for Aufmaßprüfung; scoped to the real component. */

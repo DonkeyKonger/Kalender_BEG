@@ -25,7 +25,6 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
-type MeasurementReviewStatusFilter = "all" | "review-required" | "reviewed" | "signed" | "billed";
 type SiteWorkTimeRangeMode = "week" | "month";
 type SiteWorkTimeBalanceStatus = "missing" | "within" | "near_limit" | "over";
 type ProjectFolderNavigationLevel = {
@@ -2515,7 +2514,6 @@ function MeasurementReviewPanel({
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
-  const [statusFilter, setStatusFilter] = useState<MeasurementReviewStatusFilter>("all");
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -2554,28 +2552,6 @@ function MeasurementReviewPanel({
     }
     return right.number - left.number;
   }), [batches]);
-  const statusFilterOptions = useMemo(() => ([
-    { key: "all" as const, label: "Alle", count: sortedBatches.length },
-    { key: "review-required" as const, label: "Prüfung erforderlich", count: sortedBatches.filter(isMeasurementBatchReviewRequired).length },
-    { key: "reviewed" as const, label: "Geprüft", count: sortedBatches.filter((batch) => isMeasurementBatchReviewed(batch.status)).length },
-    { key: "signed" as const, label: "Unterschrieben", count: sortedBatches.filter(isMeasurementBatchSignedOpen).length },
-    { key: "billed" as const, label: "Abgerechnet", count: sortedBatches.filter((batch) => isMeasurementBatchBilled(batch.status)).length },
-  ]), [sortedBatches]);
-  const visibleBatches = useMemo(() => sortedBatches.filter((batch) => {
-    if (statusFilter === "all") {
-      return true;
-    }
-    if (statusFilter === "review-required") {
-      return isMeasurementBatchReviewRequired(batch);
-    }
-    if (statusFilter === "reviewed") {
-      return isMeasurementBatchReviewed(batch.status);
-    }
-    if (statusFilter === "signed") {
-      return isMeasurementBatchSignedOpen(batch);
-    }
-    return isMeasurementBatchBilled(batch.status);
-  }), [sortedBatches, statusFilter]);
 
   function updateEntryDraft(entryId: number, field: keyof MeasurementEntryDraft, value: string): void {
     setEntryDrafts((current) => ({
@@ -2890,28 +2866,8 @@ function MeasurementReviewPanel({
         <div className="project-record-empty-state">Noch keine Aufmaßpakete vorhanden.</div>
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
-        <>
-          <div className="measurement-review-list-toolbar">
-            <div className="measurement-review-filter-group" aria-label="Statusfilter">
-              {statusFilterOptions.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={statusFilter === option.key ? "is-active" : ""}
-                  onClick={() => setStatusFilter(option.key)}
-                >
-                  {option.label}
-                  <span>{option.count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {visibleBatches.length === 0 ? (
-            <div className="project-record-empty-state">Keine Aufmaßpakete in diesem Status.</div>
-          ) : null}
-          {visibleBatches.length > 0 ? (
-            <div className="measurement-review-list">
-              {visibleBatches.map((batch) => {
+        <div className="measurement-review-list">
+          {sortedBatches.map((batch) => {
             const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
             const isOldOffer = batch.is_current_offer === false;
             const checkedPdfKey = `${batch.id}:checked`;
@@ -2931,12 +2887,7 @@ function MeasurementReviewPanel({
                   onClick={() => onSelectBatch(batch)}
                 >
                   <span className={statusBadge.className}>
-                    {statusBadge.secondaryLabel ? (
-                      <>
-                        <span>{statusBadge.label}</span>
-                        <span>{statusBadge.secondaryLabel}</span>
-                      </>
-                    ) : statusBadge.label}
+                    {statusBadge.label}
                   </span>
                   <div className="measurement-review-card-main">
                     <div className="measurement-review-card-title-row">
@@ -2979,10 +2930,8 @@ function MeasurementReviewPanel({
                 </div>
               </div>
             );
-              })}
-            </div>
-          ) : null}
-        </>
+          })}
+        </div>
       ) : null}
     </>
   );
@@ -3964,22 +3913,20 @@ function formatMeasurementBaseName(base: MeasurementBase): string {
 
 function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
   label: string;
-  secondaryLabel?: string;
   className: string;
 } {
   const status = batch.status.toLowerCase();
   if (isMeasurementBatchBilled(status)) {
-    return { label: "Abgerechnet", className: "measurement-status is-billed" };
+    return { label: "Abgerechnet", className: "measurement-status measurement-review-status-badge is-billed" };
   }
   if (isCustomerSignedMeasurementBatch(batch)) {
     return {
       label: "Unterschrieben",
-      secondaryLabel: "Prüfung erforderlich",
-      className: "measurement-status is-signed-review is-two-line",
+      className: "measurement-status measurement-review-status-badge is-signed-review",
     };
   }
   if (isMeasurementBatchOpen(status)) {
-    return { label: "Prüfung erforderlich", className: "measurement-status is-review-required" };
+    return { label: "Prüfung erforderlich", className: "measurement-status measurement-review-status-badge is-review-required" };
   }
   const labels: Record<string, string> = {
     draft: "Entwurf",
@@ -3990,7 +3937,7 @@ function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
   const normalizedStatus = status === "in_review" ? "review-required" : status;
   return {
     label: labels[status] ?? status,
-    className: ["measurement-status", `is-${normalizedStatus}`].join(" "),
+    className: ["measurement-status", "measurement-review-status-badge", `is-${normalizedStatus}`].join(" "),
   };
 }
 
