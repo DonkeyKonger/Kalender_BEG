@@ -5580,6 +5580,14 @@ button.person-chip:focus-visible {
   color: #0f172a;
 }
 
+.measurement-timesheet-table .measurement-timesheet-virtual-spacer td {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 0;
+}
+
 .measurement-status.is-open,
 .measurement-status.is-submitted,
 .measurement-status.is-rejected,

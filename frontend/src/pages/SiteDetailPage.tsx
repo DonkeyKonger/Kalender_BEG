@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -38,8 +38,9 @@ const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
-const MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT = 50;
-const MEASUREMENT_TIMESHEET_REVEAL_DELAY_MS = 90;
+const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 56;
+const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
+const MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT = 560;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Zeitenliste" },
@@ -1690,8 +1691,43 @@ function MeasurementTimesheetPanel({
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isTableRenderReady, setIsTableRenderReady] = useState(false);
-  const [visibleRowLimit, setVisibleRowLimit] = useState(MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT);
+  const [tableViewport, setTableViewport] = useState({
+    firstVisibleRow: 0,
+    height: MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT,
+  });
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const tableScrollFrameRef = useRef<number | null>(null);
   const tableRenderStartedAtRef = useRef<number | null>(null);
+
+  const updateTableViewport = useCallback(() => {
+    const element = tableWrapRef.current;
+    if (!element) {
+      return;
+    }
+
+    const nextViewport = {
+      firstVisibleRow: Math.max(0, Math.floor(element.scrollTop / MEASUREMENT_TIMESHEET_ROW_HEIGHT)),
+      height: element.clientHeight || MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT,
+    };
+
+    setTableViewport((currentViewport) => (
+      currentViewport.firstVisibleRow === nextViewport.firstVisibleRow
+        && Math.abs(currentViewport.height - nextViewport.height) < 1
+        ? currentViewport
+        : nextViewport
+    ));
+  }, []);
+
+  const handleTableScroll = useCallback(() => {
+    if (tableScrollFrameRef.current !== null) {
+      return;
+    }
+
+    tableScrollFrameRef.current = window.requestAnimationFrame(() => {
+      tableScrollFrameRef.current = null;
+      updateTableViewport();
+    });
+  }, [updateTableViewport]);
 
   const measuredByItemId = useMemo(() => {
     const startedAt = startMeasurementTimesheetPerformanceTiming();
@@ -1844,35 +1880,77 @@ function MeasurementTimesheetPanel({
     const rowCount = filteredProjectPositionRows.length;
     tableRenderStartedAtRef.current = startMeasurementTimesheetPerformanceTiming();
     setIsTableRenderReady(false);
-    setVisibleRowLimit(Math.min(MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT, rowCount));
+    if (tableWrapRef.current) {
+      tableWrapRef.current.scrollTop = 0;
+    }
+    setTableViewport((currentViewport) => ({
+      firstVisibleRow: 0,
+      height: currentViewport.height || MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT,
+    }));
 
     if (rowCount === 0) {
       setIsTableRenderReady(true);
       return;
     }
 
-    let revealTimer: number | null = null;
     const frameId = window.requestAnimationFrame(() => {
       setIsTableRenderReady(true);
-      if (rowCount > MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT) {
-        revealTimer = window.setTimeout(() => {
-          setVisibleRowLimit(rowCount);
-        }, MEASUREMENT_TIMESHEET_REVEAL_DELAY_MS);
-      }
     });
 
     return () => {
       window.cancelAnimationFrame(frameId);
-      if (revealTimer !== null) {
-        window.clearTimeout(revealTimer);
-      }
     };
   }, [filteredProjectPositionRows]);
 
-  const visibleProjectPositionRows = useMemo(
-    () => (isTableRenderReady ? filteredProjectPositionRows.slice(0, visibleRowLimit) : []),
-    [filteredProjectPositionRows, isTableRenderReady, visibleRowLimit],
-  );
+  useEffect(() => {
+    const element = tableWrapRef.current;
+    if (!element || !isTableRenderReady) {
+      return;
+    }
+
+    updateTableViewport();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => updateTableViewport());
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isTableRenderReady, updateTableViewport]);
+
+  useEffect(() => () => {
+    if (tableScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(tableScrollFrameRef.current);
+    }
+  }, []);
+
+  const virtualProjectPositionRows = useMemo(() => {
+    if (!isTableRenderReady) {
+      return {
+        bottomSpacerHeight: 0,
+        endIndex: 0,
+        rows: [],
+        startIndex: 0,
+        topSpacerHeight: 0,
+      };
+    }
+
+    const totalRows = filteredProjectPositionRows.length;
+    const startIndex = Math.max(0, tableViewport.firstVisibleRow - MEASUREMENT_TIMESHEET_OVERSCAN_ROWS);
+    const visibleRowCount = Math.ceil(
+      (tableViewport.height || MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT) / MEASUREMENT_TIMESHEET_ROW_HEIGHT,
+    ) + (MEASUREMENT_TIMESHEET_OVERSCAN_ROWS * 2);
+    const endIndex = Math.min(totalRows, startIndex + visibleRowCount);
+
+    return {
+      bottomSpacerHeight: Math.max(0, totalRows - endIndex) * MEASUREMENT_TIMESHEET_ROW_HEIGHT,
+      endIndex,
+      rows: filteredProjectPositionRows.slice(startIndex, endIndex),
+      startIndex,
+      topSpacerHeight: startIndex * MEASUREMENT_TIMESHEET_ROW_HEIGHT,
+    };
+  }, [filteredProjectPositionRows, isTableRenderReady, tableViewport.firstVisibleRow, tableViewport.height]);
 
   useEffect(() => {
     const startedAt = tableRenderStartedAtRef.current;
@@ -1880,14 +1958,19 @@ function MeasurementTimesheetPanel({
       return;
     }
     logMeasurementTimesheetPerformance("Tabelle sichtbar", startedAt, {
-      visibleRows: visibleProjectPositionRows.length,
+      renderedRows: virtualProjectPositionRows.rows.length,
       totalRows: filteredProjectPositionRows.length,
-      complete: visibleProjectPositionRows.length >= filteredProjectPositionRows.length,
+      virtualStart: virtualProjectPositionRows.startIndex,
+      virtualEnd: virtualProjectPositionRows.endIndex,
     });
-    if (visibleProjectPositionRows.length >= filteredProjectPositionRows.length) {
-      tableRenderStartedAtRef.current = null;
-    }
-  }, [filteredProjectPositionRows.length, isTableRenderReady, visibleProjectPositionRows.length]);
+    tableRenderStartedAtRef.current = null;
+  }, [
+    filteredProjectPositionRows.length,
+    isTableRenderReady,
+    virtualProjectPositionRows.endIndex,
+    virtualProjectPositionRows.rows.length,
+    virtualProjectPositionRows.startIndex,
+  ]);
 
   useEffect(() => {
     if (defaultBase && selectedBaseId === null) {
@@ -2102,7 +2185,11 @@ function MeasurementTimesheetPanel({
                 <div className="project-record-empty-state">Tabelle wird vorbereitet...</div>
               ) : (
                 <>
-                  <div className="measurement-table-wrap measurement-timesheet-table-wrap">
+                  <div
+                    className="measurement-table-wrap measurement-timesheet-table-wrap"
+                    ref={tableWrapRef}
+                    onScroll={handleTableScroll}
+                  >
                     <table className="measurement-table measurement-timesheet-table">
                       <thead>
                         <tr>
@@ -2118,7 +2205,12 @@ function MeasurementTimesheetPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleProjectPositionRows.map((row) => (
+                        {virtualProjectPositionRows.topSpacerHeight > 0 ? (
+                          <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
+                            <td colSpan={9} style={{ height: virtualProjectPositionRows.topSpacerHeight }} />
+                          </tr>
+                        ) : null}
+                        {virtualProjectPositionRows.rows.map((row) => (
                           <tr
                             key={row.item.id}
                             className={row.measuredQuantity > 0 ? "has-quantity" : ""}
@@ -2134,14 +2226,14 @@ function MeasurementTimesheetPanel({
                             <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
                           </tr>
                         ))}
+                        {virtualProjectPositionRows.bottomSpacerHeight > 0 ? (
+                          <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
+                            <td colSpan={9} style={{ height: virtualProjectPositionRows.bottomSpacerHeight }} />
+                          </tr>
+                        ) : null}
                       </tbody>
                     </table>
                   </div>
-                  {visibleProjectPositionRows.length < filteredProjectPositionRows.length ? (
-                    <div className="project-record-empty-state">
-                      Weitere Projektpositionen werden geladen...
-                    </div>
-                  ) : null}
                 </>
               )}
             </section>
