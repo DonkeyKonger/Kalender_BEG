@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -305,17 +305,14 @@ export function SiteDetailPage() {
       setMeasurementError(null);
       setMeasurementBatchesError(null);
       try {
-        const [bases, items, batches, activeBatches] = await Promise.all([
+        const [bases, items, batches] = await Promise.all([
           api.measurementBases(site.id),
           api.measurementItems(site.id, { activeOnly: true }),
           api.siteMeasurementBatches(site.id),
-          api.siteMeasurementBatches(site.id, { activeOnly: true }),
         ]);
-        let progressItemLists: MobileMeasurementItem[][] = [];
+        let progressItems: MobileMeasurementItem[] = [];
         try {
-          progressItemLists = activeBatches.length > 0
-            ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
-            : [];
+          progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
         } catch (progressError) {
           setMeasurementBatchesError(readApiError(progressError, "Aufmaßmengen konnten für den Vergleich nicht geladen werden."));
         }
@@ -323,7 +320,7 @@ export function SiteDetailPage() {
         setMeasurementItems(items);
         setMeasurementBatches(batches);
         setMeasurementBatchesLoaded(true);
-        setMeasurementProgressItems(progressItemLists.flat());
+        setMeasurementProgressItems(progressItems);
         setMeasurementLoaded(true);
       } catch (requestError) {
         setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
@@ -558,18 +555,15 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.activateMeasurementBase(site.id, base.id);
-      const [items, batches, activeBatches] = await Promise.all([
+      const [items, batches] = await Promise.all([
         api.measurementItems(site.id, { activeOnly: true }),
         api.siteMeasurementBatches(site.id),
-        api.siteMeasurementBatches(site.id, { activeOnly: true }),
       ]);
-      const progressItemLists = activeBatches.length > 0
-        ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
-        : [];
+      const progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
       setMeasurementBases(bases);
       setMeasurementItems(items);
       setMeasurementBatches(batches);
-      setMeasurementProgressItems(progressItemLists.flat());
+      setMeasurementProgressItems(progressItems);
       setMeasurementLoaded(true);
       setMeasurementBatchesLoaded(true);
       setMeasurementImportMessage("Angebot ist jetzt aktiv.");
@@ -610,19 +604,16 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const [bases, items, batches, activeBatches] = await Promise.all([
+      const [bases, items, batches] = await Promise.all([
         api.measurementBases(site.id),
         api.measurementItems(site.id, { activeOnly: true }),
         api.siteMeasurementBatches(site.id),
-        api.siteMeasurementBatches(site.id, { activeOnly: true }),
       ]);
-      const progressItemLists = activeBatches.length > 0
-        ? await Promise.all(activeBatches.map((batch) => api.siteMeasurementBatchItems(site.id, batch.id)))
-        : [];
+      const progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
       setMeasurementBases(bases);
       setMeasurementItems(items);
       setMeasurementBatches(batches);
-      setMeasurementProgressItems(progressItemLists.flat());
+      setMeasurementProgressItems(progressItems);
       setMeasurementLoaded(true);
       setMeasurementBatchesLoaded(true);
       setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`);
@@ -1660,9 +1651,15 @@ function MeasurementTimesheetPanel({
   onImport: (file: File, options: MeasurementImportOptions) => Promise<void>;
   onRetry: () => void;
 }) {
-  const selectableBases = bases.filter((base) => base.status !== "closed" && base.status !== "archived");
-  const defaultBase = selectableBases.find((base) => base.status === "active" && base.released_to_mobile) ?? selectableBases[0] ?? null;
-  const suggestedBaseName = getSuggestedMeasurementSheetName(siteNumber, bases.length + 1);
+  const selectableBases = useMemo(
+    () => bases.filter((base) => base.status !== "closed" && base.status !== "archived"),
+    [bases],
+  );
+  const defaultBase = useMemo(
+    () => selectableBases.find((base) => base.status === "active" && base.released_to_mobile) ?? selectableBases[0] ?? null,
+    [selectableBases],
+  );
+  const suggestedBaseName = useMemo(() => getSuggestedMeasurementSheetName(siteNumber, bases.length + 1), [bases.length, siteNumber]);
   const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBase ? "append_existing" : "create_new");
   const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBase?.id ?? null);
   const [newBaseName, setNewBaseName] = useState(suggestedBaseName);
@@ -1673,6 +1670,7 @@ function MeasurementTimesheetPanel({
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<MeasurementTimesheetFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const measuredByItemId = useMemo(() => {
     const totals = new Map<number, { quantity: number; minutes: number }>();
@@ -1707,6 +1705,7 @@ function MeasurementTimesheetPanel({
         item,
         positionNumber: item.position,
         description: item.description,
+        searchText: `${item.position} ${item.description ?? ""}`.toLocaleLowerCase("de-DE"),
         unit: item.unit,
         plannedQuantity,
         hasPlannedQuantity: plannedQuantity > 0,
@@ -1721,11 +1720,20 @@ function MeasurementTimesheetPanel({
   ), [items, measuredByItemId]);
 
   const projectPositionStats = useMemo(() => {
-    const plannedMinutes = projectPositionRows.reduce((sum, row) => sum + row.plannedMinutes, 0);
-    const measuredMinutes = projectPositionRows.reduce((sum, row) => sum + row.measuredMinutes, 0);
+    let plannedMinutes = 0;
+    let measuredMinutes = 0;
+    let withMeasurement = 0;
+
+    for (const row of projectPositionRows) {
+      plannedMinutes += row.plannedMinutes;
+      measuredMinutes += row.measuredMinutes;
+      if (row.measuredQuantity > 0) {
+        withMeasurement += 1;
+      }
+    }
+
     const hasPlannedBasis = plannedMinutes > 0;
     const progressPercent = hasPlannedBasis ? (measuredMinutes / plannedMinutes) * 100 : null;
-    const withMeasurement = projectPositionRows.filter((row) => row.measuredQuantity > 0).length;
 
     // Belastbarer Fortschritt ist erst möglich, wenn Angebots-/Sollmengen als Vergleichsbasis vorhanden sind.
     return {
@@ -1767,7 +1775,7 @@ function MeasurementTimesheetPanel({
   ]), [projectPositionStats]);
 
   const filteredProjectPositionRows = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLocaleLowerCase("de-DE");
+    const normalizedSearch = deferredSearchTerm.trim().toLocaleLowerCase("de-DE");
 
     return projectPositionRows.filter((row) => {
       const matchesFilter =
@@ -1782,10 +1790,9 @@ function MeasurementTimesheetPanel({
         return true;
       }
 
-      const haystack = `${row.positionNumber} ${row.description ?? ""}`.toLocaleLowerCase("de-DE");
-      return haystack.includes(normalizedSearch);
+      return row.searchText.includes(normalizedSearch);
     });
-  }, [activeFilter, projectPositionRows, searchTerm]);
+  }, [activeFilter, deferredSearchTerm, projectPositionRows]);
 
   useEffect(() => {
     if (defaultBase && selectedBaseId === null) {
@@ -3881,6 +3888,22 @@ function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
     window.open(url, "_blank", "noopener,noreferrer");
   }
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+async function loadActiveMeasurementProgressItems(
+  siteId: number,
+  batches: MobileMeasurementBatch[],
+): Promise<MobileMeasurementItem[]> {
+  const activeBatches = batches.filter((batch) => batch.is_current_offer);
+  if (activeBatches.length === 0) {
+    return [];
+  }
+
+  const progressItemLists = await Promise.all(
+    activeBatches.map((batch) => api.siteMeasurementBatchItems(siteId, batch.id)),
+  );
+
+  return progressItemLists.flat();
 }
 
 function formatMeasurementPackageNumber(
