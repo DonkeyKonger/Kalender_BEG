@@ -38,6 +38,8 @@ const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
+const MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT = 50;
+const MEASUREMENT_TIMESHEET_REVEAL_DELAY_MS = 90;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Zeitenliste" },
@@ -301,18 +303,29 @@ export function SiteDetailPage() {
       if (!site) {
         return;
       }
+      const loadStartedAt = startMeasurementTimesheetPerformanceTiming();
       setMeasurementLoading(true);
       setMeasurementError(null);
       setMeasurementBatchesError(null);
       try {
+        const initialRequestsStartedAt = startMeasurementTimesheetPerformanceTiming();
         const [bases, items, batches] = await Promise.all([
           api.measurementBases(site.id),
           api.measurementItems(site.id, { activeOnly: true }),
           api.siteMeasurementBatches(site.id),
         ]);
+        logMeasurementTimesheetPerformance("API Basisdaten", initialRequestsStartedAt, {
+          bases: bases.length,
+          items: items.length,
+          batches: batches.length,
+        });
         let progressItems: MobileMeasurementItem[] = [];
         try {
+          const progressStartedAt = startMeasurementTimesheetPerformanceTiming();
           progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
+          logMeasurementTimesheetPerformance("API Aufmaßmengen", progressStartedAt, {
+            progressItems: progressItems.length,
+          });
         } catch (progressError) {
           setMeasurementBatchesError(readApiError(progressError, "Aufmaßmengen konnten für den Vergleich nicht geladen werden."));
         }
@@ -322,6 +335,11 @@ export function SiteDetailPage() {
         setMeasurementBatchesLoaded(true);
         setMeasurementProgressItems(progressItems);
         setMeasurementLoaded(true);
+        logMeasurementTimesheetPerformance("Erstladen gesamt", loadStartedAt, {
+          items: items.length,
+          batches: batches.length,
+          progressItems: progressItems.length,
+        });
       } catch (requestError) {
         setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
       } finally {
@@ -1671,8 +1689,12 @@ function MeasurementTimesheetPanel({
   const [activeFilter, setActiveFilter] = useState<MeasurementTimesheetFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [isTableRenderReady, setIsTableRenderReady] = useState(false);
+  const [visibleRowLimit, setVisibleRowLimit] = useState(MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT);
+  const tableRenderStartedAtRef = useRef<number | null>(null);
 
   const measuredByItemId = useMemo(() => {
+    const startedAt = startMeasurementTimesheetPerformanceTiming();
     const totals = new Map<number, { quantity: number; minutes: number }>();
 
     for (const progressItem of progressItems) {
@@ -1688,11 +1710,17 @@ function MeasurementTimesheetPanel({
       });
     }
 
+    logMeasurementTimesheetPerformance("Derived Aufmaßsummen", startedAt, {
+      progressItems: progressItems.length,
+      totals: totals.size,
+    });
     return totals;
   }, [progressItems]);
 
   const projectPositionRows = useMemo(() => (
-    items.map((item) => {
+    (() => {
+      const startedAt = startMeasurementTimesheetPerformanceTiming();
+      const rows = items.map((item) => {
       const plannedQuantity = getMeasurementNumericValue(item.list_quantity);
       const minutesPerUnit = getMeasurementNumericValue(item.minutes_per_unit);
       const plannedMinutes = plannedQuantity > 0 && minutesPerUnit > 0 ? plannedQuantity * minutesPerUnit : 0;
@@ -1716,10 +1744,16 @@ function MeasurementTimesheetPanel({
         measuredMinutes,
         progressPercent,
       };
-    })
+      });
+      logMeasurementTimesheetPerformance("Derived Positionszeilen", startedAt, {
+        rows: rows.length,
+      });
+      return rows;
+    })()
   ), [items, measuredByItemId]);
 
   const projectPositionStats = useMemo(() => {
+    const startedAt = startMeasurementTimesheetPerformanceTiming();
     let plannedMinutes = 0;
     let measuredMinutes = 0;
     let withMeasurement = 0;
@@ -1736,7 +1770,7 @@ function MeasurementTimesheetPanel({
     const progressPercent = hasPlannedBasis ? (measuredMinutes / plannedMinutes) * 100 : null;
 
     // Belastbarer Fortschritt ist erst möglich, wenn Angebots-/Sollmengen als Vergleichsbasis vorhanden sind.
-    return {
+    const stats = {
       total: projectPositionRows.length,
       plannedMinutes,
       measuredMinutes,
@@ -1746,6 +1780,10 @@ function MeasurementTimesheetPanel({
       withMeasurement,
       withoutMeasurement: projectPositionRows.length - withMeasurement,
     };
+    logMeasurementTimesheetPerformance("Derived KPI", startedAt, {
+      rows: projectPositionRows.length,
+    });
+    return stats;
   }, [projectPositionRows]);
 
   const latestImportInfo = useMemo(() => {
@@ -1775,9 +1813,10 @@ function MeasurementTimesheetPanel({
   ]), [projectPositionStats]);
 
   const filteredProjectPositionRows = useMemo(() => {
+    const startedAt = startMeasurementTimesheetPerformanceTiming();
     const normalizedSearch = deferredSearchTerm.trim().toLocaleLowerCase("de-DE");
 
-    return projectPositionRows.filter((row) => {
+    const rows = projectPositionRows.filter((row) => {
       const matchesFilter =
         activeFilter === "all"
         || (activeFilter === "billed" && row.measuredQuantity > 0)
@@ -1792,7 +1831,63 @@ function MeasurementTimesheetPanel({
 
       return row.searchText.includes(normalizedSearch);
     });
+    logMeasurementTimesheetPerformance("Derived Tabellenfilter", startedAt, {
+      rows: projectPositionRows.length,
+      filteredRows: rows.length,
+      filter: activeFilter,
+      hasSearch: normalizedSearch.length > 0,
+    });
+    return rows;
   }, [activeFilter, deferredSearchTerm, projectPositionRows]);
+
+  useEffect(() => {
+    const rowCount = filteredProjectPositionRows.length;
+    tableRenderStartedAtRef.current = startMeasurementTimesheetPerformanceTiming();
+    setIsTableRenderReady(false);
+    setVisibleRowLimit(Math.min(MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT, rowCount));
+
+    if (rowCount === 0) {
+      setIsTableRenderReady(true);
+      return;
+    }
+
+    let revealTimer: number | null = null;
+    const frameId = window.requestAnimationFrame(() => {
+      setIsTableRenderReady(true);
+      if (rowCount > MEASUREMENT_TIMESHEET_INITIAL_ROW_LIMIT) {
+        revealTimer = window.setTimeout(() => {
+          setVisibleRowLimit(rowCount);
+        }, MEASUREMENT_TIMESHEET_REVEAL_DELAY_MS);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (revealTimer !== null) {
+        window.clearTimeout(revealTimer);
+      }
+    };
+  }, [filteredProjectPositionRows]);
+
+  const visibleProjectPositionRows = useMemo(
+    () => (isTableRenderReady ? filteredProjectPositionRows.slice(0, visibleRowLimit) : []),
+    [filteredProjectPositionRows, isTableRenderReady, visibleRowLimit],
+  );
+
+  useEffect(() => {
+    const startedAt = tableRenderStartedAtRef.current;
+    if (!isTableRenderReady || startedAt === null) {
+      return;
+    }
+    logMeasurementTimesheetPerformance("Tabelle sichtbar", startedAt, {
+      visibleRows: visibleProjectPositionRows.length,
+      totalRows: filteredProjectPositionRows.length,
+      complete: visibleProjectPositionRows.length >= filteredProjectPositionRows.length,
+    });
+    if (visibleProjectPositionRows.length >= filteredProjectPositionRows.length) {
+      tableRenderStartedAtRef.current = null;
+    }
+  }, [filteredProjectPositionRows.length, isTableRenderReady, visibleProjectPositionRows.length]);
 
   useEffect(() => {
     if (defaultBase && selectedBaseId === null) {
@@ -2003,42 +2098,51 @@ function MeasurementTimesheetPanel({
 
               {filteredProjectPositionRows.length === 0 ? (
                 <div className="project-record-empty-state">Keine passenden Projektpositionen gefunden.</div>
+              ) : !isTableRenderReady ? (
+                <div className="project-record-empty-state">Tabelle wird vorbereitet...</div>
               ) : (
-                <div className="measurement-table-wrap measurement-timesheet-table-wrap">
-                  <table className="measurement-table measurement-timesheet-table">
-                    <thead>
-                      <tr>
-                        <th>Pos.-Nr.</th>
-                        <th>Bezeichnung</th>
-                        <th>Einheit</th>
-                        <th className="measurement-timesheet-number">Sollmenge / Listenmenge</th>
-                        <th className="measurement-timesheet-number">Aufmaßmenge</th>
-                        <th className="measurement-timesheet-number">Restmenge</th>
-                        <th className="measurement-timesheet-number">Min./Einheit</th>
-                        <th className="measurement-timesheet-number">Aufmaß-Stunden</th>
-                        <th className="measurement-timesheet-number">Fortschritt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredProjectPositionRows.map((row) => (
-                        <tr
-                          key={row.item.id}
-                          className={row.measuredQuantity > 0 ? "has-quantity" : ""}
-                        >
-                          <td><strong>{row.positionNumber}</strong></td>
-                          <td className="measurement-timesheet-description">{row.description}</td>
-                          <td>{row.unit ?? "-"}</td>
-                          <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
-                          <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
-                          <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
-                          <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
-                          <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
-                          <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
+                <>
+                  <div className="measurement-table-wrap measurement-timesheet-table-wrap">
+                    <table className="measurement-table measurement-timesheet-table">
+                      <thead>
+                        <tr>
+                          <th>Pos.-Nr.</th>
+                          <th>Bezeichnung</th>
+                          <th>Einheit</th>
+                          <th className="measurement-timesheet-number">Sollmenge / Listenmenge</th>
+                          <th className="measurement-timesheet-number">Aufmaßmenge</th>
+                          <th className="measurement-timesheet-number">Restmenge</th>
+                          <th className="measurement-timesheet-number">Min./Einheit</th>
+                          <th className="measurement-timesheet-number">Aufmaß-Stunden</th>
+                          <th className="measurement-timesheet-number">Fortschritt</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {visibleProjectPositionRows.map((row) => (
+                          <tr
+                            key={row.item.id}
+                            className={row.measuredQuantity > 0 ? "has-quantity" : ""}
+                          >
+                            <td><strong>{row.positionNumber}</strong></td>
+                            <td className="measurement-timesheet-description">{row.description}</td>
+                            <td>{row.unit ?? "-"}</td>
+                            <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
+                            <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
+                            <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
+                            <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
+                            <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
+                            <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {visibleProjectPositionRows.length < filteredProjectPositionRows.length ? (
+                    <div className="project-record-empty-state">
+                      Weitere Projektpositionen werden geladen...
+                    </div>
+                  ) : null}
+                </>
               )}
             </section>
           </>
@@ -3860,6 +3964,25 @@ function persistMeasurementViewMode(mode: MeasurementViewMode): void {
     return;
   }
   window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
+}
+
+function startMeasurementTimesheetPerformanceTiming(): number | null {
+  return isMeasurementTimesheetPerformanceLoggingEnabled() ? performance.now() : null;
+}
+
+function logMeasurementTimesheetPerformance(label: string, startedAt: number | null, details?: Record<string, unknown>): void {
+  if (startedAt === null) {
+    return;
+  }
+  const duration = performance.now() - startedAt;
+  console.debug(`[Aufmaß Zeitenliste] ${label}: ${duration.toFixed(1)} ms`, details ?? {});
+}
+
+function isMeasurementTimesheetPerformanceLoggingEnabled(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem("beg_measurement_timesheet_perf") === "1";
 }
 
 function formatCoordinates(latitude: number | null, longitude: number | null): string | null {
