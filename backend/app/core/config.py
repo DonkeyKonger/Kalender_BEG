@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     admin_password: str | None = Field(default=None, alias="ADMIN_PASSWORD")
     admin_display_name: str = Field(default="Administrator", alias="ADMIN_DISPLAY_NAME")
     seed_default_password: str | None = Field(default=None, alias="SEED_DEFAULT_PASSWORD")
+    run_seed_data: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RUN_SEED_DATA", "RUN_SEED"),
+    )
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     company_location_label: str = Field(default="Firmenzentrale Achim", alias="COMPANY_LOCATION_LABEL")
     company_location_lat: float = Field(default=53.0142, alias="COMPANY_LOCATION_LAT")

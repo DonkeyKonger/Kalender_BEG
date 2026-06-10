@@ -84,12 +84,6 @@ def get_or_create_user(
 
     user = get_one(db, User, username=username)
     if user is not None:
-        user.display_name = display_name
-        user.password_hash = hash_password(settings.seed_default_password)
-        user.role = role
-        user.is_active = True
-        user.person_id = person.id if person else None
-        db.flush()
         return user
 
     user = User(
@@ -704,6 +698,9 @@ def seed_demo_data(db: Session) -> None:
 
 
 def main() -> None:
+    if not settings.run_seed_data:
+        print("Seed-Daten übersprungen: RUN_SEED_DATA/RUN_SEED ist nicht aktiviert.")
+        return
     with SessionLocal() as db:
         seed_demo_data(db)
     print("Seed-Daten bereit.")
