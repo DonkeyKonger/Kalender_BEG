@@ -19,7 +19,7 @@ import {
 import { FileOpener } from "@capacitor-community/file-opener";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -28,7 +28,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { MeasurementEntry, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -756,6 +756,19 @@ function MobileMeasurementTab({
   const [formQuantity, setFormQuantity] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
+  const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
+
+  function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
+    setBatches((currentBatches) => sortMobileMeasurementBatches(
+      currentBatches.map((batch) => (batch.id === updatedBatch.id ? updatedBatch : batch)),
+    ));
+    setSelectedBatch((currentBatch) => (
+      currentBatch?.id === updatedBatch.id ? updatedBatch : currentBatch
+    ));
+    setSignatureBatch((currentBatch) => (
+      currentBatch?.id === updatedBatch.id ? updatedBatch : currentBatch
+    ));
+  }
 
   async function loadBatches(selectBatchId?: number): Promise<void> {
     setIsLoading(true);
@@ -823,6 +836,7 @@ function MobileMeasurementTab({
         item={selectedItem}
         allItems={items}
         isSaving={isSaving}
+        isLockedForWorker={selectedBatch.is_locked_for_worker}
         formComment={formComment}
         formQuantity={formQuantity}
         formError={formError}
@@ -882,43 +896,54 @@ function MobileMeasurementTab({
 
   if (selectedBatch) {
     return (
-      <MeasurementBatchDetail
-        batch={selectedBatch}
-        items={filteredItems}
-        allItems={items}
-        isItemsLoading={isItemsLoading}
-        error={error}
-        searchTerm={searchTerm}
-        onBack={() => {
-          setSelectedBatch(null);
-          setSelectedItem(null);
-          setItems([]);
-          setError(null);
-        }}
-        viewMode={viewMode}
-        onViewModeChange={updateViewMode}
-        onSearchChange={setSearchTerm}
-        onSelectItem={(item) => {
-          setSelectedItem(item);
-          setFormComment("");
-          setFormQuantity("");
-          setFormError(null);
-        }}
-        onSubmit={async () => {
-          setIsSaving(true);
-          setError(null);
-          try {
-            const submitted = await api.submitMobileMeasurementBatch(assignment.id, selectedBatch.id);
-            await loadBatches(submitted.id);
-            setSelectedBatch(submitted);
-          } catch (requestError) {
-            setError(readApiError(requestError, "Aufmaß konnte nicht gesendet werden."));
-          } finally {
-            setIsSaving(false);
-          }
-        }}
-        isSaving={isSaving}
-      />
+      <>
+        <MeasurementBatchDetail
+          batch={selectedBatch}
+          items={filteredItems}
+          allItems={items}
+          isItemsLoading={isItemsLoading}
+          error={error}
+          searchTerm={searchTerm}
+          onBack={() => {
+            setSelectedBatch(null);
+            setSelectedItem(null);
+            setItems([]);
+            setError(null);
+          }}
+          viewMode={viewMode}
+          onViewModeChange={updateViewMode}
+          onCustomerSignature={() => setSignatureBatch(selectedBatch)}
+          onSearchChange={setSearchTerm}
+          onSelectItem={(item) => {
+            setSelectedItem(item);
+            setFormComment("");
+            setFormQuantity("");
+            setFormError(null);
+          }}
+          onSubmit={async () => {
+            setIsSaving(true);
+            setError(null);
+            try {
+              const submitted = await api.submitMobileMeasurementBatch(assignment.id, selectedBatch.id);
+              await loadBatches(submitted.id);
+              setSelectedBatch(submitted);
+            } catch (requestError) {
+              setError(readApiError(requestError, "Aufmaß konnte nicht gesendet werden."));
+            } finally {
+              setIsSaving(false);
+            }
+          }}
+          isSaving={isSaving}
+        />
+        {signatureBatch ? (
+          <CustomerSignatureOverlay
+            assignmentId={assignment.id}
+            batch={signatureBatch}
+            onClose={() => setSignatureBatch(null)}
+            onSigned={mergeUpdatedBatch}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -1005,6 +1030,7 @@ function MeasurementBatchDetail({
   viewMode,
   onBack,
   onViewModeChange,
+  onCustomerSignature,
   onSearchChange,
   onSelectItem,
   onSubmit,
@@ -1019,6 +1045,7 @@ function MeasurementBatchDetail({
   viewMode: MeasurementViewMode;
   onBack: () => void;
   onViewModeChange: (mode: MeasurementViewMode) => void;
+  onCustomerSignature: () => void;
   onSearchChange: (value: string) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
   onSubmit: () => void;
@@ -1037,7 +1064,7 @@ function MeasurementBatchDetail({
           className="primary-action mobile-measurement-submit-action"
           type="button"
           onClick={onSubmit}
-          disabled={!isDraft || isSaving || batch.entry_count === 0}
+          disabled={!isDraft || isSaving || batch.entry_count === 0 || batch.is_locked_for_worker}
         >
           <Send aria-hidden="true" size={15} />
           <span>{isSaving ? "Sende..." : "Zur Prüfung senden"}</span>
@@ -1053,6 +1080,9 @@ function MeasurementBatchDetail({
           <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
         </span>
       </div>
+      {batch.is_locked_for_worker ? (
+        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+      ) : null}
 
       <div className="mobile-measurement-search">
         <Search aria-hidden="true" size={17} />
@@ -1064,7 +1094,17 @@ function MeasurementBatchDetail({
         />
       </div>
 
-      <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+      <div className="mobile-measurement-view-actions">
+        <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+        <button
+          className="primary-action mobile-customer-signature-action"
+          type="button"
+          onClick={onCustomerSignature}
+        >
+          <FileText aria-hidden="true" size={14} />
+          <span>Kundenunterschrift</span>
+        </button>
+      </div>
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
@@ -1194,6 +1234,7 @@ function MeasurementDetail({
   item,
   allItems,
   isSaving,
+  isLockedForWorker,
   formComment,
   formQuantity,
   formError,
@@ -1207,6 +1248,7 @@ function MeasurementDetail({
   item: MobileMeasurementItem;
   allItems: MobileMeasurementItem[];
   isSaving: boolean;
+  isLockedForWorker: boolean;
   formComment: string;
   formQuantity: string;
   formError: string | null;
@@ -1217,6 +1259,7 @@ function MeasurementDetail({
   onSave: () => void;
 }) {
   const isDraft = batch.status === "draft";
+  const isEditable = isDraft && !isLockedForWorker;
   const areaInputRef = useRef<HTMLInputElement>(null);
   const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
   const measuredAreas = useMemo(() => groupMeasurementEntriesByArea(item.entries), [item.entries]);
@@ -1244,7 +1287,11 @@ function MeasurementDetail({
         </div>
       </header>
 
-      {isDraft ? (
+      {isLockedForWorker ? (
+        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+      ) : null}
+
+      {isEditable ? (
         <div className="mobile-measurement-form mobile-measurement-entry-form">
           <div className="mobile-measurement-form-grid">
             <label>
@@ -1294,9 +1341,9 @@ function MeasurementDetail({
             <button className="primary-action" type="button" onClick={onSave} disabled={isSaving}>{isSaving ? "Speichern..." : "Speichern"}</button>
           </div>
         </div>
-      ) : (
+      ) : !isLockedForWorker ? (
         <p className="form-info">Dieses Aufmaß ist nicht mehr im Entwurf. Neue Aufmaßzeilen sind gesperrt.</p>
-      )}
+      ) : null}
 
       <div className="mobile-measurement-entries">
         <div className="mobile-panel-title-row">
@@ -1308,7 +1355,7 @@ function MeasurementDetail({
           <article className="mobile-measurement-entry" key={area.key}>
             <strong>{area.label}</strong>
             <span>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</span>
-            {isDraft ? (
+            {isEditable ? (
               <button
                 aria-label={`Aufmaß für ${area.label} löschen`}
                 className="mobile-measurement-entry-delete"
@@ -1387,6 +1434,284 @@ function MeasurementQuantityKeypad({
       ))}
     </div>
   );
+}
+
+function CustomerSignatureOverlay({
+  assignmentId,
+  batch,
+  onClose,
+  onSigned,
+}: {
+  assignmentId: number;
+  batch: MobileMeasurementBatch;
+  onClose: () => void;
+  onSigned: (batch: MobileMeasurementBatch) => void;
+}) {
+  const [activeBatch, setActiveBatch] = useState(batch);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfReloadKey, setPdfReloadKey] = useState(0);
+  const [isPdfLoading, setIsPdfLoading] = useState(true);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [isSigning, setIsSigning] = useState(false);
+  const [customerName, setCustomerName] = useState(batch.customer_signature_name ?? "");
+  const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+
+  const isSigned = Boolean(activeBatch.customer_signed_at);
+  const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+
+  useEffect(() => {
+    setActiveBatch(batch);
+    setCustomerName(batch.customer_signature_name ?? "");
+  }, [batch]);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let isActive = true;
+
+    async function loadPdf(): Promise<void> {
+      setIsPdfLoading(true);
+      setPdfError(null);
+      setPdfUrl(null);
+      try {
+        const blob = await api.mobileMeasurementBatchPdf(assignmentId, batch.id);
+        objectUrl = URL.createObjectURL(blob);
+        if (isActive) {
+          setPdfUrl(objectUrl);
+        }
+      } catch (requestError) {
+        if (isActive) {
+          setPdfError(readApiError(requestError, "Aufmaß-PDF konnte nicht geladen werden."));
+        }
+      } finally {
+        if (isActive) {
+          setIsPdfLoading(false);
+        }
+      }
+    }
+
+    void loadPdf();
+    return () => {
+      isActive = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [assignmentId, batch.id, pdfReloadKey]);
+
+  useEffect(() => {
+    if (!isSigning) {
+      return;
+    }
+    drawSignatureCanvas(canvasRef.current, strokes);
+  }, [isSigning, strokes]);
+
+  function appendSignaturePoint(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const point = getSignatureCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+    setStrokes((currentStrokes) => {
+      if (currentStrokes.length === 0) {
+        return [[point]];
+      }
+      const nextStrokes = currentStrokes.slice();
+      const lastStroke = nextStrokes[nextStrokes.length - 1] ?? [];
+      nextStrokes[nextStrokes.length - 1] = [...lastStroke, point];
+      return nextStrokes;
+    });
+  }
+
+  async function handleSaveSignature(): Promise<void> {
+    const normalizedName = customerName.trim();
+    if (!normalizedName) {
+      setSignatureError("Bitte Kundennamen eintragen.");
+      return;
+    }
+    const validStrokes = strokes.filter((stroke) => stroke.length >= 2);
+    if (validStrokes.length === 0) {
+      setSignatureError("Bitte Unterschrift erfassen.");
+      return;
+    }
+
+    setIsSavingSignature(true);
+    setSignatureError(null);
+    try {
+      const updatedBatch = await api.signMobileMeasurementBatch(assignmentId, activeBatch.id, {
+        customer_name: normalizedName,
+        signature_strokes: validStrokes,
+      });
+      setActiveBatch(updatedBatch);
+      setIsSigning(false);
+      setStrokes([]);
+      onSigned(updatedBatch);
+      setPdfReloadKey((currentKey) => currentKey + 1);
+    } catch (requestError) {
+      setSignatureError(readApiError(requestError, "Unterschrift konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSignature(false);
+    }
+  }
+
+  return (
+    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Kundenunterschrift">
+      <header className="mobile-customer-signature-header">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Zurück</span>
+        </button>
+        <div className="mobile-customer-signature-title">
+          <strong>{formatMobileMeasurementBatchTitle(activeBatch)}</strong>
+          <span>{isSigned ? "Kundenunterschrift gespeichert" : "PDF prüfen und unterschreiben"}</span>
+        </div>
+        <button
+          className="primary-action mobile-customer-signature-sign-action"
+          type="button"
+          onClick={() => {
+            setSignatureError(null);
+            setIsSigning(true);
+          }}
+          disabled={isSigned}
+        >
+          Unterschreiben
+        </button>
+      </header>
+
+      <main className="mobile-customer-signature-pdf">
+        {isPdfLoading ? <div className="empty-panel">PDF wird geladen...</div> : null}
+        {pdfError ? <div className="form-error">{pdfError}</div> : null}
+        {!isPdfLoading && !pdfError && pdfUrl ? (
+          <iframe className="mobile-customer-signature-frame" src={pdfUrl} title="Aufmaß-PDF" />
+        ) : null}
+      </main>
+
+      {isSigning && !isSigned ? (
+        <section className="mobile-customer-signature-sheet" aria-label="Unterschrift erfassen">
+          <label>
+            <span>Kundenname</span>
+            <input
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+              placeholder="Name des Kunden"
+            />
+          </label>
+          <div className="mobile-signature-canvas-wrap">
+            <span>Unterschrift</span>
+            <canvas
+              ref={canvasRef}
+              className="mobile-signature-canvas"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                isDrawingRef.current = true;
+                const point = getSignatureCanvasPoint(event);
+                if (point) {
+                  setStrokes((currentStrokes) => [...currentStrokes, [point]]);
+                }
+              }}
+              onPointerMove={(event) => {
+                if (!isDrawingRef.current) {
+                  return;
+                }
+                event.preventDefault();
+                appendSignaturePoint(event);
+              }}
+              onPointerUp={(event) => {
+                isDrawingRef.current = false;
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+              }}
+              onPointerCancel={() => {
+                isDrawingRef.current = false;
+              }}
+            />
+          </div>
+          {signatureError ? <p className="form-error">{signatureError}</p> : null}
+          <div className="mobile-customer-signature-actions">
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => {
+                setStrokes([]);
+                setSignatureError(null);
+              }}
+              disabled={isSavingSignature}
+            >
+              Leeren
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void handleSaveSignature()}
+              disabled={isSavingSignature || !customerName.trim() || !hasSignature}
+            >
+              {isSavingSignature ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function getSignatureCanvasPoint(event: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+  return {
+    x: clampNumber((event.clientX - rect.left) / rect.width, 0, 1),
+    y: clampNumber((event.clientY - rect.top) / rect.height, 0, 1),
+  };
+}
+
+function drawSignatureCanvas(canvas: HTMLCanvasElement | null, strokes: CustomerSignatureStroke[]): void {
+  if (!canvas) {
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.floor(rect.width * scale));
+  const height = Math.max(1, Math.floor(rect.height * scale));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+  context.clearRect(0, 0, width, height);
+  context.save();
+  context.scale(scale, scale);
+  context.lineWidth = 2;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = "#0f2747";
+  for (const stroke of strokes) {
+    if (stroke.length < 2) {
+      continue;
+    }
+    const firstPoint = stroke[0];
+    if (!firstPoint) {
+      continue;
+    }
+    context.beginPath();
+    context.moveTo(firstPoint.x * rect.width, firstPoint.y * rect.height);
+    for (const point of stroke.slice(1)) {
+      context.lineTo(point.x * rect.width, point.y * rect.height);
+    }
+    context.stroke();
+  }
+  context.restore();
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function PlaceholderPanel({ icon: Icon, text }: { icon: typeof ClipboardList; text: string }) {

@@ -248,7 +248,7 @@ class MeasurementPdfService:
         )
         if batch is None or batch.site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
-        if batch.status not in {"billed", "approved"}:
+        if mode == "checked" and batch.status not in {"billed", "approved"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "PDF-Export ist erst für abgerechnete Aufmaße verfügbar.",
@@ -434,7 +434,13 @@ class MeasurementPdfService:
 
         if page_number == page_count:
             _draw_grand_total(commands)
-            _signature_block(commands, contractor_name=submitted_by)
+            _signature_block(
+                commands,
+                contractor_name=submitted_by,
+                customer_name=batch.customer_signature_name,
+                customer_signed_at=batch.customer_signed_at,
+                customer_signature_strokes=batch.customer_signature_strokes,
+            )
         else:
             _text(commands, PAGE_WIDTH - MARGIN, 68, "Fortsetzung auf folgendem Blatt", 8, "F2", align_right=True)
 
@@ -598,10 +604,19 @@ def _draw_measurement_matrix(
         )
 
 
-def _signature_block(commands: list[bytes], *, contractor_name: str) -> None:
+def _signature_block(
+    commands: list[bytes],
+    *,
+    contractor_name: str,
+    customer_name: str | None = None,
+    customer_signed_at: datetime | None = None,
+    customer_signature_strokes: list[list[dict[str, float]]] | None = None,
+) -> None:
     _text(commands, 53, 53.6, "Die Richtigkeit des Aufmaßes und die", 7)
     _text(commands, 53, 42.6, "ordnungsgemäße Montage bescheinigen:", 7)
     _text(commands, 54, 20.0, "Ort / Datum:", 7, "F2")
+    if customer_signed_at is not None:
+        _text_fitted(commands, 139, 19.8, _format_date(customer_signed_at), 8, max_width=90)
     _line(commands, 136, 14.6, 233.5, 14.6, 0.8)
 
     _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")
@@ -611,9 +626,48 @@ def _signature_block(commands: list[bytes], *, contractor_name: str) -> None:
     _line(commands, 661, 41.3, 764, 41.3, 0.8)
 
     _text(commands, 250.2, 20.4, "Name Auftraggeber (Kunde):", 7, "F2")
+    if customer_name:
+        _text_fitted(commands, 396, 19.8, customer_name, 8, max_width=158)
     _line(commands, 394.9, 14.6, 566.6, 14.6, 0.8)
     _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
+    _draw_customer_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
     _line(commands, 661, 14.6, 764, 14.6, 0.8)
+
+
+def _draw_customer_signature(
+    commands: list[bytes],
+    strokes: list[list[dict[str, float]]] | None,
+    *,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+) -> None:
+    if not strokes:
+        return
+
+    for stroke in strokes:
+        points: list[tuple[float, float]] = []
+        for point in stroke:
+            if not isinstance(point, dict):
+                continue
+            try:
+                point_x = float(point.get("x", 0))
+                point_y = float(point.get("y", 0))
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= point_x <= 1 and 0 <= point_y <= 1):
+                continue
+            points.append((x + point_x * width, y + (1 - point_y) * height))
+        if len(points) < 2:
+            continue
+
+        first_x, first_y = points[0]
+        path_parts = [_number(first_x), _number(first_y), b"m"]
+        for next_x, next_y in points[1:]:
+            path_parts.extend([_number(next_x), _number(next_y), b"l"])
+        path_parts.append(b"S")
+        commands.append(b"q 1.25 w 0.05 0.12 0.24 RG " + b" ".join(path_parts) + b" Q")
 
 
 def _wrapped(value: str, width: int) -> list[str]:

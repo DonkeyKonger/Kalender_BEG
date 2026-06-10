@@ -15,6 +15,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.user import User
 from app.schemas.measurement import (
+    CustomerSignatureCreate,
     MeasurementBaseRead,
     MeasurementBaseUpdate,
     MeasurementEntryCreate,
@@ -250,6 +251,7 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
             )
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
@@ -287,6 +289,7 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
             )
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
 
         entry = self.db.get(SiteMeasurementEntry, entry_id)
         if entry is None or entry.measurement_batch_id != batch.id or entry.site_id != assignment.site_id:
@@ -304,6 +307,7 @@ class MeasurementService:
         batch = self._get_batch_for_site(batch_id, assignment.site_id)
         if batch.status != "draft":
             raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Aufmaß ist kein Entwurf mehr.")
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
         if not batch.entries:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -324,6 +328,37 @@ class MeasurementService:
                 submitted_by=current_user,
                 submitted_at=submitted_at,
             )
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
+    def sign_mobile_batch(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+        payload: CustomerSignatureCreate,
+    ) -> MobileMeasurementBatchRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde bereits vom Kunden unterschrieben.",
+            )
+
+        customer_name = " ".join(payload.customer_name.split())
+        if not customer_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kundenname ist erforderlich.")
+
+        batch.customer_signature_name = customer_name
+        batch.customer_signature_strokes = [
+            [point.model_dump() for point in stroke]
+            for stroke in payload.signature_strokes
+            if len(stroke) >= 2
+        ]
+        batch.customer_signed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
@@ -820,6 +855,9 @@ class MeasurementService:
             submitted_by_user_id=batch.submitted_by_user_id,
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
+            customer_signed_at=batch.customer_signed_at,
+            customer_signature_name=batch.customer_signature_name,
+            is_locked_for_worker=batch.customer_signed_at is not None,
             created_at=batch.created_at,
             updated_at=batch.updated_at,
             position_count=len(position_ids),
@@ -827,6 +865,13 @@ class MeasurementService:
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
         )
+
+    def _ensure_mobile_batch_can_be_edited_by_worker(self, batch: SiteMeasurementBatch) -> None:
+        if batch.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.",
+            )
 
     def _build_original_submitted_snapshot(
         self,

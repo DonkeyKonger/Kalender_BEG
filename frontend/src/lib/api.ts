@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
+import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -816,6 +816,21 @@ export const api = {
   ): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/submit`, {
       method: "POST",
+    });
+  },
+
+  async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<Blob> {
+    return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=original`);
+  },
+
+  async signMobileMeasurementBatch(
+    assignmentId: number,
+    batchId: number,
+    payload: CustomerSignaturePayload,
+  ): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/customer-signature`, {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 

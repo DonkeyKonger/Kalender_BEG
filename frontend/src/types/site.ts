@@ -257,12 +257,27 @@ export type MobileMeasurementBatch = {
   submitted_by_user_id: number | null;
   submitted_by_name: string | null;
   submitted_at: string | null;
+  customer_signed_at: string | null;
+  customer_signature_name: string | null;
+  is_locked_for_worker: boolean;
   created_at: string;
   updated_at: string;
   position_count: number;
   entry_count: number;
   reported_minutes: MeasurementNumericValue;
   reported_hours: MeasurementNumericValue;
+};
+
+export type CustomerSignaturePoint = {
+  x: number;
+  y: number;
+};
+
+export type CustomerSignatureStroke = CustomerSignaturePoint[];
+
+export type CustomerSignaturePayload = {
+  customer_name: string;
+  signature_strokes: CustomerSignatureStroke[];
 };
 
 export type MobileMeasurementItem = MeasurementItem & {

@@ -1,18 +1,22 @@
 from datetime import date
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.measurement import (
+    CustomerSignatureCreate,
     MeasurementEntryCreate,
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
 from app.schemas.mobile import MobileAssignmentsResponse, MobileSite
+from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 
@@ -100,6 +104,48 @@ def submit_my_assignment_measurement_batch(
         assignment_id=assignment_id,
         batch_id=batch_id,
         current_user=current_user,
+    )
+
+
+@router.get("/assignments/{assignment_id}/measurement-batches/{batch_id}/pdf")
+def download_my_assignment_measurement_batch_pdf(
+    assignment_id: int,
+    batch_id: int,
+    mode: str = Query("original", pattern="^(checked|original)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    assignment = MeasurementService(db)._get_user_assignment(assignment_id, current_user)
+    content, filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=assignment.site_id,
+        batch_id=batch_id,
+        mode=mode,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+        },
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/customer-signature",
+    response_model=MobileMeasurementBatchRead,
+)
+def sign_my_assignment_measurement_batch(
+    assignment_id: int,
+    batch_id: int,
+    payload: CustomerSignatureCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).sign_mobile_batch(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

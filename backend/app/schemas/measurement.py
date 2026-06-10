@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MeasurementBaseRead(BaseModel):
@@ -95,12 +95,34 @@ class MobileMeasurementBatchRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_by_name: str | None
     submitted_at: datetime | None
+    customer_signed_at: datetime | None
+    customer_signature_name: str | None
+    is_locked_for_worker: bool = False
     created_at: datetime
     updated_at: datetime
     position_count: int
     entry_count: int
     reported_minutes: Decimal | None
     reported_hours: Decimal | None
+
+
+class CustomerSignaturePoint(BaseModel):
+    x: float = Field(..., ge=0, le=1)
+    y: float = Field(..., ge=0, le=1)
+
+
+class CustomerSignatureCreate(BaseModel):
+    customer_name: str = Field(..., min_length=1, max_length=160)
+    signature_strokes: list[list[CustomerSignaturePoint]] = Field(..., min_length=1)
+
+    @field_validator("signature_strokes")
+    @classmethod
+    def validate_signature_strokes(
+        cls, strokes: list[list[CustomerSignaturePoint]]
+    ) -> list[list[CustomerSignaturePoint]]:
+        if not any(len(stroke) >= 2 for stroke in strokes):
+            raise ValueError("Unterschrift ist erforderlich.")
+        return strokes
 
 
 class MeasurementDashboardSubmissionRead(BaseModel):
