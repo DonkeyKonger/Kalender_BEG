@@ -1467,6 +1467,7 @@ function MeasurementQuantityKeypad({
 
 function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
   const pagesRef = useRef<HTMLDivElement | null>(null);
+  const lastObservedWidthRef = useRef<number | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
   const [isRendering, setIsRendering] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -1478,7 +1479,14 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     }
 
     let resizeTimer: number | null = null;
-    const observer = new ResizeObserver(() => {
+    lastObservedWidthRef.current = Math.round(pagesElement.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = Math.round(entries[0]?.contentRect.width ?? 0);
+      const previousWidth = lastObservedWidthRef.current;
+      if (nextWidth <= 0 || previousWidth === null || Math.abs(nextWidth - previousWidth) < 8) {
+        return;
+      }
+      lastObservedWidthRef.current = nextWidth;
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
       }
