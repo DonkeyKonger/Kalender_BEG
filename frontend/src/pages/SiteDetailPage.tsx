@@ -2147,7 +2147,18 @@ function MeasurementTimesheetPanel({
                             <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
-                            <td className="measurement-timesheet-number">{row.progressPercent !== null ? formatMeasurementPercent(row.progressPercent) : "-"}</td>
+                            <td className="measurement-timesheet-number measurement-timesheet-progress-cell">
+                              {row.progressPercent !== null ? (
+                                <span className="measurement-timesheet-cell-progress">
+                                  <span className="measurement-timesheet-cell-progress-value">{formatMeasurementPercent(row.progressPercent)}</span>
+                                  <span className="measurement-timesheet-cell-progress-track" aria-hidden="true">
+                                    <span style={{ width: `${Math.min(Math.max(row.progressPercent, 0), 100)}%` }} />
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="measurement-timesheet-empty-value">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                         {virtualProjectPositionRows.bottomSpacerHeight > 0 ? (
