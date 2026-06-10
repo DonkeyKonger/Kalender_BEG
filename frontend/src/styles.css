@@ -11933,7 +11933,7 @@ button.person-chip:focus-visible {
 
 .mobile-customer-signature-pdf {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 8px;
   -webkit-overflow-scrolling: touch;
 }
@@ -11949,6 +11949,9 @@ button.person-chip:focus-visible {
 }
 
 .mobile-customer-signature-pdfjs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   min-height: 100%;
 }
 
@@ -11995,14 +11998,32 @@ button.person-chip:focus-visible {
   opacity: 0.45;
 }
 
+.mobile-customer-signature-pdf-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 8px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
+.mobile-customer-signature-pdf-surface {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
 .mobile-customer-signature-pdf-pages {
   display: grid;
   align-content: start;
-  justify-items: center;
+  justify-items: start;
   gap: 10px;
-  min-height: 100%;
-  min-width: 100%;
-  transform-origin: top center;
+  width: max-content;
+  min-height: 0;
+  min-width: 0;
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .mobile-customer-signature-pdf-page {

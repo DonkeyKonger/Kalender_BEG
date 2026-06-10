@@ -51,6 +51,23 @@ const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
 const PDF_ZOOM_STEP = 0.25;
 
+type PdfContentSize = {
+  width: number;
+  height: number;
+};
+
+type PdfFocalPoint = {
+  clientX: number;
+  clientY: number;
+};
+
+type PdfPinchState = {
+  initialDistance: number;
+  initialZoom: number;
+  latestZoom: number;
+  latestFocal: PdfFocalPoint | null;
+};
+
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 
 type LocationState = {
@@ -1469,24 +1486,29 @@ function MeasurementQuantityKeypad({
 }
 
 function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const pagesRef = useRef<HTMLDivElement | null>(null);
+  const baseContentSizeRef = useRef<PdfContentSize>({ width: 0, height: 0 });
   const lastObservedWidthRef = useRef<number | null>(null);
-  const pinchStateRef = useRef<{ initialDistance: number; initialZoom: number; latestScale: number } | null>(null);
-  const pinchPreviewScaleRef = useRef(1);
+  const pinchStateRef = useRef<PdfPinchState | null>(null);
+  const zoomScaleRef = useRef(1);
+  const activeScaleRef = useRef(1);
+  const pendingScaleRef = useRef<{ scale: number; focal: PdfFocalPoint | null } | null>(null);
+  const scaleFrameRef = useRef<number | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
   const [zoomScale, setZoomScale] = useState(1);
-  const [pinchPreviewScale, setPinchPreviewScale] = useState(1);
   const [isRendering, setIsRendering] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
 
   useEffect(() => {
-    const pagesElement = pagesRef.current;
-    if (!pagesElement || typeof ResizeObserver === "undefined") {
+    const viewportElement = viewportRef.current;
+    if (!viewportElement || typeof ResizeObserver === "undefined") {
       return;
     }
 
     let resizeTimer: number | null = null;
-    lastObservedWidthRef.current = Math.round(pagesElement.getBoundingClientRect().width);
+    lastObservedWidthRef.current = Math.round(viewportElement.getBoundingClientRect().width);
     const observer = new ResizeObserver((entries) => {
       const nextWidth = Math.round(entries[0]?.contentRect.width ?? 0);
       const previousWidth = lastObservedWidthRef.current;
@@ -1502,7 +1524,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       }, 160);
     });
 
-    observer.observe(pagesElement);
+    observer.observe(viewportElement);
     return () => {
       observer.disconnect();
       if (resizeTimer !== null) {
@@ -1512,10 +1534,67 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (scaleFrameRef.current !== null) {
+        window.cancelAnimationFrame(scaleFrameRef.current);
+      }
+    };
+  }, []);
+
+  function applyPdfScale(nextScale: number, focal: PdfFocalPoint | null = null): void {
+    const viewportElement = viewportRef.current;
+    const surfaceElement = surfaceRef.current;
     const pagesElement = pagesRef.current;
-    if (!pagesElement) {
+    const baseSize = baseContentSizeRef.current;
+    if (!viewportElement || !surfaceElement || !pagesElement || baseSize.width <= 0 || baseSize.height <= 0) {
       return;
     }
+
+    const clampedScale = clampNumber(nextScale, PDF_MIN_ZOOM, PDF_MAX_ZOOM);
+    const previousScale = activeScaleRef.current || 1;
+    const viewportRect = viewportElement.getBoundingClientRect();
+    const focalX = focal ? clampNumber(focal.clientX - viewportRect.left, 0, viewportRect.width) : viewportRect.width / 2;
+    const focalY = focal ? clampNumber(focal.clientY - viewportRect.top, 0, viewportRect.height) : viewportRect.height / 2;
+    const focalContentX = (viewportElement.scrollLeft + focalX) / previousScale;
+    const focalContentY = (viewportElement.scrollTop + focalY) / previousScale;
+    const scaledWidth = Math.max(Math.ceil(baseSize.width * clampedScale), Math.ceil(viewportElement.clientWidth));
+    const scaledHeight = Math.max(Math.ceil(baseSize.height * clampedScale), Math.ceil(viewportElement.clientHeight));
+
+    activeScaleRef.current = clampedScale;
+    pagesElement.style.transform = `scale(${clampedScale})`;
+    surfaceElement.style.width = `${scaledWidth}px`;
+    surfaceElement.style.height = `${scaledHeight}px`;
+
+    const maxScrollLeft = Math.max(0, scaledWidth - viewportElement.clientWidth);
+    const maxScrollTop = Math.max(0, scaledHeight - viewportElement.clientHeight);
+    viewportElement.scrollLeft = clampNumber((focalContentX * clampedScale) - focalX, 0, maxScrollLeft);
+    viewportElement.scrollTop = clampNumber((focalContentY * clampedScale) - focalY, 0, maxScrollTop);
+  }
+
+  function schedulePdfScale(nextScale: number, focal: PdfFocalPoint | null): void {
+    pendingScaleRef.current = { scale: nextScale, focal };
+    if (scaleFrameRef.current !== null) {
+      return;
+    }
+    scaleFrameRef.current = window.requestAnimationFrame(() => {
+      scaleFrameRef.current = null;
+      const pendingScale = pendingScaleRef.current;
+      pendingScaleRef.current = null;
+      if (pendingScale) {
+        applyPdfScale(pendingScale.scale, pendingScale.focal);
+      }
+    });
+  }
+
+  useEffect(() => {
+    const viewportElement = viewportRef.current;
+    const surfaceElement = surfaceRef.current;
+    const pagesElement = pagesRef.current;
+    if (!viewportElement || !surfaceElement || !pagesElement) {
+      return;
+    }
+    const viewportNode = viewportElement;
+    const surfaceNode = surfaceElement;
     const renderTarget = pagesElement;
 
     let isCancelled = false;
@@ -1523,6 +1602,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     let pdfDocument: PDFDocumentProxy | null = null;
     setIsRendering(renderTarget.childElementCount === 0);
     setRenderError(null);
+    renderTarget.style.width = "";
 
     async function renderPdf(): Promise<void> {
       try {
@@ -1544,8 +1624,8 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
           }
 
           const baseViewport = page.getViewport({ scale: 1 });
-          const availableWidth = Math.max(renderTarget.clientWidth - 16, 260);
-          const scale = Math.min(Math.max((availableWidth / baseViewport.width) * zoomScale, 0.35), 3.5);
+          const availableWidth = Math.max(viewportNode.clientWidth - 16, 260);
+          const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 3.5);
           const viewport = page.getViewport({ scale });
           const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
           const canvas = document.createElement("canvas");
@@ -1573,6 +1653,15 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
 
         if (!isCancelled) {
           renderTarget.replaceChildren(...nextPageElements);
+          const nextSize = {
+            width: Math.ceil(renderTarget.scrollWidth),
+            height: Math.ceil(renderTarget.scrollHeight),
+          };
+          baseContentSizeRef.current = nextSize;
+          renderTarget.style.width = `${nextSize.width}px`;
+          surfaceNode.style.width = `${Math.max(nextSize.width, viewportNode.clientWidth)}px`;
+          surfaceNode.style.height = `${Math.max(nextSize.height, viewportNode.clientHeight)}px`;
+          applyPdfScale(zoomScaleRef.current);
           setIsRendering(false);
         }
       } catch (error) {
@@ -1590,13 +1679,21 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       void loadingTask?.destroy();
       void pdfDocument?.cleanup();
     };
-  }, [data, renderVersion, zoomScale]);
+  }, [data, renderVersion]);
 
   function updateZoom(nextZoom: number): void {
-    setZoomScale((currentZoom) => {
-      const clampedZoom = clampNumber(nextZoom, PDF_MIN_ZOOM, PDF_MAX_ZOOM);
-      return Math.abs(clampedZoom - currentZoom) < 0.01 ? currentZoom : clampedZoom;
-    });
+    const clampedZoom = clampNumber(nextZoom, PDF_MIN_ZOOM, PDF_MAX_ZOOM);
+    if (Math.abs(clampedZoom - zoomScaleRef.current) < 0.01) {
+      return;
+    }
+    const viewportElement = viewportRef.current;
+    const viewportRect = viewportElement?.getBoundingClientRect();
+    const focal = viewportRect
+      ? { clientX: viewportRect.left + (viewportRect.width / 2), clientY: viewportRect.top + (viewportRect.height / 2) }
+      : null;
+    zoomScaleRef.current = clampedZoom;
+    applyPdfScale(clampedZoom, focal);
+    setZoomScale(clampedZoom);
   }
 
   function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>): void {
@@ -1610,11 +1707,10 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     event.preventDefault();
     pinchStateRef.current = {
       initialDistance: distance,
-      initialZoom: zoomScale,
-      latestScale: 1,
+      initialZoom: zoomScaleRef.current,
+      latestZoom: zoomScaleRef.current,
+      latestFocal: getTouchMidpoint(event.touches),
     };
-    pinchPreviewScaleRef.current = 1;
-    setPinchPreviewScale(1);
   }
 
   function handleTouchMove(event: ReactTouchEvent<HTMLDivElement>): void {
@@ -1627,12 +1723,11 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     if (distance <= 0) {
       return;
     }
-    const nextPreviewScale = clampNumber(distance / pinchState.initialDistance, 0.65, 1.8);
-    pinchState.latestScale = nextPreviewScale;
-    if (Math.abs(nextPreviewScale - pinchPreviewScaleRef.current) >= 0.03) {
-      pinchPreviewScaleRef.current = nextPreviewScale;
-      setPinchPreviewScale(nextPreviewScale);
-    }
+    const nextZoom = clampNumber(pinchState.initialZoom * (distance / pinchState.initialDistance), PDF_MIN_ZOOM, PDF_MAX_ZOOM);
+    const focal = getTouchMidpoint(event.touches);
+    pinchState.latestZoom = nextZoom;
+    pinchState.latestFocal = focal;
+    schedulePdfScale(nextZoom, focal);
   }
 
   function finishPinch(): void {
@@ -1641,23 +1736,15 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       return;
     }
     pinchStateRef.current = null;
-    pinchPreviewScaleRef.current = 1;
-    setPinchPreviewScale(1);
-    updateZoom(pinchState.initialZoom * pinchState.latestScale);
+    zoomScaleRef.current = pinchState.latestZoom;
+    applyPdfScale(pinchState.latestZoom, pinchState.latestFocal);
+    setZoomScale(pinchState.latestZoom);
   }
 
   return (
     <div
       className="mobile-customer-signature-pdfjs"
       aria-label="Aufmaß-PDF"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={(event) => {
-        if (event.touches.length < 2) {
-          finishPinch();
-        }
-      }}
-      onTouchCancel={finishPinch}
     >
       <div className="mobile-customer-signature-zoom-controls" aria-label="PDF-Zoom">
         <button type="button" onClick={() => updateZoom(zoomScale - PDF_ZOOM_STEP)} disabled={zoomScale <= PDF_MIN_ZOOM + 0.01}>
@@ -1674,10 +1761,21 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       {isRendering ? <div className="empty-panel">PDF wird vorbereitet...</div> : null}
       {renderError ? <div className="form-error">{renderError}</div> : null}
       <div
-        className="mobile-customer-signature-pdf-pages"
-        ref={pagesRef}
-        style={{ transform: pinchPreviewScale === 1 ? undefined : `scale(${pinchPreviewScale})` }}
-      />
+        className="mobile-customer-signature-pdf-viewport"
+        ref={viewportRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={(event) => {
+          if (event.touches.length < 2) {
+            finishPinch();
+          }
+        }}
+        onTouchCancel={finishPinch}
+      >
+        <div className="mobile-customer-signature-pdf-surface" ref={surfaceRef}>
+          <div className="mobile-customer-signature-pdf-pages" ref={pagesRef} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1964,6 +2062,21 @@ function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>["touches"]): 
     return 0;
   }
   return Math.hypot(firstTouch.clientX - secondTouch.clientX, firstTouch.clientY - secondTouch.clientY);
+}
+
+function getTouchMidpoint(touches: ReactTouchEvent<HTMLDivElement>["touches"]): PdfFocalPoint | null {
+  if (touches.length < 2) {
+    return null;
+  }
+  const firstTouch = touches[0];
+  const secondTouch = touches[1];
+  if (!firstTouch || !secondTouch) {
+    return null;
+  }
+  return {
+    clientX: (firstTouch.clientX + secondTouch.clientX) / 2,
+    clientY: (firstTouch.clientY + secondTouch.clientY) / 2,
+  };
 }
 
 function PlaceholderPanel({ icon: Icon, text }: { icon: typeof ClipboardList; text: string }) {
