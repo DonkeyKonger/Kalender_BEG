@@ -2688,7 +2688,7 @@ function MeasurementReviewPanel({
             <span className="measurement-review-action-divider" aria-hidden="true" />
             <div className="measurement-review-filter-group" aria-label="Statusfilter">
               <span>Alle</span>
-              <span className={!isBilled ? "is-active" : ""}>Noch offen</span>
+              <span className={!isBilled ? "is-active" : ""}>Prüfung erforderlich</span>
               <span className={isBilled ? "is-active" : ""}>Abgerechnet</span>
             </div>
           </div>
@@ -2837,6 +2837,7 @@ function MeasurementReviewPanel({
             const isExportingCheckedPdf = pdfExportingAction === checkedPdfKey;
             const isExportingOriginalPdf = pdfExportingAction === originalPdfKey;
             const isExportingPdf = isExportingCheckedPdf || isExportingOriginalPdf;
+            const statusBadge = getMeasurementBatchStatusBadge(batch);
             return (
               <div
                 key={batch.id}
@@ -2847,7 +2848,14 @@ function MeasurementReviewPanel({
                   className="measurement-review-card-open"
                   onClick={() => onSelectBatch(batch)}
                 >
-                  <span className={getMeasurementBatchStatusClass(batch.status)}>{getMeasurementBatchStatusLabel(batch.status)}</span>
+                  <span className={statusBadge.className}>
+                    {statusBadge.secondaryLabel ? (
+                      <>
+                        <span>{statusBadge.label}</span>
+                        <span>{statusBadge.secondaryLabel}</span>
+                      </>
+                    ) : statusBadge.label}
+                  </span>
                   <div className="measurement-review-card-main">
                     <div className="measurement-review-card-title-row">
                       <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
@@ -3870,28 +3878,35 @@ function formatMeasurementBaseName(base: MeasurementBase): string {
   return base.name.replace("Aufmaßbasis", "Aufmaßblatt");
 }
 
-function getMeasurementBatchStatusLabel(status: string): string {
+function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
+  label: string;
+  secondaryLabel?: string;
+  className: string;
+} {
+  const status = batch.status.toLowerCase();
   if (isMeasurementBatchBilled(status)) {
-    return "Abgerechnet";
+    return { label: "Abgerechnet", className: "measurement-status is-billed" };
+  }
+  if (isCustomerSignedMeasurementBatch(batch)) {
+    return {
+      label: "Unterschrieben",
+      secondaryLabel: "Prüfung erforderlich",
+      className: "measurement-status is-signed-review is-two-line",
+    };
   }
   if (isMeasurementBatchOpen(status)) {
-    return "Noch offen";
+    return { label: "Prüfung erforderlich", className: "measurement-status is-review-required" };
   }
   const labels: Record<string, string> = {
     draft: "Entwurf",
-    in_review: "In Prüfung",
+    in_review: "Prüfung erforderlich",
     closed: "Abgeschlossen",
   };
-  return labels[status] ?? status;
-}
-
-function getMeasurementBatchStatusClass(status: string): string {
-  const normalizedStatus = isMeasurementBatchBilled(status)
-    ? "billed"
-    : isMeasurementBatchOpen(status)
-      ? "open"
-      : status;
-  return ["measurement-status", `is-${normalizedStatus}`].join(" ");
+  const normalizedStatus = status === "in_review" ? "review-required" : status;
+  return {
+    label: labels[status] ?? status,
+    className: ["measurement-status", `is-${normalizedStatus}`].join(" "),
+  };
 }
 
 function isMeasurementBatchBilled(status: string): boolean {
@@ -3904,6 +3919,10 @@ function isMeasurementBatchPdfExportable(status: string): boolean {
 
 function isMeasurementBatchOpen(status: string): boolean {
   return status === "submitted" || status === "rejected";
+}
+
+function isCustomerSignedMeasurementBatch(batch: MobileMeasurementBatch): boolean {
+  return Boolean(batch.customer_signed_at || batch.customer_signature_name || batch.is_locked_for_worker);
 }
 
 function formatMeasurementNumber(value: string | number | null): string {

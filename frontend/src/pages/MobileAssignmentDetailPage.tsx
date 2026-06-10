@@ -1975,6 +1975,9 @@ function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { 
   if (isReviewedMobileMeasurementBatchStatus(status)) {
     return { label: "Geprüft", className: "mobile-batch-status-reviewed" };
   }
+  if (isCustomerSignedMobileMeasurementBatch(batch)) {
+    return { label: "Unterschrieben", className: "mobile-batch-status-signed" };
+  }
   if (isSubmittedMobileMeasurementBatchStatus(status) || batch.submitted_at) {
     return { label: "Eingereicht", className: "mobile-batch-status-submitted" };
   }
@@ -2010,6 +2013,10 @@ function isReviewedMobileMeasurementBatchStatus(status: string): boolean {
 
 function isSubmittedMobileMeasurementBatchStatus(status: string): boolean {
   return ["submitted", "in_review", "rejected"].includes(status);
+}
+
+function isCustomerSignedMobileMeasurementBatch(batch: MobileMeasurementBatch): boolean {
+  return Boolean(batch.customer_signed_at || batch.customer_signature_name || batch.is_locked_for_worker);
 }
 
 function mobileStatusLabel(status: string): string {

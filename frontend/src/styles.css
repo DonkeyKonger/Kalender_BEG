@@ -5582,9 +5582,32 @@ button.person-chip:focus-visible {
 
 .measurement-status.is-open,
 .measurement-status.is-submitted,
-.measurement-status.is-rejected {
-  background: #fef2f2;
-  color: #991b1b;
+.measurement-status.is-rejected,
+.measurement-status.is-review-required,
+.measurement-status.is-signed-review {
+  background: #e8f1ff;
+  color: #1d4f91;
+}
+
+.measurement-status.is-two-line {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 108px;
+  min-height: 34px;
+  border-radius: 9px;
+  line-height: 1.05;
+  padding: 5px 9px;
+}
+
+.measurement-status.is-two-line span:first-child {
+  font-weight: 900;
+}
+
+.measurement-status.is-two-line span:last-child {
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .measurement-status.is-draft {
@@ -12012,7 +12035,8 @@ button.person-chip:focus-visible {
   color: #42526b;
 }
 
-.mobile-batch-status-submitted {
+.mobile-batch-status-submitted,
+.mobile-batch-status-signed {
   background: #e8f1ff;
   color: #1d4f91;
 }
@@ -12479,6 +12503,12 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .measurement-status.is-open,
 .site-detail-page.is-project-file-workspace .measurement-status.is-submitted,
 .site-detail-page.is-project-file-workspace .measurement-status.is-rejected,
+.site-detail-page.is-project-file-workspace .measurement-status.is-review-required,
+.site-detail-page.is-project-file-workspace .measurement-status.is-signed-review {
+  background: #e8f1ff;
+  color: #1d4f91;
+}
+
 .site-detail-page.is-project-file-workspace .measurement-status.is-nep {
   background: var(--pf-warning-bg);
   color: var(--pf-warning-text);
@@ -12990,13 +13020,14 @@ button.person-chip:focus-visible {
 
 .measurement-review-detail.is-table-view .measurement-status.is-open,
 .measurement-review-detail.is-table-view .measurement-status.is-submitted,
-.measurement-review-detail.is-table-view .measurement-status.is-rejected {
+.measurement-review-detail.is-table-view .measurement-status.is-rejected,
+.measurement-review-detail.is-table-view .measurement-status.is-review-required,
+.measurement-review-detail.is-table-view .measurement-status.is-signed-review {
   min-height: 28px;
-  max-height: 30px;
-  border: 1px solid rgb(146 64 14 / 16%);
+  border: 1px solid rgb(29 79 145 / 18%);
   border-radius: 4px;
-  background: var(--ct-warning-bg);
-  color: var(--ct-warning-text);
+  background: #e8f1ff;
+  color: #1d4f91;
   padding: 4px 9px;
   font-size: 0.83rem;
   font-weight: 800;
