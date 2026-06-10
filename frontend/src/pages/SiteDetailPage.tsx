@@ -15,7 +15,7 @@ import {
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
@@ -96,7 +96,7 @@ export function SiteDetailPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
   const [measurementBases, setMeasurementBases] = useState<MeasurementBase[]>([]);
-  const [measurementItems, setMeasurementItems] = useState<MeasurementItem[]>([]);
+  const [measurementTimesheet, setMeasurementTimesheet] = useState<MeasurementTimesheet | null>(null);
   const [measurementLoading, setMeasurementLoading] = useState(false);
   const [measurementLoaded, setMeasurementLoaded] = useState(false);
   const [measurementError, setMeasurementError] = useState<string | null>(null);
@@ -110,7 +110,6 @@ export function SiteDetailPage() {
   const [measurementBatchesError, setMeasurementBatchesError] = useState<string | null>(null);
   const [selectedMeasurementBatch, setSelectedMeasurementBatch] = useState<MobileMeasurementBatch | null>(null);
   const [measurementBatchItems, setMeasurementBatchItems] = useState<MobileMeasurementItem[]>([]);
-  const [measurementProgressItems, setMeasurementProgressItems] = useState<MobileMeasurementItem[]>([]);
   const [measurementWorkerHeadCount, setMeasurementWorkerHeadCount] = useState(0);
   const [measurementBatchItemsLoading, setMeasurementBatchItemsLoading] = useState(false);
   const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
@@ -188,7 +187,7 @@ export function SiteDetailPage() {
     setUploadMessage(null);
     setUploadError(null);
     setDragOverFolderKey(null);
-    setMeasurementItems([]);
+    setMeasurementTimesheet(null);
     setMeasurementLoading(false);
     setMeasurementLoaded(false);
     setMeasurementError(null);
@@ -201,7 +200,6 @@ export function SiteDetailPage() {
     setMeasurementBatchesError(null);
     setSelectedMeasurementBatch(null);
     setMeasurementBatchItems([]);
-    setMeasurementProgressItems([]);
     setMeasurementWorkerHeadCount(0);
     setMeasurementBatchItemsLoading(false);
     setMeasurementReviewMessage(null);
@@ -310,36 +308,21 @@ export function SiteDetailPage() {
       setMeasurementBatchesError(null);
       try {
         const initialRequestsStartedAt = startMeasurementTimesheetPerformanceTiming();
-        const [bases, items, batches] = await Promise.all([
+        const [bases, timesheet] = await Promise.all([
           api.measurementBases(site.id),
-          api.measurementItems(site.id, { activeOnly: true }),
-          api.siteMeasurementBatches(site.id),
+          api.measurementTimesheet(site.id),
         ]);
-        logMeasurementTimesheetPerformance("API Basisdaten", initialRequestsStartedAt, {
+        logMeasurementTimesheetPerformance("API Zeitenliste aggregiert", initialRequestsStartedAt, {
           bases: bases.length,
-          items: items.length,
-          batches: batches.length,
+          activeBatches: timesheet.active_batch_ids.length,
+          rows: timesheet.rows.length,
         });
-        let progressItems: MobileMeasurementItem[] = [];
-        try {
-          const progressStartedAt = startMeasurementTimesheetPerformanceTiming();
-          progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
-          logMeasurementTimesheetPerformance("API Aufmaßmengen", progressStartedAt, {
-            progressItems: progressItems.length,
-          });
-        } catch (progressError) {
-          setMeasurementBatchesError(readApiError(progressError, "Aufmaßmengen konnten für den Vergleich nicht geladen werden."));
-        }
         setMeasurementBases(bases);
-        setMeasurementItems(items);
-        setMeasurementBatches(batches);
-        setMeasurementBatchesLoaded(true);
-        setMeasurementProgressItems(progressItems);
+        setMeasurementTimesheet(timesheet);
         setMeasurementLoaded(true);
         logMeasurementTimesheetPerformance("Erstladen gesamt", loadStartedAt, {
-          items: items.length,
-          batches: batches.length,
-          progressItems: progressItems.length,
+          activeBatches: timesheet.active_batch_ids.length,
+          rows: timesheet.rows.length,
         });
       } catch (requestError) {
         setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
@@ -574,17 +557,12 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.activateMeasurementBase(site.id, base.id);
-      const [items, batches] = await Promise.all([
-        api.measurementItems(site.id, { activeOnly: true }),
-        api.siteMeasurementBatches(site.id),
-      ]);
-      const progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
+      const timesheet = await api.measurementTimesheet(site.id);
       setMeasurementBases(bases);
-      setMeasurementItems(items);
-      setMeasurementBatches(batches);
-      setMeasurementProgressItems(progressItems);
+      setMeasurementTimesheet(timesheet);
+      setMeasurementBatches([]);
       setMeasurementLoaded(true);
-      setMeasurementBatchesLoaded(true);
+      setMeasurementBatchesLoaded(false);
       setMeasurementImportMessage("Angebot ist jetzt aktiv.");
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktiviert werden."));
@@ -605,9 +583,11 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.deleteMeasurementBase(site.id, base.id);
-      const items = await api.measurementItems(site.id, { activeOnly: true });
+      const timesheet = await api.measurementTimesheet(site.id);
       setMeasurementBases(bases);
-      setMeasurementItems(items);
+      setMeasurementTimesheet(timesheet);
+      setMeasurementBatches([]);
+      setMeasurementBatchesLoaded(false);
       setMeasurementImportMessage("Angebot wurde gelöscht.");
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht gelöscht werden."));
@@ -623,18 +603,15 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const [bases, items, batches] = await Promise.all([
+      const [bases, timesheet] = await Promise.all([
         api.measurementBases(site.id),
-        api.measurementItems(site.id, { activeOnly: true }),
-        api.siteMeasurementBatches(site.id),
+        api.measurementTimesheet(site.id),
       ]);
-      const progressItems = await loadActiveMeasurementProgressItems(site.id, batches);
       setMeasurementBases(bases);
-      setMeasurementItems(items);
-      setMeasurementBatches(batches);
-      setMeasurementProgressItems(progressItems);
+      setMeasurementTimesheet(timesheet);
+      setMeasurementBatches([]);
       setMeasurementLoaded(true);
-      setMeasurementBatchesLoaded(true);
+      setMeasurementBatchesLoaded(false);
       setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`);
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
@@ -882,7 +859,7 @@ export function SiteDetailPage() {
             setMeasurementReviewError(null);
           }}
           bases={measurementBases}
-          items={measurementItems}
+          timesheet={measurementTimesheet}
           isLoading={measurementLoading}
           error={measurementError}
           isImporting={measurementImporting}
@@ -894,10 +871,10 @@ export function SiteDetailPage() {
           onDeleteBase={(base) => void deleteMeasurementBase(base)}
           onRetry={() => {
             setMeasurementLoaded(false);
+            setMeasurementTimesheet(null);
             setMeasurementError(null);
           }}
           batches={measurementBatches}
-          batchProgressItems={measurementProgressItems}
           workerHeadCount={measurementWorkerHeadCount}
           batchesLoading={measurementBatchesLoading}
           batchesError={measurementBatchesError}
@@ -1498,7 +1475,7 @@ function MeasurementTab({
   activeSubtab,
   onSubtabChange,
   bases,
-  items,
+  timesheet,
   isLoading,
   error,
   isImporting,
@@ -1510,7 +1487,6 @@ function MeasurementTab({
   onDeleteBase,
   onRetry,
   batches,
-  batchProgressItems,
   workerHeadCount,
   batchesLoading,
   batchesError,
@@ -1535,7 +1511,7 @@ function MeasurementTab({
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
-  items: MeasurementItem[];
+  timesheet: MeasurementTimesheet | null;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
@@ -1547,7 +1523,6 @@ function MeasurementTab({
   onDeleteBase: (base: MeasurementBase) => void;
   onRetry: () => void;
   batches: MobileMeasurementBatch[];
-  batchProgressItems: MobileMeasurementItem[];
   workerHeadCount: number;
   batchesLoading: boolean;
   batchesError: string | null;
@@ -1589,8 +1564,7 @@ function MeasurementTab({
         <MeasurementTimesheetPanel
           siteNumber={siteNumber}
           bases={bases}
-          items={items}
-          progressItems={batchProgressItems}
+          timesheet={timesheet}
           workerHeadCount={workerHeadCount}
           isLoading={isLoading}
           error={error}
@@ -1646,8 +1620,7 @@ function MeasurementTab({
 function MeasurementTimesheetPanel({
   siteNumber,
   bases,
-  items,
-  progressItems,
+  timesheet,
   workerHeadCount,
   isLoading,
   error,
@@ -1659,8 +1632,7 @@ function MeasurementTimesheetPanel({
 }: {
   siteNumber: string | null;
   bases: MeasurementBase[];
-  items: MeasurementItem[];
-  progressItems: MobileMeasurementItem[];
+  timesheet: MeasurementTimesheet | null;
   workerHeadCount: number;
   isLoading: boolean;
   error: string | null;
@@ -1729,118 +1701,70 @@ function MeasurementTimesheetPanel({
     });
   }, [updateTableViewport]);
 
-  const measuredByItemId = useMemo(() => {
+  const projectPositionRows = useMemo(() => {
     const startedAt = startMeasurementTimesheetPerformanceTiming();
-    const totals = new Map<number, { quantity: number; minutes: number }>();
-
-    for (const progressItem of progressItems) {
-      const quantity = getMeasurementNumericValue(progressItem.reported_quantity);
-      const minutesPerUnit = getMeasurementNumericValue(progressItem.minutes_per_unit);
-      const reportedMinutes = getMeasurementNumericValue(progressItem.reported_minutes);
-      const minutes = reportedMinutes > 0 ? reportedMinutes : quantity * minutesPerUnit;
-      const current = totals.get(progressItem.id) ?? { quantity: 0, minutes: 0 };
-
-      totals.set(progressItem.id, {
-        quantity: current.quantity + quantity,
-        minutes: current.minutes + minutes,
-      });
-    }
-
-    logMeasurementTimesheetPerformance("Derived Aufmaßsummen", startedAt, {
-      progressItems: progressItems.length,
-      totals: totals.size,
-    });
-    return totals;
-  }, [progressItems]);
-
-  const projectPositionRows = useMemo(() => (
-    (() => {
-      const startedAt = startMeasurementTimesheetPerformanceTiming();
-      const rows = items.map((item) => {
-      const plannedQuantity = getMeasurementNumericValue(item.list_quantity);
-      const minutesPerUnit = getMeasurementNumericValue(item.minutes_per_unit);
-      const plannedMinutes = plannedQuantity > 0 && minutesPerUnit > 0 ? plannedQuantity * minutesPerUnit : 0;
-      const measured = measuredByItemId.get(item.id) ?? { quantity: 0, minutes: 0 };
-      const measuredMinutes = measured.minutes > 0 ? measured.minutes : measured.quantity * minutesPerUnit;
-      const progressPercent = plannedMinutes > 0 ? (measuredMinutes / plannedMinutes) * 100 : null;
-      const remainingQuantity = plannedQuantity > 0 ? plannedQuantity - measured.quantity : null;
+    const rows = (timesheet?.rows ?? []).map((row) => {
+      const plannedQuantity = getMeasurementNumericValue(row.target_quantity);
+      const measuredQuantity = getMeasurementNumericValue(row.measured_quantity);
+      const remainingQuantity = row.remaining_quantity === null ? null : getMeasurementNumericValue(row.remaining_quantity);
 
       return {
-        item,
-        positionNumber: item.position,
-        description: item.description,
-        searchText: `${item.position} ${item.description ?? ""}`.toLocaleLowerCase("de-DE"),
-        unit: item.unit,
+        positionId: row.position_id,
+        positionNumber: row.position_number,
+        description: row.description,
+        searchText: row.search_text || `${row.position_number} ${row.description ?? ""}`.toLocaleLowerCase("de-DE"),
+        unit: row.unit,
         plannedQuantity,
         hasPlannedQuantity: plannedQuantity > 0,
-        measuredQuantity: measured.quantity,
+        measuredQuantity,
         remainingQuantity,
-        minutesPerUnit,
-        plannedMinutes,
-        measuredMinutes,
-        progressPercent,
+        minutesPerUnit: getMeasurementNumericValue(row.minutes_per_unit),
+        plannedMinutes: getMeasurementNumericValue(row.planned_minutes),
+        measuredMinutes: getMeasurementNumericValue(row.measured_minutes),
+        progressPercent: row.progress_percent,
       };
-      });
-      logMeasurementTimesheetPerformance("Derived Positionszeilen", startedAt, {
-        rows: rows.length,
-      });
-      return rows;
-    })()
-  ), [items, measuredByItemId]);
+    });
+    logMeasurementTimesheetPerformance("Derived Positionszeilen", startedAt, {
+      rows: rows.length,
+      source: "backend-timesheet",
+    });
+    return rows;
+  }, [timesheet?.rows]);
 
   const projectPositionStats = useMemo(() => {
-    const startedAt = startMeasurementTimesheetPerformanceTiming();
-    let plannedMinutes = 0;
-    let measuredMinutes = 0;
-    let withMeasurement = 0;
-
-    for (const row of projectPositionRows) {
-      plannedMinutes += row.plannedMinutes;
-      measuredMinutes += row.measuredMinutes;
-      if (row.measuredQuantity > 0) {
-        withMeasurement += 1;
-      }
+    const kpi = timesheet?.kpi;
+    if (!kpi) {
+      return {
+        total: 0,
+        plannedMinutes: 0,
+        measuredMinutes: 0,
+        progressPercent: null,
+        openMinutes: null,
+        hasPlannedBasis: false,
+        withMeasurement: 0,
+        withoutMeasurement: 0,
+      };
     }
 
-    const hasPlannedBasis = plannedMinutes > 0;
-    const progressPercent = hasPlannedBasis ? (measuredMinutes / plannedMinutes) * 100 : null;
-
-    // Belastbarer Fortschritt ist erst möglich, wenn Angebots-/Sollmengen als Vergleichsbasis vorhanden sind.
-    const stats = {
-      total: projectPositionRows.length,
-      plannedMinutes,
-      measuredMinutes,
-      progressPercent,
-      openMinutes: hasPlannedBasis ? plannedMinutes - measuredMinutes : null,
-      hasPlannedBasis,
-      withMeasurement,
-      withoutMeasurement: projectPositionRows.length - withMeasurement,
+    return {
+      total: kpi.position_count,
+      plannedMinutes: getMeasurementNumericValue(kpi.planned_minutes),
+      measuredMinutes: getMeasurementNumericValue(kpi.measured_minutes),
+      progressPercent: kpi.progress_percent,
+      openMinutes: kpi.open_minutes === null ? null : getMeasurementNumericValue(kpi.open_minutes),
+      hasPlannedBasis: kpi.has_planned_basis,
+      withMeasurement: kpi.captured_count,
+      withoutMeasurement: kpi.not_captured_count,
     };
-    logMeasurementTimesheetPerformance("Derived KPI", startedAt, {
-      rows: projectPositionRows.length,
-    });
-    return stats;
-  }, [projectPositionRows]);
+  }, [timesheet?.kpi]);
 
-  const latestImportInfo = useMemo(() => {
-    let latestItem: MeasurementItem | null = null;
-    let latestTimestamp = -Infinity;
-
-    for (const item of items) {
-      const timestamp = Date.parse(item.updated_at || item.created_at);
-      if (Number.isFinite(timestamp) && timestamp > latestTimestamp) {
-        latestTimestamp = timestamp;
-        latestItem = item;
+  const latestImportInfo = timesheet?.last_import_label || timesheet?.last_import_at
+    ? {
+        fileName: timesheet.last_import_label,
+        updatedAt: timesheet.last_import_at,
       }
-    }
-
-    return latestItem
-      ? {
-          fileName: latestItem.source_file_name,
-          updatedAt: latestItem.updated_at || latestItem.created_at,
-        }
-      : null;
-  }, [items]);
+    : null;
+  const activeMeasurementLabel = timesheet?.active_measurement_label ?? (defaultBase ? formatMeasurementBaseName(defaultBase) : null);
 
   const filterOptions = useMemo(() => ([
     { key: "all" as const, label: "Alle", count: projectPositionStats.total },
@@ -2038,7 +1962,7 @@ function MeasurementTimesheetPanel({
             <h2><Ruler aria-hidden="true" size={18} />Projektpositionen / Angebot vs. Ausführung</h2>
             <p>Übersicht über Projektpositionen, Montagezeiten und bisher erfasste Aufmaßmengen.</p>
             <div className="measurement-timesheet-meta">
-              {defaultBase ? <span><strong>Aktives Aufmaß:</strong> {formatMeasurementBaseName(defaultBase)}</span> : null}
+              {activeMeasurementLabel ? <span><strong>Aktives Aufmaß:</strong> {activeMeasurementLabel}</span> : null}
               {latestImportInfo?.fileName ? <span><strong>Letzter Import:</strong> {latestImportInfo.fileName}</span> : null}
               {latestImportInfo?.updatedAt ? <span><strong>Importzeit:</strong> {formatDateTime(latestImportInfo.updatedAt)}</span> : null}
             </div>
@@ -2100,10 +2024,10 @@ function MeasurementTimesheetPanel({
             <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
           </div>
         ) : null}
-        {!isLoading && !error && items.length === 0 ? (
+        {!isLoading && !error && projectPositionRows.length === 0 ? (
           <div className="project-record-empty-state">Noch keine Aufmaßpositionen importiert.</div>
         ) : null}
-        {!isLoading && !error && items.length > 0 ? (
+        {!isLoading && !error && projectPositionRows.length > 0 ? (
           <>
             <div className="measurement-timesheet-kpis" aria-label="Projektpositionen Kennzahlen">
               <div className="measurement-timesheet-kpi-card">
@@ -2212,7 +2136,7 @@ function MeasurementTimesheetPanel({
                         ) : null}
                         {virtualProjectPositionRows.rows.map((row) => (
                           <tr
-                            key={row.item.id}
+                            key={row.positionId}
                             className={row.measuredQuantity > 0 ? "has-quantity" : ""}
                           >
                             <td><strong>{row.positionNumber}</strong></td>
@@ -4103,22 +4027,6 @@ function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
     window.open(url, "_blank", "noopener,noreferrer");
   }
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-}
-
-async function loadActiveMeasurementProgressItems(
-  siteId: number,
-  batches: MobileMeasurementBatch[],
-): Promise<MobileMeasurementItem[]> {
-  const activeBatches = batches.filter((batch) => batch.is_current_offer);
-  if (activeBatches.length === 0) {
-    return [];
-  }
-
-  const progressItemLists = await Promise.all(
-    activeBatches.map((batch) => api.siteMeasurementBatchItems(siteId, batch.id)),
-  );
-
-  return progressItemLists.flat();
 }
 
 function formatMeasurementPackageNumber(

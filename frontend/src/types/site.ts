@@ -288,6 +288,44 @@ export type MobileMeasurementItem = MeasurementItem & {
   mobile_status: "open" | "edited" | "billed" | string;
 };
 
+export type MeasurementTimesheetKpi = {
+  position_count: number;
+  planned_minutes: MeasurementNumericValue;
+  measured_minutes: MeasurementNumericValue;
+  open_minutes: MeasurementNumericValue;
+  progress_percent: number | null;
+  captured_count: number;
+  not_captured_count: number;
+  has_planned_basis: boolean;
+};
+
+export type MeasurementTimesheetRow = {
+  position_id: number;
+  position_number: string;
+  description: string;
+  unit: string | null;
+  target_quantity: MeasurementNumericValue;
+  measured_quantity: MeasurementNumericValue;
+  remaining_quantity: MeasurementNumericValue;
+  minutes_per_unit: MeasurementNumericValue;
+  planned_minutes: MeasurementNumericValue;
+  measured_minutes: MeasurementNumericValue;
+  progress_percent: number | null;
+  is_captured: boolean;
+  search_text: string;
+};
+
+export type MeasurementTimesheet = {
+  site_id: number;
+  measurement_base_id: number | null;
+  active_batch_ids: number[];
+  active_measurement_label: string | null;
+  last_import_label: string | null;
+  last_import_at: string | null;
+  kpi: MeasurementTimesheetKpi;
+  rows: MeasurementTimesheetRow[];
+};
+
 export type MeasurementImportResponse = {
   imported_count: number;
   measurement_base: MeasurementBase;

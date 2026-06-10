@@ -106,6 +106,44 @@ class MobileMeasurementBatchRead(BaseModel):
     reported_hours: Decimal | None
 
 
+class MeasurementTimesheetKpiRead(BaseModel):
+    position_count: int
+    planned_minutes: Decimal
+    measured_minutes: Decimal
+    open_minutes: Decimal | None
+    progress_percent: float | None
+    captured_count: int
+    not_captured_count: int
+    has_planned_basis: bool
+
+
+class MeasurementTimesheetRowRead(BaseModel):
+    position_id: int
+    position_number: str
+    description: str
+    unit: str | None
+    target_quantity: Decimal | None
+    measured_quantity: Decimal
+    remaining_quantity: Decimal | None
+    minutes_per_unit: Decimal | None
+    planned_minutes: Decimal
+    measured_minutes: Decimal
+    progress_percent: float | None
+    is_captured: bool
+    search_text: str
+
+
+class MeasurementTimesheetRead(BaseModel):
+    site_id: int
+    measurement_base_id: int | None
+    active_batch_ids: list[int]
+    active_measurement_label: str | None
+    last_import_label: str | None
+    last_import_at: datetime | None
+    kpi: MeasurementTimesheetKpiRead
+    rows: list[MeasurementTimesheetRowRead]
+
+
 class CustomerSignaturePoint(BaseModel):
     x: float = Field(..., ge=0, le=1)
     y: float = Field(..., ge=0, le=1)

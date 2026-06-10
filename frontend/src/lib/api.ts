@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
+import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate } from "../types/site";
 import type { MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -645,6 +645,10 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`);
+  },
+
+  async measurementTimesheet(siteId: number): Promise<MeasurementTimesheet> {
+    return request<MeasurementTimesheet>(`/sites/${siteId}/measurement-timesheet`);
   },
 
   async siteMeasurementBatches(siteId: number, params: { measurementBaseId?: number | null; activeOnly?: boolean } = {}): Promise<MobileMeasurementBatch[]> {

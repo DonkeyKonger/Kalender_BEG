@@ -21,6 +21,9 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
+    MeasurementTimesheetKpiRead,
+    MeasurementTimesheetRead,
+    MeasurementTimesheetRowRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
@@ -449,6 +452,156 @@ class MeasurementService:
             ).all()
         )
         return [self._build_mobile_item(item, batch.id) for item in items]
+
+    def get_site_measurement_timesheet(self, site_id: int) -> MeasurementTimesheetRead:
+        self._get_site(site_id)
+        active_base_id = self._get_active_measurement_base_id(site_id)
+        if active_base_id is None:
+            return MeasurementTimesheetRead(
+                site_id=site_id,
+                measurement_base_id=None,
+                active_batch_ids=[],
+                active_measurement_label=None,
+                last_import_label=None,
+                last_import_at=None,
+                kpi=MeasurementTimesheetKpiRead(
+                    position_count=0,
+                    planned_minutes=Decimal("0"),
+                    measured_minutes=Decimal("0"),
+                    open_minutes=None,
+                    progress_percent=None,
+                    captured_count=0,
+                    not_captured_count=0,
+                    has_planned_basis=False,
+                ),
+                rows=[],
+            )
+
+        active_base = self.db.get(SiteMeasurementBase, active_base_id)
+        active_batch_ids = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch.id)
+                .where(
+                    SiteMeasurementBatch.site_id == site_id,
+                    SiteMeasurementBatch.measurement_base_id == active_base_id,
+                )
+                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
+            ).all()
+        )
+
+        measured_by_item_id: dict[int, Decimal] = {}
+        if active_batch_ids:
+            measured_rows = self.db.execute(
+                select(
+                    SiteMeasurementEntry.measurement_item_id,
+                    func.coalesce(func.sum(SiteMeasurementEntry.quantity), Decimal("0")),
+                )
+                .where(
+                    SiteMeasurementEntry.site_id == site_id,
+                    SiteMeasurementEntry.measurement_batch_id.in_(active_batch_ids),
+                )
+                .group_by(SiteMeasurementEntry.measurement_item_id)
+            ).all()
+            measured_by_item_id = {
+                int(item_id): measured_quantity or Decimal("0")
+                for item_id, measured_quantity in measured_rows
+            }
+
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .where(
+                    SiteMeasurementItem.site_id == site_id,
+                    SiteMeasurementItem.measurement_base_id == active_base_id,
+                )
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            ).all()
+        )
+
+        rows: list[MeasurementTimesheetRowRead] = []
+        planned_minutes_total = Decimal("0")
+        measured_minutes_total = Decimal("0")
+        captured_count = 0
+        latest_import_item: SiteMeasurementItem | None = None
+        latest_import_timestamp: datetime | None = None
+
+        for item in items:
+            planned_quantity = item.list_quantity or Decimal("0")
+            minutes_per_unit = item.minutes_per_unit or Decimal("0")
+            planned_minutes = (
+                planned_quantity * minutes_per_unit
+                if planned_quantity > 0 and minutes_per_unit > 0
+                else Decimal("0")
+            )
+            measured_quantity = measured_by_item_id.get(item.id, Decimal("0"))
+            measured_minutes = (
+                measured_quantity * minutes_per_unit
+                if measured_quantity > 0 and minutes_per_unit > 0
+                else Decimal("0")
+            )
+            remaining_quantity = planned_quantity - measured_quantity if planned_quantity > 0 else None
+            progress_percent = (
+                float((measured_minutes / planned_minutes) * Decimal("100"))
+                if planned_minutes > 0
+                else None
+            )
+            is_captured = measured_quantity > 0
+
+            if is_captured:
+                captured_count += 1
+            planned_minutes_total += planned_minutes
+            measured_minutes_total += measured_minutes
+
+            item_timestamp = item.updated_at or item.created_at
+            if (
+                item_timestamp is not None
+                and (latest_import_timestamp is None or item_timestamp > latest_import_timestamp)
+            ):
+                latest_import_item = item
+                latest_import_timestamp = item_timestamp
+
+            rows.append(
+                MeasurementTimesheetRowRead(
+                    position_id=item.id,
+                    position_number=item.position,
+                    description=item.description,
+                    unit=item.unit,
+                    target_quantity=item.list_quantity,
+                    measured_quantity=measured_quantity,
+                    remaining_quantity=remaining_quantity,
+                    minutes_per_unit=item.minutes_per_unit,
+                    planned_minutes=planned_minutes,
+                    measured_minutes=measured_minutes,
+                    progress_percent=progress_percent,
+                    is_captured=is_captured,
+                    search_text=f"{item.position} {item.description or ''}".lower(),
+                )
+            )
+
+        has_planned_basis = planned_minutes_total > 0
+        return MeasurementTimesheetRead(
+            site_id=site_id,
+            measurement_base_id=active_base_id,
+            active_batch_ids=active_batch_ids,
+            active_measurement_label=active_base.name if active_base else None,
+            last_import_label=latest_import_item.source_file_name if latest_import_item else None,
+            last_import_at=latest_import_timestamp,
+            kpi=MeasurementTimesheetKpiRead(
+                position_count=len(rows),
+                planned_minutes=planned_minutes_total,
+                measured_minutes=measured_minutes_total,
+                open_minutes=planned_minutes_total - measured_minutes_total if has_planned_basis else None,
+                progress_percent=(
+                    float((measured_minutes_total / planned_minutes_total) * Decimal("100"))
+                    if has_planned_basis
+                    else None
+                ),
+                captured_count=captured_count,
+                not_captured_count=len(rows) - captured_count,
+                has_planned_basis=has_planned_basis,
+            ),
+            rows=rows,
+        )
 
     def set_site_batch_billing_status(
         self, *, site_id: int, batch_id: int, billing_status: str

@@ -15,6 +15,7 @@ from app.schemas.measurement import (
     MeasurementEntryRead,
     MeasurementImportResponse,
     MeasurementItemRead,
+    MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
@@ -331,6 +332,15 @@ def list_measurement_items(
         active_only=active_only,
     )
     return [MeasurementItemRead.model_validate(item) for item in items]
+
+
+@router.get("/{site_id}/measurement-timesheet", response_model=MeasurementTimesheetRead)
+def get_measurement_timesheet(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> MeasurementTimesheetRead:
+    return MeasurementService(db).get_site_measurement_timesheet(site_id)
 
 
 @router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])
