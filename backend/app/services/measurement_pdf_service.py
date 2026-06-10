@@ -934,12 +934,12 @@ def _format_date(value: datetime) -> str:
 
 def _status_label(status_value: str) -> str:
     return {
-        "billed": "Abgerechnet",
-        "approved": "Abgerechnet",
+        "billed": "Abgeschlossen",
+        "approved": "Abgeschlossen",
         "reviewed": "Geprüft",
-        "submitted": "Prüfung erforderlich",
-        "rejected": "Prüfung erforderlich",
-        "customer_signed": "Unterschrieben / Prüfung erforderlich",
+        "submitted": "Eingereicht",
+        "rejected": "Eingereicht",
+        "customer_signed": "Unterschrieben",
         "draft": "Entwurf",
     }.get(status_value, status_value)
 

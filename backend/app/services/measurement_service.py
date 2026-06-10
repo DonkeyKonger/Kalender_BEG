@@ -461,14 +461,14 @@ class MeasurementService:
             "abgerechnet": "billed",
         }.get(billing_status, billing_status)
         if normalized_status not in {"submitted", "billed"}:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Abrechnungsstatus.")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Abschlussstatus.")
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
         if batch.status == "draft":
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Entwürfe können noch nicht abgerechnet werden.",
+                "Entwürfe können noch nicht abgeschlossen werden.",
             )
         if normalized_status == "billed" and not (
             batch.status == "reviewed"
@@ -477,7 +477,7 @@ class MeasurementService:
         ):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Aufmaße müssen vor der Abrechnung durch den Projektleiter geprüft werden.",
+                "Aufmaße müssen vor dem Abschluss durch den Projektleiter geprüft werden.",
             )
 
         batch.status = normalized_status
@@ -505,7 +505,7 @@ class MeasurementService:
         if batch.customer_signed_at is not None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Unterschriebene Aufmaße bleiben bis zur Abrechnung prüfungspflichtig.",
+                "Unterschriebene Aufmaße bleiben bis zum Abschluss in der Prüfung.",
             )
 
         batch.status = "reviewed"

@@ -432,11 +432,11 @@ export function SiteDetailPage() {
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
       setMeasurementReviewMessage(
         billingStatus === "billed"
-          ? `${batch.title} wurde als abgerechnet markiert.`
-          : `${batch.title} wurde wieder als prüfungspflichtig markiert.`,
+          ? `${batch.title} wurde abgeschlossen.`
+          : `${batch.title} wurde wieder als eingereicht markiert.`,
       );
     } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Abrechnungsstatus konnte nicht gespeichert werden."));
+      setMeasurementReviewError(readApiError(requestError, "Abschlussstatus konnte nicht gespeichert werden."));
     } finally {
       setMeasurementReviewActionLoading(false);
     }
@@ -583,7 +583,7 @@ export function SiteDetailPage() {
       return;
     }
     const confirmed = window.confirm(
-      "Angebot wirklich löschen?\n\nImportierte Positionen dieses Angebots werden entfernt. Bereits erfasste oder abgerechnete Aufmaße dürfen nicht gelöscht werden.",
+      "Angebot wirklich löschen?\n\nImportierte Positionen dieses Angebots werden entfernt. Bereits erfasste oder abgeschlossene Aufmaße dürfen nicht gelöscht werden.",
     );
     if (!confirmed) {
       return;
@@ -1762,8 +1762,8 @@ function MeasurementTimesheetPanel({
 
   const filterOptions = useMemo(() => ([
     { key: "all" as const, label: "Alle", count: projectPositionStats.total },
-    { key: "billed" as const, label: "Abgerechnet", count: projectPositionStats.withMeasurement },
-    { key: "unbilled" as const, label: "Noch nicht abgerechnet", count: projectPositionStats.withoutMeasurement },
+    { key: "billed" as const, label: "Erfasst", count: projectPositionStats.withMeasurement },
+    { key: "unbilled" as const, label: "Noch nicht erfasst", count: projectPositionStats.withoutMeasurement },
   ]), [projectPositionStats]);
 
   const filteredProjectPositionRows = useMemo(() => {
@@ -2715,10 +2715,10 @@ function MeasurementReviewPanel({
             <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
             <span className="measurement-review-action-divider" aria-hidden="true" />
             <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
-              <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Prüfung erforderlich</span>
+              <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Eingereicht</span>
               <span className={isReviewed ? "is-active" : ""}>Geprüft</span>
               <span className={isCustomerSigned && !isBilled ? "is-active" : ""}>Unterschrieben</span>
-              <span className={isBilled ? "is-active" : ""}>Abgerechnet</span>
+              <span className={isBilled ? "is-active" : ""}>Abgeschlossen</span>
             </div>
           </div>
           <div className="measurement-review-actions">
@@ -2742,7 +2742,7 @@ function MeasurementReviewPanel({
             {!isDraft ? (
               isBilled ? (
                 <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
-                  Wieder auf Prüfung erforderlich setzen
+                  Wieder auf Eingereicht setzen
                 </button>
               ) : (
                 <>
@@ -2753,7 +2753,7 @@ function MeasurementReviewPanel({
                   ) : null}
                   {(isReviewed || isCustomerSigned) ? (
                     <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
-                      Als abgerechnet markieren
+                      Aufmaß abschließen
                     </button>
                   ) : null}
                 </>
@@ -2852,7 +2852,7 @@ function MeasurementReviewPanel({
       <div className="project-record-toolbar">
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Prüfung</h2>
-          <p>Eingereichte Aufmaßpakete prüfen und danach zur Unterschrift oder Abrechnung führen.</p>
+          <p>Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen.</p>
         </div>
       </div>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
@@ -2907,7 +2907,7 @@ function MeasurementReviewPanel({
                     type="button"
                     className="measurement-review-pdf-action"
                     disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst nach Prüfung oder Abrechnung verfügbar"}
+                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
                     onClick={() => {
                       setPdfExportingAction(checkedPdfKey);
                       void onExportPdf(batch, "checked").finally(() => setPdfExportingAction(null));
@@ -2919,7 +2919,7 @@ function MeasurementReviewPanel({
                     type="button"
                     className="measurement-review-pdf-action"
                     disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abrechnung verfügbar"}
+                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
                     onClick={() => {
                       setPdfExportingAction(originalPdfKey);
                       void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
@@ -3917,7 +3917,7 @@ function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
 } {
   const status = batch.status.toLowerCase();
   if (isMeasurementBatchBilled(status)) {
-    return { label: "Abgerechnet", className: "measurement-status measurement-review-status-badge is-billed" };
+    return { label: "Abgeschlossen", className: "measurement-status measurement-review-status-badge is-billed" };
   }
   if (isCustomerSignedMeasurementBatch(batch)) {
     return {
@@ -3926,11 +3926,11 @@ function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
     };
   }
   if (isMeasurementBatchOpen(status)) {
-    return { label: "Prüfung erforderlich", className: "measurement-status measurement-review-status-badge is-review-required" };
+    return { label: "Eingereicht", className: "measurement-status measurement-review-status-badge is-review-required" };
   }
   const labels: Record<string, string> = {
     draft: "Entwurf",
-    in_review: "Prüfung erforderlich",
+    in_review: "Eingereicht",
     reviewed: "Geprüft",
     closed: "Abgeschlossen",
   };

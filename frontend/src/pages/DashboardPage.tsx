@@ -426,7 +426,7 @@ function EmptyDashboardText({ text }: { text: string }) {
 
 function formatMeasurementDashboardMessageTitle(message: MeasurementDashboardSubmission): string {
   if (message.message_type === "measurement_customer_signed") {
-    return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Prüfung erforderlich.`;
+    return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Bitte prüfen.`;
   }
   return `${message.title} für ${message.site_name} wurde zur Prüfung eingereicht.`;
 }
