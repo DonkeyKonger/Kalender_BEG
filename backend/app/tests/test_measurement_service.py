@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -8,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementItem
-from app.services.measurement_service import MeasurementService
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementItem
+from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
     MeasurementTimesheetParseResult,
@@ -64,6 +65,40 @@ def parsed_timesheet() -> MeasurementTimesheetParseResult:
             )
         ],
     )
+
+
+def test_measurement_archive_filename_uses_completion_date_site_name_and_number():
+    site = Site(
+        name="Schüchtermann Klinik",
+        site_number="8007",
+        status=SiteStatus.ACTIVE,
+        location_status=SiteLocationStatus.UNCHECKED,
+    )
+    batch = SiteMeasurementBatch(site=site, number=18)
+
+    filename = _measurement_archive_filename(
+        batch,
+        completed_at=datetime(2026, 6, 11, 10, 30, tzinfo=timezone.utc),
+    )
+
+    assert filename == "260611_Aufmaß_Schüchtermann_Klinik_8007.pdf"
+
+
+def test_measurement_archive_filename_sanitizes_forbidden_file_characters():
+    site = Site(
+        name=' Projekt / Nord: A * B ? "Test" ',
+        site_number=" 80/07 ",
+        status=SiteStatus.ACTIVE,
+        location_status=SiteLocationStatus.UNCHECKED,
+    )
+    batch = SiteMeasurementBatch(site=site, number=18)
+
+    filename = _measurement_archive_filename(
+        batch,
+        completed_at=datetime(2026, 6, 11, 10, 30, tzinfo=timezone.utc),
+    )
+
+    assert filename == "260611_Aufmaß_Projekt_Nord_A_B_Test_80_07.pdf"
 
 
 def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypatch):

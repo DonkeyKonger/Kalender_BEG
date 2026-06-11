@@ -490,11 +490,14 @@ def list_measurement_batch_items(
 def mark_measurement_batch_billed(
     site_id: int,
     batch_id: int,
-    _user: User = Depends(CAN_WRITE),
+    current_user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
     return MeasurementService(db).set_site_batch_billing_status(
-        site_id=site_id, batch_id=batch_id, billing_status="billed"
+        site_id=site_id,
+        batch_id=batch_id,
+        billing_status="billed",
+        current_user=current_user,
     )
 
 

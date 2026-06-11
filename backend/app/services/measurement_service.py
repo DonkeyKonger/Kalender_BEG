@@ -3,6 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 import re
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -42,6 +43,8 @@ from app.services.project_storage_service import ProjectStorageService
 
 
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
+MEASUREMENT_ARCHIVE_FOLDER_KEY = "aufmass"
+MEASUREMENT_ARCHIVE_TIMEZONE = ZoneInfo("Europe/Berlin")
 MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -783,7 +786,12 @@ class MeasurementService:
         )
 
     def set_site_batch_billing_status(
-        self, *, site_id: int, batch_id: int, billing_status: str
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        billing_status: str,
+        current_user: User | None = None,
     ) -> MobileMeasurementBatchRead:
         normalized_status = {
             "open": "submitted",
@@ -815,6 +823,8 @@ class MeasurementService:
         batch.status = normalized_status
         for entry in batch.entries:
             entry.status = normalized_status
+        if normalized_status == "billed" and current_user is not None:
+            self._archive_billed_batch_pdf(batch=batch, current_user=current_user)
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
@@ -1497,6 +1507,29 @@ class MeasurementService:
             updated_at=entry.updated_at,
         )
 
+    def _archive_billed_batch_pdf(self, *, batch: SiteMeasurementBatch, current_user: User) -> None:
+        if batch.site is None:
+            batch.site = self._get_site(batch.site_id)
+        folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
+            batch.site_id,
+            MEASUREMENT_ARCHIVE_FOLDER_KEY,
+            current_user,
+        )
+        from app.services.measurement_pdf_service import MeasurementPdfService
+
+        pdf_content, _generated_filename = MeasurementPdfService(self.db).build_batch_pdf(
+            site_id=batch.site_id,
+            batch_id=batch.id,
+            mode="checked",
+        )
+        ProjectStorageService().upload_file_to_folder(
+            drive_id=folder.external_drive_id,
+            folder_item_id=folder.external_item_id,
+            filename=_measurement_archive_filename(batch),
+            content=pdf_content,
+            content_type="application/pdf",
+        )
+
     def _get_site(self, site_id: int) -> Site:
         site = self.db.get(Site, site_id)
         if site is None:
@@ -1556,6 +1589,28 @@ def _measurement_photo_filename(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     suffix = uuid4().hex[:8]
     return f"Aufmass-{batch.number}_{timestamp}_{user_label}_{suffix}{extension}"
+
+
+def _measurement_archive_filename(
+    batch: SiteMeasurementBatch,
+    completed_at: datetime | None = None,
+) -> str:
+    completed_at = completed_at or datetime.now(MEASUREMENT_ARCHIVE_TIMEZONE)
+    date_prefix = completed_at.astimezone(MEASUREMENT_ARCHIVE_TIMEZONE).strftime("%y%m%d")
+    site_name = _safe_measurement_archive_filename_part(
+        batch.site.name if batch.site and batch.site.name else "Projekt"
+    )
+    site_number = _safe_measurement_archive_filename_part(
+        batch.site.site_number if batch.site and batch.site.site_number else "ohne_Nummer"
+    )
+    return f"{date_prefix}_Aufmaß_{site_name}_{site_number}.pdf"
+
+
+def _safe_measurement_archive_filename_part(value: str) -> str:
+    normalized = re.sub(r'[/\\:*?"<>|]+', "_", value.strip())
+    normalized = re.sub(r"\s+", "_", normalized)
+    normalized = re.sub(r"_+", "_", normalized)
+    return normalized.strip("._ ") or "Projekt"
 
 
 def _safe_filename_part(value: str) -> str:
