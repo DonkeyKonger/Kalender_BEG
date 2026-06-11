@@ -135,6 +135,7 @@ export function MobileAssignmentDetailPage() {
   const isOverviewFlow = activeTab === "overview";
   const isFoldersFlow = activeTab === "folders";
   const isMeasurementFlow = activeTab === "measurement";
+  const isExtraWorkFlow = activeTab === "extra-work";
   const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
 
   function openOverview(): void {
@@ -190,7 +191,7 @@ export function MobileAssignmentDetailPage() {
         </>
       ) : isFoldersFlow ? (
         <MobileProjectFoldersHeader assignment={assignment} onBack={() => setActiveTab(null)} />
-      ) : !isMeasurementFlow ? (
+      ) : !isMeasurementFlow && !isExtraWorkFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
             <ArrowLeft aria-hidden="true" size={17} />
