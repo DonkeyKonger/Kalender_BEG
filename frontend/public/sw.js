@@ -1,5 +1,9 @@
-const CACHE_NAME = "kalender-baustellen-v3";
+const CACHE_NAME = "kalender-baustellen-v4";
 const APP_SHELL = ["/manifest.webmanifest", "/icon.svg"];
+
+function isFreshnessCriticalAsset(request) {
+  return ["script", "style", "manifest"].includes(request.destination);
+}
 
 function isCacheableAsset(request, response) {
   if (!response || !response.ok) {
@@ -46,6 +50,19 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
+    if (isFreshnessCriticalAsset(request)) {
+      event.respondWith(
+        fetch(request).then((response) => {
+          if (isCacheableAsset(request, response)) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        }).catch(() => caches.match(request)),
+      );
+      return;
+    }
+
     event.respondWith(
       caches.match(request).then((cached) => cached ?? fetch(request).then((response) => {
         if (isCacheableAsset(request, response)) {
