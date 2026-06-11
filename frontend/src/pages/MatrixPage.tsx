@@ -2491,7 +2491,9 @@ function groupMatrixRows(rows: MatrixRow[], projectManagerFilter: string): Matri
     : rows.filter((row) => String(row.site.project_manager_person_id ?? "") === projectManagerFilter);
   const sortedRows = filteredRows.slice().sort(compareMatrixRowsByNumber);
   if (projectManagerFilter !== "all") {
-    return [{ key: projectManagerFilter, label: "", rows: sortedRows, showHeading: false }];
+    return sortedRows.length
+      ? [{ key: projectManagerFilter, label: "", rows: sortedRows, showHeading: true }]
+      : [];
   }
   const groups = new Map<string, MatrixRowGroup>();
   sortedRows.forEach((row) => {
