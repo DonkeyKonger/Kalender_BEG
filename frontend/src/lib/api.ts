@@ -891,6 +891,16 @@ export const api = {
     return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos/${photoId}/content`);
   },
 
+  async deleteMobileMeasurementBatchPhoto(
+    assignmentId: number,
+    batchId: number,
+    photoId: number,
+  ): Promise<void> {
+    await request<void>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos/${photoId}`, {
+      method: "DELETE",
+    });
+  },
+
   async createMobileMeasurementEntry(
     assignmentId: number,
     batchId: number,

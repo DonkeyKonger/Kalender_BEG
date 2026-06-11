@@ -12288,9 +12288,15 @@ button.person-chip:focus-visible {
   gap: 9px;
 }
 
+.mobile-measurement-photo-tile-wrap {
+  position: relative;
+  min-width: 0;
+}
+
 .mobile-measurement-photo-tile {
   display: grid;
   gap: 6px;
+  width: 100%;
   min-width: 0;
   border: 1px solid #d8e3ef;
   border-radius: 8px;
@@ -12299,6 +12305,32 @@ button.person-chip:focus-visible {
   color: #65738a;
   text-align: left;
   box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+}
+
+.mobile-measurement-photo-tile:disabled {
+  opacity: 0.72;
+}
+
+.mobile-measurement-photo-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(203 213 225 / 92%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 94%);
+  color: #172033;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 22%);
+  touch-action: manipulation;
+}
+
+.mobile-measurement-photo-delete:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 .mobile-measurement-photo-tile img {

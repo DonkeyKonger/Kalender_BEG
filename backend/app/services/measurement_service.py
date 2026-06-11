@@ -559,6 +559,25 @@ class MeasurementService:
             str(downloaded.get("filename") or photo.filename),
         )
 
+    def delete_mobile_batch_photo(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        photo_id: int,
+        current_user: User,
+    ) -> None:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        photo = self._get_photo_for_batch(photo_id, batch.id)
+        ProjectStorageService().delete_file_from_folder(
+            drive_id=photo.external_drive_id,
+            folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+            item_id=photo.external_item_id,
+        )
+        self.db.delete(photo)
+        self.db.commit()
+
     def list_site_batches(
         self,
         site_id: int,

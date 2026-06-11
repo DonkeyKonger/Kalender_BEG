@@ -308,6 +308,49 @@ class ProjectStorageService:
             "filename": document.get("name") or "download",
         }
 
+    def delete_file_from_folder(
+        self,
+        *,
+        drive_id: str | None,
+        folder_item_id: str | None,
+        item_id: str,
+    ) -> None:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+
+        encoded_item_id = quote(item_id, safe="")
+        try:
+            drive_item = self.graph_client.get(
+                f"/drives/{drive_id}/items/{encoded_item_id}"
+                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            )
+        except MicrosoftGraphRequestError as error:
+            if error.status_code == 404:
+                return
+            raise _safe_graph_files_exception(error) from error
+        if not isinstance(drive_item, dict) or not drive_item.get("id"):
+            return
+        if drive_item.get("id") == folder_item_id or isinstance(drive_item.get("folder"), dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht gelöscht werden.")
+        if not self._is_item_inside_folder(
+            drive_id=drive_id,
+            root_folder_item_id=folder_item_id,
+            item=drive_item,
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei nicht gefunden.")
+
+        try:
+            self.graph_client.delete(f"/drives/{drive_id}/items/{encoded_item_id}")
+        except MicrosoftGraphRequestError as error:
+            if error.status_code == 404:
+                return
+            raise _safe_graph_files_exception(error) from error
+
     def _get_descendant_drive_item(
         self,
         *,

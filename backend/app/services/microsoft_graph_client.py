@@ -102,6 +102,9 @@ class MicrosoftGraphClient:
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", path, payload=payload)
 
+    def delete(self, path: str) -> dict[str, Any]:
+        return self._request("DELETE", path)
+
     def get_content(self, path: str) -> tuple[bytes, str | None]:
         token = self.get_access_token()
         url = f"{self.config.ms_graph_base_url.rstrip('/')}/{path.lstrip('/')}"

@@ -17,6 +17,7 @@ import {
   Search,
   Send,
   UserRound,
+  X,
 } from "lucide-react";
 import { FileOpener } from "@capacitor-community/file-opener";
 import { Capacitor } from "@capacitor/core";
@@ -1204,6 +1205,7 @@ function MobileMeasurementTab({
             isUploadingPhoto={isUploadingPhoto}
             refreshKey={photoGalleryVersion}
             onBack={() => setPhotoGalleryBatch(null)}
+            onPhotoCountChange={(nextCount) => updateBatchPhotoCount(photoGalleryBatch.id, nextCount)}
             onTakePhoto={() => openPhotoCapture(photoGalleryBatch)}
           />
           <input
@@ -1511,6 +1513,7 @@ function MeasurementPhotoGallery({
   refreshKey,
   isUploadingPhoto,
   onBack,
+  onPhotoCountChange,
   onTakePhoto,
 }: {
   assignmentId: number;
@@ -1518,12 +1521,14 @@ function MeasurementPhotoGallery({
   refreshKey: number;
   isUploadingPhoto: boolean;
   onBack: () => void;
+  onPhotoCountChange: (nextCount: number) => void;
   onTakePhoto: () => void;
 }) {
   const [photos, setPhotos] = useState<MeasurementPhotoPreview[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<MeasurementPhotoPreview | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -1572,6 +1577,30 @@ function MeasurementPhotoGallery({
     };
   }, [assignmentId, batch.id, refreshKey]);
 
+  async function handleDeletePhoto(preview: MeasurementPhotoPreview): Promise<void> {
+    if (deletingPhotoId !== null || !window.confirm("Foto wirklich löschen?")) {
+      return;
+    }
+    setDeletingPhotoId(preview.photo.id);
+    setPhotoError(null);
+    try {
+      await api.deleteMobileMeasurementBatchPhoto(assignmentId, batch.id, preview.photo.id);
+      if (preview.url) {
+        window.URL.revokeObjectURL(preview.url);
+      }
+      const nextPhotos = photos.filter((item) => item.photo.id !== preview.photo.id);
+      setPhotos(nextPhotos);
+      onPhotoCountChange(nextPhotos.length);
+      setSelectedPhoto((currentPhoto) => (
+        currentPhoto?.photo.id === preview.photo.id ? null : currentPhoto
+      ));
+    } catch (requestError) {
+      setPhotoError(readApiError(requestError, "Foto konnte nicht gelöscht werden."));
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
@@ -1602,18 +1631,34 @@ function MeasurementPhotoGallery({
       ) : null}
       {!isLoadingPhotos && photos.length ? (
         <div className="mobile-measurement-photo-grid">
-          {photos.map((preview) => (
-            <button
-              className="mobile-measurement-photo-tile"
-              key={preview.photo.id}
-              type="button"
-              onClick={() => preview.url ? setSelectedPhoto(preview) : undefined}
-              disabled={!preview.url}
-            >
-              {preview.url ? <img alt={preview.photo.filename} src={preview.url} /> : <span>{preview.error ?? "Foto nicht verfügbar."}</span>}
-              <small>{formatDateTimeLabel(preview.photo.created_at)}</small>
-            </button>
-          ))}
+          {photos.map((preview) => {
+            const isDeleting = deletingPhotoId === preview.photo.id;
+            return (
+              <div className="mobile-measurement-photo-tile-wrap" key={preview.photo.id}>
+                <button
+                  className="mobile-measurement-photo-tile"
+                  type="button"
+                  onClick={() => preview.url ? setSelectedPhoto(preview) : undefined}
+                  disabled={!preview.url || isDeleting}
+                >
+                  {preview.url ? <img alt={preview.photo.filename} src={preview.url} /> : <span>{preview.error ?? "Foto nicht verfügbar."}</span>}
+                  <small>{isDeleting ? "Wird gelöscht..." : formatDateTimeLabel(preview.photo.created_at)}</small>
+                </button>
+                <button
+                  aria-label="Foto löschen"
+                  className="mobile-measurement-photo-delete"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeletePhoto(preview);
+                  }}
+                  disabled={deletingPhotoId !== null}
+                >
+                  <X aria-hidden="true" size={14} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
       {selectedPhoto?.url ? (

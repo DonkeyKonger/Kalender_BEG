@@ -30,6 +30,7 @@ class FakeGraphClient:
         self.posts = []
         self.puts = []
         self.downloads = []
+        self.deletes = []
 
     def get_access_token(self):
         return "token-not-returned"
@@ -176,6 +177,10 @@ class FakeGraphClient:
         if path == "/drives/drive-1/items/nested-file-1/content":
             return b"image-bytes", "image/png"
         return b"pdf-bytes", "application/pdf"
+
+    def delete(self, path):
+        self.deletes.append(path)
+        return {}
 
 
 class FailingTokenGraphClient:
@@ -555,3 +560,42 @@ def test_create_project_folder_for_site_returns_error_without_raising():
     assert result["folder_name"] == "8007_Schuechtermann_Klinik"
     assert "accessDenied" in result["error"]
     assert "super-secret-value" not in str(result)
+
+
+def test_delete_file_from_folder_deletes_descendant_file():
+    graph = FakeGraphClient()
+    service = ProjectStorageService(config=enabled_config(), graph_client=graph)
+
+    service.delete_file_from_folder(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        item_id="nested-file-1",
+    )
+
+    assert graph.deletes == ["/drives/drive-1/items/nested-file-1"]
+
+
+def test_delete_file_from_folder_ignores_missing_graph_item():
+    class MissingFileGraphClient(FakeGraphClient):
+        def get(self, path):
+            if path == (
+                "/drives/drive-1/items/missing-file-1"
+                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            ):
+                raise MicrosoftGraphRequestError(
+                    404,
+                    "Microsoft Graph request failed with status 404.",
+                    error_code="itemNotFound",
+                )
+            return super().get(path)
+
+    graph = MissingFileGraphClient()
+    service = ProjectStorageService(config=enabled_config(), graph_client=graph)
+
+    service.delete_file_from_folder(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        item_id="missing-file-1",
+    )
+
+    assert graph.deletes == []

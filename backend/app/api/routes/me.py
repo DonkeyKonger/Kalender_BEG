@@ -252,6 +252,25 @@ def download_my_assignment_measurement_batch_photo(
     )
 
 
+@router.delete(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_my_assignment_measurement_batch_photo(
+    assignment_id: int,
+    batch_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    MeasurementService(db).delete_mobile_batch_photo(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        photo_id=photo_id,
+        current_user=current_user,
+    )
+
+
 @router.get(
     "/assignments/{assignment_id}/measurement-batches/{batch_id}/items",
     response_model=list[MobileMeasurementItemRead],
