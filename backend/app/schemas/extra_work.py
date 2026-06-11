@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ExtraWorkTicketCreate(BaseModel):
     title: str | None = Field(default=None, max_length=160)
+    kind: str | None = Field(default=None, pattern="^(billing|approval)$")
+    approval_ticket_id: int | None = None
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -20,6 +22,8 @@ class ExtraWorkTicketRead(BaseModel):
     sequence_number: int
     display_number: str
     title: str | None
+    kind: str
+    approval_ticket_id: int | None
     status: str
     created_by_user_id: int | None
     submitted_by_user_id: int | None

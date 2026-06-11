@@ -37,6 +37,7 @@ class SiteBase(BaseModel):
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
     planned_work_minutes: int | None = Field(default=None, ge=0)
+    requires_extra_work_approval: bool = False
 
 
 class SiteCreate(SiteBase):
@@ -63,6 +64,7 @@ class SiteUpdate(BaseModel):
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
     planned_work_minutes: int | None = Field(default=None, ge=0)
+    requires_extra_work_approval: bool | None = None
 
 
 class SitePersonSummary(BaseModel):
@@ -84,6 +86,7 @@ class SiteSummary(BaseModel):
     project_manager: SitePersonSummary | None = None
     status: SiteStatus
     color: str | None = None
+    requires_extra_work_approval: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -19,6 +19,10 @@ class ExtraWorkTicket(TimestampMixin, Base):
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     display_number: Mapped[str] = mapped_column(String(120), nullable=False)
     title: Mapped[str | None] = mapped_column(String(160))
+    kind: Mapped[str] = mapped_column(String(40), nullable=False, default="billing", index=True)
+    approval_ticket_id: Mapped[int | None] = mapped_column(
+        ForeignKey("extra_work_tickets.id", ondelete="SET NULL"), index=True
+    )
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
@@ -30,5 +34,6 @@ class ExtraWorkTicket(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     site = relationship("Site", back_populates="extra_work_tickets")
+    approval_ticket = relationship("ExtraWorkTicket", remote_side=[id])
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])

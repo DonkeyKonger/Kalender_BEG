@@ -322,6 +322,8 @@ function MobileExtraWorkTab({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const requiresApproval = assignment.site.requires_extra_work_approval;
+  const primaryKind: "billing" | "approval" = requiresApproval ? "approval" : "billing";
 
   useEffect(() => {
     void loadOrders();
@@ -361,10 +363,10 @@ function MobileExtraWorkTab({
     setError(null);
     setMessage(null);
     try {
-      const createdOrder = await api.createMobileExtraWorkTicket(assignment.id);
+      const createdOrder = await api.createMobileExtraWorkTicket(assignment.id, { kind: primaryKind });
       mergeUpdatedOrder(createdOrder);
     } catch (requestError) {
-      setError(readApiError(requestError, "Stundenzettel konnte nicht erstellt werden."));
+      setError(readApiError(requestError, `${formatMobileExtraWorkKindLabel(primaryKind)} konnte nicht erstellt werden.`));
     } finally {
       setIsSaving(false);
     }
@@ -391,9 +393,9 @@ function MobileExtraWorkTab({
           try {
             const submittedOrder = await api.updateMobileExtraWorkTicketStatus(assignment.id, selectedOrder.id, "submitted");
             mergeUpdatedOrder(submittedOrder);
-            setMessage("Stundenzettel wurde zur Prüfung gesendet.");
+            setMessage(`${formatMobileExtraWorkKindLabel(selectedOrder.kind)} wurde eingereicht.`);
           } catch (requestError) {
-            setError(readApiError(requestError, "Stundenzettel konnte nicht gesendet werden."));
+            setError(readApiError(requestError, `${formatMobileExtraWorkKindLabel(selectedOrder.kind)} konnte nicht gesendet werden.`));
           } finally {
             setIsSaving(false);
           }
@@ -422,14 +424,19 @@ function MobileExtraWorkTab({
           disabled={isSaving}
         >
           <Plus aria-hidden="true" size={15} />
-          <span>{isSaving ? "Erstelle..." : "Neuer Stundenzettel"}</span>
+          <span>{isSaving ? "Erstelle..." : requiresApproval ? "Neue Stundenfreigabe" : "Neuer Stundenzettel"}</span>
         </button>
       </div>
 
+      {requiresApproval ? (
+        <p className="form-info">
+          Für diese Baustelle ist vor Zusatzarbeiten eine Stundenfreigabe vorgesehen.
+        </p>
+      ) : null}
       {isLoading ? <div className="empty-panel">Stundenzettel werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
       {!isLoading && !error && orders.length === 0 ? (
-        <div className="empty-panel">Noch kein Stundenzettel vorhanden.</div>
+        <div className="empty-panel">{requiresApproval ? "Noch keine Stundenfreigabe vorhanden." : "Noch kein Stundenzettel vorhanden."}</div>
       ) : null}
       {!isLoading && orders.length > 0 ? (
         <div className="mobile-measurement-list">
@@ -446,6 +453,7 @@ function MobileExtraWorkTab({
                 }}
               >
                 <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                <span className="mobile-measurement-card-date">{formatMobileExtraWorkKindLabel(order.kind)}</span>
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
                 <span className="mobile-measurement-card-meta">
@@ -480,7 +488,9 @@ function ExtraWorkOrderOverview({
 }) {
   const isDraft = order.status === "draft";
   const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
-  const placeholderText = "Diese Stundenzettel-Funktion ist vorbereitet und wird im nächsten Schritt angebunden.";
+  const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
+  const isApproval = order.kind === "approval";
+  const placeholderText = `${kindLabel} ist vorbereitet und wird im nächsten Schritt angebunden.`;
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -501,6 +511,7 @@ function ExtraWorkOrderOverview({
 
       <div className="mobile-measurement-summary-card">
         <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+        <span className="mobile-measurement-card-date">{kindLabel}</span>
         <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
@@ -514,13 +525,13 @@ function ExtraWorkOrderOverview({
       <div className="mobile-measurement-overview-actions">
         <button className="mobile-measurement-overview-action is-primary" type="button" onClick={() => onPlaceholderAction(placeholderText)}>
           <ClipboardList aria-hidden="true" size={18} />
-          <span>Leistungen erfassen</span>
+          <span>{isApproval ? "Freigabe erfassen" : "Leistungen erfassen"}</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Stundenzettel-PDF wird im nächsten Schritt angebunden.")}>
+        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction(`${kindLabel}-PDF wird im nächsten Schritt angebunden.`)}>
           <FileText aria-hidden="true" size={18} />
-          <span>Stundenzettel anzeigen (PDF)</span>
+          <span>{kindLabel} anzeigen (PDF)</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Kundenunterschrift wird nach der Prüfung angebunden.")}>
+        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Kundenunterschrift wird später angebunden.")}>
           <UserRound aria-hidden="true" size={18} />
           <span>Kundenunterschrift einfügen</span>
         </button>
@@ -3367,8 +3378,15 @@ function sortMobileExtraWorkOrders(orders: MobileExtraWorkTicket[]): MobileExtra
 }
 
 function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
-  const title = order.title?.trim() || `Stundenzettel ${order.sequence_number}`;
+  const defaultTitle = order.kind === "approval"
+    ? `Stundenfreigabe ${order.sequence_number}`
+    : `Stundenzettel ${order.sequence_number}`;
+  const title = order.title?.trim() || defaultTitle;
   return `${title} - Hauptauftrag`;
+}
+
+function formatMobileExtraWorkKindLabel(kind: string): string {
+  return kind === "approval" ? "Stundenfreigabe" : "Stundenzettel";
 }
 
 function formatMobileExtraWorkOrderDate(order: MobileExtraWorkTicket): string {

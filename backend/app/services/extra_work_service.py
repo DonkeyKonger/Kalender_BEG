@@ -11,6 +11,9 @@ from app.models.user import User
 from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
+EXTRA_WORK_KINDS = {"billing", "approval"}
+EXTRA_WORK_BILLING_KIND = "billing"
+EXTRA_WORK_APPROVAL_KIND = "approval"
 
 
 class ExtraWorkService:
@@ -49,6 +52,8 @@ class ExtraWorkService:
             sequence_number=next_sequence,
             display_number=self._build_display_number(site, next_sequence),
             title=payload.title.strip() if payload.title and payload.title.strip() else None,
+            kind=self._normalize_kind(payload.kind, default=EXTRA_WORK_BILLING_KIND),
+            approval_ticket_id=self._validate_approval_ticket_id(site_id, payload.approval_ticket_id),
             status="draft",
             created_by_user_id=current_user.id,
             notes=payload.notes.strip() if payload.notes and payload.notes.strip() else None,
@@ -72,12 +77,21 @@ class ExtraWorkService:
         *,
         assignment_id: int,
         current_user: User,
+        payload: ExtraWorkTicketCreate | None = None,
     ) -> ExtraWorkTicketRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
+        site = self._get_site(assignment.site_id)
+        requested = payload or ExtraWorkTicketCreate()
+        default_kind = EXTRA_WORK_APPROVAL_KIND if site.requires_extra_work_approval else EXTRA_WORK_BILLING_KIND
         return self.create_site_ticket(
             site_id=assignment.site_id,
             current_user=current_user,
-            payload=ExtraWorkTicketCreate(title=None, notes=None),
+            payload=ExtraWorkTicketCreate(
+                title=requested.title,
+                kind=requested.kind or default_kind,
+                approval_ticket_id=requested.approval_ticket_id,
+                notes=requested.notes,
+            ),
         )
 
     def get_mobile_ticket(
@@ -158,6 +172,22 @@ class ExtraWorkService:
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
+
+    def _validate_approval_ticket_id(self, site_id: int, approval_ticket_id: int | None) -> int | None:
+        if approval_ticket_id is None:
+            return None
+        approval_ticket = self._get_ticket_for_site(approval_ticket_id, site_id)
+        if approval_ticket.kind != EXTRA_WORK_APPROVAL_KIND:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Verknüpfte Freigabe muss eine Stundenfreigabe sein.")
+        return approval_ticket.id
+
+    @staticmethod
+    def _normalize_kind(value: str | None, *, default: str) -> str:
+        normalized = value.strip().lower() if isinstance(value, str) else ""
+        kind = normalized or default
+        if kind not in EXTRA_WORK_KINDS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekannte Stundenzettel-Prozessart.")
+        return kind
 
     @staticmethod
     def _build_display_number(site: Site, sequence_number: int) -> str:

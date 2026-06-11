@@ -524,6 +524,7 @@ function toSiteSummary(site: Site): SiteSummary {
       : null,
     status: site.status,
     color: site.color,
+    requires_extra_work_approval: site.requires_extra_work_approval,
   };
 }
 

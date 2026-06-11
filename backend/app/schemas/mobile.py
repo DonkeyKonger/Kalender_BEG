@@ -25,6 +25,7 @@ class MobileSite(BaseModel):
     project_manager: MobilePerson | None = None
     status: SiteStatus
     info: str | None = None
+    requires_extra_work_approval: bool = False
 
 
 class MobileAssignment(BaseModel):

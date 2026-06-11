@@ -867,9 +867,13 @@ export const api = {
     return request<MobileExtraWorkTicket[]>(`/me/assignments/${assignmentId}/extra-work-tickets`);
   },
 
-  async createMobileExtraWorkTicket(assignmentId: number): Promise<MobileExtraWorkTicket> {
+  async createMobileExtraWorkTicket(
+    assignmentId: number,
+    payload: { kind?: "billing" | "approval"; approval_ticket_id?: number | null } = {},
+  ): Promise<MobileExtraWorkTicket> {
     return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets`, {
       method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 

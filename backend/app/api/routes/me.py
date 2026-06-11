@@ -1,14 +1,14 @@
 from datetime import date
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.extra_work import ExtraWorkTicketRead, ExtraWorkTicketStatusUpdate
+from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead, ExtraWorkTicketStatusUpdate
 from app.schemas.measurement import (
     CustomerSignatureCreate,
     MeasurementEntryCreate,
@@ -161,12 +161,14 @@ def list_my_assignment_extra_work_tickets(
 )
 def create_my_assignment_extra_work_ticket(
     assignment_id: int,
+    payload: ExtraWorkTicketCreate | None = Body(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ExtraWorkTicketRead:
     return ExtraWorkService(db).create_mobile_ticket(
         assignment_id=assignment_id,
         current_user=current_user,
+        payload=payload,
     )
 
 

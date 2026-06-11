@@ -28,6 +28,7 @@ export type SiteSummary = {
   project_manager: SiteSummaryPerson | null;
   status: SiteStatus;
   color: string | null;
+  requires_extra_work_approval: boolean;
 };
 
 export type Site = {
@@ -52,6 +53,7 @@ export type Site = {
   info: string | null;
   color: string | null;
   planned_work_minutes: number | null;
+  requires_extra_work_approval: boolean;
   project_folder_id: string | null;
   project_folder_web_url: string | null;
   project_folder_name: string | null;
@@ -83,6 +85,7 @@ export type SiteCreate = {
   info: string | null;
   color: string | null;
   planned_work_minutes?: number | null;
+  requires_extra_work_approval?: boolean;
 };
 
 export type SiteUpdate = Partial<SiteCreate>;
@@ -291,6 +294,8 @@ export type MobileExtraWorkTicket = {
   sequence_number: number;
   display_number: string;
   title: string | null;
+  kind: "billing" | "approval" | string;
+  approval_ticket_id: number | null;
   status: "draft" | "submitted" | "reviewed" | "signed" | string;
   created_by_user_id: number | null;
   submitted_by_user_id: number | null;

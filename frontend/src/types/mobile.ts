@@ -18,6 +18,7 @@ export type MobileSite = {
   project_manager: MobilePerson | null;
   status: SiteStatus;
   info: string | null;
+  requires_extra_work_approval: boolean;
 };
 
 export type MobileAssignment = {

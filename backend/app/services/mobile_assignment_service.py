@@ -216,6 +216,7 @@ class MobileAssignmentService:
             project_manager=self._build_person(site.project_manager) if site.project_manager else None,
             status=site.status,
             info=site.info,
+            requires_extra_work_approval=site.requires_extra_work_approval,
         )
 
     def _build_person(self, person: Person) -> MobilePerson:

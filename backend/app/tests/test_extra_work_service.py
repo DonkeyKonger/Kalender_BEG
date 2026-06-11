@@ -8,6 +8,7 @@ from app.models import Base
 from app.models.assignment import Assignment
 from app.models.person import Person
 from app.models.site import Site
+from app.schemas.extra_work import ExtraWorkTicketCreate
 from app.services.extra_work_service import ExtraWorkService
 
 
@@ -66,8 +67,51 @@ def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submit
 
     assert created.site_id == site.id
     assert created.sequence_number == 1
+    assert created.kind == "billing"
+    assert created.approval_ticket_id is None
     assert created.status == "draft"
     assert submitted.status == "submitted"
     assert submitted.submitted_at is not None
     assert [ticket.id for ticket in tickets] == [created.id]
     assert other_tickets == []
+
+
+def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(
+        site_number="8007",
+        name="Schüchtermann Klinik",
+        requires_extra_work_approval=True,
+    )
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+
+    approval = ExtraWorkService(db).create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+    billing = ExtraWorkService(db).create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketCreate(kind="billing", approval_ticket_id=approval.id),
+    )
+
+    assert approval.kind == "approval"
+    assert approval.approval_ticket_id is None
+    assert billing.kind == "billing"
+    assert billing.approval_ticket_id == approval.id
