@@ -14,8 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.site_measurement_item import (
+    SiteMeasurementBase,
     SiteMeasurementBatch,
     SiteMeasurementEntry,
+    SiteMeasurementItem,
 )
 from app.models.user import User
 
@@ -279,6 +281,106 @@ class MeasurementPdfService:
         safe_number = file_number.replace("/", "-").replace(" ", "_")
         prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
         return pdf.build(), f"{prefix}_{safe_number}.pdf"
+
+    def build_active_timesheet_pdf(self, *, site_id: int) -> tuple[bytes, str]:
+        measurement_base = self.db.scalar(
+            select(SiteMeasurementBase)
+            .where(
+                SiteMeasurementBase.site_id == site_id,
+                SiteMeasurementBase.status == "active",
+                SiteMeasurementBase.released_to_mobile.is_(True),
+            )
+            .order_by(SiteMeasurementBase.created_at.desc(), SiteMeasurementBase.id.desc())
+        )
+        if measurement_base is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine aktive Zeitenliste ausgewählt.")
+
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .where(
+                    SiteMeasurementItem.site_id == site_id,
+                    SiteMeasurementItem.measurement_base_id == measurement_base.id,
+                )
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            )
+        )
+        pdf = SimplePdf()
+        logo = _load_png_rgb(LOGO_PATH)
+        if logo is not None:
+            pdf.add_image(LOGO_RESOURCE_NAME, logo)
+
+        rows_per_page = 18
+        item_pages = _chunk(items, rows_per_page) or [[]]
+        for page_number, page_items in enumerate(item_pages, start=1):
+            pdf.add_page(
+                self._render_timesheet_page(
+                    measurement_base=measurement_base,
+                    items=page_items,
+                    page_number=page_number,
+                    page_count=len(item_pages),
+                    logo=logo,
+                )
+            )
+
+        safe_name = (measurement_base.name or "Zeitenliste").replace("/", "-").replace(" ", "_")
+        return pdf.build(), f"Zeitenliste_{safe_name}.pdf"
+
+    def _render_timesheet_page(
+        self,
+        *,
+        measurement_base: SiteMeasurementBase,
+        items: list[SiteMeasurementItem],
+        page_number: int,
+        page_count: int,
+        logo: PdfImage | None,
+    ) -> list[bytes]:
+        commands: list[bytes] = ["1 1 1 rg 0 0 841.89 595.28 re f 0 0 0 RG 0 0 0 rg".encode("ascii")]
+        if logo is not None:
+            _image_fit(commands, LOGO_RESOURCE_NAME, x=50, top_y=32, max_width=64, max_height=40, image=logo)
+
+        _text(commands, 130, 545, "Zeitenliste", 20, "F2")
+        _text_fitted(commands, 130, 521, measurement_base.name, 10, max_width=360, font="F2")
+        _text(commands, 640, 545, f"Blatt {page_number} / {page_count}", 9, "F2")
+        _text(commands, 640, 524, f"Stand: {_format_date(datetime.now())}", 8)
+        if measurement_base.import_label:
+            _text_fitted(commands, 130, 503, f"Import: {measurement_base.import_label}", 8, max_width=420)
+
+        columns = (
+            (50, 190, "Position"),
+            (190, 470, "Leistung"),
+            (470, 540, "Menge"),
+            (540, 595, "Einheit"),
+            (595, 690, "Min./Einheit"),
+            (690, 790, "Gesamt-Min."),
+        )
+        table_top = 470
+        row_height = 21
+        _rect(commands, 50, table_top - row_height, 740, row_height)
+        for left, right, label in columns:
+            _text(commands, left + 5, table_top - 14, label, 8, "F2")
+            if left > 50:
+                _line(commands, left, table_top - row_height, left, table_top, 0.45)
+            _line(commands, right, table_top - row_height, right, table_top, 0.45)
+
+        y = table_top - row_height
+        for item in items:
+            next_y = y - row_height
+            _rect(commands, 50, next_y, 740, row_height)
+            for left, _right, _label in columns[1:]:
+                _line(commands, left, next_y, left, y, 0.35)
+            _cell_text(commands, 55, y - 8, item.position, 130, 7.2, "F2")
+            _cell_text(commands, 195, y - 8, item.description, 265, 6.8)
+            _text(commands, 475, y - 13, _format_optional_decimal(item.list_quantity), 7.2)
+            _text(commands, 545, y - 13, item.unit or "-", 7.2)
+            _text(commands, 600, y - 13, _format_optional_decimal(item.minutes_per_unit), 7.2)
+            _text(commands, 695, y - 13, _format_optional_decimal(item.list_minutes_total), 7.2)
+            y = next_y
+
+        if not items:
+            _text(commands, 55, table_top - 43, "Keine Positionen in der aktiven Zeitenliste.", 9)
+
+        return commands
 
     def _build_matrix(
         self, batch: SiteMeasurementBatch, *, mode: str
@@ -912,6 +1014,10 @@ def _position_totals(quantities: dict[tuple[str, int], Decimal]) -> dict[int, De
 
 def _format_decimal(value: Decimal) -> str:
     return f"{value:.2f}".replace(".", ",")
+
+
+def _format_optional_decimal(value: Decimal | None) -> str:
+    return "-" if value is None else _format_decimal(value)
 
 
 def _format_user(user: User | None) -> str | None:

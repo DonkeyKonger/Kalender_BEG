@@ -11315,6 +11315,53 @@ button.person-chip:focus-visible {
   font-weight: 750;
 }
 
+.mobile-extra-work-timesheet-action {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #143c6d;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 850;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 7%);
+}
+
+.mobile-extra-work-timesheet-action:hover:not(:disabled),
+.mobile-extra-work-timesheet-action:focus-visible:not(:disabled) {
+  border-color: #9db7d6;
+  box-shadow: 0 14px 28px rgb(18 29 52 / 10%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mobile-extra-work-timesheet-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.mobile-extra-work-timesheet-message {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 3px;
+  margin: 0;
+  color: #65738a;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.mobile-extra-work-timesheet-message span {
+  color: #8291a8;
+  font-size: 0.78rem;
+}
+
 .mobile-folder-panel {
   gap: 12px;
 }

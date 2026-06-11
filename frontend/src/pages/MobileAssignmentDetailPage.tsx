@@ -231,6 +231,35 @@ function MobileExtraWorkPlaceholder({
   assignment: MobileAssignment;
   onBack: () => void;
 }) {
+  const [isOpeningTimesheet, setIsOpeningTimesheet] = useState(false);
+  const [timesheetMessage, setTimesheetMessage] = useState<string | null>(null);
+
+  async function openTimesheetPdf(): Promise<void> {
+    if (isOpeningTimesheet) {
+      return;
+    }
+    setIsOpeningTimesheet(true);
+    setTimesheetMessage(null);
+    try {
+      const blob = await api.mobileMeasurementTimesheetPdf(assignment.id);
+      const filename = "Zeitenliste.pdf";
+      if (isNativeAndroidApp()) {
+        await openAndroidPdfBlob(blob, filename);
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+        if (!openedWindow) {
+          downloadBlobFile(blob, filename);
+        }
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (requestError) {
+      setTimesheetMessage(readApiError(requestError, "Zeitenliste konnte nicht geöffnet werden."));
+    } finally {
+      setIsOpeningTimesheet(false);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-placeholder-panel">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
@@ -243,6 +272,18 @@ function MobileExtraWorkPlaceholder({
       <p>
         Diese Funktion wird vorbereitet. Später können hier Zusatzstunden zur Baustelle erfasst und als Zettel/PDF übergeben werden.
       </p>
+      <button className="mobile-extra-work-timesheet-action" type="button" onClick={() => void openTimesheetPdf()} disabled={isOpeningTimesheet}>
+        <FileText aria-hidden="true" size={18} />
+        <span>{isOpeningTimesheet ? "Zeitenliste wird geladen..." : "Zeitenliste"}</span>
+      </button>
+      {timesheetMessage ? (
+        <p className="mobile-extra-work-timesheet-message">
+          {timesheetMessage}
+          {timesheetMessage === "Keine aktive Zeitenliste ausgewählt." ? (
+            <span>Bitte im Büro/Projektleiterbereich unter Baustellen / Aufmaß / Angebot auswählen.</span>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   );
 }

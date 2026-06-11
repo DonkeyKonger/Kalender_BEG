@@ -833,6 +833,10 @@ export const api = {
     return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
   },
 
+  async mobileMeasurementTimesheetPdf(assignmentId: number): Promise<Blob> {
+    return requestBlob(`/me/assignments/${assignmentId}/measurement-timesheet/pdf`);
+  },
+
   async signMobileMeasurementBatch(
     assignmentId: number,
     batchId: number,

@@ -130,6 +130,25 @@ def download_my_assignment_measurement_batch_pdf(
     )
 
 
+@router.get("/assignments/{assignment_id}/measurement-timesheet/pdf")
+def download_my_assignment_measurement_timesheet_pdf(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    assignment = MeasurementService(db)._get_user_assignment(assignment_id, current_user)
+    content, filename = MeasurementPdfService(db).build_active_timesheet_pdf(
+        site_id=assignment.site_id,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+        },
+    )
+
+
 @router.post(
     "/assignments/{assignment_id}/measurement-batches/{batch_id}/customer-signature",
     response_model=MobileMeasurementBatchRead,
