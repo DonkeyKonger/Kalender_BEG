@@ -412,6 +412,7 @@ export function SitesPage() {
           customers={customers}
           customersLoading={customersLoading}
           disabled={!canEdit}
+          hideTopLocationField
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
           onCustomerFocus={() => {
             if (customersLoaded === false && customersLoading === false) {
@@ -475,6 +476,7 @@ export function SiteFields({
   customers = [],
   customersLoading = false,
   disabled = false,
+  hideTopLocationField = false,
   isCheckingLocation = false,
   onChange,
   onCustomerFocus,
@@ -489,6 +491,7 @@ export function SiteFields({
   customers?: Customer[];
   customersLoading?: boolean;
   disabled?: boolean;
+  hideTopLocationField?: boolean;
   isCheckingLocation?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
   onCustomerFocus?: () => void;
@@ -663,14 +666,16 @@ export function SiteFields({
           onChange={(event) => onChange({ site_number: event.target.value || null })}
         />
       </label>
-      <label className="site-field-location">
-        <span>Ort</span>
-        <input
-          disabled={disabled}
-          value={draft.location ?? ""}
-          onChange={(event) => onChange({ location: event.target.value || null })}
-        />
-      </label>
+      {!hideTopLocationField ? (
+        <label className="site-field-location">
+          <span>Ort</span>
+          <input
+            disabled={disabled}
+            value={draft.location ?? ""}
+            onChange={(event) => onChange({ location: event.target.value || null })}
+          />
+        </label>
+      ) : null}
       <div className="site-field-customer site-customer-autocomplete">
         <label>
           <span>Kunde</span>
