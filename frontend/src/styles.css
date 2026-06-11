@@ -2802,6 +2802,16 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
+.mobile-home-assignment-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 62%);
+  padding: 10px;
+  box-shadow: 0 10px 24px rgb(18 29 52 / 5%);
+}
+
 .mobile-section-heading {
   display: flex;
   align-items: flex-end;

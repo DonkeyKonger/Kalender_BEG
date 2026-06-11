@@ -405,11 +405,13 @@ export function MyAssignmentsPage() {
             <div className="mobile-section-heading">
               <h2>Nächste Einsätze</h2>
             </div>
-            <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
-            <div className="mobile-upcoming-days">
-              {nextThreeDays.map((date) => (
-                <DayFocusCard date={date} label={formatWeekday(date)} assignments={dailyByDate.get(date) ?? []} compact key={date} />
-              ))}
+            <div className="mobile-home-assignment-group">
+              <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
+              <div className="mobile-upcoming-days">
+                {nextThreeDays.map((date) => (
+                  <DayFocusCard date={date} label={formatWeekday(date)} assignments={dailyByDate.get(date) ?? []} compact key={date} />
+                ))}
+              </div>
             </div>
           </section>
 
