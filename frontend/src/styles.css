@@ -11651,6 +11651,14 @@ button.person-chip:focus-visible {
   gap: 12px;
 }
 
+.mobile-measurement-overview-panel {
+  width: calc(100% + 12px);
+  margin-right: -6px;
+  margin-left: -6px;
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
 .mobile-measurement-page {
   display: grid;
   gap: 12px;
@@ -11966,13 +11974,13 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-overview-action.is-primary {
-  border-color: #2d5d8f;
-  background: #2d5d8f;
-  color: #ffffff;
+  border-color: #9db7d6;
+  background: #eef6ff;
+  color: #143c6d;
 }
 
 .mobile-measurement-overview-action.is-primary svg {
-  color: #ffffff;
+  color: #143c6d;
 }
 
 .mobile-measurement-overview-action:hover:not(:disabled),
@@ -11985,8 +11993,8 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-overview-action.is-primary:hover:not(:disabled),
 .mobile-measurement-overview-action.is-primary:focus-visible:not(:disabled) {
-  border-color: #244d78;
-  background: #244d78;
+  border-color: #7fa1ca;
+  background: #e5f0fb;
 }
 
 .mobile-measurement-overview-action:disabled {

@@ -26,6 +26,7 @@ from app.schemas.measurement import (
     MeasurementTimesheetRowRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
+    WorkerSignatureCreate,
 )
 from app.services.measurement_timesheet_parser import (
     MeasurementTimesheetParseError,
@@ -395,6 +396,47 @@ class MeasurementService:
             event_at=signed_at,
         )
         batch.status = "customer_signed"
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
+    def sign_mobile_batch_worker(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+        payload: WorkerSignatureCreate,
+    ) -> MobileMeasurementBatchRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.",
+            )
+        if batch.status in {"billed", "approved", "closed"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß ist bereits abgeschlossen.",
+            )
+        if not batch.entries:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Ein Aufmaß ohne Aufmaßzeilen kann nicht unterschrieben werden.",
+            )
+
+        worker_name = " ".join(payload.worker_name.split())
+        if not worker_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurname ist erforderlich.")
+
+        batch.worker_signature_name = worker_name
+        batch.worker_signature_strokes = [
+            [point.model_dump() for point in stroke]
+            for stroke in payload.signature_strokes
+            if len(stroke) >= 2
+        ]
+        batch.worker_signed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
@@ -1095,6 +1137,8 @@ class MeasurementService:
             submitted_at=batch.submitted_at,
             customer_signed_at=batch.customer_signed_at,
             customer_signature_name=batch.customer_signature_name,
+            worker_signed_at=batch.worker_signed_at,
+            worker_signature_name=batch.worker_signature_name,
             is_locked_for_worker=batch.customer_signed_at is not None,
             created_at=batch.created_at,
             updated_at=batch.updated_at,

@@ -259,6 +259,8 @@ export type MobileMeasurementBatch = {
   submitted_at: string | null;
   customer_signed_at: string | null;
   customer_signature_name: string | null;
+  worker_signed_at: string | null;
+  worker_signature_name: string | null;
   is_locked_for_worker: boolean;
   created_at: string;
   updated_at: string;
@@ -277,6 +279,11 @@ export type CustomerSignatureStroke = CustomerSignaturePoint[];
 
 export type CustomerSignaturePayload = {
   customer_name: string;
+  signature_strokes: CustomerSignatureStroke[];
+};
+
+export type WorkerSignaturePayload = {
+  worker_name: string;
   signature_strokes: CustomerSignatureStroke[];
 };
 

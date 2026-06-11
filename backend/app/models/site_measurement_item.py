@@ -88,6 +88,9 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     customer_signature_name: Mapped[str | None] = mapped_column(String(160))
     customer_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
     customer_signed_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    worker_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_signature_name: Mapped[str | None] = mapped_column(String(160))
+    worker_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
 
     site = relationship("Site", back_populates="measurement_batches")
     measurement_base = relationship("SiteMeasurementBase", back_populates="batches")

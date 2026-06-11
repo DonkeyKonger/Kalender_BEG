@@ -97,6 +97,8 @@ class MobileMeasurementBatchRead(BaseModel):
     submitted_at: datetime | None
     customer_signed_at: datetime | None
     customer_signature_name: str | None
+    worker_signed_at: datetime | None
+    worker_signature_name: str | None
     is_locked_for_worker: bool = False
     created_at: datetime
     updated_at: datetime
@@ -151,6 +153,20 @@ class CustomerSignaturePoint(BaseModel):
 
 class CustomerSignatureCreate(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=160)
+    signature_strokes: list[list[CustomerSignaturePoint]] = Field(..., min_length=1)
+
+    @field_validator("signature_strokes")
+    @classmethod
+    def validate_signature_strokes(
+        cls, strokes: list[list[CustomerSignaturePoint]]
+    ) -> list[list[CustomerSignaturePoint]]:
+        if not any(len(stroke) >= 2 for stroke in strokes):
+            raise ValueError("Unterschrift ist erforderlich.")
+        return strokes
+
+
+class WorkerSignatureCreate(BaseModel):
+    worker_name: str = Field(..., min_length=1, max_length=160)
     signature_strokes: list[list[CustomerSignaturePoint]] = Field(..., min_length=1)
 
     @field_validator("signature_strokes")

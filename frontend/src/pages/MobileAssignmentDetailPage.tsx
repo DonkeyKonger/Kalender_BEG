@@ -1086,9 +1086,14 @@ function MobileMeasurementTab({
         ) : null}
         {workerSignatureBatch ? (
           <WorkerSignatureOverlay
+            assignmentId={assignment.id}
             batch={workerSignatureBatch}
             workerName={assignment.person.display_name}
             onClose={() => setWorkerSignatureBatch(null)}
+            onSigned={(updatedBatch) => {
+              mergeUpdatedBatch(updatedBatch);
+              setWorkerSignatureBatch(null);
+            }}
           />
         ) : null}
       </>
@@ -1230,7 +1235,7 @@ function MeasurementBatchOverview({
   const displayDate = formatMobileMeasurementBatchDate(batch);
   const canSubmit = isDraft && !isSaving && batch.entry_count > 0 && !batch.is_locked_for_worker;
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel">
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -1264,7 +1269,7 @@ function MeasurementBatchOverview({
       <div className="mobile-measurement-overview-actions">
         <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
           <ClipboardList aria-hidden="true" size={18} />
-          <span>{isItemsLoading ? "Positionen laden..." : "Positionen bearbeiten"}</span>
+          <span>{isItemsLoading ? "Positionen laden..." : "Aufmaßpositionen erfassen"}</span>
         </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPdf} disabled={isOpeningPdf}>
           <FileText aria-hidden="true" size={18} />
@@ -2148,17 +2153,22 @@ function CustomerSignatureOverlay({
 }
 
 function WorkerSignatureOverlay({
+  assignmentId,
   batch,
   workerName,
   onClose,
+  onSigned,
 }: {
+  assignmentId: number;
   batch: MobileMeasurementBatch;
   workerName: string;
   onClose: () => void;
+  onSigned: (batch: MobileMeasurementBatch) => void;
 }) {
-  const [signerName, setSignerName] = useState(workerName);
+  const [signerName, setSignerName] = useState(batch.worker_signature_name ?? workerName);
   const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
   const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
@@ -2183,7 +2193,7 @@ function WorkerSignatureOverlay({
     });
   }
 
-  function handleSaveSignature(): void {
+  async function handleSaveSignature(): Promise<void> {
     if (!signerName.trim()) {
       setSignatureError("Bitte Monteurnamen eintragen.");
       return;
@@ -2192,7 +2202,19 @@ function WorkerSignatureOverlay({
       setSignatureError("Bitte Unterschrift erfassen.");
       return;
     }
-    setSignatureError("Monteursunterschrift kann noch nicht gespeichert werden.");
+    setIsSavingSignature(true);
+    setSignatureError(null);
+    try {
+      const updatedBatch = await api.signMobileMeasurementBatchWorker(assignmentId, batch.id, {
+        worker_name: signerName.trim(),
+        signature_strokes: strokes.filter((stroke) => stroke.length >= 2),
+      });
+      onSigned(updatedBatch);
+    } catch (requestError) {
+      setSignatureError(readApiError(requestError, "Monteursunterschrift konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSignature(false);
+    }
   }
 
   return (
@@ -2259,16 +2281,17 @@ function WorkerSignatureOverlay({
                 setStrokes([]);
                 setSignatureError(null);
               }}
+              disabled={isSavingSignature}
             >
               Leeren
             </button>
             <button
               className="primary-action"
               type="button"
-              onClick={handleSaveSignature}
-              disabled={!signerName.trim() || !hasSignature}
+              onClick={() => void handleSaveSignature()}
+              disabled={isSavingSignature || !signerName.trim() || !hasSignature}
             >
-              Speichern
+              {isSavingSignature ? "Speichert..." : "Speichern"}
             </button>
           </div>
         </section>

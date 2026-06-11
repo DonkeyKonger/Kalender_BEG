@@ -538,6 +538,9 @@ class MeasurementPdfService:
             _signature_block(
                 commands,
                 contractor_name=submitted_by,
+                worker_name=batch.worker_signature_name,
+                worker_signed_at=batch.worker_signed_at,
+                worker_signature_strokes=batch.worker_signature_strokes,
                 customer_name=batch.customer_signature_name,
                 customer_signed_at=batch.customer_signed_at,
                 customer_signature_strokes=batch.customer_signature_strokes,
@@ -709,6 +712,9 @@ def _signature_block(
     commands: list[bytes],
     *,
     contractor_name: str,
+    worker_name: str | None = None,
+    worker_signed_at: datetime | None = None,
+    worker_signature_strokes: list[list[dict[str, float]]] | None = None,
     customer_name: str | None = None,
     customer_signed_at: datetime | None = None,
     customer_signature_strokes: list[list[dict[str, float]]] | None = None,
@@ -721,9 +727,12 @@ def _signature_block(
     _line(commands, 136, 14.6, 233.5, 14.6, 0.8)
 
     _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")
-    _text_fitted(commands, 396, 45.0, contractor_name, 8, max_width=158)
+    _text_fitted(commands, 396, 45.0, worker_name or contractor_name, 8, max_width=158)
+    if worker_signed_at is not None:
+        _text_fitted(commands, 139, 44.8, _format_date(worker_signed_at), 8, max_width=90)
     _line(commands, 394.9, 41.3, 566.6, 41.3, 0.8)
     _text(commands, 598.6, 44.6, "Unterschrift:", 7, "F2")
+    _draw_signature(commands, worker_signature_strokes, x=661, y=43.7, width=103, height=24)
     _line(commands, 661, 41.3, 764, 41.3, 0.8)
 
     _text(commands, 250.2, 20.4, "Name Auftraggeber (Kunde):", 7, "F2")
@@ -731,11 +740,11 @@ def _signature_block(
         _text_fitted(commands, 396, 19.8, customer_name, 8, max_width=158)
     _line(commands, 394.9, 14.6, 566.6, 14.6, 0.8)
     _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
-    _draw_customer_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
+    _draw_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
     _line(commands, 661, 14.6, 764, 14.6, 0.8)
 
 
-def _draw_customer_signature(
+def _draw_signature(
     commands: list[bytes],
     strokes: list[list[dict[str, float]]] | None,
     *,

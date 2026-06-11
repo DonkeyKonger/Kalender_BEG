@@ -14,6 +14,7 @@ from app.schemas.measurement import (
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
+    WorkerSignatureCreate,
 )
 from app.schemas.mobile import MobileAssignmentsResponse, MobileSite
 from app.services.measurement_pdf_service import MeasurementPdfService
@@ -161,6 +162,25 @@ def sign_my_assignment_measurement_batch(
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
     return MeasurementService(db).sign_mobile_batch(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/worker-signature",
+    response_model=MobileMeasurementBatchRead,
+)
+def sign_my_assignment_measurement_batch_worker(
+    assignment_id: int,
+    batch_id: int,
+    payload: WorkerSignatureCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).sign_mobile_batch_worker(
         assignment_id=assignment_id,
         batch_id=batch_id,
         current_user=current_user,
