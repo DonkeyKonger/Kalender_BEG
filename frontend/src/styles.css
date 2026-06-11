@@ -3107,11 +3107,6 @@ button.person-chip:focus-visible {
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
-.mobile-home-assignment-card.is-today {
-  border-top: 4px solid #f4b73f;
-  padding-top: 9px;
-}
-
 .mobile-home-assignment-card:hover,
 .mobile-home-assignment-card:focus-visible {
   border-color: #9db7d6;
