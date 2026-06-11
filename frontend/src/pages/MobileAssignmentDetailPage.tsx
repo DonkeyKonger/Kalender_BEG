@@ -755,9 +755,11 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
           <div className="mobile-folder-file-list">
             {currentDocuments.items.map((item) => (
               <MobileFolderFileItem
+                folderKey={selectedFolder.folder_key}
                 item={item}
                 key={item.id || item.name}
                 isOpening={openingItemId === item.id || (isLoadingNestedFolder && item.is_folder)}
+                siteId={assignment.site.id}
                 onOpen={() => {
                   if (item.is_folder) {
                     void handleOpenFolderItem(item);
@@ -951,34 +953,110 @@ function documentKindLabel(kind: ProjectDocumentKind): string {
 }
 
 function MobileFolderFileItem({
+  folderKey,
   item,
   isOpening,
+  siteId,
   onOpen,
 }: {
+  folderKey: string;
   item: ProjectFolderDocumentItem;
   isOpening: boolean;
+  siteId: number;
   onOpen: () => void;
 }) {
-  const content = (
-    <>
-      {item.is_folder ? <FolderOpen aria-hidden="true" size={18} /> : <FileText aria-hidden="true" size={18} />}
-      <span>
-        <strong>{item.name}</strong>
-        <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
-      </span>
-      {!item.is_folder ? <ExternalLink aria-hidden="true" size={15} /> : null}
-    </>
-  );
+  const kind = getProjectDocumentKind(item);
+  const isPdf = kind === "pdf";
 
   return (
     <button
       type="button"
-      className="mobile-folder-card mobile-folder-file-card"
+      className={`mobile-folder-card mobile-folder-file-card${isPdf ? " is-pdf-preview" : ""}`}
       disabled={isOpening}
       onClick={onOpen}
     >
-      {content}
+      {isPdf ? (
+        <>
+          <MobilePdfThumbnail folderKey={folderKey} item={item} siteId={siteId} />
+          <span className="mobile-folder-file-copy">
+            <strong>{item.name}</strong>
+            <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
+          </span>
+          <ExternalLink aria-hidden="true" className="mobile-folder-file-open-icon" size={15} />
+        </>
+      ) : (
+        <>
+          {item.is_folder ? <FolderOpen aria-hidden="true" size={18} /> : <FileText aria-hidden="true" size={18} />}
+          <span>
+            <strong>{item.name}</strong>
+            <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
+          </span>
+          {!item.is_folder ? <ExternalLink aria-hidden="true" size={15} /> : null}
+        </>
+      )}
     </button>
+  );
+}
+
+function MobilePdfThumbnail({
+  folderKey,
+  item,
+  siteId,
+}: {
+  folderKey: string;
+  item: ProjectFolderDocumentItem;
+  siteId: number;
+}) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+    let objectUrl: string | null = null;
+
+    async function loadThumbnail(): Promise<void> {
+      setHasError(false);
+      setThumbnailUrl(null);
+      try {
+        const blob = await api.projectFolderDocumentThumbnail(siteId, folderKey, item.id);
+        objectUrl = window.URL.createObjectURL(blob);
+        if (isCurrent) {
+          setThumbnailUrl(objectUrl);
+        } else {
+          window.URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (isCurrent) {
+          setHasError(true);
+        }
+      }
+    }
+
+    void loadThumbnail();
+    return () => {
+      isCurrent = false;
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [folderKey, item.id, siteId]);
+
+  return (
+    <span className={thumbnailUrl && !hasError ? "mobile-pdf-thumbnail is-ready" : "mobile-pdf-thumbnail"}>
+      {thumbnailUrl && !hasError ? (
+        <img
+          alt=""
+          loading="lazy"
+          src={thumbnailUrl}
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span className="mobile-pdf-thumbnail-placeholder" aria-hidden="true">
+          <FileText size={28} />
+          <small>PDF</small>
+        </span>
+      )}
+    </span>
   );
 }
 

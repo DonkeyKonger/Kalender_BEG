@@ -599,6 +599,19 @@ export const api = {
     return requestBlob(path);
   },
 
+  async projectFolderDocumentThumbnail(
+    siteId: number,
+    folderKey: string,
+    itemId: string,
+  ): Promise<Blob> {
+    const encodedSiteId = encodeURIComponent(String(siteId));
+    const encodedFolderKey = encodeURIComponent(folderKey);
+    const encodedItemId = encodeURIComponent(itemId);
+    return requestBlob(
+      `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/thumbnail`,
+    );
+  },
+
   async uploadProjectFolderDocument(
     siteId: number,
     folderKey: string,

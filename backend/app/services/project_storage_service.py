@@ -285,14 +285,11 @@ class ProjectStorageService:
                 "SharePoint-Ordner ist noch nicht angebunden.",
             )
 
-        drive_item = self._get_descendant_drive_item(
+        document = self.get_file_item_from_folder(
             drive_id=drive_id,
-            root_folder_item_id=folder_item_id,
+            folder_item_id=folder_item_id,
             item_id=item_id,
         )
-        if isinstance(drive_item.get("folder"), dict):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
-        document = _document_item(drive_item)
 
         encoded_item_id = quote(item_id, safe="")
         try:
@@ -307,6 +304,30 @@ class ProjectStorageService:
             "content_type": content_type or document.get("mime_type") or "application/octet-stream",
             "filename": document.get("name") or "download",
         }
+
+    def get_file_item_from_folder(
+        self,
+        *,
+        drive_id: str | None,
+        folder_item_id: str | None,
+        item_id: str,
+    ) -> dict[str, Any]:
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Ordner ist noch nicht angebunden.",
+            )
+
+        drive_item = self._get_descendant_drive_item(
+            drive_id=drive_id,
+            root_folder_item_id=folder_item_id,
+            item_id=item_id,
+        )
+        if isinstance(drive_item.get("folder"), dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
+        return _document_item(drive_item)
 
     def delete_file_from_folder(
         self,

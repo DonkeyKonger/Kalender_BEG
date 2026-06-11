@@ -1,7 +1,8 @@
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,6 +38,12 @@ from app.schemas.site import (
     SiteSummary,
     SiteRemoveResponse,
     SiteUpdate,
+)
+from app.services.document_thumbnail_service import (
+    DocumentThumbnailService,
+    PdfThumbnailUnavailableError,
+    THUMBNAIL_MEDIA_TYPE,
+    is_pdf_document,
 )
 from app.services.extra_work_service import ExtraWorkService
 from app.services.geo_service import search_geocoding_candidates
@@ -266,6 +273,61 @@ def get_project_folder_document_content(
                 f"{effective_disposition}; filename*=UTF-8''{quote(filename, safe='')}"
             )
         },
+    )
+
+
+@router.get("/{site_id}/documents/folders/{folder_key}/items/{item_id}/thumbnail")
+def get_project_folder_document_thumbnail(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+        site_id, folder_key, current_user
+    )
+    storage = ProjectStorageService()
+    document = storage.get_file_item_from_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    if not is_pdf_document(document):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine PDF-Vorschau verfügbar.")
+
+    thumbnail_service = DocumentThumbnailService()
+    cache_key = thumbnail_service.build_cache_key(
+        site_id=site_id,
+        folder_key=folder.folder_key,
+        drive_id=folder.external_drive_id,
+        item_id=item_id,
+        document=document,
+    )
+    cached_thumbnail = thumbnail_service.get_cached_thumbnail(cache_key)
+    if cached_thumbnail:
+        return _thumbnail_response(cached_thumbnail)
+
+    download = storage.download_file_from_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    try:
+        thumbnail_path = thumbnail_service.get_or_create_pdf_thumbnail(
+            bytes(download["content"]),
+            cache_key,
+        )
+    except PdfThumbnailUnavailableError as error:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF-Vorschau konnte nicht erzeugt werden.") from error
+    return _thumbnail_response(thumbnail_path)
+
+
+def _thumbnail_response(path: Path) -> FileResponse:
+    return FileResponse(
+        path,
+        media_type=THUMBNAIL_MEDIA_TYPE,
+        headers={"Cache-Control": "private, max-age=86400"},
     )
 
 
