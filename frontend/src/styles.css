@@ -11892,6 +11892,72 @@ button.person-chip:focus-visible {
   text-overflow: ellipsis;
 }
 
+.mobile-measurement-overview-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.mobile-measurement-overview-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #143c6d;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 850;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 7%);
+}
+
+.mobile-measurement-overview-action svg {
+  color: #2d5d8f;
+}
+
+.mobile-measurement-overview-action.is-primary {
+  border-color: #2d5d8f;
+  background: #2d5d8f;
+  color: #ffffff;
+}
+
+.mobile-measurement-overview-action.is-primary svg {
+  color: #ffffff;
+}
+
+.mobile-measurement-overview-action:hover:not(:disabled),
+.mobile-measurement-overview-action:focus-visible:not(:disabled) {
+  border-color: #9db7d6;
+  box-shadow: 0 14px 28px rgb(18 29 52 / 10%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mobile-measurement-overview-action.is-primary:hover:not(:disabled),
+.mobile-measurement-overview-action.is-primary:focus-visible:not(:disabled) {
+  border-color: #244d78;
+  background: #244d78;
+}
+
+.mobile-measurement-overview-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.mobile-measurement-action-hint {
+  margin: -2px 0 2px;
+  border-left: 3px solid #7ba7d8;
+  background: #eef6ff;
+  color: #38516e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
 .mobile-measurement-quick-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

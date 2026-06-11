@@ -810,6 +810,7 @@ function MobileMeasurementTab({
 }) {
   const [batches, setBatches] = useState<MobileMeasurementBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [isBatchPositionOverviewOpen, setIsBatchPositionOverviewOpen] = useState(false);
   const [items, setItems] = useState<MobileMeasurementItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MobileMeasurementItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -822,6 +823,7 @@ function MobileMeasurementTab({
   const [formError, setFormError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
   const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
     setBatches((currentBatches) => sortMobileMeasurementBatches(
@@ -876,6 +878,40 @@ function MobileMeasurementTab({
   function updateViewMode(mode: MeasurementViewMode): void {
     setViewMode(mode);
     persistMeasurementViewMode(mode);
+  }
+
+  function closeBatchOverview(): void {
+    setSelectedBatch(null);
+    setSelectedItem(null);
+    setIsBatchPositionOverviewOpen(false);
+    setItems([]);
+    setError(null);
+  }
+
+  async function openMeasurementBatchPdf(batch: MobileMeasurementBatch): Promise<void> {
+    if (isOpeningPdf) {
+      return;
+    }
+    setIsOpeningPdf(true);
+    setError(null);
+    try {
+      const blob = await api.mobileMeasurementBatchPdf(assignment.id, batch.id);
+      const filename = getMobileMeasurementPdfFilename(batch);
+      if (isNativeAndroidApp()) {
+        await openAndroidPdfBlob(blob, filename);
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+        if (!openedWindow) {
+          downloadBlobFile(blob, filename);
+        }
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (requestError) {
+      setError(readApiError(requestError, "Aufmaß-PDF konnte nicht geöffnet werden."));
+    } finally {
+      setIsOpeningPdf(false);
+    }
   }
 
   const filteredItems = useMemo(() => {
@@ -959,28 +995,21 @@ function MobileMeasurementTab({
     );
   }
 
-  if (selectedBatch) {
+  if (selectedBatch && !isBatchPositionOverviewOpen) {
     const canSignImmediately = Boolean(assignment.person.can_sign_measurements_immediately);
     const customerSignatureAction = getCustomerSignatureActionState(selectedBatch, canSignImmediately);
     return (
       <>
-        <MeasurementBatchDetail
+        <MeasurementBatchOverview
           batch={selectedBatch}
-          items={filteredItems}
-          allItems={items}
-          isItemsLoading={isItemsLoading}
           error={error}
-          searchTerm={searchTerm}
-          onBack={() => {
-            setSelectedBatch(null);
-            setSelectedItem(null);
-            setItems([]);
-            setError(null);
-          }}
-          viewMode={viewMode}
-          onViewModeChange={updateViewMode}
+          isSaving={isSaving}
+          isOpeningPdf={isOpeningPdf}
+          isItemsLoading={isItemsLoading}
           customerSignatureDisabled={customerSignatureAction.disabled}
           customerSignatureHint={customerSignatureAction.hint}
+          onBack={closeBatchOverview}
+          onOpenPdf={() => void openMeasurementBatchPdf(selectedBatch)}
           onCustomerSignature={() => {
             if (customerSignatureAction.disabled) {
               setError(customerSignatureAction.hint);
@@ -988,13 +1017,7 @@ function MobileMeasurementTab({
             }
             setSignatureBatch(selectedBatch);
           }}
-          onSearchChange={setSearchTerm}
-          onSelectItem={(item) => {
-            setSelectedItem(item);
-            setFormComment("");
-            setFormQuantity("");
-            setFormError(null);
-          }}
+          onOpenPositions={() => setIsBatchPositionOverviewOpen(true)}
           onSubmit={async () => {
             setIsSaving(true);
             setError(null);
@@ -1008,7 +1031,6 @@ function MobileMeasurementTab({
               setIsSaving(false);
             }
           }}
-          isSaving={isSaving}
         />
         {signatureBatch ? (
           <CustomerSignatureOverlay
@@ -1019,6 +1041,33 @@ function MobileMeasurementTab({
           />
         ) : null}
       </>
+    );
+  }
+
+  if (selectedBatch && isBatchPositionOverviewOpen) {
+    return (
+      <MeasurementBatchDetail
+        batch={selectedBatch}
+        items={filteredItems}
+        allItems={items}
+        isItemsLoading={isItemsLoading}
+        error={error}
+        searchTerm={searchTerm}
+        onBack={() => {
+          setIsBatchPositionOverviewOpen(false);
+          setSelectedItem(null);
+          setError(null);
+        }}
+        viewMode={viewMode}
+        onViewModeChange={updateViewMode}
+        onSearchChange={setSearchTerm}
+        onSelectItem={(item) => {
+          setSelectedItem(item);
+          setFormComment("");
+          setFormQuantity("");
+          setFormError(null);
+        }}
+      />
     );
   }
 
@@ -1044,6 +1093,7 @@ function MobileMeasurementTab({
               const batch = await api.createMobileMeasurementBatch(assignment.id);
               await loadBatches(batch.id);
               setSelectedBatch(batch);
+              setIsBatchPositionOverviewOpen(false);
               await loadBatchItems(batch);
             } catch (requestError) {
               setError(readApiError(requestError, "Aufmaß konnte nicht erstellt werden."));
@@ -1075,6 +1125,7 @@ function MobileMeasurementTab({
                 type="button"
                 onClick={() => {
                   setSelectedBatch(batch);
+                  setIsBatchPositionOverviewOpen(false);
                   void loadBatchItems(batch);
                 }}
               >
@@ -1094,44 +1145,37 @@ function MobileMeasurementTab({
   );
 }
 
-function MeasurementBatchDetail({
+function MeasurementBatchOverview({
   batch,
-  items,
-  allItems,
-  isItemsLoading,
   error,
-  searchTerm,
   isSaving,
-  viewMode,
-  onBack,
-  onViewModeChange,
+  isOpeningPdf,
+  isItemsLoading,
   customerSignatureDisabled,
   customerSignatureHint,
+  onBack,
+  onOpenPdf,
   onCustomerSignature,
-  onSearchChange,
-  onSelectItem,
+  onOpenPositions,
   onSubmit,
 }: {
   batch: MobileMeasurementBatch;
-  items: MobileMeasurementItem[];
-  allItems: MobileMeasurementItem[];
-  isItemsLoading: boolean;
   error: string | null;
-  searchTerm: string;
   isSaving: boolean;
-  viewMode: MeasurementViewMode;
-  onBack: () => void;
-  onViewModeChange: (mode: MeasurementViewMode) => void;
+  isOpeningPdf: boolean;
+  isItemsLoading: boolean;
   customerSignatureDisabled: boolean;
   customerSignatureHint: string | null;
+  onBack: () => void;
+  onOpenPdf: () => void;
   onCustomerSignature: () => void;
-  onSearchChange: (value: string) => void;
-  onSelectItem: (item: MobileMeasurementItem) => void;
+  onOpenPositions: () => void;
   onSubmit: () => void;
 }) {
   const isDraft = batch.status === "draft";
   const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
   const displayDate = formatMobileMeasurementBatchDate(batch);
+  const canSubmit = isDraft && !isSaving && batch.entry_count > 0 && !batch.is_locked_for_worker;
   return (
     <div className="mobile-detail-panel mobile-measurement-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -1143,7 +1187,7 @@ function MeasurementBatchDetail({
           className="primary-action mobile-measurement-submit-action"
           type="button"
           onClick={onSubmit}
-          disabled={!isDraft || isSaving || batch.entry_count === 0 || batch.is_locked_for_worker}
+          disabled={!canSubmit}
         >
           <Send aria-hidden="true" size={15} />
           <span>{isSaving ? "Sende..." : "Zur Prüfung senden"}</span>
@@ -1162,6 +1206,68 @@ function MeasurementBatchDetail({
       {batch.is_locked_for_worker ? (
         <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
+      {error ? <div className="form-error">{error}</div> : null}
+
+      <div className="mobile-measurement-overview-actions">
+        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPdf} disabled={isOpeningPdf}>
+          <FileText aria-hidden="true" size={18} />
+          <span>{isOpeningPdf ? "PDF wird geöffnet..." : "PDF anzeigen"}</span>
+        </button>
+        <button className="mobile-measurement-overview-action" type="button" onClick={onCustomerSignature} disabled={customerSignatureDisabled}>
+          <UserRound aria-hidden="true" size={18} />
+          <span>Kundenunterschrift einfügen</span>
+        </button>
+        {customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
+        <button className="mobile-measurement-overview-action" type="button" disabled>
+          <UserRound aria-hidden="true" size={18} />
+          <span>Monteursunterschrift einfügen</span>
+        </button>
+        <p className="mobile-measurement-action-hint">Monteursunterschrift ist vorbereitet und wird später aktiviert.</p>
+        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
+          <ClipboardList aria-hidden="true" size={18} />
+          <span>{isItemsLoading ? "Positionen laden..." : "Positionen bearbeiten"}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MeasurementBatchDetail({
+  batch,
+  items,
+  allItems,
+  isItemsLoading,
+  error,
+  searchTerm,
+  viewMode,
+  onBack,
+  onViewModeChange,
+  onSearchChange,
+  onSelectItem,
+}: {
+  batch: MobileMeasurementBatch;
+  items: MobileMeasurementItem[];
+  allItems: MobileMeasurementItem[];
+  isItemsLoading: boolean;
+  error: string | null;
+  searchTerm: string;
+  viewMode: MeasurementViewMode;
+  onBack: () => void;
+  onViewModeChange: (mode: MeasurementViewMode) => void;
+  onSearchChange: (value: string) => void;
+  onSelectItem: (item: MobileMeasurementItem) => void;
+}) {
+  return (
+    <div className="mobile-detail-panel mobile-measurement-panel">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Aufmaß</span>
+        </button>
+      </div>
+      {batch.is_locked_for_worker ? (
+        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+      ) : null}
 
       <div className="mobile-measurement-search">
         <Search aria-hidden="true" size={17} />
@@ -1175,17 +1281,7 @@ function MeasurementBatchDetail({
 
       <div className="mobile-measurement-view-actions">
         <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
-        <button
-          className="primary-action mobile-customer-signature-action"
-          type="button"
-          onClick={onCustomerSignature}
-          disabled={customerSignatureDisabled}
-        >
-          <FileText aria-hidden="true" size={14} />
-          <span>Kundenunterschrift</span>
-        </button>
       </div>
-      {customerSignatureHint ? <p className="form-info">{customerSignatureHint}</p> : null}
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
@@ -2346,6 +2442,10 @@ function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch): strin
   const title = batch.title?.trim() || `Aufmaß ${batch.number}`;
   const offerName = batch.offer_name?.trim() || batch.measurement_base_name?.trim() || "Angebot ohne Namen";
   return `${title} - ${offerName}`;
+}
+
+function getMobileMeasurementPdfFilename(batch: MobileMeasurementBatch): string {
+  return `${formatMobileMeasurementBatchTitle(batch).replace(/\s+/g, "_")}.pdf`;
 }
 
 function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { label: string; className: string } {
