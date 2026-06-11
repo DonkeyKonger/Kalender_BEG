@@ -11936,6 +11936,20 @@ button.person-chip:focus-visible {
   font-size: 0.78rem;
 }
 
+.mobile-folder-master-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.mobile-folder-master-icon {
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #eaf2fb;
+  color: #143c6d;
+  padding: 9px;
+}
+
 .mobile-detail-panel {
   display: grid;
   gap: 12px;

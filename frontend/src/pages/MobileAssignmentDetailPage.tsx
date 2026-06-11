@@ -133,6 +133,7 @@ export function MobileAssignmentDetailPage() {
 
   const currentAssignment = assignment;
   const isOverviewFlow = activeTab === "overview";
+  const isFoldersFlow = activeTab === "folders";
   const isMeasurementFlow = activeTab === "measurement";
   const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
 
@@ -187,6 +188,8 @@ export function MobileAssignmentDetailPage() {
             <span>Projektakte</span>
           </button>
         </>
+      ) : isFoldersFlow ? (
+        <MobileProjectFoldersHeader assignment={assignment} onBack={() => setActiveTab(null)} />
       ) : !isMeasurementFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
@@ -271,6 +274,37 @@ export function MobileAssignmentDetailPage() {
       )}
       {activeTab === "tools" && <PlaceholderPanel icon={Hammer} text="Werkzeuge & Material wird später Wagen-, Werkzeug- und Materialinformationen anzeigen." />}
     </section>
+  );
+}
+
+function MobileProjectFoldersHeader({
+  assignment,
+  onBack,
+}: {
+  assignment: MobileAssignment;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" size={17} />
+        <span>Projektakte</span>
+      </button>
+
+      <header className="mobile-detail-hero mobile-detail-summary mobile-folder-master-header">
+        <div className="assignment-card-main">
+          <div>
+            <p className="eyebrow">Ordner</p>
+            <h1>{assignment.site.name}</h1>
+            <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
+          </div>
+          <FolderOpen aria-hidden="true" className="mobile-folder-master-icon" size={24} />
+        </div>
+        <p className="assignment-date">
+          <span><FolderOpen aria-hidden="true" size={15} />Projektordner und Dateien</span>
+        </p>
+      </header>
+    </>
   );
 }
 
