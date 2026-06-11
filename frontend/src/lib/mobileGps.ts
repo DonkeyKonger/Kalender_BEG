@@ -3,6 +3,8 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { ApiError, api, getAccessToken, getApiBaseUrl } from "./api";
 
 export const ANDROID_GPS_PING_INTERVAL_MS = 900_000;
+export const GPS_ALLOWED_START_HOUR = 5;
+export const GPS_ALLOWED_END_HOUR = 19;
 
 type MobileGpsSendResult = {
   sentAt: string;
@@ -131,11 +133,17 @@ export async function sendCurrentGpsLocation(): Promise<MobileGpsSendResult> {
 }
 
 async function sendCurrentLocation(): Promise<MobileGpsSendResult> {
+  if (!isGpsLocalTimeAllowed()) {
+    throw new Error("Standort wird nur zwischen 05:00 und 19:00 Uhr gesendet.");
+  }
   if (!("geolocation" in navigator)) {
     throw new Error("Standort ist auf diesem Gerät nicht verfügbar.");
   }
 
   const position = await getCurrentPosition();
+  if (!isGpsLocalTimeAllowed(new Date(position.timestamp || Date.now()))) {
+    throw new Error("Standort wird nur zwischen 05:00 und 19:00 Uhr gesendet.");
+  }
   const capturedAt = new Date(position.timestamp || Date.now()).toISOString();
   await api.createGpsLocationPoint({
     captured_at: capturedAt,
@@ -147,6 +155,11 @@ async function sendCurrentLocation(): Promise<MobileGpsSendResult> {
   });
 
   return { sentAt: new Date().toISOString() };
+}
+
+export function isGpsLocalTimeAllowed(value: Date = new Date()): boolean {
+  const hour = value.getHours();
+  return hour >= GPS_ALLOWED_START_HOUR && hour < GPS_ALLOWED_END_HOUR;
 }
 
 function backgroundGpsUnavailableStatus(): AndroidBackgroundGpsStatus {

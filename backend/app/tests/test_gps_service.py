@@ -1,10 +1,11 @@
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.api.routes.time_entries import list_time_entries, time_entry_read
@@ -25,6 +26,9 @@ from app.services.gps_service import (
     NOTICE_MANUAL_DIFFERS_FROM_PLAN,
     GpsPresenceService,
 )
+
+
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
 def service() -> GpsPresenceService:
@@ -62,6 +66,93 @@ def test_gps_point_rejects_invalid_coordinates():
             latitude=120,
             longitude=9.0263,
         )
+
+
+@pytest.mark.parametrize(
+    ("captured_at", "should_accept"),
+    [
+        (datetime(2026, 6, 10, 4, 59, tzinfo=BERLIN), False),
+        (datetime(2026, 6, 10, 5, 0, tzinfo=BERLIN), True),
+        (datetime(2026, 6, 10, 18, 59, tzinfo=BERLIN), True),
+        (datetime(2026, 6, 10, 19, 0, tzinfo=BERLIN), False),
+    ],
+)
+def test_gps_location_point_is_saved_only_inside_allowed_berlin_window(captured_at: datetime, should_accept: bool):
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    db.add(person)
+    db.commit()
+    current_user = SimpleNamespace(id=7, role=UserRole.MONTEUR, person_id=person.id)
+    payload = GpsLocationPointCreate(
+        captured_at=captured_at.astimezone(UTC),
+        latitude=53.0142,
+        longitude=9.0263,
+    )
+
+    if should_accept:
+        point = GpsPresenceService(db).create_location_point(payload, current_user)
+        assert point.id is not None
+        assert list(db.scalars(select(GpsPoint))) == [point]
+    else:
+        with pytest.raises(HTTPException) as error:
+            GpsPresenceService(db).create_location_point(payload, current_user)
+        assert error.value.status_code == 422
+        assert list(db.scalars(select(GpsPoint))) == []
+
+
+def test_evaluate_presence_ignores_gps_points_outside_allowed_window():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+        status=SiteStatus.ACTIVE,
+    )
+    db.add_all([person, site])
+    db.commit()
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 10, 4, 59, tzinfo=BERLIN).astimezone(UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 10, 5, 0, tzinfo=BERLIN).astimezone(UTC),
+        ),
+    ])
+    db.commit()
+
+    result = GpsPresenceService(db).evaluate_presence(
+        person_id=person.id,
+        site_id=site.id,
+        start_datetime=datetime(2026, 6, 10, 0, 0, tzinfo=UTC),
+        end_datetime=datetime(2026, 6, 10, 23, 59, tzinfo=UTC),
+    )
+
+    assert result.status == "matched"
+    assert result.total_points == 1
+    assert result.matched_points == 1
 
 
 def test_presence_status_for_missing_points():

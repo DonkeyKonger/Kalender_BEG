@@ -44,6 +44,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -80,6 +81,9 @@ public class AndroidBackgroundGpsService extends Service {
     private static final int NOTIFICATION_ID = 7201;
     private static final int ALARM_REQUEST_CODE = 7202;
     private static final int MAX_QUEUE_ITEMS = 672;
+    private static final int GPS_ALLOWED_START_HOUR = 5;
+    private static final int GPS_ALLOWED_END_HOUR = 19;
+    private static final TimeZone GPS_TIME_ZONE = TimeZone.getTimeZone("Europe/Berlin");
 
     private static volatile boolean serviceInstanceRunning = false;
     private static volatile boolean foregroundServiceRunning = false;
@@ -313,6 +317,12 @@ public class AndroidBackgroundGpsService extends Service {
             finishTick();
             return;
         }
+        if (!isGpsCaptureAllowedNow()) {
+            Log.i(TAG, "GPS tick skipped outside allowed time window.");
+            setLastError("Background-GPS pausiert: Standortpunkte werden nur zwischen 05:00 und 19:00 Uhr gesendet.");
+            finishTick();
+            return;
+        }
         networkExecutor.execute(() -> {
             flushQueuedPoints();
             requestCurrentLocation();
@@ -334,6 +344,11 @@ public class AndroidBackgroundGpsService extends Service {
             Task<Location> task = fusedLocationProvider.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null);
             task.addOnSuccessListener(networkExecutor, location -> {
                 if (location != null && isValidLocation(location)) {
+                    if (!isGpsCaptureAllowed(location.getTime())) {
+                        Log.i(TAG, "Location dropped outside allowed time window.");
+                        setLastError("Standortpunkt verworfen: außerhalb 05:00-19:00 Uhr.");
+                        return;
+                    }
                     Log.i(TAG, "Location received.");
                     sendOrQueue(buildPayload(location));
                 } else {
@@ -358,6 +373,11 @@ public class AndroidBackgroundGpsService extends Service {
     }
 
     private void sendOrQueue(JSONObject payload) {
+        if (!isPayloadCaptureAllowed(payload)) {
+            Log.i(TAG, "Background GPS payload dropped outside allowed time window.");
+            setLastError("Standortpunkt verworfen: außerhalb 05:00-19:00 Uhr.");
+            return;
+        }
         if (!trySendPayload(payload)) {
             enqueuePayload(payload);
         }
@@ -500,11 +520,15 @@ public class AndroidBackgroundGpsService extends Service {
             if (payload == null) {
                 continue;
             }
+            if (!isPayloadCaptureAllowed(payload)) {
+                Log.i(TAG, "Queued background GPS payload dropped outside allowed time window.");
+                continue;
+            }
             if (!trySendPayload(payload)) {
                 remaining.put(payload);
                 for (int rest = index + 1; rest < queue.length(); rest += 1) {
                     JSONObject restPayload = queue.optJSONObject(rest);
-                    if (restPayload != null) {
+                    if (restPayload != null && isPayloadCaptureAllowed(restPayload)) {
                         remaining.put(restPayload);
                     }
                 }
@@ -577,6 +601,37 @@ public class AndroidBackgroundGpsService extends Service {
             && location.getLatitude() <= 90
             && location.getLongitude() >= -180
             && location.getLongitude() <= 180;
+    }
+
+    private static boolean isGpsCaptureAllowedNow() {
+        return isGpsCaptureAllowed(System.currentTimeMillis());
+    }
+
+    private static boolean isGpsCaptureAllowed(long timestampMs) {
+        Calendar calendar = Calendar.getInstance(GPS_TIME_ZONE, Locale.GERMANY);
+        calendar.setTimeInMillis(timestampMs);
+        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        return hour >= GPS_ALLOWED_START_HOUR && hour < GPS_ALLOWED_END_HOUR;
+    }
+
+    private static boolean isPayloadCaptureAllowed(JSONObject payload) {
+        long capturedAtMs = payloadCapturedAtMs(payload);
+        return capturedAtMs > 0 && isGpsCaptureAllowed(capturedAtMs);
+    }
+
+    private static long payloadCapturedAtMs(JSONObject payload) {
+        String raw = payload.optString("captured_at", "");
+        if (raw.trim().isEmpty()) {
+            return 0L;
+        }
+        try {
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+            Date parsed = formatter.parse(raw);
+            return parsed != null ? parsed.getTime() : 0L;
+        } catch (Exception ignored) {
+            return 0L;
+        }
     }
 
     private void scheduleImmediateTick() {

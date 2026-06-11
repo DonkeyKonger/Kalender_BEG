@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from zoneinfo import ZoneInfo
 
 from app.models.assignment import Assignment
 from app.models.enums import GpsSourceType, SiteStatus, UserRole
@@ -19,6 +20,9 @@ from app.services.geo_service import has_valid_coordinates, is_point_inside_site
 
 
 GPS_CAPTURE_FUTURE_TOLERANCE = timedelta(minutes=10)
+GPS_PROCESSING_TIMEZONE = ZoneInfo("Europe/Berlin")
+GPS_ALLOWED_START_LOCAL = time(5, 0)
+GPS_ALLOWED_END_LOCAL = time(19, 0)
 GPS_REVIEW_SUGGESTION_MINUTES = 30
 NOTICE_GPS_DIFFERS_FROM_PLAN = "GPS-Aufenthalt weicht von Planungsmatrix ab"
 NOTICE_MANUAL_DIFFERS_FROM_GPS = "Gemeldete Baustelle weicht von GPS ab"
@@ -100,6 +104,11 @@ class GpsPresenceService:
         person_id = self._effective_person_id(current_user, payload.person_id)
         self._ensure_person_exists(person_id)
         captured_at = ensure_aware_utc(payload.captured_at)
+        if not is_gps_timestamp_in_allowed_window(captured_at):
+            raise HTTPException(
+                422,
+                "GPS-Zeitpunkt liegt außerhalb des erlaubten Zeitfensters 05:00-19:00 Uhr.",
+            )
         if captured_at > datetime.now(UTC) + GPS_CAPTURE_FUTURE_TOLERANCE:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "GPS-Zeitpunkt darf nicht in der Zukunft liegen.")
 
@@ -128,6 +137,9 @@ class GpsPresenceService:
             .order_by(GpsPoint.timestamp.desc(), GpsPoint.id.desc())
             .limit(safe_limit)
         ))
+        if not points:
+            return []
+        points = gps_points_in_allowed_window(points)
         if not points:
             return []
 
@@ -197,7 +209,7 @@ class GpsPresenceService:
         )
         if person_id is not None:
             point_statement = point_statement.where(GpsPoint.person_id == person_id)
-        points = list(self.db.scalars(point_statement))
+        points = gps_points_in_allowed_window(list(self.db.scalars(point_statement)))
         if not points:
             return []
 
@@ -279,7 +291,7 @@ class GpsPresenceService:
         if site is None or not has_valid_coordinates(site):
             return GpsPresenceEvaluation("not_checkable", 0, 0, "site_coordinates_missing")
 
-        points = list(self.db.scalars(
+        points = gps_points_in_allowed_window(list(self.db.scalars(
             select(GpsPoint)
             .where(
                 GpsPoint.person_id == person_id,
@@ -287,7 +299,7 @@ class GpsPresenceService:
                 GpsPoint.timestamp <= ensure_aware_utc(end_datetime),
             )
             .order_by(GpsPoint.timestamp)
-        ))
+        )))
         total_points = len(points)
         if total_points == 0:
             return GpsPresenceEvaluation("missing", 0, 0, "no_gps_points")
@@ -422,7 +434,7 @@ class GpsPresenceService:
         start_datetime: datetime,
         end_datetime: datetime,
     ) -> list[GpsPoint]:
-        return list(self.db.scalars(
+        return gps_points_in_allowed_window(list(self.db.scalars(
             select(GpsPoint)
             .where(
                 GpsPoint.source_type == GpsSourceType.PHONE,
@@ -431,7 +443,7 @@ class GpsPresenceService:
                 GpsPoint.timestamp <= ensure_aware_utc(end_datetime),
             )
             .order_by(GpsPoint.timestamp, GpsPoint.id)
-        ))
+        )))
 
     @staticmethod
     def _evaluate_point_against_planned_sites(point: GpsPoint, planned_sites: list[Site]) -> GpsPointPlausibility:
@@ -501,6 +513,15 @@ def ensure_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def is_gps_timestamp_in_allowed_window(value: datetime) -> bool:
+    local_time = ensure_aware_utc(value).astimezone(GPS_PROCESSING_TIMEZONE).time()
+    return GPS_ALLOWED_START_LOCAL <= local_time < GPS_ALLOWED_END_LOCAL
+
+
+def gps_points_in_allowed_window(points: list[GpsPoint]) -> list[GpsPoint]:
+    return [point for point in points if is_gps_timestamp_in_allowed_window(point.timestamp)]
 
 
 def clean_source_id(device_id: str | None, user_id: int) -> str:
