@@ -262,6 +262,7 @@ export type MobileMeasurementBatch = {
   submitted_at: string | null;
   customer_signed_at: string | null;
   customer_signature_name: string | null;
+  customer_signature_place: string | null;
   worker_signed_at: string | null;
   worker_signature_name: string | null;
   is_locked_for_worker: boolean;

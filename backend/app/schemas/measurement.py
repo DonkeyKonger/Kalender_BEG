@@ -113,6 +113,7 @@ class MobileMeasurementBatchRead(BaseModel):
     submitted_at: datetime | None
     customer_signed_at: datetime | None
     customer_signature_name: str | None
+    customer_signature_place: str | None
     worker_signed_at: datetime | None
     worker_signature_name: str | None
     is_locked_for_worker: bool = False

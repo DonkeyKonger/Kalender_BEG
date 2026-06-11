@@ -714,6 +714,10 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     site = create_site(db)
     site.name = "Schüchtermann Klinik"
     site.site_number = "8007"
+    site.street = "Klinikweg"
+    site.house_number = "8"
+    site.postal_code = "77815"
+    site.city = "Buehl"
     base = create_measurement_base(db, site)
     person = Person(
         first_name="Max",
@@ -791,12 +795,28 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert dashboard_messages[0].event_at == signed.customer_signed_at
     assert dashboard_messages[0].customer_signature_name == "Kunde Beispiel"
     assert dashboard_messages[0].submitted_by_name is None
+    assert signed.customer_signature_place == "Klinikweg 8, 77815 Buehl"
 
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
     assert stored_batch.status == "customer_signed"
+    assert stored_batch.customer_signature_place == "Klinikweg 8, 77815 Buehl"
     assert stored_batch.customer_signed_snapshot is not None
     assert stored_batch.customer_signed_snapshot["version_label"] == "customer_signed"
+
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    pdf_content, filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=site.id,
+        batch_id=batch.id,
+        mode="checked",
+    )
+
+    assert filename == "Aufmass_geprueft_8007.01.pdf"
+    assert b"Kunde Beispiel" in pdf_content
+    assert b"Klinikweg 8" in pdf_content
+    assert b"0.05 0.12 0.24 RG" in pdf_content
+
     stored_batch.status = "billed"
     db.commit()
 

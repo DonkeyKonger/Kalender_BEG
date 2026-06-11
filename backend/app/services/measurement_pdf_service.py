@@ -24,7 +24,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
-from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY
+from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, format_site_signature_location
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -587,6 +587,7 @@ class MeasurementPdfService:
                 worker_signed_at=batch.worker_signed_at,
                 worker_signature_strokes=batch.worker_signature_strokes,
                 customer_name=batch.customer_signature_name,
+                customer_signature_place=batch.customer_signature_place or format_site_signature_location(batch.site),
                 customer_signed_at=batch.customer_signed_at,
                 customer_signature_strokes=batch.customer_signature_strokes,
             )
@@ -784,6 +785,7 @@ def _signature_block(
     worker_signed_at: datetime | None = None,
     worker_signature_strokes: list[list[dict[str, float]]] | None = None,
     customer_name: str | None = None,
+    customer_signature_place: str | None = None,
     customer_signed_at: datetime | None = None,
     customer_signature_strokes: list[list[dict[str, float]]] | None = None,
 ) -> None:
@@ -791,7 +793,15 @@ def _signature_block(
     _text(commands, 53, 42.6, "ordnungsgemäße Montage bescheinigen:", 7)
     _text(commands, 54, 20.0, "Ort / Datum:", 7, "F2")
     if customer_signed_at is not None:
-        _text_fitted(commands, 139, 19.8, _format_date(customer_signed_at), 8, max_width=90)
+        location_date = " · ".join(
+            part
+            for part in [
+                customer_signature_place,
+                _format_date(customer_signed_at),
+            ]
+            if part
+        )
+        _text_fitted(commands, 139, 19.8, location_date, 6.8, max_width=95)
     _line(commands, 136, 14.6, 233.5, 14.6, 0.8)
 
     _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")

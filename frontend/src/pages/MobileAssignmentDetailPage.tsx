@@ -2218,6 +2218,7 @@ function MobileMeasurementTab({
           <CustomerSignatureOverlay
             assignmentId={assignment.id}
             batch={signatureBatch}
+            signaturePlace={formatMobileSignatureLocation(assignment.site)}
             onClose={() => setSignatureBatch(null)}
             onSigned={mergeUpdatedBatch}
           />
@@ -3455,11 +3456,13 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
 function CustomerSignatureOverlay({
   assignmentId,
   batch,
+  signaturePlace,
   onClose,
   onSigned,
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
+  signaturePlace: string;
   onClose: () => void;
   onSigned: (batch: MobileMeasurementBatch) => void;
 }) {
@@ -3608,6 +3611,7 @@ function CustomerSignatureOverlay({
               placeholder="Name des Kunden"
             />
           </label>
+          <p className="mobile-measurement-action-hint">Ort: {activeBatch.customer_signature_place || signaturePlace}</p>
           <div className="mobile-signature-canvas-wrap">
             <span>Unterschrift</span>
             <canvas
@@ -4322,6 +4326,18 @@ function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch): strin
   const title = batch.title?.trim() || `Aufmaß ${batch.number}`;
   const offerName = batch.offer_name?.trim() || batch.measurement_base_name?.trim() || "Angebot ohne Namen";
   return `${title} - ${offerName}`;
+}
+
+function formatMobileSignatureLocation(site: MobileAssignment["site"]): string {
+  const address = site.address?.trim();
+  if (address) {
+    return address;
+  }
+  const location = site.location?.trim();
+  if (location) {
+    return location;
+  }
+  return "Baustelle";
 }
 
 function getMobileMeasurementPdfFilename(batch: MobileMeasurementBatch): string {

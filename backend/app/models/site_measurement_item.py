@@ -86,6 +86,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     original_submitted_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     customer_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     customer_signature_name: Mapped[str | None] = mapped_column(String(160))
+    customer_signature_place: Mapped[str | None] = mapped_column(String(260))
     customer_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
     customer_signed_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     worker_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -403,7 +403,9 @@ class MeasurementService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kundenname ist erforderlich.")
 
         signed_at = datetime.now(timezone.utc)
+        site = self._get_site(assignment.site_id)
         batch.customer_signature_name = customer_name
+        batch.customer_signature_place = format_site_signature_location(site)
         batch.customer_signature_strokes = [
             [point.model_dump() for point in stroke]
             for stroke in payload.signature_strokes
@@ -1284,6 +1286,7 @@ class MeasurementService:
             submitted_at=batch.submitted_at,
             customer_signed_at=batch.customer_signed_at,
             customer_signature_name=batch.customer_signature_name,
+            customer_signature_place=batch.customer_signature_place,
             worker_signed_at=batch.worker_signed_at,
             worker_signature_name=batch.worker_signature_name,
             is_locked_for_worker=batch.customer_signed_at is not None,
@@ -1563,6 +1566,32 @@ def _datetime_as_string(value: datetime | None) -> str | None:
 
 def _can_sign_measurements_immediately(user: User) -> bool:
     return bool(user.person and user.person.can_sign_measurements_immediately)
+
+
+def format_site_signature_location(site: Site | None) -> str:
+    if site is None:
+        return "Baustelle"
+    street_line = " ".join(
+        part.strip()
+        for part in [site.street, site.house_number]
+        if isinstance(part, str) and part.strip()
+    )
+    city_line = " ".join(
+        part.strip()
+        for part in [site.postal_code, site.city]
+        if isinstance(part, str) and part.strip()
+    )
+    structured = ", ".join(part for part in [street_line, city_line] if part)
+    if structured:
+        return _trim_signature_location(structured)
+    for value in (site.address, site.location):
+        if isinstance(value, str) and value.strip():
+            return _trim_signature_location(" ".join(value.split()))
+    return "Baustelle"
+
+
+def _trim_signature_location(value: str) -> str:
+    return value[:260].rstrip() or "Baustelle"
 
 
 def _normalize_content_type(value: str | None) -> str:
