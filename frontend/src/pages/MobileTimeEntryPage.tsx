@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -93,6 +93,9 @@ export function MobileTimeEntryPage() {
   const [timePickerTarget, setTimePickerTarget] = useState<TimePickerTarget | null>(null);
   const [timePickerDraftHour, setTimePickerDraftHour] = useState(7);
   const [timePickerDraftMinute, setTimePickerDraftMinute] = useState(0);
+  const [timePickerInitialValue, setTimePickerInitialValue] = useState<{ hour: number; minute: number } | null>(null);
+  const hourWheelRef = useRef<HTMLDivElement | null>(null);
+  const minuteWheelRef = useRef<HTMLDivElement | null>(null);
 
   const timeEntryLoadRange = useMemo(
     () => ({
@@ -155,6 +158,17 @@ export function MobileTimeEntryPage() {
   useEffect(() => {
     void loadTimeData();
   }, [loadTimeData]);
+
+  useEffect(() => {
+    if (!timePickerTarget || !timePickerInitialValue) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollWheelOptionIntoView(hourWheelRef.current, "hour", timePickerInitialValue.hour);
+      scrollWheelOptionIntoView(minuteWheelRef.current, "minute", timePickerInitialValue.minute);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [timePickerInitialValue, timePickerTarget]);
 
   const entriesByDate = useMemo(() => {
     const grouped = new Map<string, TimeEntry[]>();
@@ -281,6 +295,7 @@ export function MobileTimeEntryPage() {
     setFormError(null);
     setTimeConflict(null);
     setTimePickerTarget(null);
+    setTimePickerInitialValue(null);
   }
 
   async function saveCurrentForm(options: { replaceEntryId?: number; skipLocalConflict?: boolean } = {}) {
@@ -382,6 +397,7 @@ export function MobileTimeEntryPage() {
     const parsedTime = parseTimePickerValue(target === "start" ? form.startTime : form.endTime, target);
     setTimePickerDraftHour(parsedTime.hour);
     setTimePickerDraftMinute(parsedTime.minute);
+    setTimePickerInitialValue(parsedTime);
     setTimePickerTarget(target);
   }
 
@@ -397,6 +413,7 @@ export function MobileTimeEntryPage() {
     setFormError(null);
     setTimeConflict(null);
     setTimePickerTarget(null);
+    setTimePickerInitialValue(null);
   }
 
   const sheetSiteLabel = sheetMode === "manual"
@@ -688,10 +705,11 @@ export function MobileTimeEntryPage() {
                   <strong id="mobile-time-picker-title">{formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute)}</strong>
                 </div>
                 <div className="mobile-time-picker-wheels" aria-label="Uhrzeit auswählen">
-                  <div className="mobile-time-picker-wheel" aria-label="Stunde">
+                  <div className="mobile-time-picker-wheel" aria-label="Stunde" ref={hourWheelRef}>
                     {TIME_PICKER_HOURS.map((hour) => (
                       <button
                         className={classNames(hour === timePickerDraftHour && "is-selected")}
+                        data-hour={hour}
                         key={hour}
                         type="button"
                         onClick={() => setTimePickerDraftHour(hour)}
@@ -700,10 +718,11 @@ export function MobileTimeEntryPage() {
                       </button>
                     ))}
                   </div>
-                  <div className="mobile-time-picker-wheel" aria-label="Minute">
+                  <div className="mobile-time-picker-wheel" aria-label="Minute" ref={minuteWheelRef}>
                     {TIME_PICKER_MINUTES.map((minute) => (
                       <button
                         className={classNames(minute === timePickerDraftMinute && "is-selected")}
+                        data-minute={minute}
                         key={minute}
                         type="button"
                         onClick={() => setTimePickerDraftMinute(minute)}
@@ -714,7 +733,10 @@ export function MobileTimeEntryPage() {
                   </div>
                 </div>
                 <div className="mobile-time-picker-actions">
-                  <button type="button" onClick={() => setTimePickerTarget(null)}>Abbrechen</button>
+                  <button type="button" onClick={() => {
+                    setTimePickerTarget(null);
+                    setTimePickerInitialValue(null);
+                  }}>Abbrechen</button>
                   <button type="button" onClick={applyTimePickerValue}>Übernehmen</button>
                 </div>
               </div>
@@ -979,6 +1001,11 @@ function parseTimePickerValue(value: string, target: TimePickerTarget): { hour: 
 
 function formatTimePickerValue(hour: number, minute: number): string {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function scrollWheelOptionIntoView(container: HTMLDivElement | null, attribute: "hour" | "minute", value: number): void {
+  const option = container?.querySelector<HTMLElement>(`[data-${attribute}="${value}"]`);
+  option?.scrollIntoView({ block: "center" });
 }
 
 function buildMonthGrid(month: Date, today: string): CalendarDay[] {

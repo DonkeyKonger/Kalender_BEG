@@ -3922,23 +3922,23 @@ button.person-chip:focus-visible {
 
 .mobile-time-picker-wheel {
   display: grid;
-  gap: 6px;
+  gap: 3px;
   max-height: 214px;
   overflow-y: auto;
-  border-radius: 14px;
+  border-radius: 13px;
   background: #f5f7fa;
-  padding: 8px;
+  padding: 6px;
   scroll-snap-type: y proximity;
 }
 
 .mobile-time-picker-wheel button {
-  min-height: 38px;
+  min-height: 29px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 9px;
   background: transparent;
   color: #536179;
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 800;
   scroll-snap-align: center;
 }
