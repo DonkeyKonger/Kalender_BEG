@@ -1573,10 +1573,10 @@ button.entity-card:focus-visible,
 }
 
 .person-chip.is-self-planned {
-  border: 1px solid #cbd5e1;
-  background: #eef2f7;
-  color: #334155;
-  box-shadow: 0 1px 0 rgb(51 65 85 / 10%);
+  border: 1px solid #d6d1c7;
+  background: #f3f1ec;
+  color: #374151;
+  box-shadow: 0 1px 0 rgb(55 65 81 / 12%);
 }
 
 .matrix-cell-typing-preview {
