@@ -823,6 +823,7 @@ function MobileMeasurementTab({
   const [formError, setFormError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
   const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [workerSignatureBatch, setWorkerSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
@@ -998,6 +999,7 @@ function MobileMeasurementTab({
   if (selectedBatch && !isBatchPositionOverviewOpen) {
     const canSignImmediately = Boolean(assignment.person.can_sign_measurements_immediately);
     const customerSignatureAction = getCustomerSignatureActionState(selectedBatch, canSignImmediately);
+    const customerSignatureHint = getCompactCustomerSignatureHint(customerSignatureAction.hint);
     return (
       <>
         <MeasurementBatchOverview
@@ -1007,7 +1009,7 @@ function MobileMeasurementTab({
           isOpeningPdf={isOpeningPdf}
           isItemsLoading={isItemsLoading}
           customerSignatureDisabled={customerSignatureAction.disabled}
-          customerSignatureHint={customerSignatureAction.hint}
+          customerSignatureHint={customerSignatureHint}
           onBack={closeBatchOverview}
           onOpenPdf={() => void openMeasurementBatchPdf(selectedBatch)}
           onCustomerSignature={() => {
@@ -1017,6 +1019,7 @@ function MobileMeasurementTab({
             }
             setSignatureBatch(selectedBatch);
           }}
+          onWorkerSignature={() => setWorkerSignatureBatch(selectedBatch)}
           onOpenPositions={() => setIsBatchPositionOverviewOpen(true)}
           onSubmit={async () => {
             setIsSaving(true);
@@ -1038,6 +1041,13 @@ function MobileMeasurementTab({
             batch={signatureBatch}
             onClose={() => setSignatureBatch(null)}
             onSigned={mergeUpdatedBatch}
+          />
+        ) : null}
+        {workerSignatureBatch ? (
+          <WorkerSignatureOverlay
+            batch={workerSignatureBatch}
+            workerName={assignment.person.display_name}
+            onClose={() => setWorkerSignatureBatch(null)}
           />
         ) : null}
       </>
@@ -1156,6 +1166,7 @@ function MeasurementBatchOverview({
   onBack,
   onOpenPdf,
   onCustomerSignature,
+  onWorkerSignature,
   onOpenPositions,
   onSubmit,
 }: {
@@ -1169,6 +1180,7 @@ function MeasurementBatchOverview({
   onBack: () => void;
   onOpenPdf: () => void;
   onCustomerSignature: () => void;
+  onWorkerSignature: () => void;
   onOpenPositions: () => void;
   onSubmit: () => void;
 }) {
@@ -1209,23 +1221,22 @@ function MeasurementBatchOverview({
       {error ? <div className="form-error">{error}</div> : null}
 
       <div className="mobile-measurement-overview-actions">
+        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
+          <ClipboardList aria-hidden="true" size={18} />
+          <span>{isItemsLoading ? "Positionen laden..." : "Positionen bearbeiten"}</span>
+        </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPdf} disabled={isOpeningPdf}>
           <FileText aria-hidden="true" size={18} />
-          <span>{isOpeningPdf ? "PDF wird geöffnet..." : "PDF anzeigen"}</span>
+          <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
         </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={onCustomerSignature} disabled={customerSignatureDisabled}>
           <UserRound aria-hidden="true" size={18} />
           <span>Kundenunterschrift einfügen</span>
         </button>
         {customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
-        <button className="mobile-measurement-overview-action" type="button" disabled>
+        <button className="mobile-measurement-overview-action" type="button" onClick={onWorkerSignature}>
           <UserRound aria-hidden="true" size={18} />
           <span>Monteursunterschrift einfügen</span>
-        </button>
-        <p className="mobile-measurement-action-hint">Monteursunterschrift ist vorbereitet und wird später aktiviert.</p>
-        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
-          <ClipboardList aria-hidden="true" size={18} />
-          <span>{isItemsLoading ? "Positionen laden..." : "Positionen bearbeiten"}</span>
         </button>
       </div>
     </div>
@@ -2095,6 +2106,136 @@ function CustomerSignatureOverlay({
   );
 }
 
+function WorkerSignatureOverlay({
+  batch,
+  workerName,
+  onClose,
+}: {
+  batch: MobileMeasurementBatch;
+  workerName: string;
+  onClose: () => void;
+}) {
+  const [signerName, setSignerName] = useState(workerName);
+  const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+  const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+
+  useEffect(() => {
+    drawSignatureCanvas(canvasRef.current, strokes);
+  }, [strokes]);
+
+  function appendSignaturePoint(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const point = getSignatureCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+    setStrokes((currentStrokes) => {
+      if (currentStrokes.length === 0) {
+        return [[point]];
+      }
+      const nextStrokes = currentStrokes.slice();
+      const lastStroke = nextStrokes[nextStrokes.length - 1] ?? [];
+      nextStrokes[nextStrokes.length - 1] = [...lastStroke, point];
+      return nextStrokes;
+    });
+  }
+
+  function handleSaveSignature(): void {
+    if (!signerName.trim()) {
+      setSignatureError("Bitte Monteurnamen eintragen.");
+      return;
+    }
+    if (!hasSignature) {
+      setSignatureError("Bitte Unterschrift erfassen.");
+      return;
+    }
+    setSignatureError("Monteursunterschrift kann noch nicht gespeichert werden.");
+  }
+
+  return (
+    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Monteursunterschrift">
+      <header className="mobile-customer-signature-header">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Zurück</span>
+        </button>
+        <div className="mobile-customer-signature-title">
+          <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
+          <span>Monteursunterschrift erfassen</span>
+        </div>
+      </header>
+
+      <main className="mobile-worker-signature-content">
+        <section className="mobile-worker-signature-card" aria-label="Monteursunterschrift erfassen">
+          <label>
+            <span>Monteur</span>
+            <input
+              value={signerName}
+              onChange={(event) => setSignerName(event.target.value)}
+              placeholder="Name des Monteurs"
+            />
+          </label>
+          <div className="mobile-signature-canvas-wrap">
+            <span>Unterschrift</span>
+            <canvas
+              ref={canvasRef}
+              className="mobile-signature-canvas"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                isDrawingRef.current = true;
+                const point = getSignatureCanvasPoint(event);
+                if (point) {
+                  setStrokes((currentStrokes) => [...currentStrokes, [point]]);
+                }
+              }}
+              onPointerMove={(event) => {
+                if (!isDrawingRef.current) {
+                  return;
+                }
+                event.preventDefault();
+                appendSignaturePoint(event);
+              }}
+              onPointerUp={(event) => {
+                isDrawingRef.current = false;
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+              }}
+              onPointerCancel={() => {
+                isDrawingRef.current = false;
+              }}
+            />
+          </div>
+          {signatureError ? <p className="form-error">{signatureError}</p> : null}
+          <div className="mobile-customer-signature-actions">
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => {
+                setStrokes([]);
+                setSignatureError(null);
+              }}
+            >
+              Leeren
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={handleSaveSignature}
+              disabled={!signerName.trim() || !hasSignature}
+            >
+              Speichern
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 function getSignatureCanvasPoint(event: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
   const rect = event.currentTarget.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
@@ -2493,6 +2634,22 @@ function getCustomerSignatureActionState(
     disabled: true,
     hint: "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
   };
+}
+
+function getCompactCustomerSignatureHint(hint: string | null): string | null {
+  if (!hint) {
+    return null;
+  }
+  if (hint.includes("mindestens eine Aufmaßzeile")) {
+    return "Erst Position erfassen.";
+  }
+  if (hint.includes("Projektleiterprüfung")) {
+    return "Prüfung durch Projektleiter erforderlich.";
+  }
+  if (hint.includes("intern erledigt")) {
+    return "Bereits intern erledigt.";
+  }
+  return hint;
 }
 
 function formatMobileMeasurementBatchDate(batch: MobileMeasurementBatch): string {

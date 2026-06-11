@@ -11944,18 +11944,24 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-overview-action:disabled {
   cursor: not-allowed;
-  opacity: 0.58;
+  border-color: #d8e3ef;
+  background: #f8fafc;
+  color: #8291a8;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.mobile-measurement-overview-action:disabled svg {
+  color: #94a3b8;
 }
 
 .mobile-measurement-action-hint {
-  margin: -2px 0 2px;
-  border-left: 3px solid #7ba7d8;
-  background: #eef6ff;
-  color: #38516e;
+  margin: -4px 0 2px;
+  color: #65738a;
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.35;
-  padding: 8px 10px;
+  padding: 0 3px;
 }
 
 .mobile-measurement-quick-facts {
@@ -12371,6 +12377,44 @@ button.person-chip:focus-visible {
 }
 
 .mobile-customer-signature-sheet input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.mobile-worker-signature-content {
+  display: grid;
+  align-content: start;
+  overflow: auto;
+  padding: 12px;
+}
+
+.mobile-worker-signature-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d8e3ef;
+  border-top: 4px solid #f4b73f;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
+}
+
+.mobile-worker-signature-card label,
+.mobile-worker-signature-card .mobile-signature-canvas-wrap {
+  display: grid;
+  gap: 6px;
+  color: #42526b;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.mobile-worker-signature-card input {
   width: 100%;
   min-height: 42px;
   border: 1px solid #cbd7e6;
