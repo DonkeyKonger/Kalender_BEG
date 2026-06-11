@@ -384,14 +384,17 @@ export function MyAssignmentsPage() {
       </div>
 
       <header className="mobile-home-title-card">
-        <h1>BEG Baustellenkalender</h1>
+        <div>
+          <h1>Baustellenkalender</h1>
+          {loadedAt ? (
+            <p>Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}</p>
+          ) : null}
+        </div>
+        <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
+          {isFromCache ? "Offline" : "Online"}
+        </span>
       </header>
 
-      {loadedAt && (
-        <p className={isFromCache ? "cache-note warning" : "cache-note"}>
-          Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}
-        </p>
-      )}
       {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}
       {isLoading && <div className="empty-panel">Einsätze werden geladen...</div>}
 
@@ -637,16 +640,53 @@ function DayFocusCard({
 }) {
   return (
     <article className={`mobile-focus-card${compact ? " is-upcoming" : ""}`}>
-      <div className="mobile-focus-card-head">
-        <span>{label}</span>
-        <strong>{formatShortDate(date)}</strong>
-      </div>
       {assignments.length ? assignments.map((daily) => (
-        <AssignmentCard assignment={daily.assignment} date={date} compact key={daily.key} />
+        <HomeAssignmentCard
+          assignment={daily.assignment}
+          date={date}
+          dayLabel={compact ? `${label} · ${formatShortDate(date)}` : undefined}
+          key={daily.key}
+          variant={compact ? "upcoming" : "today"}
+        />
       )) : (
-        <p className="empty-inline">Kein Einsatz geplant.</p>
+        <div className="mobile-home-empty-day">
+          <strong>{compact ? `${label} · ${formatShortDate(date)}` : "Heute"}</strong>
+          <span>Kein Einsatz geplant.</span>
+        </div>
       )}
     </article>
+  );
+}
+
+function HomeAssignmentCard({
+  assignment,
+  date,
+  dayLabel,
+  variant,
+}: {
+  assignment: MobileAssignment;
+  date: string;
+  dayLabel?: string;
+  variant: "today" | "upcoming";
+}) {
+  return (
+    <Link
+      className={`mobile-home-assignment-card is-${variant}`}
+      to={`/me/assignments/${assignment.id}`}
+      state={{ assignment }}
+    >
+      <CalendarClock aria-hidden="true" size={18} />
+      <span>
+        {dayLabel ? <strong>{dayLabel}</strong> : null}
+        <b>{assignment.site.name}</b>
+        <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
+        {variant === "today" ? <em>{formatShortDate(date)}</em> : null}
+      </span>
+      <span className="assignment-card-affordance">
+        <SiteStatusBadge status={assignment.site.status} />
+        <ChevronRight aria-hidden="true" size={17} />
+      </span>
+    </Link>
   );
 }
 

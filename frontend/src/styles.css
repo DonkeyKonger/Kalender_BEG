@@ -2669,7 +2669,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-page {
   gap: 12px;
-  background: #ffffff;
+  background: #f5f8fc;
 }
 
 .mobile-home-actions {
@@ -2707,6 +2707,9 @@ button.person-chip:focus-visible {
 
 .mobile-home-title-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   border: 1px solid #d5e2f1;
   border-top: 4px solid #f4b73f;
   border-radius: 8px;
@@ -2715,7 +2718,14 @@ button.person-chip:focus-visible {
   box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
 }
 
+.mobile-home-title-card div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
 .mobile-home-title-card h1,
+.mobile-home-title-card p,
 .mobile-section-heading h2,
 .mobile-section-heading span,
 .mobile-focus-card p,
@@ -2736,9 +2746,32 @@ button.person-chip:focus-visible {
 
 .mobile-home-title-card h1 {
   color: #111827;
-  font-size: 1.08rem;
+  font-size: 1.18rem;
   line-height: 1.2;
   letter-spacing: 0;
+}
+
+.mobile-home-title-card p {
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.mobile-home-status-badge {
+  align-self: start;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #16733d;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.mobile-home-status-badge.is-cache {
+  background: #fff7d6;
+  color: #7a5a00;
 }
 
 .mobile-refresh-button {
@@ -3005,7 +3038,11 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
-.mobile-focus-card,
+.mobile-focus-card {
+  display: grid;
+  gap: 8px;
+}
+
 .mobile-day-card {
   display: grid;
   gap: 8px;
@@ -3018,14 +3055,7 @@ button.person-chip:focus-visible {
 
 .mobile-focus-card.is-upcoming {
   gap: 7px;
-  background: #fbfdff;
-  padding: 9px;
-  box-shadow: none;
-}
-
-.mobile-focus-card-head,
-.mobile-day-card {
-  align-items: start;
+  background: transparent;
 }
 
 .mobile-focus-card-head {
@@ -3046,6 +3076,121 @@ button.person-chip:focus-visible {
 
 .mobile-focus-card.is-upcoming .empty-inline {
   font-size: 0.82rem;
+}
+
+.mobile-day-card {
+  align-items: start;
+}
+
+.mobile-home-assignment-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  padding: 10px 11px;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.mobile-home-assignment-card.is-today {
+  border-top: 4px solid #f4b73f;
+  padding-top: 9px;
+}
+
+.mobile-home-assignment-card:hover,
+.mobile-home-assignment-card:focus-visible {
+  border-color: #9db7d6;
+  box-shadow: 0 13px 26px rgb(18 29 52 / 10%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mobile-home-assignment-card > svg {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #eaf2fb;
+  color: #143c6d;
+  padding: 8px;
+}
+
+.mobile-home-assignment-card > span:not(.assignment-card-affordance) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mobile-home-assignment-card strong,
+.mobile-home-assignment-card b,
+.mobile-home-assignment-card small,
+.mobile-home-assignment-card em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-home-assignment-card strong {
+  color: #143c6d;
+  font-size: 0.84rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.mobile-home-assignment-card b {
+  color: #111827;
+  font-size: 0.96rem;
+  line-height: 1.15;
+}
+
+.mobile-home-assignment-card small {
+  color: #65738a;
+  font-size: 0.77rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.mobile-home-assignment-card em {
+  color: #143c6d;
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.mobile-home-assignment-card.is-upcoming {
+  padding: 9px 10px;
+  box-shadow: none;
+}
+
+.mobile-home-assignment-card.is-upcoming b {
+  font-size: 0.86rem;
+}
+
+.mobile-home-empty-day {
+  display: grid;
+  gap: 2px;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+  color: #65738a;
+}
+
+.mobile-home-empty-day strong {
+  color: #143c6d;
+  font-size: 0.84rem;
+}
+
+.mobile-home-empty-day span {
+  font-size: 0.78rem;
+  font-weight: 760;
 }
 
 .mobile-day-card {
