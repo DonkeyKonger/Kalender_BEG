@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
-from app.models.site import Site
 from app.models.user import User
 
 PAGE_WIDTH = 595.28
