@@ -12697,9 +12697,22 @@ button.person-chip:focus-visible {
   margin-top: 96px;
 }
 
+.mobile-project-photo-action {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  margin-top: -2px;
+  padding-right: 4px;
+}
+
+.mobile-project-photo-message {
+  justify-self: stretch;
+  margin: 0;
+}
+
 .mobile-project-camera-button {
-  justify-self: end;
-  margin-top: 10px;
+  width: 52px;
+  height: 52px;
 }
 
 .mobile-measurement-photo-gallery {

@@ -247,6 +247,7 @@ export function MobileAssignmentDetailPage() {
               </p>
             ) : null}
           </div>
+          {activeTab === null ? <MobileProjectPhotoCapture assignment={assignment} /> : null}
         </>
       ) : null}
 
@@ -297,6 +298,27 @@ function MobileExtraWorkPlaceholder({
 }
 
 function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
+  return (
+    <div className="mobile-detail-panel">
+      <h2>Übersicht</h2>
+      <div className="assignment-detail-list">
+        {(assignment.site.location || assignment.site.address) && (
+          <p><MapPin aria-hidden="true" size={16} /><span>{[assignment.site.location, assignment.site.address].filter(Boolean).join(" - ")}</span></p>
+        )}
+        {assignment.site.project_manager && (
+          <p><UserRound aria-hidden="true" size={16} /><span>{assignment.site.project_manager.display_name}</span></p>
+        )}
+        {assignment.site.customer && (
+          <p><ClipboardList aria-hidden="true" size={16} /><span>Kunde: {assignment.site.customer}</span></p>
+        )}
+      </div>
+      {assignment.site.info && <p className="assignment-note">{assignment.site.info}</p>}
+      {assignment.note && <p className="assignment-note">{assignment.note}</p>}
+    </div>
+  );
+}
+
+function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignment }) {
   const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
   const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
   const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
@@ -347,23 +369,9 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
   }
 
   return (
-    <div className="mobile-detail-panel">
-      <h2>Übersicht</h2>
-      <div className="assignment-detail-list">
-        {(assignment.site.location || assignment.site.address) && (
-          <p><MapPin aria-hidden="true" size={16} /><span>{[assignment.site.location, assignment.site.address].filter(Boolean).join(" - ")}</span></p>
-        )}
-        {assignment.site.project_manager && (
-          <p><UserRound aria-hidden="true" size={16} /><span>{assignment.site.project_manager.display_name}</span></p>
-        )}
-        {assignment.site.customer && (
-          <p><ClipboardList aria-hidden="true" size={16} /><span>Kunde: {assignment.site.customer}</span></p>
-        )}
-      </div>
-      {assignment.site.info && <p className="assignment-note">{assignment.site.info}</p>}
-      {assignment.note && <p className="assignment-note">{assignment.note}</p>}
+    <div className="mobile-project-photo-action">
       {projectPhotoMessage ? (
-        <p className={projectPhotoMessageTone === "error" ? "form-error" : "form-info"}>
+        <p className={projectPhotoMessageTone === "error" ? "form-error mobile-project-photo-message" : "form-info mobile-project-photo-message"}>
           {projectPhotoMessage}
         </p>
       ) : null}
