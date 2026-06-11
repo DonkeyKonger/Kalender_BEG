@@ -2705,7 +2705,7 @@ function getCompactCustomerSignatureHint(hint: string | null): string | null {
     return null;
   }
   if (hint.includes("mindestens eine Aufmaßzeile")) {
-    return "Erst Position erfassen.";
+    return "Prüfung durch Projektleiter erforderlich.";
   }
   if (hint.includes("Projektleiterprüfung")) {
     return "Prüfung durch Projektleiter erforderlich.";
