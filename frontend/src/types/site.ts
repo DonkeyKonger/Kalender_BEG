@@ -306,6 +306,8 @@ export type MobileExtraWorkTicket = {
   customer_signature_name: string | null;
   customer_signature_place: string | null;
   customer_signed_at: string | null;
+  worker_signature_name: string | null;
+  worker_signed_at: string | null;
   entry_count: number;
   total_hours: MeasurementNumericValue;
   estimated_hours: MeasurementNumericValue | null;

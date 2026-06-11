@@ -34,6 +34,20 @@ class ExtraWorkCustomerSignatureCreate(BaseModel):
         return strokes
 
 
+class ExtraWorkWorkerSignatureCreate(BaseModel):
+    worker_name: str = Field(..., min_length=1, max_length=160)
+    signature_strokes: list[list[ExtraWorkSignaturePoint]] = Field(..., min_length=1)
+
+    @field_validator("signature_strokes")
+    @classmethod
+    def validate_signature_strokes(
+        cls, strokes: list[list[ExtraWorkSignaturePoint]]
+    ) -> list[list[ExtraWorkSignaturePoint]]:
+        if not any(len(stroke) >= 2 for stroke in strokes):
+            raise ValueError("Unterschrift ist erforderlich.")
+        return strokes
+
+
 class ExtraWorkWorkerHours(BaseModel):
     worker_name: str = Field(min_length=1, max_length=160)
     monday_hours: float = Field(default=0, ge=0, le=24)
@@ -111,6 +125,8 @@ class ExtraWorkTicketRead(BaseModel):
     customer_signature_name: str | None
     customer_signature_place: str | None
     customer_signed_at: datetime | None
+    worker_signature_name: str | None
+    worker_signed_at: datetime | None
     entry_count: int
     total_hours: float
     estimated_hours: float | None

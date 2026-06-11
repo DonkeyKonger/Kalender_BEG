@@ -17,6 +17,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
+    ExtraWorkWorkerSignatureCreate,
 )
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
@@ -261,6 +262,40 @@ class ExtraWorkService:
         ]
         ticket.customer_signed_at = datetime.now(UTC)
         ticket.status = "signed"
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return ExtraWorkTicketRead.model_validate(ticket)
+
+    def sign_mobile_ticket_worker(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkWorkerSignatureCreate,
+    ) -> ExtraWorkTicketRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        if ticket.status in {"billed", "closed"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieser Stundenzettel ist bereits abgeschlossen.",
+            )
+
+        worker_name = " ".join(payload.worker_name.split())
+        if not worker_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurname ist erforderlich.")
+        valid_strokes = [stroke for stroke in payload.signature_strokes if len(stroke) >= 2]
+        if not valid_strokes:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unterschrift ist erforderlich.")
+
+        ticket.worker_signature_name = worker_name
+        ticket.worker_signature_strokes = [
+            [point.model_dump() for point in stroke]
+            for stroke in valid_strokes
+        ]
+        ticket.worker_signed_at = datetime.now(UTC)
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)

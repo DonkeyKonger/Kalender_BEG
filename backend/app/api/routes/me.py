@@ -16,6 +16,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketStatusUpdate,
+    ExtraWorkWorkerSignatureCreate,
 )
 from app.schemas.measurement import (
     CustomerSignatureCreate,
@@ -265,6 +266,25 @@ def sign_my_assignment_extra_work_ticket_customer(
     db: Session = Depends(get_db),
 ) -> ExtraWorkTicketRead:
     return ExtraWorkService(db).sign_mobile_ticket_customer(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/worker-signature",
+    response_model=ExtraWorkTicketRead,
+)
+def sign_my_assignment_extra_work_ticket_worker(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkWorkerSignatureCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).sign_mobile_ticket_worker(
         assignment_id=assignment_id,
         ticket_id=ticket_id,
         current_user=current_user,

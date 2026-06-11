@@ -25,6 +25,7 @@ from app.schemas.extra_work import (
     ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
     ExtraWorkTicketEntryPayload,
+    ExtraWorkWorkerSignatureCreate,
     ExtraWorkWorkerHours,
 )
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
@@ -439,6 +440,44 @@ def test_mobile_extra_work_approval_customer_signature_uses_approval_signature_t
     assert signed.customer_signature_type == "approval_customer"
 
 
+def test_mobile_extra_work_worker_signature_persists_without_status_change():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    signed = service.sign_mobile_ticket_worker(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkWorkerSignatureCreate(
+            worker_name="Max Monteur",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.1, y=0.4),
+                ExtraWorkSignaturePoint(x=0.7, y=0.45),
+            ]],
+        ),
+    )
+    reloaded = service.get_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert signed.status == "draft"
+    assert signed.worker_signature_name == "Max Monteur"
+    assert signed.worker_signed_at is not None
+    assert reloaded.worker_signature_name == "Max Monteur"
+    assert reloaded.worker_signed_at == signed.worker_signed_at
+
+
 def test_mobile_extra_work_customer_signature_rejects_empty_signature():
     with pytest.raises(ValueError):
         ExtraWorkCustomerSignatureCreate(
@@ -471,6 +510,31 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
             worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5)],
         ),
     )
+    service.sign_mobile_ticket_worker(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkWorkerSignatureCreate(
+            worker_name="Max Monteur",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.1, y=0.4),
+                ExtraWorkSignaturePoint(x=0.7, y=0.45),
+            ]],
+        ),
+    )
+    service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            customer_place="Klinikweg 8, 77815 Bühl",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                ExtraWorkSignaturePoint(x=0.8, y=0.5),
+            ]],
+        ),
+    )
 
     content, filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
         assignment_id=assignment.id,
@@ -481,6 +545,10 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     assert content.startswith(b"%PDF")
     assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
     assert len(PdfReader(BytesIO(content)).pages) == 1
+    assert b"Unterschrift Monteur" in content
+    assert b"Max Monteur" in content
+    assert b"Unterschrift Kunde" in content
+    assert b"Kunde Beispiel" in content
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):

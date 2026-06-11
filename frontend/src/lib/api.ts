@@ -918,6 +918,17 @@ export const api = {
     });
   },
 
+  async signMobileExtraWorkTicketWorker(
+    assignmentId: number,
+    ticketId: number,
+    payload: WorkerSignaturePayload,
+  ): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/worker-signature`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async mobileExtraWorkTicketPhotos(
     assignmentId: number,
     ticketId: number,

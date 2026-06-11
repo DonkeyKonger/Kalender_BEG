@@ -230,6 +230,8 @@ class ExtraWorkPdfService:
             if ticket.kind == "approval":
                 self._draw_approval_fields(commands, ticket, entry)
             self._draw_billing_fields(commands, ticket, assignment, entry, rows)
+            if page_index == len(chunks) - 1:
+                self._draw_signature_fields(commands, ticket)
             pdf.add_page(commands)
         return pdf.build()
 
@@ -309,6 +311,35 @@ class ExtraWorkPdfService:
             approval_estimate = ticket.approval_ticket.estimated_hours
             if approval_estimate is not None:
                 _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
+
+    def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket) -> None:
+        signature_y = 38
+        column_width = 224
+        worker_x = 62
+        customer_x = 315
+
+        _text(commands, worker_x, signature_y + 42, "Unterschrift Monteur", 8, font="F2")
+        _text(commands, customer_x, signature_y + 42, "Unterschrift Kunde", 8, font="F2")
+
+        _text(commands, worker_x, signature_y + 26, "Name:", 6.8, font="F2")
+        _text(commands, customer_x, signature_y + 26, "Name:", 6.8, font="F2")
+        _text(commands, worker_x + 34, signature_y + 26, ticket.worker_signature_name or "", 7)
+        _text(commands, customer_x + 34, signature_y + 26, ticket.customer_signature_name or "", 7)
+
+        _text(commands, worker_x, signature_y + 12, "Datum:", 6.8, font="F2")
+        _text(commands, customer_x, signature_y + 12, "Datum:", 6.8, font="F2")
+        _text(commands, worker_x + 40, signature_y + 12, _format_date_from_datetime(ticket.worker_signed_at), 7)
+        _text(commands, customer_x + 40, signature_y + 12, _format_date_from_datetime(ticket.customer_signed_at), 7)
+
+        customer_place = ticket.customer_signature_place or _format_site_signature_location(ticket.site)
+        if customer_place:
+            _text(commands, customer_x, signature_y - 2, "Ort:", 6.8, font="F2")
+            _text(commands, customer_x + 24, signature_y - 2, _fit_text(customer_place, 176, 6.8), 6.8)
+
+        _line(commands, worker_x, signature_y + 4, worker_x + column_width, signature_y + 4, 0.6)
+        _line(commands, customer_x, signature_y + 4, customer_x + column_width, signature_y + 4, 0.6)
+        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 102, y=signature_y + 6, width=112, height=34)
+        _draw_signature(commands, ticket.customer_signature_strokes, x=customer_x + 102, y=signature_y + 6, width=112, height=34)
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
@@ -622,6 +653,42 @@ def _image_fit(
     _image(commands, name, fitted_x, fitted_y, width, height)
 
 
+def _draw_signature(
+    commands: list[bytes],
+    strokes: list[list[dict[str, float]]] | None,
+    *,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+) -> None:
+    if not strokes:
+        return
+
+    for stroke in strokes:
+        points: list[tuple[float, float]] = []
+        for point in stroke:
+            if not isinstance(point, dict):
+                continue
+            try:
+                point_x = float(point.get("x", 0))
+                point_y = float(point.get("y", 0))
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= point_x <= 1 and 0 <= point_y <= 1):
+                continue
+            points.append((x + point_x * width, y + (1 - point_y) * height))
+        if len(points) < 2:
+            continue
+
+        first_x, first_y = points[0]
+        path_parts = [_number(first_x), _number(first_y), b"m"]
+        for next_x, next_y in points[1:]:
+            path_parts.extend([_number(next_x), _number(next_y), b"l"])
+        path_parts.append(b"S")
+        commands.append(b"q 1.25 w 0.05 0.12 0.24 RG " + b" ".join(path_parts) + b" Q")
+
+
 def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
     with Image.open(BytesIO(content)) as source:
         image = ImageOps.exif_transpose(source)
@@ -649,6 +716,40 @@ def _format_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.strftime("%d.%m.%Y, %H:%M")
+
+
+def _format_date_from_datetime(value: datetime | None) -> str:
+    if value is None:
+        return ""
+    return value.strftime("%d.%m.%Y")
+
+
+def _format_site_signature_location(site: Any | None) -> str:
+    if site is None:
+        return ""
+    street_parts = [
+        _clean_text(getattr(site, "street", None)),
+        _clean_text(getattr(site, "house_number", None)),
+    ]
+    city_parts = [
+        _clean_text(getattr(site, "postal_code", None)),
+        _clean_text(getattr(site, "city", None)),
+    ]
+    structured = ", ".join(
+        part
+        for part in [
+            " ".join(part for part in street_parts if part),
+            " ".join(part for part in city_parts if part),
+        ]
+        if part
+    )
+    if structured:
+        return structured
+    for attribute in ("address", "location", "city"):
+        value = _clean_text(getattr(site, attribute, None))
+        if value:
+            return value
+    return ""
 
 
 def _wrap_text(text: str, width: float, size: float, max_lines: int) -> list[str]:
