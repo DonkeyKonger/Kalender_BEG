@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarClock,
+  ChevronRight,
   FileText,
   HeartPulse,
   LogOut,
@@ -295,6 +296,7 @@ export function MyAssignmentsPage() {
 
   const today = toIsoDate(startOfToday());
   const tomorrow = toIsoDate(addDays(startOfToday(), 1));
+  const nextThreeDays = useMemo(() => getDayRange(tomorrow, 3), [tomorrow]);
   const dailyAssignments = useMemo(
     () => expandAssignmentsByDay(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
@@ -414,9 +416,24 @@ export function MyAssignmentsPage() {
                 <small>Nachrichten, Aufgaben und Hinweise erscheinen später hier.</small>
               </span>
             </button>
-            <div className="mobile-focus-grid">
-              <DayFocusCard date={today} label="Einsatz heute" assignments={dailyByDate.get(today) ?? []} />
-              <DayFocusCard date={tomorrow} label="Einsatz morgen" assignments={dailyByDate.get(tomorrow) ?? []} />
+          </section>
+
+          <section className="mobile-home-section">
+            <div className="mobile-section-heading">
+              <h2>Heute</h2>
+              <span>Einsatz</span>
+            </div>
+            <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
+          </section>
+
+          <section className="mobile-home-section">
+            <div className="mobile-section-heading">
+              <h2>Nächste Einsätze</h2>
+            </div>
+            <div className="mobile-upcoming-days">
+              {nextThreeDays.map((date) => (
+                <DayFocusCard date={date} label={formatWeekday(date)} assignments={dailyByDate.get(date) ?? []} compact key={date} />
+              ))}
             </div>
           </section>
 
@@ -611,13 +628,15 @@ function DayFocusCard({
   date,
   label,
   assignments,
+  compact = false,
 }: {
   date: string;
   label: string;
   assignments: DailyAssignment[];
+  compact?: boolean;
 }) {
   return (
-    <article className="mobile-focus-card">
+    <article className={`mobile-focus-card${compact ? " is-upcoming" : ""}`}>
       <div className="mobile-focus-card-head">
         <span>{label}</span>
         <strong>{formatShortDate(date)}</strong>
@@ -746,7 +765,10 @@ function AssignmentCard({ assignment, date, compact = false }: { assignment: Mob
           <h3>{assignment.site.name}</h3>
           <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
         </div>
-        <SiteStatusBadge status={assignment.site.status} />
+        <span className="assignment-card-affordance">
+          <SiteStatusBadge status={assignment.site.status} />
+          <ChevronRight aria-hidden="true" size={17} />
+        </span>
       </div>
 
       {!compact ? (
