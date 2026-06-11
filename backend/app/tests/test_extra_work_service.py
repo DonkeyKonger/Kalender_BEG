@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from pypdf import PdfReader
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.main import app
 from app.models import Base
 from app.models.assignment import Assignment
 from app.models.enums import UserRole
+from app.models.extra_work_ticket import ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
@@ -26,6 +28,7 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerHours,
 )
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
+from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import extra_work_service as extra_work_module
 from app.services.extra_work_service import ExtraWorkService
 
@@ -38,6 +41,12 @@ def db_session() -> Session:
     )
     Base.metadata.create_all(engine)
     return Session(engine)
+
+
+def sample_photo_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (48, 32), color=(36, 76, 128)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submitted():
@@ -472,6 +481,79 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     assert content.startswith(b"%PDF")
     assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
     assert len(PdfReader(BytesIO(content)).pages) == 1
+
+
+def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    photo_folder = ProjectFolder(
+        site_id=site.id,
+        sort_order=14,
+        name="Fotos",
+        folder_key="fotos",
+        is_active=True,
+        external_drive_id="drive-1",
+        external_item_id="folder-1",
+    )
+    db.add_all([assignment, photo_folder])
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="BT A",
+            floor="2. OG",
+            remarks="Kabeltrasse angepasst",
+            material_text="Kabelrinne",
+            worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5)],
+        ),
+    )
+    db.add(
+        ExtraWorkTicketPhoto(
+            site_id=site.id,
+            extra_work_ticket_id=ticket.id,
+            project_folder_key="fotos",
+            external_drive_id="drive-1",
+            external_item_id="photo-1",
+            filename="baustelle.png",
+            content_type="image/png",
+            file_size_bytes=128,
+        )
+    )
+    db.commit()
+    photo_bytes = sample_photo_bytes()
+
+    class FakeProjectStorageService:
+        def download_file_from_folder(self, *, drive_id, folder_item_id, item_id):
+            assert drive_id == "drive-1"
+            assert folder_item_id == "folder-1"
+            assert item_id == "photo-1"
+            return {
+                "content": photo_bytes,
+                "content_type": "image/png",
+                "filename": "baustelle.png",
+            }
+
+    monkeypatch.setattr(extra_work_pdf_module, "ProjectStorageService", FakeProjectStorageService)
+
+    content, filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
+    assert len(PdfReader(BytesIO(content)).pages) == 2
+    assert b"Fotoanlagen" in content
+    assert b"baustelle.png" in content
 
 
 def test_mobile_extra_work_pdf_splits_four_workers_to_second_template_page():

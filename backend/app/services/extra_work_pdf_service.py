@@ -5,20 +5,28 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+import logging
 from pathlib import Path
+import zlib
 from typing import Any
 
 from fastapi import HTTPException, status
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
-from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
+from app.models.project_folder import ProjectFolder
 from app.models.user import User
+from app.services.project_storage_service import ProjectStorageService
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
+PHOTO_MAX_IMAGE_EDGE = 1800
+EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
+LOGGER = logging.getLogger(__name__)
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
     / "templates"
@@ -42,6 +50,13 @@ class FieldRect:
     y: float
     width: float
     height: float
+
+
+@dataclass(frozen=True)
+class PdfImage:
+    width: int
+    height: int
+    data: bytes
 
 
 FIELD_RECTS = {
@@ -144,9 +159,62 @@ class ExtraWorkPdfService:
             if "/Annots" in page:
                 del page["/Annots"]
             page.merge_page(overlay_reader.pages[index])
+        self._append_photo_pages(writer, ticket)
         output = BytesIO()
         writer.write(output)
         return output.getvalue()
+
+    def _append_photo_pages(self, writer: PdfWriter, ticket: ExtraWorkTicket) -> None:
+        photos = sorted(ticket.photos or [], key=lambda photo: (photo.created_at, photo.id))
+        if not photos:
+            return
+        folder_item_id = self._get_photo_folder_item_id(ticket.site_id)
+        if folder_item_id is None:
+            LOGGER.warning("Extra work photo folder is not connected for site %s.", ticket.site_id)
+            return
+
+        appendix_pdf = PhotoAppendixPdf()
+        appended_count = 0
+        for photo in photos:
+            try:
+                downloaded = ProjectStorageService().download_file_from_folder(
+                    drive_id=photo.external_drive_id,
+                    folder_item_id=folder_item_id,
+                    item_id=photo.external_item_id,
+                )
+                image = _load_uploaded_image_rgb(downloaded["content"])
+            except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
+                LOGGER.warning("Extra work photo %s could not be added to PDF: %s", photo.id, error)
+                continue
+            appended_count += 1
+            image_name = f"ExtraWorkPhoto{photo.id}"
+            appendix_pdf.add_image(image_name, image)
+            appendix_pdf.add_page(
+                _render_photo_attachment_page(
+                    ticket=ticket,
+                    photo=photo,
+                    image=image,
+                    image_name=image_name,
+                    index=appended_count,
+                    total=len(photos),
+                )
+            )
+        if appended_count == 0:
+            return
+
+        appendix_reader = PdfReader(BytesIO(appendix_pdf.build()))
+        for page in appendix_reader.pages:
+            writer.add_page(page)
+
+    def _get_photo_folder_item_id(self, site_id: int) -> str | None:
+        folder = self.db.scalar(
+            select(ProjectFolder).where(
+                ProjectFolder.site_id == site_id,
+                ProjectFolder.folder_key == EXTRA_WORK_PHOTO_FOLDER_KEY,
+                ProjectFolder.is_active.is_(True),
+            )
+        )
+        return folder.external_item_id if folder and folder.external_item_id else None
 
     def _build_overlay_pdf(
         self,
@@ -262,6 +330,9 @@ class ExtraWorkPdfService:
                 selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.entries),
                 selectinload(ExtraWorkTicket.approval_ticket).selectinload(ExtraWorkTicket.entries),
+                selectinload(ExtraWorkTicket.photos).selectinload(
+                    ExtraWorkTicketPhoto.uploaded_by
+                ).selectinload(User.person),
             )
             .where(ExtraWorkTicket.id == ticket_id, ExtraWorkTicket.site_id == site_id)
         )
@@ -342,6 +413,104 @@ class OverlayPdf:
         return buffer.getvalue()
 
 
+class PhotoAppendixPdf:
+    def __init__(self) -> None:
+        self.pages: list[bytes] = []
+        self.images: dict[str, PdfImage] = {}
+
+    def add_image(self, name: str, image: PdfImage) -> None:
+        self.images[name] = image
+
+    def add_page(self, commands: list[bytes]) -> None:
+        self.pages.append(b"\n".join(commands))
+
+    def build(self) -> bytes:
+        objects: list[bytes] = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        ]
+        image_object_numbers: dict[str, int] = {}
+        for name, image in self.images.items():
+            objects.append(
+                b"<< /Type /XObject /Subtype /Image /Width "
+                + str(image.width).encode("ascii")
+                + b" /Height "
+                + str(image.height).encode("ascii")
+                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                + str(len(image.data)).encode("ascii")
+                + b" >>\nstream\n"
+                + image.data
+                + b"\nendstream"
+            )
+            image_object_numbers[name] = len(objects)
+
+        xobject_resource = b""
+        if image_object_numbers:
+            xobjects = b" ".join(
+                b"/" + name.encode("ascii") + b" " + str(number).encode("ascii") + b" 0 R"
+                for name, number in image_object_numbers.items()
+            )
+            xobject_resource = b" /XObject << " + xobjects + b" >>"
+
+        page_object_numbers: list[int] = []
+        for page_stream in self.pages:
+            stream_object_number = len(objects) + 1
+            objects.append(
+                b"<< /Length "
+                + str(len(page_stream)).encode("ascii")
+                + b" >>\nstream\n"
+                + page_stream
+                + b"\nendstream"
+            )
+            page_object_numbers.append(len(objects) + 1)
+            objects.append(
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "
+                + _number(PAGE_WIDTH)
+                + b" "
+                + _number(PAGE_HEIGHT)
+                + b"] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>"
+                + xobject_resource
+                + b" >> /Contents "
+                + str(stream_object_number).encode("ascii")
+                + b" 0 R >>"
+            )
+
+        kids = b" ".join(str(number).encode("ascii") + b" 0 R" for number in page_object_numbers)
+        objects[1] = (
+            b"<< /Type /Pages /Kids ["
+            + kids
+            + b"] /Count "
+            + str(len(page_object_numbers)).encode("ascii")
+            + b" >>"
+        )
+
+        buffer = BytesIO()
+        buffer.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+        offsets = [0]
+        for index, obj in enumerate(objects, start=1):
+            offsets.append(buffer.tell())
+            buffer.write(str(index).encode("ascii") + b" 0 obj\n")
+            buffer.write(obj)
+            buffer.write(b"\nendobj\n")
+        xref_start = buffer.tell()
+        buffer.write(b"xref\n")
+        buffer.write(f"0 {len(objects) + 1}\n".encode("ascii"))
+        buffer.write(b"0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            buffer.write(f"{offset:010d} 00000 n \n".encode("ascii"))
+        buffer.write(b"trailer\n")
+        buffer.write(
+            b"<< /Size "
+            + str(len(objects) + 1).encode("ascii")
+            + b" /Root 1 0 R >>\nstartxref\n"
+            + str(xref_start).encode("ascii")
+            + b"\n%%EOF\n"
+        )
+        return buffer.getvalue()
+
+
 def _field(commands: list[bytes], rect: FieldRect, text: str, *, size: float = 8.5, align: str = "left") -> None:
     value = _clean_text(text)
     if not value:
@@ -371,9 +540,49 @@ def _checkbox(commands: list[bytes], center_x: float, center_y_top: float) -> No
     _text(commands, center_x - 2.8, PAGE_HEIGHT - center_y_top - 3.3, "X", 7.5)
 
 
-def _text(commands: list[bytes], x: float, y: float, text: str, size: float) -> None:
+def _render_photo_attachment_page(
+    *,
+    ticket: ExtraWorkTicket,
+    photo: ExtraWorkTicketPhoto,
+    image: PdfImage,
+    image_name: str,
+    index: int,
+    total: int,
+) -> list[bytes]:
+    ticket_label = ticket.display_number or f"Stundenzettel {ticket.sequence_number}"
+    uploaded_by = _format_user(photo.uploaded_by) or "-"
+    commands: list[bytes] = [b"1 1 1 rg 0 0 595.28 841.89 re f 0 0 0 RG 0 0 0 rg"]
+    _text(commands, 42, 782, "Fotoanlagen", 18, font="F2")
+    _text(commands, 42, 758, f"{ticket_label} · {ticket.site.name}", 9)
+    _text(commands, 42, 733, f"Foto {index} von {total}", 9, font="F2")
+    _text(commands, 42, 716, f"Datei: {photo.filename}", 8)
+    _text(commands, 42, 702, f"Hochgeladen: {_format_datetime(photo.created_at) or '-'}", 8)
+    _text(commands, 42, 688, f"Monteur: {uploaded_by}", 8)
+    _line(commands, 42, 672, 553, 672, 0.8)
+    _image_fit(commands, image_name, x=42, y=64, max_width=511, max_height=590, image=image)
+    return commands
+
+
+def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float, width: float = 0.5) -> None:
     commands.append(
-        b"BT /F1 "
+        _number(width)
+        + b" w "
+        + _number(x1)
+        + b" "
+        + _number(y1)
+        + b" m "
+        + _number(x2)
+        + b" "
+        + _number(y2)
+        + b" l S"
+    )
+
+
+def _text(commands: list[bytes], x: float, y: float, text: str, size: float, font: str = "F1") -> None:
+    commands.append(
+        b"BT /"
+        + font.encode("ascii")
+        + b" "
         + _number(size)
         + b" Tf "
         + _number(x)
@@ -383,6 +592,63 @@ def _text(commands: list[bytes], x: float, y: float, text: str, size: float) -> 
         + _pdf_string(text)
         + b" Tj ET"
     )
+
+
+def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
+    commands.append(
+        b"q "
+        + b" ".join([_number(width), b"0", b"0", _number(height), _number(x), _number(y)])
+        + b" cm /"
+        + name.encode("ascii")
+        + b" Do Q"
+    )
+
+
+def _image_fit(
+    commands: list[bytes],
+    name: str,
+    *,
+    x: float,
+    y: float,
+    max_width: float,
+    max_height: float,
+    image: PdfImage,
+) -> None:
+    scale = min(max_width / image.width, max_height / image.height)
+    width = image.width * scale
+    height = image.height * scale
+    fitted_x = x + (max_width - width) / 2
+    fitted_y = y + (max_height - height) / 2
+    _image(commands, name, fitted_x, fitted_y, width, height)
+
+
+def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
+    with Image.open(BytesIO(content)) as source:
+        image = ImageOps.exif_transpose(source)
+        if image.mode not in {"RGB", "RGBA"}:
+            image = image.convert("RGBA")
+        image.thumbnail((PHOTO_MAX_IMAGE_EDGE, PHOTO_MAX_IMAGE_EDGE))
+        rgb = Image.new("RGB", image.size, "white")
+        if image.mode == "RGBA":
+            rgb.paste(image, mask=image.getchannel("A"))
+        else:
+            rgb.paste(image)
+        width, height = rgb.size
+        return PdfImage(width=width, height=height, data=zlib.compress(rgb.tobytes(), 9))
+
+
+def _format_user(user: User | None) -> str | None:
+    if user is None:
+        return None
+    if user.person and user.person.display_name:
+        return user.person.display_name
+    return user.display_name
+
+
+def _format_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.strftime("%d.%m.%Y, %H:%M")
 
 
 def _wrap_text(text: str, width: float, size: float, max_lines: int) -> list[str]:
