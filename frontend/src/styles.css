@@ -3195,15 +3195,6 @@ button.person-chip:focus-visible {
   font-weight: 900;
 }
 
-.mobile-home-assignment-card.is-upcoming {
-  padding: 9px 10px;
-  box-shadow: none;
-}
-
-.mobile-home-assignment-card.is-upcoming b {
-  font-size: 0.86rem;
-}
-
 .mobile-home-empty-day {
   display: grid;
   gap: 2px;

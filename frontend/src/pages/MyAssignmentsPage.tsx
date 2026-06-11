@@ -698,9 +698,7 @@ function DayFocusCard({
         <HomeAssignmentCard
           assignment={daily.assignment}
           date={date}
-          dayLabel={compact ? `${label} · ${formatShortDate(date)}` : undefined}
           key={daily.key}
-          variant={compact ? "upcoming" : "today"}
         />
       )) : (
         <button
@@ -708,7 +706,7 @@ function DayFocusCard({
           type="button"
           onClick={() => onEmptyDaySelect?.(date, compact ? `${label} · ${formatShortDate(date)}` : "Heute")}
         >
-          {compact ? <strong>{label} · {formatShortDate(date)}</strong> : null}
+          <strong>{formatHomeAssignmentDateLabel(date)}</strong>
           <span>Kein Einsatz geplant.</span>
           <small>Antippen, falls du trotzdem auf Baustelle bist.</small>
         </button>
@@ -720,26 +718,21 @@ function DayFocusCard({
 function HomeAssignmentCard({
   assignment,
   date,
-  dayLabel,
-  variant,
 }: {
   assignment: MobileAssignment;
   date: string;
-  dayLabel?: string;
-  variant: "today" | "upcoming";
 }) {
   return (
     <Link
-      className={`mobile-home-assignment-card is-${variant}`}
+      className="mobile-home-assignment-card"
       to={`/me/assignments/${assignment.id}`}
       state={{ assignment }}
     >
       <CalendarClock aria-hidden="true" size={18} />
       <span>
-        {dayLabel ? <strong>{dayLabel}</strong> : null}
+        <strong>{formatHomeAssignmentDateLabel(date)}</strong>
         <b>{assignment.site.name}</b>
         <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
-        {variant === "today" ? <em>{formatShortDate(date)}</em> : null}
       </span>
       <span className="assignment-card-affordance">
         <ChevronRight aria-hidden="true" size={17} />
@@ -1071,6 +1064,10 @@ function formatShortDate(date: string): string {
 
 function formatWeekday(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseIsoDate(date));
+}
+
+function formatHomeAssignmentDateLabel(date: string): string {
+  return `${formatWeekday(date).replace(/\.$/, "")} · ${formatShortDate(date)}`;
 }
 
 function formatDateTime(value: string): string {
