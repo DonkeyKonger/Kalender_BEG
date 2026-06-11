@@ -34,6 +34,8 @@ import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "..
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
+const MOBILE_HOME_DAY_WINDOW = 7;
+const MOBILE_HOME_VISIBLE_DAY_COUNT = 4;
 
 type MobileViewMode = "two_weeks" | "year";
 
@@ -353,14 +355,18 @@ export function MyAssignmentsPage() {
   }
 
   const today = toIsoDate(startOfToday());
-  const tomorrow = toIsoDate(addDays(startOfToday(), 1));
-  const nextThreeDays = useMemo(() => getDayRange(tomorrow, 3), [tomorrow]);
   const dailyAssignments = useMemo(
     () => expandAssignmentsByDay(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
   );
   const nextFourteenDays = useMemo(() => getDayRange(today, 14), [today]);
   const dailyByDate = useMemo(() => groupDailyAssignments(dailyAssignments), [dailyAssignments]);
+  const mobileHomeDays = useMemo(
+    () => getDayRange(today, MOBILE_HOME_DAY_WINDOW)
+      .filter((date) => shouldShowMobileUpcomingDay(date, dailyByDate.get(date) ?? []))
+      .slice(0, MOBILE_HOME_VISIBLE_DAY_COUNT),
+    [dailyByDate, today],
+  );
   const yearGroups = useMemo(
     () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
@@ -465,24 +471,16 @@ export function MyAssignmentsPage() {
               <h2>Nächste Einsätze</h2>
             </div>
             <div className="mobile-home-assignment-group">
-              <DayFocusCard
-                date={today}
-                label="Heute"
-                assignments={dailyByDate.get(today) ?? []}
-                onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
-              />
-              <div className="mobile-upcoming-days">
-                {nextThreeDays.map((date) => (
-                  <DayFocusCard
-                    date={date}
-                    label={formatWeekday(date)}
-                    assignments={dailyByDate.get(date) ?? []}
-                    compact
-                    key={date}
-                    onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
-                  />
-                ))}
-              </div>
+              {mobileHomeDays.map((date) => (
+                <DayFocusCard
+                  date={date}
+                  label={date === today ? "Heute" : formatWeekday(date)}
+                  assignments={dailyByDate.get(date) ?? []}
+                  compact={date !== today}
+                  key={date}
+                  onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
+                />
+              ))}
             </div>
           </section>
 
@@ -990,6 +988,19 @@ function groupAssignmentsForLongView(assignments: MobileAssignment[], start: str
 function getDayRange(start: string, count: number): string[] {
   const startDate = parseIsoDate(start);
   return Array.from({ length: count }, (_, index) => toIsoDate(addDays(startDate, index)));
+}
+
+function shouldShowMobileUpcomingDay(date: string, assignments: DailyAssignment[]): boolean {
+  return !isWeekendDay(date) || assignments.some(hasRealDailyAssignment);
+}
+
+function hasRealDailyAssignment(entry: DailyAssignment): boolean {
+  return entry.assignment.site.id > 0 && entry.assignment.site.name.trim().length > 0;
+}
+
+function isWeekendDay(date: string): boolean {
+  const day = parseIsoDate(date).getDay();
+  return day === 0 || day === 6;
 }
 
 function readCache(): CachePayload | null {
