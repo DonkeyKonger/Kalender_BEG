@@ -1,7 +1,7 @@
 from datetime import date
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
+    MobileMeasurementBatchPhotoRead,
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
 )
@@ -185,6 +186,69 @@ def sign_my_assignment_measurement_batch_worker(
         batch_id=batch_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/photos",
+    response_model=list[MobileMeasurementBatchPhotoRead],
+)
+def list_my_assignment_measurement_batch_photos(
+    assignment_id: int,
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MobileMeasurementBatchPhotoRead]:
+    return MeasurementService(db).list_mobile_batch_photos(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/photos",
+    response_model=MobileMeasurementBatchPhotoRead,
+)
+async def upload_my_assignment_measurement_batch_photo(
+    assignment_id: int,
+    batch_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchPhotoRead:
+    return MeasurementService(db).upload_mobile_batch_photo(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        filename=file.filename,
+        content=await file.read(),
+        content_type=file.content_type,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/photos/{photo_id}/content",
+)
+def download_my_assignment_measurement_batch_photo(
+    assignment_id: int,
+    batch_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, content_type, filename = MeasurementService(db).get_mobile_batch_photo_content(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        photo_id=photo_id,
+        current_user=current_user,
+    )
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+        },
     )
 
 

@@ -97,6 +97,9 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_batch", cascade="all, delete-orphan"
     )
+    photos = relationship(
+        "SiteMeasurementBatchPhoto", back_populates="measurement_batch", cascade="all, delete-orphan"
+    )
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
 
@@ -127,3 +130,31 @@ class SiteMeasurementEntry(TimestampMixin, Base):
     measurement_item = relationship("SiteMeasurementItem", back_populates="entries")
     site = relationship("Site", back_populates="measurement_entries")
     created_by = relationship("User")
+
+
+class SiteMeasurementBatchPhoto(TimestampMixin, Base):
+    __tablename__ = "site_measurement_batch_photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    measurement_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    project_folder_key: Mapped[str] = mapped_column(String(80), nullable=False, default="fotos")
+    external_drive_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_item_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_web_url: Mapped[str | None] = mapped_column(String(1000))
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    caption: Mapped[str | None] = mapped_column(String(500))
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    measurement_batch = relationship("SiteMeasurementBatch", back_populates="photos")
+    site = relationship("Site")
+    uploaded_by = relationship("User")

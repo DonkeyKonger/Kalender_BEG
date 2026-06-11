@@ -12,6 +12,7 @@ from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
     SiteMeasurementBatch,
+    SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "Site",
     "SiteMeasurementBase",
     "SiteMeasurementBatch",
+    "SiteMeasurementBatchPhoto",
     "SiteMeasurementEntry",
     "SiteMeasurementItem",
     "SiteVehicleAssignment",

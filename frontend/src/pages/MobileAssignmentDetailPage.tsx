@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Camera,
   CalendarClock,
   ChevronRight,
   ClipboardList,
@@ -8,6 +9,7 @@ import {
   FileText,
   FolderOpen,
   Hammer,
+  Images,
   MapPin,
   Package,
   Plus,
@@ -21,7 +23,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -30,7 +32,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -870,7 +872,14 @@ function MobileMeasurementTab({
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
   const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [workerSignatureBatch, setWorkerSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [photoGalleryBatch, setPhotoGalleryBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [photoUploadBatch, setPhotoUploadBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [photoMessageTone, setPhotoMessageTone] = useState<"info" | "error">("info");
+  const [photoGalleryVersion, setPhotoGalleryVersion] = useState(0);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
     setBatches((currentBatches) => sortMobileMeasurementBatches(
@@ -882,6 +891,21 @@ function MobileMeasurementTab({
     setSignatureBatch((currentBatch) => (
       currentBatch?.id === updatedBatch.id ? updatedBatch : currentBatch
     ));
+    setWorkerSignatureBatch((currentBatch) => (
+      currentBatch?.id === updatedBatch.id ? updatedBatch : currentBatch
+    ));
+    setPhotoGalleryBatch((currentBatch) => (
+      currentBatch?.id === updatedBatch.id ? updatedBatch : currentBatch
+    ));
+  }
+
+  function updateBatchPhotoCount(batchId: number, nextCount: number): void {
+    const applyCount = (batch: MobileMeasurementBatch) => (
+      batch.id === batchId ? { ...batch, photo_count: nextCount } : batch
+    );
+    setBatches((currentBatches) => currentBatches.map(applyCount));
+    setSelectedBatch((currentBatch) => (currentBatch ? applyCount(currentBatch) : currentBatch));
+    setPhotoGalleryBatch((currentBatch) => (currentBatch ? applyCount(currentBatch) : currentBatch));
   }
 
   async function loadBatches(selectBatchId?: number): Promise<void> {
@@ -958,6 +982,39 @@ function MobileMeasurementTab({
       setError(readApiError(requestError, "Aufmaß-PDF konnte nicht geöffnet werden."));
     } finally {
       setIsOpeningPdf(false);
+    }
+  }
+
+  function openPhotoCapture(batch: MobileMeasurementBatch): void {
+    setPhotoUploadBatch(batch);
+    setPhotoMessage(null);
+    setPhotoMessageTone("info");
+    photoInputRef.current?.click();
+  }
+
+  async function handlePhotoInputChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    const batch = photoUploadBatch ?? selectedBatch;
+    if (!file || !batch || isUploadingPhoto) {
+      return;
+    }
+    setIsUploadingPhoto(true);
+    setPhotoMessage("Foto wird gespeichert...");
+    setPhotoMessageTone("info");
+    try {
+      const uploadFile = await prepareMeasurementPhotoFile(file);
+      await api.uploadMobileMeasurementBatchPhoto(assignment.id, batch.id, uploadFile);
+      updateBatchPhotoCount(batch.id, (batch.photo_count ?? 0) + 1);
+      setPhotoGalleryVersion((version) => version + 1);
+      setPhotoMessage("Foto gespeichert.");
+      setPhotoMessageTone("info");
+    } catch (requestError) {
+      setPhotoMessage(readApiError(requestError, "Foto konnte nicht gespeichert werden."));
+      setPhotoMessageTone("error");
+    } finally {
+      setIsUploadingPhoto(false);
+      setPhotoUploadBatch(null);
     }
   }
 
@@ -1046,6 +1103,28 @@ function MobileMeasurementTab({
     const canSignImmediately = Boolean(assignment.person.can_sign_measurements_immediately);
     const customerSignatureAction = getCustomerSignatureActionState(selectedBatch, canSignImmediately);
     const customerSignatureHint = getCompactCustomerSignatureHint(customerSignatureAction.hint);
+    if (photoGalleryBatch) {
+      return (
+        <>
+          <MeasurementPhotoGallery
+            assignmentId={assignment.id}
+            batch={photoGalleryBatch}
+            isUploadingPhoto={isUploadingPhoto}
+            refreshKey={photoGalleryVersion}
+            onBack={() => setPhotoGalleryBatch(null)}
+            onTakePhoto={() => openPhotoCapture(photoGalleryBatch)}
+          />
+          <input
+            ref={photoInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => void handlePhotoInputChange(event)}
+          />
+        </>
+      );
+    }
     return (
       <>
         <MeasurementBatchOverview
@@ -1054,10 +1133,15 @@ function MobileMeasurementTab({
           isSaving={isSaving}
           isOpeningPdf={isOpeningPdf}
           isItemsLoading={isItemsLoading}
+          isUploadingPhoto={isUploadingPhoto}
+          photoMessage={photoMessage}
+          photoMessageTone={photoMessageTone}
           customerSignatureDisabled={customerSignatureAction.disabled}
           customerSignatureHint={customerSignatureHint}
           onBack={closeBatchOverview}
           onOpenPdf={() => void openMeasurementBatchPdf(selectedBatch)}
+          onTakePhoto={() => openPhotoCapture(selectedBatch)}
+          onOpenPhotos={() => setPhotoGalleryBatch(selectedBatch)}
           onCustomerSignature={() => {
             if (customerSignatureAction.disabled) {
               setError(customerSignatureAction.hint);
@@ -1101,6 +1185,14 @@ function MobileMeasurementTab({
             }}
           />
         ) : null}
+        <input
+          ref={photoInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => void handlePhotoInputChange(event)}
+        />
       </>
     );
   }
@@ -1212,10 +1304,15 @@ function MeasurementBatchOverview({
   isSaving,
   isOpeningPdf,
   isItemsLoading,
+  isUploadingPhoto,
+  photoMessage,
+  photoMessageTone,
   customerSignatureDisabled,
   customerSignatureHint,
   onBack,
   onOpenPdf,
+  onTakePhoto,
+  onOpenPhotos,
   onCustomerSignature,
   onWorkerSignature,
   onOpenPositions,
@@ -1226,10 +1323,15 @@ function MeasurementBatchOverview({
   isSaving: boolean;
   isOpeningPdf: boolean;
   isItemsLoading: boolean;
+  isUploadingPhoto: boolean;
+  photoMessage: string | null;
+  photoMessageTone: "info" | "error";
   customerSignatureDisabled: boolean;
   customerSignatureHint: string | null;
   onBack: () => void;
   onOpenPdf: () => void;
+  onTakePhoto: () => void;
+  onOpenPhotos: () => void;
   onCustomerSignature: () => void;
   onWorkerSignature: () => void;
   onOpenPositions: () => void;
@@ -1289,7 +1391,154 @@ function MeasurementBatchOverview({
           <UserRound aria-hidden="true" size={18} />
           <span>Monteursunterschrift einfügen</span>
         </button>
+        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
+          <Images aria-hidden="true" size={18} />
+          <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
+        </button>
       </div>
+      {photoMessage ? <p className={photoMessageTone === "error" ? "form-error" : "form-info"}>{photoMessage}</p> : null}
+      <button
+        aria-label="Foto aufnehmen"
+        className="mobile-measurement-camera-button"
+        type="button"
+        onClick={onTakePhoto}
+        disabled={isUploadingPhoto}
+      >
+        <Camera aria-hidden="true" size={24} />
+      </button>
+    </div>
+  );
+}
+
+type MeasurementPhotoPreview = {
+  photo: MobileMeasurementBatchPhoto;
+  url: string | null;
+  error: string | null;
+};
+
+function MeasurementPhotoGallery({
+  assignmentId,
+  batch,
+  refreshKey,
+  isUploadingPhoto,
+  onBack,
+  onTakePhoto,
+}: {
+  assignmentId: number;
+  batch: MobileMeasurementBatch;
+  refreshKey: number;
+  isUploadingPhoto: boolean;
+  onBack: () => void;
+  onTakePhoto: () => void;
+}) {
+  const [photos, setPhotos] = useState<MeasurementPhotoPreview[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<MeasurementPhotoPreview | null>(null);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const objectUrls: string[] = [];
+
+    async function loadPhotos(): Promise<void> {
+      setIsLoadingPhotos(true);
+      setPhotoError(null);
+      try {
+        const response = await api.mobileMeasurementBatchPhotos(assignmentId, batch.id);
+        const previews = await Promise.all(response.map(async (photo) => {
+          try {
+            const blob = await api.mobileMeasurementBatchPhotoContent(assignmentId, batch.id, photo.id);
+            const url = window.URL.createObjectURL(blob);
+            objectUrls.push(url);
+            return { photo, url, error: null };
+          } catch (requestError) {
+            return {
+              photo,
+              url: null,
+              error: readApiError(requestError, "Foto konnte nicht geladen werden."),
+            };
+          }
+        }));
+        if (isCurrent) {
+          setPhotos(previews);
+        } else {
+          objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setPhotoError(readApiError(requestError, "Fotos konnten nicht geladen werden."));
+          setPhotos([]);
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingPhotos(false);
+        }
+      }
+    }
+
+    void loadPhotos();
+    return () => {
+      isCurrent = false;
+      objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
+    };
+  }, [assignmentId, batch.id, refreshKey]);
+
+  return (
+    <div className="mobile-detail-panel mobile-measurement-photo-gallery">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Aufmaß</span>
+        </button>
+        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+          <Camera aria-hidden="true" size={16} />
+          <span>{isUploadingPhoto ? "Speichert..." : "Foto aufnehmen"}</span>
+        </button>
+      </div>
+
+      <header className="mobile-measurement-photo-gallery-head">
+        <h2>Hinterlegte Fotos</h2>
+        <p>{formatMobileMeasurementBatchTitle(batch)}</p>
+      </header>
+
+      {photoError ? <div className="form-error">{photoError}</div> : null}
+      {isLoadingPhotos ? <div className="empty-panel">Fotos werden geladen...</div> : null}
+      {!isLoadingPhotos && !photos.length ? (
+        <div className="empty-panel mobile-measurement-photo-empty">
+          <span>Noch keine Fotos hinterlegt.</span>
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+            Foto aufnehmen
+          </button>
+        </div>
+      ) : null}
+      {!isLoadingPhotos && photos.length ? (
+        <div className="mobile-measurement-photo-grid">
+          {photos.map((preview) => (
+            <button
+              className="mobile-measurement-photo-tile"
+              key={preview.photo.id}
+              type="button"
+              onClick={() => preview.url ? setSelectedPhoto(preview) : undefined}
+              disabled={!preview.url}
+            >
+              {preview.url ? <img alt={preview.photo.filename} src={preview.url} /> : <span>{preview.error ?? "Foto nicht verfügbar."}</span>}
+              <small>{formatDateTimeLabel(preview.photo.created_at)}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {selectedPhoto?.url ? (
+        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
+          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+            <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
+            <figcaption>
+              <strong>{selectedPhoto.photo.filename}</strong>
+              <span>{formatDateTimeLabel(selectedPhoto.photo.created_at)}</span>
+            </figcaption>
+            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
+          </figure>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2744,6 +2993,56 @@ function formatMobileDateValue(value: string | null | undefined): string {
     month: "2-digit",
     year: "numeric",
   }).format(parsed);
+}
+
+function formatDateTimeLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+async function prepareMeasurementPhotoFile(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/heic" || file.type === "image/heif") {
+    return file;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxEdge = 1800;
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.86);
+    });
+    if (!blob) {
+      return file;
+    }
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "aufmass-foto";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
 }
 
 function isReviewedMobileMeasurementBatchStatus(status: string): boolean {

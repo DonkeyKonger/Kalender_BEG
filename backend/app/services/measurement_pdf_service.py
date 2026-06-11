@@ -4,22 +4,28 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
+import logging
 from pathlib import Path
 import struct
 from textwrap import wrap
 import zlib
 
 from fastapi import HTTPException, status
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.project_folder import ProjectFolder
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
     SiteMeasurementBatch,
+    SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
 from app.models.user import User
+from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY
+from app.services.project_storage_service import ProjectStorageService
 
 
 PAGE_WIDTH = 841.89
@@ -77,6 +83,8 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
+PHOTO_MAX_IMAGE_EDGE = 1800
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -245,6 +253,9 @@ class MeasurementPdfService:
                     SiteMeasurementEntry.measurement_item
                 ),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.photos).selectinload(
+                    SiteMeasurementBatchPhoto.uploaded_by
+                ).selectinload(User.person),
             )
             .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
         )
@@ -276,11 +287,45 @@ class MeasurementPdfService:
                     )
                 )
                 page_number += 1
+        self._append_photo_pages(pdf, batch)
 
         file_number = _format_batch_number(batch.site.site_number, batch.number)
         safe_number = file_number.replace("/", "-").replace(" ", "_")
         prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
         return pdf.build(), f"{prefix}_{safe_number}.pdf"
+
+    def _append_photo_pages(self, pdf: SimplePdf, batch: SiteMeasurementBatch) -> None:
+        photos = sorted(batch.photos, key=lambda photo: (photo.created_at, photo.id))
+        if not photos:
+            return
+        folder_item_id = self._get_photo_folder_item_id(batch.site_id)
+        if folder_item_id is None:
+            LOGGER.warning("Measurement photo folder is not connected for site %s.", batch.site_id)
+            return
+        for index, photo in enumerate(photos, start=1):
+            try:
+                downloaded = ProjectStorageService().download_file_from_folder(
+                    drive_id=photo.external_drive_id,
+                    folder_item_id=folder_item_id,
+                    item_id=photo.external_item_id,
+                )
+                image = _load_uploaded_image_rgb(downloaded["content"])
+            except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
+                LOGGER.warning("Measurement photo %s could not be added to PDF: %s", photo.id, error)
+                continue
+            image_name = f"Photo{photo.id}"
+            pdf.add_image(image_name, image)
+            pdf.add_page(_render_photo_page(batch=batch, photo=photo, image=image, image_name=image_name, index=index, total=len(photos)))
+
+    def _get_photo_folder_item_id(self, site_id: int) -> str | None:
+        folder = self.db.scalar(
+            select(ProjectFolder).where(
+                ProjectFolder.site_id == site_id,
+                ProjectFolder.folder_key == MEASUREMENT_PHOTO_FOLDER_KEY,
+                ProjectFolder.is_active.is_(True),
+            )
+        )
+        return folder.external_item_id if folder and folder.external_item_id else None
 
     def build_active_timesheet_pdf(self, *, site_id: int) -> tuple[bytes, str]:
         measurement_base = self.db.scalar(
@@ -591,6 +636,29 @@ def _template_header(
     _text(commands, 510, 456, "Datum:", 8, "F2")
     _line(commands, 553, PAGE_HEIGHT - 143, 620, PAGE_HEIGHT - 143, 0.9)
     _text(commands, 558, 456, date_label, 8)
+
+
+def _render_photo_page(
+    *,
+    batch: SiteMeasurementBatch,
+    photo: SiteMeasurementBatchPhoto,
+    image: PdfImage,
+    image_name: str,
+    index: int,
+    total: int,
+) -> list[bytes]:
+    site = batch.site
+    title = _format_batch_number(site.site_number if site else None, batch.number)
+    uploaded_by = _format_user(photo.uploaded_by) or "-"
+    commands: list[bytes] = [b"1 1 1 rg 0 0 841.89 595.28 re f 0 0 0 RG 0 0 0 rg"]
+    _text(commands, 50, 535, f"Hinterlegte Fotos - {title}", 17, "F2")
+    _line(commands, 50, 528, 790, 528, 1.0)
+    _text(commands, 50, 508, f"Foto {index} von {total}", 9, "F2", color=(0.08, 0.24, 0.43))
+    _text(commands, 50, 493, f"Datei: {photo.filename}", 8)
+    _text(commands, 50, 480, f"Hochgeladen: {_format_datetime(photo.created_at) or '-'}", 8)
+    _text(commands, 50, 467, f"Monteur: {uploaded_by}", 8)
+    _image_fit(commands, image_name, x=50, top_y=150, max_width=740, max_height=380, image=image)
+    return commands
 
 
 def _header_meta_row(
@@ -946,6 +1014,21 @@ def _load_png_rgb(path: Path) -> PdfImage | None:
         return PdfImage(width=crop_width, height=crop_height, data=zlib.compress(b"".join(rows), 9))
     except Exception:
         return None
+
+
+def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
+    with Image.open(BytesIO(content)) as source:
+        image = ImageOps.exif_transpose(source)
+        if image.mode not in {"RGB", "RGBA"}:
+            image = image.convert("RGBA")
+        image.thumbnail((PHOTO_MAX_IMAGE_EDGE, PHOTO_MAX_IMAGE_EDGE))
+        rgb = Image.new("RGB", image.size, "white")
+        if image.mode == "RGBA":
+            rgb.paste(image, mask=image.getchannel("A"))
+        else:
+            rgb.paste(image)
+        width, height = rgb.size
+        return PdfImage(width=width, height=height, data=zlib.compress(rgb.tobytes(), 9))
 
 
 def _chunk[T](rows: list[T], size: int) -> list[list[T]]:

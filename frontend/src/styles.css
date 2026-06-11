@@ -2667,6 +2667,15 @@ button.person-chip:focus-visible {
   padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .mobile-home-page {
   gap: 12px;
   background: #f5f8fc;
@@ -11839,11 +11848,13 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-overview-panel {
+  position: relative;
   width: calc(100% + 12px);
   margin-right: -6px;
   margin-left: -6px;
   padding-right: 10px;
   padding-left: 10px;
+  padding-bottom: 74px;
 }
 
 .mobile-measurement-page {
@@ -12205,6 +12216,157 @@ button.person-chip:focus-visible {
   font-weight: 700;
   line-height: 1.35;
   padding: 0 3px;
+}
+
+.mobile-measurement-camera-button {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid #244d78;
+  border-radius: 999px;
+  background: #2d5d8f;
+  color: #ffffff;
+  box-shadow: 0 18px 34px rgb(18 29 52 / 22%);
+}
+
+.mobile-measurement-camera-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.mobile-measurement-photo-gallery {
+  gap: 12px;
+}
+
+.mobile-measurement-photo-capture-action {
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+.mobile-measurement-photo-gallery-head {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-measurement-photo-gallery-head h2,
+.mobile-measurement-photo-gallery-head p {
+  margin: 0;
+}
+
+.mobile-measurement-photo-gallery-head h2 {
+  color: #111827;
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+
+.mobile-measurement-photo-gallery-head p {
+  color: #65738a;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.mobile-measurement-photo-empty {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.mobile-measurement-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.mobile-measurement-photo-tile {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px;
+  color: #65738a;
+  text-align: left;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+}
+
+.mobile-measurement-photo-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 7px;
+  background: #eef3f8;
+}
+
+.mobile-measurement-photo-tile span {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  padding: 8px;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.mobile-measurement-photo-tile small {
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-photo-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 72%);
+  padding: 14px;
+}
+
+.mobile-photo-preview {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 440px);
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  margin: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.mobile-photo-preview img {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.mobile-photo-preview figcaption {
+  display: grid;
+  gap: 2px;
+  color: #65738a;
+  font-size: 0.8rem;
+}
+
+.mobile-photo-preview figcaption strong {
+  overflow: hidden;
+  color: #111827;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-measurement-quick-facts {

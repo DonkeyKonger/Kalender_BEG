@@ -268,6 +268,21 @@ export type MobileMeasurementBatch = {
   entry_count: number;
   reported_minutes: MeasurementNumericValue;
   reported_hours: MeasurementNumericValue;
+  photo_count: number;
+};
+
+export type MobileMeasurementBatchPhoto = {
+  id: number;
+  site_id: number;
+  measurement_batch_id: number;
+  filename: string;
+  content_type: string;
+  file_size_bytes: number | null;
+  external_web_url: string | null;
+  uploaded_by_name: string | null;
+  taken_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CustomerSignaturePoint = {

@@ -80,6 +80,22 @@ class MobileMeasurementItemRead(MeasurementItemRead):
     mobile_status: str
 
 
+class MobileMeasurementBatchPhotoRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    site_id: int
+    measurement_batch_id: int
+    filename: str
+    content_type: str
+    file_size_bytes: int | None
+    external_web_url: str | None
+    uploaded_by_name: str | None = None
+    taken_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class MobileMeasurementBatchRead(BaseModel):
     id: int
     site_id: int
@@ -106,6 +122,7 @@ class MobileMeasurementBatchRead(BaseModel):
     entry_count: int
     reported_minutes: Decimal | None
     reported_hours: Decimal | None
+    photo_count: int = 0
 
 
 class MeasurementTimesheetKpiRead(BaseModel):

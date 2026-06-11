@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -861,6 +861,34 @@ export const api = {
 
   async mobileMeasurementBatchItems(assignmentId: number, batchId: number): Promise<MobileMeasurementItem[]> {
     return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`);
+  },
+
+  async mobileMeasurementBatchPhotos(
+    assignmentId: number,
+    batchId: number,
+  ): Promise<MobileMeasurementBatchPhoto[]> {
+    return request<MobileMeasurementBatchPhoto[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos`);
+  },
+
+  async uploadMobileMeasurementBatchPhoto(
+    assignmentId: number,
+    batchId: number,
+    file: File,
+  ): Promise<MobileMeasurementBatchPhoto> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return request<MobileMeasurementBatchPhoto>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  async mobileMeasurementBatchPhotoContent(
+    assignmentId: number,
+    batchId: number,
+    photoId: number,
+  ): Promise<Blob> {
+    return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos/${photoId}/content`);
   },
 
   async createMobileMeasurementEntry(

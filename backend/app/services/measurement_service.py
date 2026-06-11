@@ -1,5 +1,8 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from pathlib import Path
+import re
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -10,6 +13,7 @@ from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
     SiteMeasurementBatch,
+    SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
@@ -25,6 +29,7 @@ from app.schemas.measurement import (
     MeasurementTimesheetRead,
     MeasurementTimesheetRowRead,
     MobileMeasurementBatchRead,
+    MobileMeasurementBatchPhotoRead,
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
 )
@@ -32,6 +37,18 @@ from app.services.measurement_timesheet_parser import (
     MeasurementTimesheetParseError,
     parse_measurement_timesheet_pdf,
 )
+from app.services.project_folder_service import ProjectFolderService
+from app.services.project_storage_service import ProjectStorageService
+
+
+MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
+MEASUREMENT_PHOTO_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+}
 
 
 class MeasurementService:
@@ -440,6 +457,107 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
+
+    def list_mobile_batch_photos(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+    ) -> list[MobileMeasurementBatchPhotoRead]:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        photos = list(
+            self.db.scalars(
+                select(SiteMeasurementBatchPhoto)
+                .options(selectinload(SiteMeasurementBatchPhoto.uploaded_by).selectinload(User.person))
+                .where(SiteMeasurementBatchPhoto.measurement_batch_id == batch.id)
+                .order_by(SiteMeasurementBatchPhoto.created_at, SiteMeasurementBatchPhoto.id)
+            )
+        )
+        return [self._build_mobile_photo(photo) for photo in photos]
+
+    def upload_mobile_batch_photo(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None,
+    ) -> MobileMeasurementBatchPhotoRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        normalized_content_type = _normalize_content_type(content_type)
+        if normalized_content_type not in MEASUREMENT_PHOTO_CONTENT_TYPES:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Bitte ein Foto als JPEG, PNG, WebP oder HEIC hochladen.",
+            )
+        if not content:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Foto ist leer.")
+
+        folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
+            assignment.site_id,
+            MEASUREMENT_PHOTO_FOLDER_KEY,
+            current_user,
+        )
+        upload_filename = _measurement_photo_filename(
+            batch=batch,
+            user=current_user,
+            original_filename=filename,
+            content_type=normalized_content_type,
+        )
+        uploaded = ProjectStorageService().upload_file_to_folder(
+            drive_id=folder.external_drive_id,
+            folder_item_id=folder.external_item_id,
+            filename=upload_filename,
+            content=content,
+            content_type=normalized_content_type,
+        )
+        item_id = uploaded.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Foto konnte nicht gespeichert werden.")
+
+        photo = SiteMeasurementBatchPhoto(
+            site_id=batch.site_id,
+            measurement_batch_id=batch.id,
+            uploaded_by_user_id=current_user.id,
+            project_folder_key=MEASUREMENT_PHOTO_FOLDER_KEY,
+            external_drive_id=folder.external_drive_id or "",
+            external_item_id=item_id,
+            external_web_url=uploaded.get("web_url"),
+            filename=str(uploaded.get("name") or upload_filename),
+            content_type=normalized_content_type,
+            file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(content),
+        )
+        self.db.add(photo)
+        self.db.commit()
+        self.db.refresh(photo)
+        return self._build_mobile_photo(photo)
+
+    def get_mobile_batch_photo_content(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        photo_id: int,
+        current_user: User,
+    ) -> tuple[bytes, str, str]:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        photo = self._get_photo_for_batch(photo_id, batch.id)
+        downloaded = ProjectStorageService().download_file_from_folder(
+            drive_id=photo.external_drive_id,
+            folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+            item_id=photo.external_item_id,
+        )
+        return (
+            downloaded["content"],
+            str(downloaded.get("content_type") or photo.content_type),
+            str(downloaded.get("filename") or photo.filename),
+        )
 
     def list_site_batches(
         self,
@@ -1146,7 +1264,54 @@ class MeasurementService:
             entry_count=len(batch.entries),
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
+            photo_count=self.db.scalar(
+                select(func.count(SiteMeasurementBatchPhoto.id)).where(
+                    SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
+                )
+            ) or 0,
         )
+
+    def _build_mobile_photo(self, photo: SiteMeasurementBatchPhoto) -> MobileMeasurementBatchPhotoRead:
+        return MobileMeasurementBatchPhotoRead(
+            id=photo.id,
+            site_id=photo.site_id,
+            measurement_batch_id=photo.measurement_batch_id,
+            filename=photo.filename,
+            content_type=photo.content_type,
+            file_size_bytes=photo.file_size_bytes,
+            external_web_url=photo.external_web_url,
+            uploaded_by_name=self._format_user_display_name(photo.uploaded_by),
+            taken_at=photo.taken_at,
+            created_at=photo.created_at,
+            updated_at=photo.updated_at,
+        )
+
+    def _get_photo_for_batch(self, photo_id: int, batch_id: int) -> SiteMeasurementBatchPhoto:
+        photo = self.db.scalar(
+            select(SiteMeasurementBatchPhoto)
+            .options(selectinload(SiteMeasurementBatchPhoto.uploaded_by).selectinload(User.person))
+            .where(
+                SiteMeasurementBatchPhoto.id == photo_id,
+                SiteMeasurementBatchPhoto.measurement_batch_id == batch_id,
+            )
+        )
+        if photo is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto nicht gefunden.")
+        return photo
+
+    def _get_photo_folder_item_id(
+        self,
+        photo: SiteMeasurementBatchPhoto,
+        current_user: User,
+    ) -> str:
+        folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
+            photo.site_id,
+            photo.project_folder_key,
+            current_user,
+        )
+        if not folder.external_item_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Fotoordner ist noch nicht angebunden.")
+        return folder.external_item_id
 
     def _ensure_mobile_batch_can_be_edited_by_worker(self, batch: SiteMeasurementBatch) -> None:
         if batch.customer_signed_at is not None:
@@ -1346,3 +1511,34 @@ def _datetime_as_string(value: datetime | None) -> str | None:
 
 def _can_sign_measurements_immediately(user: User) -> bool:
     return bool(user.person and user.person.can_sign_measurements_immediately)
+
+
+def _normalize_content_type(value: str | None) -> str:
+    return (value or "application/octet-stream").split(";", 1)[0].strip().lower()
+
+
+def _measurement_photo_filename(
+    *,
+    batch: SiteMeasurementBatch,
+    user: User,
+    original_filename: str | None,
+    content_type: str,
+) -> str:
+    extension = MEASUREMENT_PHOTO_CONTENT_TYPES.get(content_type)
+    original_extension = Path(original_filename or "").suffix.lower()
+    if original_extension in {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}:
+        extension = ".jpg" if original_extension == ".jpeg" else original_extension
+    extension = extension or ".jpg"
+    user_label = _safe_filename_part(
+        (user.person.display_name if user.person else None)
+        or user.display_name
+        or f"user-{user.id}"
+    )
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    suffix = uuid4().hex[:8]
+    return f"Aufmass-{batch.number}_{timestamp}_{user_label}_{suffix}{extension}"
+
+
+def _safe_filename_part(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_-]+", "-", value.strip())
+    return normalized.strip("-")[:48] or "foto"
