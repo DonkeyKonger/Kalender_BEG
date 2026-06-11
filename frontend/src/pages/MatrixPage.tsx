@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
 import type {
   MatrixAssignment,
@@ -142,6 +143,8 @@ export function MatrixPage() {
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
   const [isSavingAbsence, setIsSavingAbsence] = useState(false);
+  const [isSiteCreateDrawerOpen, setIsSiteCreateDrawerOpen] = useState(false);
+  const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const dayColumnWidth = matrixDayColumnWidth(isCompactView);
   const selectedCellRange = useMemo(() => {
@@ -1207,6 +1210,11 @@ export function MatrixPage() {
     });
   }
 
+  function openSiteCreateDrawer(projectManagerPersonId: number | null) {
+    setSiteCreateProjectManagerId(projectManagerPersonId);
+    setIsSiteCreateDrawerOpen(true);
+  }
+
   const projectManagerOptions = useMemo(() => {
     if (!matrix) {
       return [];
@@ -1277,6 +1285,7 @@ export function MatrixPage() {
         <>
           <MatrixTable
             absences={absences}
+            canCreateSites={isEditable}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
             isCompactView={isCompactView}
@@ -1292,6 +1301,7 @@ export function MatrixPage() {
             onStartAssignmentDrag={startAssignmentDrag}
             onStartAssignmentResize={startAssignmentResize}
             onClearCellMark={clearCellMark}
+            onCreateSiteForGroup={openSiteCreateDrawer}
             onCycleCellMark={cycleCellMark}
             onMatrixContextMenu={handleMatrixContextMenu}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
@@ -1309,6 +1319,17 @@ export function MatrixPage() {
             today={today}
             typingPreview={typingPreview}
             visibleRowGroups={visibleRowGroups}
+          />
+
+          <SiteCreateDrawer
+            canEdit={isEditable}
+            initialProjectManagerPersonId={siteCreateProjectManagerId}
+            isOpen={isSiteCreateDrawerOpen}
+            onClose={() => setIsSiteCreateDrawerOpen(false)}
+            onCreated={() => {
+              setError(null);
+              void refreshMatrixOnly();
+            }}
           />
 
           {editorAnchor && assignmentSuggestions.length > 0 && (
@@ -1683,6 +1704,7 @@ function AbsenceCellEditor({
 
 type MatrixTableProps = {
   absences: Absence[];
+  canCreateSites: boolean;
   cellMessage: Record<CellKey, string>;
   dayColumnWidth: number;
   highlightedCellRange: CellRange | null;
@@ -1697,6 +1719,7 @@ type MatrixTableProps = {
   onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
+  onCreateSiteForGroup: (projectManagerPersonId: number | null) => void;
   onCycleCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
@@ -1926,6 +1949,8 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
 }
 
 function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { group: MatrixRowGroup }) {
+  const projectManagerPersonId = matrixGroupProjectManagerPersonId(group);
+
   return (
     <>
       {group.showHeading && (
@@ -1936,7 +1961,56 @@ function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { grou
       {group.rows.map((row) => (
         <MatrixTableRow key={row.site.id} row={row} {...props} />
       ))}
+      {props.canCreateSites && (
+        <MatrixAddSiteRow
+          days={props.matrix.days}
+          holidayMap={props.holidayMap}
+          projectManagerPersonId={projectManagerPersonId}
+          today={props.today}
+          onCreateSite={props.onCreateSiteForGroup}
+        />
+      )}
     </>
+  );
+}
+
+type MatrixAddSiteRowProps = {
+  days: MatrixResponse["days"];
+  holidayMap: ReadonlyMap<string, HolidayInfo>;
+  projectManagerPersonId: number | null;
+  today: string;
+  onCreateSite: (projectManagerPersonId: number | null) => void;
+};
+
+function MatrixAddSiteRow({
+  days,
+  holidayMap,
+  projectManagerPersonId,
+  today,
+  onCreateSite,
+}: MatrixAddSiteRowProps) {
+  return (
+    <tr className="matrix-add-site-row">
+      <th className="sticky-col site-col row-heading" scope="row">
+        <button
+          className="matrix-add-site-button"
+          type="button"
+          onClick={() => onCreateSite(projectManagerPersonId)}
+        >
+          Baustelle hinzufügen
+        </button>
+      </th>
+      <td className="sticky-col pm-col matrix-add-site-empty" />
+      <td className="sticky-col info-col matrix-add-site-empty" />
+      <td className="sticky-col status-col matrix-add-site-empty" />
+      {days.map((day) => (
+        <td
+          aria-hidden="true"
+          className={matrixAddSiteCellClassName(day.date, today, holidayMap.get(day.date) ?? null)}
+          key={`add-site-${day.date}`}
+        />
+      ))}
+    </tr>
   );
 }
 
@@ -2509,6 +2583,16 @@ function groupMatrixRows(rows: MatrixRow[], projectManagerFilter: string): Matri
   return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, "de"));
 }
 
+function matrixGroupProjectManagerPersonId(group: MatrixRowGroup): number | null {
+  const firstProjectManagerPersonId = group.rows[0]?.site.project_manager_person_id ?? null;
+  if (firstProjectManagerPersonId === null) {
+    return null;
+  }
+  return group.rows.every((row) => row.site.project_manager_person_id === firstProjectManagerPersonId)
+    ? firstProjectManagerPersonId
+    : null;
+}
+
 function compareMatrixRowsByNumber(left: MatrixRow, right: MatrixRow): number {
   return compareSiteNumbers(left.site.site_number, right.site.site_number)
     || left.site.name.localeCompare(right.site.name, "de")
@@ -2581,6 +2665,17 @@ function matrixCellClassName(
     isRangeSelected ? "is-range-selected" : "",
     isDragTarget ? "is-drag-target" : "",
     isResizePreview ? "is-resize-preview" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function matrixAddSiteCellClassName(date: string, today: string, holiday: HolidayInfo | null): string {
+  return [
+    "matrix-cell",
+    "matrix-add-site-day",
+    isWeekendDate(date) ? "weekend" : "",
+    holiday ? "is-holiday" : "",
+    isWeekStartDate(date) ? "is-week-start" : "",
+    date === today ? "today" : "",
   ].filter(Boolean).join(" ");
 }
 

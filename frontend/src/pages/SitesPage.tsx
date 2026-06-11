@@ -77,24 +77,13 @@ export function SitesPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const [sites, setSites] = useState<SiteSummary[]>([]);
-  const [projectManagerPeople, setProjectManagerPeople] = useState<Person[]>([]);
-  const [projectManagersLoaded, setProjectManagersLoaded] = useState(false);
-  const [projectManagersLoading, setProjectManagersLoading] = useState(false);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customersLoaded, setCustomersLoaded] = useState(false);
-  const [customersLoading, setCustomersLoading] = useState(false);
-  const [createForm, setCreateForm] = useState<SiteCreate>(emptySite);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
-  const [isCustomerCreateDrawerOpen, setIsCustomerCreateDrawerOpen] = useState(false);
-  const [customerCreateForm, setCustomerCreateForm] = useState<CustomerCreate>(emptyCustomerForSite);
-  const [customerCreateError, setCustomerCreateError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
-  const [savingCustomer, setSavingCustomer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -145,29 +134,6 @@ export function SitesPage() {
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
   const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
 
-  async function createSite() {
-    const validationError = validateSitePayload(createForm);
-    if (validationError) {
-      setError(validationError);
-      setMessage(null);
-      return;
-    }
-    setSavingSiteId(0);
-    setError(null);
-    setMessage(null);
-    try {
-      const created = await api.createSite(normalizeSitePayload(createForm));
-      setSites((current) => [...current, toSiteSummary(created)].sort(compareSites));
-      setCreateForm(emptySite);
-      setIsCreateDrawerOpen(false);
-      setMessage("Baustelle angelegt.");
-    } catch (requestError) {
-      setError(readApiError(requestError, "Baustelle konnte nicht angelegt werden."));
-    } finally {
-      setSavingSiteId(null);
-    }
-  }
-
   async function updateSiteStatus(site: SiteSummary, nextStatus: SiteStatus) {
     if (!canEdit || site.status === nextStatus) {
       return;
@@ -202,91 +168,12 @@ export function SitesPage() {
 
 
   function openNewSiteDrawer() {
-    setCreateForm(emptySite);
+    setError(null);
+    setMessage(null);
     setIsCreateDrawerOpen(true);
-    if (projectManagersLoaded === false && projectManagersLoading === false) {
-      void loadProjectManagersForSiteForm();
-    }
-    if (customersLoaded === false && customersLoading === false) {
-      void loadCustomersForSiteForm();
-    }
-  }
-
-  async function loadProjectManagersForSiteForm() {
-    setProjectManagersLoading(true);
-    setError(null);
-    try {
-      setProjectManagerPeople(await api.siteProjectManagers());
-      setProjectManagersLoaded(true);
-    } catch (requestError) {
-      setError(readApiError(requestError, "Projektleiter konnten nicht geladen werden."));
-    } finally {
-      setProjectManagersLoading(false);
-    }
-  }
-
-  async function loadCustomersForSiteForm() {
-    if (customersLoading) {
-      return;
-    }
-    setCustomersLoading(true);
-    setError(null);
-    try {
-      setCustomers(await api.customers({ isActive: true }));
-      setCustomersLoaded(true);
-    } catch (requestError) {
-      setError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
-    } finally {
-      setCustomersLoading(false);
-    }
-  }
-
-  function selectCustomerForSite(customer: Customer) {
-    setCreateForm((current) => ({ ...current, customer: customer.company_name }));
-  }
-
-  function openCustomerCreateDrawer(initialName: string) {
-    setCustomerCreateForm({ ...emptyCustomerForSite, company_name: initialName.trim() });
-    setCustomerCreateError(null);
-    setIsCustomerCreateDrawerOpen(true);
-  }
-
-  function closeCustomerCreateDrawer() {
-    if (savingCustomer) {
-      return;
-    }
-    setCustomerCreateForm(emptyCustomerForSite);
-    setCustomerCreateError(null);
-    setIsCustomerCreateDrawerOpen(false);
-  }
-
-  async function createCustomerFromSite() {
-    const validationError = validateCustomerPayloadForSite(customerCreateForm);
-    if (validationError) {
-      setCustomerCreateError(validationError);
-      return;
-    }
-    setSavingCustomer(true);
-    setCustomerCreateError(null);
-    try {
-      const created = await api.createCustomer(normalizeCustomerPayloadForSite(customerCreateForm));
-      setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
-      setCustomersLoaded(true);
-      setCreateForm((current) => ({ ...current, customer: created.company_name }));
-      setCustomerCreateForm(emptyCustomerForSite);
-      setIsCustomerCreateDrawerOpen(false);
-    } catch (requestError) {
-      setCustomerCreateError(readApiError(requestError, "Kunde konnte nicht angelegt werden."));
-    } finally {
-      setSavingCustomer(false);
-    }
   }
 
   function closeDrawer() {
-    setCreateForm(emptySite);
-    setCustomerCreateForm(emptyCustomerForSite);
-    setCustomerCreateError(null);
-    setIsCustomerCreateDrawerOpen(false);
     setIsCreateDrawerOpen(false);
   }
 
@@ -394,18 +281,189 @@ export function SitesPage() {
         </>
       )}
 
-      <EntityDetailDrawer
+      <SiteCreateDrawer
+        canEdit={canEdit}
         isOpen={isCreateDrawerOpen}
+        onClose={closeDrawer}
+        onCreated={(created) => {
+          setSites((current) => [...current, toSiteSummary(created)].sort(compareSites));
+          setError(null);
+          setMessage("Baustelle angelegt.");
+        }}
+      />
+    </section>
+  );
+}
+
+type SiteCreateDrawerProps = {
+  canEdit: boolean;
+  initialProjectManagerPersonId?: number | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onCreated: (site: Site) => void;
+};
+
+export function SiteCreateDrawer({
+  canEdit,
+  initialProjectManagerPersonId = null,
+  isOpen,
+  onClose,
+  onCreated,
+}: SiteCreateDrawerProps) {
+  const initialCreateForm = useMemo<SiteCreate>(() => ({
+    ...emptySite,
+    project_manager_person_id: initialProjectManagerPersonId,
+  }), [initialProjectManagerPersonId]);
+  const [projectManagerPeople, setProjectManagerPeople] = useState<Person[]>([]);
+  const [projectManagersLoaded, setProjectManagersLoaded] = useState(false);
+  const [projectManagersLoading, setProjectManagersLoading] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoaded, setCustomersLoaded] = useState(false);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [createForm, setCreateForm] = useState<SiteCreate>(initialCreateForm);
+  const [isCustomerCreateDrawerOpen, setIsCustomerCreateDrawerOpen] = useState(false);
+  const [customerCreateForm, setCustomerCreateForm] = useState<CustomerCreate>(emptyCustomerForSite);
+  const [customerCreateError, setCustomerCreateError] = useState<string | null>(null);
+  const [savingSite, setSavingSite] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCreateForm(initialCreateForm);
+      setCreateError(null);
+    }
+  }, [initialCreateForm, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    if (!projectManagersLoaded && !projectManagersLoading) {
+      void loadProjectManagersForSiteForm();
+    }
+    if (!customersLoaded && !customersLoading) {
+      void loadCustomersForSiteForm();
+    }
+  }, [customersLoaded, customersLoading, isOpen, projectManagersLoaded, projectManagersLoading]);
+
+  async function createSite() {
+    const validationError = validateSitePayload(createForm);
+    if (validationError) {
+      setCreateError(validationError);
+      return;
+    }
+    setSavingSite(true);
+    setCreateError(null);
+    try {
+      const created = await api.createSite(normalizeSitePayload(createForm));
+      onCreated(created);
+      setCreateForm(initialCreateForm);
+      onClose();
+    } catch (requestError) {
+      setCreateError(readApiError(requestError, "Baustelle konnte nicht angelegt werden."));
+    } finally {
+      setSavingSite(false);
+    }
+  }
+
+  async function loadProjectManagersForSiteForm() {
+    setProjectManagersLoading(true);
+    setCreateError(null);
+    try {
+      setProjectManagerPeople(await api.siteProjectManagers());
+      setProjectManagersLoaded(true);
+    } catch (requestError) {
+      setCreateError(readApiError(requestError, "Projektleiter konnten nicht geladen werden."));
+    } finally {
+      setProjectManagersLoading(false);
+    }
+  }
+
+  async function loadCustomersForSiteForm() {
+    if (customersLoading) {
+      return;
+    }
+    setCustomersLoading(true);
+    setCreateError(null);
+    try {
+      setCustomers(await api.customers({ isActive: true }));
+      setCustomersLoaded(true);
+    } catch (requestError) {
+      setCreateError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
+    } finally {
+      setCustomersLoading(false);
+    }
+  }
+
+  function selectCustomerForSite(customer: Customer) {
+    setCreateForm((current) => ({ ...current, customer: customer.company_name }));
+  }
+
+  function openCustomerCreateDrawer(initialName: string) {
+    setCustomerCreateForm({ ...emptyCustomerForSite, company_name: initialName.trim() });
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(true);
+  }
+
+  function closeCustomerCreateDrawer() {
+    if (savingCustomer) {
+      return;
+    }
+    setCustomerCreateForm(emptyCustomerForSite);
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(false);
+  }
+
+  async function createCustomerFromSite() {
+    const validationError = validateCustomerPayloadForSite(customerCreateForm);
+    if (validationError) {
+      setCustomerCreateError(validationError);
+      return;
+    }
+    setSavingCustomer(true);
+    setCustomerCreateError(null);
+    try {
+      const created = await api.createCustomer(normalizeCustomerPayloadForSite(customerCreateForm));
+      setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
+      setCustomersLoaded(true);
+      setCreateForm((current) => ({ ...current, customer: created.company_name }));
+      setCustomerCreateForm(emptyCustomerForSite);
+      setIsCustomerCreateDrawerOpen(false);
+    } catch (requestError) {
+      setCustomerCreateError(readApiError(requestError, "Kunde konnte nicht angelegt werden."));
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
+  function closeSiteDrawer() {
+    if (savingSite) {
+      return;
+    }
+    setCreateForm(initialCreateForm);
+    setCustomerCreateForm(emptyCustomerForSite);
+    setCustomerCreateError(null);
+    setIsCustomerCreateDrawerOpen(false);
+    setCreateError(null);
+    onClose();
+  }
+
+  return (
+    <>
+      <EntityDetailDrawer
+        isOpen={isOpen}
         title="Neue Baustelle"
         subtitle="Stammdaten anlegen"
-        onClose={closeDrawer}
+        onClose={closeSiteDrawer}
         footer={canEdit ? (
-          <button className="icon-button" disabled={savingSiteId === 0} type="button" onClick={() => void createSite()}>
+          <button className="icon-button" disabled={savingSite} type="button" onClick={() => void createSite()}>
             <PlusCircle aria-hidden="true" size={17} />
-            <span>Baustelle anlegen</span>
+            <span>{savingSite ? "Baustelle wird angelegt..." : "Baustelle anlegen"}</span>
           </button>
         ) : undefined}
       >
+        {createError && <p className="form-error">{createError}</p>}
         <SiteFields
           draft={createForm}
           people={projectManagerPeople}
@@ -442,7 +500,7 @@ export function SitesPage() {
           onChange={(values) => setCustomerCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
-    </section>
+    </>
   );
 }
 

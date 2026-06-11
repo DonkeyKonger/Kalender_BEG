@@ -1830,6 +1830,51 @@ button.person-chip:focus-visible {
   background: #fffdf5;
 }
 
+.matrix-add-site-row th,
+.matrix-add-site-row td {
+  background: #fbfdff;
+}
+
+.matrix-add-site-row .matrix-add-site-day.weekend {
+  background: #f6f1e8;
+}
+
+.matrix-add-site-row .matrix-add-site-day.is-holiday {
+  background: #fff8df;
+}
+
+.matrix-add-site-row .matrix-add-site-day.weekend.is-holiday {
+  background: #faefd2;
+}
+
+.matrix-add-site-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: #1d5c99;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.1;
+  text-align: left;
+  cursor: pointer;
+}
+
+.matrix-add-site-button:hover,
+.matrix-add-site-button:focus-visible {
+  color: #143c6d;
+  text-decoration: underline;
+  outline: none;
+}
+
+.matrix-add-site-empty {
+  color: #94a3b8;
+}
+
 .matrix-cell.mark-orange {
   background: #fff2d6;
   box-shadow: inset 0 0 0 2px rgb(245 158 11 / 32%);
