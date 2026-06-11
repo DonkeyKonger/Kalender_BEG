@@ -3833,7 +3833,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-time-field input,
-.mobile-time-field select {
+.mobile-time-field select,
+.mobile-time-value-button {
   min-height: 44px;
   width: 100%;
   border: 1px solid #cbd7e6;
@@ -3846,11 +3847,120 @@ button.person-chip:focus-visible {
   padding: 9px 10px;
 }
 
+.mobile-time-value-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .mobile-time-field input:focus,
-.mobile-time-field select:focus {
+.mobile-time-field select:focus,
+.mobile-time-value-button:focus-visible {
   border-color: #143c6d;
   box-shadow: 0 0 0 3px rgb(20 60 109 / 12%);
   outline: none;
+}
+
+.mobile-time-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: grid;
+  align-items: end;
+  background: rgb(15 23 42 / 34%);
+  padding: 12px;
+}
+
+.mobile-time-picker-sheet {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 420px);
+  margin: 0 auto;
+  border: 1px solid #d8e1ee;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 -16px 40px rgb(15 23 42 / 22%);
+}
+
+.mobile-time-picker-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-time-picker-title span {
+  color: #65738a;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mobile-time-picker-title strong {
+  color: #111827;
+  font-size: 1.28rem;
+  letter-spacing: 0;
+}
+
+.mobile-time-picker-wheels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-time-picker-wheel {
+  display: grid;
+  gap: 6px;
+  max-height: 214px;
+  overflow-y: auto;
+  border-radius: 14px;
+  background: #f5f7fa;
+  padding: 8px;
+  scroll-snap-type: y proximity;
+}
+
+.mobile-time-picker-wheel button {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #536179;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  scroll-snap-align: center;
+}
+
+.mobile-time-picker-wheel button.is-selected {
+  border-color: #143c6d;
+  background: #ffffff;
+  color: #143c6d;
+  box-shadow: 0 7px 16px rgb(18 29 52 / 10%);
+}
+
+.mobile-time-picker-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-time-picker-actions button {
+  min-height: 40px;
+  border: 1px solid #d8e1ee;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #31415a;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.mobile-time-picker-actions button:last-child {
+  border-color: #143c6d;
+  background: #143c6d;
+  color: #ffffff;
 }
 
 .mobile-time-summary {

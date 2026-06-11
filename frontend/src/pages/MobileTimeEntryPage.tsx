@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -30,6 +30,7 @@ type TimeFormState = {
 };
 
 type TimeEntrySheetMode = "closed" | "site" | "manual";
+type TimePickerTarget = "start" | "end";
 
 type MobileTimeSiteOption = {
   id: number;
@@ -62,6 +63,8 @@ type TimeOverlapConflict = {
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const BREAK_THRESHOLD_MINUTES = 510;
+const TIME_PICKER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+const TIME_PICKER_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
 
 export function MobileTimeEntryPage() {
   const navigate = useNavigate();
@@ -87,7 +90,9 @@ export function MobileTimeEntryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [timePickerTarget, setTimePickerTarget] = useState<TimePickerTarget | null>(null);
+  const [timePickerDraftHour, setTimePickerDraftHour] = useState(7);
+  const [timePickerDraftMinute, setTimePickerDraftMinute] = useState(0);
 
   const timeEntryLoadRange = useMemo(
     () => ({
@@ -248,7 +253,6 @@ export function MobileTimeEntryPage() {
     setSheetMode("site");
     setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
-    setSaveMessage(null);
     setTimeConflict(null);
   }
 
@@ -265,7 +269,6 @@ export function MobileTimeEntryPage() {
     setSheetMode("manual");
     setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
-    setSaveMessage(null);
     setTimeConflict(null);
   }
 
@@ -277,10 +280,10 @@ export function MobileTimeEntryPage() {
     setSuggestionMessage(null);
     setFormError(null);
     setTimeConflict(null);
+    setTimePickerTarget(null);
   }
 
   async function saveCurrentForm(options: { replaceEntryId?: number; skipLocalConflict?: boolean } = {}) {
-    setSaveMessage(null);
     setFormError(null);
     setTimeConflict(null);
 
@@ -348,11 +351,6 @@ export function MobileTimeEntryPage() {
         ? await api.updateTimeEntry(targetEntryId, payload)
         : await api.createTimeEntry(payload);
       setEntries((currentEntries) => upsertEntry(currentEntries, savedEntry));
-      if (targetEntryId) {
-        setSaveMessage(options.replaceEntryId ? "Alter Eintrag wurde ersetzt." : "Eintrag aktualisiert.");
-      } else {
-        setSaveMessage("Zeit hinzugefügt.");
-      }
       closeTimeEntrySheet();
     } catch (error) {
       const apiConflict = parseApiOverlapConflict(error, siteById);
@@ -377,8 +375,28 @@ export function MobileTimeEntryPage() {
     setSheetMode(entry.site_id === null ? "manual" : "site");
     setSuggestionMessage(null);
     setFormError(null);
-    setSaveMessage(null);
     setTimeConflict(null);
+  }
+
+  function openTimePicker(target: TimePickerTarget): void {
+    const parsedTime = parseTimePickerValue(target === "start" ? form.startTime : form.endTime, target);
+    setTimePickerDraftHour(parsedTime.hour);
+    setTimePickerDraftMinute(parsedTime.minute);
+    setTimePickerTarget(target);
+  }
+
+  function applyTimePickerValue(): void {
+    if (!timePickerTarget) {
+      return;
+    }
+    const value = formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute);
+    setForm((currentForm) => ({
+      ...currentForm,
+      [timePickerTarget === "start" ? "startTime" : "endTime"]: value,
+    }));
+    setFormError(null);
+    setTimeConflict(null);
+    setTimePickerTarget(null);
   }
 
   const sheetSiteLabel = sheetMode === "manual"
@@ -494,20 +512,6 @@ export function MobileTimeEntryPage() {
               <h1>{formatDetailDate(selectedDate)}</h1>
             </div>
 
-            <div className="mobile-time-plan-note">
-              {assignmentLoadError ? "Planung konnte nicht geladen werden." : null}
-              {!assignmentLoadError && plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Wähle eine vergangene Baustelle oder erfasse eine Abweichung." : null}
-              {!assignmentLoadError && plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
-              {!assignmentLoadError && plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
-            </div>
-
-            {saveMessage ? (
-              <p className="form-info mobile-time-save-message">
-                <CheckCircle2 aria-hidden="true" size={16} />
-                {saveMessage}
-              </p>
-            ) : null}
-
             <div className="mobile-time-site-picker">
               <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
                 <strong>Baustelle abweichend von Planung</strong>
@@ -533,6 +537,30 @@ export function MobileTimeEntryPage() {
                 )}
               </section>
 
+              <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
+                <div className="mobile-time-day-entries-heading">
+                  <span>Einträge an diesem Tag</span>
+                  <strong>{selectedDateEntries.length}</strong>
+                </div>
+                {selectedDateEntries.length === 0 ? (
+                  <p>Noch keine Zeit für diesen Tag erfasst.</p>
+                ) : (
+                  <div className="mobile-time-entry-bubbles">
+                    {selectedDateEntries.map((entry) => (
+                      <button
+                        className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
+                        key={entry.id}
+                        type="button"
+                        onClick={() => editEntry(entry)}
+                      >
+                        <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
+                        <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               <section className="mobile-time-picker-section" aria-label="Vergangene geplante Baustellen">
                 <div className="mobile-time-picker-heading">
                   <span>Vergangene geplante Baustellen (6 Monate)</span>
@@ -551,30 +579,6 @@ export function MobileTimeEntryPage() {
                 )}
               </section>
             </div>
-
-            <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
-              <div className="mobile-time-day-entries-heading">
-                <span>Einträge an diesem Tag</span>
-                <strong>{selectedDateEntries.length}</strong>
-              </div>
-              {selectedDateEntries.length === 0 ? (
-                <p>Noch keine Zeit für diesen Tag erfasst.</p>
-              ) : (
-                <div className="mobile-time-entry-bubbles">
-                  {selectedDateEntries.map((entry) => (
-                    <button
-                      className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
-                      key={entry.id}
-                      type="button"
-                      onClick={() => editEntry(entry)}
-                    >
-                      <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-                      <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
           </section>
 
           {sheetMode !== "closed" ? (
@@ -598,7 +602,6 @@ export function MobileTimeEntryPage() {
                         onChange={(event) => {
                           setManualSiteText(event.target.value);
                           setFormError(null);
-                          setSaveMessage(null);
                         }}
                         placeholder="z. B. Musterstraße 12, Kunde, Ort"
                       />
@@ -606,32 +609,18 @@ export function MobileTimeEntryPage() {
                   ) : null}
 
                   <div className="mobile-time-form-grid">
-                    <label className="mobile-time-field">
+                    <div className="mobile-time-field">
                       <span>Startzeit</span>
-                      <input
-                        required
-                        type="time"
-                        value={form.startTime}
-                        onChange={(event) => {
-                          setForm((currentForm) => ({ ...currentForm, startTime: event.target.value }));
-                          setFormError(null);
-                          setSaveMessage(null);
-                        }}
-                      />
-                    </label>
-                    <label className="mobile-time-field">
+                      <button className="mobile-time-value-button" type="button" onClick={() => openTimePicker("start")}>
+                        {form.startTime || "--:--"}
+                      </button>
+                    </div>
+                    <div className="mobile-time-field">
                       <span>Endzeit</span>
-                      <input
-                        required
-                        type="time"
-                        value={form.endTime}
-                        onChange={(event) => {
-                          setForm((currentForm) => ({ ...currentForm, endTime: event.target.value }));
-                          setFormError(null);
-                          setSaveMessage(null);
-                        }}
-                      />
-                    </label>
+                      <button className="mobile-time-value-button" type="button" onClick={() => openTimePicker("end")}>
+                        {form.endTime || "--:--"}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mobile-time-summary">
@@ -687,6 +676,47 @@ export function MobileTimeEntryPage() {
                     Zurück zur Baustellenauswahl
                   </button>
                 </form>
+              </div>
+            </div>
+          ) : null}
+
+          {timePickerTarget ? (
+            <div className="mobile-time-picker-backdrop" role="presentation">
+              <div className="mobile-time-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-picker-title">
+                <div className="mobile-time-picker-title">
+                  <span>{timePickerTarget === "start" ? "Startzeit" : "Endzeit"}</span>
+                  <strong id="mobile-time-picker-title">{formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute)}</strong>
+                </div>
+                <div className="mobile-time-picker-wheels" aria-label="Uhrzeit auswählen">
+                  <div className="mobile-time-picker-wheel" aria-label="Stunde">
+                    {TIME_PICKER_HOURS.map((hour) => (
+                      <button
+                        className={classNames(hour === timePickerDraftHour && "is-selected")}
+                        key={hour}
+                        type="button"
+                        onClick={() => setTimePickerDraftHour(hour)}
+                      >
+                        {String(hour).padStart(2, "0")}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mobile-time-picker-wheel" aria-label="Minute">
+                    {TIME_PICKER_MINUTES.map((minute) => (
+                      <button
+                        className={classNames(minute === timePickerDraftMinute && "is-selected")}
+                        key={minute}
+                        type="button"
+                        onClick={() => setTimePickerDraftMinute(minute)}
+                      >
+                        {String(minute).padStart(2, "0")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mobile-time-picker-actions">
+                  <button type="button" onClick={() => setTimePickerTarget(null)}>Abbrechen</button>
+                  <button type="button" onClick={applyTimePickerValue}>Übernehmen</button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -932,6 +962,23 @@ function normalizeTimeInput(value: string | null | undefined): string | null {
   }
   const match = /^(\d{2}):(\d{2})/.exec(value);
   return match ? `${match[1]}:${match[2]}` : null;
+}
+
+function parseTimePickerValue(value: string, target: TimePickerTarget): { hour: number; minute: number } {
+  const minutes = parseTimeMinutes(value);
+  if (minutes === null) {
+    return target === "start" ? { hour: 7, minute: 0 } : { hour: 16, minute: 0 };
+  }
+  const hour = Math.floor(minutes / 60);
+  const minute = Math.round((minutes % 60) / 5) * 5;
+  if (minute >= 60) {
+    return { hour: Math.min(hour + 1, 23), minute: 0 };
+  }
+  return { hour, minute };
+}
+
+function formatTimePickerValue(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function buildMonthGrid(month: Date, today: string): CalendarDay[] {
