@@ -8,6 +8,10 @@ class ExtraWorkTicketCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
 
 
+class ExtraWorkTicketStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(submitted)$")
+
+
 class ExtraWorkTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

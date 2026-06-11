@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -860,6 +860,27 @@ export const api = {
   ): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/submit`, {
       method: "POST",
+    });
+  },
+
+  async mobileExtraWorkTickets(assignmentId: number): Promise<MobileExtraWorkTicket[]> {
+    return request<MobileExtraWorkTicket[]>(`/me/assignments/${assignmentId}/extra-work-tickets`);
+  },
+
+  async createMobileExtraWorkTicket(assignmentId: number): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets`, {
+      method: "POST",
+    });
+  },
+
+  async mobileExtraWorkTicket(assignmentId: number, ticketId: number): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}`);
+  },
+
+  async updateMobileExtraWorkTicketStatus(assignmentId: number, ticketId: number, status: "submitted"): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
     });
   },
 

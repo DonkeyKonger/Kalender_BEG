@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.extra_work import ExtraWorkTicketRead, ExtraWorkTicketStatusUpdate
 from app.schemas.measurement import (
     CustomerSignatureCreate,
     MeasurementEntryCreate,
@@ -21,6 +22,7 @@ from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, Mobi
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
+from app.services.extra_work_service import ExtraWorkService
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -133,6 +135,73 @@ def submit_my_assignment_measurement_batch(
     return MeasurementService(db).submit_mobile_batch(
         assignment_id=assignment_id,
         batch_id=batch_id,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/extra-work-tickets",
+    response_model=list[ExtraWorkTicketRead],
+)
+def list_my_assignment_extra_work_tickets(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ExtraWorkTicketRead]:
+    return ExtraWorkService(db).list_mobile_tickets(
+        assignment_id=assignment_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/extra-work-tickets",
+    response_model=ExtraWorkTicketRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_my_assignment_extra_work_ticket(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).create_mobile_ticket(
+        assignment_id=assignment_id,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}",
+    response_model=ExtraWorkTicketRead,
+)
+def get_my_assignment_extra_work_ticket(
+    assignment_id: int,
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).get_mobile_ticket(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+    )
+
+
+@router.patch(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/status",
+    response_model=ExtraWorkTicketRead,
+)
+def update_my_assignment_extra_work_ticket_status(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).update_mobile_ticket_status(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        next_status=payload.status,
         current_user=current_user,
     )
 

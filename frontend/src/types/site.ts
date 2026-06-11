@@ -285,6 +285,21 @@ export type MobileMeasurementBatchPhoto = {
   updated_at: string;
 };
 
+export type MobileExtraWorkTicket = {
+  id: number;
+  site_id: number;
+  sequence_number: number;
+  display_number: string;
+  title: string | null;
+  status: "draft" | "submitted" | "reviewed" | "signed" | string;
+  created_by_user_id: number | null;
+  submitted_by_user_id: number | null;
+  submitted_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CustomerSignaturePoint = {
   x: number;
   y: number;

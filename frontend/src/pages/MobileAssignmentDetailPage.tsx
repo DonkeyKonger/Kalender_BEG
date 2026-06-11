@@ -33,7 +33,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -75,7 +75,6 @@ type PdfPinchState = {
 };
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
-const EXTRA_WORK_ORDER_STORAGE_PREFIX = "beg_mobile_extra_work_orders_v1:";
 
 type LocationState = {
   assignment?: MobileAssignment;
@@ -93,21 +92,6 @@ type MobileDocumentPreviewState = {
   status: "loading" | "ready" | "unsupported" | "error";
   url: string | null;
   error: string | null;
-};
-
-type MobileExtraWorkOrderStatus = "draft" | "submitted" | "reviewed" | "signed";
-
-type MobileExtraWorkOrder = {
-  id: number;
-  number: number;
-  status: MobileExtraWorkOrderStatus;
-  title: string;
-  created_at: string;
-  submitted_at: string | null;
-  updated_at: string;
-  entry_count: number;
-  reported_hours: number | null;
-  photo_count: number;
 };
 
 const detailTabs: Array<{ key: MobileDetailActionKey; label: string; description: string; icon: typeof ClipboardList }> = [
@@ -331,50 +315,58 @@ function MobileExtraWorkTab({
   assignment: MobileAssignment;
   onBack: () => void;
 }) {
-  const [orders, setOrders] = useState<MobileExtraWorkOrder[]>(() => readMobileExtraWorkOrders(assignment.id));
-  const [selectedOrder, setSelectedOrder] = useState<MobileExtraWorkOrder | null>(null);
+  const [orders, setOrders] = useState<MobileExtraWorkTicket[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<MobileExtraWorkTicket | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedOrders = readMobileExtraWorkOrders(assignment.id);
-    setOrders(storedOrders);
-    setSelectedOrder((currentOrder) => (
-      currentOrder ? storedOrders.find((order) => order.id === currentOrder.id) ?? null : null
-    ));
+    void loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment.id]);
 
-  function persistOrders(nextOrders: MobileExtraWorkOrder[]): void {
+  async function loadOrders(selectOrderId?: number): Promise<void> {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await api.mobileExtraWorkTickets(assignment.id);
+      const sortedOrders = sortMobileExtraWorkOrders(response);
+      setOrders(sortedOrders);
+      setSelectedOrder((currentOrder) => {
+        const selectedId = selectOrderId ?? currentOrder?.id;
+        return selectedId ? sortedOrders.find((order) => order.id === selectedId) ?? null : null;
+      });
+    } catch (requestError) {
+      setError(readApiError(requestError, "Stundenzettel konnten nicht geladen werden."));
+      setOrders([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function mergeUpdatedOrder(updatedOrder: MobileExtraWorkTicket): void {
+    const nextOrders = orders.some((order) => order.id === updatedOrder.id)
+      ? orders.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
+      : [updatedOrder, ...orders];
     const sortedOrders = sortMobileExtraWorkOrders(nextOrders);
     setOrders(sortedOrders);
-    writeMobileExtraWorkOrders(assignment.id, sortedOrders);
+    setSelectedOrder(updatedOrder);
   }
 
-  function createOrder(): void {
+  async function createOrder(): Promise<void> {
     setIsSaving(true);
+    setError(null);
     setMessage(null);
-    const now = new Date().toISOString();
-    const nextNumber = Math.max(0, ...orders.map((order) => order.number)) + 1;
-    const nextOrder: MobileExtraWorkOrder = {
-      id: Date.now(),
-      number: nextNumber,
-      status: "draft",
-      title: `Stundenzettel ${nextNumber}`,
-      created_at: now,
-      submitted_at: null,
-      updated_at: now,
-      entry_count: 0,
-      reported_hours: null,
-      photo_count: 0,
-    };
-    persistOrders([nextOrder, ...orders]);
-    setSelectedOrder(nextOrder);
-    window.setTimeout(() => setIsSaving(false), 120);
-  }
-
-  function updateSelectedOrder(nextOrder: MobileExtraWorkOrder): void {
-    persistOrders(orders.map((order) => (order.id === nextOrder.id ? nextOrder : order)));
-    setSelectedOrder(nextOrder);
+    try {
+      const createdOrder = await api.createMobileExtraWorkTicket(assignment.id);
+      mergeUpdatedOrder(createdOrder);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Stundenzettel konnte nicht erstellt werden."));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (selectedOrder) {
@@ -382,28 +374,28 @@ function MobileExtraWorkTab({
       <ExtraWorkOrderOverview
         order={selectedOrder}
         message={message}
+        error={error}
         isSaving={isSaving}
         onBack={() => {
           setSelectedOrder(null);
           setMessage(null);
         }}
-        onSubmit={() => {
+        onSubmit={async () => {
           if (selectedOrder.status !== "draft" || isSaving) {
             return;
           }
           setIsSaving(true);
+          setError(null);
           setMessage(null);
-          const now = new Date().toISOString();
-          window.setTimeout(() => {
-            updateSelectedOrder({
-              ...selectedOrder,
-              status: "submitted",
-              submitted_at: now,
-              updated_at: now,
-            });
+          try {
+            const submittedOrder = await api.updateMobileExtraWorkTicketStatus(assignment.id, selectedOrder.id, "submitted");
+            mergeUpdatedOrder(submittedOrder);
+            setMessage("Stundenzettel wurde zur Prüfung gesendet.");
+          } catch (requestError) {
+            setError(readApiError(requestError, "Stundenzettel konnte nicht gesendet werden."));
+          } finally {
             setIsSaving(false);
-            setMessage("Stundenzettel wurde als Entwurf zur Prüfung markiert.");
-          }, 120);
+          }
         }}
         onPlaceholderAction={(text) => setMessage(text)}
       />
@@ -425,7 +417,7 @@ function MobileExtraWorkTab({
         <button
           className="primary-action mobile-measurement-new-action"
           type="button"
-          onClick={createOrder}
+          onClick={() => void createOrder()}
           disabled={isSaving}
         >
           <Plus aria-hidden="true" size={15} />
@@ -433,10 +425,12 @@ function MobileExtraWorkTab({
         </button>
       </div>
 
-      {orders.length === 0 ? (
+      {isLoading ? <div className="empty-panel">Stundenzettel werden geladen...</div> : null}
+      {error ? <div className="form-error">{error}</div> : null}
+      {!isLoading && !error && orders.length === 0 ? (
         <div className="empty-panel">Noch kein Stundenzettel vorhanden.</div>
       ) : null}
-      {orders.length > 0 ? (
+      {!isLoading && orders.length > 0 ? (
         <div className="mobile-measurement-list">
           {orders.map((order) => {
             const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
@@ -454,8 +448,8 @@ function MobileExtraWorkTab({
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
                 <span className="mobile-measurement-card-meta">
-                  <span>Einträge: {order.entry_count}</span>
-                  <span>Stunden: {formatMeasurementNumber(order.reported_hours)}</span>
+                  <span>Einträge: 0</span>
+                  <span>Stunden: -</span>
                 </span>
               </button>
             );
@@ -469,16 +463,18 @@ function MobileExtraWorkTab({
 function ExtraWorkOrderOverview({
   order,
   message,
+  error,
   isSaving,
   onBack,
   onSubmit,
   onPlaceholderAction,
 }: {
-  order: MobileExtraWorkOrder;
+  order: MobileExtraWorkTicket;
   message: string | null;
+  error: string | null;
   isSaving: boolean;
   onBack: () => void;
-  onSubmit: () => void;
+  onSubmit: () => Promise<void>;
   onPlaceholderAction: (text: string) => void;
 }) {
   const isDraft = order.status === "draft";
@@ -507,10 +503,11 @@ function ExtraWorkOrderOverview({
         <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
-          <span>Einträge: {order.entry_count}</span>
-          <span>Stunden: {formatMeasurementNumber(order.reported_hours)}</span>
+          <span>Einträge: 0</span>
+          <span>Stunden: -</span>
         </span>
       </div>
+      {error ? <div className="form-error">{error}</div> : null}
       {message ? <p className="form-info">{message}</p> : null}
 
       <div className="mobile-measurement-overview-actions">
@@ -535,7 +532,7 @@ function ExtraWorkOrderOverview({
         </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Fotos werden später dem Stundenzettel zugeordnet.")}>
           <Images aria-hidden="true" size={18} />
-          <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
+          <span>Hinterlegte Fotos</span>
         </button>
       </div>
       <MobileCameraButton
@@ -3358,7 +3355,7 @@ function formatMeasurementNumber(value: string | number | null): string {
   return new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
 }
 
-function sortMobileExtraWorkOrders(orders: MobileExtraWorkOrder[]): MobileExtraWorkOrder[] {
+function sortMobileExtraWorkOrders(orders: MobileExtraWorkTicket[]): MobileExtraWorkTicket[] {
   return [...orders].sort((left, right) => {
     const leftCreatedAt = Date.parse(left.created_at);
     const rightCreatedAt = Date.parse(right.created_at);
@@ -3368,19 +3365,19 @@ function sortMobileExtraWorkOrders(orders: MobileExtraWorkOrder[]): MobileExtraW
   });
 }
 
-function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkOrder): string {
-  const title = order.title.trim() || `Stundenzettel ${order.number}`;
+function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
+  const title = order.title?.trim() || `Stundenzettel ${order.sequence_number}`;
   return `${title} - Hauptauftrag`;
 }
 
-function formatMobileExtraWorkOrderDate(order: MobileExtraWorkOrder): string {
+function formatMobileExtraWorkOrderDate(order: MobileExtraWorkTicket): string {
   const dateValue = order.status === "signed" || order.status === "reviewed"
     ? order.updated_at
     : order.submitted_at || order.created_at;
   return formatMobileDateValue(dateValue);
 }
 
-function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkOrder): { label: string; className: string } {
+function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkTicket): { label: string; className: string } {
   if (order.status === "reviewed") {
     return { label: "Geprüft", className: "mobile-batch-status-reviewed" };
   }
@@ -3391,47 +3388,6 @@ function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkOrder): { labe
     return { label: "Eingereicht", className: "mobile-batch-status-submitted" };
   }
   return { label: "Entwurf", className: "mobile-batch-status-draft" };
-}
-
-function readMobileExtraWorkOrders(assignmentId: number): MobileExtraWorkOrder[] {
-  try {
-    const raw = window.localStorage.getItem(mobileExtraWorkOrderStorageKey(assignmentId));
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as MobileExtraWorkOrder[];
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return sortMobileExtraWorkOrders(parsed.filter(isMobileExtraWorkOrder));
-  } catch {
-    return [];
-  }
-}
-
-function writeMobileExtraWorkOrders(assignmentId: number, orders: MobileExtraWorkOrder[]): void {
-  try {
-    window.localStorage.setItem(mobileExtraWorkOrderStorageKey(assignmentId), JSON.stringify(orders));
-  } catch {
-    // Local MVP data is non-critical; failing storage must not break the project view.
-  }
-}
-
-function mobileExtraWorkOrderStorageKey(assignmentId: number): string {
-  return `${EXTRA_WORK_ORDER_STORAGE_PREFIX}${assignmentId}`;
-}
-
-function isMobileExtraWorkOrder(value: unknown): value is MobileExtraWorkOrder {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const order = value as Partial<MobileExtraWorkOrder>;
-  return typeof order.id === "number"
-    && typeof order.number === "number"
-    && typeof order.title === "string"
-    && typeof order.created_at === "string"
-    && typeof order.updated_at === "string"
-    && ["draft", "submitted", "reviewed", "signed"].includes(String(order.status));
 }
 
 function sortMobileMeasurementBatches(batches: MobileMeasurementBatch[]): MobileMeasurementBatch[] {
