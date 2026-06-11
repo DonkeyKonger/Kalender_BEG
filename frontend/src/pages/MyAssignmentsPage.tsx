@@ -1,15 +1,11 @@
 import {
-  AlertCircle,
   ArrowLeft,
   CalendarClock,
   ChevronRight,
   FileText,
-  HeartPulse,
   LogOut,
   MapPin,
-  Plane,
   RefreshCcw,
-  UserCircle,
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -50,11 +46,6 @@ type DailyAssignment = {
   assignment: MobileAssignment;
 };
 
-type PlaceholderContent = {
-  title: string;
-  text: string;
-};
-
 export function MyAssignmentsPage() {
   const navigate = useNavigate();
   const { logout, status, user } = useAuth();
@@ -64,7 +55,6 @@ export function MyAssignmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFromCache, setIsFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
   const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
@@ -402,37 +392,9 @@ export function MyAssignmentsPage() {
         <>
           <section className="mobile-home-section">
             <div className="mobile-section-heading">
-              <h2>Übersicht</h2>
-              <span>Jetzt wichtig</span>
-            </div>
-            <button
-              className="mobile-message-card"
-              type="button"
-              onClick={() => setPlaceholder({
-                title: "Nachrichten und Aufgaben",
-                text: "Diese Funktion ist vorbereitet und wird später Hinweise, Aufgaben, Lohn- und Aufmaßmeldungen öffnen.",
-              })}
-            >
-              <AlertCircle aria-hidden="true" size={20} />
-              <span>
-                <strong>Keine offenen Pflichtmeldungen</strong>
-                <small>Nachrichten, Aufgaben und Hinweise erscheinen später hier.</small>
-              </span>
-            </button>
-          </section>
-
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Heute</h2>
-              <span>Einsatz</span>
-            </div>
-            <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
-          </section>
-
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
               <h2>Nächste Einsätze</h2>
             </div>
+            <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
             <div className="mobile-upcoming-days">
               {nextThreeDays.map((date) => (
                 <DayFocusCard date={date} label={formatWeekday(date)} assignments={dailyByDate.get(date) ?? []} compact key={date} />
@@ -441,58 +403,12 @@ export function MyAssignmentsPage() {
           </section>
 
           <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Melden & Einreichen</h2>
-              <span>Aktiv</span>
-            </div>
             <div className="mobile-action-list">
               <PlaceholderAction
                 icon={FileText}
                 title="Lohnzeit erfassen"
                 text="Arbeitszeit tagesbezogen eintragen oder ändern."
                 onOpen={() => navigate("/me/time-entry")}
-              />
-              <PlaceholderAction
-                icon={Plane}
-                title="Urlaubsantrag"
-                text="Diese Funktion ist vorbereitet und wird später aktiviert."
-                onOpen={() => setPlaceholder({
-                  title: "Urlaubsantrag",
-                  text: "Hier werden später Urlaubsanträge erfasst und an das Büro übergeben.",
-                })}
-              />
-              <PlaceholderAction
-                icon={HeartPulse}
-                title="Krankmeldung"
-                text="Diese Funktion ist vorbereitet und wird später aktiviert."
-                onOpen={() => setPlaceholder({
-                  title: "Krankmeldung",
-                  text: "Hier werden später Krankmeldungen erfasst und mit der persönlichen Akte verknüpft.",
-                })}
-              />
-            </div>
-          </section>
-
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Weitere Bereiche</h2>
-              <span>Direkt erreichbar</span>
-            </div>
-            <div className="mobile-action-list">
-              <PlaceholderAction
-                icon={CalendarClock}
-                title="Alle Einsätze anzeigen"
-                text="Öffnet die vollständige Einsatzliste mit 14-Tage- und Jahresansicht."
-                onOpen={() => setActiveScreen("assignments")}
-              />
-              <PlaceholderAction
-                icon={UserCircle}
-                title="Persönliche Akte"
-                text="Diese persönliche Akte wird später Resturlaub, Krankheitstage und weitere Informationen anzeigen."
-                onOpen={() => setPlaceholder({
-                  title: "Persönliche Akte",
-                  text: "Diese persönliche Akte wird später Resturlaub, Krankheitstage, Statistiken sowie Wagen- und Werkzeugzuordnung anzeigen.",
-                })}
               />
             </div>
           </section>
@@ -552,8 +468,6 @@ export function MyAssignmentsPage() {
           </section>
         </>
       )}
-
-      {placeholder ? <MobilePlaceholderDialog content={placeholder} onClose={() => setPlaceholder(null)} /> : null}
     </section>
   );
 }
@@ -738,18 +652,6 @@ function PlaceholderAction({
         <small>{text}</small>
       </span>
     </button>
-  );
-}
-
-function MobilePlaceholderDialog({ content, onClose }: { content: PlaceholderContent; onClose: () => void }) {
-  return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
-      <div className="mobile-placeholder-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-placeholder-title" onClick={(event) => event.stopPropagation()}>
-        <h2 id="mobile-placeholder-title">{content.title}</h2>
-        <p>{content.text}</p>
-        <button className="primary-action" type="button" onClick={onClose}>Schließen</button>
-      </div>
-    </div>
   );
 }
 
