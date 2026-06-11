@@ -14,6 +14,48 @@ class ExtraWorkTicketStatusUpdate(BaseModel):
     status: str = Field(pattern="^(submitted)$")
 
 
+class ExtraWorkWorkerHours(BaseModel):
+    worker_name: str = Field(min_length=1, max_length=160)
+    monday_hours: float = Field(default=0, ge=0, le=24)
+    tuesday_hours: float = Field(default=0, ge=0, le=24)
+    wednesday_hours: float = Field(default=0, ge=0, le=24)
+    thursday_hours: float = Field(default=0, ge=0, le=24)
+    friday_hours: float = Field(default=0, ge=0, le=24)
+    saturday_hours: float = Field(default=0, ge=0, le=24)
+    sunday_hours: float = Field(default=0, ge=0, le=24)
+
+
+class ExtraWorkTicketEntryPayload(BaseModel):
+    component: str = Field(min_length=1, max_length=160)
+    floor: str = Field(min_length=1, max_length=120)
+    room_number: str | None = Field(default=None, max_length=80)
+    axis: str | None = Field(default=None, max_length=80)
+    remarks: str | None = Field(default=None, max_length=4000)
+    material_text: str | None = Field(default=None, max_length=4000)
+    estimated_hours: float | None = Field(default=None, ge=0, le=10000)
+    worker_rows: list[ExtraWorkWorkerHours] = Field(min_length=1, max_length=20)
+
+
+class ExtraWorkTicketEntryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ticket_id: int
+    site_id: int
+    component: str
+    floor: str
+    room_number: str | None
+    axis: str | None
+    remarks: str | None
+    material_text: str | None
+    estimated_hours: float | None
+    worker_rows: list[ExtraWorkWorkerHours]
+    total_hours: float
+    created_by_user_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ExtraWorkTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -29,5 +71,8 @@ class ExtraWorkTicketRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
+    entry_count: int
+    total_hours: float
+    estimated_hours: float | None
     created_at: datetime
     updated_at: datetime

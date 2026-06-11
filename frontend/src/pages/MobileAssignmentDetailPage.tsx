@@ -33,7 +33,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -75,6 +75,16 @@ type PdfPinchState = {
 };
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
+const EXTRA_WORK_WEEK_DAYS = [
+  { key: "monday_hours", label: "Mo" },
+  { key: "tuesday_hours", label: "Di" },
+  { key: "wednesday_hours", label: "Mi" },
+  { key: "thursday_hours", label: "Do" },
+  { key: "friday_hours", label: "Fr" },
+  { key: "saturday_hours", label: "Sa" },
+  { key: "sunday_hours", label: "So" },
+] as const;
+type ExtraWorkWeekdayKey = (typeof EXTRA_WORK_WEEK_DAYS)[number]["key"];
 
 type LocationState = {
   assignment?: MobileAssignment;
@@ -318,6 +328,7 @@ function MobileExtraWorkTab({
 }) {
   const [orders, setOrders] = useState<MobileExtraWorkTicket[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<MobileExtraWorkTicket | null>(null);
+  const [isEditingEntry, setIsEditingEntry] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -373,6 +384,21 @@ function MobileExtraWorkTab({
   }
 
   if (selectedOrder) {
+    if (isEditingEntry) {
+      return (
+        <ExtraWorkEntryPage
+          assignmentId={assignment.id}
+          order={selectedOrder}
+          onBack={() => setIsEditingEntry(false)}
+          onSaved={async () => {
+            const updatedOrder = await api.mobileExtraWorkTicket(assignment.id, selectedOrder.id);
+            mergeUpdatedOrder(updatedOrder);
+            setIsEditingEntry(false);
+            setMessage("Eingaben gespeichert.");
+          }}
+        />
+      );
+    }
     return (
       <ExtraWorkOrderOverview
         order={selectedOrder}
@@ -381,7 +407,12 @@ function MobileExtraWorkTab({
         isSaving={isSaving}
         onBack={() => {
           setSelectedOrder(null);
+          setIsEditingEntry(false);
           setMessage(null);
+        }}
+        onOpenEntry={() => {
+          setMessage(null);
+          setIsEditingEntry(true);
         }}
         onSubmit={async () => {
           if (selectedOrder.status !== "draft" || isSaving) {
@@ -449,6 +480,7 @@ function MobileExtraWorkTab({
                 type="button"
                 onClick={() => {
                   setSelectedOrder(order);
+                  setIsEditingEntry(false);
                   setMessage(null);
                 }}
               >
@@ -457,8 +489,8 @@ function MobileExtraWorkTab({
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
                 <span className="mobile-measurement-card-meta">
-                  <span>Einträge: 0</span>
-                  <span>Stunden: -</span>
+                  <span>Einträge: {order.entry_count}</span>
+                  <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
                 </span>
               </button>
             );
@@ -475,6 +507,7 @@ function ExtraWorkOrderOverview({
   error,
   isSaving,
   onBack,
+  onOpenEntry,
   onSubmit,
   onPlaceholderAction,
 }: {
@@ -483,6 +516,7 @@ function ExtraWorkOrderOverview({
   error: string | null;
   isSaving: boolean;
   onBack: () => void;
+  onOpenEntry: () => void;
   onSubmit: () => Promise<void>;
   onPlaceholderAction: (text: string) => void;
 }) {
@@ -490,7 +524,6 @@ function ExtraWorkOrderOverview({
   const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
   const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
   const isApproval = order.kind === "approval";
-  const placeholderText = `${kindLabel} ist vorbereitet und wird im nächsten Schritt angebunden.`;
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -515,15 +548,18 @@ function ExtraWorkOrderOverview({
         <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
-          <span>Einträge: 0</span>
-          <span>Stunden: -</span>
+          <span>Einträge: {order.entry_count}</span>
+          <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
+          {isApproval && order.estimated_hours !== null && order.estimated_hours !== undefined ? (
+            <span>Vorgabe: {formatExtraWorkHours(order.estimated_hours)}</span>
+          ) : null}
         </span>
       </div>
       {error ? <div className="form-error">{error}</div> : null}
       {message ? <p className="form-info">{message}</p> : null}
 
       <div className="mobile-measurement-overview-actions">
-        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={() => onPlaceholderAction(placeholderText)}>
+        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenEntry}>
           <ClipboardList aria-hidden="true" size={18} />
           <span>{isApproval ? "Freigabe erfassen" : "Leistungen erfassen"}</span>
         </button>
@@ -553,6 +589,270 @@ function ExtraWorkOrderOverview({
         label="Foto aufnehmen"
         onClick={() => onPlaceholderAction("Fotoaufnahme für Stundenzettel wird später angebunden.")}
       />
+    </div>
+  );
+}
+
+type ExtraWorkWorkerHoursFormRow = {
+  id: string;
+  worker_name: string;
+} & Record<ExtraWorkWeekdayKey, string>;
+
+type ExtraWorkEntryFormState = {
+  component: string;
+  floor: string;
+  room_number: string;
+  axis: string;
+  remarks: string;
+  material_text: string;
+  estimated_hours: string;
+  worker_rows: ExtraWorkWorkerHoursFormRow[];
+};
+
+function ExtraWorkEntryPage({
+  assignmentId,
+  order,
+  onBack,
+  onSaved,
+}: {
+  assignmentId: number;
+  order: MobileExtraWorkTicket;
+  onBack: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const isApproval = order.kind === "approval";
+  const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
+  const [form, setForm] = useState<ExtraWorkEntryFormState>(() => createEmptyExtraWorkEntryForm(user?.display_name || user?.username || ""));
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadEntry(): Promise<void> {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const entry = await api.mobileExtraWorkTicketEntry(assignmentId, order.id);
+        if (isMounted) {
+          setForm(entry ? mapExtraWorkEntryToForm(entry) : createEmptyExtraWorkEntryForm(user?.display_name || user?.username || ""));
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setError(readApiError(requestError, "Eingaben konnten nicht geladen werden."));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+    void loadEntry();
+    return () => {
+      isMounted = false;
+    };
+  }, [assignmentId, order.id, user?.display_name, user?.username]);
+
+  const totalHours = useMemo(
+    () => form.worker_rows.reduce((sum, row) => sum + calculateExtraWorkWorkerTotal(row), 0),
+    [form.worker_rows],
+  );
+
+  function updateField(key: keyof Omit<ExtraWorkEntryFormState, "worker_rows">, value: string): void {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateWorkerRow(rowId: string, key: "worker_name" | ExtraWorkWeekdayKey, value: string): void {
+    setForm((current) => ({
+      ...current,
+      worker_rows: current.worker_rows.map((row) => (
+        row.id === rowId ? { ...row, [key]: value } : row
+      )),
+    }));
+  }
+
+  function addWorkerRow(): void {
+    setForm((current) => ({
+      ...current,
+      worker_rows: [...current.worker_rows, createEmptyExtraWorkWorkerRow()],
+    }));
+  }
+
+  function removeWorkerRow(rowId: string): void {
+    setForm((current) => ({
+      ...current,
+      worker_rows: current.worker_rows.length > 1
+        ? current.worker_rows.filter((row) => row.id !== rowId)
+        : current.worker_rows,
+    }));
+  }
+
+  async function saveEntry(): Promise<void> {
+    setError(null);
+    const component = form.component.trim();
+    const floor = form.floor.trim();
+    const workerRows = form.worker_rows
+      .map((row) => ({
+        worker_name: row.worker_name.trim(),
+        monday_hours: parseExtraWorkHoursInput(row.monday_hours),
+        tuesday_hours: parseExtraWorkHoursInput(row.tuesday_hours),
+        wednesday_hours: parseExtraWorkHoursInput(row.wednesday_hours),
+        thursday_hours: parseExtraWorkHoursInput(row.thursday_hours),
+        friday_hours: parseExtraWorkHoursInput(row.friday_hours),
+        saturday_hours: parseExtraWorkHoursInput(row.saturday_hours),
+        sunday_hours: parseExtraWorkHoursInput(row.sunday_hours),
+      }))
+      .filter((row) => row.worker_name || calculateExtraWorkPayloadWorkerTotal(row) > 0);
+    if (!component || !floor) {
+      setError("Bitte Bauteil und Etage ausfüllen.");
+      return;
+    }
+    if (workerRows.length === 0 || workerRows.some((row) => !row.worker_name)) {
+      setError("Bitte mindestens einen Monteur mit Namen erfassen.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await api.saveMobileExtraWorkTicketEntry(assignmentId, order.id, {
+        component,
+        floor,
+        room_number: cleanOptionalFormText(form.room_number),
+        axis: cleanOptionalFormText(form.axis),
+        remarks: cleanOptionalFormText(form.remarks),
+        material_text: cleanOptionalFormText(form.material_text),
+        estimated_hours: isApproval ? parseNullableExtraWorkHoursInput(form.estimated_hours) : null,
+        worker_rows: workerRows,
+      });
+      await onSaved();
+    } catch (requestError) {
+      setError(readApiError(requestError, "Eingaben konnten nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>{kindLabel}</span>
+        </button>
+      </div>
+
+      <header className="mobile-entry-head">
+        <p className="eyebrow">{kindLabel}</p>
+        <h1>{isApproval ? "Stundenfreigabe erfassen" : "Leistungen erfassen"}</h1>
+        <p>{formatMobileExtraWorkOrderTitle(order)}</p>
+      </header>
+
+      {isLoading ? <div className="empty-panel">Eingaben werden geladen...</div> : null}
+      {error ? <div className="form-error">{error}</div> : null}
+
+      {!isLoading ? (
+        <form
+          className="mobile-measurement-form mobile-measurement-entry-form mobile-extra-work-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveEntry();
+          }}
+        >
+          <div className="mobile-measurement-form-grid">
+            <label>
+              <span>Bauteil</span>
+              <input value={form.component} onChange={(event) => updateField("component", event.target.value)} required />
+            </label>
+            <label>
+              <span>Etage</span>
+              <input value={form.floor} onChange={(event) => updateField("floor", event.target.value)} required />
+            </label>
+            <label>
+              <span>Raum Nr.</span>
+              <input value={form.room_number} onChange={(event) => updateField("room_number", event.target.value)} />
+            </label>
+            <label>
+              <span>Achse</span>
+              <input value={form.axis} onChange={(event) => updateField("axis", event.target.value)} />
+            </label>
+            {isApproval ? (
+              <label>
+                <span>Stundenvorgabe / geschätzt</span>
+                <input
+                  inputMode="decimal"
+                  value={form.estimated_hours}
+                  onChange={(event) => updateField("estimated_hours", event.target.value)}
+                  placeholder="z. B. 12,5"
+                />
+              </label>
+            ) : null}
+          </div>
+
+          <section className="mobile-extra-work-section">
+            <div className="mobile-extra-work-section-head">
+              <div>
+                <h2>Monteure und Stunden</h2>
+                <p>Montag bis Sonntag</p>
+              </div>
+              <strong>{formatExtraWorkHours(totalHours)} h</strong>
+            </div>
+            <div className="mobile-extra-work-worker-list">
+              {form.worker_rows.map((row, index) => (
+                <article className="mobile-extra-work-worker-card" key={row.id}>
+                  <div className="mobile-extra-work-worker-head">
+                    <label>
+                      <span>Name des Monteurs</span>
+                      <input
+                        value={row.worker_name}
+                        onChange={(event) => updateWorkerRow(row.id, "worker_name", event.target.value)}
+                        required
+                      />
+                    </label>
+                    {form.worker_rows.length > 1 ? (
+                      <button className="mobile-extra-work-remove-worker" type="button" onClick={() => removeWorkerRow(row.id)} aria-label={`Monteur ${index + 1} entfernen`}>
+                        <X aria-hidden="true" size={16} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="mobile-extra-work-week-grid">
+                    {EXTRA_WORK_WEEK_DAYS.map((day) => (
+                      <label key={day.key}>
+                        <span>{day.label}</span>
+                        <input
+                          inputMode="decimal"
+                          value={row[day.key]}
+                          onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
+                          placeholder="0"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mobile-extra-work-worker-total">Summe: {formatExtraWorkHours(calculateExtraWorkWorkerTotal(row))} h</p>
+                </article>
+              ))}
+            </div>
+            <button className="secondary-action mobile-extra-work-add-worker" type="button" onClick={addWorkerRow}>
+              <Plus aria-hidden="true" size={15} />
+              <span>Monteur hinzufügen</span>
+            </button>
+          </section>
+
+          <label>
+            <span>Bemerkungen / ausgeführte Arbeiten</span>
+            <textarea value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} rows={4} />
+          </label>
+          <label>
+            <span>Material</span>
+            <textarea value={form.material_text} onChange={(event) => updateField("material_text", event.target.value)} rows={3} />
+          </label>
+
+          <div className="mobile-form-actions">
+            <button className="primary-action" type="submit" disabled={isSaving}>
+              {isSaving ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }
@@ -3387,6 +3687,118 @@ function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
 
 function formatMobileExtraWorkKindLabel(kind: string): string {
   return kind === "approval" ? "Stundenfreigabe" : "Stundenzettel";
+}
+
+function createEmptyExtraWorkEntryForm(workerName = ""): ExtraWorkEntryFormState {
+  return {
+    component: "",
+    floor: "",
+    room_number: "",
+    axis: "",
+    remarks: "",
+    material_text: "",
+    estimated_hours: "",
+    worker_rows: [createEmptyExtraWorkWorkerRow(workerName)],
+  };
+}
+
+function createEmptyExtraWorkWorkerRow(workerName = ""): ExtraWorkWorkerHoursFormRow {
+  return {
+    id: createClientRowId(),
+    worker_name: workerName,
+    monday_hours: "",
+    tuesday_hours: "",
+    wednesday_hours: "",
+    thursday_hours: "",
+    friday_hours: "",
+    saturday_hours: "",
+    sunday_hours: "",
+  };
+}
+
+function mapExtraWorkEntryToForm(entry: MobileExtraWorkTicketEntry): ExtraWorkEntryFormState {
+  return {
+    component: entry.component,
+    floor: entry.floor,
+    room_number: entry.room_number ?? "",
+    axis: entry.axis ?? "",
+    remarks: entry.remarks ?? "",
+    material_text: entry.material_text ?? "",
+    estimated_hours: formatExtraWorkInputValue(entry.estimated_hours),
+    worker_rows: entry.worker_rows.length > 0
+      ? entry.worker_rows.map((row) => ({
+        id: createClientRowId(),
+        worker_name: row.worker_name,
+        monday_hours: formatExtraWorkInputValue(row.monday_hours),
+        tuesday_hours: formatExtraWorkInputValue(row.tuesday_hours),
+        wednesday_hours: formatExtraWorkInputValue(row.wednesday_hours),
+        thursday_hours: formatExtraWorkInputValue(row.thursday_hours),
+        friday_hours: formatExtraWorkInputValue(row.friday_hours),
+        saturday_hours: formatExtraWorkInputValue(row.saturday_hours),
+        sunday_hours: formatExtraWorkInputValue(row.sunday_hours),
+      }))
+      : [createEmptyExtraWorkWorkerRow()],
+  };
+}
+
+function createClientRowId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function cleanOptionalFormText(value: string): string | null {
+  const cleaned = value.trim();
+  return cleaned || null;
+}
+
+function parseExtraWorkHoursInput(value: string): number {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) {
+    return 0;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function parseNullableExtraWorkHoursInput(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function formatExtraWorkInputValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric === 0) {
+    return "";
+  }
+  return String(numeric).replace(".", ",");
+}
+
+function formatExtraWorkHours(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
+}
+
+function calculateExtraWorkWorkerTotal(row: ExtraWorkWorkerHoursFormRow): number {
+  return EXTRA_WORK_WEEK_DAYS.reduce((sum, day) => sum + parseExtraWorkHoursInput(row[day.key]), 0);
+}
+
+function calculateExtraWorkPayloadWorkerTotal(row: Record<ExtraWorkWeekdayKey, number>): number {
+  return EXTRA_WORK_WEEK_DAYS.reduce((sum, day) => sum + row[day.key], 0);
 }
 
 function formatMobileExtraWorkOrderDate(order: MobileExtraWorkTicket): string {

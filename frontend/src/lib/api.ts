@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -885,6 +885,21 @@ export const api = {
     return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    });
+  },
+
+  async mobileExtraWorkTicketEntry(assignmentId: number, ticketId: number): Promise<MobileExtraWorkTicketEntry | null> {
+    return request<MobileExtraWorkTicketEntry | null>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/entry`);
+  },
+
+  async saveMobileExtraWorkTicketEntry(
+    assignmentId: number,
+    ticketId: number,
+    payload: MobileExtraWorkTicketEntryPayload,
+  ): Promise<MobileExtraWorkTicketEntry> {
+    return request<MobileExtraWorkTicketEntry>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/entry`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
     });
   },
 

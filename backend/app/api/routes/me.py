@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead, ExtraWorkTicketStatusUpdate
+from app.schemas.extra_work import (
+    ExtraWorkTicketCreate,
+    ExtraWorkTicketEntryPayload,
+    ExtraWorkTicketEntryRead,
+    ExtraWorkTicketRead,
+    ExtraWorkTicketStatusUpdate,
+)
 from app.schemas.measurement import (
     CustomerSignatureCreate,
     MeasurementEntryCreate,
@@ -205,6 +211,42 @@ def update_my_assignment_extra_work_ticket_status(
         ticket_id=ticket_id,
         next_status=payload.status,
         current_user=current_user,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/entry",
+    response_model=ExtraWorkTicketEntryRead | None,
+)
+def get_my_assignment_extra_work_ticket_entry(
+    assignment_id: int,
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketEntryRead | None:
+    return ExtraWorkService(db).get_mobile_ticket_entry(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+    )
+
+
+@router.put(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/entry",
+    response_model=ExtraWorkTicketEntryRead,
+)
+def upsert_my_assignment_extra_work_ticket_entry(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketEntryPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketEntryRead:
+    return ExtraWorkService(db).upsert_mobile_ticket_entry(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

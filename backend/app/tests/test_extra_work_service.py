@@ -8,7 +8,7 @@ from app.models import Base
 from app.models.assignment import Assignment
 from app.models.person import Person
 from app.models.site import Site
-from app.schemas.extra_work import ExtraWorkTicketCreate
+from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketEntryPayload, ExtraWorkWorkerHours
 from app.services.extra_work_service import ExtraWorkService
 
 
@@ -115,3 +115,116 @@ def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval
     assert approval.approval_ticket_id is None
     assert billing.kind == "billing"
     assert billing.approval_ticket_id == approval.id
+
+
+def test_mobile_extra_work_ticket_entry_persists_and_updates_ticket_summary():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+
+    ticket = service.create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+    entry = service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="BT A",
+            floor="2. OG",
+            room_number="203",
+            axis="A-4",
+            remarks="Kabeltrasse angepasst",
+            material_text="Kabelrinne, Befestiger",
+            worker_rows=[
+                ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5, tuesday_hours=1.25),
+                ExtraWorkWorkerHours(worker_name="Erika Elektro", wednesday_hours=3),
+            ],
+        ),
+    )
+    loaded_entry = service.get_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+    reloaded_ticket = service.get_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert entry.component == "BT A"
+    assert loaded_entry is not None
+    assert loaded_entry.material_text == "Kabelrinne, Befestiger"
+    assert loaded_entry.total_hours == 6.75
+    assert reloaded_ticket.entry_count == 1
+    assert reloaded_ticket.total_hours == 6.75
+
+
+def test_mobile_extra_work_approval_entry_accepts_estimated_hours():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(
+        site_number="8007",
+        name="Schüchtermann Klinik",
+        requires_extra_work_approval=True,
+    )
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+
+    ticket = service.create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+    service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="BT A",
+            floor="2. OG",
+            estimated_hours=12.5,
+            worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=0)],
+        ),
+    )
+    reloaded_ticket = service.get_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert reloaded_ticket.kind == "approval"
+    assert reloaded_ticket.estimated_hours == 12.5

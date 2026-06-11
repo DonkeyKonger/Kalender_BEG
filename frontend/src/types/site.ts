@@ -301,6 +301,41 @@ export type MobileExtraWorkTicket = {
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;
+  entry_count: number;
+  total_hours: MeasurementNumericValue;
+  estimated_hours: MeasurementNumericValue | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MobileExtraWorkWorkerHours = {
+  worker_name: string;
+  monday_hours: MeasurementNumericValue;
+  tuesday_hours: MeasurementNumericValue;
+  wednesday_hours: MeasurementNumericValue;
+  thursday_hours: MeasurementNumericValue;
+  friday_hours: MeasurementNumericValue;
+  saturday_hours: MeasurementNumericValue;
+  sunday_hours: MeasurementNumericValue;
+};
+
+export type MobileExtraWorkTicketEntryPayload = {
+  component: string;
+  floor: string;
+  room_number?: string | null;
+  axis?: string | null;
+  remarks?: string | null;
+  material_text?: string | null;
+  estimated_hours?: number | null;
+  worker_rows: MobileExtraWorkWorkerHours[];
+};
+
+export type MobileExtraWorkTicketEntry = MobileExtraWorkTicketEntryPayload & {
+  id: number;
+  ticket_id: number;
+  site_id: number;
+  total_hours: MeasurementNumericValue;
+  created_by_user_id: number | null;
   created_at: string;
   updated_at: string;
 };

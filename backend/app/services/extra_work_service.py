@@ -5,10 +5,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
-from app.models.extra_work_ticket import ExtraWorkTicket
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
 from app.models.site import Site
 from app.models.user import User
-from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
+from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketEntryPayload, ExtraWorkTicketEntryRead, ExtraWorkTicketRead
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
 EXTRA_WORK_KINDS = {"billing", "approval"}
@@ -140,6 +140,65 @@ class ExtraWorkService:
             current_user=current_user,
         )
 
+    def get_mobile_ticket_entry(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+    ) -> ExtraWorkTicketEntryRead | None:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        self._get_ticket_for_site(ticket_id, assignment.site_id)
+        entry = self.db.scalar(
+            select(ExtraWorkTicketEntry)
+            .where(ExtraWorkTicketEntry.ticket_id == ticket_id)
+            .order_by(ExtraWorkTicketEntry.id)
+        )
+        return ExtraWorkTicketEntryRead.model_validate(entry) if entry else None
+
+    def upsert_mobile_ticket_entry(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkTicketEntryPayload,
+    ) -> ExtraWorkTicketEntryRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        if ticket.status != "draft":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Eingaben können nur im Entwurf geändert werden.")
+        entry = self.db.scalar(
+            select(ExtraWorkTicketEntry)
+            .where(ExtraWorkTicketEntry.ticket_id == ticket.id)
+            .order_by(ExtraWorkTicketEntry.id)
+        )
+        worker_rows = [row.model_dump() for row in payload.worker_rows]
+        values = {
+            "site_id": ticket.site_id,
+            "component": payload.component.strip(),
+            "floor": payload.floor.strip(),
+            "room_number": self._clean_optional_text(payload.room_number),
+            "axis": self._clean_optional_text(payload.axis),
+            "remarks": self._clean_optional_text(payload.remarks),
+            "material_text": self._clean_optional_text(payload.material_text),
+            "estimated_hours": payload.estimated_hours,
+            "worker_rows": worker_rows,
+        }
+        if entry is None:
+            entry = ExtraWorkTicketEntry(
+                ticket_id=ticket.id,
+                created_by_user_id=current_user.id,
+                **values,
+            )
+        else:
+            for key, value in values.items():
+                setattr(entry, key, value)
+        self.db.add(entry)
+        self.db.commit()
+        self.db.refresh(entry)
+        return ExtraWorkTicketEntryRead.model_validate(entry)
+
     def _get_site(self, site_id: int) -> Site:
         site = self.db.get(Site, site_id)
         if site is None:
@@ -188,6 +247,13 @@ class ExtraWorkService:
         if kind not in EXTRA_WORK_KINDS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekannte Stundenzettel-Prozessart.")
         return kind
+
+    @staticmethod
+    def _clean_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
     @staticmethod
     def _build_display_number(site: Site, sequence_number: int) -> str:
