@@ -531,11 +531,11 @@ export function MobileTimeEntryPage() {
 
             <div className="mobile-time-site-picker">
               <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
-                <strong>Baustelle abweichend von Planung</strong>
-                <span>Ausnahmefall mit manueller Baustellenbeschreibung</span>
+                <strong>Abweichend von Planung</strong>
+                <span>Baustelle manuell beschreiben</span>
               </button>
 
-              <section className="mobile-time-picker-section" aria-label="Geplante Baustellen">
+              <section className="mobile-time-picker-section is-primary" aria-label="Geplante Baustellen">
                 <div className="mobile-time-picker-heading">
                   <span>Geplante Baustellen</span>
                   <strong>{plannedSiteOptions.length}</strong>
@@ -578,7 +578,7 @@ export function MobileTimeEntryPage() {
                 )}
               </section>
 
-              <section className="mobile-time-picker-section" aria-label="Vergangene geplante Baustellen">
+              <section className="mobile-time-picker-section is-secondary" aria-label="Vergangene geplante Baustellen">
                 <div className="mobile-time-picker-heading">
                   <span>Vergangene geplante Baustellen (6 Monate)</span>
                 </div>
