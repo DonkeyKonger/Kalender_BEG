@@ -1830,20 +1830,7 @@ button.person-chip:focus-visible {
   background: #fffdf5;
 }
 
-.matrix-add-site-row th,
-.matrix-add-site-row td {
-  background: #ffffff;
-}
-
-.matrix-add-site-row .matrix-add-site-day.weekend {
-  background: #ffffff;
-}
-
-.matrix-add-site-row .matrix-add-site-day.is-holiday {
-  background: #ffffff;
-}
-
-.matrix-add-site-row .matrix-add-site-day.weekend.is-holiday {
+.matrix-add-site-row .sticky-col {
   background: #ffffff;
 }
 
