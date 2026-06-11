@@ -312,6 +312,7 @@ export function MyAssignmentsPage() {
   const showGpsDebugStatus = showGpsDebug && user?.role === "monteur";
   const canUseAndroidGpsTracking = user?.role === "monteur" && isAndroidAppContext();
   const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
+  const greetingName = getGreetingName(user?.display_name || user?.username || "");
 
   if (activeScreen === "assignments") {
     return (
@@ -388,6 +389,7 @@ export function MyAssignmentsPage() {
           {loadedAt ? (
             <p>Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}</p>
           ) : null}
+          <p className="mobile-home-greeting">Hallo {greetingName}</p>
         </div>
         <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
           {isFromCache ? "Offline" : "Online"}
@@ -552,6 +554,14 @@ function writeGpsTrackingPreference(isEnabled: boolean): void {
   } catch {
     // Ignore storage failures; the in-memory toggle still controls this session.
   }
+}
+
+function getGreetingName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "zusammen";
+  }
+  return trimmed.split(/\s+/)[0] ?? trimmed;
 }
 
 function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus | null): AndroidGpsPermissionPrompt | null {

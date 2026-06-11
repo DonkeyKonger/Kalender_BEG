@@ -2717,20 +2717,23 @@ button.person-chip:focus-visible {
 .mobile-home-title-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  align-items: start;
+  gap: 16px;
+  min-height: 116px;
   border: 1px solid #d5e2f1;
-  border-top: 4px solid #f4b73f;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 11px 13px;
-  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  border-top: 6px solid #f4b73f;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 98%) 0%, rgb(239 247 255 / 96%) 100%),
+    #ffffff;
+  padding: 18px 18px 17px;
+  box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
 .mobile-home-title-card div {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 5px;
 }
 
 .mobile-home-title-card h1,
@@ -2755,25 +2758,32 @@ button.person-chip:focus-visible {
 
 .mobile-home-title-card h1 {
   color: #111827;
-  font-size: 1.18rem;
-  line-height: 1.2;
+  font-size: 1.68rem;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
 .mobile-home-title-card p {
   color: #65738a;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.84rem;
+  font-weight: 750;
   line-height: 1.25;
+}
+
+.mobile-home-title-card .mobile-home-greeting {
+  color: #143c6d;
+  font-size: 0.96rem;
+  font-weight: 850;
 }
 
 .mobile-home-status-badge {
   align-self: start;
+  margin-top: 1px;
   border-radius: 999px;
   background: #dcfce7;
   color: #16733d;
-  padding: 3px 8px;
-  font-size: 0.68rem;
+  padding: 5px 9px;
+  font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
 }
