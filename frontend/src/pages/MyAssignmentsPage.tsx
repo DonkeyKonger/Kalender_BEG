@@ -30,7 +30,7 @@ import {
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
-import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
+import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
@@ -54,6 +54,11 @@ type PlaceholderContent = {
   text: string;
 };
 
+type SelfPlanSheetState = {
+  workDate: string;
+  label: string;
+};
+
 export function MyAssignmentsPage() {
   const navigate = useNavigate();
   const { logout, status, user } = useAuth();
@@ -64,6 +69,11 @@ export function MyAssignmentsPage() {
   const [isFromCache, setIsFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
+  const [selfPlanSheet, setSelfPlanSheet] = useState<SelfPlanSheetState | null>(null);
+  const [recentSelfPlanSites, setRecentSelfPlanSites] = useState<MobileSite[] | null>(null);
+  const [isLoadingSelfPlanSites, setIsLoadingSelfPlanSites] = useState(false);
+  const [selfPlanError, setSelfPlanError] = useState<string | null>(null);
+  const [selfPlanningSiteId, setSelfPlanningSiteId] = useState<number | null>(null);
   const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
@@ -293,6 +303,55 @@ export function MyAssignmentsPage() {
     await logout();
   }
 
+  async function openSelfPlanSheet(workDate: string, label: string): Promise<void> {
+    setSelfPlanSheet({ workDate, label });
+    setSelfPlanError(null);
+    if (recentSelfPlanSites !== null || isLoadingSelfPlanSites) {
+      return;
+    }
+
+    setIsLoadingSelfPlanSites(true);
+    try {
+      const sites = await api.recentlyPlannedSites({ months: 12 });
+      setRecentSelfPlanSites(sites);
+    } catch (requestError) {
+      setSelfPlanError(readApiError(requestError, "Baustellen konnten nicht geladen werden."));
+    } finally {
+      setIsLoadingSelfPlanSites(false);
+    }
+  }
+
+  async function handleSelfPlanSite(site: MobileSite): Promise<void> {
+    if (!selfPlanSheet || selfPlanningSiteId !== null) {
+      return;
+    }
+
+    setSelfPlanningSiteId(site.id);
+    setSelfPlanError(null);
+    try {
+      const assignment = await api.selfPlanAssignment({
+        siteId: site.id,
+        workDate: selfPlanSheet.workDate,
+      });
+      const timestamp = new Date().toISOString();
+      setData((current) => {
+        const nextData = upsertMobileAssignment(
+          current ?? { start_date: range.start, end_date: range.end, assignments: [] },
+          assignment,
+        );
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ loadedAt: timestamp, mode, data: nextData }));
+        return nextData;
+      });
+      setLoadedAt(timestamp);
+      setIsFromCache(false);
+      setSelfPlanSheet(null);
+    } catch (requestError) {
+      setSelfPlanError(readApiError(requestError, "Einsatz konnte nicht nachgetragen werden."));
+    } finally {
+      setSelfPlanningSiteId(null);
+    }
+  }
+
   const today = toIsoDate(startOfToday());
   const tomorrow = toIsoDate(addDays(startOfToday(), 1));
   const nextThreeDays = useMemo(() => getDayRange(tomorrow, 3), [tomorrow]);
@@ -406,10 +465,22 @@ export function MyAssignmentsPage() {
               <h2>Nächste Einsätze</h2>
             </div>
             <div className="mobile-home-assignment-group">
-              <DayFocusCard date={today} label="Heute" assignments={dailyByDate.get(today) ?? []} />
+              <DayFocusCard
+                date={today}
+                label="Heute"
+                assignments={dailyByDate.get(today) ?? []}
+                onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
+              />
               <div className="mobile-upcoming-days">
                 {nextThreeDays.map((date) => (
-                  <DayFocusCard date={date} label={formatWeekday(date)} assignments={dailyByDate.get(date) ?? []} compact key={date} />
+                  <DayFocusCard
+                    date={date}
+                    label={formatWeekday(date)}
+                    assignments={dailyByDate.get(date) ?? []}
+                    compact
+                    key={date}
+                    onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
+                  />
                 ))}
               </div>
             </div>
@@ -516,6 +587,17 @@ export function MyAssignmentsPage() {
       )}
 
       {placeholder ? <MobilePlaceholderDialog content={placeholder} onClose={() => setPlaceholder(null)} /> : null}
+      {selfPlanSheet ? (
+        <MobileSelfPlanSheet
+          error={selfPlanError}
+          isLoading={isLoadingSelfPlanSites}
+          planningSiteId={selfPlanningSiteId}
+          sheet={selfPlanSheet}
+          sites={recentSelfPlanSites ?? []}
+          onClose={() => setSelfPlanSheet(null)}
+          onSelectSite={(site) => void handleSelfPlanSite(site)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -602,11 +684,13 @@ function DayFocusCard({
   label,
   assignments,
   compact = false,
+  onEmptyDaySelect,
 }: {
   date: string;
   label: string;
   assignments: DailyAssignment[];
   compact?: boolean;
+  onEmptyDaySelect?: (date: string, label: string) => void;
 }) {
   return (
     <article className={`mobile-focus-card${compact ? " is-upcoming" : ""}`}>
@@ -619,10 +703,15 @@ function DayFocusCard({
           variant={compact ? "upcoming" : "today"}
         />
       )) : (
-        <div className="mobile-home-empty-day">
+        <button
+          className="mobile-home-empty-day"
+          type="button"
+          onClick={() => onEmptyDaySelect?.(date, compact ? `${label} · ${formatShortDate(date)}` : "Heute")}
+        >
           {compact ? <strong>{label} · {formatShortDate(date)}</strong> : null}
           <span>Kein Einsatz geplant.</span>
-        </div>
+          <small>Antippen, falls du trotzdem auf Baustelle bist.</small>
+        </button>
       )}
     </article>
   );
@@ -718,6 +807,58 @@ function MobilePlaceholderDialog({ content, onClose }: { content: PlaceholderCon
         <h2 id="mobile-placeholder-title">{content.title}</h2>
         <p>{content.text}</p>
         <button className="primary-action" type="button" onClick={onClose}>Schließen</button>
+      </div>
+    </div>
+  );
+}
+
+function MobileSelfPlanSheet({
+  error,
+  isLoading,
+  planningSiteId,
+  sheet,
+  sites,
+  onClose,
+  onSelectSite,
+}: {
+  error: string | null;
+  isLoading: boolean;
+  planningSiteId: number | null;
+  sheet: SelfPlanSheetState;
+  sites: MobileSite[];
+  onClose: () => void;
+  onSelectSite: (site: MobileSite) => void;
+}) {
+  return (
+    <div className="mobile-dialog-backdrop mobile-bottom-sheet-backdrop" role="presentation" onClick={onClose}>
+      <div className="mobile-bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-self-plan-title" onClick={(event) => event.stopPropagation()}>
+        <div className="mobile-bottom-sheet-head">
+          <div>
+            <h2 id="mobile-self-plan-title">Baustelle nachtragen</h2>
+            <p>{sheet.label}: Nur verwenden, wenn du arbeitest, aber keine Planung eingetragen ist.</p>
+          </div>
+          <button className="icon-button secondary" type="button" onClick={onClose}>Abbrechen</button>
+        </div>
+        {error ? <p className="form-error mobile-self-plan-message">{error}</p> : null}
+        {isLoading ? <p className="empty-inline">Baustellen werden geladen...</p> : null}
+        {!isLoading && !sites.length ? (
+          <p className="empty-inline">Keine früher geplanten Baustellen gefunden.</p>
+        ) : null}
+        <div className="mobile-self-plan-site-list">
+          {sites.map((site) => (
+            <button
+              className="mobile-self-plan-site-card"
+              disabled={planningSiteId !== null}
+              key={site.id}
+              type="button"
+              onClick={() => onSelectSite(site)}
+            >
+              <strong>{site.name}</strong>
+              <span>{[site.site_number, site.customer, site.location].filter(Boolean).join(" · ") || "Baustelle"}</span>
+              {planningSiteId === site.id ? <em>Wird nachgetragen...</em> : null}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -876,6 +1017,19 @@ function readApiError(error: unknown, fallback: string): string {
     return error.detail;
   }
   return error.message;
+}
+
+function upsertMobileAssignment(
+  current: MobileAssignmentsResponse,
+  assignment: MobileAssignment,
+): MobileAssignmentsResponse {
+  const withoutCurrent = current.assignments.filter((item) => item.id !== assignment.id);
+  const assignments = [...withoutCurrent, assignment].sort((left, right) => (
+    left.start_date.localeCompare(right.start_date)
+      || left.end_date.localeCompare(right.end_date)
+      || left.id - right.id
+  ));
+  return { ...current, assignments };
 }
 
 function startOfToday(): Date {

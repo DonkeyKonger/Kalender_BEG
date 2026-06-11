@@ -7,7 +7,7 @@ import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMess
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
-import type { MobileAssignmentsResponse, MobileSite } from "../types/mobile";
+import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
@@ -808,7 +808,24 @@ export const api = {
     return request<MobileSite[]>("/me/sites");
   },
 
+  async recentlyPlannedSites(params: { months?: number } = {}): Promise<MobileSite[]> {
+    const search = new URLSearchParams();
+    if (params.months !== undefined) {
+      search.set("months", String(params.months));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<MobileSite[]>(`/me/sites/recently-planned${suffix}`);
+  },
 
+  async selfPlanAssignment(payload: { siteId: number; workDate: string }): Promise<MobileAssignment> {
+    return request<MobileAssignment>("/me/assignments/self-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        site_id: payload.siteId,
+        work_date: payload.workDate,
+      }),
+    });
+  },
 
   async mobileMeasurementBatches(assignmentId: number): Promise<MobileMeasurementBatch[]> {
     return request<MobileMeasurementBatch[]>(`/me/assignments/${assignmentId}/measurement-batches`);

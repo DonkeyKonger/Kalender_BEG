@@ -37,6 +37,7 @@ class AssignmentType(StrEnum):
     REGULAR = "regular"
     SUPPORT = "support"
     EMERGENCY = "emergency"
+    SELF_PLANNED = "self_planned"
 
 
 class AbsenceType(StrEnum):

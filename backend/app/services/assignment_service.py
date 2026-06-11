@@ -36,6 +36,7 @@ class AssignmentService:
         self,
         payload: AssignmentCreate,
         user_id: int,
+        audit_action: str = "assignment.created",
     ) -> AssignmentMutationResult:
         conflict_result = self.conflicts.check_assignment(
             person_id=payload.person_id,
@@ -59,7 +60,7 @@ class AssignmentService:
         self.assignments.add(assignment)
         self.audit.record(
             user_id=user_id,
-            action="assignment.created",
+            action=audit_action,
             entity_type="assignment",
             entity_id=assignment.id,
             old_value=None,

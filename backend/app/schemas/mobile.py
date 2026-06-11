@@ -41,3 +41,8 @@ class MobileAssignmentsResponse(BaseModel):
     start_date: Date
     end_date: Date
     assignments: list[MobileAssignment]
+
+
+class MobileSelfPlanRequest(BaseModel):
+    site_id: int
+    work_date: Date

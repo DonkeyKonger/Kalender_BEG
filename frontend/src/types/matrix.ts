@@ -1,4 +1,4 @@
-export type AssignmentType = "regular" | "support" | "emergency";
+export type AssignmentType = "regular" | "support" | "emergency" | "self_planned";
 export type AbsenceType = "vacation" | "sick" | "school" | "free" | "other";
 export type SiteStatus = "active" | "paused" | "planned" | "completed" | "deleted";
 export type MatrixCellMark = "orange" | "red" | "blue";

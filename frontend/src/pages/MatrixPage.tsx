@@ -2214,7 +2214,13 @@ function CellDisplay({
         const canResizeEnd = isEditable && isAssignmentResizeEdgeVisible(rowCells, cellIndex, assignment, span, "end");
         return (
           <button
-            className={assignmentChipClassName(span, absenceConflict !== null, isResizing, assignment.person.person_type !== "internal")}
+            className={assignmentChipClassName(
+              span,
+              absenceConflict !== null,
+              isResizing,
+              assignment.person.person_type !== "internal",
+              assignment.assignment_type === "self_planned",
+            )}
             key={assignment.id}
             style={{
               "--assignment-layer": layer,
@@ -2733,10 +2739,17 @@ function matrixAbsenceTypePriority(absenceType: AbsenceType): number {
   return 2;
 }
 
-function assignmentChipClassName(span: number, hasAbsenceConflict: boolean, isResizing: boolean, isExternalPerson: boolean): string {
+function assignmentChipClassName(
+  span: number,
+  hasAbsenceConflict: boolean,
+  isResizing: boolean,
+  isExternalPerson: boolean,
+  isSelfPlanned: boolean,
+): string {
   return [
     "person-chip",
     span > 1 ? "is-assignment-run" : "",
+    isSelfPlanned ? "is-self-planned" : "",
     isExternalPerson ? "is-external-person" : "",
     hasAbsenceConflict ? "is-absence-conflict" : "",
     isResizing ? "is-resizing" : "",
@@ -2758,10 +2771,11 @@ function isAssignmentResizeEdgeVisible(
 
 function assignmentChipTitle(assignment: MatrixAssignment, absenceConflict: MatrixCell["absences"][number] | null, isEditable: boolean): string {
   const actionHint = isEditable ? " - ziehen zum Verschieben, Shift+Ziehen kopiert, Rechtsklick entfernt den ganzen Einsatz" : "";
+  const selfPlannedHint = assignment.assignment_type === "self_planned" ? " - vom Monteur selbst nachgetragen" : "";
   if (!absenceConflict) {
-    return `${assignment.person.display_name}${actionHint}`;
+    return `${assignment.person.display_name}${selfPlannedHint}${actionHint}`;
   }
-  return `${assignment.person.display_name} - Konflikt: ${absenceTypeLabels[absenceConflict.absence_type]} am Einsatztag${actionHint}`;
+  return `${assignment.person.display_name}${selfPlannedHint} - Konflikt: ${absenceTypeLabels[absenceConflict.absence_type]} am Einsatztag${actionHint}`;
 }
 
 function compactProjectManagerCode(person: MatrixPerson | null): string {

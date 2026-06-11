@@ -17,7 +17,7 @@ from app.schemas.measurement import (
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
 )
-from app.schemas.mobile import MobileAssignmentsResponse, MobileSite
+from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, MobileSelfPlanRequest, MobileSite
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
@@ -60,6 +60,34 @@ def list_my_mobile_sites(
     db: Session = Depends(get_db),
 ) -> list[MobileSite]:
     return MobileAssignmentService(db).list_active_sites_for_mobile(current_user=current_user)
+
+
+@router.get("/sites/recently-planned", response_model=list[MobileSite])
+def list_my_recently_planned_sites(
+    months: int = Query(12, ge=1, le=24),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MobileSite]:
+    return MobileAssignmentService(db).list_recently_planned_sites(
+        current_user=current_user,
+        months=months,
+    )
+
+
+@router.post(
+    "/assignments/self-plan",
+    response_model=MobileAssignment,
+    status_code=status.HTTP_201_CREATED,
+)
+def self_plan_my_assignment(
+    payload: MobileSelfPlanRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileAssignment:
+    return MobileAssignmentService(db).self_plan_assignment(
+        current_user=current_user,
+        payload=payload,
+    )
 
 
 @router.get(
