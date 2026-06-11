@@ -415,6 +415,10 @@ function MobileExtraWorkTab({
           setMessage(null);
           setIsEditingEntry(true);
         }}
+        onCustomerSigned={(updatedOrder) => {
+          mergeUpdatedOrder(updatedOrder);
+          setMessage("Kundenunterschrift gespeichert.");
+        }}
         onSubmit={async () => {
           if (selectedOrder.status !== "draft" || isSaving) {
             return;
@@ -510,6 +514,7 @@ function ExtraWorkOrderOverview({
   isSaving,
   onBack,
   onOpenEntry,
+  onCustomerSigned,
   onSubmit,
   onPlaceholderAction,
 }: {
@@ -520,6 +525,7 @@ function ExtraWorkOrderOverview({
   isSaving: boolean;
   onBack: () => void;
   onOpenEntry: () => void;
+  onCustomerSigned: (order: MobileExtraWorkTicket) => void;
   onSubmit: () => Promise<void>;
   onPlaceholderAction: (text: string) => void;
 }) {
@@ -528,7 +534,9 @@ function ExtraWorkOrderOverview({
   const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
   const isApproval = order.kind === "approval";
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [isSigningCustomer, setIsSigningCustomer] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const hasCustomerSignature = Boolean(order.customer_signed_at);
 
   async function openExtraWorkPdf(): Promise<void> {
     if (isOpeningPdf) {
@@ -599,12 +607,20 @@ function ExtraWorkOrderOverview({
           <FileText aria-hidden="true" size={18} />
           <span>{isOpeningPdf ? "PDF wird geöffnet..." : `${kindLabel} anzeigen (PDF)`}</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Kundenunterschrift wird später angebunden.")}>
+        <button
+          className="mobile-measurement-overview-action"
+          type="button"
+          onClick={() => {
+            setPdfError(null);
+            setIsSigningCustomer(true);
+          }}
+          disabled={hasCustomerSignature}
+        >
           <UserRound aria-hidden="true" size={18} />
-          <span>Kundenunterschrift einfügen</span>
+          <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
         </button>
-        {order.status !== "reviewed" && order.status !== "signed" ? (
-          <p className="mobile-measurement-action-hint">Prüfung durch Projektleiter erforderlich.</p>
+        {hasCustomerSignature && order.customer_signature_name ? (
+          <p className="mobile-measurement-action-hint">Unterschrieben von {order.customer_signature_name}</p>
         ) : null}
         <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Monteursunterschrift wird mit der Stundenzettel-Speicherung angebunden.")}>
           <UserRound aria-hidden="true" size={18} />
@@ -621,6 +637,178 @@ function ExtraWorkOrderOverview({
         label="Foto aufnehmen"
         onClick={() => onPlaceholderAction("Fotoaufnahme für Stundenzettel wird später angebunden.")}
       />
+      {isSigningCustomer ? (
+        <ExtraWorkCustomerSignatureOverlay
+          assignmentId={assignmentId}
+          order={order}
+          onClose={() => setIsSigningCustomer(false)}
+          onSigned={(updatedOrder) => {
+            setIsSigningCustomer(false);
+            onCustomerSigned(updatedOrder);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ExtraWorkCustomerSignatureOverlay({
+  assignmentId,
+  order,
+  onClose,
+  onSigned,
+}: {
+  assignmentId: number;
+  order: MobileExtraWorkTicket;
+  onClose: () => void;
+  onSigned: (order: MobileExtraWorkTicket) => void;
+}) {
+  const signatureLabel = order.kind === "approval"
+    ? "Ausführungsgenehmigung unterschreiben"
+    : "Stundenabrechnung unterschreiben";
+  const [customerName, setCustomerName] = useState(order.customer_signature_name ?? "");
+  const [customerPlace, setCustomerPlace] = useState(order.customer_signature_place ?? "");
+  const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+  const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+
+  useEffect(() => {
+    drawSignatureCanvas(canvasRef.current, strokes);
+  }, [strokes]);
+
+  function appendSignaturePoint(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const point = getSignatureCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+    setStrokes((currentStrokes) => {
+      if (currentStrokes.length === 0) {
+        return [[point]];
+      }
+      const nextStrokes = currentStrokes.slice();
+      const lastStroke = nextStrokes[nextStrokes.length - 1] ?? [];
+      nextStrokes[nextStrokes.length - 1] = [...lastStroke, point];
+      return nextStrokes;
+    });
+  }
+
+  async function handleSaveSignature(): Promise<void> {
+    const normalizedName = customerName.trim();
+    if (!normalizedName) {
+      setSignatureError("Bitte Kundennamen eintragen.");
+      return;
+    }
+    const validStrokes = strokes.filter((stroke) => stroke.length >= 2);
+    if (validStrokes.length === 0) {
+      setSignatureError("Bitte Unterschrift erfassen.");
+      return;
+    }
+    setIsSavingSignature(true);
+    setSignatureError(null);
+    try {
+      const updatedOrder = await api.signMobileExtraWorkTicketCustomer(assignmentId, order.id, {
+        customer_name: normalizedName,
+        customer_place: customerPlace.trim() || null,
+        signature_strokes: validStrokes,
+      });
+      onSigned(updatedOrder);
+    } catch (requestError) {
+      setSignatureError(readApiError(requestError, "Kundenunterschrift konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSignature(false);
+    }
+  }
+
+  return (
+    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Kundenunterschrift">
+      <header className="mobile-customer-signature-header">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Zurück</span>
+        </button>
+        <div className="mobile-customer-signature-title">
+          <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
+          <span>{signatureLabel}</span>
+        </div>
+      </header>
+
+      <main className="mobile-worker-signature-content">
+        <section className="mobile-worker-signature-card" aria-label="Kundenunterschrift erfassen">
+          <label>
+            <span>Name des Kunden</span>
+            <input
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+              placeholder="Name des Unterzeichners"
+            />
+          </label>
+          <label>
+            <span>Ort</span>
+            <input
+              value={customerPlace}
+              onChange={(event) => setCustomerPlace(event.target.value)}
+              placeholder="Ort der Unterschrift"
+            />
+          </label>
+          <div className="mobile-signature-canvas-wrap">
+            <span>Unterschrift</span>
+            <canvas
+              ref={canvasRef}
+              className="mobile-signature-canvas"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                isDrawingRef.current = true;
+                const point = getSignatureCanvasPoint(event);
+                if (point) {
+                  setStrokes((currentStrokes) => [...currentStrokes, [point]]);
+                }
+              }}
+              onPointerMove={(event) => {
+                if (!isDrawingRef.current) {
+                  return;
+                }
+                event.preventDefault();
+                appendSignaturePoint(event);
+              }}
+              onPointerUp={(event) => {
+                isDrawingRef.current = false;
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+              }}
+              onPointerCancel={() => {
+                isDrawingRef.current = false;
+              }}
+            />
+          </div>
+          {signatureError ? <p className="form-error">{signatureError}</p> : null}
+          <div className="mobile-customer-signature-actions">
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => {
+                setStrokes([]);
+                setSignatureError(null);
+              }}
+              disabled={isSavingSignature}
+            >
+              Leeren
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void handleSaveSignature()}
+              disabled={isSavingSignature || !customerName.trim() || !hasSignature}
+            >
+              {isSavingSignature ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

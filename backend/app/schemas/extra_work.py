@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ExtraWorkTicketCreate(BaseModel):
@@ -12,6 +12,26 @@ class ExtraWorkTicketCreate(BaseModel):
 
 class ExtraWorkTicketStatusUpdate(BaseModel):
     status: str = Field(pattern="^(submitted)$")
+
+
+class ExtraWorkSignaturePoint(BaseModel):
+    x: float = Field(..., ge=0, le=1)
+    y: float = Field(..., ge=0, le=1)
+
+
+class ExtraWorkCustomerSignatureCreate(BaseModel):
+    customer_name: str = Field(..., min_length=1, max_length=160)
+    customer_place: str | None = Field(default=None, max_length=160)
+    signature_strokes: list[list[ExtraWorkSignaturePoint]] = Field(..., min_length=1)
+
+    @field_validator("signature_strokes")
+    @classmethod
+    def validate_signature_strokes(
+        cls, strokes: list[list[ExtraWorkSignaturePoint]]
+    ) -> list[list[ExtraWorkSignaturePoint]]:
+        if not any(len(stroke) >= 2 for stroke in strokes):
+            raise ValueError("Unterschrift ist erforderlich.")
+        return strokes
 
 
 class ExtraWorkWorkerHours(BaseModel):
@@ -71,6 +91,10 @@ class ExtraWorkTicketRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
+    customer_signature_type: str | None
+    customer_signature_name: str | None
+    customer_signature_place: str | None
+    customer_signed_at: datetime | None
     entry_count: int
     total_hours: float
     estimated_hours: float | None

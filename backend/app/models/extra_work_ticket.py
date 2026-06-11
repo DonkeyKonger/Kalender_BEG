@@ -34,6 +34,11 @@ class ExtraWorkTicket(TimestampMixin, Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+    customer_signature_type: Mapped[str | None] = mapped_column(String(60))
+    customer_signature_name: Mapped[str | None] = mapped_column(String(160))
+    customer_signature_place: Mapped[str | None] = mapped_column(String(160))
+    customer_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
+    customer_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     site = relationship("Site", back_populates="extra_work_tickets")
     approval_ticket = relationship("ExtraWorkTicket", remote_side=[id])

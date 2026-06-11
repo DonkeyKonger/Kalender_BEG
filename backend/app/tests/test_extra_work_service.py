@@ -2,6 +2,7 @@ from datetime import date
 from io import BytesIO
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
 from sqlalchemy import create_engine
@@ -15,7 +16,13 @@ from app.models import Base
 from app.models.assignment import Assignment
 from app.models.person import Person
 from app.models.site import Site
-from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketEntryPayload, ExtraWorkWorkerHours
+from app.schemas.extra_work import (
+    ExtraWorkCustomerSignatureCreate,
+    ExtraWorkSignaturePoint,
+    ExtraWorkTicketCreate,
+    ExtraWorkTicketEntryPayload,
+    ExtraWorkWorkerHours,
+)
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.extra_work_service import ExtraWorkService
 
@@ -240,6 +247,90 @@ def test_mobile_extra_work_approval_entry_accepts_estimated_hours():
 
     assert reloaded_ticket.kind == "approval"
     assert reloaded_ticket.estimated_hours == 12.5
+
+
+def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    signed = service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            customer_place="Bad Herrenalb",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.1, y=0.4),
+                ExtraWorkSignaturePoint(x=0.6, y=0.45),
+            ]],
+        ),
+    )
+    reloaded = service.get_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert signed.status == "signed"
+    assert signed.customer_signature_type == "billing_customer"
+    assert signed.customer_signature_name == "Kunde Beispiel"
+    assert signed.customer_signature_place == "Bad Herrenalb"
+    assert signed.customer_signed_at is not None
+    assert reloaded.status == "signed"
+    assert reloaded.customer_signed_at == signed.customer_signed_at
+
+
+def test_mobile_extra_work_approval_customer_signature_uses_approval_signature_type():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(
+        site_number="8007",
+        name="Schüchtermann Klinik",
+        requires_extra_work_approval=True,
+    )
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    signed = service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Freigabe",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                ExtraWorkSignaturePoint(x=0.7, y=0.5),
+            ]],
+        ),
+    )
+
+    assert signed.kind == "approval"
+    assert signed.status == "signed"
+    assert signed.customer_signature_type == "approval_customer"
+
+
+def test_mobile_extra_work_customer_signature_rejects_empty_signature():
+    with pytest.raises(ValueError):
+        ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde",
+            signature_strokes=[[ExtraWorkSignaturePoint(x=0.2, y=0.3)]],
+        )
 
 
 def test_mobile_extra_work_pdf_builds_billing_template_pdf():

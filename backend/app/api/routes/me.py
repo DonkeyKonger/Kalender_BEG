@@ -9,6 +9,7 @@ from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.extra_work import (
+    ExtraWorkCustomerSignatureCreate,
     ExtraWorkTicketCreate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
@@ -244,6 +245,25 @@ def upsert_my_assignment_extra_work_ticket_entry(
     db: Session = Depends(get_db),
 ) -> ExtraWorkTicketEntryRead:
     return ExtraWorkService(db).upsert_mobile_ticket_entry(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/customer-signature",
+    response_model=ExtraWorkTicketRead,
+)
+def sign_my_assignment_extra_work_ticket_customer(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkCustomerSignatureCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).sign_mobile_ticket_customer(
         assignment_id=assignment_id,
         ticket_id=ticket_id,
         current_user=current_user,

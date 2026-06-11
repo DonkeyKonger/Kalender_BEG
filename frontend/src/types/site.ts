@@ -301,6 +301,10 @@ export type MobileExtraWorkTicket = {
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;
+  customer_signature_type: "billing_customer" | "approval_customer" | string | null;
+  customer_signature_name: string | null;
+  customer_signature_place: string | null;
+  customer_signed_at: string | null;
   entry_count: number;
   total_hours: MeasurementNumericValue;
   estimated_hours: MeasurementNumericValue | null;
@@ -350,6 +354,10 @@ export type CustomerSignatureStroke = CustomerSignaturePoint[];
 export type CustomerSignaturePayload = {
   customer_name: string;
   signature_strokes: CustomerSignatureStroke[];
+};
+
+export type ExtraWorkCustomerSignaturePayload = CustomerSignaturePayload & {
+  customer_place?: string | null;
 };
 
 export type WorkerSignaturePayload = {

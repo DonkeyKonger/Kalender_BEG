@@ -8,12 +8,22 @@ from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
 from app.models.site import Site
 from app.models.user import User
-from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketEntryPayload, ExtraWorkTicketEntryRead, ExtraWorkTicketRead
+from app.schemas.extra_work import (
+    ExtraWorkCustomerSignatureCreate,
+    ExtraWorkTicketCreate,
+    ExtraWorkTicketEntryPayload,
+    ExtraWorkTicketEntryRead,
+    ExtraWorkTicketRead,
+)
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
 EXTRA_WORK_KINDS = {"billing", "approval"}
 EXTRA_WORK_BILLING_KIND = "billing"
 EXTRA_WORK_APPROVAL_KIND = "approval"
+EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES = {
+    EXTRA_WORK_BILLING_KIND: "billing_customer",
+    EXTRA_WORK_APPROVAL_KIND: "approval_customer",
+}
 
 
 class ExtraWorkService:
@@ -198,6 +208,49 @@ class ExtraWorkService:
         self.db.commit()
         self.db.refresh(entry)
         return ExtraWorkTicketEntryRead.model_validate(entry)
+
+    def sign_mobile_ticket_customer(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkCustomerSignatureCreate,
+    ) -> ExtraWorkTicketRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        if ticket.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieser Stundenzettel wurde bereits vom Kunden unterschrieben.",
+            )
+        if ticket.status in {"billed", "closed"}:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieser Stundenzettel ist bereits abgeschlossen.",
+            )
+        customer_name = " ".join(payload.customer_name.split())
+        if not customer_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kundenname ist erforderlich.")
+        valid_strokes = [stroke for stroke in payload.signature_strokes if len(stroke) >= 2]
+        if not valid_strokes:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unterschrift ist erforderlich.")
+
+        ticket.customer_signature_type = EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES.get(
+            ticket.kind, "billing_customer"
+        )
+        ticket.customer_signature_name = customer_name
+        ticket.customer_signature_place = self._clean_optional_text(payload.customer_place)
+        ticket.customer_signature_strokes = [
+            [point.model_dump() for point in stroke]
+            for stroke in valid_strokes
+        ]
+        ticket.customer_signed_at = datetime.now(UTC)
+        ticket.status = "signed"
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return ExtraWorkTicketRead.model_validate(ticket)
 
     def _get_site(self, site_id: int) -> Site:
         site = self.db.get(Site, site_id)
