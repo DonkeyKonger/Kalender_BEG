@@ -742,7 +742,6 @@ function HomeAssignmentCard({
         {variant === "today" ? <em>{formatShortDate(date)}</em> : null}
       </span>
       <span className="assignment-card-affordance">
-        <SiteStatusBadge status={assignment.site.status} />
         <ChevronRight aria-hidden="true" size={17} />
       </span>
     </Link>
