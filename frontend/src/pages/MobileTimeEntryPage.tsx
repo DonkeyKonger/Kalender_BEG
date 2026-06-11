@@ -29,12 +29,16 @@ type TimeFormState = {
   endTime: string;
 };
 
-type SiteSelectionMode = "planned" | "other";
+type TimeEntrySheetMode = "closed" | "site" | "manual";
 
 type MobileTimeSiteOption = {
   id: number;
   site_number: string | null;
   name: string;
+};
+
+type MobileTimeRecentSiteOption = MobileTimeSiteOption & {
+  lastPlannedDate: string;
 };
 
 type DayWorkSummary = {
@@ -74,20 +78,27 @@ export function MobileTimeEntryPage() {
   const [activeSites, setActiveSites] = useState<MobileSite[]>([]);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "" });
-  const [siteSelectionMode, setSiteSelectionMode] = useState<SiteSelectionMode>("planned");
+  const [sheetMode, setSheetMode] = useState<TimeEntrySheetMode>("closed");
+  const [manualSiteText, setManualSiteText] = useState("");
   const [timeConflict, setTimeConflict] = useState<TimeOverlapConflict | null>(null);
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
-  const [siteLoadError, setSiteLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const loadRange = useMemo(
+  const timeEntryLoadRange = useMemo(
     () => ({
       start: toIsoDate(startOfMonth(addMonths(visibleMonth, -1))),
+      end: toIsoDate(endOfMonth(addMonths(visibleMonth, 1))),
+    }),
+    [visibleMonth],
+  );
+  const assignmentLoadRange = useMemo(
+    () => ({
+      start: toIsoDate(startOfMonth(addMonths(visibleMonth, -6))),
       end: toIsoDate(endOfMonth(addMonths(visibleMonth, 1))),
     }),
     [visibleMonth],
@@ -103,11 +114,10 @@ export function MobileTimeEntryPage() {
     setIsLoading(true);
     setLoadError(null);
     setAssignmentLoadError(null);
-    setSiteLoadError(null);
     try {
       const [timeEntriesResult, assignmentResult, sitesResult] = await Promise.allSettled([
-        api.timeEntries({ personId, dateFrom: loadRange.start, dateTo: loadRange.end }),
-        api.myAssignmentHistory({ start: loadRange.start, end: loadRange.end }),
+        api.timeEntries({ personId, dateFrom: timeEntryLoadRange.start, dateTo: timeEntryLoadRange.end }),
+        api.myAssignmentHistory({ start: assignmentLoadRange.start, end: assignmentLoadRange.end }),
         api.mySites(),
       ]);
 
@@ -129,14 +139,13 @@ export function MobileTimeEntryPage() {
         setActiveSites(sitesResult.value);
       } else {
         setActiveSites([]);
-        setSiteLoadError(getErrorMessage(sitesResult.reason, "Baustellenliste konnte nicht geladen werden."));
       }
     } catch (error) {
       setLoadError(getErrorMessage(error, "Arbeitszeiten konnten nicht geladen werden."));
     } finally {
       setIsLoading(false);
     }
-  }, [loadRange.end, loadRange.start, personId]);
+  }, [assignmentLoadRange.end, assignmentLoadRange.start, personId, timeEntryLoadRange.end, timeEntryLoadRange.start]);
 
   useEffect(() => {
     void loadTimeData();
@@ -168,44 +177,6 @@ export function MobileTimeEntryPage() {
     [editingEntry, entries, selectedDate],
   );
 
-  useEffect(() => {
-    const existingStart = normalizeTimeInput(editingEntry?.start_time);
-    const existingEnd = normalizeTimeInput(editingEntry?.end_time);
-    const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
-    const suggestedEnd = normalizeTimeInput(prefillEntry?.end_time);
-    const plannedSiteId = plannedSiteIds.length === 1 ? String(plannedSiteIds[0]) : "";
-    const initialSiteId = editingEntry
-      ? editingEntry.site_id !== null ? String(editingEntry.site_id) : ""
-      : plannedSiteId;
-
-    setForm({
-      siteId: initialSiteId,
-      startTime: existingStart ?? suggestedStart ?? "",
-      endTime: existingEnd ?? suggestedEnd ?? "",
-    });
-    setSiteSelectionMode(initialSiteId && !plannedSiteIds.includes(Number(initialSiteId)) ? "other" : "planned");
-    setSuggestionMessage(!editingEntry && suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
-    setTimeConflict(null);
-    setFormError(null);
-    setSaveMessage(null);
-  }, [editingEntry, plannedSiteIds, prefillEntry]);
-
-  const relevantSiteIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const assignment of assignments) {
-      ids.add(assignment.site.id);
-    }
-    for (const entry of entries) {
-      if (entry.site_id !== null) {
-        ids.add(entry.site_id);
-      }
-    }
-    for (const site of activeSites) {
-      ids.add(site.id);
-    }
-    return ids;
-  }, [activeSites, assignments, entries]);
-
   const plannedSiteOptions = useMemo(
     () => plannedSiteIds
       .map((siteId) => siteById.get(siteId))
@@ -214,13 +185,15 @@ export function MobileTimeEntryPage() {
     [plannedSiteIds, siteById],
   );
 
-  const otherSiteOptions = useMemo(
-    () => Array.from(siteById.values())
-      .filter((site) => relevantSiteIds.has(site.id))
-      .sort(compareSites),
-    [relevantSiteIds, siteById],
+  const recentSiteOptions = useMemo(
+    () => buildRecentPlannedSiteOptions({
+      assignments,
+      selectedDate,
+      plannedSiteIds,
+      siteById,
+    }),
+    [assignments, plannedSiteIds, selectedDate, siteById],
   );
-  const visibleSiteOptions = siteSelectionMode === "planned" ? plannedSiteOptions : otherSiteOptions;
 
   const calendarDays = useMemo(() => buildMonthGrid(visibleMonth, today), [today, visibleMonth]);
   const weekDays = useMemo(() => buildWeekDays(selectedDate, today), [selectedDate, today]);
@@ -228,13 +201,13 @@ export function MobileTimeEntryPage() {
   const breakMinutes = calculateBreakMinutes(form.startTime, form.endTime);
   const netMinutes = calculateNetMinutes(form.startTime, form.endTime);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
-  const selectedAssignmentId = findAssignmentIdForSite(assignmentsForSelectedDate, form.siteId);
 
   function showMonth(month: Date) {
     const monthStart = startOfMonth(month);
     setVisibleMonth(monthStart);
     setSelectedDate(toIsoDate(monthStart));
     setEditingEntryId(null);
+    closeTimeEntrySheet();
     setActiveView("month");
   }
 
@@ -242,6 +215,7 @@ export function MobileTimeEntryPage() {
     setVisibleMonth(currentMonth);
     setSelectedDate(today);
     setEditingEntryId(null);
+    closeTimeEntrySheet();
     setActiveView("month");
   }
 
@@ -252,12 +226,57 @@ export function MobileTimeEntryPage() {
       setVisibleMonth(dateMonth);
     }
     setEditingEntryId(null);
+    closeTimeEntrySheet();
     setActiveView("day");
   }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await saveCurrentForm();
+  }
+
+  function openSiteEntry(siteId: number) {
+    const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
+    const suggestedEnd = normalizeTimeInput(prefillEntry?.end_time);
+    setEditingEntryId(null);
+    setForm({
+      siteId: String(siteId),
+      startTime: suggestedStart ?? "",
+      endTime: suggestedEnd ?? "",
+    });
+    setManualSiteText("");
+    setSheetMode("site");
+    setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
+    setFormError(null);
+    setSaveMessage(null);
+    setTimeConflict(null);
+  }
+
+  function openManualEntry(initialText = "") {
+    const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
+    const suggestedEnd = normalizeTimeInput(prefillEntry?.end_time);
+    setEditingEntryId(null);
+    setForm({
+      siteId: "",
+      startTime: suggestedStart ?? "",
+      endTime: suggestedEnd ?? "",
+    });
+    setManualSiteText(initialText);
+    setSheetMode("manual");
+    setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
+    setFormError(null);
+    setSaveMessage(null);
+    setTimeConflict(null);
+  }
+
+  function closeTimeEntrySheet() {
+    setSheetMode("closed");
+    setEditingEntryId(null);
+    setForm({ siteId: "", startTime: "", endTime: "" });
+    setManualSiteText("");
+    setSuggestionMessage(null);
+    setFormError(null);
+    setTimeConflict(null);
   }
 
   async function saveCurrentForm(options: { replaceEntryId?: number; skipLocalConflict?: boolean } = {}) {
@@ -271,6 +290,14 @@ export function MobileTimeEntryPage() {
     }
     if (!form.startTime || !form.endTime) {
       setFormError("Bitte Startzeit und Endzeit eintragen.");
+      return;
+    }
+    if (sheetMode === "site" && !form.siteId) {
+      setFormError("Bitte eine Baustelle auswählen.");
+      return;
+    }
+    if (sheetMode === "manual" && !manualSiteText.trim()) {
+      setFormError("Bitte Baustelle oder Ort beschreiben.");
       return;
     }
     if (timeValidationMessage || breakMinutes === null || netMinutes === null) {
@@ -293,17 +320,24 @@ export function MobileTimeEntryPage() {
       }
     }
 
+    const isManualEntry = sheetMode === "manual";
+    const nextSiteId = isManualEntry ? null : Number(form.siteId);
+    const nextAssignmentId = isManualEntry ? null : findAssignmentIdForSite(assignmentsForSelectedDate, form.siteId);
+    const nextNote = isManualEntry
+      ? `Manuelle Baustelle: ${manualSiteText.trim()}`
+      : editingEntry?.note ?? null;
+
     const payload: TimeEntryCreate = {
       person_id: personId,
-      site_id: form.siteId ? Number(form.siteId) : null,
-      assignment_id: selectedAssignmentId,
+      site_id: nextSiteId,
+      assignment_id: nextAssignmentId,
       work_date: selectedDate,
       start_time: form.startTime,
       end_time: form.endTime,
       break_minutes: breakMinutes,
       travel_minutes: editingEntry?.travel_minutes ?? 0,
       work_minutes: netMinutes,
-      note: editingEntry?.note ?? null,
+      note: nextNote,
       source: "manual",
       status: "submitted",
     };
@@ -315,12 +349,11 @@ export function MobileTimeEntryPage() {
         : await api.createTimeEntry(payload);
       setEntries((currentEntries) => upsertEntry(currentEntries, savedEntry));
       if (targetEntryId) {
-        setEditingEntryId(savedEntry.id);
         setSaveMessage(options.replaceEntryId ? "Alter Eintrag wurde ersetzt." : "Eintrag aktualisiert.");
       } else {
-        resetFormForNewEntry(plannedSiteIds);
         setSaveMessage("Zeit hinzugefügt.");
       }
+      closeTimeEntrySheet();
     } catch (error) {
       const apiConflict = parseApiOverlapConflict(error, siteById);
       if (apiConflict) {
@@ -333,41 +366,24 @@ export function MobileTimeEntryPage() {
     }
   }
 
-  function startNewEntry() {
-    resetFormForNewEntry(plannedSiteIds);
-    setEditingEntryId(null);
-    setFormError(null);
-    setSaveMessage(null);
-    setTimeConflict(null);
-  }
-
-  function switchSiteSelectionMode(mode: SiteSelectionMode) {
-    setSiteSelectionMode(mode);
-    setForm((currentForm) => {
-      if (mode === "planned") {
-        const plannedSiteId = plannedSiteIds.length === 1 ? String(plannedSiteIds[0]) : "";
-        return { ...currentForm, siteId: plannedSiteId };
-      }
-      return currentForm;
-    });
-    setFormError(null);
-    setSaveMessage(null);
-    setTimeConflict(null);
-  }
-
   function editEntry(entry: TimeEntry) {
     setEditingEntryId(entry.id);
+    setForm({
+      siteId: entry.site_id !== null ? String(entry.site_id) : "",
+      startTime: normalizeTimeInput(entry.start_time) ?? "",
+      endTime: normalizeTimeInput(entry.end_time) ?? "",
+    });
+    setManualSiteText(entry.site_id === null ? extractManualSiteText(entry.note) : "");
+    setSheetMode(entry.site_id === null ? "manual" : "site");
+    setSuggestionMessage(null);
     setFormError(null);
     setSaveMessage(null);
     setTimeConflict(null);
   }
 
-  function resetFormForNewEntry(nextPlannedSiteIds: number[]) {
-    const plannedSiteId = nextPlannedSiteIds.length === 1 ? String(nextPlannedSiteIds[0]) : "";
-    setForm({ siteId: plannedSiteId, startTime: "", endTime: "" });
-    setSiteSelectionMode("planned");
-    setSuggestionMessage(null);
-  }
+  const sheetSiteLabel = sheetMode === "manual"
+    ? manualSiteText.trim() || "Baustelle abweichend von Planung"
+    : form.siteId ? formatSiteLabel(Number(form.siteId), siteById) : "Baustelle";
 
   return (
     <section className={classNames("mobile-page", "mobile-time-page", activeView === "day" && "is-day-view")}>
@@ -473,181 +489,207 @@ export function MobileTimeEntryPage() {
           </section>
 
           <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
-	            <div className="mobile-time-entry-heading">
-	              <span>{formatCalendarWeek(selectedDate)}</span>
-	              <h1>{formatDetailDate(selectedDate)}</h1>
-	              {editingEntry ? <p>Gespeicherter Eintrag wird bearbeitet.</p> : null}
-	              {!editingEntry && suggestionMessage ? <p>{suggestionMessage}</p> : null}
-	            </div>
+            <div className="mobile-time-entry-heading">
+              <span>{formatCalendarWeek(selectedDate)}</span>
+              <h1>{formatDetailDate(selectedDate)}</h1>
+            </div>
 
-	            <div className="mobile-time-plan-note">
-	              {assignmentLoadError ? "Planung konnte nicht geladen werden." : null}
-	              {!assignmentLoadError && plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Du kannst eine Baustelle auswählen." : null}
-	              {!assignmentLoadError && plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
-	              {!assignmentLoadError && plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
-	            </div>
+            <div className="mobile-time-plan-note">
+              {assignmentLoadError ? "Planung konnte nicht geladen werden." : null}
+              {!assignmentLoadError && plannedSiteIds.length === 0 ? "Keine Baustelle geplant. Wähle eine vergangene Baustelle oder erfasse eine Abweichung." : null}
+              {!assignmentLoadError && plannedSiteIds.length === 1 ? `Geplant: ${formatSiteLabel(plannedSiteIds[0], siteById)}` : null}
+              {!assignmentLoadError && plannedSiteIds.length > 1 ? `Mehrere Einsätze geplant: ${plannedSiteIds.map((siteId) => formatSiteLabel(siteId, siteById)).join(", ")}` : null}
+            </div>
 
-	            <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
-	              <label className="mobile-time-field">
-	                <span>Baustelle</span>
-	                <div className="mobile-time-site-mode" aria-label="Baustellen-Auswahlmodus">
-	                  <button
-	                    className={classNames(siteSelectionMode === "planned" && "active")}
-	                    type="button"
-	                    onClick={() => switchSiteSelectionMode("planned")}
-	                  >
-	                    Geplante Baustelle
-	                  </button>
-	                  <button
-	                    className={classNames(siteSelectionMode === "other" && "active")}
-	                    type="button"
-	                    onClick={() => switchSiteSelectionMode("other")}
-	                  >
-	                    Andere Baustelle auswählen
-	                  </button>
-	                </div>
-	                <select value={form.siteId} onChange={(event) => {
-	                  setForm((currentForm) => ({ ...currentForm, siteId: event.target.value }));
-	                  setFormError(null);
-	                  setSaveMessage(null);
-	                  setTimeConflict(null);
-	                }}>
-	                  <option value="">
-	                    {assignmentLoadError && siteSelectionMode === "planned"
-	                      ? "Planung nicht geladen"
-	                      : siteSelectionMode === "planned" && plannedSiteOptions.length === 0
-	                      ? "Keine Baustelle geplant"
-	                      : "Keine Baustelle ausgewählt"}
-	                  </option>
-	                  {visibleSiteOptions.map((site) => (
-	                    <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
-	                  ))}
-	                </select>
-	              </label>
-	              {siteLoadError && siteSelectionMode === "other" ? (
-	                <p className="form-error">{siteLoadError}</p>
-	              ) : null}
-	              {siteSelectionMode === "other" && plannedSiteIds.length > 0 ? (
-	                <p className="form-info mobile-time-deviation-note">
-	                  Andere Baustelle: Die spätere Prüfung erkennt die Abweichung zur Planmatrix.
-	                </p>
-	              ) : null}
+            {saveMessage ? (
+              <p className="form-info mobile-time-save-message">
+                <CheckCircle2 aria-hidden="true" size={16} />
+                {saveMessage}
+              </p>
+            ) : null}
 
-              <div className="mobile-time-form-grid">
-                <label className="mobile-time-field">
-                  <span>Startzeit</span>
-                  <input
-                    required
-                    type="time"
-                    value={form.startTime}
-                    onChange={(event) => {
-                      setForm((currentForm) => ({ ...currentForm, startTime: event.target.value }));
-                      setFormError(null);
-                      setSaveMessage(null);
-                    }}
-                  />
-                </label>
-                <label className="mobile-time-field">
-                  <span>Endzeit</span>
-                  <input
-                    required
-                    type="time"
-                    value={form.endTime}
-                    onChange={(event) => {
-                      setForm((currentForm) => ({ ...currentForm, endTime: event.target.value }));
-                      setFormError(null);
-                      setSaveMessage(null);
-                    }}
-                  />
-                </label>
+            <div className="mobile-time-site-picker">
+              <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
+                <strong>Baustelle abweichend von Planung</strong>
+                <span>Ausnahmefall mit manueller Baustellenbeschreibung</span>
+              </button>
+
+              <section className="mobile-time-picker-section" aria-label="Geplante Baustellen">
+                <div className="mobile-time-picker-heading">
+                  <span>Geplante Baustellen</span>
+                  <strong>{plannedSiteOptions.length}</strong>
+                </div>
+                {plannedSiteOptions.length ? (
+                  <div className="mobile-time-site-grid">
+                    {plannedSiteOptions.map((site) => (
+                      <button className="mobile-time-site-card is-planned" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
+                        <strong>{site.name}</strong>
+                        {site.site_number ? <span>{site.site_number}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mobile-time-picker-empty">Keine geplante Baustelle für diesen Tag.</p>
+                )}
+              </section>
+
+              <section className="mobile-time-picker-section" aria-label="Vergangene geplante Baustellen">
+                <div className="mobile-time-picker-heading">
+                  <span>Vergangene geplante Baustellen (6 Monate)</span>
+                </div>
+                {recentSiteOptions.length ? (
+                  <div className="mobile-time-site-grid">
+                    {recentSiteOptions.map((site) => (
+                      <button className="mobile-time-site-card" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
+                        <strong>{site.name}</strong>
+                        <span>{[site.site_number, `zuletzt ${formatShortDate(site.lastPlannedDate)}`].filter(Boolean).join(" · ")}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mobile-time-picker-empty">Keine vergangenen Baustellen gefunden.</p>
+                )}
+              </section>
+            </div>
+
+            <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
+              <div className="mobile-time-day-entries-heading">
+                <span>Einträge an diesem Tag</span>
+                <strong>{selectedDateEntries.length}</strong>
               </div>
+              {selectedDateEntries.length === 0 ? (
+                <p>Noch keine Zeit für diesen Tag erfasst.</p>
+              ) : (
+                <div className="mobile-time-entry-bubbles">
+                  {selectedDateEntries.map((entry) => (
+                    <button
+                      className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
+                      key={entry.id}
+                      type="button"
+                      onClick={() => editEntry(entry)}
+                    >
+                      <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
+                      <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
 
-              <div className="mobile-time-summary">
-                <div>
-                  <span>Pause automatisch</span>
-                  <strong>{breakMinutes !== null ? formatHoursFromMinutes(breakMinutes) : "-"}</strong>
+          {sheetMode !== "closed" ? (
+            <div className="mobile-time-sheet-backdrop" role="presentation">
+              <div className="mobile-time-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-sheet-title">
+                <div className="mobile-time-sheet-heading">
+                  <span>{editingEntry ? "Eintrag bearbeiten" : "Zeit erfassen"}</span>
+                  <h2 id="mobile-time-sheet-title">{sheetSiteLabel}</h2>
+                  {suggestionMessage ? <p>{suggestionMessage}</p> : null}
                 </div>
-                <div>
-                  <span>Arbeitszeit netto</span>
-                  <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
-                </div>
-                <div>
-                  <span>Brutto</span>
-                  <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
-                </div>
+
+                <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
+                  {sheetMode === "manual" ? (
+                    <label className="mobile-time-field">
+                      <span>Baustelle / Ort beschreiben</span>
+                      <input
+                        autoFocus
+                        required
+                        type="text"
+                        value={manualSiteText}
+                        onChange={(event) => {
+                          setManualSiteText(event.target.value);
+                          setFormError(null);
+                          setSaveMessage(null);
+                        }}
+                        placeholder="z. B. Musterstraße 12, Kunde, Ort"
+                      />
+                    </label>
+                  ) : null}
+
+                  <div className="mobile-time-form-grid">
+                    <label className="mobile-time-field">
+                      <span>Startzeit</span>
+                      <input
+                        required
+                        type="time"
+                        value={form.startTime}
+                        onChange={(event) => {
+                          setForm((currentForm) => ({ ...currentForm, startTime: event.target.value }));
+                          setFormError(null);
+                          setSaveMessage(null);
+                        }}
+                      />
+                    </label>
+                    <label className="mobile-time-field">
+                      <span>Endzeit</span>
+                      <input
+                        required
+                        type="time"
+                        value={form.endTime}
+                        onChange={(event) => {
+                          setForm((currentForm) => ({ ...currentForm, endTime: event.target.value }));
+                          setFormError(null);
+                          setSaveMessage(null);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mobile-time-summary">
+                    <div>
+                      <span>Pause automatisch</span>
+                      <strong>{breakMinutes !== null ? formatHoursFromMinutes(breakMinutes) : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Arbeitszeit netto</span>
+                      <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Brutto</span>
+                      <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
+                    </div>
+                  </div>
+
+                  {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
+                  {formError ? <p className="form-error">{formError}</p> : null}
+                  {timeConflict ? (
+                    <div className="mobile-time-conflict" role="alert">
+                      <strong>{timeConflict.message}</strong>
+                      {timeConflict.conflicts.map((conflict) => (
+                        <p key={conflict.id}>
+                          {conflict.site_label} · {formatTimeRange(conflict.start_time, conflict.end_time)}
+                        </p>
+                      ))}
+                      <div className="mobile-time-conflict-actions">
+                        <button type="button" onClick={() => setTimeConflict(null)}>Abbrechen</button>
+                        {timeConflict.conflicts[0] ? (
+                          <button type="button" onClick={() => {
+                            const conflictEntry = selectedDateEntries.find((entry) => entry.id === timeConflict.conflicts[0]?.id);
+                            if (conflictEntry) {
+                              editEntry(conflictEntry);
+                            }
+                          }}>
+                            Vorhandenen Eintrag bearbeiten
+                          </button>
+                        ) : null}
+                        {timeConflict.conflicts.length === 1 ? (
+                          <button type="button" onClick={() => void saveCurrentForm({ replaceEntryId: timeConflict.conflicts[0].id, skipLocalConflict: true })}>
+                            Alten Eintrag ersetzen
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
+                    {isSaving ? "Speichert..." : editingEntry ? "Eintrag aktualisieren" : "Zeit hinzufügen"}
+                  </button>
+                  <button className="mobile-time-secondary-button" type="button" onClick={closeTimeEntrySheet}>
+                    Zurück zur Baustellenauswahl
+                  </button>
+                </form>
               </div>
-
-	              {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
-	              {formError ? <p className="form-error">{formError}</p> : null}
-	              {timeConflict ? (
-	                <div className="mobile-time-conflict" role="alert">
-	                  <strong>{timeConflict.message}</strong>
-	                  {timeConflict.conflicts.map((conflict) => (
-	                    <p key={conflict.id}>
-	                      {conflict.site_label} · {formatTimeRange(conflict.start_time, conflict.end_time)}
-	                    </p>
-	                  ))}
-	                  <div className="mobile-time-conflict-actions">
-	                    <button type="button" onClick={() => setTimeConflict(null)}>Abbrechen</button>
-	                    {timeConflict.conflicts[0] ? (
-	                      <button type="button" onClick={() => {
-	                        const conflictEntry = selectedDateEntries.find((entry) => entry.id === timeConflict.conflicts[0]?.id);
-	                        if (conflictEntry) {
-	                          editEntry(conflictEntry);
-	                        }
-	                      }}>
-	                        Vorhandenen Eintrag bearbeiten
-	                      </button>
-	                    ) : null}
-	                    {timeConflict.conflicts.length === 1 ? (
-	                      <button type="button" onClick={() => void saveCurrentForm({ replaceEntryId: timeConflict.conflicts[0].id, skipLocalConflict: true })}>
-	                        Alten Eintrag ersetzen
-	                      </button>
-	                    ) : null}
-	                  </div>
-	                </div>
-	              ) : null}
-	              {saveMessage ? (
-	                <p className="form-info mobile-time-save-message">
-	                  <CheckCircle2 aria-hidden="true" size={16} />
-                  {saveMessage}
-                </p>
-	              ) : null}
-
-	              <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
-	                {isSaving ? "Speichert..." : editingEntry ? "Eintrag aktualisieren" : "Zeit hinzufügen"}
-	              </button>
-	              {editingEntry ? (
-	                <button className="mobile-time-secondary-button" type="button" onClick={startNewEntry}>
-	                  Neuer Eintrag
-	                </button>
-	              ) : null}
-	            </form>
-
-	            <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
-	              <div className="mobile-time-day-entries-heading">
-	                <span>Einträge an diesem Tag</span>
-	                <strong>{selectedDateEntries.length}</strong>
-	              </div>
-	              {selectedDateEntries.length === 0 ? (
-	                <p>Noch keine Zeit für diesen Tag erfasst.</p>
-	              ) : (
-	                <div className="mobile-time-entry-bubbles">
-	                  {selectedDateEntries.map((entry) => (
-	                    <button
-	                      className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
-	                      key={entry.id}
-	                      type="button"
-	                      onClick={() => editEntry(entry)}
-	                    >
-	                      <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-	                      <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
-	                    </button>
-	                  ))}
-	                </div>
-	              )}
-	            </section>
-	          </section>
+            </div>
+          ) : null}
         </>
       ) : null}
     </section>
@@ -699,13 +741,46 @@ function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[
   return sites;
 }
 
+function buildRecentPlannedSiteOptions({
+  assignments,
+  selectedDate,
+  plannedSiteIds,
+  siteById,
+}: {
+  assignments: MobileAssignment[];
+  selectedDate: string;
+  plannedSiteIds: number[];
+  siteById: Map<number, MobileTimeSiteOption>;
+}): MobileTimeRecentSiteOption[] {
+  const cutoffDate = toIsoDate(addMonths(parseDateInput(selectedDate), -6));
+  const excludedSiteIds = new Set(plannedSiteIds);
+  const latestBySite = new Map<number, MobileTimeRecentSiteOption>();
+  for (const assignment of assignments) {
+    if (excludedSiteIds.has(assignment.site.id) || assignment.end_date >= selectedDate || assignment.end_date < cutoffDate) {
+      continue;
+    }
+    const site = siteById.get(assignment.site.id) ?? {
+      id: assignment.site.id,
+      site_number: assignment.site.site_number,
+      name: assignment.site.name,
+    };
+    const current = latestBySite.get(site.id);
+    if (!current || assignment.end_date > current.lastPlannedDate) {
+      latestBySite.set(site.id, { ...site, lastPlannedDate: assignment.end_date });
+    }
+  }
+  return Array.from(latestBySite.values())
+    .sort((first, second) => second.lastPlannedDate.localeCompare(first.lastPlannedDate) || compareSites(first, second))
+    .slice(0, 6);
+}
+
 function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, MobileTimeSiteOption>): DayWorkSummary[] {
   const summaries = new Map<string, DayWorkSummary>();
   for (const entry of entries) {
     const key = entry.site_id !== null ? `site:${entry.site_id}` : "without-site";
     const siteLabel = entry.site_id !== null
       ? compactSiteLabel(entry.site_id, siteById, entry.site_name)
-      : "Ohne Baustelle";
+      : extractManualSiteText(entry.note) || "Manuelle Baustelle";
     const current = summaries.get(key);
     if (current) {
       current.minutes += entry.work_minutes;
@@ -756,7 +831,7 @@ function timeOverlapConflictEntry(entry: TimeEntry, siteById: Map<number, Mobile
   return {
     id: entry.id,
     site_id: entry.site_id,
-    site_label: entry.site_id !== null ? formatSiteLabel(entry.site_id, siteById) : "Ohne Baustelle",
+    site_label: entry.site_id !== null ? formatSiteLabel(entry.site_id, siteById) : extractManualSiteText(entry.note) || "Manuelle Baustelle",
     start_time: entry.start_time,
     end_time: entry.end_time,
   };
@@ -936,15 +1011,27 @@ function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOpt
   return siteOptionLabel(site);
 }
 
+function formatShortDate(value: string): string {
+  const date = parseDateInput(value);
+  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.${date.getFullYear()}`;
+}
+
 function compactSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>, fallbackName: string | null): string {
   const site = siteById.get(siteId);
   const label = site?.name ?? fallbackName ?? site?.site_number;
   return label || `Baustelle ${siteId}`;
 }
 
+function extractManualSiteText(note: string | null | undefined): string {
+  if (!note) {
+    return "";
+  }
+  return note.replace(/^Manuelle Baustelle:\s*/i, "").trim();
+}
+
 function formatEntryBubbleTitle(entry: TimeEntry, siteById: Map<number, MobileTimeSiteOption>): string {
   if (entry.site_id === null) {
-    return "Ohne Baustelle";
+    return extractManualSiteText(entry.note) || "Manuelle Baustelle";
   }
   return formatSiteLabel(entry.site_id, siteById);
 }
