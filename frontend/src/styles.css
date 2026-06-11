@@ -11848,13 +11848,11 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-overview-panel {
-  position: relative;
   width: calc(100% + 12px);
   margin-right: -6px;
   margin-left: -6px;
   padding-right: 10px;
   padding-left: 10px;
-  padding-bottom: 74px;
 }
 
 .mobile-measurement-page {
@@ -12218,10 +12216,7 @@ button.person-chip:focus-visible {
   padding: 0 3px;
 }
 
-.mobile-measurement-camera-button {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
+.mobile-camera-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12234,9 +12229,19 @@ button.person-chip:focus-visible {
   box-shadow: 0 18px 34px rgb(18 29 52 / 22%);
 }
 
-.mobile-measurement-camera-button:disabled {
+.mobile-camera-button:disabled {
   cursor: wait;
   opacity: 0.68;
+}
+
+.mobile-measurement-camera-button {
+  justify-self: end;
+  margin-top: 96px;
+}
+
+.mobile-project-camera-button {
+  justify-self: end;
+  margin-top: 10px;
 }
 
 .mobile-measurement-photo-gallery {

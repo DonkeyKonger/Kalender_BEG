@@ -296,6 +296,55 @@ function MobileExtraWorkPlaceholder({
 }
 
 function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
+  const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
+  const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
+  const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
+  const projectPhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  function openProjectPhotoCapture(): void {
+    setProjectPhotoMessage(null);
+    setProjectPhotoMessageTone("info");
+    projectPhotoInputRef.current?.click();
+  }
+
+  async function handleProjectPhotoChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file || isUploadingProjectPhoto) {
+      return;
+    }
+    setIsUploadingProjectPhoto(true);
+    setProjectPhotoMessage("Foto wird gespeichert...");
+    setProjectPhotoMessageTone("info");
+    try {
+      const folders = await api.projectFolders(assignment.site.id);
+      const hasConnectedProjectFolder = folders.some((folder) => folder.external_drive_id && folder.external_item_id);
+      if (!hasConnectedProjectFolder) {
+        throw new Error("Für diese Baustelle ist noch kein Projektordner vorhanden.");
+      }
+      const photoFolder = folders.find((folder) => folder.folder_key === "fotos");
+      if (!photoFolder) {
+        throw new Error("Projektordner Fotos wurde nicht gefunden.");
+      }
+      if (!photoFolder.external_drive_id || !photoFolder.external_item_id) {
+        throw new Error("Für diese Baustelle ist noch kein Projektordner vorhanden.");
+      }
+      const uploadFile = await prepareMeasurementPhotoFile(file);
+      await api.uploadProjectFolderDocument(assignment.site.id, "fotos", uploadFile);
+      setProjectPhotoMessage("Foto gespeichert.");
+      setProjectPhotoMessageTone("info");
+    } catch (requestError) {
+      setProjectPhotoMessage(
+        requestError instanceof Error && !(requestError instanceof ApiError)
+          ? requestError.message
+          : readApiError(requestError, "Foto konnte nicht gespeichert werden."),
+      );
+      setProjectPhotoMessageTone("error");
+    } finally {
+      setIsUploadingProjectPhoto(false);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel">
       <h2>Übersicht</h2>
@@ -312,7 +361,50 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
       </div>
       {assignment.site.info && <p className="assignment-note">{assignment.site.info}</p>}
       {assignment.note && <p className="assignment-note">{assignment.note}</p>}
+      {projectPhotoMessage ? (
+        <p className={projectPhotoMessageTone === "error" ? "form-error" : "form-info"}>
+          {projectPhotoMessage}
+        </p>
+      ) : null}
+      <MobileCameraButton
+        className="mobile-project-camera-button"
+        disabled={isUploadingProjectPhoto}
+        label="Projektfoto aufnehmen"
+        onClick={openProjectPhotoCapture}
+      />
+      <input
+        ref={projectPhotoInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(event) => void handleProjectPhotoChange(event)}
+      />
     </div>
+  );
+}
+
+function MobileCameraButton({
+  className = "",
+  disabled,
+  label,
+  onClick,
+}: {
+  className?: string;
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className={`mobile-camera-button ${className}`.trim()}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Camera aria-hidden="true" size={24} />
+    </button>
   );
 }
 
@@ -1397,15 +1489,12 @@ function MeasurementBatchOverview({
         </button>
       </div>
       {photoMessage ? <p className={photoMessageTone === "error" ? "form-error" : "form-info"}>{photoMessage}</p> : null}
-      <button
-        aria-label="Foto aufnehmen"
+      <MobileCameraButton
         className="mobile-measurement-camera-button"
-        type="button"
-        onClick={onTakePhoto}
         disabled={isUploadingPhoto}
-      >
-        <Camera aria-hidden="true" size={24} />
-      </button>
+        label="Foto aufnehmen"
+        onClick={onTakePhoto}
+      />
     </div>
   );
 }
