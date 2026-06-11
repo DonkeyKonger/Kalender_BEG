@@ -29,6 +29,7 @@ from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 from app.services.extra_work_service import ExtraWorkService
+from app.services.extra_work_pdf_service import ExtraWorkPdfService
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -247,6 +248,26 @@ def upsert_my_assignment_extra_work_ticket_entry(
         ticket_id=ticket_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.get("/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/pdf")
+def download_my_assignment_extra_work_ticket_pdf(
+    assignment_id: int,
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+    )
+    quoted = quote(filename)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
     )
 
 

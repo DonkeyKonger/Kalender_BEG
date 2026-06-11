@@ -903,6 +903,10 @@ export const api = {
     });
   },
 
+  async mobileExtraWorkTicketPdf(assignmentId: number, ticketId: number): Promise<Blob> {
+    return requestBlob(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/pdf`);
+  },
+
   async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<Blob> {
     return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
   },

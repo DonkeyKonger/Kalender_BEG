@@ -401,6 +401,7 @@ function MobileExtraWorkTab({
     }
     return (
       <ExtraWorkOrderOverview
+        assignmentId={assignment.id}
         order={selectedOrder}
         message={message}
         error={error}
@@ -502,6 +503,7 @@ function MobileExtraWorkTab({
 }
 
 function ExtraWorkOrderOverview({
+  assignmentId,
   order,
   message,
   error,
@@ -511,6 +513,7 @@ function ExtraWorkOrderOverview({
   onSubmit,
   onPlaceholderAction,
 }: {
+  assignmentId: number;
   order: MobileExtraWorkTicket;
   message: string | null;
   error: string | null;
@@ -524,6 +527,35 @@ function ExtraWorkOrderOverview({
   const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
   const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
   const isApproval = order.kind === "approval";
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  async function openExtraWorkPdf(): Promise<void> {
+    if (isOpeningPdf) {
+      return;
+    }
+    setIsOpeningPdf(true);
+    setPdfError(null);
+    try {
+      const blob = await api.mobileExtraWorkTicketPdf(assignmentId, order.id);
+      const filename = getMobileExtraWorkPdfFilename(order);
+      if (isNativeAndroidApp()) {
+        await openAndroidPdfBlob(blob, filename);
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+        if (!openedWindow) {
+          downloadBlobFile(blob, filename);
+        }
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (requestError) {
+      setPdfError(readApiError(requestError, `${kindLabel}-PDF konnte nicht geöffnet werden.`));
+    } finally {
+      setIsOpeningPdf(false);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -555,7 +587,7 @@ function ExtraWorkOrderOverview({
           ) : null}
         </span>
       </div>
-      {error ? <div className="form-error">{error}</div> : null}
+      {error || pdfError ? <div className="form-error">{error ?? pdfError}</div> : null}
       {message ? <p className="form-info">{message}</p> : null}
 
       <div className="mobile-measurement-overview-actions">
@@ -563,9 +595,9 @@ function ExtraWorkOrderOverview({
           <ClipboardList aria-hidden="true" size={18} />
           <span>{isApproval ? "Freigabe erfassen" : "Leistungen erfassen"}</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction(`${kindLabel}-PDF wird im nächsten Schritt angebunden.`)}>
+        <button className="mobile-measurement-overview-action" type="button" onClick={() => void openExtraWorkPdf()} disabled={isOpeningPdf}>
           <FileText aria-hidden="true" size={18} />
-          <span>{kindLabel} anzeigen (PDF)</span>
+          <span>{isOpeningPdf ? "PDF wird geöffnet..." : `${kindLabel} anzeigen (PDF)`}</span>
         </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Kundenunterschrift wird später angebunden.")}>
           <UserRound aria-hidden="true" size={18} />
@@ -3687,6 +3719,11 @@ function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
 
 function formatMobileExtraWorkKindLabel(kind: string): string {
   return kind === "approval" ? "Stundenfreigabe" : "Stundenzettel";
+}
+
+function getMobileExtraWorkPdfFilename(order: MobileExtraWorkTicket): string {
+  const number = order.display_number || String(order.id);
+  return `Zusatzauftrag_${number.replace(/[\\/:*?"<>|\s]+/g, "_")}.pdf`;
 }
 
 function createEmptyExtraWorkEntryForm(workerName = ""): ExtraWorkEntryFormState {
