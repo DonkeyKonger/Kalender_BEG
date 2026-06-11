@@ -312,6 +312,20 @@ export type MobileExtraWorkTicket = {
   updated_at: string;
 };
 
+export type MobileExtraWorkTicketPhoto = {
+  id: number;
+  site_id: number;
+  extra_work_ticket_id: number;
+  filename: string;
+  content_type: string;
+  file_size_bytes: number | null;
+  external_web_url: string | null;
+  uploaded_by_name: string | null;
+  taken_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MobileExtraWorkWorkerHours = {
   worker_name: string;
   monday_hours: MeasurementNumericValue;

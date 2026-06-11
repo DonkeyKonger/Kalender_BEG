@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -915,6 +915,44 @@ export const api = {
     return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/customer-signature`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  async mobileExtraWorkTicketPhotos(
+    assignmentId: number,
+    ticketId: number,
+  ): Promise<MobileExtraWorkTicketPhoto[]> {
+    return request<MobileExtraWorkTicketPhoto[]>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/photos`);
+  },
+
+  async uploadMobileExtraWorkTicketPhoto(
+    assignmentId: number,
+    ticketId: number,
+    file: File,
+  ): Promise<MobileExtraWorkTicketPhoto> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return request<MobileExtraWorkTicketPhoto>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/photos`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  async mobileExtraWorkTicketPhotoContent(
+    assignmentId: number,
+    ticketId: number,
+    photoId: number,
+  ): Promise<Blob> {
+    return requestBlob(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/photos/${photoId}/content`);
+  },
+
+  async deleteMobileExtraWorkTicketPhoto(
+    assignmentId: number,
+    ticketId: number,
+    photoId: number,
+  ): Promise<void> {
+    await request<void>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/photos/${photoId}`, {
+      method: "DELETE",
     });
   },
 

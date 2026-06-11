@@ -45,6 +45,9 @@ class ExtraWorkTicket(TimestampMixin, Base):
     entries = relationship(
         "ExtraWorkTicketEntry", back_populates="ticket", cascade="all, delete-orphan"
     )
+    photos = relationship(
+        "ExtraWorkTicketPhoto", back_populates="ticket", cascade="all, delete-orphan"
+    )
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
 
@@ -111,3 +114,31 @@ class ExtraWorkTicketEntry(TimestampMixin, Base):
                 except (ArithmeticError, TypeError, ValueError):
                     continue
         return total
+
+
+class ExtraWorkTicketPhoto(TimestampMixin, Base):
+    __tablename__ = "extra_work_ticket_photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    extra_work_ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("extra_work_tickets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    project_folder_key: Mapped[str] = mapped_column(String(80), nullable=False, default="fotos")
+    external_drive_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_item_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_web_url: Mapped[str | None] = mapped_column(String(1000))
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    caption: Mapped[str | None] = mapped_column(String(500))
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    ticket = relationship("ExtraWorkTicket", back_populates="photos")
+    site = relationship("Site")
+    uploaded_by = relationship("User")

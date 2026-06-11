@@ -13,6 +13,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketCreate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
+    ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketStatusUpdate,
 )
@@ -288,6 +289,88 @@ def download_my_assignment_extra_work_ticket_pdf(
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/photos",
+    response_model=list[ExtraWorkTicketPhotoRead],
+)
+def list_my_assignment_extra_work_ticket_photos(
+    assignment_id: int,
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ExtraWorkTicketPhotoRead]:
+    return ExtraWorkService(db).list_mobile_ticket_photos(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/photos",
+    response_model=ExtraWorkTicketPhotoRead,
+)
+async def upload_my_assignment_extra_work_ticket_photo(
+    assignment_id: int,
+    ticket_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketPhotoRead:
+    return ExtraWorkService(db).upload_mobile_ticket_photo(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        filename=file.filename,
+        content=await file.read(),
+        content_type=file.content_type,
+    )
+
+
+@router.get(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/content",
+)
+def download_my_assignment_extra_work_ticket_photo(
+    assignment_id: int,
+    ticket_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, content_type, filename = ExtraWorkService(db).get_mobile_ticket_photo_content(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        current_user=current_user,
+    )
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+        },
+    )
+
+
+@router.delete(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_my_assignment_extra_work_ticket_photo(
+    assignment_id: int,
+    ticket_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    ExtraWorkService(db).delete_mobile_ticket_photo(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        current_user=current_user,
     )
 
 

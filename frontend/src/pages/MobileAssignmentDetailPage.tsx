@@ -33,7 +33,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -328,11 +328,17 @@ function MobileExtraWorkTab({
 }) {
   const [orders, setOrders] = useState<MobileExtraWorkTicket[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<MobileExtraWorkTicket | null>(null);
+  const [photoGalleryOrder, setPhotoGalleryOrder] = useState<MobileExtraWorkTicket | null>(null);
+  const [photoUploadOrder, setPhotoUploadOrder] = useState<MobileExtraWorkTicket | null>(null);
+  const [photoGalleryVersion, setPhotoGalleryVersion] = useState(0);
   const [isEditingEntry, setIsEditingEntry] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [photoMessageTone, setPhotoMessageTone] = useState<"info" | "error">("info");
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const requiresApproval = assignment.site.requires_extra_work_approval;
   const primaryKind: "billing" | "approval" = requiresApproval ? "approval" : "billing";
 
@@ -383,7 +389,61 @@ function MobileExtraWorkTab({
     }
   }
 
+  function openPhotoCapture(order: MobileExtraWorkTicket): void {
+    setPhotoUploadOrder(order);
+    setMessage(null);
+    setPhotoMessageTone("info");
+    photoInputRef.current?.click();
+  }
+
+  async function handlePhotoInputChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    const order = photoUploadOrder ?? selectedOrder;
+    if (!file || !order || isUploadingPhoto) {
+      return;
+    }
+    setIsUploadingPhoto(true);
+    setMessage("Foto wird gespeichert...");
+    setPhotoMessageTone("info");
+    try {
+      const uploadFile = await prepareMeasurementPhotoFile(file);
+      await api.uploadMobileExtraWorkTicketPhoto(assignment.id, order.id, uploadFile);
+      setPhotoGalleryVersion((version) => version + 1);
+      setMessage("Foto gespeichert.");
+      setPhotoMessageTone("info");
+    } catch (requestError) {
+      setMessage(readApiError(requestError, "Foto konnte nicht gespeichert werden."));
+      setPhotoMessageTone("error");
+    } finally {
+      setIsUploadingPhoto(false);
+      setPhotoUploadOrder(null);
+    }
+  }
+
   if (selectedOrder) {
+    if (photoGalleryOrder) {
+      return (
+        <>
+          <ExtraWorkPhotoGallery
+            assignmentId={assignment.id}
+            order={photoGalleryOrder}
+            refreshKey={photoGalleryVersion}
+            isUploadingPhoto={isUploadingPhoto}
+            onBack={() => setPhotoGalleryOrder(null)}
+            onTakePhoto={() => openPhotoCapture(photoGalleryOrder)}
+          />
+          <input
+            ref={photoInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => void handlePhotoInputChange(event)}
+          />
+        </>
+      );
+    }
     if (isEditingEntry) {
       return (
         <ExtraWorkEntryPage
@@ -394,50 +454,71 @@ function MobileExtraWorkTab({
             const updatedOrder = await api.mobileExtraWorkTicket(assignment.id, selectedOrder.id);
             mergeUpdatedOrder(updatedOrder);
             setIsEditingEntry(false);
+            setPhotoMessageTone("info");
             setMessage("Eingaben gespeichert.");
           }}
         />
       );
     }
     return (
-      <ExtraWorkOrderOverview
-        assignmentId={assignment.id}
-        order={selectedOrder}
-        message={message}
-        error={error}
-        isSaving={isSaving}
-        onBack={() => {
-          setSelectedOrder(null);
-          setIsEditingEntry(false);
-          setMessage(null);
-        }}
-        onOpenEntry={() => {
-          setMessage(null);
-          setIsEditingEntry(true);
-        }}
-        onCustomerSigned={(updatedOrder) => {
-          mergeUpdatedOrder(updatedOrder);
-          setMessage("Kundenunterschrift gespeichert.");
-        }}
-        onSubmit={async () => {
-          if (selectedOrder.status !== "draft" || isSaving) {
-            return;
-          }
-          setIsSaving(true);
-          setError(null);
-          setMessage(null);
-          try {
-            const submittedOrder = await api.updateMobileExtraWorkTicketStatus(assignment.id, selectedOrder.id, "submitted");
-            mergeUpdatedOrder(submittedOrder);
-            setMessage(`${formatMobileExtraWorkKindLabel(selectedOrder.kind)} wurde eingereicht.`);
-          } catch (requestError) {
-            setError(readApiError(requestError, `${formatMobileExtraWorkKindLabel(selectedOrder.kind)} konnte nicht gesendet werden.`));
-          } finally {
-            setIsSaving(false);
-          }
-        }}
-        onPlaceholderAction={(text) => setMessage(text)}
-      />
+      <>
+        <ExtraWorkOrderOverview
+          assignmentId={assignment.id}
+          order={selectedOrder}
+          message={message}
+          error={error}
+          isSaving={isSaving}
+          isUploadingPhoto={isUploadingPhoto}
+          messageTone={photoMessageTone}
+          onBack={() => {
+            setSelectedOrder(null);
+            setPhotoGalleryOrder(null);
+            setIsEditingEntry(false);
+            setMessage(null);
+          }}
+          onOpenEntry={() => {
+            setMessage(null);
+            setIsEditingEntry(true);
+          }}
+          onTakePhoto={() => openPhotoCapture(selectedOrder)}
+          onOpenPhotos={() => setPhotoGalleryOrder(selectedOrder)}
+          onCustomerSigned={(updatedOrder) => {
+            mergeUpdatedOrder(updatedOrder);
+            setPhotoMessageTone("info");
+            setMessage("Kundenunterschrift gespeichert.");
+          }}
+          onSubmit={async () => {
+            if (selectedOrder.status !== "draft" || isSaving) {
+              return;
+            }
+            setIsSaving(true);
+            setError(null);
+            setMessage(null);
+            try {
+              const submittedOrder = await api.updateMobileExtraWorkTicketStatus(assignment.id, selectedOrder.id, "submitted");
+              mergeUpdatedOrder(submittedOrder);
+              setPhotoMessageTone("info");
+              setMessage(`${formatMobileExtraWorkKindLabel(selectedOrder.kind)} wurde eingereicht.`);
+            } catch (requestError) {
+              setError(readApiError(requestError, `${formatMobileExtraWorkKindLabel(selectedOrder.kind)} konnte nicht gesendet werden.`));
+            } finally {
+              setIsSaving(false);
+            }
+          }}
+          onPlaceholderAction={(text) => {
+            setPhotoMessageTone("info");
+            setMessage(text);
+          }}
+        />
+        <input
+          ref={photoInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => void handlePhotoInputChange(event)}
+        />
+      </>
     );
   }
 
@@ -512,8 +593,12 @@ function ExtraWorkOrderOverview({
   message,
   error,
   isSaving,
+  isUploadingPhoto,
+  messageTone,
   onBack,
   onOpenEntry,
+  onTakePhoto,
+  onOpenPhotos,
   onCustomerSigned,
   onSubmit,
   onPlaceholderAction,
@@ -523,8 +608,12 @@ function ExtraWorkOrderOverview({
   message: string | null;
   error: string | null;
   isSaving: boolean;
+  isUploadingPhoto: boolean;
+  messageTone: "info" | "error";
   onBack: () => void;
   onOpenEntry: () => void;
+  onTakePhoto: () => void;
+  onOpenPhotos: () => void;
   onCustomerSigned: (order: MobileExtraWorkTicket) => void;
   onSubmit: () => Promise<void>;
   onPlaceholderAction: (text: string) => void;
@@ -596,7 +685,6 @@ function ExtraWorkOrderOverview({
         </span>
       </div>
       {error || pdfError ? <div className="form-error">{error ?? pdfError}</div> : null}
-      {message ? <p className="form-info">{message}</p> : null}
 
       <div className="mobile-measurement-overview-actions">
         <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenEntry}>
@@ -626,16 +714,17 @@ function ExtraWorkOrderOverview({
           <UserRound aria-hidden="true" size={18} />
           <span>Monteursunterschrift einfügen</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => onPlaceholderAction("Fotos werden später dem Stundenzettel zugeordnet.")}>
+        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
           <Images aria-hidden="true" size={18} />
           <span>Hinterlegte Fotos</span>
         </button>
       </div>
+      {message ? <p className={messageTone === "error" ? "form-error" : "form-info"}>{message}</p> : null}
       <MobileCameraButton
         className="mobile-measurement-camera-button"
-        disabled
+        disabled={isUploadingPhoto}
         label="Foto aufnehmen"
-        onClick={() => onPlaceholderAction("Fotoaufnahme für Stundenzettel wird später angebunden.")}
+        onClick={onTakePhoto}
       />
       {isSigningCustomer ? (
         <ExtraWorkCustomerSignatureOverlay
@@ -2483,6 +2572,179 @@ function MeasurementPhotoGallery({
       <header className="mobile-measurement-photo-gallery-head">
         <h2>Hinterlegte Fotos</h2>
         <p>{formatMobileMeasurementBatchTitle(batch)}</p>
+      </header>
+
+      {photoError ? <div className="form-error">{photoError}</div> : null}
+      {isLoadingPhotos ? <div className="empty-panel">Fotos werden geladen...</div> : null}
+      {!isLoadingPhotos && !photos.length ? (
+        <div className="empty-panel mobile-measurement-photo-empty">
+          <span>Noch keine Fotos hinterlegt.</span>
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+            Foto aufnehmen
+          </button>
+        </div>
+      ) : null}
+      {!isLoadingPhotos && photos.length ? (
+        <div className="mobile-measurement-photo-grid">
+          {photos.map((preview) => {
+            const isDeleting = deletingPhotoId === preview.photo.id;
+            return (
+              <div className="mobile-measurement-photo-tile-wrap" key={preview.photo.id}>
+                <button
+                  className="mobile-measurement-photo-tile"
+                  type="button"
+                  onClick={() => preview.url ? setSelectedPhoto(preview) : undefined}
+                  disabled={!preview.url || isDeleting}
+                >
+                  {preview.url ? <img alt={preview.photo.filename} src={preview.url} /> : <span>{preview.error ?? "Foto nicht verfügbar."}</span>}
+                  <small>{isDeleting ? "Wird gelöscht..." : formatDateTimeLabel(preview.photo.created_at)}</small>
+                </button>
+                <button
+                  aria-label="Foto löschen"
+                  className="mobile-measurement-photo-delete"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeletePhoto(preview);
+                  }}
+                  disabled={deletingPhotoId !== null}
+                >
+                  <X aria-hidden="true" size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {selectedPhoto?.url ? (
+        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
+          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+            <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
+            <figcaption>
+              <strong>{selectedPhoto.photo.filename}</strong>
+              <span>{formatDateTimeLabel(selectedPhoto.photo.created_at)}</span>
+            </figcaption>
+            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
+          </figure>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type ExtraWorkPhotoPreview = {
+  photo: MobileExtraWorkTicketPhoto;
+  url: string | null;
+  error: string | null;
+};
+
+function ExtraWorkPhotoGallery({
+  assignmentId,
+  order,
+  refreshKey,
+  isUploadingPhoto,
+  onBack,
+  onTakePhoto,
+}: {
+  assignmentId: number;
+  order: MobileExtraWorkTicket;
+  refreshKey: number;
+  isUploadingPhoto: boolean;
+  onBack: () => void;
+  onTakePhoto: () => void;
+}) {
+  const [photos, setPhotos] = useState<ExtraWorkPhotoPreview[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<ExtraWorkPhotoPreview | null>(null);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const objectUrls: string[] = [];
+
+    async function loadPhotos(): Promise<void> {
+      setIsLoadingPhotos(true);
+      setPhotoError(null);
+      try {
+        const response = await api.mobileExtraWorkTicketPhotos(assignmentId, order.id);
+        const previews = await Promise.all(response.map(async (photo) => {
+          try {
+            const blob = await api.mobileExtraWorkTicketPhotoContent(assignmentId, order.id, photo.id);
+            const url = window.URL.createObjectURL(blob);
+            objectUrls.push(url);
+            return { photo, url, error: null };
+          } catch (requestError) {
+            return {
+              photo,
+              url: null,
+              error: readApiError(requestError, "Foto konnte nicht geladen werden."),
+            };
+          }
+        }));
+        if (isCurrent) {
+          setPhotos(previews);
+        } else {
+          objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setPhotoError(readApiError(requestError, "Fotos konnten nicht geladen werden."));
+          setPhotos([]);
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingPhotos(false);
+        }
+      }
+    }
+
+    void loadPhotos();
+    return () => {
+      isCurrent = false;
+      objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
+    };
+  }, [assignmentId, order.id, refreshKey]);
+
+  async function handleDeletePhoto(preview: ExtraWorkPhotoPreview): Promise<void> {
+    if (deletingPhotoId !== null || !window.confirm("Foto wirklich löschen?")) {
+      return;
+    }
+    setDeletingPhotoId(preview.photo.id);
+    setPhotoError(null);
+    try {
+      await api.deleteMobileExtraWorkTicketPhoto(assignmentId, order.id, preview.photo.id);
+      if (preview.url) {
+        window.URL.revokeObjectURL(preview.url);
+      }
+      const nextPhotos = photos.filter((item) => item.photo.id !== preview.photo.id);
+      setPhotos(nextPhotos);
+      setSelectedPhoto((currentPhoto) => (
+        currentPhoto?.photo.id === preview.photo.id ? null : currentPhoto
+      ));
+    } catch (requestError) {
+      setPhotoError(readApiError(requestError, "Foto konnte nicht gelöscht werden."));
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  }
+
+  return (
+    <div className="mobile-detail-panel mobile-measurement-photo-gallery">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Stundenzettel</span>
+        </button>
+        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+          <Camera aria-hidden="true" size={16} />
+          <span>{isUploadingPhoto ? "Speichert..." : "Foto aufnehmen"}</span>
+        </button>
+      </div>
+
+      <header className="mobile-measurement-photo-gallery-head">
+        <h2>Hinterlegte Fotos</h2>
+        <p>{formatMobileExtraWorkOrderTitle(order)}</p>
       </header>
 
       {photoError ? <div className="form-error">{photoError}</div> : null}
