@@ -2,11 +2,13 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
 from app.core.database import get_db
-from app.models.enums import UserRole
+from app.models.enums import PersonType, UserRole
+from app.models.person import Person
 from app.models.user import User
 from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
 from app.schemas.measurement import (
@@ -20,6 +22,7 @@ from app.schemas.measurement import (
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
 )
+from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
@@ -78,6 +81,27 @@ def list_site_summaries(
 ) -> list[SiteSummary]:
     sites = SiteService(db).list_site_summaries(include_closed=include_closed)
     return [SiteSummary.model_validate(site) for site in sites]
+
+
+@router.get("/project-managers", response_model=list[PersonRead])
+def list_project_manager_people(
+    _user=Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> list[PersonRead]:
+    statement = (
+        select(Person)
+        .join(User, User.person_id == Person.id)
+        .where(
+            User.is_active.is_(True),
+            User.role.in_([UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
+            Person.is_active.is_(True),
+            Person.deleted_at.is_(None),
+            Person.person_type == PersonType.INTERNAL,
+        )
+        .distinct()
+        .order_by(Person.display_name, Person.id)
+    )
+    return [PersonRead.model_validate(person) for person in db.scalars(statement)]
 
 
 @router.get("/map", response_model=SiteMapResponse)

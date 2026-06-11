@@ -74,7 +74,7 @@ export function SiteDetailPage() {
   const requestedMeasurementSubtab = searchParams.get("measurementSubtab");
   const [site, setSite] = useState<Site | null>(null);
   const [siteDraft, setSiteDraft] = useState<EditableSite | null>(null);
-  const [people, setPeople] = useState<Person[]>([]);
+  const [projectManagerPeople, setProjectManagerPeople] = useState<Person[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProjectRecordTab>("overview");
@@ -153,15 +153,15 @@ export function SiteDetailPage() {
 
     let isCurrent = true;
     api
-      .persons({ isActive: null })
+      .siteProjectManagers()
       .then((personData) => {
         if (isCurrent) {
-          setPeople(personData);
+          setProjectManagerPeople(personData);
         }
       })
       .catch(() => {
         if (isCurrent) {
-          setPeople([]);
+          setProjectManagerPeople([]);
         }
       });
 
@@ -801,7 +801,7 @@ export function SiteDetailPage() {
         <OverviewTab
           site={site}
           draft={siteDraft}
-          people={people}
+          people={projectManagerPeople}
           editMode={editMode}
           canEdit={canEditSite}
           isSaving={isSavingSite}
@@ -1007,6 +1007,7 @@ function OverviewTab({
           <SiteFields
             draft={draft}
             people={people}
+            currentProjectManager={site.project_manager}
             disabled={!canEdit || isSaving}
             isCheckingLocation={isCheckingLocation}
             onChange={onDraftChange}

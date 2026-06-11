@@ -504,6 +504,10 @@ export const api = {
     return request<Site[]>(`/sites${suffix}`);
   },
 
+  async siteProjectManagers(): Promise<Person[]> {
+    return request<Person[]>("/sites/project-managers");
+  },
+
   async siteMap(): Promise<SiteMapResponse> {
     return request<SiteMapResponse>("/sites/map");
   },

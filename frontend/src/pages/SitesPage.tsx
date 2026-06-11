@@ -11,7 +11,7 @@ import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteSummary } from "../types/site";
+import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteSummary, SiteSummaryPerson } from "../types/site";
 
 const emptySite: SiteCreate = {
   site_number: null,
@@ -51,6 +51,7 @@ const emptyCustomerForSite: CustomerCreate = {
 
 export type EditableSite = SiteCreate & { id: number };
 type ProjectManagerOption = { id: number; name: string; shortCode: string };
+type CurrentProjectManagerOption = Pick<SiteSummaryPerson, "id" | "display_name" | "short_code"> | null;
 type SiteGroup = { key: string; label: string; sites: SiteSummary[]; showHeading: boolean };
 type SiteColorOption = { name: string; value: string };
 type SiteStatusFilter = SiteStatus | "standard";
@@ -76,9 +77,9 @@ export function SitesPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const [sites, setSites] = useState<SiteSummary[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [peopleLoaded, setPeopleLoaded] = useState(false);
-  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [projectManagerPeople, setProjectManagerPeople] = useState<Person[]>([]);
+  const [projectManagersLoaded, setProjectManagersLoaded] = useState(false);
+  const [projectManagersLoading, setProjectManagersLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoaded, setCustomersLoaded] = useState(false);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -203,24 +204,24 @@ export function SitesPage() {
   function openNewSiteDrawer() {
     setCreateForm(emptySite);
     setIsCreateDrawerOpen(true);
-    if (peopleLoaded === false && peopleLoading === false) {
-      void loadPeopleForSiteForm();
+    if (projectManagersLoaded === false && projectManagersLoading === false) {
+      void loadProjectManagersForSiteForm();
     }
     if (customersLoaded === false && customersLoading === false) {
       void loadCustomersForSiteForm();
     }
   }
 
-  async function loadPeopleForSiteForm() {
-    setPeopleLoading(true);
+  async function loadProjectManagersForSiteForm() {
+    setProjectManagersLoading(true);
     setError(null);
     try {
-      setPeople(await api.persons({ isActive: null }));
-      setPeopleLoaded(true);
+      setProjectManagerPeople(await api.siteProjectManagers());
+      setProjectManagersLoaded(true);
     } catch (requestError) {
       setError(readApiError(requestError, "Projektleiter konnten nicht geladen werden."));
     } finally {
-      setPeopleLoading(false);
+      setProjectManagersLoading(false);
     }
   }
 
@@ -407,7 +408,7 @@ export function SitesPage() {
       >
         <SiteFields
           draft={createForm}
-          people={people}
+          people={projectManagerPeople}
           customers={customers}
           customersLoading={customersLoading}
           disabled={!canEdit}
@@ -470,6 +471,7 @@ function toSiteSummary(site: Site): SiteSummary {
 export function SiteFields({
   draft,
   people,
+  currentProjectManager = null,
   customers = [],
   customersLoading = false,
   disabled = false,
@@ -483,6 +485,7 @@ export function SiteFields({
 }: {
   draft: SiteCreate;
   people: Person[];
+  currentProjectManager?: CurrentProjectManagerOption;
   customers?: Customer[];
   customersLoading?: boolean;
   disabled?: boolean;
@@ -501,6 +504,10 @@ export function SiteFields({
   const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
   const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false);
   const [activeCustomerSuggestionIndex, setActiveCustomerSuggestionIndex] = useState(0);
+  const projectManagerOptions = useMemo(
+    () => withCurrentProjectManagerOption(people, draft.project_manager_person_id, currentProjectManager),
+    [currentProjectManager, draft.project_manager_person_id, people],
+  );
 
   const customerQuery = draft.customer ?? "";
   const customerSuggestions = useMemo(() => {
@@ -730,9 +737,9 @@ export function SiteFields({
           onChange={(event) => onChange({ project_manager_person_id: parsePersonId(event.target.value) })}
         >
           <option value="">Nicht zugeordnet</option>
-          {people.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.display_name}{person.is_active ? "" : " (inaktiv)"}
+          {projectManagerOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -876,6 +883,26 @@ export function toEditableSite(site: Site): EditableSite {
     info: site.info,
     color: site.color,
   };
+}
+
+function withCurrentProjectManagerOption(
+  people: Person[],
+  selectedPersonId: number | null,
+  currentProjectManager: CurrentProjectManagerOption,
+): Array<{ id: number; label: string }> {
+  const options = people.map((person) => ({ id: person.id, label: person.display_name }));
+  if (
+    selectedPersonId !== null
+    && currentProjectManager
+    && currentProjectManager.id === selectedPersonId
+    && !options.some((option) => option.id === selectedPersonId)
+  ) {
+    return [
+      { id: currentProjectManager.id, label: `${currentProjectManager.display_name} (aktuell zugeordnet)` },
+      ...options,
+    ];
+  }
+  return options;
 }
 
 export function validateSitePayload(site: SiteCreate): string | null {
