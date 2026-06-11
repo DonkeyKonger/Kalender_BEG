@@ -46,6 +46,7 @@ function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
 }
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
+type MobileDetailActionKey = MobileDetailTab | "timesheet";
 type MeasurementViewMode = "list" | "table";
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
@@ -90,10 +91,11 @@ type MobileDocumentPreviewState = {
   error: string | null;
 };
 
-const detailTabs: Array<{ key: MobileDetailTab; label: string; description: string; icon: typeof ClipboardList }> = [
+const detailTabs: Array<{ key: MobileDetailActionKey; label: string; description: string; icon: typeof ClipboardList }> = [
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
   { key: "extra-work", label: "Stundenzettel", description: "Zusatzstunden erfassen", icon: FileText },
+  { key: "timesheet", label: "Zeitenliste", description: "Aktuelle Zeitenliste anzeigen", icon: ClipboardList },
   { key: "tools", label: "Werkzeuge & Material", description: "Status später verfügbar", icon: Package },
 ];
 
@@ -103,6 +105,8 @@ export function MobileAssignmentDetailPage() {
   const { assignmentId } = useParams();
   const [activeTab, setActiveTab] = useState<MobileDetailTab | null>(null);
   const [isMeasurementEntryMode, setIsMeasurementEntryMode] = useState(false);
+  const [isOpeningTimesheet, setIsOpeningTimesheet] = useState(false);
+  const [timesheetMessage, setTimesheetMessage] = useState<string | null>(null);
 
   const assignment = useMemo(() => {
     const stateAssignment = (location.state as LocationState | null)?.assignment;
@@ -124,6 +128,7 @@ export function MobileAssignmentDetailPage() {
     );
   }
 
+  const currentAssignment = assignment;
   const isOverviewFlow = activeTab === "overview";
   const isMeasurementFlow = activeTab === "measurement";
   const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
@@ -131,6 +136,43 @@ export function MobileAssignmentDetailPage() {
   function openOverview(): void {
     setActiveTab("overview");
     setIsMeasurementEntryMode(false);
+  }
+
+  async function openTimesheetPdf(): Promise<void> {
+    if (isOpeningTimesheet) {
+      return;
+    }
+    setIsOpeningTimesheet(true);
+    setTimesheetMessage(null);
+    try {
+      const blob = await api.mobileMeasurementTimesheetPdf(currentAssignment.id);
+      const filename = "Zeitenliste.pdf";
+      if (isNativeAndroidApp()) {
+        await openAndroidPdfBlob(blob, filename);
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+        if (!openedWindow) {
+          downloadBlobFile(blob, filename);
+        }
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (requestError) {
+      setTimesheetMessage(readApiError(requestError, "Zeitenliste konnte nicht geöffnet werden."));
+    } finally {
+      setIsOpeningTimesheet(false);
+    }
+  }
+
+  function handleDetailAction(tab: (typeof detailTabs)[number]): void {
+    if (tab.key === "timesheet") {
+      void openTimesheetPdf();
+      return;
+    }
+    setActiveTab(tab.key);
+    if (tab.key !== "measurement") {
+      setIsMeasurementEntryMode(false);
+    }
   }
 
   return (
@@ -179,24 +221,28 @@ export function MobileAssignmentDetailPage() {
               const Icon = tab.icon;
               return (
                 <button
-                  className={activeTab === tab.key ? "is-active" : ""}
+                  className={tab.key !== "timesheet" && activeTab === tab.key ? "is-active" : ""}
+                  disabled={tab.key === "timesheet" && isOpeningTimesheet}
                   key={tab.key}
                   type="button"
-                  onClick={() => {
-                    setActiveTab(tab.key);
-                    if (tab.key !== "measurement") {
-                      setIsMeasurementEntryMode(false);
-                    }
-                  }}
+                  onClick={() => handleDetailAction(tab)}
                 >
                   <Icon aria-hidden="true" size={16} />
                   <span>
                     <strong>{tab.label}</strong>
-                    <small>{tab.description}</small>
+                    <small>{tab.key === "timesheet" && isOpeningTimesheet ? "Zeitenliste wird geladen..." : tab.description}</small>
                   </span>
                 </button>
               );
             })}
+            {timesheetMessage ? (
+              <p className="mobile-detail-action-message">
+                {timesheetMessage}
+                {timesheetMessage === "Keine aktive Zeitenliste ausgewählt." ? (
+                  <span>Bitte im Büro/Projektleiterbereich unter Baustellen / Aufmaß / Angebot auswählen.</span>
+                ) : null}
+              </p>
+            ) : null}
           </div>
         </>
       ) : null}
@@ -231,35 +277,6 @@ function MobileExtraWorkPlaceholder({
   assignment: MobileAssignment;
   onBack: () => void;
 }) {
-  const [isOpeningTimesheet, setIsOpeningTimesheet] = useState(false);
-  const [timesheetMessage, setTimesheetMessage] = useState<string | null>(null);
-
-  async function openTimesheetPdf(): Promise<void> {
-    if (isOpeningTimesheet) {
-      return;
-    }
-    setIsOpeningTimesheet(true);
-    setTimesheetMessage(null);
-    try {
-      const blob = await api.mobileMeasurementTimesheetPdf(assignment.id);
-      const filename = "Zeitenliste.pdf";
-      if (isNativeAndroidApp()) {
-        await openAndroidPdfBlob(blob, filename);
-      } else {
-        const url = window.URL.createObjectURL(blob);
-        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
-        if (!openedWindow) {
-          downloadBlobFile(blob, filename);
-        }
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-      }
-    } catch (requestError) {
-      setTimesheetMessage(readApiError(requestError, "Zeitenliste konnte nicht geöffnet werden."));
-    } finally {
-      setIsOpeningTimesheet(false);
-    }
-  }
-
   return (
     <div className="mobile-detail-panel mobile-placeholder-panel">
       <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
@@ -272,18 +289,6 @@ function MobileExtraWorkPlaceholder({
       <p>
         Diese Funktion wird vorbereitet. Später können hier Zusatzstunden zur Baustelle erfasst und als Zettel/PDF übergeben werden.
       </p>
-      <button className="mobile-extra-work-timesheet-action" type="button" onClick={() => void openTimesheetPdf()} disabled={isOpeningTimesheet}>
-        <FileText aria-hidden="true" size={18} />
-        <span>{isOpeningTimesheet ? "Zeitenliste wird geladen..." : "Zeitenliste"}</span>
-      </button>
-      {timesheetMessage ? (
-        <p className="mobile-extra-work-timesheet-message">
-          {timesheetMessage}
-          {timesheetMessage === "Keine aktive Zeitenliste ausgewählt." ? (
-            <span>Bitte im Büro/Projektleiterbereich unter Baustellen / Aufmaß / Angebot auswählen.</span>
-          ) : null}
-        </p>
-      ) : null}
     </div>
   );
 }

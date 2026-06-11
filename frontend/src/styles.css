@@ -11291,6 +11291,26 @@ button.person-chip:focus-visible {
   transform: translateY(-1px);
 }
 
+.mobile-detail-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
+}
+
+.mobile-detail-action-message {
+  display: grid;
+  gap: 3px;
+  margin: -2px 2px 0;
+  color: #65738a;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.mobile-detail-action-message span {
+  color: #8291a8;
+  font-size: 0.78rem;
+}
+
 .mobile-detail-panel {
   display: grid;
   gap: 12px;
