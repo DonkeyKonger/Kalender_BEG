@@ -899,9 +899,10 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     assert len(pdf_reader.pages) == 1
     assert b"Unterschrift Monteur" in content
     assert b"Max Monteur" in content
-    assert b"Unterschrift Kunde" in content
+    assert b"Unterschrift Kunde" not in content
     assert b"Kunde Beispiel" in content
     assert "Nachtrag Kabeltrasse 2. OG" in pdf_text
+    assert "Unterschrift Kunde" not in pdf_text
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):

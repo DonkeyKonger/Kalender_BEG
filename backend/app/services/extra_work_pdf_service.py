@@ -465,45 +465,31 @@ class ExtraWorkPdfService:
                 _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
 
     def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket, assignment: Assignment) -> None:
-        line_y = 75
-        column_width = 224
         worker_x = 62
-        customer_x = 315
+        customer_x = 397
         worker_place = _format_site_signature_location(ticket.site)
         customer_place = ticket.customer_signature_place or worker_place
         worker_name = _signature_worker_name(ticket, assignment)
 
-        _text(commands, worker_x, line_y + 46, "Unterschrift Monteur", 8, font="F2")
-        _text(commands, customer_x, line_y + 46, "Unterschrift Kunde", 8, font="F2")
-
-        _line(commands, worker_x, line_y, worker_x + column_width, line_y, 0.6)
-        _line(commands, customer_x, line_y, customer_x + column_width, line_y, 0.6)
-        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 86, y=line_y + 7, width=96, height=30)
+        _text(commands, worker_x, 121, "Unterschrift Monteur", 8, font="F2")
+        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 20, y=101, width=104, height=25)
         _draw_signature(
             commands,
             ticket.customer_signature_strokes,
-            x=customer_x + 86,
-            y=line_y + 7,
-            width=96,
-            height=30,
+            x=customer_x + 20,
+            y=101,
+            width=104,
+            height=25,
         )
 
-        _text(commands, worker_x, line_y - 15, "Name:", 6.8, font="F2")
-        _text(commands, customer_x, line_y - 15, "Name:", 6.8, font="F2")
-        _text(commands, worker_x + 34, line_y - 15, _fit_text(worker_name, 172, 7), 7)
-        _text(commands, customer_x + 34, line_y - 15, _fit_text(ticket.customer_signature_name or "", 172, 7), 7)
-
-        _text(commands, worker_x, line_y - 29, "Datum:", 6.8, font="F2")
-        _text(commands, customer_x, line_y - 29, "Datum:", 6.8, font="F2")
-        _text(commands, worker_x + 40, line_y - 29, _format_date_from_datetime(ticket.worker_signed_at), 7)
-        _text(commands, customer_x + 40, line_y - 29, _format_date_from_datetime(ticket.customer_signed_at), 7)
-
-        if worker_place:
-            _text(commands, worker_x, line_y - 43, "Ort:", 6.8, font="F2")
-            _text(commands, worker_x + 24, line_y - 43, _fit_text(worker_place, 176, 6.8), 6.8)
-        if customer_place:
-            _text(commands, customer_x, line_y - 43, "Ort:", 6.8, font="F2")
-            _text(commands, customer_x + 24, line_y - 43, _fit_text(customer_place, 176, 6.8), 6.8)
+        _signature_meta(commands, x=worker_x, name=worker_name, signed_at=ticket.worker_signed_at, place=worker_place)
+        _signature_meta(
+            commands,
+            x=customer_x,
+            name=ticket.customer_signature_name or "",
+            signed_at=ticket.customer_signed_at,
+            place=customer_place,
+        )
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
@@ -758,6 +744,25 @@ def _centered_textarea(commands: list[bytes], rect: FieldRect, text: str, *, siz
 
 def _shift_rect(rect: FieldRect, *, dx: float = 0, dy: float = 0) -> FieldRect:
     return FieldRect(rect.x + dx, rect.y + dy, rect.width, rect.height)
+
+
+def _signature_meta(
+    commands: list[bytes],
+    *,
+    x: float,
+    name: str,
+    signed_at: datetime | None,
+    place: str,
+) -> None:
+    label_size = 5.7
+    value_size = 5.7
+    _text(commands, x, 72, "Name:", label_size, font="F2")
+    _text(commands, x + 28, 72, _fit_text(name, 112, value_size), value_size)
+    _text(commands, x, 64, "Datum:", label_size, font="F2")
+    _text(commands, x + 36, 64, _format_date_from_datetime(signed_at), value_size)
+    if place:
+        _text(commands, x, 56, "Ort:", label_size, font="F2")
+        _text(commands, x + 22, 56, _fit_text(place, 118, value_size), value_size)
 
 
 def _checkbox(commands: list[bytes], center_x: float, center_y_top: float) -> None:
