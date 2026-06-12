@@ -59,6 +59,8 @@ const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
 const PDF_MAX_RENDER_PIXEL_RATIO = 3.5;
 const PDF_MAX_CANVAS_PIXELS = 8_000_000;
 const MOBILE_DOCUMENT_PHOTO_LIMIT = 5;
+const MAX_PHOTO_DIMENSION = 1600;
+const PHOTO_JPEG_QUALITY = 0.8;
 
 type PdfContentSize = {
   width: number;
@@ -429,10 +431,11 @@ function MobileExtraWorkTab({
       return;
     }
     setIsUploadingPhoto(true);
-    setMessage("Foto wird gespeichert...");
+    setMessage("Foto wird optimiert...");
     setPhotoMessageTone("info");
     try {
       const uploadFile = await prepareMeasurementPhotoFile(file);
+      setMessage("Foto wird gespeichert...");
       await api.uploadMobileExtraWorkTicketPhoto(assignment.id, order.id, uploadFile);
       updateOrderPhotoCount(order.id, (order.photo_count ?? 0) + 1);
       setPhotoGalleryVersion((version) => version + 1);
@@ -2663,10 +2666,11 @@ function MobileMeasurementTab({
       return;
     }
     setIsUploadingPhoto(true);
-    setPhotoMessage("Foto wird gespeichert...");
+    setPhotoMessage("Foto wird optimiert...");
     setPhotoMessageTone("info");
     try {
       const uploadFile = await prepareMeasurementPhotoFile(file);
+      setPhotoMessage("Foto wird gespeichert...");
       await api.uploadMobileMeasurementBatchPhoto(assignment.id, batch.id, uploadFile);
       updateBatchPhotoCount(batch.id, (batch.photo_count ?? 0) + 1);
       setPhotoGalleryVersion((version) => version + 1);
@@ -5167,9 +5171,11 @@ async function prepareMeasurementPhotoFile(file: File): Promise<File> {
     return file;
   }
   try {
+    const startedAt = performance.now();
     const bitmap = await createImageBitmap(file);
-    const maxEdge = 1800;
-    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const originalWidth = bitmap.width;
+    const originalHeight = bitmap.height;
+    const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
@@ -5183,11 +5189,18 @@ async function prepareMeasurementPhotoFile(file: File): Promise<File> {
     context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.86);
+      canvas.toBlob(resolve, "image/jpeg", PHOTO_JPEG_QUALITY);
     });
     if (!blob) {
       return file;
     }
+    console.info("Document photo optimized", {
+      bytesBefore: file.size,
+      bytesAfter: blob.size,
+      dimensionsBefore: `${originalWidth}x${originalHeight}`,
+      dimensionsAfter: `${width}x${height}`,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
     const baseName = file.name.replace(/\.[^.]+$/, "") || "aufmass-foto";
     return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
   } catch {

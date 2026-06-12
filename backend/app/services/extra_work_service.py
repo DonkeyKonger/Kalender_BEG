@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from pathlib import Path
+import logging
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -20,6 +20,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
 )
+from app.services.document_photo_optimizer import optimize_document_photo
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
@@ -41,6 +42,7 @@ EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES = {
     EXTRA_WORK_BILLING_KIND: "billing_customer",
     EXTRA_WORK_APPROVAL_KIND: "approval_customer",
 }
+LOGGER = logging.getLogger(__name__)
 
 
 class ExtraWorkService:
@@ -373,8 +375,18 @@ class ExtraWorkService:
                 status.HTTP_400_BAD_REQUEST,
                 "Bitte ein Foto als JPEG, PNG, WebP oder HEIC hochladen.",
             )
-        if not content:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Foto ist leer.")
+        optimized_photo = optimize_document_photo(content)
+        LOGGER.info(
+            "Extra work photo optimized: ticket_id=%s bytes=%s->%s dimensions=%sx%s->%sx%s duration_ms=%.1f",
+            ticket.id,
+            optimized_photo.original_size_bytes,
+            optimized_photo.optimized_size_bytes,
+            optimized_photo.original_width,
+            optimized_photo.original_height,
+            optimized_photo.optimized_width,
+            optimized_photo.optimized_height,
+            optimized_photo.duration_ms,
+        )
 
         folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
             assignment.site_id,
@@ -385,14 +397,14 @@ class ExtraWorkService:
             ticket=ticket,
             user=current_user,
             original_filename=filename,
-            content_type=normalized_content_type,
+            content_type=optimized_photo.content_type,
         )
         uploaded = ProjectStorageService().upload_file_to_folder(
             drive_id=folder.external_drive_id,
             folder_item_id=folder.external_item_id,
             filename=upload_filename,
-            content=content,
-            content_type=normalized_content_type,
+            content=optimized_photo.content,
+            content_type=optimized_photo.content_type,
         )
         item_id = uploaded.get("id")
         if not isinstance(item_id, str) or not item_id:
@@ -407,8 +419,8 @@ class ExtraWorkService:
             external_item_id=item_id,
             external_web_url=uploaded.get("web_url"),
             filename=str(uploaded.get("name") or upload_filename),
-            content_type=normalized_content_type,
-            file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(content),
+            content_type=optimized_photo.content_type,
+            file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(optimized_photo.content),
         )
         self.db.add(photo)
         self.db.commit()
@@ -582,9 +594,6 @@ def _extra_work_photo_filename(
     content_type: str,
 ) -> str:
     extension = EXTRA_WORK_PHOTO_CONTENT_TYPES.get(content_type)
-    original_extension = Path(original_filename or "").suffix.lower()
-    if original_extension in {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}:
-        extension = ".jpg" if original_extension == ".jpeg" else original_extension
     extension = extension or ".jpg"
     user_label = _safe_filename_part(
         (user.person.display_name if user.person else None)

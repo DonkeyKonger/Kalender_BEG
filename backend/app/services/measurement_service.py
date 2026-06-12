@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from pathlib import Path
+import logging
 import re
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -38,6 +38,7 @@ from app.services.measurement_timesheet_parser import (
     MeasurementTimesheetParseError,
     parse_measurement_timesheet_pdf,
 )
+from app.services.document_photo_optimizer import optimize_document_photo
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
@@ -53,6 +54,7 @@ MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/heic": ".heic",
     "image/heif": ".heif",
 }
+LOGGER = logging.getLogger(__name__)
 
 
 class MeasurementService:
@@ -508,8 +510,18 @@ class MeasurementService:
                 status.HTTP_400_BAD_REQUEST,
                 "Bitte ein Foto als JPEG, PNG, WebP oder HEIC hochladen.",
             )
-        if not content:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Foto ist leer.")
+        optimized_photo = optimize_document_photo(content)
+        LOGGER.info(
+            "Measurement photo optimized: batch_id=%s bytes=%s->%s dimensions=%sx%s->%sx%s duration_ms=%.1f",
+            batch.id,
+            optimized_photo.original_size_bytes,
+            optimized_photo.optimized_size_bytes,
+            optimized_photo.original_width,
+            optimized_photo.original_height,
+            optimized_photo.optimized_width,
+            optimized_photo.optimized_height,
+            optimized_photo.duration_ms,
+        )
 
         folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
             assignment.site_id,
@@ -520,14 +532,14 @@ class MeasurementService:
             batch=batch,
             user=current_user,
             original_filename=filename,
-            content_type=normalized_content_type,
+            content_type=optimized_photo.content_type,
         )
         uploaded = ProjectStorageService().upload_file_to_folder(
             drive_id=folder.external_drive_id,
             folder_item_id=folder.external_item_id,
             filename=upload_filename,
-            content=content,
-            content_type=normalized_content_type,
+            content=optimized_photo.content,
+            content_type=optimized_photo.content_type,
         )
         item_id = uploaded.get("id")
         if not isinstance(item_id, str) or not item_id:
@@ -542,8 +554,8 @@ class MeasurementService:
             external_item_id=item_id,
             external_web_url=uploaded.get("web_url"),
             filename=str(uploaded.get("name") or upload_filename),
-            content_type=normalized_content_type,
-            file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(content),
+            content_type=optimized_photo.content_type,
+            file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(optimized_photo.content),
         )
         self.db.add(photo)
         self.db.commit()
@@ -1614,9 +1626,6 @@ def _measurement_photo_filename(
     content_type: str,
 ) -> str:
     extension = MEASUREMENT_PHOTO_CONTENT_TYPES.get(content_type)
-    original_extension = Path(original_filename or "").suffix.lower()
-    if original_extension in {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}:
-        extension = ".jpg" if original_extension == ".jpeg" else original_extension
     extension = extension or ".jpg"
     user_label = _safe_filename_part(
         (user.person.display_name if user.person else None)

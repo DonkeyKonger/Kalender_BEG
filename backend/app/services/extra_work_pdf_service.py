@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import logging
 from pathlib import Path
+from time import perf_counter
 import zlib
 from typing import Any
 
@@ -20,11 +21,12 @@ from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
+from app.services.photo_limits import MAX_PHOTO_DIMENSION
 from app.services.project_storage_service import ProjectStorageService
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
-PHOTO_MAX_IMAGE_EDGE = 1800
+PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
 LOGGER = logging.getLogger(__name__)
 TEMPLATE_PATH = (
@@ -145,6 +147,7 @@ class ExtraWorkPdfService:
     def _build_ticket_pdf(self, *, ticket: ExtraWorkTicket, assignment: Assignment) -> bytes:
         if not TEMPLATE_PATH.exists():
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Zusatzauftrag-Vorlage fehlt.")
+        started_at = perf_counter()
         entries = list(ticket.entries or [])
         entry = entries[0] if entries else None
         worker_rows = list(entry.worker_rows or []) if entry else []
@@ -162,7 +165,15 @@ class ExtraWorkPdfService:
         self._append_photo_pages(writer, ticket)
         output = BytesIO()
         writer.write(output)
-        return output.getvalue()
+        content = output.getvalue()
+        LOGGER.info(
+            "Extra work PDF generated: ticket_id=%s photos=%s bytes=%s duration_ms=%.1f",
+            ticket.id,
+            len(ticket.photos or []),
+            len(content),
+            (perf_counter() - started_at) * 1000,
+        )
+        return content
 
     def _append_photo_pages(self, writer: PdfWriter, ticket: ExtraWorkTicket) -> None:
         photos = sorted(ticket.photos or [], key=lambda photo: (photo.created_at, photo.id))

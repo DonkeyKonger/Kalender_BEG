@@ -7,6 +7,7 @@ from io import BytesIO
 import logging
 from pathlib import Path
 import struct
+from time import perf_counter
 from textwrap import wrap
 import zlib
 
@@ -25,6 +26,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.user import User
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, format_site_signature_location
+from app.services.photo_limits import MAX_PHOTO_DIMENSION
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -83,7 +85,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-PHOTO_MAX_IMAGE_EDGE = 1800
+PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 LOGGER = logging.getLogger(__name__)
 
 
@@ -245,6 +247,7 @@ class MeasurementPdfService:
     ) -> tuple[bytes, str]:
         if mode not in {"checked", "original"}:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger PDF-Modus.")
+        started_at = perf_counter()
         batch = self.db.scalar(
             select(SiteMeasurementBatch)
             .options(
@@ -292,7 +295,16 @@ class MeasurementPdfService:
         file_number = _format_batch_number(batch.site.site_number, batch.number)
         safe_number = file_number.replace("/", "-").replace(" ", "_")
         prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
-        return pdf.build(), f"{prefix}_{safe_number}.pdf"
+        content = pdf.build()
+        LOGGER.info(
+            "Measurement PDF generated: batch_id=%s mode=%s photos=%s bytes=%s duration_ms=%.1f",
+            batch.id,
+            mode,
+            len(batch.photos or []),
+            len(content),
+            (perf_counter() - started_at) * 1000,
+        )
+        return content, f"{prefix}_{safe_number}.pdf"
 
     def _append_photo_pages(self, pdf: SimplePdf, batch: SiteMeasurementBatch) -> None:
         photos = sorted(batch.photos, key=lambda photo: (photo.created_at, photo.id))

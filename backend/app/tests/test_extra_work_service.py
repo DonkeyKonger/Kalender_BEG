@@ -376,7 +376,8 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
             assert drive_id == "drive-1"
             assert folder_item_id == "folder-1"
             assert filename.startswith("Stundenzettel-8007-SZ01_")
-            assert content == b"image-content"
+            assert filename.endswith(".jpg")
+            assert content.startswith(b"\xff\xd8")
             assert content_type == "image/jpeg"
             return {
                 "id": "photo-1",
@@ -409,7 +410,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         ticket_id=ticket.id,
         current_user=current_user,
         filename="baustelle.jpeg",
-        content=b"image-content",
+        content=sample_photo_bytes(),
         content_type="image/jpeg",
     )
     photos = service.list_mobile_ticket_photos(
@@ -431,7 +432,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
     )
 
     assert photo.extra_work_ticket_id == ticket.id
-    assert photo.file_size_bytes == len(b"image-content")
+    assert photo.file_size_bytes is not None and photo.file_size_bytes > 0
     assert photo.external_web_url == "https://example.invalid/photo-1"
     assert [item.id for item in photos] == [photo.id]
     assert content == b"downloaded-image"
