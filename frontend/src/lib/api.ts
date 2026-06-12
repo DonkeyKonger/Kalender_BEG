@@ -941,6 +941,15 @@ export const api = {
     });
   },
 
+  async sendMobileMeasurementBatchEmail(
+    assignmentId: number,
+    batchId: number,
+  ): Promise<ExtraWorkTicketEmailSendResponse> {
+    return request<ExtraWorkTicketEmailSendResponse>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/send-email`, {
+      method: "POST",
+    });
+  },
+
   async signMobileExtraWorkTicketCustomer(
     assignmentId: number,
     ticketId: number,

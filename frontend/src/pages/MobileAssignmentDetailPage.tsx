@@ -696,7 +696,7 @@ function ExtraWorkOrderOverview({
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
   const emailPdfFilename = `${formatMobileExtraWorkOrderTitle(order)}.pdf`;
   const emailSendPrerequisitesMet = emailRecipients.length > 0 && hasCustomerSignature && hasWorkerSignature;
-  const emailSendHint = getExtraWorkEmailSendHint({
+  const emailSendHint = getDocumentEmailSendHint({
     hasRecipients: emailRecipients.length > 0,
     hasCustomerSignature,
     hasWorkerSignature,
@@ -929,12 +929,13 @@ function ExtraWorkOrderOverview({
         />
       ) : null}
       {isConfirmingEmailSend ? (
-        <ExtraWorkEmailSendDialog
+        <DocumentEmailSendDialog
+          description={`Der aktuelle ${formatMobileExtraWorkKindLabel(order.kind)} wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet.`}
           filename={emailPdfFilename}
           isSending={isSendingEmail}
-          order={order}
           recipients={emailRecipients}
           error={emailSendError}
+          title="Stundenzettel senden?"
           onClose={() => setIsConfirmingEmailSend(false)}
           onConfirm={() => void sendExtraWorkEmail()}
         />
@@ -1028,8 +1029,9 @@ function ExtraWorkTitleDialog({
   );
 }
 
-function ExtraWorkEmailSendDialog({
-  order,
+function DocumentEmailSendDialog({
+  title,
+  description,
   recipients,
   filename,
   isSending,
@@ -1037,7 +1039,8 @@ function ExtraWorkEmailSendDialog({
   onClose,
   onConfirm,
 }: {
-  order: MobileExtraWorkTicket;
+  title: string;
+  description: string;
   recipients: SiteEmailRecipient[];
   filename: string;
   isSending: boolean;
@@ -1055,8 +1058,8 @@ function ExtraWorkEmailSendDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mobile-project-email-dialog-head">
-          <h2 id="mobile-extra-work-email-send-title">Stundenzettel senden?</h2>
-          <p>Der aktuelle {formatMobileExtraWorkKindLabel(order.kind)} wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet.</p>
+          <h2 id="mobile-extra-work-email-send-title">{title}</h2>
+          <p>{description}</p>
         </div>
 
         <div className="mobile-project-email-list">
@@ -2953,6 +2956,7 @@ function MobileMeasurementTab({
     return (
       <>
         <MeasurementBatchOverview
+          assignmentId={assignment.id}
           batch={selectedBatch}
           error={error}
           isSaving={isSaving}
@@ -3126,6 +3130,7 @@ function MobileMeasurementTab({
 }
 
 function MeasurementBatchOverview({
+  assignmentId,
   batch,
   error,
   isSaving,
@@ -3146,6 +3151,7 @@ function MeasurementBatchOverview({
   onOpenPositions,
   onSubmit,
 }: {
+  assignmentId: number;
   batch: MobileMeasurementBatch;
   error: string | null;
   isSaving: boolean;
@@ -3171,6 +3177,71 @@ function MeasurementBatchOverview({
   const displayDate = formatMobileMeasurementBatchDate(batch);
   const canSubmit = isDraft && !isSaving && batch.entry_count > 0 && !batch.is_locked_for_worker;
   const isPhotoLimitReached = (batch.photo_count ?? 0) >= photoLimit;
+  const [isEditingEmailRecipients, setIsEditingEmailRecipients] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState<SiteEmailRecipient[]>([]);
+  const [isLoadingEmailRecipients, setIsLoadingEmailRecipients] = useState(true);
+  const [isConfirmingEmailSend, setIsConfirmingEmailSend] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSendError, setEmailSendError] = useState<string | null>(null);
+  const [emailSendMessage, setEmailSendMessage] = useState<string | null>(null);
+  const hasCustomerSignature = Boolean(batch.customer_signed_at);
+  const hasWorkerSignature = Boolean(batch.worker_signed_at);
+  const emailPdfFilename = getMobileMeasurementPdfFilename(batch);
+  const emailSendPrerequisitesMet = emailRecipients.length > 0 && hasCustomerSignature && hasWorkerSignature;
+  const emailSendHint = getDocumentEmailSendHint({
+    hasRecipients: emailRecipients.length > 0,
+    hasCustomerSignature,
+    hasWorkerSignature,
+    isLoadingRecipients: isLoadingEmailRecipients,
+  });
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadEmailRecipients(): Promise<void> {
+      setIsLoadingEmailRecipients(true);
+      setEmailSendError(null);
+      try {
+        const response = await api.assignmentEmailRecipients(assignmentId);
+        if (isActive) {
+          setEmailRecipients(response.recipients);
+        }
+      } catch (requestError) {
+        if (isActive) {
+          setEmailSendError(readApiError(requestError, "E-Mail-Empfänger konnten nicht geladen werden."));
+          setEmailRecipients([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingEmailRecipients(false);
+        }
+      }
+    }
+
+    void loadEmailRecipients();
+    return () => {
+      isActive = false;
+    };
+  }, [assignmentId, batch.id]);
+
+  async function sendMeasurementEmail(): Promise<void> {
+    if (!emailSendPrerequisitesMet || isSendingEmail) {
+      return;
+    }
+    setIsSendingEmail(true);
+    setEmailSendError(null);
+    setEmailSendMessage(null);
+    try {
+      await api.sendMobileMeasurementBatchEmail(assignmentId, batch.id);
+      setIsConfirmingEmailSend(false);
+      setEmailSendMessage("E-Mail gesendet.");
+    } catch (requestError) {
+      setEmailSendError(readApiError(requestError, "E-Mail konnte nicht gesendet werden."));
+    } finally {
+      setIsSendingEmail(false);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -3212,15 +3283,55 @@ function MeasurementBatchOverview({
           <FileText aria-hidden="true" size={18} />
           <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
         </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={onCustomerSignature} disabled={customerSignatureDisabled}>
+        <button
+          className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
+          type="button"
+          onClick={onCustomerSignature}
+          disabled={hasCustomerSignature || customerSignatureDisabled}
+        >
           <UserRound aria-hidden="true" size={18} />
-          <span>Kundenunterschrift einfügen</span>
+          <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+          {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
-        {customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
-        <button className="mobile-measurement-overview-action" type="button" onClick={onWorkerSignature}>
+        {!hasCustomerSignature && customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
+        <button
+          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
+          type="button"
+          onClick={onWorkerSignature}
+          disabled={hasWorkerSignature}
+        >
           <UserRound aria-hidden="true" size={18} />
-          <span>Monteursunterschrift einfügen</span>
+          <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
+        <button
+          className="mobile-measurement-overview-action"
+          type="button"
+          onClick={() => {
+            setEmailSendError(null);
+            setEmailSendMessage(null);
+            setIsEditingEmailRecipients(true);
+          }}
+        >
+          <Mail aria-hidden="true" size={18} />
+          <span>Kunden-E-Mail</span>
+        </button>
+        <button
+          className="mobile-measurement-overview-action"
+          type="button"
+          onClick={() => {
+            setEmailSendError(null);
+            setEmailSendMessage(null);
+            setIsConfirmingEmailSend(true);
+          }}
+          disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
+        >
+          <Mail aria-hidden="true" size={18} />
+          <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
+        </button>
+        {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
+        {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
+        {emailSendMessage ? <p className="form-info">{emailSendMessage}</p> : null}
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
           <Images aria-hidden="true" size={18} />
           <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
@@ -3236,6 +3347,30 @@ function MeasurementBatchOverview({
         label="Foto aufnehmen"
         onClick={onTakePhoto}
       />
+      {isEditingEmailRecipients ? (
+        <ProjectEmailRecipientsModal
+          assignmentId={assignmentId}
+          onClose={() => setIsEditingEmailRecipients(false)}
+          onSaved={() => {
+            setIsEditingEmailRecipients(false);
+            void api.assignmentEmailRecipients(assignmentId).then((response) => {
+              setEmailRecipients(response.recipients);
+            }).catch(() => undefined);
+          }}
+        />
+      ) : null}
+      {isConfirmingEmailSend ? (
+        <DocumentEmailSendDialog
+          description="Das aktuelle Aufmaß wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet."
+          filename={emailPdfFilename}
+          isSending={isSendingEmail}
+          recipients={emailRecipients}
+          error={emailSendError}
+          title="Aufmaß senden?"
+          onClose={() => setIsConfirmingEmailSend(false)}
+          onConfirm={() => void sendMeasurementEmail()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -4986,7 +5121,7 @@ function getMobileExtraWorkPdfFilename(order: MobileExtraWorkTicket): string {
   return `Zusatzauftrag_${number.replace(/[\\/:*?"<>|\s]+/g, "_")}.pdf`;
 }
 
-function getExtraWorkEmailSendHint({
+function getDocumentEmailSendHint({
   hasRecipients,
   hasCustomerSignature,
   hasWorkerSignature,
