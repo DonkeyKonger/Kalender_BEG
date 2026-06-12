@@ -22,7 +22,6 @@ import type { EditableSite } from "./SitesPage";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
-type MeasurementViewMode = "list" | "table";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteWorkTimeRangeMode = "week" | "month";
@@ -33,7 +32,6 @@ type ProjectFolderNavigationLevel = {
   documents: ProjectFolderDocumentList;
 };
 
-const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
@@ -2323,53 +2321,46 @@ function MeasurementTimesheetPanel({
         ) : null}
         {!isLoading && !error && projectPositionRows.length > 0 ? (
           <>
-            <div className="measurement-timesheet-kpis" aria-label="Projektpositionen Kennzahlen">
-              <div className="measurement-timesheet-kpi-card">
-                <span>Projektpositionen</span>
-                <strong>{projectPositionStats.total}</strong>
-              </div>
-              <div className="measurement-timesheet-kpi-card">
-                <span>Geplante Stunden</span>
-                <strong>{projectPositionStats.hasPlannedBasis ? formatMeasurementDuration(projectPositionStats.plannedMinutes) : "Noch keine Sollbasis"}</strong>
-              </div>
-              <div className="measurement-timesheet-kpi-card">
-                <span>Aufmaß-Stunden</span>
-                <strong>{formatMeasurementDuration(projectPositionStats.measuredMinutes)}</strong>
-              </div>
-              <div className="measurement-timesheet-kpi-card">
-                <span>Rechnerischer Ausführungsstand</span>
-                <strong>{projectPositionStats.progressPercent !== null ? formatMeasurementPercent(projectPositionStats.progressPercent) : "Keine Sollbasis"}</strong>
-              </div>
-              <div className="measurement-timesheet-kpi-card">
-                <span>Offene Stunden</span>
-                <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
-              </div>
-            </div>
-
-            <section className="measurement-timesheet-progress-panel" aria-label="Rechnerischer Ausführungsstand">
-              <div className="measurement-timesheet-progress-head">
-                <div>
-                  <h3>Rechnerischer Ausführungsstand</h3>
-                  <p>Aufmaß-/Leistungsfortschritt auf Basis von Montagezeiten und erfassten Aufmaßmengen.</p>
+            <div className="measurement-timesheet-progress-row">
+              <section className="measurement-timesheet-progress-panel" aria-label="Rechnerischer Ausführungsstand">
+                <div className="measurement-timesheet-progress-head">
+                  <div>
+                    <h3>Rechnerischer Ausführungsstand</h3>
+                    <p>Aufmaß-/Leistungsfortschritt auf Basis von Montagezeiten und erfassten Aufmaßmengen.</p>
+                  </div>
+                  {projectPositionStats.progressPercent !== null ? <strong>{formatMeasurementPercent(projectPositionStats.progressPercent)}</strong> : null}
                 </div>
-                {projectPositionStats.progressPercent !== null ? <strong>{formatMeasurementPercent(projectPositionStats.progressPercent)}</strong> : null}
-              </div>
-              {projectPositionStats.progressPercent !== null ? (
-                <>
-                  <ExecutionProgressTrack
-                    percent={projectPositionStats.progressPercent}
-                    workerHeadCount={workerHeadCount}
-                  />
+                {projectPositionStats.progressPercent !== null ? (
+                  <>
+                    <ExecutionProgressTrack
+                      percent={projectPositionStats.progressPercent}
+                      workerHeadCount={workerHeadCount}
+                    />
+                    <p className="measurement-timesheet-progress-note">
+                      {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
+                    </p>
+                  </>
+                ) : (
                   <p className="measurement-timesheet-progress-note">
-                    {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
+                    Für einen belastbaren Fortschritt fehlt aktuell noch die Sollbasis aus Angebots-/Projektmengen.
                   </p>
-                </>
-              ) : (
-                <p className="measurement-timesheet-progress-note">
-                  Für einen belastbaren Fortschritt fehlt aktuell noch die Sollbasis aus Angebots-/Projektmengen.
-                </p>
-              )}
-            </section>
+                )}
+              </section>
+              <aside className="measurement-timesheet-hours-card" aria-label="Stundenübersicht">
+                <div>
+                  <span>Gesamtstunden Angebot</span>
+                  <strong>{projectPositionStats.hasPlannedBasis ? formatMeasurementDuration(projectPositionStats.plannedMinutes) : "Keine Sollbasis"}</strong>
+                </div>
+                <div>
+                  <span>Geleistete Stunden</span>
+                  <strong>{formatMeasurementDuration(projectPositionStats.measuredMinutes)}</strong>
+                </div>
+                <div>
+                  <span>Offene Stunden</span>
+                  <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
+                </div>
+              </aside>
+            </div>
 
             <section className="measurement-timesheet-table-panel" aria-label="Projektpositionen Tabelle">
               <div className="measurement-timesheet-filterbar">
@@ -2945,7 +2936,6 @@ function MeasurementReviewPanel({
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -2970,11 +2960,6 @@ function MeasurementReviewPanel({
   useEffect(() => {
     setUndoStack([]);
   }, [selectedBatch?.id]);
-
-  function updateViewMode(mode: MeasurementViewMode): void {
-    setViewMode(mode);
-    persistMeasurementViewMode(mode);
-  }
 
   const sortedBatches = useMemo(() => [...batches].sort((left, right) => {
     const rightTime = getMeasurementBatchSortTime(right);
@@ -3132,7 +3117,7 @@ function MeasurementReviewPanel({
     const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
 
     return (
-      <div className={`measurement-review-detail${viewMode === "table" ? " is-table-view" : ""}`}>
+      <div className="measurement-review-detail is-table-view">
         <div className="measurement-package-header measurement-review-package-row">
           <div className="measurement-review-package-title">
             <h2>{displayTitle}</h2>
@@ -3143,8 +3128,6 @@ function MeasurementReviewPanel({
         <div className="measurement-table-toolbar measurement-review-toolbar-row">
           <div className="measurement-review-toolbar-left">
             <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
-            <span className="measurement-review-action-divider" aria-hidden="true" />
-            <MeasurementViewToggle viewMode={viewMode} onChange={updateViewMode} />
             <span className="measurement-review-action-divider" aria-hidden="true" />
             <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
               <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Eingereicht</span>
@@ -3201,69 +3184,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
         ) : null}
-        {!batchItemsLoading && itemsWithEntries.length > 0 && viewMode === "list" ? (
-          <div className="measurement-review-positions">
-            {itemsWithEntries.map((item) => (
-              <section className="measurement-review-position" key={item.id}>
-                <div className="measurement-review-position-head">
-                  <strong className="measurement-review-position-title">{item.position} {item.description}</strong>
-                </div>
-                <div className="measurement-review-entry-list">
-                  {item.entries.map((entry) => {
-                    const draft = entryDrafts[entry.id] ?? {
-                      area_or_comment: entry.area_or_comment,
-                      quantity: formatMeasurementDraftQuantity(entry.quantity),
-                    };
-                    const isSaving = savingEntryId === entry.id;
-                    return (
-                      <div className="measurement-review-entry" key={entry.id}>
-                        <input
-                          className="measurement-review-inline-input"
-                          value={draft.area_or_comment}
-                          disabled={!canEditRows || reviewActionLoading || isSaving}
-                          aria-label={`Bereich für ${item.position}`}
-                          onChange={(event) => updateEntryDraft(entry.id, "area_or_comment", event.target.value)}
-                          onBlur={() => void saveEntryDraft(selectedBatch, entry, draft)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void saveEntryDraft(selectedBatch, entry, draft);
-                            }
-                            if (event.key === "Escape") {
-                              resetEntryDraft(entry);
-                            }
-                          }}
-                        />
-                        <div className="measurement-review-quantity-group">
-                          <input
-                            className="measurement-review-inline-quantity"
-                            value={draft.quantity}
-                            disabled={!canEditRows || reviewActionLoading || isSaving}
-                            inputMode="decimal"
-                            aria-label={`Menge für ${item.position}`}
-                            onChange={(event) => updateEntryDraft(entry.id, "quantity", event.target.value)}
-                            onBlur={() => void saveEntryDraft(selectedBatch, entry, draft)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void saveEntryDraft(selectedBatch, entry, draft);
-                              }
-                              if (event.key === "Escape") {
-                                resetEntryDraft(entry);
-                              }
-                            }}
-                          />
-                          <span>{item.unit ?? ""}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        ) : null}
-        {!batchItemsLoading && itemsWithEntries.length > 0 && viewMode === "table" ? (
+        {!batchItemsLoading && itemsWithEntries.length > 0 ? (
           <MeasurementReviewTable
             items={itemsWithEntries}
             positionSuggestions={batchItems}
@@ -3366,21 +3287,6 @@ function MeasurementReviewPanel({
         </div>
       ) : null}
     </>
-  );
-}
-
-function MeasurementViewToggle({
-  viewMode,
-  onChange,
-}: {
-  viewMode: MeasurementViewMode;
-  onChange: (mode: MeasurementViewMode) => void;
-}) {
-  return (
-    <div className="measurement-view-toggle" role="group" aria-label="Aufmaß Ansicht">
-      <button className={viewMode === "list" ? "is-active" : ""} type="button" onClick={() => onChange("list")}>Liste</button>
-      <button className={viewMode === "table" ? "is-active" : ""} type="button" onClick={() => onChange("table")}>Tabelle</button>
-    </div>
   );
 }
 
@@ -4606,20 +4512,6 @@ function InlineEditableSelectItem({
       )}
     </div>
   );
-}
-
-function readMeasurementViewMode(): MeasurementViewMode {
-  if (typeof window === "undefined") {
-    return "list";
-  }
-  return window.localStorage.getItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "list";
-}
-
-function persistMeasurementViewMode(mode: MeasurementViewMode): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 function startMeasurementTimesheetPerformanceTiming(): number | null {

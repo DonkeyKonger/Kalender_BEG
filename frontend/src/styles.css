@@ -5237,31 +5237,26 @@ button.person-chip:focus-visible {
 }
 
 .site-detail-page .project-record-tabs,
-.site-detail-page .project-record-subtabs,
-.site-detail-page .measurement-view-toggle {
+.site-detail-page .project-record-subtabs {
   border-color: var(--project-border);
   background: var(--project-surface-muted);
 }
 
 .site-detail-page .project-record-tabs button,
-.site-detail-page .project-record-subtabs button,
-.site-detail-page .measurement-view-toggle button {
+.site-detail-page .project-record-subtabs button {
   color: var(--project-muted);
 }
 
 .site-detail-page .project-record-tabs button:hover,
 .site-detail-page .project-record-tabs button:focus-visible,
 .site-detail-page .project-record-subtabs button:hover,
-.site-detail-page .project-record-subtabs button:focus-visible,
-.site-detail-page .measurement-view-toggle button:hover,
-.site-detail-page .measurement-view-toggle button:focus-visible {
+.site-detail-page .project-record-subtabs button:focus-visible {
   background: rgb(255 255 255 / 72%);
   color: var(--project-primary);
 }
 
 .site-detail-page .project-record-tabs button.is-active,
-.site-detail-page .project-record-subtabs button.is-active,
-.site-detail-page .measurement-view-toggle button.is-active {
+.site-detail-page .project-record-subtabs button.is-active {
   background: var(--project-surface);
   color: var(--project-text);
   box-shadow: inset 0 0 0 1px rgb(31 41 51 / 8%);
@@ -6188,36 +6183,11 @@ button.person-chip:focus-visible {
   background: #d9e1ec;
 }
 
-.measurement-timesheet-kpis {
+.measurement-timesheet-progress-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
   gap: 12px;
-}
-
-.measurement-timesheet-kpi-card {
-  display: grid;
-  align-content: start;
-  min-height: 72px;
-  border: 1px solid #dce4ef;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 12px 14px;
-}
-
-.measurement-timesheet-kpi-card span {
-  color: #5e6c84;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.measurement-timesheet-kpi-card strong {
-  margin-top: 6px;
-  color: #172033;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.15;
+  align-items: stretch;
 }
 
 .measurement-timesheet-progress-panel {
@@ -6227,6 +6197,44 @@ button.person-chip:focus-visible {
   border-radius: 12px;
   background: #ffffff;
   padding: 16px 16px 12px;
+}
+
+.measurement-timesheet-hours-card {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px 16px;
+}
+
+.measurement-timesheet-hours-card div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.measurement-timesheet-hours-card div + div {
+  padding-top: 10px;
+  border-top: 1px solid #edf2f7;
+}
+
+.measurement-timesheet-hours-card span {
+  color: #5e6c84;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.measurement-timesheet-hours-card strong {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .measurement-timesheet-progress-head {
@@ -6425,6 +6433,10 @@ button.person-chip:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .measurement-timesheet-progress-row {
+    grid-template-columns: 1fr;
+  }
+
   .measurement-execution-track {
     padding-top: 19px;
   }
@@ -6810,35 +6822,6 @@ button.person-chip:focus-visible {
   background: #ffffff;
   color: #172033;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.09);
-}
-
-.measurement-view-toggle {
-  display: inline-flex;
-  width: fit-content;
-  border: 1px solid #cbd7e6;
-  border-radius: 9px;
-  background: #eef4fb;
-  padding: 3px;
-}
-
-.measurement-view-toggle button {
-  min-height: 28px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #52627a;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 850;
-  padding: 4px 10px;
-  white-space: nowrap;
-}
-
-.measurement-view-toggle button.is-active {
-  background: #ffffff;
-  color: #172033;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
 }
 
 .mobile-measurement-table-wrap,
@@ -15035,28 +15018,6 @@ button.person-chip:focus-visible {
 .measurement-review-detail.is-table-view .primary-action:hover,
 .measurement-review-detail.is-table-view .primary-action:focus-visible {
   background: var(--ct-primary-hover);
-}
-
-.measurement-review-detail.is-table-view .measurement-view-toggle {
-  border-color: var(--ct-border);
-  border-radius: 4px;
-  background: var(--ct-surface-muted);
-  padding: 2px;
-}
-
-.measurement-review-detail.is-table-view .measurement-view-toggle button {
-  min-height: 28px;
-  max-height: 30px;
-  border-radius: 3px;
-  color: var(--ct-muted);
-  font-size: 0.83rem;
-  padding: 4px 9px;
-}
-
-.measurement-review-detail.is-table-view .measurement-view-toggle button.is-active {
-  background: var(--ct-surface);
-  color: var(--ct-text);
-  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
 }
 
 .measurement-review-detail.is-table-view .measurement-status.is-open,
