@@ -177,7 +177,33 @@ class ExtraWorkPdfService:
         )
         return content, filename
 
-    def _build_ticket_pdf_version_hash(self, ticket: ExtraWorkTicket, assignment: Assignment) -> str:
+    def build_site_ticket_pdf(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+    ) -> tuple[bytes, str]:
+        ticket = self._get_ticket(ticket_id, site_id)
+        assignment = self._get_site_assignment_context(ticket)
+        started_at = perf_counter()
+        filename = self._build_filename(ticket)
+        version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
+        content, cache_hit = DocumentPdfCache().get_or_build(
+            cache_key=f"extra-work-{ticket.id}",
+            version_hash=version_hash,
+            build=lambda: self._build_ticket_pdf(ticket=ticket, assignment=assignment),
+        )
+        LOGGER.info(
+            "Extra work site PDF served: ticket_id=%s photos=%s cache_hit=%s bytes=%s duration_ms=%.1f",
+            ticket.id,
+            len(ticket.photos or []),
+            cache_hit,
+            len(content),
+            (perf_counter() - started_at) * 1000,
+        )
+        return content, filename
+
+    def _build_ticket_pdf_version_hash(self, ticket: ExtraWorkTicket, assignment: Assignment | None) -> str:
         return build_pdf_version_hash({
             "type": "extra_work",
             "generator_version": EXTRA_WORK_PDF_CACHE_VERSION,
@@ -208,10 +234,10 @@ class ExtraWorkPdfService:
                 "updated_at": ticket.site.updated_at if ticket.site else None,
             },
             "assignment": {
-                "id": assignment.id,
-                "start_date": assignment.start_date,
-                "end_date": assignment.end_date,
-                "updated_at": assignment.updated_at,
+                "id": assignment.id if assignment else None,
+                "start_date": assignment.start_date if assignment else None,
+                "end_date": assignment.end_date if assignment else None,
+                "updated_at": assignment.updated_at if assignment else None,
             },
             "entries": [
                 {
@@ -252,7 +278,7 @@ class ExtraWorkPdfService:
             ],
         })
 
-    def _build_ticket_pdf(self, *, ticket: ExtraWorkTicket, assignment: Assignment) -> bytes:
+    def _build_ticket_pdf(self, *, ticket: ExtraWorkTicket, assignment: Assignment | None) -> bytes:
         if not TEMPLATE_PATH.exists():
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Zusatzauftrag-Vorlage fehlt.")
         started_at = perf_counter()
@@ -350,7 +376,7 @@ class ExtraWorkPdfService:
     def _build_overlay_pdf(
         self,
         ticket: ExtraWorkTicket,
-        assignment: Assignment,
+        assignment: Assignment | None,
         entry: ExtraWorkTicketEntry | None,
         chunks: list[list[dict[str, Any]]],
     ) -> bytes:
@@ -370,7 +396,7 @@ class ExtraWorkPdfService:
         self,
         commands: list[bytes],
         ticket: ExtraWorkTicket,
-        assignment: Assignment,
+        assignment: Assignment | None,
         entry: ExtraWorkTicketEntry | None,
         page_number: int,
         total_pages: int,
@@ -419,7 +445,8 @@ class ExtraWorkPdfService:
         title = _clean_text(ticket.title)
         if title:
             _field(commands, FieldRect(236.88, 366.00, 313.00, 10.00), title, size=7.1)
-        week_start, week_end = _week_range(assignment.start_date or created_date)
+        assignment_date = assignment.start_date if assignment else None
+        week_start, week_end = _week_range(assignment_date or created_date)
         _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.0, align="center")
         _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.0, align="center")
         if entry:
@@ -448,7 +475,7 @@ class ExtraWorkPdfService:
         self,
         commands: list[bytes],
         ticket: ExtraWorkTicket,
-        assignment: Assignment,
+        assignment: Assignment | None,
         entry: ExtraWorkTicketEntry | None,
         rows: list[dict[str, Any]],
     ) -> None:
@@ -531,6 +558,7 @@ class ExtraWorkPdfService:
         ticket = self.db.scalar(
             select(ExtraWorkTicket)
             .options(
+                selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.entries),
                 selectinload(ExtraWorkTicket.approval_ticket).selectinload(ExtraWorkTicket.entries),
@@ -543,6 +571,22 @@ class ExtraWorkPdfService:
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
+
+    def _get_site_assignment_context(self, ticket: ExtraWorkTicket) -> Assignment | None:
+        person_id = ticket.created_by.person_id if ticket.created_by else None
+        query = (
+            select(Assignment)
+            .options(selectinload(Assignment.person))
+            .where(Assignment.site_id == ticket.site_id)
+        )
+        if person_id is not None:
+            query = query.where(Assignment.person_id == person_id)
+        return self.db.scalar(
+            query.order_by(
+                Assignment.start_date.desc(),
+                Assignment.id.desc(),
+            ).limit(1)
+        )
 
     @staticmethod
     def _build_filename(ticket: ExtraWorkTicket) -> str:

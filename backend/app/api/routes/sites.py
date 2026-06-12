@@ -46,6 +46,7 @@ from app.services.document_thumbnail_service import (
     is_pdf_document,
 )
 from app.services.extra_work_service import ExtraWorkService
+from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.geo_service import search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
@@ -427,6 +428,26 @@ def create_extra_work_ticket(
         site_id=site_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.get("/{site_id}/extra-work-tickets/{ticket_id}/pdf")
+def download_extra_work_ticket_pdf(
+    site_id: int,
+    ticket_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, filename = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site_id,
+        ticket_id=ticket_id,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        },
     )
 
 

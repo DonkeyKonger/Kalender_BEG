@@ -712,6 +712,14 @@ export const api = {
     return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
   },
 
+  async siteExtraWorkTickets(siteId: number): Promise<MobileExtraWorkTicket[]> {
+    return request<MobileExtraWorkTicket[]>(`/sites/${siteId}/extra-work-tickets`);
+  },
+
+  async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<Blob> {
+    return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/pdf`);
+  },
+
   async createSiteMeasurementEntry(
     siteId: number,
     batchId: number,

@@ -15,7 +15,7 @@ import {
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
@@ -119,6 +119,11 @@ export function SiteDetailPage() {
   const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
   const [measurementReviewError, setMeasurementReviewError] = useState<string | null>(null);
   const [measurementReviewActionLoading, setMeasurementReviewActionLoading] = useState(false);
+  const [extraWorkTickets, setExtraWorkTickets] = useState<MobileExtraWorkTicket[]>([]);
+  const [extraWorkLoading, setExtraWorkLoading] = useState(false);
+  const [extraWorkLoaded, setExtraWorkLoaded] = useState(false);
+  const [extraWorkError, setExtraWorkError] = useState<string | null>(null);
+  const [extraWorkPdfAction, setExtraWorkPdfAction] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -209,6 +214,11 @@ export function SiteDetailPage() {
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     setMeasurementReviewActionLoading(false);
+    setExtraWorkTickets([]);
+    setExtraWorkLoading(false);
+    setExtraWorkLoaded(false);
+    setExtraWorkError(null);
+    setExtraWorkPdfAction(null);
   }, [requestedMeasurementSubtab, requestedProjectTab, site?.id]);
 
   useEffect(() => {
@@ -383,6 +393,14 @@ export function SiteDetailPage() {
     void loadMeasurementBatches();
   }, [activeTab, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
 
+  useEffect(() => {
+    if (!site || activeTab !== "extra-work" || extraWorkLoaded || extraWorkLoading) {
+      return;
+    }
+
+    void loadExtraWorkTickets();
+  }, [activeTab, extraWorkLoaded, extraWorkLoading, site]);
+
   async function loadMeasurementBatches(): Promise<void> {
     if (!site) {
       return;
@@ -396,6 +414,22 @@ export function SiteDetailPage() {
       setMeasurementBatchesError(readApiError(requestError, "Aufmaßpakete konnten nicht geladen werden."));
     } finally {
       setMeasurementBatchesLoading(false);
+    }
+  }
+
+  async function loadExtraWorkTickets(): Promise<void> {
+    if (!site) {
+      return;
+    }
+    setExtraWorkLoading(true);
+    setExtraWorkError(null);
+    try {
+      setExtraWorkTickets(await api.siteExtraWorkTickets(site.id));
+      setExtraWorkLoaded(true);
+    } catch (requestError) {
+      setExtraWorkError(readApiError(requestError, "Zusatzaufträge konnten nicht geladen werden."));
+    } finally {
+      setExtraWorkLoading(false);
     }
   }
 
@@ -536,6 +570,31 @@ export function SiteDetailPage() {
       triggerBrowserDownload(blob, `${prefix}_${packageNumber}.pdf`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "PDF konnte nicht erstellt werden."));
+    }
+  }
+
+  async function handleExtraWorkTicketPdf(ticket: MobileExtraWorkTicket, mode: "open" | "download"): Promise<void> {
+    if (!site || extraWorkPdfAction) {
+      return;
+    }
+    const actionKey = `${ticket.id}:${mode}`;
+    const openedWindow = mode === "open" ? window.open("about:blank", "_blank", "noopener,noreferrer") : null;
+    setExtraWorkPdfAction(actionKey);
+    setExtraWorkError(null);
+    try {
+      const blob = await api.downloadSiteExtraWorkTicketPdf(site.id, ticket.id);
+      if (mode === "open") {
+        openBlobInNewTab(blob, openedWindow);
+      } else {
+        triggerBrowserDownload(blob, formatExtraWorkTicketPdfFilename(site, ticket));
+      }
+    } catch (requestError) {
+      if (openedWindow) {
+        openedWindow.close();
+      }
+      setExtraWorkError(readApiError(requestError, "Zusatzauftrag-PDF konnte nicht erstellt werden."));
+    } finally {
+      setExtraWorkPdfAction(null);
     }
   }
 
@@ -909,12 +968,18 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "extra-work" ? (
-        <PlaceholderTab
-          icon={FileText}
-          title="Zusatzaufträge"
-          description="Hier werden später Stundenzettel und Zusatzarbeiten zur Baustelle erfasst, geprüft und als PDF ausgegeben."
-          emptyText="Stundenzettel und Zusatzarbeiten werden in einer späteren Ausbaustufe hier gesammelt."
-          sections={["Stundenzettel", "Zusatzarbeiten", "Prüfung", "PDF-Ausgabe"]}
+        <ExtraWorkTab
+          site={site}
+          tickets={extraWorkTickets}
+          isLoading={extraWorkLoading}
+          error={extraWorkError}
+          pdfAction={extraWorkPdfAction}
+          onRetry={() => {
+            setExtraWorkLoaded(false);
+            setExtraWorkError(null);
+          }}
+          onOpenPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "open")}
+          onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -1478,6 +1543,106 @@ function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
     return <Mail aria-hidden="true" className="is-mail" size={20} />;
   }
   return <FileIcon aria-hidden="true" size={20} />;
+}
+
+function ExtraWorkTab({
+  site,
+  tickets,
+  isLoading,
+  error,
+  pdfAction,
+  onRetry,
+  onOpenPdf,
+  onDownloadPdf,
+}: {
+  site: Site;
+  tickets: MobileExtraWorkTicket[];
+  isLoading: boolean;
+  error: string | null;
+  pdfAction: string | null;
+  onRetry: () => void;
+  onOpenPdf: (ticket: MobileExtraWorkTicket) => void;
+  onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
+}) {
+  const sortedTickets = useMemo(
+    () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
+    [tickets],
+  );
+
+  return (
+    <>
+      <div className="project-record-toolbar">
+        <div>
+          <h2><FileText aria-hidden="true" size={18} />Zusatzaufträge</h2>
+          <p>Mobile Stundenzettel und Zusatzaufträge zu {site.name} zur Einsicht und PDF-Ausgabe.</p>
+        </div>
+      </div>
+      {isLoading ? <div className="matrix-state">Zusatzaufträge werden geladen...</div> : null}
+      {error ? (
+        <div className="project-record-empty-state is-error">
+          <strong>{error}</strong>
+          <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+        </div>
+      ) : null}
+      {!isLoading && !error && sortedTickets.length === 0 ? (
+        <div className="project-record-empty-state">Noch keine Zusatzaufträge vorhanden.</div>
+      ) : null}
+      {!isLoading && !error && sortedTickets.length > 0 ? (
+        <div className="measurement-review-list">
+          {sortedTickets.map((ticket) => {
+            const statusBadge = getExtraWorkTicketStatusBadge(ticket);
+            const openActionKey = `${ticket.id}:open`;
+            const downloadActionKey = `${ticket.id}:download`;
+            const isOpeningPdf = pdfAction === openActionKey;
+            const isDownloadingPdf = pdfAction === downloadActionKey;
+            const isPdfBusy = isOpeningPdf || isDownloadingPdf;
+            return (
+              <div
+                key={ticket.id}
+                className={`measurement-review-card${ticket.status === "submitted" ? " is-submitted" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="measurement-review-card-open"
+                  onClick={() => onOpenPdf(ticket)}
+                >
+                  <span className={statusBadge.className}>
+                    {statusBadge.label}
+                  </span>
+                  <div className="measurement-review-card-main">
+                    <div className="measurement-review-card-title-row">
+                      <strong>{formatExtraWorkTicketTitle(ticket)}</strong>
+                    </div>
+                    <small>{formatExtraWorkTicketMeta(ticket)}</small>
+                    <small>{formatExtraWorkTicketPeriod(ticket)}</small>
+                  </div>
+                  <b>{formatExtraWorkTicketHours(ticket)}</b>
+                </button>
+                <div className="measurement-review-pdf-actions">
+                  <button
+                    type="button"
+                    className="measurement-review-pdf-action"
+                    disabled={isPdfBusy}
+                    onClick={() => onOpenPdf(ticket)}
+                  >
+                    {isOpeningPdf ? "Öffnet..." : "Ansehen"}
+                  </button>
+                  <button
+                    type="button"
+                    className="measurement-review-pdf-action"
+                    disabled={isPdfBusy}
+                    onClick={() => onDownloadPdf(ticket)}
+                  >
+                    {isDownloadingPdf ? "Lädt..." : "PDF"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 
@@ -4070,6 +4235,83 @@ function getSuggestedMeasurementSheetName(siteNumber: string | null, nextNumber:
 
 function formatMeasurementBaseName(base: MeasurementBase): string {
   return base.name.replace("Aufmaßbasis", "Aufmaßblatt");
+}
+
+function compareExtraWorkTicketsNewestFirst(left: MobileExtraWorkTicket, right: MobileExtraWorkTicket): number {
+  const rightTime = getExtraWorkTicketSortTime(right);
+  const leftTime = getExtraWorkTicketSortTime(left);
+  if (rightTime !== leftTime) {
+    return rightTime - leftTime;
+  }
+  return right.sequence_number - left.sequence_number;
+}
+
+function getExtraWorkTicketSortTime(ticket: MobileExtraWorkTicket): number {
+  const value = ticket.submitted_at ?? ticket.customer_signed_at ?? ticket.updated_at ?? ticket.created_at;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
+  label: string;
+  className: string;
+} {
+  const status = ticket.status.toLowerCase();
+  if (ticket.customer_signed_at || status === "signed") {
+    return {
+      label: "Unterschrieben",
+      className: "measurement-status measurement-review-status-badge is-signed-review",
+    };
+  }
+  if (status === "reviewed") {
+    return { label: "Geprüft", className: "measurement-status measurement-review-status-badge is-reviewed" };
+  }
+  if (status === "submitted") {
+    return { label: "Eingereicht", className: "measurement-status measurement-review-status-badge is-review-required" };
+  }
+  const labels: Record<string, string> = {
+    draft: "Entwurf",
+  };
+  return {
+    label: labels[status] ?? status,
+    className: ["measurement-status", "measurement-review-status-badge", `is-${status}`].join(" "),
+  };
+}
+
+function formatExtraWorkTicketTitle(ticket: MobileExtraWorkTicket): string {
+  const suffix = ticket.title?.trim() || "Hauptauftrag";
+  return `Zusatzauftrag ${ticket.display_number}${suffix ? ` - ${suffix}` : ""}`;
+}
+
+function formatExtraWorkTicketMeta(ticket: MobileExtraWorkTicket): string {
+  const creator = ticket.created_by_name ? `Ersteller: ${ticket.created_by_name}` : "Ersteller: -";
+  const created = ticket.created_at ? `Angelegt: ${formatDateTime(ticket.created_at)}` : null;
+  const submitted = ticket.submitted_at ? `Eingereicht: ${formatDateTime(ticket.submitted_at)}` : null;
+  return [creator, created, submitted].filter(Boolean).join(" · ");
+}
+
+function formatExtraWorkTicketPeriod(ticket: MobileExtraWorkTicket): string {
+  const dateValue = ticket.submitted_at ?? ticket.created_at;
+  return dateValue ? `Leistungsdatum: ${formatIsoDateOnly(dateValue)}` : "Leistungsdatum: -";
+}
+
+function formatExtraWorkTicketHours(ticket: MobileExtraWorkTicket): string {
+  return `${formatMeasurementNumber(ticket.total_hours)} h`;
+}
+
+function formatExtraWorkTicketPdfFilename(site: Site, ticket: MobileExtraWorkTicket): string {
+  const siteNumber = sanitizeDownloadPart(site.site_number || String(site.id));
+  const ticketNumber = sanitizeDownloadPart(ticket.display_number || String(ticket.sequence_number));
+  return `Zusatzauftrag_${siteNumber}_${ticketNumber}.pdf`;
+}
+
+function sanitizeDownloadPart(value: string): string {
+  return value.trim().replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "ohne_nummer";
+}
+
+function formatIsoDateOnly(value: string): string {
+  const dateKey = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? formatDateOnly(dateKey) : value;
 }
 
 function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
