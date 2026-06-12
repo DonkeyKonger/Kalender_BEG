@@ -5072,7 +5072,6 @@ button.person-chip:focus-visible {
 .site-inline-edit-display > span {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #172033;
   font-size: 0.95rem;
   font-weight: 750;
   text-transform: none;
@@ -5082,18 +5081,18 @@ button.person-chip:focus-visible {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid #d6dfeb;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #64748b;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #7b8798;
   cursor: pointer;
 }
 
 .site-inline-edit-button:hover,
 .site-inline-edit-button:focus-visible {
-  border-color: #9fb6d4;
+  background: rgb(31 47 70 / 6%);
   color: #244f86;
 }
 
@@ -5174,7 +5173,7 @@ button.person-chip:focus-visible {
   resize: vertical;
   border: 1px solid #d6dfeb;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #ffffff;
   color: #172033;
   padding: 12px 14px;
   font: inherit;
@@ -5189,9 +5188,10 @@ button.person-chip:focus-visible {
 }
 
 .site-notes-textarea:disabled {
-  color: #475569;
-  background: #f3f6fa;
+  color: #172033;
+  background: #ffffff;
   cursor: default;
+  opacity: 1;
 }
 
 
@@ -5234,6 +5234,10 @@ button.person-chip:focus-visible {
 .site-detail-page .detail-item span,
 .site-detail-page .project-placeholder-card small {
   color: var(--project-muted);
+}
+
+.site-detail-page .site-inline-edit-display > span {
+  color: var(--project-text);
 }
 
 .site-detail-page .project-record-tabs,
@@ -14466,7 +14470,7 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .measurement-base-card,
 .site-detail-page.is-project-file-workspace .measurement-table-wrap {
   border: 1px solid var(--pf-border);
-  border-radius: 6px;
+  border-radius: 2px;
   background: var(--pf-surface);
   box-shadow: none;
 }
@@ -14567,7 +14571,7 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .project-folder-card,
 .site-detail-page.is-project-file-workspace .project-document-item {
   border-color: var(--pf-border);
-  border-radius: 6px;
+  border-radius: 2px;
   background: var(--pf-surface);
   box-shadow: none;
 }
@@ -14581,9 +14585,9 @@ button.person-chip:focus-visible {
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-selected,
 .site-detail-page.is-project-file-workspace .measurement-base-card.is-active {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  box-shadow: inset 0 0 0 1px rgb(59 130 246 / 10%);
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  box-shadow: inset 3px 0 0 var(--pf-primary);
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-drag-over,
@@ -14601,8 +14605,16 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .measurement-review-inline-quantity,
 .site-detail-page.is-project-file-workspace .measurement-table-input {
   border-color: var(--pf-border);
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--pf-surface);
+}
+
+.site-detail-page.is-project-file-workspace .secondary-action,
+.site-detail-page.is-project-file-workspace .primary-action,
+.site-detail-page.is-project-file-workspace .project-document-open-action,
+.site-detail-page.is-project-file-workspace .project-upload-action {
+  border-radius: 2px;
+  box-shadow: none;
 }
 
 .site-detail-page.is-project-file-workspace .project-document-search:focus-within,
