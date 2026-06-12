@@ -701,6 +701,7 @@ function DayFocusCard({
           {assignments.map((daily) => (
             <CompactHomeAssignmentCard
               assignment={daily.assignment}
+              date={date}
               key={daily.key}
             />
           ))}
@@ -732,14 +733,22 @@ function DayFocusCard({
   );
 }
 
-function CompactHomeAssignmentCard({ assignment }: { assignment: MobileAssignment }) {
+function CompactHomeAssignmentCard({
+  assignment,
+  date,
+}: {
+  assignment: MobileAssignment;
+  date: string;
+}) {
   return (
     <Link
       className="mobile-home-assignment-card is-day-cluster-item"
       to={`/me/assignments/${assignment.id}`}
       state={{ assignment }}
     >
+      <CalendarClock aria-hidden="true" size={18} />
       <span>
+        <strong>{formatHomeAssignmentDateLabel(date)}</strong>
         <b>{assignment.site.name}</b>
         <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
       </span>

@@ -3112,11 +3112,11 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-day-assignment-cluster {
-  border: 1px solid #d8e3ef;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 10px;
-  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
 .mobile-home-day-assignment-head {
@@ -3125,6 +3125,7 @@ button.person-chip:focus-visible {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  padding: 0 2px;
 }
 
 .mobile-home-day-assignment-head strong {
@@ -3215,10 +3216,14 @@ button.person-chip:focus-visible {
 
 .mobile-home-assignment-card.is-day-cluster-item {
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  min-height: 74px;
-  padding: 9px;
-  box-shadow: none;
+  gap: 7px;
+  align-items: center;
+  min-height: 116px;
+  padding: 10px;
+}
+
+.mobile-home-assignment-card.is-day-cluster-item > svg {
+  display: none;
 }
 
 .mobile-home-assignment-card > svg {
@@ -3269,7 +3274,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-assignment-card.is-day-cluster-item b {
   display: -webkit-box;
-  font-size: 0.87rem;
+  font-size: 0.92rem;
   line-height: 1.16;
   white-space: normal;
   -webkit-box-orient: vertical;
@@ -3277,7 +3282,11 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-assignment-card.is-day-cluster-item small {
-  font-size: 0.73rem;
+  font-size: 0.76rem;
+}
+
+.mobile-home-assignment-card.is-day-cluster-item .assignment-card-affordance {
+  margin-left: 0;
 }
 
 .mobile-home-assignment-card em {
