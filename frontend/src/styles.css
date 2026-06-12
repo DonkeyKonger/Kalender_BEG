@@ -4653,14 +4653,19 @@ button.person-chip:focus-visible {
   outline: 3px solid rgb(29 92 153 / 16%);
 }
 
-.site-overview-search input {
+.site-list-toolbar .site-overview-search input {
   min-height: 38px;
   border: 0;
   background: transparent;
+  box-shadow: none;
+  outline: none;
   padding: 0 0 0 9px;
 }
 
-.site-overview-search input:focus {
+.site-list-toolbar .site-overview-search input:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   outline: none;
 }
 
