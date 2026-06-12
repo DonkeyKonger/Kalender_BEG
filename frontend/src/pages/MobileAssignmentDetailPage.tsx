@@ -842,6 +842,19 @@ function ExtraWorkOrderOverview({
           {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
         <button
+          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
+          type="button"
+          onClick={() => {
+            setPdfError(null);
+            setIsSigningWorker(true);
+          }}
+          disabled={hasWorkerSignature}
+        >
+          <UserRound aria-hidden="true" size={18} />
+          <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+        </button>
+        <button
           className="mobile-measurement-overview-action"
           type="button"
           onClick={() => {
@@ -866,19 +879,6 @@ function ExtraWorkOrderOverview({
         </button>
         {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
         {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
-        <button
-          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
-          type="button"
-          onClick={() => {
-            setPdfError(null);
-            setIsSigningWorker(true);
-          }}
-          disabled={hasWorkerSignature}
-        >
-          <UserRound aria-hidden="true" size={18} />
-          <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
-          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-        </button>
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
           <Images aria-hidden="true" size={18} />
           <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
