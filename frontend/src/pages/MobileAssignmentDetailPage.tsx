@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Camera,
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   ClipboardList,
   Download,
@@ -828,7 +829,7 @@ function ExtraWorkOrderOverview({
           <span>{isOpeningPdf ? "PDF wird geöffnet..." : `${kindLabel} anzeigen (PDF)`}</span>
         </button>
         <button
-          className="mobile-measurement-overview-action"
+          className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
           type="button"
           onClick={() => {
             setPdfError(null);
@@ -838,10 +839,8 @@ function ExtraWorkOrderOverview({
         >
           <UserRound aria-hidden="true" size={18} />
           <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+          {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
-        {hasCustomerSignature && order.customer_signature_name ? (
-          <p className="mobile-measurement-action-hint">Unterschrieben von {order.customer_signature_name}</p>
-        ) : null}
         <button
           className="mobile-measurement-overview-action"
           type="button"
@@ -868,7 +867,7 @@ function ExtraWorkOrderOverview({
         {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
         {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
         <button
-          className="mobile-measurement-overview-action"
+          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
           type="button"
           onClick={() => {
             setPdfError(null);
@@ -878,10 +877,8 @@ function ExtraWorkOrderOverview({
         >
           <UserRound aria-hidden="true" size={18} />
           <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
-        {hasWorkerSignature && order.worker_signature_name ? (
-          <p className="mobile-measurement-action-hint">Unterschrieben von {order.worker_signature_name}</p>
-        ) : null}
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
           <Images aria-hidden="true" size={18} />
           <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
@@ -1574,19 +1571,18 @@ function ExtraWorkWorkerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Monteursunterschrift">
-      <header className="mobile-customer-signature-header">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Zurück</span>
-        </button>
-        <div className="mobile-customer-signature-title">
-          <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
-          <span>Monteursunterschrift erfassen</span>
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSavingSignature ? undefined : onClose}>
+      <div
+        className="mobile-project-email-dialog mobile-worker-signature-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-worker-signature-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-project-email-dialog-head">
+          <h2 id="mobile-worker-signature-dialog-title">Monteursunterschrift</h2>
+          <p>{formatMobileExtraWorkOrderTitle(order)}</p>
         </div>
-      </header>
-
-      <main className="mobile-worker-signature-content">
         <section className="mobile-worker-signature-card" aria-label="Monteursunterschrift erfassen">
           <label>
             <span>Monteur</span>
@@ -1629,7 +1625,10 @@ function ExtraWorkWorkerSignatureOverlay({
             />
           </div>
           {signatureError ? <p className="form-error">{signatureError}</p> : null}
-          <div className="mobile-customer-signature-actions">
+          <div className="mobile-worker-signature-actions">
+            <button className="secondary-action" type="button" onClick={onClose} disabled={isSavingSignature}>
+              Abbrechen
+            </button>
             <button
               className="secondary-action"
               type="button"
@@ -1651,7 +1650,7 @@ function ExtraWorkWorkerSignatureOverlay({
             </button>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
