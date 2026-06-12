@@ -58,6 +58,7 @@ const PDF_MAX_ZOOM = 2.5;
 const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
 const PDF_MAX_RENDER_PIXEL_RATIO = 3.5;
 const PDF_MAX_CANVAS_PIXELS = 8_000_000;
+const MOBILE_DOCUMENT_PHOTO_LIMIT = 5;
 
 type PdfContentSize = {
   width: number;
@@ -403,6 +404,11 @@ function MobileExtraWorkTab({
   }
 
   function openPhotoCapture(order: MobileExtraWorkTicket): void {
+    if ((order.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
+      setMessage("Maximal 5 Fotos pro Stundenzettel erlaubt.");
+      setPhotoMessageTone("error");
+      return;
+    }
     setPhotoUploadOrder(order);
     setMessage(null);
     setPhotoMessageTone("info");
@@ -414,6 +420,12 @@ function MobileExtraWorkTab({
     event.target.value = "";
     const order = photoUploadOrder ?? selectedOrder;
     if (!file || !order || isUploadingPhoto) {
+      return;
+    }
+    if ((order.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
+      setMessage("Maximal 5 Fotos pro Stundenzettel erlaubt.");
+      setPhotoMessageTone("error");
+      setPhotoUploadOrder(null);
       return;
     }
     setIsUploadingPhoto(true);
@@ -447,6 +459,7 @@ function MobileExtraWorkTab({
             onBack={() => setPhotoGalleryOrder(null)}
             onTakePhoto={() => openPhotoCapture(photoGalleryOrder)}
             onPhotoCountChanged={(count) => updateOrderPhotoCount(photoGalleryOrder.id, count)}
+            photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
           />
           <input
             ref={photoInputRef}
@@ -485,6 +498,7 @@ function MobileExtraWorkTab({
           error={error}
           isSaving={isSaving}
           isUploadingPhoto={isUploadingPhoto}
+          photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
           messageTone={photoMessageTone}
           onBack={() => {
             setSelectedOrder(null);
@@ -619,6 +633,7 @@ function ExtraWorkOrderOverview({
   error,
   isSaving,
   isUploadingPhoto,
+  photoLimit,
   messageTone,
   onBack,
   onOpenEntry,
@@ -636,6 +651,7 @@ function ExtraWorkOrderOverview({
   error: string | null;
   isSaving: boolean;
   isUploadingPhoto: boolean;
+  photoLimit: number;
   messageTone: "info" | "error";
   onBack: () => void;
   onOpenEntry: () => void;
@@ -660,6 +676,7 @@ function ExtraWorkOrderOverview({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const hasCustomerSignature = Boolean(order.customer_signed_at);
   const hasWorkerSignature = Boolean(order.worker_signed_at);
+  const isPhotoLimitReached = (order.photo_count ?? 0) >= photoLimit;
   const canRename = order.status === "draft" && !hasCustomerSignature;
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
 
@@ -788,10 +805,13 @@ function ExtraWorkOrderOverview({
           <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
         </button>
       </div>
+      {isPhotoLimitReached ? (
+        <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Stundenzettel erlaubt.</p>
+      ) : null}
       {message ? <p className={messageTone === "error" ? "form-error" : "form-info"}>{message}</p> : null}
       <MobileCameraButton
         className="mobile-measurement-camera-button"
-        disabled={isUploadingPhoto}
+        disabled={isUploadingPhoto || isPhotoLimitReached}
         label="Foto aufnehmen"
         onClick={onTakePhoto}
       />
@@ -2618,6 +2638,11 @@ function MobileMeasurementTab({
   }
 
   function openPhotoCapture(batch: MobileMeasurementBatch): void {
+    if ((batch.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
+      setPhotoMessage("Maximal 5 Fotos pro Aufmaß erlaubt.");
+      setPhotoMessageTone("error");
+      return;
+    }
     setPhotoUploadBatch(batch);
     setPhotoMessage(null);
     setPhotoMessageTone("info");
@@ -2629,6 +2654,12 @@ function MobileMeasurementTab({
     event.target.value = "";
     const batch = photoUploadBatch ?? selectedBatch;
     if (!file || !batch || isUploadingPhoto) {
+      return;
+    }
+    if ((batch.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
+      setPhotoMessage("Maximal 5 Fotos pro Aufmaß erlaubt.");
+      setPhotoMessageTone("error");
+      setPhotoUploadBatch(null);
       return;
     }
     setIsUploadingPhoto(true);
@@ -2746,6 +2777,7 @@ function MobileMeasurementTab({
             onBack={() => setPhotoGalleryBatch(null)}
             onPhotoCountChange={(nextCount) => updateBatchPhotoCount(photoGalleryBatch.id, nextCount)}
             onTakePhoto={() => openPhotoCapture(photoGalleryBatch)}
+            photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
           />
           <input
             ref={photoInputRef}
@@ -2767,6 +2799,7 @@ function MobileMeasurementTab({
           isOpeningPdf={isOpeningPdf}
           isItemsLoading={isItemsLoading}
           isUploadingPhoto={isUploadingPhoto}
+          photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
           photoMessage={photoMessage}
           photoMessageTone={photoMessageTone}
           customerSignatureDisabled={customerSignatureAction.disabled}
@@ -2939,6 +2972,7 @@ function MeasurementBatchOverview({
   isOpeningPdf,
   isItemsLoading,
   isUploadingPhoto,
+  photoLimit,
   photoMessage,
   photoMessageTone,
   customerSignatureDisabled,
@@ -2958,6 +2992,7 @@ function MeasurementBatchOverview({
   isOpeningPdf: boolean;
   isItemsLoading: boolean;
   isUploadingPhoto: boolean;
+  photoLimit: number;
   photoMessage: string | null;
   photoMessageTone: "info" | "error";
   customerSignatureDisabled: boolean;
@@ -2975,6 +3010,7 @@ function MeasurementBatchOverview({
   const statusBadge = getMobileMeasurementBatchStatusBadge(batch);
   const displayDate = formatMobileMeasurementBatchDate(batch);
   const canSubmit = isDraft && !isSaving && batch.entry_count > 0 && !batch.is_locked_for_worker;
+  const isPhotoLimitReached = (batch.photo_count ?? 0) >= photoLimit;
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
       <div className="mobile-measurement-detail-topbar">
@@ -3030,10 +3066,13 @@ function MeasurementBatchOverview({
           <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
         </button>
       </div>
+      {isPhotoLimitReached ? (
+        <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p>
+      ) : null}
       {photoMessage ? <p className={photoMessageTone === "error" ? "form-error" : "form-info"}>{photoMessage}</p> : null}
       <MobileCameraButton
         className="mobile-measurement-camera-button"
-        disabled={isUploadingPhoto}
+        disabled={isUploadingPhoto || isPhotoLimitReached}
         label="Foto aufnehmen"
         onClick={onTakePhoto}
       />
@@ -3055,6 +3094,7 @@ function MeasurementPhotoGallery({
   onBack,
   onPhotoCountChange,
   onTakePhoto,
+  photoLimit,
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
@@ -3063,12 +3103,14 @@ function MeasurementPhotoGallery({
   onBack: () => void;
   onPhotoCountChange: (nextCount: number) => void;
   onTakePhoto: () => void;
+  photoLimit: number;
 }) {
   const [photos, setPhotos] = useState<MeasurementPhotoPreview[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<MeasurementPhotoPreview | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
     let isCurrent = true;
@@ -3095,6 +3137,7 @@ function MeasurementPhotoGallery({
         }));
         if (isCurrent) {
           setPhotos(previews);
+          onPhotoCountChange(previews.length);
         } else {
           objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
         }
@@ -3148,7 +3191,7 @@ function MeasurementPhotoGallery({
           <ArrowLeft aria-hidden="true" size={17} />
           <span>Aufmaß</span>
         </button>
-        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
           <Camera aria-hidden="true" size={16} />
           <span>{isUploadingPhoto ? "Speichert..." : "Foto aufnehmen"}</span>
         </button>
@@ -3160,11 +3203,12 @@ function MeasurementPhotoGallery({
       </header>
 
       {photoError ? <div className="form-error">{photoError}</div> : null}
+      {isPhotoLimitReached ? <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p> : null}
       {isLoadingPhotos ? <div className="empty-panel">Fotos werden geladen...</div> : null}
       {!isLoadingPhotos && !photos.length ? (
         <div className="empty-panel mobile-measurement-photo-empty">
           <span>Noch keine Fotos hinterlegt.</span>
-          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
             Foto aufnehmen
           </button>
         </div>
@@ -3231,6 +3275,7 @@ function ExtraWorkPhotoGallery({
   onBack,
   onTakePhoto,
   onPhotoCountChanged,
+  photoLimit,
 }: {
   assignmentId: number;
   order: MobileExtraWorkTicket;
@@ -3239,12 +3284,14 @@ function ExtraWorkPhotoGallery({
   onBack: () => void;
   onTakePhoto: () => void;
   onPhotoCountChanged: (count: number) => void;
+  photoLimit: number;
 }) {
   const [photos, setPhotos] = useState<ExtraWorkPhotoPreview[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<ExtraWorkPhotoPreview | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
     let isCurrent = true;
@@ -3325,7 +3372,7 @@ function ExtraWorkPhotoGallery({
           <ArrowLeft aria-hidden="true" size={17} />
           <span>Stundenzettel</span>
         </button>
-        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
           <Camera aria-hidden="true" size={16} />
           <span>{isUploadingPhoto ? "Speichert..." : "Foto aufnehmen"}</span>
         </button>
@@ -3337,11 +3384,12 @@ function ExtraWorkPhotoGallery({
       </header>
 
       {photoError ? <div className="form-error">{photoError}</div> : null}
+      {isPhotoLimitReached ? <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Stundenzettel erlaubt.</p> : null}
       {isLoadingPhotos ? <div className="empty-panel">Fotos werden geladen...</div> : null}
       {!isLoadingPhotos && !photos.length ? (
         <div className="empty-panel mobile-measurement-photo-empty">
           <span>Noch keine Fotos hinterlegt.</span>
-          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
             Foto aufnehmen
           </button>
         </div>

@@ -3,6 +3,7 @@ from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 from pypdf import PdfReader
@@ -441,6 +442,49 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         ticket_id=ticket.id,
         current_user=current_user,
     ) == []
+
+
+def test_mobile_extra_work_photo_upload_blocks_after_five_photos():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    for index in range(5):
+        db.add(
+            ExtraWorkTicketPhoto(
+                site_id=site.id,
+                extra_work_ticket_id=ticket.id,
+                uploaded_by_user_id=current_user.id,
+                project_folder_key="fotos",
+                external_drive_id="drive-1",
+                external_item_id=f"photo-{index}",
+                filename=f"photo-{index}.jpg",
+                content_type="image/jpeg",
+                file_size_bytes=100,
+            )
+        )
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        service.upload_mobile_ticket_photo(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+            filename="extra.jpg",
+            content=b"image-content",
+            content_type="image/jpeg",
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Maximal 5 Fotos erlaubt."
 
 
 def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():

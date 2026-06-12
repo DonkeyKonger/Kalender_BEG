@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementItem
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementBatchPhoto, SiteMeasurementItem
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -388,6 +388,85 @@ def test_mobile_batch_uses_only_active_released_measurement_base():
     assert batch.measurement_base_id == new_base.id
     assert [item.id for item in mobile_items] == [new_item.id]
     assert mobile_items[0].description == "Neue Position"
+
+
+def test_mobile_measurement_photo_upload_blocks_after_five_photos():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.user import User
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add_all([item, user, assignment])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    for index in range(5):
+        db.add(
+            SiteMeasurementBatchPhoto(
+                site_id=site.id,
+                measurement_batch_id=batch.id,
+                uploaded_by_user_id=user.id,
+                project_folder_key="fotos",
+                external_drive_id="drive-1",
+                external_item_id=f"photo-{index}",
+                filename=f"photo-{index}.jpg",
+                content_type="image/jpeg",
+                file_size_bytes=100,
+            )
+        )
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        service.upload_mobile_batch_photo(
+            assignment_id=assignment.id,
+            batch_id=batch.id,
+            current_user=user,
+            filename="extra.jpg",
+            content=b"image-content",
+            content_type="image/jpeg",
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Maximal 5 Fotos erlaubt."
 
 
 def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():

@@ -38,6 +38,7 @@ from app.services.measurement_timesheet_parser import (
     MeasurementTimesheetParseError,
     parse_measurement_timesheet_pdf,
 )
+from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 
@@ -494,6 +495,13 @@ class MeasurementService:
     ) -> MobileMeasurementBatchPhotoRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        current_photo_count = self.db.scalar(
+            select(func.count(SiteMeasurementBatchPhoto.id)).where(
+                SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
+            )
+        ) or 0
+        if current_photo_count >= MAX_DOCUMENT_PHOTOS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Maximal 5 Fotos erlaubt.")
         normalized_content_type = _normalize_content_type(content_type)
         if normalized_content_type not in MEASUREMENT_PHOTO_CONTENT_TYPES:
             raise HTTPException(

@@ -20,6 +20,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
 )
+from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 
@@ -359,6 +360,13 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketPhotoRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        current_photo_count = self.db.scalar(
+            select(func.count(ExtraWorkTicketPhoto.id)).where(
+                ExtraWorkTicketPhoto.extra_work_ticket_id == ticket.id
+            )
+        ) or 0
+        if current_photo_count >= MAX_DOCUMENT_PHOTOS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Maximal 5 Fotos erlaubt.")
         normalized_content_type = _normalize_content_type(content_type)
         if normalized_content_type not in EXTRA_WORK_PHOTO_CONTENT_TYPES:
             raise HTTPException(
