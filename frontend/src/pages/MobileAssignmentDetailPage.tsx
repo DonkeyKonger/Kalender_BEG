@@ -748,7 +748,6 @@ function ExtraWorkOrderOverview({
           order={order}
           onClose={() => setIsSigningCustomer(false)}
           onSigned={(updatedOrder) => {
-            setIsSigningCustomer(false);
             onCustomerSigned(updatedOrder);
           }}
         />
@@ -780,21 +779,68 @@ function ExtraWorkCustomerSignatureOverlay({
   onClose: () => void;
   onSigned: (order: MobileExtraWorkTicket) => void;
 }) {
-  const signatureLabel = order.kind === "approval"
+  const [activeOrder, setActiveOrder] = useState(order);
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  const [pdfReloadKey, setPdfReloadKey] = useState(0);
+  const [isPdfLoading, setIsPdfLoading] = useState(true);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [isSigning, setIsSigning] = useState(false);
+  const signatureLabel = activeOrder.kind === "approval"
     ? "Ausführungsgenehmigung unterschreiben"
     : "Stundenabrechnung unterschreiben";
-  const [customerName, setCustomerName] = useState(order.customer_signature_name ?? "");
-  const [customerPlace, setCustomerPlace] = useState(order.customer_signature_place ?? "");
+  const kindLabel = formatMobileExtraWorkKindLabel(activeOrder.kind);
+  const [customerName, setCustomerName] = useState(activeOrder.customer_signature_name ?? "");
+  const [customerPlace, setCustomerPlace] = useState(activeOrder.customer_signature_place ?? "");
   const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const [isSavingSignature, setIsSavingSignature] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
+  const isSigned = Boolean(activeOrder.customer_signed_at);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
 
   useEffect(() => {
+    setActiveOrder(order);
+    setCustomerName(order.customer_signature_name ?? "");
+    setCustomerPlace(order.customer_signature_place ?? "");
+  }, [order]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadPdf(): Promise<void> {
+      setIsPdfLoading(true);
+      setPdfError(null);
+      setPdfData(null);
+      try {
+        const blob = await api.mobileExtraWorkTicketPdf(assignmentId, activeOrder.id);
+        const arrayBuffer = await blob.arrayBuffer();
+        if (isActive) {
+          setPdfData(arrayBuffer);
+        }
+      } catch (requestError) {
+        if (isActive) {
+          setPdfError(readApiError(requestError, `${kindLabel}-PDF konnte nicht geladen werden.`));
+        }
+      } finally {
+        if (isActive) {
+          setIsPdfLoading(false);
+        }
+      }
+    }
+
+    void loadPdf();
+    return () => {
+      isActive = false;
+    };
+  }, [activeOrder.id, assignmentId, kindLabel, pdfReloadKey]);
+
+  useEffect(() => {
+    if (!isSigning) {
+      return;
+    }
     drawSignatureCanvas(canvasRef.current, strokes);
-  }, [strokes]);
+  }, [isSigning, strokes]);
 
   function appendSignaturePoint(event: ReactPointerEvent<HTMLCanvasElement>): void {
     const point = getSignatureCanvasPoint(event);
@@ -826,12 +872,16 @@ function ExtraWorkCustomerSignatureOverlay({
     setIsSavingSignature(true);
     setSignatureError(null);
     try {
-      const updatedOrder = await api.signMobileExtraWorkTicketCustomer(assignmentId, order.id, {
+      const updatedOrder = await api.signMobileExtraWorkTicketCustomer(assignmentId, activeOrder.id, {
         customer_name: normalizedName,
         customer_place: customerPlace.trim() || null,
         signature_strokes: validStrokes,
       });
+      setActiveOrder(updatedOrder);
+      setIsSigning(false);
+      setStrokes([]);
       onSigned(updatedOrder);
+      setPdfReloadKey((currentKey) => currentKey + 1);
     } catch (requestError) {
       setSignatureError(readApiError(requestError, "Kundenunterschrift konnte nicht gespeichert werden."));
     } finally {
@@ -847,13 +897,31 @@ function ExtraWorkCustomerSignatureOverlay({
           <span>Zurück</span>
         </button>
         <div className="mobile-customer-signature-title">
-          <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
-          <span>{signatureLabel}</span>
+          <strong>{formatMobileExtraWorkOrderTitle(activeOrder)}</strong>
+          <span>{isSigned ? "Kundenunterschrift gespeichert" : "PDF prüfen und unterschreiben"}</span>
         </div>
+        <button
+          className="primary-action mobile-customer-signature-sign-action"
+          type="button"
+          onClick={() => {
+            setSignatureError(null);
+            setIsSigning(true);
+          }}
+          disabled={isSigned}
+        >
+          Unterschrift einfügen
+        </button>
       </header>
 
-      <main className="mobile-worker-signature-content">
-        <section className="mobile-worker-signature-card" aria-label="Kundenunterschrift erfassen">
+      <main className="mobile-customer-signature-pdf">
+        {isPdfLoading ? <div className="empty-panel">PDF wird geladen...</div> : null}
+        {pdfError ? <div className="form-error">{pdfError}</div> : null}
+        {!isPdfLoading && !pdfError && pdfData ? <PdfCanvasPreview data={pdfData} /> : null}
+      </main>
+
+      {isSigning && !isSigned ? (
+        <section className="mobile-customer-signature-sheet" aria-label="Kundenunterschrift erfassen">
+          <p className="mobile-measurement-action-hint">{signatureLabel}</p>
           <label>
             <span>Name des Kunden</span>
             <input
@@ -925,7 +993,7 @@ function ExtraWorkCustomerSignatureOverlay({
             </button>
           </div>
         </section>
-      </main>
+      ) : null}
     </div>
   );
 }
