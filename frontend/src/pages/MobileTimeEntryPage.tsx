@@ -96,6 +96,8 @@ export function MobileTimeEntryPage() {
   const [timePickerInitialValue, setTimePickerInitialValue] = useState<{ hour: number; minute: number } | null>(null);
   const hourWheelRef = useRef<HTMLDivElement | null>(null);
   const minuteWheelRef = useRef<HTMLDivElement | null>(null);
+  const hourWheelScrollTimeoutRef = useRef<number | null>(null);
+  const minuteWheelScrollTimeoutRef = useRef<number | null>(null);
 
   const timeEntryLoadRange = useMemo(
     () => ({
@@ -169,6 +171,15 @@ export function MobileTimeEntryPage() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [timePickerInitialValue, timePickerTarget]);
+
+  useEffect(() => () => {
+    if (hourWheelScrollTimeoutRef.current !== null) {
+      window.clearTimeout(hourWheelScrollTimeoutRef.current);
+    }
+    if (minuteWheelScrollTimeoutRef.current !== null) {
+      window.clearTimeout(minuteWheelScrollTimeoutRef.current);
+    }
+  }, []);
 
   const entriesByDate = useMemo(() => {
     const grouped = new Map<string, TimeEntry[]>();
@@ -405,7 +416,9 @@ export function MobileTimeEntryPage() {
     if (!timePickerTarget) {
       return;
     }
-    const value = formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute);
+    const selectedHour = getCenteredTimePickerValue(hourWheelRef.current, "hour") ?? timePickerDraftHour;
+    const selectedMinute = getCenteredTimePickerValue(minuteWheelRef.current, "minute") ?? timePickerDraftMinute;
+    const value = formatTimePickerValue(selectedHour, selectedMinute);
     setForm((currentForm) => ({
       ...currentForm,
       [timePickerTarget === "start" ? "startTime" : "endTime"]: value,
@@ -414,6 +427,24 @@ export function MobileTimeEntryPage() {
     setTimeConflict(null);
     setTimePickerTarget(null);
     setTimePickerInitialValue(null);
+  }
+
+  function handleTimeWheelScroll(attribute: "hour" | "minute"): void {
+    const timeoutRef = attribute === "hour" ? hourWheelScrollTimeoutRef : minuteWheelScrollTimeoutRef;
+    const container = attribute === "hour" ? hourWheelRef.current : minuteWheelRef.current;
+    const setValue = attribute === "hour" ? setTimePickerDraftHour : setTimePickerDraftMinute;
+    updateTimePickerDraftFromWheel(container, attribute, setValue);
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      const selectedValue = getCenteredTimePickerValue(container, attribute);
+      if (selectedValue === null) {
+        return;
+      }
+      scrollWheelOptionIntoView(container, attribute, selectedValue);
+      setValue(selectedValue);
+    }, 90);
   }
 
   const sheetSiteLabel = sheetMode === "manual"
@@ -705,31 +736,51 @@ export function MobileTimeEntryPage() {
                   <strong id="mobile-time-picker-title">{formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute)}</strong>
                 </div>
                 <div className="mobile-time-picker-wheels" aria-label="Uhrzeit auswählen">
-                  <div className="mobile-time-picker-wheel" aria-label="Stunde" ref={hourWheelRef}>
-                    {TIME_PICKER_HOURS.map((hour) => (
-                      <button
-                        className={classNames(hour === timePickerDraftHour && "is-selected")}
-                        data-hour={hour}
-                        key={hour}
-                        type="button"
-                        onClick={() => setTimePickerDraftHour(hour)}
-                      >
-                        {String(hour).padStart(2, "0")}
-                      </button>
-                    ))}
+                  <div className="mobile-time-picker-wheel-frame">
+                    <div
+                      className="mobile-time-picker-wheel"
+                      aria-label="Stunde"
+                      ref={hourWheelRef}
+                      onScroll={() => handleTimeWheelScroll("hour")}
+                    >
+                      {TIME_PICKER_HOURS.map((hour) => (
+                        <button
+                          className={classNames(hour === timePickerDraftHour && "is-selected")}
+                          data-hour={hour}
+                          key={hour}
+                          type="button"
+                          onClick={() => {
+                            setTimePickerDraftHour(hour);
+                            scrollWheelOptionIntoView(hourWheelRef.current, "hour", hour);
+                          }}
+                        >
+                          {String(hour).padStart(2, "0")}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mobile-time-picker-wheel" aria-label="Minute" ref={minuteWheelRef}>
-                    {TIME_PICKER_MINUTES.map((minute) => (
-                      <button
-                        className={classNames(minute === timePickerDraftMinute && "is-selected")}
-                        data-minute={minute}
-                        key={minute}
-                        type="button"
-                        onClick={() => setTimePickerDraftMinute(minute)}
-                      >
-                        {String(minute).padStart(2, "0")}
-                      </button>
-                    ))}
+                  <div className="mobile-time-picker-wheel-frame">
+                    <div
+                      className="mobile-time-picker-wheel"
+                      aria-label="Minute"
+                      ref={minuteWheelRef}
+                      onScroll={() => handleTimeWheelScroll("minute")}
+                    >
+                      {TIME_PICKER_MINUTES.map((minute) => (
+                        <button
+                          className={classNames(minute === timePickerDraftMinute && "is-selected")}
+                          data-minute={minute}
+                          key={minute}
+                          type="button"
+                          onClick={() => {
+                            setTimePickerDraftMinute(minute);
+                            scrollWheelOptionIntoView(minuteWheelRef.current, "minute", minute);
+                          }}
+                        >
+                          {String(minute).padStart(2, "0")}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="mobile-time-picker-actions">
@@ -1006,6 +1057,42 @@ function formatTimePickerValue(hour: number, minute: number): string {
 function scrollWheelOptionIntoView(container: HTMLDivElement | null, attribute: "hour" | "minute", value: number): void {
   const option = container?.querySelector<HTMLElement>(`[data-${attribute}="${value}"]`);
   option?.scrollIntoView({ block: "center" });
+}
+
+function updateTimePickerDraftFromWheel(
+  container: HTMLDivElement | null,
+  attribute: "hour" | "minute",
+  setValue: (value: number) => void,
+): void {
+  const centeredValue = getCenteredTimePickerValue(container, attribute);
+  if (centeredValue !== null) {
+    setValue(centeredValue);
+  }
+}
+
+function getCenteredTimePickerValue(container: HTMLDivElement | null, attribute: "hour" | "minute"): number | null {
+  if (!container) {
+    return null;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const centerY = containerRect.top + containerRect.height / 2;
+  const options = Array.from(container.querySelectorAll<HTMLElement>(`[data-${attribute}]`));
+  let centeredValue: number | null = null;
+  let smallestDistance = Number.POSITIVE_INFINITY;
+
+  for (const option of options) {
+    const optionRect = option.getBoundingClientRect();
+    const optionCenterY = optionRect.top + optionRect.height / 2;
+    const distance = Math.abs(optionCenterY - centerY);
+    const rawValue = option.dataset[attribute];
+    const numericValue = rawValue !== undefined ? Number(rawValue) : Number.NaN;
+    if (Number.isFinite(numericValue) && distance < smallestDistance) {
+      smallestDistance = distance;
+      centeredValue = numericValue;
+    }
+  }
+
+  return centeredValue;
 }
 
 function buildMonthGrid(month: Date, today: string): CalendarDay[] {
