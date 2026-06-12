@@ -622,6 +622,9 @@ function MobileExtraWorkTab({
                 <span className="mobile-measurement-card-date">{formatMobileExtraWorkKindLabel(order.kind)}</span>
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
+                {order.created_by_name ? (
+                  <span className="mobile-measurement-card-date">Ersteller: {order.created_by_name}</span>
+                ) : null}
                 <span className="mobile-measurement-card-meta">
                   <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
                 </span>
@@ -3116,6 +3119,9 @@ function MobileMeasurementTab({
                 <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
+                {batch.created_by_name ? (
+                  <span className="mobile-measurement-card-date">Ersteller: {batch.created_by_name}</span>
+                ) : null}
                 <span className="mobile-measurement-card-meta">
                   <span>Positionen: {batch.position_count}</span>
                   <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>

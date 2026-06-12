@@ -54,11 +54,12 @@ class ExtraWorkService:
         tickets = list(
             self.db.scalars(
                 select(ExtraWorkTicket)
+                .options(selectinload(ExtraWorkTicket.created_by).selectinload(User.person))
                 .where(ExtraWorkTicket.site_id == site_id)
                 .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
             ).all()
         )
-        return [ExtraWorkTicketRead.model_validate(ticket) for ticket in tickets]
+        return [self._build_ticket_read(ticket) for ticket in tickets]
 
     def create_site_ticket(
         self,
@@ -90,7 +91,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def list_mobile_tickets(
         self,
@@ -132,7 +133,7 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def submit_mobile_ticket(
         self,
@@ -151,7 +152,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def update_mobile_ticket_status(
         self,
@@ -193,7 +194,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def get_mobile_ticket_entry(
         self,
@@ -295,7 +296,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def sign_mobile_ticket_worker(
         self,
@@ -330,7 +331,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
-        return ExtraWorkTicketRead.model_validate(ticket)
+        return self._build_ticket_read(ticket)
 
     def list_mobile_ticket_photos(
         self,
@@ -493,7 +494,9 @@ class ExtraWorkService:
 
     def _get_ticket_for_site(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
         ticket = self.db.scalar(
-            select(ExtraWorkTicket).where(
+            select(ExtraWorkTicket)
+            .options(selectinload(ExtraWorkTicket.created_by).selectinload(User.person))
+            .where(
                 ExtraWorkTicket.id == ticket_id,
                 ExtraWorkTicket.site_id == site_id,
             )
@@ -501,6 +504,11 @@ class ExtraWorkService:
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
+
+    def _build_ticket_read(self, ticket: ExtraWorkTicket) -> ExtraWorkTicketRead:
+        result = ExtraWorkTicketRead.model_validate(ticket)
+        result.created_by_name = self._format_user_display_name(ticket.created_by)
+        return result
 
     def _build_mobile_photo(self, photo: ExtraWorkTicketPhoto) -> ExtraWorkTicketPhotoRead:
         return ExtraWorkTicketPhotoRead(

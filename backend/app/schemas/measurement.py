@@ -108,6 +108,7 @@ class MobileMeasurementBatchRead(BaseModel):
     title: str
     status: str
     created_by_user_id: int | None
+    created_by_name: str | None = None
     submitted_by_user_id: int | None
     submitted_by_name: str | None
     submitted_at: datetime | None

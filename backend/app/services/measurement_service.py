@@ -163,6 +163,7 @@ class MeasurementService:
                         SiteMeasurementEntry.measurement_item
                     ),
                     selectinload(SiteMeasurementBatch.measurement_base),
+                    selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
                 .where(SiteMeasurementBatch.site_id == assignment.site_id)
@@ -1242,6 +1243,7 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
             )
             .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
@@ -1296,6 +1298,7 @@ class MeasurementService:
             title=batch.title,
             status=batch.status,
             created_by_user_id=batch.created_by_user_id,
+            created_by_name=self._format_user_display_name(batch.created_by),
             submitted_by_user_id=batch.submitted_by_user_id,
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,

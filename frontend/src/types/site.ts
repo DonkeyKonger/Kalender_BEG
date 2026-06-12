@@ -257,6 +257,7 @@ export type MobileMeasurementBatch = {
   title: string;
   status: "draft" | "submitted" | "reviewed" | "customer_signed" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
   created_by_user_id: number | null;
+  created_by_name: string | null;
   submitted_by_user_id: number | null;
   submitted_by_name: string | null;
   submitted_at: string | null;
@@ -299,6 +300,7 @@ export type MobileExtraWorkTicket = {
   approval_ticket_id: number | null;
   status: "draft" | "submitted" | "reviewed" | "signed" | string;
   created_by_user_id: number | null;
+  created_by_name: string | null;
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;

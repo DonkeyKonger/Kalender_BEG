@@ -122,6 +122,7 @@ class ExtraWorkTicketRead(BaseModel):
     approval_ticket_id: int | None
     status: str
     created_by_user_id: int | None
+    created_by_name: str | None = None
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
