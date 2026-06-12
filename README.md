@@ -41,6 +41,24 @@ Healthcheck:
 
 - http://localhost:8000/api/health
 
+## Manueller E-Mail-Versand
+
+Der mobile Versand fuer Stundenzettel/Zusatzauftraege nutzt aktuell SMTP. Microsoft Graph wird hierfuer noch nicht verwendet. Ohne SMTP-Host und Absenderadresse bricht das Backend bewusst mit `E-Mail-Versand ist noch nicht konfiguriert.` ab.
+
+Benötigte App Settings / `.env`-Werte:
+
+```env
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=baustellenplaner@beg-achim.de
+SMTP_FROM_NAME=BEG Baustellenkalender
+SMTP_USE_STARTTLS=true
+```
+
+Der Versand erfolgt immer backendseitig ueber die zentrale Absenderadresse. Empfaenger kommen aus der projektbezogenen Kunden-E-Mail-Auswahl; private Monteur- oder Projektleiter-Adressen werden nicht automatisch verwendet.
+
 ## Microsoft Graph Verbindungstest
 
 Die SharePoint-/OneDrive-Anbindung ist als sicherer Backend-Test vorbereitet. Es werden noch keine produktiven Baustellenordner automatisch erstellt und keine Dateien hochgeladen. Alle Werte gehoeren in `.env` oder Azure App Settings, niemals ins Repo.

@@ -44,9 +44,15 @@ class EmailDeliveryService:
             filename=attachment.filename,
         )
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-            if settings.smtp_use_starttls:
-                smtp.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
+        try:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+                if settings.smtp_use_starttls:
+                    smtp.starttls()
+                if settings.smtp_username and settings.smtp_password:
+                    smtp.login(settings.smtp_username, settings.smtp_password)
+                smtp.send_message(message)
+        except (OSError, smtplib.SMTPException) as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "E-Mail konnte nicht gesendet werden. Bitte Mailserver-Konfiguration prüfen.",
+            ) from exc
