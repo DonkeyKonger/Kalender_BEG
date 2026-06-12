@@ -1,7 +1,7 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -15,7 +15,7 @@ import {
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
@@ -724,6 +724,19 @@ export function SiteDetailPage() {
     }
   }
 
+  async function saveSiteInline(values: SiteUpdate): Promise<void> {
+    if (!site || !canEditSite) {
+      return;
+    }
+    const updated = await api.updateSite(site.id, values);
+    setSite(updated);
+    setSiteDraft(toEditableSite(updated));
+  }
+
+  async function saveSiteNotes(info: string | null): Promise<void> {
+    await saveSiteInline({ info });
+  }
+
   async function applyGeocodedSite(values: Partial<SiteCreate>): Promise<void> {
     if (!site || !siteDraft || isSavingSite) {
       return;
@@ -870,15 +883,11 @@ export function SiteDetailPage() {
           isCheckingLocation={isCheckingSiteLocation}
           saveError={siteSaveError}
           saveMessage={siteSaveMessage}
-          onToggleEdit={() => {
-            setSiteDraft(toEditableSite(site));
-            setSiteSaveError(null);
-            setSiteSaveMessage(null);
-            setEditMode((value) => !value);
-          }}
           onCancelEdit={cancelSiteEdit}
           onDraftChange={updateSiteDraft}
           onSave={() => void saveSiteDetails()}
+          onSaveField={saveSiteInline}
+          onSaveNotes={saveSiteNotes}
           onCheckLocation={() => void checkSiteLocation()}
           onGeocodeSelected={(values) => void applyGeocodedSite(values)}
         />
@@ -1030,10 +1039,11 @@ function OverviewTab({
   isCheckingLocation,
   saveError,
   saveMessage,
-  onToggleEdit,
   onCancelEdit,
   onDraftChange,
   onSave,
+  onSaveField,
+  onSaveNotes,
   onCheckLocation,
   onGeocodeSelected,
 }: {
@@ -1046,27 +1056,73 @@ function OverviewTab({
   isCheckingLocation: boolean;
   saveError: string | null;
   saveMessage: string | null;
-  onToggleEdit: () => void;
   onCancelEdit: () => void;
   onDraftChange: (values: Partial<SiteCreate>) => void;
   onSave: () => void;
+  onSaveField: (values: SiteUpdate) => Promise<void>;
+  onSaveNotes: (info: string | null) => Promise<void>;
   onCheckLocation: () => void;
   onGeocodeSelected: (values: Partial<SiteCreate>) => void;
 }) {
+  const [notesDraft, setNotesDraft] = useState(site.info ?? "");
+  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const externalNotesRef = useRef(site.info ?? "");
+
+  useEffect(() => {
+    const nextInfo = site.info ?? "";
+    setNotesDraft((currentDraft) => (
+      currentDraft === externalNotesRef.current ? nextInfo : currentDraft
+    ));
+    externalNotesRef.current = nextInfo;
+  }, [site.id, site.info]);
+
+  useEffect(() => {
+    setNotesSaveStatus("idle");
+  }, [site.id]);
+
+  const persistNotes = useCallback(async (value: string): Promise<void> => {
+    if (!canEdit) {
+      return;
+    }
+    const normalizedInfo = normalizeSiteNotesInput(value);
+    const normalizedCurrent = normalizeSiteNotesInput(site.info ?? "");
+    if (normalizedInfo === normalizedCurrent) {
+      return;
+    }
+    setNotesSaveStatus("saving");
+    try {
+      await onSaveNotes(normalizedInfo);
+      externalNotesRef.current = normalizedInfo ?? "";
+      setNotesSaveStatus("saved");
+    } catch {
+      setNotesSaveStatus("error");
+    }
+  }, [canEdit, onSaveNotes, site.info]);
+
+  useEffect(() => {
+    if (!canEdit || editMode) {
+      return;
+    }
+    if (normalizeSiteNotesInput(notesDraft) === normalizeSiteNotesInput(site.info ?? "")) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      void persistNotes(notesDraft);
+    }, 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [canEdit, editMode, notesDraft, persistNotes, site.info]);
+
+  function handleNotesBlur(): void {
+    if (!canEdit || editMode) {
+      return;
+    }
+    void persistNotes(notesDraft);
+  }
+
+  const projectManagerOptions = getProjectManagerInlineOptions(people, site.project_manager);
+
   return (
     <div className="project-record-tab-panel">
-      <div className="project-record-toolbar">
-        <div>
-          <h2>Übersicht</h2>
-          <p>Stammdaten und Standortinformationen zur Baustelle.</p>
-        </div>
-        {canEdit ? (
-          <button type="button" className="secondary-action" onClick={editMode ? onCancelEdit : onToggleEdit}>
-            {editMode ? "Bearbeitung schließen" : "Bearbeiten"}
-          </button>
-        ) : null}
-      </div>
-
       {saveError ? <p className="form-error">{saveError}</p> : null}
       {saveMessage ? <p className="form-info">{saveMessage}</p> : null}
 
@@ -1096,20 +1152,67 @@ function OverviewTab({
           <div className="site-detail-grid">
             <DetailSection title="Stammdaten" icon={Building2}>
               <DetailItem label="Baustellennummer" value={site.site_number} />
-              <DetailItem label="Kunde" value={site.customer} />
-              <DetailItem label="Status" value={siteStatusLabels[site.status]} />
+              <InlineEditableDetailItem
+                label="Kunde"
+                value={site.customer}
+                canEdit={canEdit}
+                onSave={(value) => onSaveField({ customer: value })}
+              />
+              <InlineEditableSelectItem
+                label="Status"
+                value={site.status}
+                displayValue={siteStatusLabels[site.status]}
+                canEdit={canEdit}
+                options={Object.entries(siteStatusLabels).map(([value, label]) => ({ value, label }))}
+                onSave={(value) => onSaveField({ status: value as Site["status"] })}
+              />
               <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
             </DetailSection>
 
             <DetailSection title="Adresse / Standort" icon={MapPin}>
-              <DetailItem label="Ort" value={site.location} />
-              <DetailItem label="PLZ / Stadt" value={[site.postal_code, site.city].filter(Boolean).join(" ")} />
-              <DetailItem label="Strasse" value={[site.street, site.house_number].filter(Boolean).join(" ")} />
-              <DetailItem label="Adresszusatz" value={site.address_extra || site.address} />
+              <InlineEditableDetailItem
+                label="Ort"
+                value={site.location}
+                canEdit={canEdit}
+                onSave={(value) => onSaveField({ location: value })}
+              />
+              <InlineEditablePairItem
+                label="PLZ / Stadt"
+                firstValue={site.postal_code}
+                secondValue={site.city}
+                firstPlaceholder="PLZ"
+                secondPlaceholder="Stadt"
+                displayValue={[site.postal_code, site.city].filter(Boolean).join(" ")}
+                canEdit={canEdit}
+                onSave={(postalCode, city) => onSaveField({ postal_code: postalCode, city })}
+              />
+              <InlineEditablePairItem
+                label="Strasse"
+                firstValue={site.street}
+                secondValue={site.house_number}
+                firstPlaceholder="Strasse"
+                secondPlaceholder="Hausnummer"
+                displayValue={[site.street, site.house_number].filter(Boolean).join(" ")}
+                canEdit={canEdit}
+                onSave={(street, houseNumber) => onSaveField({ street, house_number: houseNumber })}
+              />
+              <InlineEditableDetailItem
+                label="Adresszusatz"
+                value={site.address_extra || site.address}
+                canEdit={canEdit}
+                onSave={(value) => onSaveField({ address_extra: value })}
+              />
             </DetailSection>
 
             <DetailSection title="Projektleiter" icon={UserRound}>
-              <DetailItem label="Name" value={site.project_manager?.display_name} />
+              <InlineEditableSelectItem
+                label="Name"
+                value={site.project_manager_person_id !== null ? String(site.project_manager_person_id) : ""}
+                displayValue={site.project_manager?.display_name}
+                canEdit={canEdit}
+                options={projectManagerOptions}
+                onSave={(value) => onSaveField({ project_manager_person_id: value ? Number(value) : null })}
+              />
               <DetailItem label="Kuerzel" value={site.project_manager?.short_code} />
               <DetailItem label="Telefon" value={site.project_manager?.phone} icon={Phone} />
             </DetailSection>
@@ -1121,8 +1224,23 @@ function OverviewTab({
           </div>
 
           <section className="site-notes-section">
-            <h2>Notizen</h2>
-            <p>{site.info || "Keine Notizen hinterlegt."}</p>
+            <div className="site-notes-header">
+              <h2>Notizen</h2>
+              {canEdit && notesSaveStatus !== "idle" ? (
+                <span className={`site-notes-save-status is-${notesSaveStatus}`}>{formatSiteNotesSaveStatus(notesSaveStatus)}</span>
+              ) : null}
+            </div>
+            <textarea
+              className="site-notes-textarea"
+              disabled={!canEdit}
+              placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
+              value={notesDraft}
+              onChange={(event) => {
+                setNotesDraft(event.target.value);
+                setNotesSaveStatus("idle");
+              }}
+              onBlur={handleNotesBlur}
+            />
           </section>
         </>
       )}
@@ -4155,6 +4273,341 @@ function DetailItem({
   );
 }
 
+type InlineEditStatus = "idle" | "saving" | "saved" | "error";
+
+function InlineEditableDetailItem({
+  label,
+  value,
+  canEdit,
+  onSave,
+}: {
+  label: string;
+  value: string | null | undefined;
+  canEdit: boolean;
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState(value ?? "");
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftValue(value ?? "");
+    }
+  }, [isEditing, value]);
+
+  async function commit(): Promise<void> {
+    const nextValue = normalizeInlineEditText(draftValue);
+    if (nextValue === normalizeInlineEditText(value ?? "")) {
+      setIsEditing(false);
+      return;
+    }
+    setStatus("saving");
+    try {
+      await onSave(nextValue);
+      setIsEditing(false);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  function cancel(): void {
+    setDraftValue(value ?? "");
+    setIsEditing(false);
+    setStatus("idle");
+  }
+
+  return (
+    <div className={`detail-item site-inline-edit-item${isEditing ? " is-editing" : ""}`}>
+      <span>{label}</span>
+      {isEditing ? (
+        <div className="site-inline-edit-control">
+          <input
+            className="site-inline-edit-input"
+            autoFocus
+            value={draftValue}
+            onChange={(event) => {
+              setDraftValue(event.target.value);
+              setStatus("idle");
+            }}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void commit();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancel();
+              }
+            }}
+          />
+          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </div>
+      ) : (
+        <>
+          <strong className="site-inline-edit-display">
+            <span>{value || "-"}</span>
+            {canEdit ? (
+              <button
+                type="button"
+                className="site-inline-edit-button"
+                aria-label={`${label} bearbeiten`}
+                onClick={() => {
+                  setDraftValue(value ?? "");
+                  setIsEditing(true);
+                  setStatus("idle");
+                }}
+              >
+                <Pencil aria-hidden="true" size={13} />
+              </button>
+            ) : null}
+          </strong>
+          {status === "saved" || status === "error" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function InlineEditablePairItem({
+  label,
+  firstValue,
+  secondValue,
+  firstPlaceholder,
+  secondPlaceholder,
+  displayValue,
+  canEdit,
+  onSave,
+}: {
+  label: string;
+  firstValue: string | null | undefined;
+  secondValue: string | null | undefined;
+  firstPlaceholder: string;
+  secondPlaceholder: string;
+  displayValue: string;
+  canEdit: boolean;
+  onSave: (firstValue: string | null, secondValue: string | null) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [firstDraft, setFirstDraft] = useState(firstValue ?? "");
+  const [secondDraft, setSecondDraft] = useState(secondValue ?? "");
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  useEffect(() => {
+    if (!isEditing) {
+      setFirstDraft(firstValue ?? "");
+      setSecondDraft(secondValue ?? "");
+    }
+  }, [firstValue, isEditing, secondValue]);
+
+  async function commit(): Promise<void> {
+    const nextFirst = normalizeInlineEditText(firstDraft);
+    const nextSecond = normalizeInlineEditText(secondDraft);
+    if (
+      nextFirst === normalizeInlineEditText(firstValue ?? "")
+      && nextSecond === normalizeInlineEditText(secondValue ?? "")
+    ) {
+      setIsEditing(false);
+      return;
+    }
+    setStatus("saving");
+    try {
+      await onSave(nextFirst, nextSecond);
+      setIsEditing(false);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  function cancel(): void {
+    setFirstDraft(firstValue ?? "");
+    setSecondDraft(secondValue ?? "");
+    setIsEditing(false);
+    setStatus("idle");
+  }
+
+  function handleEditKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commit();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancel();
+    }
+  }
+
+  return (
+    <div className={`detail-item site-inline-edit-item${isEditing ? " is-editing" : ""}`}>
+      <span>{label}</span>
+      {isEditing ? (
+        <div
+          className="site-inline-edit-control"
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget as Node | null;
+            if (!event.currentTarget.contains(nextTarget)) {
+              void commit();
+            }
+          }}
+        >
+          <div className="site-inline-edit-pair">
+            <input
+              className="site-inline-edit-input"
+              autoFocus
+              placeholder={firstPlaceholder}
+              value={firstDraft}
+              onChange={(event) => {
+                setFirstDraft(event.target.value);
+                setStatus("idle");
+              }}
+              onKeyDown={handleEditKeyDown}
+            />
+            <input
+              className="site-inline-edit-input"
+              placeholder={secondPlaceholder}
+              value={secondDraft}
+              onChange={(event) => {
+                setSecondDraft(event.target.value);
+                setStatus("idle");
+              }}
+              onKeyDown={handleEditKeyDown}
+            />
+          </div>
+          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </div>
+      ) : (
+        <>
+          <strong className="site-inline-edit-display">
+            <span>{displayValue || "-"}</span>
+            {canEdit ? (
+              <button
+                type="button"
+                className="site-inline-edit-button"
+                aria-label={`${label} bearbeiten`}
+                onClick={() => {
+                  setFirstDraft(firstValue ?? "");
+                  setSecondDraft(secondValue ?? "");
+                  setIsEditing(true);
+                  setStatus("idle");
+                }}
+              >
+                <Pencil aria-hidden="true" size={13} />
+              </button>
+            ) : null}
+          </strong>
+          {status === "saved" || status === "error" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function InlineEditableSelectItem({
+  label,
+  value,
+  displayValue,
+  canEdit,
+  options,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  displayValue: string | null | undefined;
+  canEdit: boolean;
+  options: Array<{ value: string; label: string }>;
+  onSave: (value: string) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState(value);
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftValue(value);
+    }
+  }, [isEditing, value]);
+
+  async function commit(): Promise<void> {
+    if (draftValue === value) {
+      setIsEditing(false);
+      return;
+    }
+    setStatus("saving");
+    try {
+      await onSave(draftValue);
+      setIsEditing(false);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  function cancel(): void {
+    setDraftValue(value);
+    setIsEditing(false);
+    setStatus("idle");
+  }
+
+  return (
+    <div className={`detail-item site-inline-edit-item${isEditing ? " is-editing" : ""}`}>
+      <span>{label}</span>
+      {isEditing ? (
+        <div className="site-inline-edit-control">
+          <select
+            className="site-inline-edit-input"
+            autoFocus
+            value={draftValue}
+            onChange={(event) => {
+              setDraftValue(event.target.value);
+              setStatus("idle");
+            }}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void commit();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancel();
+              }
+            }}
+          >
+            {options.map((option) => (
+              <option value={option.value} key={option.value}>{option.label}</option>
+            ))}
+          </select>
+          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </div>
+      ) : (
+        <>
+          <strong className="site-inline-edit-display">
+            <span>{displayValue || "-"}</span>
+            {canEdit ? (
+              <button
+                type="button"
+                className="site-inline-edit-button"
+                aria-label={`${label} bearbeiten`}
+                onClick={() => {
+                  setDraftValue(value);
+                  setIsEditing(true);
+                  setStatus("idle");
+                }}
+              >
+                <Pencil aria-hidden="true" size={13} />
+              </button>
+            ) : null}
+          </strong>
+          {status === "saved" || status === "error" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 function readMeasurementViewMode(): MeasurementViewMode {
   if (typeof window === "undefined") {
     return "list";
@@ -4235,6 +4688,60 @@ function getSuggestedMeasurementSheetName(siteNumber: string | null, nextNumber:
 
 function formatMeasurementBaseName(base: MeasurementBase): string {
   return base.name.replace("Aufmaßbasis", "Aufmaßblatt");
+}
+
+function normalizeSiteNotesInput(value: string): string | null {
+  return value.trim() ? value : null;
+}
+
+function normalizeInlineEditText(value: string): string | null {
+  return value.trim() ? value : null;
+}
+
+function formatSiteNotesSaveStatus(status: "idle" | "saving" | "saved" | "error"): string {
+  if (status === "saving") {
+    return "Speichert...";
+  }
+  if (status === "saved") {
+    return "Gespeichert";
+  }
+  if (status === "error") {
+    return "Fehler beim Speichern";
+  }
+  return "";
+}
+
+function formatInlineEditStatus(status: InlineEditStatus): string {
+  if (status === "saving") {
+    return "Speichert...";
+  }
+  if (status === "saved") {
+    return "Gespeichert";
+  }
+  if (status === "error") {
+    return "Fehler beim Speichern";
+  }
+  return "";
+}
+
+function getProjectManagerInlineOptions(
+  people: Person[],
+  currentProjectManager: Site["project_manager"],
+): Array<{ value: string; label: string }> {
+  const options = [
+    { value: "", label: "Nicht zugeordnet" },
+    ...people.map((person) => ({ value: String(person.id), label: person.display_name })),
+  ];
+  if (
+    currentProjectManager
+    && !options.some((option) => option.value === String(currentProjectManager.id))
+  ) {
+    options.splice(1, 0, {
+      value: String(currentProjectManager.id),
+      label: `${currentProjectManager.display_name} (aktuell zugeordnet)`,
+    });
+  }
+  return options;
 }
 
 function compareExtraWorkTicketsNewestFirst(left: MobileExtraWorkTicket, right: MobileExtraWorkTicket): number {
