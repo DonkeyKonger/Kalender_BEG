@@ -6115,36 +6115,7 @@ button.person-chip:focus-visible {
   padding: 18px 18px 16px;
 }
 
-.measurement-timesheet-header {
-  margin: 0;
-  padding: 0 0 16px;
-  border: 0;
-  border-bottom: 1px solid #e5ebf3;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.measurement-timesheet-header h2 {
-  align-items: center;
-  color: #172033;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.measurement-timesheet-header h2 svg {
-  color: #315b88;
-}
-
-.measurement-timesheet-header p {
-  margin-top: 4px;
-  color: #5f6f86;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.measurement-timesheet-header .measurement-import-drop-action {
+.project-record-subtab-bar .measurement-import-drop-action {
   min-height: 40px;
   border-color: #c9d6e6;
   border-radius: 2px;
@@ -6155,36 +6126,8 @@ button.person-chip:focus-visible {
   padding: 0 14px;
 }
 
-.measurement-timesheet-header .measurement-import-drop-action:hover {
+.project-record-subtab-bar .measurement-import-drop-action:hover {
   background: #f8fafc;
-}
-
-.measurement-timesheet-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 0;
-  margin-top: 8px;
-  color: #42526b;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.measurement-timesheet-meta strong {
-  color: #334155;
-  font-weight: 800;
-}
-
-.measurement-timesheet-meta span {
-  display: inline-flex;
-  align-items: center;
-}
-
-.measurement-timesheet-meta span + span::before {
-  content: "";
-  width: 1px;
-  height: 14px;
-  margin: 0 14px;
-  background: #d9e1ec;
 }
 
 .measurement-timesheet-progress-row {
@@ -6807,6 +6750,14 @@ button.person-chip:focus-visible {
   border-radius: 999px;
   background: #f3f7fb;
   padding: 4px;
+}
+
+.project-record-subtab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
 }
 
 .project-record-subtabs button {
@@ -14369,6 +14320,49 @@ button.person-chip:focus-visible {
   gap: 8px;
   margin: -18px -18px 0;
   padding: 10px 18px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtab-bar {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% + 36px);
+  border-bottom: 1px solid var(--pf-border);
+  background: var(--pf-surface);
+  gap: 12px;
+  margin: -18px -18px 0;
+  padding: 10px 18px;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtab-bar .project-record-subtabs {
+  width: auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtab-bar .measurement-import-drop-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  border-color: var(--pf-border);
+  border-radius: 2px;
+  background: var(--pf-surface);
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .project-record-subtab-bar .measurement-import-drop-action:hover,
+.site-detail-page.is-project-file-workspace .project-record-subtab-bar .measurement-import-drop-action:focus-within {
+  border-color: var(--pf-border);
+  background: var(--pf-muted-surface);
+  color: #334155;
 }
 
 .site-detail-page.is-project-file-workspace .project-record-subtabs button {
