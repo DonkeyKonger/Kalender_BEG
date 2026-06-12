@@ -682,7 +682,6 @@ function ExtraWorkOrderOverview({
         <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
-          <span>Einträge: {order.entry_count}</span>
           <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
           {isApproval && order.estimated_hours !== null && order.estimated_hours !== undefined ? (
             <span>Vorgabe: {formatExtraWorkHours(order.estimated_hours)}</span>
