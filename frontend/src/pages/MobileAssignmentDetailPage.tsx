@@ -12,6 +12,7 @@ import {
   Images,
   MapPin,
   Package,
+  Pencil,
   Plus,
   ReceiptText,
   Search,
@@ -85,6 +86,7 @@ const EXTRA_WORK_WEEK_DAYS = [
   { key: "sunday_hours", label: "So" },
 ] as const;
 type ExtraWorkWeekdayKey = (typeof EXTRA_WORK_WEEK_DAYS)[number]["key"];
+const EXTRA_WORK_DEFAULT_TITLE_SUFFIX = "Hauptauftrag";
 
 type LocationState = {
   assignment?: MobileAssignment;
@@ -488,6 +490,11 @@ function MobileExtraWorkTab({
             setPhotoMessageTone("info");
             setMessage("Kundenunterschrift gespeichert.");
           }}
+          onTitleUpdated={(updatedOrder) => {
+            mergeUpdatedOrder(updatedOrder);
+            setPhotoMessageTone("info");
+            setMessage("Bezeichnung gespeichert.");
+          }}
           onWorkerSigned={(updatedOrder) => {
             mergeUpdatedOrder(updatedOrder);
             setPhotoMessageTone("info");
@@ -602,6 +609,7 @@ function ExtraWorkOrderOverview({
   onTakePhoto,
   onOpenPhotos,
   onCustomerSigned,
+  onTitleUpdated,
   onWorkerSigned,
   onSubmit,
 }: {
@@ -617,6 +625,7 @@ function ExtraWorkOrderOverview({
   onTakePhoto: () => void;
   onOpenPhotos: () => void;
   onCustomerSigned: (order: MobileExtraWorkTicket) => void;
+  onTitleUpdated: (order: MobileExtraWorkTicket) => void;
   onWorkerSigned: (order: MobileExtraWorkTicket) => void;
   onSubmit: () => Promise<void>;
 }) {
@@ -628,9 +637,11 @@ function ExtraWorkOrderOverview({
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [isSigningCustomer, setIsSigningCustomer] = useState(false);
   const [isSigningWorker, setIsSigningWorker] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const hasCustomerSignature = Boolean(order.customer_signed_at);
   const hasWorkerSignature = Boolean(order.worker_signed_at);
+  const canRename = order.status === "draft" && !hasCustomerSignature;
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
 
   async function openExtraWorkPdf(): Promise<void> {
@@ -677,10 +688,22 @@ function ExtraWorkOrderOverview({
         </button>
       </div>
 
-      <div className="mobile-measurement-summary-card">
+      <button
+        className={`mobile-measurement-summary-card mobile-extra-work-title-card${canRename ? " is-editable" : " is-locked"}`}
+        type="button"
+        onClick={() => {
+          if (canRename) {
+            setIsRenaming(true);
+          }
+        }}
+        aria-label={canRename ? "Stundenzettel benennen" : "Stundenzettel-Name gesperrt"}
+      >
         <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
         <span className="mobile-measurement-card-date">{kindLabel}</span>
-        <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
+        <span className="mobile-extra-work-title-line">
+          <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
+          {canRename ? <Pencil aria-hidden="true" size={15} /> : null}
+        </span>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
           <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
@@ -688,7 +711,7 @@ function ExtraWorkOrderOverview({
             <span>Vorgabe: {formatExtraWorkHours(order.estimated_hours)}</span>
           ) : null}
         </span>
-      </div>
+      </button>
       {error || pdfError ? <div className="form-error">{error ?? pdfError}</div> : null}
 
       <div className="mobile-measurement-overview-actions">
@@ -752,6 +775,17 @@ function ExtraWorkOrderOverview({
           }}
         />
       ) : null}
+      {isRenaming ? (
+        <ExtraWorkTitleDialog
+          assignmentId={assignmentId}
+          order={order}
+          onClose={() => setIsRenaming(false)}
+          onSaved={(updatedOrder) => {
+            setIsRenaming(false);
+            onTitleUpdated(updatedOrder);
+          }}
+        />
+      ) : null}
       {isSigningWorker ? (
         <ExtraWorkWorkerSignatureOverlay
           assignmentId={assignmentId}
@@ -764,6 +798,79 @@ function ExtraWorkOrderOverview({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function ExtraWorkTitleDialog({
+  assignmentId,
+  order,
+  onClose,
+  onSaved,
+}: {
+  assignmentId: number;
+  order: MobileExtraWorkTicket;
+  onClose: () => void;
+  onSaved: (order: MobileExtraWorkTicket) => void;
+}) {
+  const [title, setTitle] = useState(getMobileExtraWorkOrderEditableTitle(order));
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const canRename = order.status === "draft" && !order.customer_signed_at;
+
+  async function saveTitle(): Promise<void> {
+    if (!canRename || isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const cleanedTitle = title.trim().replace(/\s+/g, " ");
+      const updatedOrder = await api.updateMobileExtraWorkTicketTitle(assignmentId, order.id, cleanedTitle || null);
+      onSaved(updatedOrder);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Bezeichnung konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="mobile-extra-work-title-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-title-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-extra-work-title-dialog-head">
+          <p>{getMobileExtraWorkOrderFixedTitle(order)}</p>
+          <h2 id="mobile-extra-work-title-dialog-title">Stundenzettel benennen</h2>
+        </div>
+        {canRename ? (
+          <label>
+            <span>Bezeichnung</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={EXTRA_WORK_DEFAULT_TITLE_SUFFIX}
+              autoFocus
+            />
+          </label>
+        ) : (
+          <p className="form-info">Der Name kann nach Kundenunterschrift nicht mehr geändert werden.</p>
+        )}
+        {error ? <p className="form-error">{error}</p> : null}
+        <div className="mobile-extra-work-title-dialog-actions">
+          <button className="secondary-action" type="button" onClick={onClose} disabled={isSaving}>
+            Abbrechen
+          </button>
+          <button className="primary-action" type="button" onClick={() => void saveTitle()} disabled={!canRename || isSaving}>
+            {isSaving ? "Speichert..." : "Speichern"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4420,11 +4527,21 @@ function sortMobileExtraWorkOrders(orders: MobileExtraWorkTicket[]): MobileExtra
 }
 
 function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
-  const defaultTitle = order.kind === "approval"
+  return `${getMobileExtraWorkOrderFixedTitle(order)} - ${getMobileExtraWorkOrderTitleSuffix(order)}`;
+}
+
+function getMobileExtraWorkOrderFixedTitle(order: MobileExtraWorkTicket): string {
+  return order.kind === "approval"
     ? `Stundenfreigabe ${order.sequence_number}`
     : `Stundenzettel ${order.sequence_number}`;
-  const title = order.title?.trim() || defaultTitle;
-  return `${title} - Hauptauftrag`;
+}
+
+function getMobileExtraWorkOrderTitleSuffix(order: MobileExtraWorkTicket): string {
+  return order.title?.trim() || EXTRA_WORK_DEFAULT_TITLE_SUFFIX;
+}
+
+function getMobileExtraWorkOrderEditableTitle(order: MobileExtraWorkTicket): string {
+  return order.title?.trim() || "";
 }
 
 function formatMobileExtraWorkKindLabel(kind: string): string {

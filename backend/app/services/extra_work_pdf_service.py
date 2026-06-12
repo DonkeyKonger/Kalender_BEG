@@ -258,6 +258,7 @@ class ExtraWorkPdfService:
         else:
             _checkbox(commands, *CHECKBOX_CENTERS["material_no"])
         _field(commands, FIELD_RECTS["Zusatzstundenachweis Nr"], _ticket_number(ticket, page_number, total_pages), size=9)
+        _field(commands, FieldRect(346.00, 351.12, 204.00, 17.01), _ticket_title_suffix(ticket), size=8)
         week_start, week_end = _week_range(assignment.start_date or created_date)
         _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.6, align="center")
         _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.6, align="center")
@@ -580,7 +581,7 @@ def _render_photo_attachment_page(
     index: int,
     total: int,
 ) -> list[bytes]:
-    ticket_label = ticket.display_number or f"Stundenzettel {ticket.sequence_number}"
+    ticket_label = _ticket_display_title(ticket)
     uploaded_by = _format_user(photo.uploaded_by) or "-"
     commands: list[bytes] = [b"1 1 1 rg 0 0 595.28 841.89 re f 0 0 0 RG 0 0 0 rg"]
     _text(commands, 42, 782, "Fotoanlagen", 18, font="F2")
@@ -834,6 +835,15 @@ def _decimal(value: Any) -> Decimal:
 def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) -> str:
     number = ticket.display_number or str(ticket.sequence_number)
     return f"{number} / Blatt {page_number}" if total_pages > 1 else number
+
+
+def _ticket_display_title(ticket: ExtraWorkTicket) -> str:
+    prefix = "Stundenfreigabe" if ticket.kind == "approval" else "Stundenzettel"
+    return f"{prefix} {ticket.sequence_number} - {_ticket_title_suffix(ticket)}"
+
+
+def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:
+    return _clean_text(ticket.title) or "Hauptauftrag"
 
 
 def _safe_filename_part(value: str) -> str:

@@ -17,6 +17,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
+    ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
 )
 from app.services.project_folder_service import ProjectFolderService
@@ -164,6 +165,32 @@ class ExtraWorkService:
             ticket_id=ticket_id,
             current_user=current_user,
         )
+
+    def update_mobile_ticket_title(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkTicketTitleUpdate,
+    ) -> ExtraWorkTicketRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        if ticket.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Der Name kann nach Kundenunterschrift nicht mehr geändert werden.",
+            )
+        if ticket.status != "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Der Name kann nur im Entwurf geändert werden.",
+            )
+        ticket.title = self._clean_optional_text(payload.title)
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return ExtraWorkTicketRead.model_validate(ticket)
 
     def get_mobile_ticket_entry(
         self,

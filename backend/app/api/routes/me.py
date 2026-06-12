@@ -16,6 +16,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketStatusUpdate,
+    ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
 )
 from app.schemas.measurement import (
@@ -196,6 +197,25 @@ def get_my_assignment_extra_work_ticket(
         assignment_id=assignment_id,
         ticket_id=ticket_id,
         current_user=current_user,
+    )
+
+
+@router.patch(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/title",
+    response_model=ExtraWorkTicketRead,
+)
+def update_my_assignment_extra_work_ticket_title(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketTitleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).update_mobile_ticket_title(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

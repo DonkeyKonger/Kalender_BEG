@@ -888,6 +888,17 @@ export const api = {
     });
   },
 
+  async updateMobileExtraWorkTicketTitle(
+    assignmentId: number,
+    ticketId: number,
+    title: string | null,
+  ): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+  },
+
   async mobileExtraWorkTicketEntry(assignmentId: number, ticketId: number): Promise<MobileExtraWorkTicketEntry | null> {
     return request<MobileExtraWorkTicketEntry | null>(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/entry`);
   },

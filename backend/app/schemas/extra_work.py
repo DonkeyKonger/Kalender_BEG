@@ -14,6 +14,10 @@ class ExtraWorkTicketStatusUpdate(BaseModel):
     status: str = Field(pattern="^(submitted)$")
 
 
+class ExtraWorkTicketTitleUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=160)
+
+
 class ExtraWorkSignaturePoint(BaseModel):
     x: float = Field(..., ge=0, le=1)
     y: float = Field(..., ge=0, le=1)

@@ -12598,6 +12598,98 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
+.mobile-extra-work-title-card {
+  appearance: none;
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.mobile-extra-work-title-card.is-locked {
+  cursor: default;
+}
+
+.mobile-extra-work-title-card:focus-visible {
+  outline: 3px solid rgb(47 96 150 / 28%);
+  outline-offset: 2px;
+}
+
+.mobile-extra-work-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-extra-work-title-line h2 {
+  min-width: 0;
+}
+
+.mobile-extra-work-title-line svg {
+  flex: 0 0 auto;
+  color: #2f6096;
+}
+
+.mobile-extra-work-title-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(92vw, 430px);
+  border: 1px solid #d8e3ef;
+  border-top: 4px solid #f4b73f;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 24px 55px rgb(15 23 42 / 20%);
+}
+
+.mobile-extra-work-title-dialog-head {
+  display: grid;
+  gap: 3px;
+}
+
+.mobile-extra-work-title-dialog-head p,
+.mobile-extra-work-title-dialog-head h2 {
+  margin: 0;
+}
+
+.mobile-extra-work-title-dialog-head p {
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.mobile-extra-work-title-dialog-head h2 {
+  color: #111827;
+  font-size: 1.08rem;
+}
+
+.mobile-extra-work-title-dialog label {
+  display: grid;
+  gap: 7px;
+  color: #42526b;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.mobile-extra-work-title-dialog input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.mobile-extra-work-title-dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .mobile-measurement-row-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

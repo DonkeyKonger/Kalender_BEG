@@ -25,6 +25,7 @@ from app.schemas.extra_work import (
     ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
     ExtraWorkTicketEntryPayload,
+    ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
     ExtraWorkWorkerHours,
 )
@@ -478,6 +479,72 @@ def test_mobile_extra_work_worker_signature_persists_without_status_change():
     assert reloaded.worker_signed_at == signed.worker_signed_at
 
 
+def test_mobile_extra_work_ticket_title_can_be_updated_and_cleared_while_draft():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    renamed = service.update_mobile_ticket_title(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketTitleUpdate(title=" Nachtrag Kabeltrasse 2. OG "),
+    )
+    cleared = service.update_mobile_ticket_title(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketTitleUpdate(title=" "),
+    )
+
+    assert renamed.title == "Nachtrag Kabeltrasse 2. OG"
+    assert cleared.title is None
+
+
+def test_mobile_extra_work_ticket_title_is_locked_after_customer_signature():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                ExtraWorkSignaturePoint(x=0.7, y=0.5),
+            ]],
+        ),
+    )
+
+    with pytest.raises(Exception) as blocked_update:
+        service.update_mobile_ticket_title(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+            payload=ExtraWorkTicketTitleUpdate(title="Nachtrag"),
+        )
+
+    assert getattr(blocked_update.value, "status_code", None) == 409
+
+
 def test_mobile_extra_work_customer_signature_rejects_empty_signature():
     with pytest.raises(ValueError):
         ExtraWorkCustomerSignatureCreate(
@@ -509,6 +576,12 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
             material_text="Kabelrinne",
             worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5)],
         ),
+    )
+    service.update_mobile_ticket_title(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketTitleUpdate(title="Nachtrag Kabeltrasse 2. OG"),
     )
     service.sign_mobile_ticket_worker(
         assignment_id=assignment.id,
@@ -544,11 +617,14 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
 
     assert content.startswith(b"%PDF")
     assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
-    assert len(PdfReader(BytesIO(content)).pages) == 1
+    pdf_reader = PdfReader(BytesIO(content))
+    pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+    assert len(pdf_reader.pages) == 1
     assert b"Unterschrift Monteur" in content
     assert b"Max Monteur" in content
     assert b"Unterschrift Kunde" in content
     assert b"Kunde Beispiel" in content
+    assert "Nachtrag Kabeltrasse 2. OG" in pdf_text
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
