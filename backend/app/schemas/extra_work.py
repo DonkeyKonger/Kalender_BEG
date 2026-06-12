@@ -132,6 +132,7 @@ class ExtraWorkTicketRead(BaseModel):
     worker_signature_name: str | None
     worker_signed_at: datetime | None
     entry_count: int
+    photo_count: int
     total_hours: float
     estimated_hours: float | None
     created_at: datetime

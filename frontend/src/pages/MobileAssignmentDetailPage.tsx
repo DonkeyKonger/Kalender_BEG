@@ -378,6 +378,16 @@ function MobileExtraWorkTab({
     setSelectedOrder(updatedOrder);
   }
 
+  function updateOrderPhotoCount(orderId: number, nextCount: number): void {
+    const normalizedCount = Math.max(0, nextCount);
+    const applyCount = (order: MobileExtraWorkTicket) => (
+      order.id === orderId ? { ...order, photo_count: normalizedCount } : order
+    );
+    setOrders((currentOrders) => currentOrders.map(applyCount));
+    setSelectedOrder((currentOrder) => (currentOrder ? applyCount(currentOrder) : currentOrder));
+    setPhotoGalleryOrder((currentOrder) => (currentOrder ? applyCount(currentOrder) : currentOrder));
+  }
+
   async function createOrder(): Promise<void> {
     setIsSaving(true);
     setError(null);
@@ -412,6 +422,7 @@ function MobileExtraWorkTab({
     try {
       const uploadFile = await prepareMeasurementPhotoFile(file);
       await api.uploadMobileExtraWorkTicketPhoto(assignment.id, order.id, uploadFile);
+      updateOrderPhotoCount(order.id, (order.photo_count ?? 0) + 1);
       setPhotoGalleryVersion((version) => version + 1);
       setMessage("Foto gespeichert.");
       setPhotoMessageTone("info");
@@ -435,6 +446,7 @@ function MobileExtraWorkTab({
             isUploadingPhoto={isUploadingPhoto}
             onBack={() => setPhotoGalleryOrder(null)}
             onTakePhoto={() => openPhotoCapture(photoGalleryOrder)}
+            onPhotoCountChanged={(count) => updateOrderPhotoCount(photoGalleryOrder.id, count)}
           />
           <input
             ref={photoInputRef}
@@ -773,7 +785,7 @@ function ExtraWorkOrderOverview({
         ) : null}
         <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
           <Images aria-hidden="true" size={18} />
-          <span>Hinterlegte Fotos</span>
+          <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
         </button>
       </div>
       {message ? <p className={messageTone === "error" ? "form-error" : "form-info"}>{message}</p> : null}
@@ -3218,6 +3230,7 @@ function ExtraWorkPhotoGallery({
   isUploadingPhoto,
   onBack,
   onTakePhoto,
+  onPhotoCountChanged,
 }: {
   assignmentId: number;
   order: MobileExtraWorkTicket;
@@ -3225,6 +3238,7 @@ function ExtraWorkPhotoGallery({
   isUploadingPhoto: boolean;
   onBack: () => void;
   onTakePhoto: () => void;
+  onPhotoCountChanged: (count: number) => void;
 }) {
   const [photos, setPhotos] = useState<ExtraWorkPhotoPreview[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<ExtraWorkPhotoPreview | null>(null);
@@ -3257,6 +3271,7 @@ function ExtraWorkPhotoGallery({
         }));
         if (isCurrent) {
           setPhotos(previews);
+          onPhotoCountChanged(previews.length);
         } else {
           objectUrls.forEach((url) => window.URL.revokeObjectURL(url));
         }
@@ -3292,6 +3307,7 @@ function ExtraWorkPhotoGallery({
       }
       const nextPhotos = photos.filter((item) => item.photo.id !== preview.photo.id);
       setPhotos(nextPhotos);
+      onPhotoCountChanged(nextPhotos.length);
       setSelectedPhoto((currentPhoto) => (
         currentPhoto?.photo.id === preview.photo.id ? null : currentPhoto
       ));

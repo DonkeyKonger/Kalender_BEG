@@ -59,6 +59,10 @@ class ExtraWorkTicket(TimestampMixin, Base):
         return len(self.entries or [])
 
     @property
+    def photo_count(self) -> int:
+        return len(self.photos or [])
+
+    @property
     def total_hours(self) -> Decimal:
         total = Decimal("0")
         for entry in self.entries or []:
