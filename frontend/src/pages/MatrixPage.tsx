@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type UIEvent as ReactUIEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -134,6 +134,8 @@ export function MatrixPage() {
   const assignmentResizeRef = useRef<AssignmentResizeState | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
   const didScrollToTodayRef = useRef(false);
+  const weekSnapTimeoutRef = useRef<number | null>(null);
+  const isApplyingWeekSnapRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
@@ -270,14 +272,43 @@ export function MatrixPage() {
       return;
     }
     didScrollToTodayRef.current = true;
-    matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, today, isCompactView);
+    matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
   }, [isCompactView, matrix, today]);
+
+  const handleMatrixScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
+    if (!matrix || isApplyingWeekSnapRef.current) {
+      return;
+    }
+    const scrollElement = event.currentTarget;
+    if (weekSnapTimeoutRef.current) {
+      window.clearTimeout(weekSnapTimeoutRef.current);
+    }
+    weekSnapTimeoutRef.current = window.setTimeout(() => {
+      const leftVisibleDate = matrixDateAtScrollOffset(matrix.days, scrollElement.scrollLeft, isCompactView);
+      if (!leftVisibleDate) {
+        return;
+      }
+      const weekStartDate = matrixWeekStartDate(leftVisibleDate);
+      const targetScrollLeft = matrixScrollOffsetForDate(matrix.days, weekStartDate, isCompactView);
+      if (Math.abs(scrollElement.scrollLeft - targetScrollLeft) < 2) {
+        return;
+      }
+      isApplyingWeekSnapRef.current = true;
+      scrollElement.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
+      window.setTimeout(() => {
+        isApplyingWeekSnapRef.current = false;
+      }, 250);
+    }, 180);
+  }, [isCompactView, matrix]);
 
   useEffect(() => {
     return () => {
       Object.values(cellMessageTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
       if (errorTimeoutRef.current) {
         window.clearTimeout(errorTimeoutRef.current);
+      }
+      if (weekSnapTimeoutRef.current) {
+        window.clearTimeout(weekSnapTimeoutRef.current);
       }
     };
   }, []);
@@ -1304,6 +1335,7 @@ export function MatrixPage() {
             onCreateSiteForGroup={openSiteCreateDrawer}
             onCycleCellMark={cycleCellMark}
             onMatrixContextMenu={handleMatrixContextMenu}
+            onMatrixScroll={handleMatrixScroll}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
             onInfoSave={(siteId) => void saveSiteInfo(siteId)}
             onStatusChange={(siteId, status) => void saveSiteStatus(siteId, status)}
@@ -1724,6 +1756,7 @@ type MatrixTableProps = {
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
   onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  onMatrixScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
   onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (row: MatrixRow, assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
@@ -1766,6 +1799,7 @@ function MatrixTable(props: MatrixTableProps) {
       aria-label="Planmatrix"
       style={matrixCssVars}
       onContextMenu={props.onMatrixContextMenu}
+      onScroll={props.onMatrixScroll}
     >
       <table className="matrix-table" style={tableStyle}>
         <colgroup>
@@ -2528,6 +2562,28 @@ function matrixScrollOffsetForDate(days: MatrixResponse["days"], targetDate: str
     }
     return offset + matrixColumnWidthForDate(day.date, isCompactView);
   }, 0);
+}
+
+function matrixDateAtScrollOffset(days: MatrixResponse["days"], scrollLeft: number, isCompactView: boolean): string | null {
+  let offset = 0;
+  for (const day of days) {
+    const width = matrixColumnWidthForDate(day.date, isCompactView);
+    if (offset + width > scrollLeft + 1) {
+      return day.date;
+    }
+    offset += width;
+  }
+  const lastDay = days[days.length - 1];
+  return lastDay ? lastDay.date : null;
+}
+
+function matrixWeekStartDate(dateValue: string): string {
+  const [year, month, day] = dateValue.split("-");
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  const weekday = date.getDay();
+  const mondayOffset = weekday === 0 ? 6 : weekday - 1;
+  date.setDate(date.getDate() - mondayOffset);
+  return toDateInputValue(date);
 }
 
 function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: number, isCompactView: boolean): number {

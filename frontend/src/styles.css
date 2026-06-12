@@ -568,7 +568,6 @@ button:disabled {
   max-width: 100%;
   overflow: auto;
   scroll-padding-left: var(--fixed-columns-width, 552px);
-  scroll-snap-type: x proximity;
   border: 1px solid #cbd7e6;
   border-radius: 8px;
   background: #ffffff;
