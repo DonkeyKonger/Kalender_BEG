@@ -3902,15 +3902,9 @@ function MeasurementTimeAnalysisPanel({
                       <span>{row.measurement_title}</span>
                     </td>
                     <td>{formatMeasurementAnalysisPeriod(row.period_start, row.period_end)}</td>
-                    <td>
+                    <td className="measurement-time-analysis-extra-work-cell">
                       {row.extra_work_tickets.length > 0 ? (
-                        <div className="measurement-time-analysis-chip-list">
-                          {row.extra_work_tickets.map((ticket) => (
-                            <span key={ticket.id} className="measurement-time-analysis-chip">
-                              {ticket.display_number}{ticket.title ? ` · ${ticket.title}` : ""}
-                            </span>
-                          ))}
-                        </div>
+                        <MeasurementTimeAnalysisExtraWorkDropdown tickets={row.extra_work_tickets} />
                       ) : "-"}
                     </td>
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.measurement_minutes))}</td>
@@ -3930,6 +3924,52 @@ function MeasurementTimeAnalysisPanel({
           <p>Noch keine eingereichten Aufmaße für eine Zeitauswertung vorhanden.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function MeasurementTimeAnalysisExtraWorkDropdown({
+  tickets,
+}: {
+  tickets: MeasurementTimeAnalysis["rows"][number]["extra_work_tickets"];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const totalMinutes = tickets.reduce(
+    (sum, ticket) => sum + getMeasurementNumericValue(ticket.planned_minutes),
+    0,
+  );
+  const ticketLabel = `${tickets.length} ${tickets.length === 1 ? "Zusatzauftrag" : "Zusatzaufträge"}`;
+
+  return (
+    <div className="measurement-time-analysis-extra-work-dropdown">
+      <button
+        type="button"
+        className="measurement-time-analysis-extra-work-toggle"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setIsOpen(false);
+          }
+        }}
+      >
+        <span>
+          <strong>{ticketLabel}</strong>
+          <small>{formatMeasurementDuration(totalMinutes)} Zusatz</small>
+        </span>
+        <span aria-hidden="true">{isOpen ? "▴" : "▾"}</span>
+      </button>
+      {isOpen ? (
+        <div className="measurement-time-analysis-extra-work-menu" role="menu">
+          {tickets.map((ticket) => (
+            <div className="measurement-time-analysis-extra-work-item" key={ticket.id} role="menuitem">
+              <strong>{ticket.display_number}</strong>
+              <span>{ticket.title || "Ohne Bezeichnung"}</span>
+              <small>{formatMeasurementDuration(getMeasurementNumericValue(ticket.planned_minutes))}</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

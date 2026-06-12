@@ -7249,22 +7249,94 @@ button.person-chip:focus-visible {
   margin-top: 3px;
 }
 
-.measurement-time-analysis-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 220px;
+.measurement-time-analysis-extra-work-cell {
+  overflow: visible;
+  position: relative;
 }
 
-.measurement-time-analysis-chip {
-  border: 1px solid #d8e1ee;
-  border-radius: 2px;
+.measurement-time-analysis-extra-work-dropdown {
+  min-width: 178px;
+  position: relative;
+}
+
+.measurement-time-analysis-extra-work-toggle {
+  align-items: center;
   background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 2px;
   color: #253550;
-  font-size: 0.82rem;
-  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 10px;
+  justify-content: space-between;
   line-height: 1.2;
-  padding: 5px 7px;
+  min-height: 36px;
+  min-width: 168px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.measurement-time-analysis-extra-work-toggle:hover,
+.measurement-time-analysis-extra-work-toggle:focus-visible {
+  background: #f1f5f9;
+  border-color: #cbd7e6;
+  outline: none;
+}
+
+.measurement-time-analysis-extra-work-toggle strong,
+.measurement-time-analysis-extra-work-toggle small {
+  display: block;
+}
+
+.measurement-time-analysis-extra-work-toggle strong {
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.measurement-time-analysis-extra-work-toggle small {
+  color: #66738a;
+  font-size: 0.76rem;
+  font-weight: 750;
+  margin-top: 2px;
+}
+
+.measurement-time-analysis-extra-work-menu {
+  background: #ffffff;
+  border: 1px solid #d8e1ee;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 14%);
+  left: 0;
+  max-height: 260px;
+  max-width: 320px;
+  min-width: 260px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 20;
+}
+
+.measurement-time-analysis-extra-work-item {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.measurement-time-analysis-extra-work-item + .measurement-time-analysis-extra-work-item {
+  border-top: 1px solid #eef2f7;
+}
+
+.measurement-time-analysis-extra-work-item strong {
+  color: #172033;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.measurement-time-analysis-extra-work-item span,
+.measurement-time-analysis-extra-work-item small {
+  color: #66738a;
+  font-size: 0.8rem;
+  font-weight: 750;
 }
 
 .project-placeholder-grid {
