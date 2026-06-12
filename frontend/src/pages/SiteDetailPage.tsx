@@ -15,7 +15,7 @@ import {
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
@@ -99,6 +99,10 @@ export function SiteDetailPage() {
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
   const [measurementBases, setMeasurementBases] = useState<MeasurementBase[]>([]);
   const [measurementTimesheet, setMeasurementTimesheet] = useState<MeasurementTimesheet | null>(null);
+  const [measurementTimeAnalysis, setMeasurementTimeAnalysis] = useState<MeasurementTimeAnalysis | null>(null);
+  const [measurementTimeAnalysisLoading, setMeasurementTimeAnalysisLoading] = useState(false);
+  const [measurementTimeAnalysisLoaded, setMeasurementTimeAnalysisLoaded] = useState(false);
+  const [measurementTimeAnalysisError, setMeasurementTimeAnalysisError] = useState<string | null>(null);
   const [measurementLoading, setMeasurementLoading] = useState(false);
   const [measurementLoaded, setMeasurementLoaded] = useState(false);
   const [measurementError, setMeasurementError] = useState<string | null>(null);
@@ -178,7 +182,11 @@ export function SiteDetailPage() {
 
   useEffect(() => {
     setActiveTab(requestedProjectTab === "measurement" ? "measurement" : "overview");
-    setMeasurementSubtab(requestedMeasurementSubtab === "review" ? "review" : "timesheet");
+    setMeasurementSubtab(
+      measurementSubtabs.some((tab) => tab.key === requestedMeasurementSubtab)
+        ? requestedMeasurementSubtab as MeasurementSubtab
+        : "timesheet",
+    );
     setEditMode(false);
     setSiteSaveError(null);
     setSiteSaveMessage(null);
@@ -195,6 +203,10 @@ export function SiteDetailPage() {
     setUploadError(null);
     setDragOverFolderKey(null);
     setMeasurementTimesheet(null);
+    setMeasurementTimeAnalysis(null);
+    setMeasurementTimeAnalysisLoading(false);
+    setMeasurementTimeAnalysisLoaded(false);
+    setMeasurementTimeAnalysisError(null);
     setMeasurementLoading(false);
     setMeasurementLoaded(false);
     setMeasurementError(null);
@@ -390,6 +402,42 @@ export function SiteDetailPage() {
 
     void loadMeasurementBatches();
   }, [activeTab, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
+
+  useEffect(() => {
+    if (
+      !site
+      || activeTab !== "measurement"
+      || measurementSubtab !== "time-analysis"
+      || measurementTimeAnalysisLoaded
+      || measurementTimeAnalysisLoading
+    ) {
+      return;
+    }
+
+    async function loadMeasurementTimeAnalysis() {
+      if (!site) {
+        return;
+      }
+      setMeasurementTimeAnalysisLoading(true);
+      setMeasurementTimeAnalysisError(null);
+      try {
+        setMeasurementTimeAnalysis(await api.measurementTimeAnalysis(site.id));
+        setMeasurementTimeAnalysisLoaded(true);
+      } catch (requestError) {
+        setMeasurementTimeAnalysisError(readApiError(requestError, "Zeitauswertung konnte nicht geladen werden."));
+      } finally {
+        setMeasurementTimeAnalysisLoading(false);
+      }
+    }
+
+    void loadMeasurementTimeAnalysis();
+  }, [
+    activeTab,
+    measurementSubtab,
+    measurementTimeAnalysisLoaded,
+    measurementTimeAnalysisLoading,
+    site,
+  ]);
 
   useEffect(() => {
     if (!site || activeTab !== "extra-work" || extraWorkLoaded || extraWorkLoading) {
@@ -930,6 +978,9 @@ export function SiteDetailPage() {
           }}
           bases={measurementBases}
           timesheet={measurementTimesheet}
+          timeAnalysis={measurementTimeAnalysis}
+          timeAnalysisLoading={measurementTimeAnalysisLoading}
+          timeAnalysisError={measurementTimeAnalysisError}
           isLoading={measurementLoading}
           error={measurementError}
           isImporting={measurementImporting}
@@ -943,6 +994,11 @@ export function SiteDetailPage() {
             setMeasurementLoaded(false);
             setMeasurementTimesheet(null);
             setMeasurementError(null);
+          }}
+          onRetryTimeAnalysis={() => {
+            setMeasurementTimeAnalysisLoaded(false);
+            setMeasurementTimeAnalysis(null);
+            setMeasurementTimeAnalysisError(null);
           }}
           batches={measurementBatches}
           workerHeadCount={measurementWorkerHeadCount}
@@ -1767,6 +1823,9 @@ function MeasurementTab({
   onSubtabChange,
   bases,
   timesheet,
+  timeAnalysis,
+  timeAnalysisLoading,
+  timeAnalysisError,
   isLoading,
   error,
   isImporting,
@@ -1777,6 +1836,7 @@ function MeasurementTab({
   onActivateBase,
   onDeleteBase,
   onRetry,
+  onRetryTimeAnalysis,
   batches,
   workerHeadCount,
   batchesLoading,
@@ -1803,6 +1863,9 @@ function MeasurementTab({
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
   timesheet: MeasurementTimesheet | null;
+  timeAnalysis: MeasurementTimeAnalysis | null;
+  timeAnalysisLoading: boolean;
+  timeAnalysisError: string | null;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
@@ -1813,6 +1876,7 @@ function MeasurementTab({
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
   onRetry: () => void;
+  onRetryTimeAnalysis: () => void;
   batches: MobileMeasurementBatch[];
   workerHeadCount: number;
   batchesLoading: boolean;
@@ -2014,7 +2078,14 @@ function MeasurementTab({
         />
       ) : null}
 
-      {activeSubtab === "time-analysis" ? <MeasurementTimeAnalysisPanel /> : null}
+      {activeSubtab === "time-analysis" ? (
+        <MeasurementTimeAnalysisPanel
+          analysis={timeAnalysis}
+          isLoading={timeAnalysisLoading}
+          error={timeAnalysisError}
+          onRetry={onRetryTimeAnalysis}
+        />
+      ) : null}
 
       {activeSubtab === "bases" ? (
         <MeasurementBasesPanel
@@ -3775,21 +3846,93 @@ function MeasurementReviewTable({
   );
 }
 
-function MeasurementTimeAnalysisPanel() {
+function MeasurementTimeAnalysisPanel({
+  analysis,
+  isLoading,
+  error,
+  onRetry,
+}: {
+  analysis: MeasurementTimeAnalysis | null;
+  isLoading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
   return (
-    <>
+    <div className="measurement-time-analysis-panel">
       <div className="project-record-toolbar">
         <div>
           <h2><Ruler aria-hidden="true" size={18} />Zeitauswertung</h2>
-          <p>Die Zeitauswertung wird später Aufmaß-Sollstunden mit tatsächlich erfassten Lohnstunden vergleichen.</p>
+          <p>Aufmaßpakete werden mit den zugehörigen Montagezeiten und Zusatzaufträgen je Abrechnungszeitraum verglichen.</p>
         </div>
       </div>
-      <div className="measurement-evaluation-grid">
-        <div><span>Sollstunden aus Aufmaß</span><strong>-</strong></div>
-        <div><span>Iststunden aus Lohnerfassung</span><strong>-</strong></div>
-        <div><span>Abweichung</span><strong>-</strong></div>
-      </div>
-    </>
+      {error ? (
+        <div className="project-record-empty-state">
+          <p>{error}</p>
+          <button type="button" className="secondary-action" onClick={onRetry}>Erneut laden</button>
+        </div>
+      ) : isLoading ? (
+        <div className="project-record-empty-state">
+          <p>Zeitauswertung wird geladen…</p>
+        </div>
+      ) : analysis && analysis.rows.length > 0 ? (
+        <>
+          <div className="measurement-evaluation-grid">
+            <div><span>Soll gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.planned_minutes))}</strong></div>
+            <div><span>Ist gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.actual_minutes))}</strong></div>
+            <div><span>Abweichung</span><strong>{formatSignedMeasurementDuration(getMeasurementNumericValue(analysis.totals.deviation_minutes))}</strong></div>
+          </div>
+          <div className="measurement-table-wrap measurement-time-analysis-table-wrap">
+            <table className="measurement-table measurement-time-analysis-table">
+              <thead>
+                <tr>
+                  <th>Aufmaß</th>
+                  <th>Zeitraum</th>
+                  <th>Zusatzaufträge</th>
+                  <th>Soll Aufmaß</th>
+                  <th>Soll Zusatz</th>
+                  <th>Soll Gesamt</th>
+                  <th>Ist Monteure</th>
+                  <th>Abweichung</th>
+                  <th>Verbrauch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.rows.map((row) => (
+                  <tr key={row.measurement_batch_id}>
+                    <td>
+                      <strong>{`Aufmaß ${row.measurement_number}`}</strong>
+                      <span>{row.measurement_title}</span>
+                    </td>
+                    <td>{formatMeasurementAnalysisPeriod(row.period_start, row.period_end)}</td>
+                    <td>
+                      {row.extra_work_tickets.length > 0 ? (
+                        <div className="measurement-time-analysis-chip-list">
+                          {row.extra_work_tickets.map((ticket) => (
+                            <span key={ticket.id} className="measurement-time-analysis-chip">
+                              {ticket.display_number}{ticket.title ? ` · ${ticket.title}` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      ) : "-"}
+                    </td>
+                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.measurement_minutes))}</td>
+                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.extra_work_minutes))}</td>
+                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.planned_minutes))}</td>
+                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.actual_minutes))}</td>
+                    <td className="measurement-timesheet-number">{formatSignedMeasurementDuration(getMeasurementNumericValue(row.deviation_minutes))}</td>
+                    <td className="measurement-timesheet-number">{row.consumption_percent !== null ? formatMeasurementPercent(row.consumption_percent) : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div className="project-record-empty-state">
+          <p>Noch keine eingereichten Aufmaße für eine Zeitauswertung vorhanden.</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -4786,6 +4929,23 @@ function formatMeasurementDuration(minutes: number): string {
     return `${sign}${hours} Std. ${restMinutes} Min.`;
   }
   return `${sign}${formatMeasurementNumber(absoluteMinutes)} min`;
+}
+
+function formatSignedMeasurementDuration(minutes: number): string {
+  if (minutes === 0) {
+    return formatMeasurementDuration(0);
+  }
+  return `${minutes > 0 ? "+" : ""}${formatMeasurementDuration(minutes)}`;
+}
+
+function formatMeasurementAnalysisPeriod(start: string | null, end: string | null): string {
+  if (!end) {
+    return "-";
+  }
+  if (!start) {
+    return `Bis ${formatDateTime(end)}`;
+  }
+  return `${formatDateTime(start)} bis ${formatDateTime(end)}`;
 }
 
 function formatMeasurementPercent(value: number): string {

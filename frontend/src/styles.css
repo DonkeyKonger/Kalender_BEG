@@ -7219,6 +7219,49 @@ button.person-chip:focus-visible {
   padding: 14px;
 }
 
+.measurement-time-analysis-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.measurement-time-analysis-table-wrap {
+  border-radius: 2px;
+}
+
+.measurement-time-analysis-table {
+  min-width: 1180px;
+}
+
+.measurement-time-analysis-table td:first-child {
+  min-width: 180px;
+}
+
+.measurement-time-analysis-table td:first-child span {
+  display: block;
+  color: #66738a;
+  font-size: 0.88rem;
+  font-weight: 750;
+  margin-top: 3px;
+}
+
+.measurement-time-analysis-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.measurement-time-analysis-chip {
+  border: 1px solid #d8e1ee;
+  border-radius: 2px;
+  background: #f8fafc;
+  color: #253550;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 5px 7px;
+}
+
 .project-placeholder-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

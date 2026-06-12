@@ -460,6 +460,45 @@ export type MeasurementTimesheet = {
   rows: MeasurementTimesheetRow[];
 };
 
+export type MeasurementTimeAnalysisExtraWorkTicket = {
+  id: number;
+  display_number: string;
+  title: string | null;
+  status: string;
+  relevant_at: string | null;
+  planned_minutes: MeasurementNumericValue;
+};
+
+export type MeasurementTimeAnalysisRow = {
+  measurement_batch_id: number;
+  measurement_number: number;
+  measurement_title: string;
+  measurement_status: string;
+  analysis_at: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  measurement_minutes: MeasurementNumericValue;
+  extra_work_minutes: MeasurementNumericValue;
+  planned_minutes: MeasurementNumericValue;
+  actual_minutes: MeasurementNumericValue;
+  deviation_minutes: MeasurementNumericValue;
+  consumption_percent: number | null;
+  extra_work_tickets: MeasurementTimeAnalysisExtraWorkTicket[];
+};
+
+export type MeasurementTimeAnalysisTotals = {
+  planned_minutes: MeasurementNumericValue;
+  actual_minutes: MeasurementNumericValue;
+  deviation_minutes: MeasurementNumericValue;
+  consumption_percent: number | null;
+};
+
+export type MeasurementTimeAnalysis = {
+  site_id: number;
+  totals: MeasurementTimeAnalysisTotals;
+  rows: MeasurementTimeAnalysisRow[];
+};
+
 export type MeasurementImportResponse = {
   imported_count: number;
   measurement_base: MeasurementBase;

@@ -165,6 +165,45 @@ class MeasurementTimesheetRead(BaseModel):
     rows: list[MeasurementTimesheetRowRead]
 
 
+class MeasurementTimeAnalysisExtraWorkTicketRead(BaseModel):
+    id: int
+    display_number: str
+    title: str | None
+    status: str
+    relevant_at: datetime | None
+    planned_minutes: Decimal
+
+
+class MeasurementTimeAnalysisRowRead(BaseModel):
+    measurement_batch_id: int
+    measurement_number: int
+    measurement_title: str
+    measurement_status: str
+    analysis_at: datetime | None
+    period_start: datetime | None
+    period_end: datetime | None
+    measurement_minutes: Decimal
+    extra_work_minutes: Decimal
+    planned_minutes: Decimal
+    actual_minutes: Decimal
+    deviation_minutes: Decimal
+    consumption_percent: float | None
+    extra_work_tickets: list[MeasurementTimeAnalysisExtraWorkTicketRead]
+
+
+class MeasurementTimeAnalysisTotalsRead(BaseModel):
+    planned_minutes: Decimal
+    actual_minutes: Decimal
+    deviation_minutes: Decimal
+    consumption_percent: float | None
+
+
+class MeasurementTimeAnalysisRead(BaseModel):
+    site_id: int
+    totals: MeasurementTimeAnalysisTotalsRead
+    rows: list[MeasurementTimeAnalysisRowRead]
+
+
 class CustomerSignaturePoint(BaseModel):
     x: float = Field(..., ge=0, le=1)
     y: float = Field(..., ge=0, le=1)

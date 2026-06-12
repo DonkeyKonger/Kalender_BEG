@@ -19,6 +19,7 @@ from app.schemas.measurement import (
     MeasurementEntryRead,
     MeasurementImportResponse,
     MeasurementItemRead,
+    MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
     MobileMeasurementItemRead,
@@ -474,6 +475,15 @@ def get_measurement_timesheet(
     db: Session = Depends(get_db),
 ) -> MeasurementTimesheetRead:
     return MeasurementService(db).get_site_measurement_timesheet(site_id)
+
+
+@router.get("/{site_id}/measurement-time-analysis", response_model=MeasurementTimeAnalysisRead)
+def get_measurement_time_analysis(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> MeasurementTimeAnalysisRead:
+    return MeasurementService(db).get_site_measurement_time_analysis(site_id)
 
 
 @router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])

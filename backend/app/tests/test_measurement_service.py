@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -758,6 +758,7 @@ def test_site_measurement_billing_status_and_entry_update():
     assert snapshot["submitted_by_name"] == "Max Monteur"
     assert snapshot["measurement_batch_id"] == batch.id
     assert snapshot["site_id"] == site.id
+
     assert snapshot["measurement_base_id"] == base.id
     assert snapshot["entries"] == [
         {
@@ -777,6 +778,163 @@ def test_site_measurement_billing_status_and_entry_update():
     assert stored_entry.status == "submitted"
     assert stored_entry.submitted_area_or_comment == "1. OG Flur"
     assert stored_entry.submitted_quantity == Decimal("10.00")
+
+
+def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():
+    from app.models.enums import PersonType
+    from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementEntry
+    from app.models.work_time_entry import WorkTimeEntry
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1",
+        description="Montage",
+        list_quantity=Decimal("0"),
+        unit="Std",
+        minutes_per_unit=Decimal("60"),
+        list_minutes_total=Decimal("0"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([person, item])
+    db.flush()
+
+    batch_1 = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Hauptauftrag",
+        status="submitted",
+        submitted_at=datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc),
+    )
+    batch_2 = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=2,
+        title="Hauptauftrag",
+        status="submitted",
+        submitted_at=datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc),
+    )
+    batch_3 = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=3,
+        title="Hauptauftrag",
+        status="submitted",
+        submitted_at=datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc),
+    )
+    db.add_all([batch_1, batch_2, batch_3])
+    db.flush()
+    db.add_all(
+        [
+            SiteMeasurementEntry(
+                measurement_batch=batch_1,
+                measurement_item=item,
+                site=site,
+                quantity=Decimal("10"),
+                area_or_comment="KW33",
+                status="submitted",
+            ),
+            SiteMeasurementEntry(
+                measurement_batch=batch_2,
+                measurement_item=item,
+                site=site,
+                quantity=Decimal("20"),
+                area_or_comment="KW34",
+                status="submitted",
+            ),
+            SiteMeasurementEntry(
+                measurement_batch=batch_3,
+                measurement_item=item,
+                site=site,
+                quantity=Decimal("30"),
+                area_or_comment="KW37",
+                status="submitted",
+            ),
+        ]
+    )
+
+    def work_entry(work_date: date, hours: int) -> WorkTimeEntry:
+        return WorkTimeEntry(
+            person=person,
+            site=site,
+            work_date=work_date,
+            work_minutes=hours * 60,
+            break_minutes=0,
+            travel_minutes=0,
+            status="reviewed",
+            time_review_status="manually_approved",
+        )
+
+    db.add_all(
+        [
+            work_entry(date(2026, 8, 14), 40),
+            work_entry(date(2026, 8, 18), 20),
+            work_entry(date(2026, 8, 20), 25),
+            work_entry(date(2026, 8, 28), 80),
+            work_entry(date(2026, 9, 4), 25),
+            work_entry(date(2026, 9, 11), 5),
+        ]
+    )
+
+    def ticket(sequence: int, relevant_at: datetime, hours: int) -> ExtraWorkTicket:
+        item_ticket = ExtraWorkTicket(
+            site=site,
+            sequence_number=sequence,
+            display_number=f"8007.SZ{sequence:02d}",
+            title=f"Zusatz {sequence}",
+            status="submitted",
+            submitted_at=relevant_at,
+        )
+        item_ticket.entries = [
+            ExtraWorkTicketEntry(
+                site=site,
+                component="Bauteil",
+                floor="EG",
+                worker_rows=[{"worker_name": "Max Monteur", "monday_hours": hours}],
+            )
+        ]
+        return item_ticket
+
+    db.add_all(
+        [
+            ticket(1, datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc), 3),
+            ticket(2, datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc), 4),
+            ticket(3, datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc), 5),
+            ticket(4, datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc), 6),
+        ]
+    )
+    db.commit()
+
+    analysis = MeasurementService(db).get_site_measurement_time_analysis(site.id)
+
+    assert [row.actual_minutes for row in analysis.rows] == [
+        Decimal("2400"),
+        Decimal("1200"),
+        Decimal("8100"),
+    ]
+    assert [ticket.display_number for ticket in analysis.rows[0].extra_work_tickets] == [
+        "8007.SZ01",
+        "8007.SZ02",
+    ]
+    assert analysis.rows[1].extra_work_tickets == []
+    assert [ticket.display_number for ticket in analysis.rows[2].extra_work_tickets] == [
+        "8007.SZ03",
+        "8007.SZ04",
+    ]
 
 
 def test_dashboard_submissions_include_customer_signed_batches_until_billed():

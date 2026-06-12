@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import logging
 import re
@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
+from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
@@ -19,6 +20,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
+from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.measurement import (
     CustomerSignatureCreate,
     MeasurementBaseRead,
@@ -26,6 +28,10 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
+    MeasurementTimeAnalysisExtraWorkTicketRead,
+    MeasurementTimeAnalysisRead,
+    MeasurementTimeAnalysisRowRead,
+    MeasurementTimeAnalysisTotalsRead,
     MeasurementTimesheetKpiRead,
     MeasurementTimesheetRead,
     MeasurementTimesheetRowRead,
@@ -42,6 +48,7 @@ from app.services.document_photo_optimizer import optimize_document_photo
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
+from app.services.time_entry_service import TimeEntryService
 
 
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
@@ -803,6 +810,148 @@ class MeasurementService:
             rows=rows,
         )
 
+    def get_site_measurement_time_analysis(self, site_id: int) -> MeasurementTimeAnalysisRead:
+        self._get_site(site_id)
+        batches = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch)
+                .options(
+                    selectinload(SiteMeasurementBatch.entries).selectinload(
+                        SiteMeasurementEntry.measurement_item
+                    ),
+                    selectinload(SiteMeasurementBatch.measurement_base),
+                )
+                .where(SiteMeasurementBatch.site_id == site_id)
+                .where(SiteMeasurementBatch.status != "draft")
+            ).all()
+        )
+        batches.sort(key=lambda batch: self._analysis_timestamp(batch) or datetime.min)
+
+        rows: list[MeasurementTimeAnalysisRowRead] = []
+        if not batches:
+            return MeasurementTimeAnalysisRead(
+                site_id=site_id,
+                totals=MeasurementTimeAnalysisTotalsRead(
+                    planned_minutes=Decimal("0"),
+                    actual_minutes=Decimal("0"),
+                    deviation_minutes=Decimal("0"),
+                    consumption_percent=None,
+                ),
+                rows=[],
+            )
+
+        work_entries = list(
+            self.db.scalars(
+                select(WorkTimeEntry)
+                .where(WorkTimeEntry.site_id == site_id)
+                .order_by(WorkTimeEntry.work_date, WorkTimeEntry.id)
+            ).all()
+        )
+        relevant_work_entries = [
+            entry for entry in work_entries if TimeEntryService.is_project_mounting_time_relevant(entry)
+        ]
+
+        previous_boundary: datetime | None = None
+        row_payloads: list[dict[str, object]] = []
+        for batch in batches:
+            analysis_at = self._analysis_timestamp(batch)
+            boundary = self._local_analysis_datetime(analysis_at) if analysis_at else None
+            measurement_minutes = self._sum_reported_minutes(batch.entries) or Decimal("0")
+            actual_minutes = self._sum_work_minutes_for_period(
+                relevant_work_entries,
+                period_start=previous_boundary,
+                period_end=boundary,
+            )
+            row_payloads.append(
+                {
+                    "batch": batch,
+                    "analysis_at": analysis_at,
+                    "boundary": boundary,
+                    "measurement_minutes": measurement_minutes,
+                    "actual_minutes": actual_minutes,
+                    "extra_work_tickets": [],
+                    "extra_work_minutes": Decimal("0"),
+                    "period_start": previous_boundary,
+                    "period_end": boundary,
+                }
+            )
+            previous_boundary = boundary
+
+        tickets = list(
+            self.db.scalars(
+                select(ExtraWorkTicket)
+                .options(selectinload(ExtraWorkTicket.entries))
+                .where(ExtraWorkTicket.site_id == site_id)
+                .where(ExtraWorkTicket.status != "draft")
+                .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
+            ).all()
+        )
+        for ticket in tickets:
+            ticket_minutes = self._extra_work_ticket_planned_minutes(ticket)
+            ticket_read = MeasurementTimeAnalysisExtraWorkTicketRead(
+                id=ticket.id,
+                display_number=ticket.display_number,
+                title=ticket.title,
+                status=ticket.status,
+                relevant_at=self._extra_work_ticket_timestamp(ticket),
+                planned_minutes=ticket_minutes,
+            )
+            row_index = self._find_analysis_row_index(row_payloads, ticket_read.relevant_at)
+            row_payloads[row_index]["extra_work_tickets"].append(ticket_read)
+            row_payloads[row_index]["extra_work_minutes"] = (
+                row_payloads[row_index]["extra_work_minutes"] + ticket_minutes
+            )
+
+        planned_total = Decimal("0")
+        actual_total = Decimal("0")
+        for payload in row_payloads:
+            batch = payload["batch"]
+            measurement_minutes = payload["measurement_minutes"]
+            extra_work_minutes = payload["extra_work_minutes"]
+            planned_minutes = measurement_minutes + extra_work_minutes
+            actual_minutes = payload["actual_minutes"]
+            deviation_minutes = actual_minutes - planned_minutes
+            planned_total += planned_minutes
+            actual_total += actual_minutes
+            rows.append(
+                MeasurementTimeAnalysisRowRead(
+                    measurement_batch_id=batch.id,
+                    measurement_number=batch.number,
+                    measurement_title=batch.title,
+                    measurement_status=batch.status,
+                    analysis_at=payload["analysis_at"],
+                    period_start=payload["period_start"],
+                    period_end=payload["period_end"],
+                    measurement_minutes=measurement_minutes,
+                    extra_work_minutes=extra_work_minutes,
+                    planned_minutes=planned_minutes,
+                    actual_minutes=actual_minutes,
+                    deviation_minutes=deviation_minutes,
+                    consumption_percent=(
+                        float((actual_minutes / planned_minutes) * Decimal("100"))
+                        if planned_minutes > 0
+                        else None
+                    ),
+                    extra_work_tickets=payload["extra_work_tickets"],
+                )
+            )
+
+        deviation_total = actual_total - planned_total
+        return MeasurementTimeAnalysisRead(
+            site_id=site_id,
+            totals=MeasurementTimeAnalysisTotalsRead(
+                planned_minutes=planned_total,
+                actual_minutes=actual_total,
+                deviation_minutes=deviation_total,
+                consumption_percent=(
+                    float((actual_total / planned_total) * Decimal("100"))
+                    if planned_total > 0
+                    else None
+                ),
+            ),
+            rows=rows,
+        )
+
     def set_site_batch_billing_status(
         self,
         *,
@@ -1512,6 +1661,103 @@ class MeasurementService:
             total += entry.quantity * entry.measurement_item.minutes_per_unit
             has_minutes = True
         return total if has_minutes else None
+
+    @staticmethod
+    def _analysis_timestamp(batch: SiteMeasurementBatch) -> datetime | None:
+        return batch.submitted_at or batch.customer_signed_at or batch.updated_at or batch.created_at
+
+    @staticmethod
+    def _extra_work_ticket_timestamp(ticket: ExtraWorkTicket) -> datetime | None:
+        return ticket.submitted_at or ticket.customer_signed_at or ticket.updated_at or ticket.created_at
+
+    @staticmethod
+    def _local_analysis_datetime(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(MEASUREMENT_ARCHIVE_TIMEZONE).replace(tzinfo=None)
+
+    @staticmethod
+    def _entry_work_minutes(entry: WorkTimeEntry) -> Decimal:
+        minutes = entry.corrected_work_minutes if entry.corrected_work_minutes is not None else entry.work_minutes
+        return Decimal(str(minutes or 0))
+
+    def _sum_work_minutes_for_period(
+        self,
+        entries: list[WorkTimeEntry],
+        *,
+        period_start: datetime | None,
+        period_end: datetime | None,
+    ) -> Decimal:
+        total = Decimal("0")
+        for entry in entries:
+            entry_minutes = self._entry_work_minutes(entry)
+            if entry_minutes <= 0:
+                continue
+            ratio = self._work_entry_overlap_ratio(entry, period_start=period_start, period_end=period_end)
+            if ratio <= 0:
+                continue
+            total += entry_minutes * ratio
+        return total
+
+    @staticmethod
+    def _work_entry_overlap_ratio(
+        entry: WorkTimeEntry,
+        *,
+        period_start: datetime | None,
+        period_end: datetime | None,
+    ) -> Decimal:
+        if period_end is None:
+            return Decimal("0")
+
+        if entry.start_time is not None and entry.end_time is not None:
+            entry_start = datetime.combine(entry.work_date, entry.start_time)
+            entry_end = datetime.combine(entry.work_date, entry.end_time)
+            if entry_end <= entry_start:
+                entry_end += timedelta(days=1)
+            overlap_start = max(entry_start, period_start) if period_start is not None else entry_start
+            overlap_end = min(entry_end, period_end)
+            if overlap_end <= overlap_start:
+                return Decimal("0")
+            interval_seconds = Decimal(str((entry_end - entry_start).total_seconds()))
+            overlap_seconds = Decimal(str((overlap_end - overlap_start).total_seconds()))
+            return overlap_seconds / interval_seconds if interval_seconds > 0 else Decimal("0")
+
+        entry_day = datetime.combine(entry.work_date, time(12, 0))
+        if period_start is not None and entry_day <= period_start:
+            return Decimal("0")
+        if entry_day > period_end:
+            return Decimal("0")
+        return Decimal("1")
+
+    def _find_analysis_row_index(
+        self,
+        row_payloads: list[dict[str, object]],
+        relevant_at: datetime | None,
+    ) -> int:
+        if not row_payloads:
+            return 0
+        if relevant_at is None:
+            return len(row_payloads) - 1
+
+        relevant_boundary = self._local_analysis_datetime(relevant_at)
+        selected_index = 0
+        for index, payload in enumerate(row_payloads):
+            boundary = payload["boundary"]
+            if boundary is None:
+                selected_index = index
+                continue
+            if boundary <= relevant_boundary:
+                selected_index = index
+                continue
+            break
+        return selected_index
+
+    @staticmethod
+    def _extra_work_ticket_planned_minutes(ticket: ExtraWorkTicket) -> Decimal:
+        total_hours = ticket.total_hours or Decimal("0")
+        if total_hours <= 0 and ticket.estimated_hours is not None:
+            total_hours = ticket.estimated_hours
+        return total_hours * Decimal("60")
 
     def _build_entry(self, entry: SiteMeasurementEntry) -> MeasurementEntryRead:
         return MeasurementEntryRead(
