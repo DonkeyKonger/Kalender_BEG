@@ -12749,6 +12749,14 @@ button.person-chip:focus-visible {
   accent-color: #2f6096;
 }
 
+.mobile-project-email-option.is-static {
+  background: #ffffff;
+}
+
+.mobile-project-email-option.is-static svg {
+  color: #2f6096;
+}
+
 .mobile-project-email-option span {
   display: grid;
   gap: 2px;

@@ -13,6 +13,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketCreate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
+    ExtraWorkTicketEmailSendRead,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketStatusUpdate,
@@ -35,6 +36,7 @@ from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
+from app.services.extra_work_email_service import ExtraWorkEmailService
 from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -357,6 +359,23 @@ def download_my_assignment_extra_work_ticket_pdf(
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/send-email",
+    response_model=ExtraWorkTicketEmailSendRead,
+)
+def send_my_assignment_extra_work_ticket_email(
+    assignment_id: int,
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketEmailSendRead:
+    return ExtraWorkEmailService(db).send_mobile_ticket_email(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
     )
 
 

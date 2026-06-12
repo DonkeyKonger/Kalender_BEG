@@ -339,6 +339,12 @@ export type SiteEmailRecipientsUpdate = {
   }>;
 };
 
+export type ExtraWorkTicketEmailSendResponse = {
+  sent_at: string;
+  recipients: string[];
+  filename: string;
+};
+
 export type MobileExtraWorkTicketPhoto = {
   id: number;
   site_id: number;

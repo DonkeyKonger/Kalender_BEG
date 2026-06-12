@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from io import BytesIO
 from types import SimpleNamespace
 
@@ -15,6 +15,7 @@ from app.api.dependencies import get_current_app_user
 from app.core.database import get_db
 from app.main import app
 from app.models import Base
+from app.models.audit_log import AuditLog
 from app.models.assignment import Assignment
 from app.models.customer import Customer, CustomerContact
 from app.models.enums import UserRole
@@ -22,6 +23,7 @@ from app.models.extra_work_ticket import ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
+from app.models.site_email_recipient import SiteEmailRecipient
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkSignaturePoint,
@@ -33,6 +35,8 @@ from app.schemas.extra_work import (
 )
 from app.schemas.site_email_recipient import SiteEmailRecipientPayload, SiteEmailRecipientsUpdate
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
+from app.services.extra_work_email_service import ExtraWorkEmailService
+from app.services import extra_work_email_service as extra_work_email_module
 from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import extra_work_service as extra_work_module
 from app.services.extra_work_service import ExtraWorkService
@@ -486,6 +490,146 @@ def test_mobile_extra_work_photo_upload_blocks_after_five_photos():
 
     assert error.value.status_code == 400
     assert error.value.detail == "Maximal 5 Fotos erlaubt."
+
+
+def test_mobile_extra_work_email_send_requires_selected_recipients():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    ticket = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    stored_ticket = db.get(extra_work_module.ExtraWorkTicket, ticket.id)
+    assert stored_ticket is not None
+    stored_ticket.customer_signature_name = "Kunde"
+    stored_ticket.customer_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    stored_ticket.customer_signed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    stored_ticket.worker_signature_name = "Max Monteur"
+    stored_ticket.worker_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    stored_ticket.worker_signed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        ExtraWorkEmailService(db).send_mobile_ticket_email(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Keine E-Mail-Empfänger hinterlegt."
+
+
+def test_mobile_extra_work_email_send_requires_signatures():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(
+        SiteEmailRecipient(
+            site_id=site.id,
+            email="kunde@example.de",
+            label="Kunde",
+            source="manual",
+            is_selected=True,
+        )
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    ticket = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    with pytest.raises(HTTPException) as error:
+        ExtraWorkEmailService(db).send_mobile_ticket_email(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+        )
+
+    assert error.value.status_code == 400
+    assert error.value.detail == "Kundenunterschrift fehlt."
+
+
+def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch):
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add_all([
+        assignment,
+        SiteEmailRecipient(
+            site_id=site.id,
+            email="kunde@example.de",
+            label="Kunde",
+            source="manual",
+            is_selected=True,
+        ),
+    ])
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    ticket = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    stored_ticket = db.get(extra_work_module.ExtraWorkTicket, ticket.id)
+    assert stored_ticket is not None
+    stored_ticket.customer_signature_name = "Kunde"
+    stored_ticket.customer_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    stored_ticket.customer_signed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    stored_ticket.worker_signature_name = "Max Monteur"
+    stored_ticket.worker_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    stored_ticket.worker_signed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    db.commit()
+    deliveries = []
+
+    class FakePdfService:
+        def __init__(self, db):
+            self.db = db
+
+        def build_mobile_ticket_pdf(self, *, assignment_id, ticket_id, current_user):
+            return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
+
+    class FakeEmailDeliveryService:
+        def send_document_email(self, *, recipients, subject, body, attachment):
+            deliveries.append({
+                "recipients": recipients,
+                "subject": subject,
+                "body": body,
+                "filename": attachment.filename,
+                "content": attachment.content,
+                "content_type": attachment.content_type,
+            })
+
+    monkeypatch.setattr(extra_work_email_module, "ExtraWorkPdfService", FakePdfService)
+    monkeypatch.setattr(extra_work_email_module, "EmailDeliveryService", FakeEmailDeliveryService)
+
+    result = ExtraWorkEmailService(db).send_mobile_ticket_email(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    audit_log = db.query(AuditLog).filter_by(action="extra_work.email_sent").one()
+    assert result.recipients == ["kunde@example.de"]
+    assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
+    assert deliveries == [
+        {
+            "recipients": ["kunde@example.de"],
+            "subject": "Stundenzettel_3_Hauptauftrag",
+            "body": "Guten Tag,\n\nanbei erhalten Sie den aktuellen Stundenzettel als PDF.\n\nMit freundlichen Grüßen\nBEG Baustellenkalender",
+            "filename": "Stundenzettel_3_Hauptauftrag.pdf",
+            "content": b"%PDF-test",
+            "content_type": "application/pdf",
+        }
+    ]
+    assert audit_log.entity_type == "extra_work_ticket"
+    assert audit_log.entity_id == ticket.id
+    assert audit_log.new_value_json["recipients"] == ["kunde@example.de"]
 
 
 def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():

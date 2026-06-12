@@ -35,7 +35,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
+import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -529,6 +529,10 @@ function MobileExtraWorkTab({
             setPhotoMessageTone("info");
             setMessage(count === 1 ? "Ein Kundenempfänger gespeichert." : `${count} Kundenempfänger gespeichert.`);
           }}
+          onEmailSent={(result) => {
+            setPhotoMessageTone("info");
+            setMessage(`E-Mail gesendet an ${result.recipients.join(", ")}.`);
+          }}
           onWorkerSigned={(updatedOrder) => {
             mergeUpdatedOrder(updatedOrder);
             setPhotoMessageTone("info");
@@ -645,6 +649,7 @@ function ExtraWorkOrderOverview({
   onCustomerSigned,
   onTitleUpdated,
   onEmailRecipientsSaved,
+  onEmailSent,
   onWorkerSigned,
   onSubmit,
 }: {
@@ -663,6 +668,7 @@ function ExtraWorkOrderOverview({
   onCustomerSigned: (order: MobileExtraWorkTicket) => void;
   onTitleUpdated: (order: MobileExtraWorkTicket) => void;
   onEmailRecipientsSaved: (count: number) => void;
+  onEmailSent: (result: ExtraWorkTicketEmailSendResponse) => void;
   onWorkerSigned: (order: MobileExtraWorkTicket) => void;
   onSubmit: () => Promise<void>;
 }) {
@@ -676,12 +682,54 @@ function ExtraWorkOrderOverview({
   const [isSigningWorker, setIsSigningWorker] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isEditingEmailRecipients, setIsEditingEmailRecipients] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState<SiteEmailRecipient[]>([]);
+  const [isLoadingEmailRecipients, setIsLoadingEmailRecipients] = useState(true);
+  const [isConfirmingEmailSend, setIsConfirmingEmailSend] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSendError, setEmailSendError] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const hasCustomerSignature = Boolean(order.customer_signed_at);
   const hasWorkerSignature = Boolean(order.worker_signed_at);
   const isPhotoLimitReached = (order.photo_count ?? 0) >= photoLimit;
   const canRename = order.status === "draft" && !hasCustomerSignature;
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
+  const emailPdfFilename = `${formatMobileExtraWorkOrderTitle(order)}.pdf`;
+  const emailSendPrerequisitesMet = emailRecipients.length > 0 && hasCustomerSignature && hasWorkerSignature;
+  const emailSendHint = getExtraWorkEmailSendHint({
+    hasRecipients: emailRecipients.length > 0,
+    hasCustomerSignature,
+    hasWorkerSignature,
+    isLoadingRecipients: isLoadingEmailRecipients,
+  });
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadEmailRecipients(): Promise<void> {
+      setIsLoadingEmailRecipients(true);
+      setEmailSendError(null);
+      try {
+        const response = await api.assignmentEmailRecipients(assignmentId);
+        if (isActive) {
+          setEmailRecipients(response.recipients);
+        }
+      } catch (requestError) {
+        if (isActive) {
+          setEmailSendError(readApiError(requestError, "E-Mail-Empfänger konnten nicht geladen werden."));
+          setEmailRecipients([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingEmailRecipients(false);
+        }
+      }
+    }
+
+    void loadEmailRecipients();
+    return () => {
+      isActive = false;
+    };
+  }, [assignmentId, order.id]);
 
   async function openExtraWorkPdf(): Promise<void> {
     if (isOpeningPdf) {
@@ -706,6 +754,23 @@ function ExtraWorkOrderOverview({
       setPdfError(readApiError(requestError, `${kindLabel}-PDF konnte nicht geöffnet werden.`));
     } finally {
       setIsOpeningPdf(false);
+    }
+  }
+
+  async function sendExtraWorkEmail(): Promise<void> {
+    if (!emailSendPrerequisitesMet || isSendingEmail) {
+      return;
+    }
+    setIsSendingEmail(true);
+    setEmailSendError(null);
+    try {
+      const result = await api.sendMobileExtraWorkTicketEmail(assignmentId, order.id);
+      setIsConfirmingEmailSend(false);
+      onEmailSent(result);
+    } catch (requestError) {
+      setEmailSendError(readApiError(requestError, "E-Mail konnte nicht gesendet werden."));
+    } finally {
+      setIsSendingEmail(false);
     }
   }
 
@@ -792,6 +857,20 @@ function ExtraWorkOrderOverview({
           className="mobile-measurement-overview-action"
           type="button"
           onClick={() => {
+            setEmailSendError(null);
+            setIsConfirmingEmailSend(true);
+          }}
+          disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
+        >
+          <Mail aria-hidden="true" size={18} />
+          <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
+        </button>
+        {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
+        {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
+        <button
+          className="mobile-measurement-overview-action"
+          type="button"
+          onClick={() => {
             setPdfError(null);
             setIsSigningWorker(true);
           }}
@@ -845,8 +924,22 @@ function ExtraWorkOrderOverview({
           onClose={() => setIsEditingEmailRecipients(false)}
           onSaved={(count) => {
             setIsEditingEmailRecipients(false);
+            void api.assignmentEmailRecipients(assignmentId).then((response) => {
+              setEmailRecipients(response.recipients);
+            }).catch(() => undefined);
             onEmailRecipientsSaved(count);
           }}
+        />
+      ) : null}
+      {isConfirmingEmailSend ? (
+        <ExtraWorkEmailSendDialog
+          filename={emailPdfFilename}
+          isSending={isSendingEmail}
+          order={order}
+          recipients={emailRecipients}
+          error={emailSendError}
+          onClose={() => setIsConfirmingEmailSend(false)}
+          onConfirm={() => void sendExtraWorkEmail()}
         />
       ) : null}
       {isSigningWorker ? (
@@ -931,6 +1024,70 @@ function ExtraWorkTitleDialog({
           </button>
           <button className="primary-action" type="button" onClick={() => void saveTitle()} disabled={!canRename || isSaving}>
             {isSaving ? "Speichert..." : "Speichern"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtraWorkEmailSendDialog({
+  order,
+  recipients,
+  filename,
+  isSending,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  order: MobileExtraWorkTicket;
+  recipients: SiteEmailRecipient[];
+  filename: string;
+  isSending: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSending ? undefined : onClose}>
+      <div
+        className="mobile-project-email-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-email-send-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-project-email-dialog-head">
+          <h2 id="mobile-extra-work-email-send-title">Stundenzettel senden?</h2>
+          <p>Der aktuelle {formatMobileExtraWorkKindLabel(order.kind)} wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet.</p>
+        </div>
+
+        <div className="mobile-project-email-list">
+          <div className="mobile-project-email-option is-static">
+            <FileText aria-hidden="true" size={18} />
+            <span>
+              <strong>{filename}</strong>
+              <small>PDF-Dokument</small>
+            </span>
+          </div>
+          {recipients.map((recipient) => (
+            <div className="mobile-project-email-option is-static" key={recipient.email}>
+              <Mail aria-hidden="true" size={18} />
+              <span>
+                <strong>{recipient.label || recipient.email}</strong>
+                {recipient.label ? <small>{recipient.email}</small> : null}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {error ? <p className="form-error">{error}</p> : null}
+        <div className="mobile-project-email-actions">
+          <button className="secondary-action" type="button" onClick={onClose} disabled={isSending}>
+            Abbrechen
+          </button>
+          <button className="primary-action" type="button" onClick={onConfirm} disabled={isSending}>
+            {isSending ? "Sendet..." : "Jetzt senden"}
           </button>
         </div>
       </div>
@@ -4828,6 +4985,26 @@ function formatMobileExtraWorkKindLabel(kind: string): string {
 function getMobileExtraWorkPdfFilename(order: MobileExtraWorkTicket): string {
   const number = order.display_number || String(order.id);
   return `Zusatzauftrag_${number.replace(/[\\/:*?"<>|\s]+/g, "_")}.pdf`;
+}
+
+function getExtraWorkEmailSendHint({
+  hasRecipients,
+  hasCustomerSignature,
+  hasWorkerSignature,
+  isLoadingRecipients,
+}: {
+  hasRecipients: boolean;
+  hasCustomerSignature: boolean;
+  hasWorkerSignature: boolean;
+  isLoadingRecipients: boolean;
+}): string | null {
+  if (isLoadingRecipients) {
+    return "E-Mail-Empfänger werden geprüft.";
+  }
+  if (hasRecipients && hasCustomerSignature && hasWorkerSignature) {
+    return null;
+  }
+  return "E-Mail-Versand möglich, sobald Empfänger und Unterschriften vorhanden sind.";
 }
 
 function createEmptyExtraWorkEntryForm(workerName = ""): ExtraWorkEntryFormState {

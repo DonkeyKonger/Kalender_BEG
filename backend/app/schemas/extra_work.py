@@ -137,3 +137,9 @@ class ExtraWorkTicketRead(BaseModel):
     estimated_hours: float | None
     created_at: datetime
     updated_at: datetime
+
+
+class ExtraWorkTicketEmailSendRead(BaseModel):
+    sent_at: datetime
+    recipients: list[str]
+    filename: str

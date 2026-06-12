@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     ctrack_base_url: str | None = Field(default=None, alias="CTRACK_BASE_URL")
     ctrack_username: str | None = Field(default=None, alias="CTRACK_USERNAME")
     ctrack_password: str | None = Field(default=None, alias="CTRACK_PASSWORD")
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from_email: str | None = Field(default=None, alias="SMTP_FROM_EMAIL")
+    smtp_from_name: str = Field(default="BEG Baustellenkalender", alias="SMTP_FROM_NAME")
+    smtp_use_starttls: bool = Field(default=True, alias="SMTP_USE_STARTTLS")
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
