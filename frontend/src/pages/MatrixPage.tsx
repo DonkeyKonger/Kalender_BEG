@@ -2027,7 +2027,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
             className="site-color"
             style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
           />
-          <Link className="matrix-site-link" to={`/sites/${row.site.id}`}>
+          <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>
             <strong>{row.site.name}</strong>
             {row.site.site_number && <small className="matrix-site-number">{row.site.site_number}</small>}
             {row.site.location && <span className="matrix-site-location">{row.site.location}</span>}

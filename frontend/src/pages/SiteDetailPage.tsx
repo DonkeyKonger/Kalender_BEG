@@ -2,7 +2,7 @@ import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as Fi
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
@@ -69,7 +69,10 @@ export function SiteDetailPage() {
   const canEditSite = user?.role === "admin" || user?.role === "project_manager";
   const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const siteDetailReturnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+  const siteDetailBackPath = siteDetailReturnTo === "matrix" ? "/matrix" : "/sites";
   const requestedProjectTab = searchParams.get("tab");
   const requestedMeasurementSubtab = searchParams.get("measurementSubtab");
   const [site, setSite] = useState<Site | null>(null);
@@ -780,7 +783,7 @@ export function SiteDetailPage() {
 
   return (
     <section className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}`}>
-      <Link className="back-link" to="/sites">
+      <Link className="back-link" to={siteDetailBackPath}>
         <ArrowLeft aria-hidden="true" size={16} />
         <span>Baustellen</span>
       </Link>
