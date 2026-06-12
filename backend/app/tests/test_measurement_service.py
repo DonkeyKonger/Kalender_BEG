@@ -787,7 +787,7 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     from app.models.person import Person
     from app.models.site_measurement_item import SiteMeasurementBatch
     from app.models.user import User
-    from app.schemas.measurement import CustomerSignatureCreate, MeasurementEntryCreate
+    from app.schemas.measurement import CustomerSignatureCreate, MeasurementEntryCreate, WorkerSignatureCreate
 
     db = db_session()
     site = create_site(db)
@@ -882,6 +882,32 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert stored_batch.customer_signature_place == "Klinikweg 8, 77815 Buehl"
     assert stored_batch.customer_signed_snapshot is not None
     assert stored_batch.customer_signed_snapshot["version_label"] == "customer_signed"
+
+    with pytest.raises(HTTPException) as locked_entry:
+        service.create_mobile_entry(
+            assignment_id=assignment.id,
+            batch_id=batch.id,
+            measurement_item_id=item.id,
+            current_user=user,
+            payload=MeasurementEntryCreate(area_or_comment="OG", quantity=Decimal("1.00")),
+        )
+    assert locked_entry.value.status_code == 409
+
+    worker_signed = service.sign_mobile_batch_worker(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+        payload=WorkerSignatureCreate(
+            worker_name="Max Monteur",
+            signature_strokes=[
+                [{"x": 0.1, "y": 0.4}, {"x": 0.5, "y": 0.45}, {"x": 0.9, "y": 0.5}]
+            ],
+        ),
+    )
+    assert worker_signed.worker_signature_name == "Max Monteur"
+    assert worker_signed.worker_signed_at is not None
+    assert worker_signed.customer_signed_at == signed.customer_signed_at
+    assert worker_signed.is_locked_for_worker is True
 
     from app.services.measurement_pdf_service import MeasurementPdfService
 

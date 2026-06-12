@@ -435,11 +435,6 @@ class MeasurementService:
     ) -> MobileMeasurementBatchRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         batch = self._get_batch_for_site(batch_id, assignment.site_id)
-        if batch.customer_signed_at is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.",
-            )
         if batch.status in {"billed", "approved", "closed"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
