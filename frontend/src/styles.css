@@ -4294,6 +4294,12 @@ button.person-chip:focus-visible {
   margin: -4px 0 0;
 }
 
+.mobile-time-sheet-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
 .mobile-time-save-button {
   width: 100%;
   min-height: 46px;
@@ -4431,6 +4437,12 @@ button.person-chip:focus-visible {
   .mobile-calendar-more-chip,
   .mobile-calendar-day-plan {
     font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 350px) {
+  .mobile-time-sheet-actions {
+    grid-template-columns: 1fr;
   }
 }
 

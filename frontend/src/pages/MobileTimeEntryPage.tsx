@@ -630,8 +630,14 @@ export function MobileTimeEntryPage() {
           </section>
 
           {sheetMode !== "closed" ? (
-            <div className="mobile-dialog-backdrop mobile-time-sheet-backdrop" role="presentation">
-              <div className="mobile-project-email-dialog mobile-time-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-sheet-title">
+            <div className="mobile-dialog-backdrop mobile-time-sheet-backdrop" role="presentation" onClick={closeTimeEntrySheet}>
+              <div
+                className="mobile-project-email-dialog mobile-time-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mobile-time-sheet-title"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <div className="mobile-project-email-dialog-head mobile-time-sheet-heading">
                   <span>{editingEntry ? "Eintrag bearbeiten" : "Zeit erfassen"}</span>
                   <h2 id="mobile-time-sheet-title">{sheetSiteLabel}</h2>
@@ -717,12 +723,14 @@ export function MobileTimeEntryPage() {
                     </div>
                   ) : null}
 
-                  <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
-                    {isSaving ? "Speichert..." : editingEntry ? "Eintrag aktualisieren" : "Zeit hinzufügen"}
-                  </button>
-                  <button className="mobile-time-secondary-button" type="button" onClick={closeTimeEntrySheet}>
-                    Zurück zur Baustellenauswahl
-                  </button>
+                  <div className="mobile-time-sheet-actions">
+                    <button className="mobile-time-secondary-button" type="button" onClick={closeTimeEntrySheet}>
+                      Zurück
+                    </button>
+                    <button className="primary-action mobile-time-save-button" disabled={isSaving} type="submit">
+                      {isSaving ? "Speichert..." : editingEntry ? "Eintrag aktualisieren" : "Zeit hinzufügen"}
+                    </button>
+                  </div>
                 </form>
               </div>
             </div>
