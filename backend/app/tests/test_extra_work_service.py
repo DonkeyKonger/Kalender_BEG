@@ -620,8 +620,8 @@ def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch
     assert deliveries == [
         {
             "recipients": ["kunde@example.de"],
-            "subject": "Stundenzettel_3_Hauptauftrag",
-            "body": "Guten Tag,\n\nanbei erhalten Sie den aktuellen Stundenzettel als PDF.\n\nMit freundlichen Grüßen\nBEG Baustellenkalender",
+            "subject": "Anliegend erhalten Sie Schüchtermann Klinik - Stundenzettel 1 - Hauptauftrag",
+            "body": "Sehr geehrte Damen und Herren,\n\nanliegend erhalten Sie Schüchtermann Klinik - Stundenzettel 1 - Hauptauftrag.\n\nMit freundlichen Grüßen\n\nMax Monteur",
             "filename": "Stundenzettel_3_Hauptauftrag.pdf",
             "content": b"%PDF-test",
             "content_type": "application/pdf",

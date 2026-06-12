@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket
+from app.models.person import Person
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.models.user import User
 from app.schemas.extra_work import ExtraWorkTicketEmailSendRead
@@ -43,12 +44,15 @@ class ExtraWorkEmailService:
             ticket_id=ticket_id,
             current_user=current_user,
         )
-        subject = f"{filename.replace('.pdf', '')}"
+        site_name = _clean_text(ticket.site.name if ticket.site else None) or "Baustelle"
+        document_name = _document_name(ticket, filename)
+        worker_name = _worker_name(assignment, current_user)
+        subject = f"Anliegend erhalten Sie {site_name} - {document_name}"
         body = (
-            "Guten Tag,\n\n"
-            "anbei erhalten Sie den aktuellen Stundenzettel als PDF.\n\n"
-            "Mit freundlichen Grüßen\n"
-            "BEG Baustellenkalender"
+            "Sehr geehrte Damen und Herren,\n\n"
+            f"anliegend erhalten Sie {site_name} - {document_name}.\n\n"
+            "Mit freundlichen Grüßen\n\n"
+            f"{worker_name}"
         )
         EmailDeliveryService().send_document_email(
             recipients=recipients,
@@ -87,7 +91,7 @@ class ExtraWorkEmailService:
         if current_user.person_id is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Dieser Benutzer ist keiner Person zugeordnet.")
         assignment = self.db.scalar(
-            select(Assignment).where(
+            select(Assignment).options(selectinload(Assignment.person)).where(
                 Assignment.id == assignment_id,
                 Assignment.person_id == current_user.person_id,
             )
@@ -121,3 +125,37 @@ class ExtraWorkEmailService:
                 .order_by(SiteEmailRecipient.email)
             )
         )
+
+
+def _document_name(ticket: ExtraWorkTicket, filename: str) -> str:
+    prefix = "Stundenfreigabe" if ticket.kind == "approval" else "Stundenzettel"
+    title = _clean_text(ticket.title) or "Hauptauftrag"
+    if ticket.sequence_number:
+        return f"{prefix} {ticket.sequence_number} - {title}"
+    return _clean_text(filename.removesuffix(".pdf")) or prefix
+
+
+def _worker_name(assignment: Assignment, current_user: User) -> str:
+    assignment_person = getattr(assignment, "person", None)
+    return (
+        _person_full_name(assignment_person)
+        or _person_full_name(getattr(current_user, "person", None))
+        or _clean_text(getattr(current_user, "display_name", None))
+        or _clean_text(getattr(current_user, "username", None))
+        or "BEG"
+    )
+
+
+def _person_full_name(person: Person | None) -> str:
+    if person is None:
+        return ""
+    first_name = _clean_text(person.first_name)
+    last_name = _clean_text(person.last_name)
+    full_name = " ".join(part for part in [first_name, last_name] if part)
+    return full_name or _clean_text(person.display_name)
+
+
+def _clean_text(value: str | None) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).replace("\r", " ").split())
