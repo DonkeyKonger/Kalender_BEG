@@ -313,7 +313,8 @@ class ExtraWorkService:
                 "Dieser Stundenzettel ist bereits abgeschlossen.",
             )
 
-        worker_name = " ".join(payload.worker_name.split())
+        submitted_worker_name = " ".join(payload.worker_name.split())
+        worker_name = self._format_person_full_name(assignment.person) or submitted_worker_name
         if not worker_name:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurname ist erforderlich.")
         valid_strokes = [stroke for stroke in payload.signature_strokes if len(stroke) >= 2]
@@ -481,7 +482,7 @@ class ExtraWorkService:
                 detail="Dieser Benutzer ist keiner Person zugeordnet.",
             )
         assignment = self.db.scalar(
-            select(Assignment).where(
+            select(Assignment).options(selectinload(Assignment.person)).where(
                 Assignment.id == assignment_id,
                 Assignment.person_id == current_user.person_id,
             )
@@ -550,6 +551,15 @@ class ExtraWorkService:
         if user.person and user.person.display_name:
             return user.person.display_name
         return user.display_name or user.username
+
+    @staticmethod
+    def _format_person_full_name(person: object | None) -> str | None:
+        if person is None:
+            return None
+        first_name = (getattr(person, "first_name", None) or "").strip()
+        last_name = (getattr(person, "last_name", None) or "").strip()
+        full_name = " ".join(part for part in (first_name, last_name) if part)
+        return full_name or (getattr(person, "display_name", None) or "").strip() or None
 
     def _validate_approval_ticket_id(self, site_id: int, approval_ticket_id: int | None) -> int | None:
         if approval_ticket_id is None:
