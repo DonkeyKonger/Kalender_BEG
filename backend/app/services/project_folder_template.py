@@ -1,7 +1,7 @@
 PROJECT_FOLDER_TEMPLATE = [
     {"sort_order": 1, "name": "Angebote", "folder_key": "angebote", "visible_for_roles": ["admin", "project_manager", "office"]},
     {"sort_order": 2, "name": "Nachtragsangebote", "folder_key": "nachtragsangebote", "visible_for_roles": ["admin", "project_manager", "office"]},
-    {"sort_order": 3, "name": "Auftraege", "folder_key": "auftraege", "visible_for_roles": ["admin", "project_manager", "office"]},
+    {"sort_order": 3, "name": "Aufträge", "folder_key": "auftraege", "visible_for_roles": ["admin", "project_manager", "office"]},
     {"sort_order": 4, "name": "Leistungsverzeichnis", "folder_key": "leistungsverzeichnis", "visible_for_roles": ["admin", "project_manager", "office"]},
     {"sort_order": 5, "name": "Terminplan", "folder_key": "terminplan", "visible_for_roles": ["admin", "project_manager", "office", "monteur"]},
     {"sort_order": 6, "name": "Schriftverkehr", "folder_key": "schriftverkehr", "visible_for_roles": ["admin", "project_manager", "office"]},

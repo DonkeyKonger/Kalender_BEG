@@ -25,10 +25,14 @@ class ProjectFolderService:
         existing = self.db.scalars(
             select(ProjectFolder).where(ProjectFolder.site_id == site_id)
         ).all()
-        existing_keys = {folder.folder_key for folder in existing}
+        existing_by_key = {folder.folder_key: folder for folder in existing}
+        for template in PROJECT_FOLDER_TEMPLATE:
+            folder = existing_by_key.get(template["folder_key"])
+            if folder is not None and folder.name != template["name"]:
+                folder.name = template["name"]
         created = []
         for template in PROJECT_FOLDER_TEMPLATE:
-            if template["folder_key"] in existing_keys:
+            if template["folder_key"] in existing_by_key:
                 continue
             folder = ProjectFolder(
                 site_id=site_id,
@@ -39,7 +43,7 @@ class ProjectFolderService:
             )
             self.db.add(folder)
             created.append(folder)
-        if created:
+        if created or existing:
             self.db.flush()
         return [*existing, *created]
 

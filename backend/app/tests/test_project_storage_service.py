@@ -365,6 +365,7 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
     assert len(result["subfolders"]) == 15
     assert graph.posts[0][1]["name"] == "8007_Schuechtermann_Klinik"
     assert graph.posts[1][1]["name"] == "01_Angebote"
+    assert graph.posts[3][1]["name"] == "03_Aufträge"
     assert graph.posts[-1][1]["name"] == "15_Mails"
     assert "super-secret-value" not in str(result)
 

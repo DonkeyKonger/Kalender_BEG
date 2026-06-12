@@ -52,6 +52,26 @@ def test_default_project_folders_are_created_once():
     assert stored_count == 15
 
 
+def test_default_project_folders_normalize_legacy_auftraege_name():
+    db = db_session()
+    site = create_site(db)
+    legacy_folder = ProjectFolder(
+        site_id=site.id,
+        sort_order=3,
+        name="Auftraege",
+        folder_key="auftraege",
+        is_active=True,
+    )
+    db.add(legacy_folder)
+    db.flush()
+
+    folders = ProjectFolderService(db).create_default_project_folders_for_site(site.id)
+
+    auftraege = next(folder for folder in folders if folder.folder_key == "auftraege")
+    assert auftraege.name == "Aufträge"
+    assert legacy_folder.name == "Aufträge"
+
+
 def test_project_folder_visibility_by_role():
     db = db_session()
     site = create_site(db)

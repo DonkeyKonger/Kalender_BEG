@@ -1739,14 +1739,6 @@ function ExtraWorkTab({
                     type="button"
                     className="measurement-review-pdf-action"
                     disabled={isPdfBusy}
-                    onClick={() => onOpenPdf(ticket)}
-                  >
-                    {isOpeningPdf ? "Öffnet..." : "Ansehen"}
-                  </button>
-                  <button
-                    type="button"
-                    className="measurement-review-pdf-action"
-                    disabled={isPdfBusy}
                     onClick={() => onDownloadPdf(ticket)}
                   >
                     {isDownloadingPdf ? "Lädt..." : "PDF"}
@@ -2336,9 +2328,6 @@ function MeasurementTimesheetPanel({
                       percent={projectPositionStats.progressPercent}
                       workerHeadCount={workerHeadCount}
                     />
-                    <p className="measurement-timesheet-progress-note">
-                      {formatMeasurementDuration(projectPositionStats.measuredMinutes)} von {formatMeasurementDuration(projectPositionStats.plannedMinutes)} über Aufmaß erfasst.
-                    </p>
                   </>
                 ) : (
                   <p className="measurement-timesheet-progress-note">
