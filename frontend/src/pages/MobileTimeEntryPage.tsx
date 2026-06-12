@@ -630,9 +630,9 @@ export function MobileTimeEntryPage() {
           </section>
 
           {sheetMode !== "closed" ? (
-            <div className="mobile-time-sheet-backdrop" role="presentation">
-              <div className="mobile-time-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-sheet-title">
-                <div className="mobile-time-sheet-heading">
+            <div className="mobile-dialog-backdrop mobile-time-sheet-backdrop" role="presentation">
+              <div className="mobile-project-email-dialog mobile-time-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-sheet-title">
+                <div className="mobile-project-email-dialog-head mobile-time-sheet-heading">
                   <span>{editingEntry ? "Eintrag bearbeiten" : "Zeit erfassen"}</span>
                   <h2 id="mobile-time-sheet-title">{sheetSiteLabel}</h2>
                   {suggestionMessage ? <p>{suggestionMessage}</p> : null}
