@@ -9,6 +9,8 @@ from app.models.enums import AssignmentType, SiteStatus
 
 class MobilePerson(BaseModel):
     id: int
+    first_name: str | None = None
+    last_name: str | None = None
     display_name: str
     phone: str | None = None
     email: str | None = None

@@ -222,6 +222,8 @@ class MobileAssignmentService:
     def _build_person(self, person: Person) -> MobilePerson:
         return MobilePerson(
             id=person.id,
+            first_name=getattr(person, "first_name", None),
+            last_name=getattr(person, "last_name", None),
             display_name=person.display_name,
             phone=person.phone,
             email=person.email,

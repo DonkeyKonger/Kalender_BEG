@@ -2,6 +2,8 @@ import type { AssignmentType, SiteStatus } from "./matrix";
 
 export type MobilePerson = {
   id: number;
+  first_name: string | null;
+  last_name: string | null;
   display_name: string;
   phone: string | null;
   email: string | null;

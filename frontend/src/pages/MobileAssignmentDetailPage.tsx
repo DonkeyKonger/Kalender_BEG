@@ -448,6 +448,7 @@ function MobileExtraWorkTab({
       return (
         <ExtraWorkEntryPage
           assignmentId={assignment.id}
+          assignmentPerson={assignment.person}
           order={selectedOrder}
           onBack={() => setIsEditingEntry(false)}
           onSaved={async () => {
@@ -1097,11 +1098,13 @@ type ExtraWorkEntryFormState = {
 
 function ExtraWorkEntryPage({
   assignmentId,
+  assignmentPerson,
   order,
   onBack,
   onSaved,
 }: {
   assignmentId: number;
+  assignmentPerson: MobileAssignment["person"];
   order: MobileExtraWorkTicket;
   onBack: () => void;
   onSaved: () => Promise<void>;
@@ -1109,7 +1112,15 @@ function ExtraWorkEntryPage({
   const { user } = useAuth();
   const isApproval = order.kind === "approval";
   const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
-  const [form, setForm] = useState<ExtraWorkEntryFormState>(() => createEmptyExtraWorkEntryForm(user?.display_name || user?.username || ""));
+  const defaultWorkerName = useMemo(
+    () => getExtraWorkDefaultWorkerName(assignmentPerson, user?.display_name || user?.username || ""),
+    [assignmentPerson, user?.display_name, user?.username],
+  );
+  const legacyWorkerNames = useMemo(
+    () => getExtraWorkLegacyWorkerNames(defaultWorkerName, user?.display_name || "", user?.username || ""),
+    [defaultWorkerName, user?.display_name, user?.username],
+  );
+  const [form, setForm] = useState<ExtraWorkEntryFormState>(() => createEmptyExtraWorkEntryForm(defaultWorkerName));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1122,7 +1133,7 @@ function ExtraWorkEntryPage({
       try {
         const entry = await api.mobileExtraWorkTicketEntry(assignmentId, order.id);
         if (isMounted) {
-          setForm(entry ? mapExtraWorkEntryToForm(entry) : createEmptyExtraWorkEntryForm(user?.display_name || user?.username || ""));
+          setForm(entry ? mapExtraWorkEntryToForm(entry, defaultWorkerName, legacyWorkerNames) : createEmptyExtraWorkEntryForm(defaultWorkerName));
         }
       } catch (requestError) {
         if (isMounted) {
@@ -1138,7 +1149,7 @@ function ExtraWorkEntryPage({
     return () => {
       isMounted = false;
     };
-  }, [assignmentId, order.id, user?.display_name, user?.username]);
+  }, [assignmentId, defaultWorkerName, legacyWorkerNames, order.id]);
 
   const totalHours = useMemo(
     () => form.worker_rows.reduce((sum, row) => sum + calculateExtraWorkWorkerTotal(row), 0),
@@ -4384,7 +4395,11 @@ function createEmptyExtraWorkWorkerRow(workerName = ""): ExtraWorkWorkerHoursFor
   };
 }
 
-function mapExtraWorkEntryToForm(entry: MobileExtraWorkTicketEntry): ExtraWorkEntryFormState {
+function mapExtraWorkEntryToForm(
+  entry: MobileExtraWorkTicketEntry,
+  defaultWorkerName = "",
+  legacyWorkerNames: string[] = [],
+): ExtraWorkEntryFormState {
   return {
     component: entry.component,
     floor: entry.floor,
@@ -4394,9 +4409,9 @@ function mapExtraWorkEntryToForm(entry: MobileExtraWorkTicketEntry): ExtraWorkEn
     material_text: entry.material_text ?? "",
     estimated_hours: formatExtraWorkInputValue(entry.estimated_hours),
     worker_rows: entry.worker_rows.length > 0
-      ? entry.worker_rows.map((row) => ({
+      ? entry.worker_rows.map((row, index) => ({
         id: createClientRowId(),
-        worker_name: row.worker_name,
+        worker_name: normalizeExtraWorkWorkerName(row.worker_name, defaultWorkerName, legacyWorkerNames, index),
         monday_hours: formatExtraWorkInputValue(row.monday_hours),
         tuesday_hours: formatExtraWorkInputValue(row.tuesday_hours),
         wednesday_hours: formatExtraWorkInputValue(row.wednesday_hours),
@@ -4405,8 +4420,62 @@ function mapExtraWorkEntryToForm(entry: MobileExtraWorkTicketEntry): ExtraWorkEn
         saturday_hours: formatExtraWorkInputValue(row.saturday_hours),
         sunday_hours: formatExtraWorkInputValue(row.sunday_hours),
       }))
-      : [createEmptyExtraWorkWorkerRow()],
+      : [createEmptyExtraWorkWorkerRow(defaultWorkerName)],
   };
+}
+
+function getExtraWorkDefaultWorkerName(
+  person: MobileAssignment["person"] | null | undefined,
+  fallbackName: string,
+): string {
+  const firstName = cleanExtraWorkNamePart(person?.first_name);
+  const lastName = cleanExtraWorkNamePart(person?.last_name);
+  const combinedName = [firstName, lastName].filter(Boolean).join(" ");
+  if (combinedName) {
+    return combinedName;
+  }
+  const displayName = cleanExtraWorkNamePart(person?.display_name);
+  if (displayName) {
+    return displayName;
+  }
+  return cleanExtraWorkNamePart(fallbackName);
+}
+
+function getExtraWorkLegacyWorkerNames(
+  defaultWorkerName: string,
+  userDisplayName: string,
+  username: string,
+): string[] {
+  const firstDefaultName = defaultWorkerName.split(/\s+/)[0] ?? "";
+  return Array.from(new Set([
+    cleanExtraWorkNamePart(userDisplayName),
+    cleanExtraWorkNamePart(username),
+    cleanExtraWorkNamePart(firstDefaultName),
+  ].filter(Boolean)));
+}
+
+function normalizeExtraWorkWorkerName(
+  workerName: string,
+  defaultWorkerName: string,
+  legacyWorkerNames: string[],
+  rowIndex: number,
+): string {
+  const currentName = cleanExtraWorkNamePart(workerName);
+  if (rowIndex !== 0 || !defaultWorkerName) {
+    return currentName;
+  }
+  if (!currentName) {
+    return defaultWorkerName;
+  }
+  const normalizedCurrent = currentName.toLocaleLowerCase("de-DE");
+  const isLegacyAutoName = legacyWorkerNames.some(
+    (legacyName) => legacyName.toLocaleLowerCase("de-DE") === normalizedCurrent,
+  );
+  return isLegacyAutoName ? defaultWorkerName : currentName;
+}
+
+function cleanExtraWorkNamePart(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
 function createClientRowId(): string {
