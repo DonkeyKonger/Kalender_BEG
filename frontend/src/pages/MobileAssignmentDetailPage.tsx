@@ -4675,19 +4675,18 @@ function WorkerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Monteursunterschrift">
-      <header className="mobile-customer-signature-header">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Zurück</span>
-        </button>
-        <div className="mobile-customer-signature-title">
-          <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
-          <span>Monteursunterschrift erfassen</span>
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSavingSignature ? undefined : onClose}>
+      <div
+        className="mobile-project-email-dialog mobile-worker-signature-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-measurement-worker-signature-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-project-email-dialog-head">
+          <h2 id="mobile-measurement-worker-signature-dialog-title">Monteursunterschrift</h2>
+          <p>{formatMobileMeasurementBatchTitle(batch)}</p>
         </div>
-      </header>
-
-      <main className="mobile-worker-signature-content">
         <section className="mobile-worker-signature-card" aria-label="Monteursunterschrift erfassen">
           <label>
             <span>Monteur</span>
@@ -4730,7 +4729,10 @@ function WorkerSignatureOverlay({
             />
           </div>
           {signatureError ? <p className="form-error">{signatureError}</p> : null}
-          <div className="mobile-customer-signature-actions">
+          <div className="mobile-worker-signature-actions">
+            <button className="secondary-action" type="button" onClick={onClose} disabled={isSavingSignature}>
+              Abbrechen
+            </button>
             <button
               className="secondary-action"
               type="button"
@@ -4752,7 +4754,7 @@ function WorkerSignatureOverlay({
             </button>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
