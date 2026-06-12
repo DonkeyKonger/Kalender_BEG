@@ -1149,7 +1149,14 @@ function OverviewTab({
         <>
           <div className="site-detail-grid">
             <DetailSection title="Stammdaten" icon={Building2}>
-              <DetailItem label="Baustellennummer" value={site.site_number} />
+              <InlineEditableDetailItem
+                label="Baustellennummer"
+                value={site.site_number}
+                canEdit={canEdit}
+                required
+                emptyMessage="Baustellennummer darf nicht leer sein."
+                onSave={(value) => onSaveField({ site_number: value })}
+              />
               <InlineEditableDetailItem
                 label="Kunde"
                 value={site.customer}
@@ -1687,7 +1694,7 @@ function ExtraWorkTab({
 
   return (
     <>
-      <div className="project-record-toolbar">
+      <div className="project-record-toolbar project-extra-work-toolbar">
         <div>
           <h2><FileText aria-hidden="true" size={18} />Zusatzaufträge</h2>
           <p>Mobile Stundenzettel und Zusatzaufträge zu {site.name} zur Einsicht und PDF-Ausgabe.</p>
@@ -4174,11 +4181,15 @@ function InlineEditableDetailItem({
   label,
   value,
   canEdit,
+  required = false,
+  emptyMessage = "Dieses Feld darf nicht leer sein.",
   onSave,
 }: {
   label: string;
   value: string | null | undefined;
   canEdit: boolean;
+  required?: boolean;
+  emptyMessage?: string;
   onSave: (value: string | null) => Promise<void>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -4193,6 +4204,10 @@ function InlineEditableDetailItem({
 
   async function commit(): Promise<void> {
     const nextValue = normalizeInlineEditText(draftValue);
+    if (required && nextValue === null) {
+      setStatus("error");
+      return;
+    }
     if (nextValue === normalizeInlineEditText(value ?? "")) {
       setIsEditing(false);
       return;
@@ -4222,6 +4237,7 @@ function InlineEditableDetailItem({
             className="site-inline-edit-input"
             autoFocus
             value={draftValue}
+            aria-invalid={required && normalizeInlineEditText(draftValue) === null}
             onChange={(event) => {
               setDraftValue(event.target.value);
               setStatus("idle");
@@ -4238,7 +4254,7 @@ function InlineEditableDetailItem({
               }
             }}
           />
-          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{status === "error" && required && normalizeInlineEditText(draftValue) === null ? emptyMessage : formatInlineEditStatus(status)}</small> : null}
         </div>
       ) : (
         <>
