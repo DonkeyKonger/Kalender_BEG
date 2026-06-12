@@ -13883,6 +13883,11 @@ button.person-chip:focus-visible {
   color: #1d4f91;
 }
 
+.mobile-batch-status-signature-missing {
+  background: #fff3d8;
+  color: #8a4f00;
+}
+
 .mobile-batch-status-reviewed {
   background: #e4f7e9;
   color: #166534;

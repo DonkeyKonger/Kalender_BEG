@@ -5196,13 +5196,21 @@ function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkTicket): { lab
   if (order.status === "reviewed") {
     return { label: "Geprüft", className: "mobile-batch-status-reviewed" };
   }
-  if (order.status === "signed") {
+  if (order.status === "signed" || order.customer_signed_at) {
     return { label: "Unterschrieben", className: "mobile-batch-status-signed" };
   }
   if (order.status === "submitted") {
     return { label: "Eingereicht", className: "mobile-batch-status-submitted" };
   }
+  if (order.status === "draft" && hasMobileExtraWorkOrderContent(order)) {
+    return { label: "Unterschrift fehlt", className: "mobile-batch-status-signature-missing" };
+  }
   return { label: "Entwurf", className: "mobile-batch-status-draft" };
+}
+
+function hasMobileExtraWorkOrderContent(order: MobileExtraWorkTicket): boolean {
+  const totalHours = Number(order.total_hours ?? 0);
+  return (Number.isFinite(totalHours) && totalHours > 0) || order.entry_count > 0;
 }
 
 function sortMobileMeasurementBatches(batches: MobileMeasurementBatch[]): MobileMeasurementBatch[] {
