@@ -3,6 +3,7 @@ from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.customer import Customer, CustomerContact
+from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
@@ -34,6 +35,7 @@ __all__ = [
     "Base",
     "Customer",
     "CustomerContact",
+    "DashboardMessageDismissal",
     "ExtraWorkTicket",
     "ExtraWorkTicketEntry",
     "ExtraWorkTicketPhoto",

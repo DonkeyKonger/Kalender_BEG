@@ -1032,7 +1032,12 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert dashboard_messages[0].event_at == signed.customer_signed_at
     assert dashboard_messages[0].customer_signature_name == "Kunde Beispiel"
     assert dashboard_messages[0].submitted_by_name is None
+    assert dashboard_messages[0].message_key == f"measurement_customer_signed:{batch.id}"
     assert signed.customer_signature_place == "Klinikweg 8, 77815 Buehl"
+
+    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
+    assert service.list_dashboard_submissions(limit=5, current_user=user) == []
+    assert service.list_dashboard_submissions(limit=5)[0].batch_id == batch.id
 
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None

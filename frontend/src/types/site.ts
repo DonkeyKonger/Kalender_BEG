@@ -509,6 +509,7 @@ export type MeasurementImportResponse = {
 };
 
 export type MeasurementDashboardSubmission = {
+  message_key: string;
   batch_id: number;
   site_id: number;
   site_name: string;

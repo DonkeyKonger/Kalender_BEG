@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
@@ -20,7 +20,17 @@ def get_company_weather(_user=Depends(CAN_READ_DASHBOARD)) -> WeatherSummary:
 @router.get("/measurement-submissions", response_model=list[MeasurementDashboardSubmissionRead])
 def get_measurement_submissions(
     limit: int = Query(default=6, ge=1, le=20),
-    _user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> list[MeasurementDashboardSubmissionRead]:
-    return MeasurementService(db).list_dashboard_submissions(limit=limit)
+    return MeasurementService(db).list_dashboard_submissions(limit=limit, current_user=user)
+
+
+@router.post("/messages/{message_key}/dismiss", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_dashboard_message(
+    message_key: str,
+    user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> Response:
+    MeasurementService(db).dismiss_dashboard_message(message_key=message_key, current_user=user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

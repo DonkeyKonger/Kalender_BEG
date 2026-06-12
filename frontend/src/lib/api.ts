@@ -283,6 +283,12 @@ export const api = {
     return request<MeasurementDashboardSubmission[]>("/dashboard/measurement-submissions");
   },
 
+  async dismissDashboardMessage(messageKey: string): Promise<void> {
+    await request<void>(`/dashboard/messages/${encodeURIComponent(messageKey)}/dismiss`, {
+      method: "POST",
+    });
+  },
+
   async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {
     const search = new URLSearchParams();
     if (params.isActive !== null && params.isActive !== undefined) {

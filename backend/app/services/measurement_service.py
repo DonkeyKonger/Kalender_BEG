@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
+from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.site import Site
 from app.models.site_measurement_item import (
@@ -1112,8 +1113,21 @@ class MeasurementService:
         return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
 
     def list_dashboard_submissions(
-        self, *, limit: int = 6
+        self, *, limit: int = 6, current_user: User | None = None
     ) -> list[MeasurementDashboardSubmissionRead]:
+        dismissed_keys: set[str] = set()
+        if current_user is not None:
+            dismissed_keys = set(
+                self.db.scalars(
+                    select(DashboardMessageDismissal.message_key).where(
+                        DashboardMessageDismissal.user_id == current_user.id,
+                        DashboardMessageDismissal.message_type.in_(
+                            ("measurement_submitted", "measurement_customer_signed")
+                        ),
+                    )
+                ).all()
+            )
+
         batches = list(
             self.db.scalars(
                 select(SiteMeasurementBatch)
@@ -1137,10 +1151,39 @@ class MeasurementService:
                     ).desc(),
                     SiteMeasurementBatch.updated_at.desc(),
                 )
-                .limit(limit)
+                .limit(limit + len(dismissed_keys))
             ).all()
         )
-        return [self._build_dashboard_submission(batch) for batch in batches]
+        messages: list[MeasurementDashboardSubmissionRead] = []
+        for batch in batches:
+            message = self._build_dashboard_submission(batch)
+            if message.message_key in dismissed_keys:
+                continue
+            messages.append(message)
+            if len(messages) >= limit:
+                break
+        return messages
+
+    def dismiss_dashboard_message(self, *, message_key: str, current_user: User) -> None:
+        message_type = message_key.split(":", 1)[0].strip()
+        if not message_type or not message_key.strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Meldung.")
+        existing = self.db.scalar(
+            select(DashboardMessageDismissal).where(
+                DashboardMessageDismissal.user_id == current_user.id,
+                DashboardMessageDismissal.message_key == message_key,
+            )
+        )
+        if existing is not None:
+            return
+        self.db.add(
+            DashboardMessageDismissal(
+                user_id=current_user.id,
+                message_type=message_type,
+                message_key=message_key,
+            )
+        )
+        self.db.commit()
 
     def import_timesheet(
         self,
@@ -1589,14 +1632,16 @@ class MeasurementService:
             "approved",
             "closed",
         }
+        message_type = "measurement_customer_signed" if is_customer_signed else "measurement_submitted"
         return MeasurementDashboardSubmissionRead(
+            message_key=f"{message_type}:{batch.id}",
             batch_id=batch.id,
             site_id=batch.site_id,
             site_name=batch.site.name if batch.site else "Baustelle",
             site_number=batch.site.site_number if batch.site else None,
             title=batch.title,
             status=batch.status,
-            message_type="measurement_customer_signed" if is_customer_signed else "measurement_submitted",
+            message_type=message_type,
             event_at=batch.customer_signed_at if is_customer_signed else batch.submitted_at,
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,

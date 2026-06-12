@@ -238,6 +238,7 @@ class WorkerSignatureCreate(BaseModel):
 
 
 class MeasurementDashboardSubmissionRead(BaseModel):
+    message_key: str
     batch_id: int
     site_id: int
     site_name: str

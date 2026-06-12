@@ -86,6 +86,7 @@ export function DashboardPage() {
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
+  const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
 
@@ -172,6 +173,22 @@ export function DashboardPage() {
     }
     return buildDashboardData(matrix, people, range);
   }, [matrix, people, range]);
+
+  async function dismissMeasurementMessage(message: MeasurementDashboardSubmission): Promise<void> {
+    if (dismissingMessageKey) {
+      return;
+    }
+    const previousMessages = measurementMessages;
+    setDismissingMessageKey(message.message_key);
+    setMeasurementMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
+    try {
+      await api.dismissDashboardMessage(message.message_key);
+    } catch {
+      setMeasurementMessages(previousMessages);
+    } finally {
+      setDismissingMessageKey(null);
+    }
+  }
 
   const filteredWorkers = useMemo(() => {
     if (!dashboard || !workerSearch.trim()) {
@@ -266,17 +283,27 @@ export function DashboardPage() {
               {measurementMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
                   {measurementMessages.map((message) => (
-                    <Link
-                      className="dashboard-alert-row dashboard-message-link"
-                      key={message.batch_id}
-                      to={`/sites/${message.site_id}?tab=measurement&measurementSubtab=review`}
-                    >
-                      <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
-                      <div>
-                        <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
-                        <span>{formatMeasurementDashboardMessageMeta(message)}</span>
-                      </div>
-                    </Link>
+                    <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
+                      <Link
+                        className="dashboard-message-link"
+                        to={`/sites/${message.site_id}?tab=measurement&measurementSubtab=review`}
+                      >
+                        <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
+                        <div>
+                          <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
+                          <span>{formatMeasurementDashboardMessageMeta(message)}</span>
+                        </div>
+                      </Link>
+                      <button
+                        type="button"
+                        className="dashboard-message-dismiss-button"
+                        aria-label="Meldung ausblenden"
+                        disabled={dismissingMessageKey === message.message_key}
+                        onClick={() => void dismissMeasurementMessage(message)}
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : (
