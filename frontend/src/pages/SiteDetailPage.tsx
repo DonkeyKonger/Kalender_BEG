@@ -1711,7 +1711,7 @@ function ExtraWorkTab({
         <div className="project-record-empty-state">Noch keine Zusatzaufträge vorhanden.</div>
       ) : null}
       {!isLoading && !error && sortedTickets.length > 0 ? (
-        <div className="measurement-review-list">
+        <div className="measurement-review-list project-extra-work-list">
           {sortedTickets.map((ticket) => {
             const statusBadge = getExtraWorkTicketStatusBadge(ticket);
             const openActionKey = `${ticket.id}:open`;
@@ -1722,7 +1722,7 @@ function ExtraWorkTab({
             return (
               <div
                 key={ticket.id}
-                className={`measurement-review-card${ticket.status === "submitted" ? " is-submitted" : ""}`}
+                className={`measurement-review-card project-extra-work-card${ticket.status === "submitted" ? " is-submitted" : ""}`}
               >
                 <button
                   type="button"

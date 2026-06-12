@@ -14407,6 +14407,7 @@ button.person-chip:focus-visible {
   display: grid;
   align-items: start;
   gap: 7px;
+  margin: 18px 0 12px;
   border-color: var(--pf-border);
   border-radius: 2px;
   padding: 16px 18px;
@@ -14421,9 +14422,51 @@ button.person-chip:focus-visible {
   color: #334155;
 }
 
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar p {
+.site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar p {
   margin-top: 2px;
+  font-size: 0.86rem;
   line-height: 1.45;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-list {
+  gap: 8px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-card-open {
+  grid-template-columns: 152px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 12px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-card-main {
+  gap: 4px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-card-title-row {
+  margin-bottom: 1px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card small {
+  line-height: 1.32;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card b {
+  min-width: 112px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-pdf-actions {
+  align-self: center;
+  margin-right: 12px;
 }
 
 .site-detail-page.is-project-file-workspace .project-record-toolbar p,
