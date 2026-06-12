@@ -12996,18 +12996,22 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-overview-action.is-complete:disabled {
   cursor: default;
-  border-color: #b9dec6;
-  background: #f4fbf6;
-  color: #174a2f;
-  box-shadow: 0 8px 18px rgb(35 111 69 / 8%);
+  border-color: #cbd7e6;
+  background: #ffffff;
+  color: #143c6d;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 7%);
 }
 
 .mobile-measurement-overview-action.is-complete:disabled svg {
-  color: #2f8f54;
+  color: #2d5d8f;
 }
 
 .mobile-measurement-overview-action .mobile-action-status-icon {
   justify-self: end;
+  color: #2f8f54;
+}
+
+.mobile-measurement-overview-action.is-complete:disabled .mobile-action-status-icon {
   color: #2f8f54;
 }
 
