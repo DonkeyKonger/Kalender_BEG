@@ -25,8 +25,9 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
+from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, format_site_signature_location
-from app.services.photo_limits import MAX_PHOTO_DIMENSION
+from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -86,6 +87,7 @@ MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-photo-cache-v1"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -134,6 +136,7 @@ class PdfImage:
     width: int
     height: int
     data: bytes
+    filter_name: str = "FlateDecode"
 
 
 class SimplePdf:
@@ -161,7 +164,9 @@ class SimplePdf:
                 + str(image.width).encode("ascii")
                 + b" /Height "
                 + str(image.height).encode("ascii")
-                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /"
+                + image.filter_name.encode("ascii")
+                + b" /Length "
                 + str(len(image.data)).encode("ascii")
                 + b" >>\nstream\n"
                 + image.data
@@ -264,6 +269,29 @@ class MeasurementPdfService:
         )
         if batch is None or batch.site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
+        file_number = _format_batch_number(batch.site.site_number, batch.number)
+        safe_number = file_number.replace("/", "-").replace(" ", "_")
+        prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
+        filename = f"{prefix}_{safe_number}.pdf"
+        version_hash = self._build_batch_pdf_version_hash(batch, mode=mode)
+        content, cache_hit = DocumentPdfCache().get_or_build(
+            cache_key=f"measurement-{batch.id}-{mode}",
+            version_hash=version_hash,
+            build=lambda: self._render_batch_pdf_content(batch=batch, mode=mode),
+        )
+        LOGGER.info(
+            "Measurement PDF served: batch_id=%s mode=%s photos=%s cache_hit=%s bytes=%s duration_ms=%.1f",
+            batch.id,
+            mode,
+            len(batch.photos or []),
+            cache_hit,
+            len(content),
+            (perf_counter() - started_at) * 1000,
+        )
+        return content, filename
+
+    def _render_batch_pdf_content(self, *, batch: SiteMeasurementBatch, mode: str) -> bytes:
+        started_at = perf_counter()
         pdf = SimplePdf()
         logo = _load_png_rgb(LOGO_PATH)
         if logo is not None:
@@ -292,9 +320,6 @@ class MeasurementPdfService:
                 page_number += 1
         self._append_photo_pages(pdf, batch)
 
-        file_number = _format_batch_number(batch.site.site_number, batch.number)
-        safe_number = file_number.replace("/", "-").replace(" ", "_")
-        prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
         content = pdf.build()
         LOGGER.info(
             "Measurement PDF generated: batch_id=%s mode=%s photos=%s bytes=%s duration_ms=%.1f",
@@ -304,7 +329,61 @@ class MeasurementPdfService:
             len(content),
             (perf_counter() - started_at) * 1000,
         )
-        return content, f"{prefix}_{safe_number}.pdf"
+        return content
+
+    def _build_batch_pdf_version_hash(self, batch: SiteMeasurementBatch, *, mode: str) -> str:
+        return build_pdf_version_hash({
+            "type": "measurement",
+            "generator_version": MEASUREMENT_PDF_CACHE_VERSION,
+            "mode": mode,
+            "batch": {
+                "id": batch.id,
+                "number": batch.number,
+                "title": batch.title,
+                "status": batch.status,
+                "updated_at": batch.updated_at,
+                "submitted_at": batch.submitted_at,
+                "customer_signed_at": batch.customer_signed_at,
+                "customer_signature_name": batch.customer_signature_name,
+                "customer_signature_place": batch.customer_signature_place,
+                "customer_signature_strokes": batch.customer_signature_strokes,
+                "worker_signed_at": batch.worker_signed_at,
+                "worker_signature_name": batch.worker_signature_name,
+                "worker_signature_strokes": batch.worker_signature_strokes,
+                "original_submitted_snapshot": batch.original_submitted_snapshot,
+            },
+            "site": {
+                "id": batch.site.id if batch.site else None,
+                "number": batch.site.site_number if batch.site else None,
+                "name": batch.site.name if batch.site else None,
+                "customer": batch.site.customer if batch.site else None,
+                "updated_at": batch.site.updated_at if batch.site else None,
+            },
+            "entries": [
+                {
+                    "id": entry.id,
+                    "item_id": entry.measurement_item_id,
+                    "quantity": entry.quantity,
+                    "area_or_comment": entry.area_or_comment,
+                    "submitted_quantity": entry.submitted_quantity,
+                    "submitted_area_or_comment": entry.submitted_area_or_comment,
+                    "status": entry.status,
+                    "updated_at": entry.updated_at,
+                    "item_updated_at": entry.measurement_item.updated_at if entry.measurement_item else None,
+                }
+                for entry in sorted(batch.entries or [], key=lambda entry: entry.id)
+            ],
+            "photos": [
+                {
+                    "id": photo.id,
+                    "filename": photo.filename,
+                    "external_item_id": photo.external_item_id,
+                    "file_size_bytes": photo.file_size_bytes,
+                    "updated_at": photo.updated_at,
+                }
+                for photo in sorted(batch.photos or [], key=lambda photo: photo.id)
+            ],
+        })
 
     def _append_photo_pages(self, pdf: SimplePdf, batch: SiteMeasurementBatch) -> None:
         photos = sorted(batch.photos, key=lambda photo: (photo.created_at, photo.id))
@@ -315,16 +394,28 @@ class MeasurementPdfService:
             LOGGER.warning("Measurement photo folder is not connected for site %s.", batch.site_id)
             return
         for index, photo in enumerate(photos, start=1):
+            photo_started_at = perf_counter()
             try:
                 downloaded = ProjectStorageService().download_file_from_folder(
                     drive_id=photo.external_drive_id,
                     folder_item_id=folder_item_id,
                     item_id=photo.external_item_id,
                 )
-                image = _load_uploaded_image_rgb(downloaded["content"])
+                downloaded_content = downloaded["content"]
+                image = _load_uploaded_image_rgb(downloaded_content)
             except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
                 LOGGER.warning("Measurement photo %s could not be added to PDF: %s", photo.id, error)
                 continue
+            LOGGER.info(
+                "Measurement PDF photo processed: batch_id=%s photo_id=%s source_bytes=%s image_bytes=%s dimensions=%sx%s duration_ms=%.1f",
+                batch.id,
+                photo.id,
+                len(downloaded_content),
+                len(image.data),
+                image.width,
+                image.height,
+                (perf_counter() - photo_started_at) * 1000,
+            )
             image_name = f"Photo{photo.id}"
             pdf.add_image(image_name, image)
             pdf.add_page(_render_photo_page(batch=batch, photo=photo, image=image, image_name=image_name, index=index, total=len(photos)))
@@ -1050,7 +1141,9 @@ def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
         else:
             rgb.paste(image)
         width, height = rgb.size
-        return PdfImage(width=width, height=height, data=zlib.compress(rgb.tobytes(), 9))
+        output = BytesIO()
+        rgb.save(output, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+        return PdfImage(width=width, height=height, data=output.getvalue(), filter_name="DCTDecode")
 
 
 def _chunk[T](rows: list[T], size: int) -> list[list[T]]:

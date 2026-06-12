@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         default="/tmp/kalender_beg_document_thumbnails",
         alias="DOCUMENT_THUMBNAIL_CACHE_DIR",
     )
+    document_pdf_cache_dir: str = Field(
+        default="/tmp/kalender_beg_document_pdfs",
+        alias="DOCUMENT_PDF_CACHE_DIR",
+    )
     ctrack_base_url: str | None = Field(default=None, alias="CTRACK_BASE_URL")
     ctrack_username: str | None = Field(default=None, alias="CTRACK_USERNAME")
     ctrack_password: str | None = Field(default=None, alias="CTRACK_PASSWORD")

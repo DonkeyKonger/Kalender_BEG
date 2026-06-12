@@ -41,6 +41,14 @@ Healthcheck:
 
 - http://localhost:8000/api/health
 
+## PDF-Cache fuer mobile Vorschauen
+
+Mobile Aufmaß- und Stundenzettel-PDFs werden versioniert zwischengespeichert, damit Fotoanlagen nicht bei jedem Oeffnen erneut geladen und verarbeitet werden muessen. Der Cache liegt standardmaessig unter `/tmp/kalender_beg_document_pdfs` und kann per App Setting angepasst werden:
+
+```env
+DOCUMENT_PDF_CACHE_DIR=/tmp/kalender_beg_document_pdfs
+```
+
 ## Manueller E-Mail-Versand
 
 Der mobile Versand fuer Stundenzettel/Zusatzauftraege nutzt aktuell SMTP. Microsoft Graph wird hierfuer noch nicht verwendet. Ohne SMTP-Host und Absenderadresse bricht das Backend bewusst mit `E-Mail-Versand ist noch nicht konfiguriert.` ab.

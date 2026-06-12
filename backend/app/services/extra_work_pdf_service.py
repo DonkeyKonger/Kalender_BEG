@@ -8,7 +8,6 @@ from io import BytesIO
 import logging
 from pathlib import Path
 from time import perf_counter
-import zlib
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -21,13 +20,15 @@ from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
-from app.services.photo_limits import MAX_PHOTO_DIMENSION
+from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
+from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-photo-cache-v1"
 LOGGER = logging.getLogger(__name__)
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -59,6 +60,7 @@ class PdfImage:
     width: int
     height: int
     data: bytes
+    filter_name: str = "FlateDecode"
 
 
 FIELD_RECTS = {
@@ -141,8 +143,98 @@ class ExtraWorkPdfService:
     ) -> tuple[bytes, str]:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
-        content = self._build_ticket_pdf(ticket=ticket, assignment=assignment)
-        return content, self._build_filename(ticket)
+        started_at = perf_counter()
+        filename = self._build_filename(ticket)
+        version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
+        content, cache_hit = DocumentPdfCache().get_or_build(
+            cache_key=f"extra-work-{ticket.id}",
+            version_hash=version_hash,
+            build=lambda: self._build_ticket_pdf(ticket=ticket, assignment=assignment),
+        )
+        LOGGER.info(
+            "Extra work PDF served: ticket_id=%s photos=%s cache_hit=%s bytes=%s duration_ms=%.1f",
+            ticket.id,
+            len(ticket.photos or []),
+            cache_hit,
+            len(content),
+            (perf_counter() - started_at) * 1000,
+        )
+        return content, filename
+
+    def _build_ticket_pdf_version_hash(self, ticket: ExtraWorkTicket, assignment: Assignment) -> str:
+        return build_pdf_version_hash({
+            "type": "extra_work",
+            "generator_version": EXTRA_WORK_PDF_CACHE_VERSION,
+            "template_mtime": TEMPLATE_PATH.stat().st_mtime if TEMPLATE_PATH.exists() else None,
+            "ticket": {
+                "id": ticket.id,
+                "sequence_number": ticket.sequence_number,
+                "display_number": ticket.display_number,
+                "title": ticket.title,
+                "kind": ticket.kind,
+                "status": ticket.status,
+                "updated_at": ticket.updated_at,
+                "submitted_at": ticket.submitted_at,
+                "customer_signature_type": ticket.customer_signature_type,
+                "customer_signature_name": ticket.customer_signature_name,
+                "customer_signature_place": ticket.customer_signature_place,
+                "customer_signature_strokes": ticket.customer_signature_strokes,
+                "customer_signed_at": ticket.customer_signed_at,
+                "worker_signature_name": ticket.worker_signature_name,
+                "worker_signature_strokes": ticket.worker_signature_strokes,
+                "worker_signed_at": ticket.worker_signed_at,
+            },
+            "site": {
+                "id": ticket.site.id if ticket.site else None,
+                "number": ticket.site.site_number if ticket.site else None,
+                "name": ticket.site.name if ticket.site else None,
+                "customer": ticket.site.customer if ticket.site else None,
+                "updated_at": ticket.site.updated_at if ticket.site else None,
+            },
+            "assignment": {
+                "id": assignment.id,
+                "start_date": assignment.start_date,
+                "end_date": assignment.end_date,
+                "updated_at": assignment.updated_at,
+            },
+            "entries": [
+                {
+                    "id": entry.id,
+                    "component": entry.component,
+                    "floor": entry.floor,
+                    "room_number": entry.room_number,
+                    "axis": entry.axis,
+                    "remarks": entry.remarks,
+                    "material_text": entry.material_text,
+                    "estimated_hours": entry.estimated_hours,
+                    "worker_rows": entry.worker_rows,
+                    "updated_at": entry.updated_at,
+                }
+                for entry in sorted(ticket.entries or [], key=lambda entry: entry.id)
+            ],
+            "approval": [
+                {
+                    "id": entry.id,
+                    "estimated_hours": entry.estimated_hours,
+                    "worker_rows": entry.worker_rows,
+                    "updated_at": entry.updated_at,
+                }
+                for entry in sorted(
+                    ticket.approval_ticket.entries if ticket.approval_ticket else [],
+                    key=lambda entry: entry.id,
+                )
+            ],
+            "photos": [
+                {
+                    "id": photo.id,
+                    "filename": photo.filename,
+                    "external_item_id": photo.external_item_id,
+                    "file_size_bytes": photo.file_size_bytes,
+                    "updated_at": photo.updated_at,
+                }
+                for photo in sorted(ticket.photos or [], key=lambda photo: photo.id)
+            ],
+        })
 
     def _build_ticket_pdf(self, *, ticket: ExtraWorkTicket, assignment: Assignment) -> bytes:
         if not TEMPLATE_PATH.exists():
@@ -187,16 +279,28 @@ class ExtraWorkPdfService:
         appendix_pdf = PhotoAppendixPdf()
         appended_count = 0
         for photo in photos:
+            photo_started_at = perf_counter()
             try:
                 downloaded = ProjectStorageService().download_file_from_folder(
                     drive_id=photo.external_drive_id,
                     folder_item_id=folder_item_id,
                     item_id=photo.external_item_id,
                 )
-                image = _load_uploaded_image_rgb(downloaded["content"])
+                downloaded_content = downloaded["content"]
+                image = _load_uploaded_image_rgb(downloaded_content)
             except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
                 LOGGER.warning("Extra work photo %s could not be added to PDF: %s", photo.id, error)
                 continue
+            LOGGER.info(
+                "Extra work PDF photo processed: ticket_id=%s photo_id=%s source_bytes=%s image_bytes=%s dimensions=%sx%s duration_ms=%.1f",
+                ticket.id,
+                photo.id,
+                len(downloaded_content),
+                len(image.data),
+                image.width,
+                image.height,
+                (perf_counter() - photo_started_at) * 1000,
+            )
             appended_count += 1
             image_name = f"ExtraWorkPhoto{photo.id}"
             appendix_pdf.add_image(image_name, image)
@@ -481,7 +585,9 @@ class PhotoAppendixPdf:
                 + str(image.width).encode("ascii")
                 + b" /Height "
                 + str(image.height).encode("ascii")
-                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /"
+                + image.filter_name.encode("ascii")
+                + b" /Length "
                 + str(len(image.data)).encode("ascii")
                 + b" >>\nstream\n"
                 + image.data
@@ -713,7 +819,9 @@ def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
         else:
             rgb.paste(image)
         width, height = rgb.size
-        return PdfImage(width=width, height=height, data=zlib.compress(rgb.tobytes(), 9))
+        output = BytesIO()
+        rgb.save(output, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+        return PdfImage(width=width, height=height, data=output.getvalue(), filter_name="DCTDecode")
 
 
 def _format_user(user: User | None) -> str | None:
