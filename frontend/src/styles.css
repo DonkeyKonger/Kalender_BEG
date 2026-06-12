@@ -3111,37 +3111,12 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-day-assignment-cluster {
+  display: block;
   border: 0;
   border-radius: 8px;
   background: transparent;
   padding: 0;
   box-shadow: none;
-}
-
-.mobile-home-day-assignment-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  padding: 0 2px;
-}
-
-.mobile-home-day-assignment-head strong {
-  min-width: 0;
-  overflow: hidden;
-  color: #143c6d;
-  font-size: 0.86rem;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-home-day-assignment-head span {
-  flex: 0 0 auto;
-  color: #65738a;
-  font-size: 0.74rem;
-  font-weight: 800;
 }
 
 .mobile-home-day-assignment-grid {
@@ -3215,10 +3190,10 @@ button.person-chip:focus-visible {
 
 .mobile-home-assignment-card.is-day-cluster-item {
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 7px;
+  gap: 6px;
   align-items: center;
-  min-height: 116px;
-  padding: 10px;
+  min-height: 82px;
+  padding: 8px 9px;
 }
 
 .mobile-home-assignment-card.is-day-cluster-item > svg {
@@ -3273,15 +3248,15 @@ button.person-chip:focus-visible {
 
 .mobile-home-assignment-card.is-day-cluster-item b {
   display: -webkit-box;
-  font-size: 0.92rem;
-  line-height: 1.16;
+  font-size: 0.86rem;
+  line-height: 1.12;
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
 .mobile-home-assignment-card.is-day-cluster-item small {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
 }
 
 .mobile-home-assignment-card.is-day-cluster-item .assignment-card-affordance {

@@ -693,10 +693,6 @@ function DayFocusCard({
   if (assignments.length > 1) {
     return (
       <article className={`mobile-focus-card mobile-home-day-assignment-cluster${compact ? " is-upcoming" : ""}`}>
-        <div className="mobile-home-day-assignment-head">
-          <strong>{formatHomeAssignmentDateLabel(date)}</strong>
-          <span>{assignments.length} Einsätze</span>
-        </div>
         <div className="mobile-home-day-assignment-grid">
           {assignments.map((daily) => (
             <CompactHomeAssignmentCard
