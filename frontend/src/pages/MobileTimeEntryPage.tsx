@@ -737,8 +737,20 @@ export function MobileTimeEntryPage() {
           ) : null}
 
           {timePickerTarget ? (
-            <div className="mobile-time-picker-backdrop" role="presentation">
-              <div className="mobile-time-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-time-picker-title">
+            <div
+              className="mobile-time-picker-backdrop"
+              role="presentation"
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div
+                className="mobile-time-picker-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mobile-time-picker-title"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
                 <div className="mobile-time-picker-title">
                   <span>{timePickerTarget === "start" ? "Startzeit" : "Endzeit"}</span>
                   <strong id="mobile-time-picker-title">{formatTimePickerValue(timePickerDraftHour, timePickerDraftMinute)}</strong>
