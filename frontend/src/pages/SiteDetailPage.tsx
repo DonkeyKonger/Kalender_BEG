@@ -4360,10 +4360,6 @@ function isMeasurementBatchReviewRequired(batch: MobileMeasurementBatch): boolea
   return isMeasurementBatchOpen(batch.status) && !isCustomerSignedMeasurementBatch(batch);
 }
 
-function isMeasurementBatchSignedOpen(batch: MobileMeasurementBatch): boolean {
-  return isCustomerSignedMeasurementBatch(batch) && !isMeasurementBatchBilled(batch.status);
-}
-
 function isMeasurementBatchOpen(status: string): boolean {
   return status === "submitted" || status === "rejected" || status === "customer_signed";
 }
