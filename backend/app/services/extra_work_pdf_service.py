@@ -28,8 +28,9 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v2"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v3"
 LOGGER = logging.getLogger(__name__)
+BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
     / "templates"
@@ -365,23 +366,40 @@ class ExtraWorkPdfService:
         _field(commands, FIELD_RECTS["Projekt"], site.name)
         _field(commands, FIELD_RECTS["Datum"], _format_date(created_date))
         _field(commands, FIELD_RECTS["Firma"], site.customer or "")
-        _field(commands, FIELD_RECTS["KomNr"], site.site_number or "")
+        _field(
+            commands,
+            FIELD_RECTS["KomNr"],
+            site.site_number or "",
+            size=10.5,
+            align="center",
+            font="F2",
+            fill=BEG_PDF_RED,
+        )
         _checkbox(commands, *CHECKBOX_CENTERS["hourly"])
         _checkbox(commands, *CHECKBOX_CENTERS["monteur"])
         if entry and entry.material_text:
             _checkbox(commands, *CHECKBOX_CENTERS["material_yes"])
         else:
             _checkbox(commands, *CHECKBOX_CENTERS["material_no"])
-        _field(commands, FIELD_RECTS["Zusatzstundenachweis Nr"], _ticket_number(ticket, page_number, total_pages), size=8.2)
-        _field(commands, FieldRect(236.88, 366.00, 313.00, 10.00), _ticket_title_suffix(ticket), size=7.1)
+        _field(
+            commands,
+            FIELD_RECTS["Zusatzstundenachweis Nr"],
+            _ticket_number(ticket, page_number, total_pages),
+            size=10.5,
+            font="F2",
+            fill=BEG_PDF_RED,
+        )
+        title = _clean_text(ticket.title)
+        if title:
+            _field(commands, FieldRect(236.88, 366.00, 313.00, 10.00), title, size=7.1)
         week_start, week_end = _week_range(assignment.start_date or created_date)
         _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.0, align="center")
         _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.0, align="center")
         if entry:
-            _field(commands, FIELD_RECTS["Bauteil"], entry.component, size=8)
-            _field(commands, FIELD_RECTS["Etage"], entry.floor, size=8)
-            _field(commands, FIELD_RECTS["Raum Nr"], entry.room_number or "", size=8)
-            _field(commands, FIELD_RECTS["Achse"], entry.axis or "", size=8)
+            _field(commands, _shift_rect(FIELD_RECTS["Bauteil"], dy=2.0), entry.component, size=9)
+            _field(commands, _shift_rect(FIELD_RECTS["Etage"], dy=2.0), entry.floor, size=9)
+            _field(commands, _shift_rect(FIELD_RECTS["Raum Nr"], dy=2.0), entry.room_number or "", size=9)
+            _field(commands, _shift_rect(FIELD_RECTS["Achse"], dy=2.0), entry.axis or "", size=9)
             _textarea(commands, FIELD_RECTS["BemerkungenRow1"], entry.remarks or "", size=7.5, max_lines=13)
             _textarea(commands, FIELD_RECTS["Material"], entry.material_text or "", size=8, max_lines=3)
 
@@ -409,16 +427,34 @@ class ExtraWorkPdfService:
     ) -> None:
         total = Decimal("0")
         for index, row in enumerate(rows[:3]):
-            _textarea(commands, WORKER_NAME_RECTS[index], str(row.get("worker_name") or ""), size=8, max_lines=2)
+            _centered_textarea(
+                commands,
+                WORKER_NAME_RECTS[index],
+                str(row.get("worker_name") or ""),
+                size=8.3,
+                max_lines=2,
+            )
             field_names = NORMAL_HOUR_FIELD_NAMES[index]
             row_total = Decimal("0")
             for weekday_index, key in enumerate(WEEKDAY_KEYS):
                 value = _decimal(row.get(key))
                 if value > 0:
-                    _field(commands, HOUR_FIELD_RECTS[field_names[weekday_index]], _format_decimal(value), size=8, align="center")
+                    _field(
+                        commands,
+                        HOUR_FIELD_RECTS[field_names[weekday_index]],
+                        _format_decimal(value),
+                        size=8,
+                        align="center",
+                    )
                     row_total += value
             if row_total > 0:
-                _field(commands, HOUR_FIELD_RECTS[field_names[-1]], _format_decimal(row_total), size=8, align="center")
+                _field(
+                    commands,
+                    HOUR_FIELD_RECTS[field_names[-1]],
+                    _format_decimal(row_total),
+                    size=8,
+                    align="center",
+                )
                 total += row_total
         if rows:
             _field(commands, FIELD_RECTS["Gesamt Std"], _format_decimal(total), size=9, align="center")
@@ -429,7 +465,7 @@ class ExtraWorkPdfService:
                 _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
 
     def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket, assignment: Assignment) -> None:
-        signature_y = 62
+        line_y = 75
         column_width = 224
         worker_x = 62
         customer_x = 315
@@ -437,30 +473,37 @@ class ExtraWorkPdfService:
         customer_place = ticket.customer_signature_place or worker_place
         worker_name = _signature_worker_name(ticket, assignment)
 
-        _text(commands, worker_x, signature_y + 42, "Unterschrift Monteur", 8, font="F2")
-        _text(commands, customer_x, signature_y + 42, "Unterschrift Kunde", 8, font="F2")
+        _text(commands, worker_x, line_y + 46, "Unterschrift Monteur", 8, font="F2")
+        _text(commands, customer_x, line_y + 46, "Unterschrift Kunde", 8, font="F2")
 
-        _text(commands, worker_x, signature_y + 26, "Name:", 6.8, font="F2")
-        _text(commands, customer_x, signature_y + 26, "Name:", 6.8, font="F2")
-        _text(commands, worker_x + 34, signature_y + 26, _fit_text(worker_name, 172, 7), 7)
-        _text(commands, customer_x + 34, signature_y + 26, ticket.customer_signature_name or "", 7)
+        _line(commands, worker_x, line_y, worker_x + column_width, line_y, 0.6)
+        _line(commands, customer_x, line_y, customer_x + column_width, line_y, 0.6)
+        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 86, y=line_y + 7, width=96, height=30)
+        _draw_signature(
+            commands,
+            ticket.customer_signature_strokes,
+            x=customer_x + 86,
+            y=line_y + 7,
+            width=96,
+            height=30,
+        )
 
-        _text(commands, worker_x, signature_y + 12, "Datum:", 6.8, font="F2")
-        _text(commands, customer_x, signature_y + 12, "Datum:", 6.8, font="F2")
-        _text(commands, worker_x + 40, signature_y + 12, _format_date_from_datetime(ticket.worker_signed_at), 7)
-        _text(commands, customer_x + 40, signature_y + 12, _format_date_from_datetime(ticket.customer_signed_at), 7)
+        _text(commands, worker_x, line_y - 15, "Name:", 6.8, font="F2")
+        _text(commands, customer_x, line_y - 15, "Name:", 6.8, font="F2")
+        _text(commands, worker_x + 34, line_y - 15, _fit_text(worker_name, 172, 7), 7)
+        _text(commands, customer_x + 34, line_y - 15, _fit_text(ticket.customer_signature_name or "", 172, 7), 7)
+
+        _text(commands, worker_x, line_y - 29, "Datum:", 6.8, font="F2")
+        _text(commands, customer_x, line_y - 29, "Datum:", 6.8, font="F2")
+        _text(commands, worker_x + 40, line_y - 29, _format_date_from_datetime(ticket.worker_signed_at), 7)
+        _text(commands, customer_x + 40, line_y - 29, _format_date_from_datetime(ticket.customer_signed_at), 7)
 
         if worker_place:
-            _text(commands, worker_x, signature_y - 2, "Ort:", 6.8, font="F2")
-            _text(commands, worker_x + 24, signature_y - 2, _fit_text(worker_place, 176, 6.8), 6.8)
+            _text(commands, worker_x, line_y - 43, "Ort:", 6.8, font="F2")
+            _text(commands, worker_x + 24, line_y - 43, _fit_text(worker_place, 176, 6.8), 6.8)
         if customer_place:
-            _text(commands, customer_x, signature_y - 2, "Ort:", 6.8, font="F2")
-            _text(commands, customer_x + 24, signature_y - 2, _fit_text(customer_place, 176, 6.8), 6.8)
-
-        _line(commands, worker_x, signature_y + 4, worker_x + column_width, signature_y + 4, 0.6)
-        _line(commands, customer_x, signature_y + 4, customer_x + column_width, signature_y + 4, 0.6)
-        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 102, y=signature_y + 8, width=108, height=30)
-        _draw_signature(commands, ticket.customer_signature_strokes, x=customer_x + 102, y=signature_y + 8, width=108, height=30)
+            _text(commands, customer_x, line_y - 43, "Ort:", 6.8, font="F2")
+            _text(commands, customer_x + 24, line_y - 43, _fit_text(customer_place, 176, 6.8), 6.8)
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
@@ -665,7 +708,16 @@ class PhotoAppendixPdf:
         return buffer.getvalue()
 
 
-def _field(commands: list[bytes], rect: FieldRect, text: str, *, size: float = 8.5, align: str = "left") -> None:
+def _field(
+    commands: list[bytes],
+    rect: FieldRect,
+    text: str,
+    *,
+    size: float = 8.5,
+    align: str = "left",
+    font: str = "F1",
+    fill: tuple[float, float, float] | None = None,
+) -> None:
     value = _clean_text(text)
     if not value:
         return
@@ -675,7 +727,7 @@ def _field(commands: list[bytes], rect: FieldRect, text: str, *, size: float = 8
         x = rect.x + rect.width / 2 - _text_width(value, size) / 2
     elif align == "right":
         x = rect.x + rect.width - _text_width(value, size) - 2.0
-    _text(commands, x, baseline, _fit_text(value, rect.width - 4, size), size)
+    _text(commands, x, baseline, _fit_text(value, rect.width - 4, size), size, font=font, fill=fill)
 
 
 def _textarea(commands: list[bytes], rect: FieldRect, text: str, *, size: float, max_lines: int) -> None:
@@ -688,6 +740,24 @@ def _textarea(commands: list[bytes], rect: FieldRect, text: str, *, size: float,
         if baseline < PAGE_HEIGHT - rect.y - rect.height + 2:
             break
         _text(commands, rect.x + 2.0, baseline, line, size)
+
+
+def _centered_textarea(commands: list[bytes], rect: FieldRect, text: str, *, size: float, max_lines: int) -> None:
+    lines = _wrap_text(_clean_text(text), rect.width - 8, size, max_lines)
+    if not lines:
+        return
+    line_height = size + 2.2
+    block_height = len(lines) * line_height
+    bottom_y = PAGE_HEIGHT - rect.y - rect.height
+    block_bottom = bottom_y + max((rect.height - block_height) / 2, 0)
+    for index, line in enumerate(lines):
+        baseline = block_bottom + (len(lines) - index - 1) * line_height + (line_height - size) / 2
+        x = rect.x + rect.width / 2 - _text_width(line, size) / 2
+        _text(commands, x, baseline, line, size)
+
+
+def _shift_rect(rect: FieldRect, *, dx: float = 0, dy: float = 0) -> FieldRect:
+    return FieldRect(rect.x + dx, rect.y + dy, rect.width, rect.height)
 
 
 def _checkbox(commands: list[bytes], center_x: float, center_y_top: float) -> None:
@@ -732,8 +802,16 @@ def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float, wid
     )
 
 
-def _text(commands: list[bytes], x: float, y: float, text: str, size: float, font: str = "F1") -> None:
-    commands.append(
+def _text(
+    commands: list[bytes],
+    x: float,
+    y: float,
+    text: str,
+    size: float,
+    font: str = "F1",
+    fill: tuple[float, float, float] | None = None,
+) -> None:
+    text_command = (
         b"BT /"
         + font.encode("ascii")
         + b" "
@@ -746,6 +824,20 @@ def _text(commands: list[bytes], x: float, y: float, text: str, size: float, fon
         + _pdf_string(text)
         + b" Tj ET"
     )
+    if fill is not None:
+        commands.append(
+            b"q "
+            + _number(fill[0])
+            + b" "
+            + _number(fill[1])
+            + b" "
+            + _number(fill[2])
+            + b" rg "
+            + text_command
+            + b" Q"
+        )
+        return
+    commands.append(text_command)
 
 
 def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
@@ -963,11 +1055,15 @@ def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) 
 
 def _ticket_display_title(ticket: ExtraWorkTicket) -> str:
     number = ticket.display_number or str(ticket.sequence_number)
-    return f"Zusatzauftrag {number} - {_ticket_title_suffix(ticket)}"
+    return f"Zusatzauftrag {number} - {_ticket_document_description(ticket)}"
 
 
 def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:
     return _clean_text(ticket.title) or "Hauptauftrag"
+
+
+def _ticket_document_description(ticket: ExtraWorkTicket) -> str:
+    return _clean_text(ticket.title) or "Zusatzarbeiten"
 
 
 def _signature_worker_name(ticket: ExtraWorkTicket, assignment: Assignment) -> str:
