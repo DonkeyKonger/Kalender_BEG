@@ -897,11 +897,11 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 1
-    assert b"Unterschrift Monteur" in content
-    assert b"Max Monteur" in content
     assert b"Unterschrift Kunde" not in content
-    assert b"Kunde Beispiel" in content
     assert "Nachtrag Kabeltrasse 2. OG" in pdf_text
+    assert "Kunde Beispiel" in pdf_text
+    assert "Name: Max Monteur" not in pdf_text
+    assert "Name: Kunde Beispiel" not in pdf_text
     assert "Unterschrift Kunde" not in pdf_text
 
 

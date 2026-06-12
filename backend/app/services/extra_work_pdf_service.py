@@ -28,7 +28,7 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v3"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v4"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -92,6 +92,21 @@ CHECKBOX_CENTERS = {
     "material_no": (190.31, 269.67),
     "monteur": (238.09, 288.52),
 }
+
+MONTEUR_SIG_IMAGE_BOX = (68.0, 106.0, 145.0, 28.0)
+MONTEUR_PLACE_CENTER_X = 102.0
+MONTEUR_DATE_CENTER_X = 181.0
+CUSTOMER_SIG_IMAGE_BOX = (402.0, 106.0, 145.0, 28.0)
+CUSTOMER_PLACE_CENTER_X = 435.0
+CUSTOMER_DATE_CENTER_X = 514.0
+SIGNATURE_VALUE_BASELINE_Y = 104.0
+SIGNATURE_VALUE_FONT_SIZE = 6.5
+SIGNATURE_PLACE_MAX_WIDTH = 72.0
+SIGNATURE_DATE_MAX_WIDTH = 58.0
+CUSTOMER_ORDERED_BY_NAME_X = 86.0
+CUSTOMER_ORDERED_BY_NAME_Y = 672.0
+CUSTOMER_ORDERED_BY_NAME_MAX_WIDTH = 345.0
+CUSTOMER_ORDERED_BY_NAME_FONT_SIZE = 8.5
 
 WORKER_NAME_RECTS = (
     FieldRect(57.48, 446.97, 101.76, 45.72),
@@ -347,7 +362,7 @@ class ExtraWorkPdfService:
                 self._draw_approval_fields(commands, ticket, entry)
             self._draw_billing_fields(commands, ticket, assignment, entry, rows)
             if page_index == len(chunks) - 1:
-                self._draw_signature_fields(commands, ticket, assignment)
+                self._draw_signature_fields(commands, ticket)
             pdf.add_page(commands)
         return pdf.build()
 
@@ -365,6 +380,18 @@ class ExtraWorkPdfService:
         _field(commands, FIELD_RECTS["Kunde"], site.customer or "")
         _field(commands, FIELD_RECTS["Projekt"], site.name)
         _field(commands, FIELD_RECTS["Datum"], _format_date(created_date))
+        if ticket.customer_signature_name:
+            _text(
+                commands,
+                CUSTOMER_ORDERED_BY_NAME_X,
+                CUSTOMER_ORDERED_BY_NAME_Y,
+                _fit_text(
+                    ticket.customer_signature_name,
+                    CUSTOMER_ORDERED_BY_NAME_MAX_WIDTH,
+                    CUSTOMER_ORDERED_BY_NAME_FONT_SIZE,
+                ),
+                CUSTOMER_ORDERED_BY_NAME_FONT_SIZE,
+            )
         _field(commands, FIELD_RECTS["Firma"], site.customer or "")
         _field(
             commands,
@@ -464,29 +491,25 @@ class ExtraWorkPdfService:
             if approval_estimate is not None:
                 _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
 
-    def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket, assignment: Assignment) -> None:
-        worker_x = 62
-        customer_x = 397
+    def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket) -> None:
         worker_place = _format_site_signature_location(ticket.site)
         customer_place = ticket.customer_signature_place or worker_place
-        worker_name = _signature_worker_name(ticket, assignment)
 
-        _text(commands, worker_x, 121, "Unterschrift Monteur", 8, font="F2")
-        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 20, y=101, width=104, height=25)
-        _draw_signature(
+        _signature_stamp(
             commands,
-            ticket.customer_signature_strokes,
-            x=customer_x + 20,
-            y=101,
-            width=104,
-            height=25,
+            strokes=ticket.worker_signature_strokes,
+            image_box=MONTEUR_SIG_IMAGE_BOX,
+            place_center_x=MONTEUR_PLACE_CENTER_X,
+            date_center_x=MONTEUR_DATE_CENTER_X,
+            signed_at=ticket.worker_signed_at,
+            place=worker_place,
         )
-
-        _signature_meta(commands, x=worker_x, name=worker_name, signed_at=ticket.worker_signed_at, place=worker_place)
-        _signature_meta(
+        _signature_stamp(
             commands,
-            x=customer_x,
-            name=ticket.customer_signature_name or "",
+            strokes=ticket.customer_signature_strokes,
+            image_box=CUSTOMER_SIG_IMAGE_BOX,
+            place_center_x=CUSTOMER_PLACE_CENTER_X,
+            date_center_x=CUSTOMER_DATE_CENTER_X,
             signed_at=ticket.customer_signed_at,
             place=customer_place,
         )
@@ -746,23 +769,49 @@ def _shift_rect(rect: FieldRect, *, dx: float = 0, dy: float = 0) -> FieldRect:
     return FieldRect(rect.x + dx, rect.y + dy, rect.width, rect.height)
 
 
-def _signature_meta(
+def _signature_stamp(
     commands: list[bytes],
     *,
-    x: float,
-    name: str,
+    strokes: list[list[dict[str, float]]] | None,
+    image_box: tuple[float, float, float, float],
+    place_center_x: float,
+    date_center_x: float,
     signed_at: datetime | None,
     place: str,
 ) -> None:
-    label_size = 5.7
-    value_size = 5.7
-    _text(commands, x, 72, "Name:", label_size, font="F2")
-    _text(commands, x + 28, 72, _fit_text(name, 112, value_size), value_size)
-    _text(commands, x, 64, "Datum:", label_size, font="F2")
-    _text(commands, x + 36, 64, _format_date_from_datetime(signed_at), value_size)
-    if place:
-        _text(commands, x, 56, "Ort:", label_size, font="F2")
-        _text(commands, x + 22, 56, _fit_text(place, 118, value_size), value_size)
+    image_x, image_y, image_width, image_height = image_box
+    _draw_signature(commands, strokes, x=image_x, y=image_y, width=image_width, height=image_height)
+    _centered_value(
+        commands,
+        center_x=place_center_x,
+        y=SIGNATURE_VALUE_BASELINE_Y,
+        text=_signature_place_short(place),
+        max_width=SIGNATURE_PLACE_MAX_WIDTH,
+        size=SIGNATURE_VALUE_FONT_SIZE,
+    )
+    _centered_value(
+        commands,
+        center_x=date_center_x,
+        y=SIGNATURE_VALUE_BASELINE_Y,
+        text=_format_date_from_datetime(signed_at),
+        max_width=SIGNATURE_DATE_MAX_WIDTH,
+        size=SIGNATURE_VALUE_FONT_SIZE,
+    )
+
+
+def _centered_value(
+    commands: list[bytes],
+    *,
+    center_x: float,
+    y: float,
+    text: str,
+    max_width: float,
+    size: float,
+) -> None:
+    value = _fit_text(_clean_text(text), max_width, size)
+    if not value:
+        return
+    _text(commands, center_x - _text_width(value, size) / 2, y, value, size)
 
 
 def _checkbox(commands: list[bytes], center_x: float, center_y_top: float) -> None:
@@ -974,6 +1023,23 @@ def _format_site_signature_location(site: Any | None) -> str:
     return ""
 
 
+def _signature_place_short(place: str | None) -> str:
+    value = _clean_text(place)
+    if not value:
+        return ""
+    candidate = value.split(",")[-1].strip()
+    parts = candidate.split()
+    if parts and len(parts[0]) == 5 and parts[0].isdigit():
+        candidate = " ".join(parts[1:])
+    if candidate:
+        return candidate
+    parts = value.split()
+    for index, part in enumerate(parts):
+        if len(part) == 5 and part.isdigit() and index + 1 < len(parts):
+            return " ".join(parts[index + 1 :])
+    return value
+
+
 def _wrap_text(text: str, width: float, size: float, max_lines: int) -> list[str]:
     words = text.split()
     lines: list[str] = []
@@ -1069,23 +1135,6 @@ def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:
 
 def _ticket_document_description(ticket: ExtraWorkTicket) -> str:
     return _clean_text(ticket.title) or "Zusatzarbeiten"
-
-
-def _signature_worker_name(ticket: ExtraWorkTicket, assignment: Assignment) -> str:
-    stored_name = _clean_text(ticket.worker_signature_name)
-    assignment_name = _person_full_name(getattr(assignment, "person", None))
-    if stored_name and (" " in stored_name or not assignment_name):
-        return stored_name
-    return assignment_name or stored_name
-
-
-def _person_full_name(person: Any | None) -> str:
-    if person is None:
-        return ""
-    first_name = _clean_text(getattr(person, "first_name", None))
-    last_name = _clean_text(getattr(person, "last_name", None))
-    full_name = " ".join(part for part in [first_name, last_name] if part)
-    return full_name or _clean_text(getattr(person, "display_name", None))
 
 
 def _safe_filename_part(value: str) -> str:
