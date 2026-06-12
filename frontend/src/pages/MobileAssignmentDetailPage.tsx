@@ -589,7 +589,6 @@ function MobileExtraWorkTab({
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
                 <span className="mobile-measurement-card-meta">
-                  <span>Einträge: {order.entry_count}</span>
                   <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
                 </span>
               </button>
