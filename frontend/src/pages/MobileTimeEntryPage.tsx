@@ -740,7 +740,11 @@ export function MobileTimeEntryPage() {
             <div
               className="mobile-time-picker-backdrop"
               role="presentation"
-              onClick={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setTimePickerTarget(null);
+                setTimePickerInitialValue(null);
+              }}
               onPointerDown={(event) => event.stopPropagation()}
             >
               <div
