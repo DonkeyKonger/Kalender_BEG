@@ -41,10 +41,10 @@ const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
 const MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT = 560;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
-  { key: "timesheet", label: "Zeitenliste" },
+  { key: "timesheet", label: "Ausführungsstand" },
   { key: "review", label: "Prüfung" },
   { key: "time-analysis", label: "Zeitauswertung" },
-  { key: "bases", label: "Angebot" },
+  { key: "bases", label: "Zeitenlisten" },
 ];
 
 const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
@@ -1991,52 +1991,50 @@ function MeasurementTab({
             </button>
           ))}
         </div>
-        {activeSubtab === "timesheet" ? (
-          <label
-            className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (!isImporting) {
-                setIsDropTargetActive(true);
-              }
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onDragLeave={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setIsDropTargetActive(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setIsDropTargetActive(false);
-              const file = event.dataTransfer.files?.[0];
+        <label
+          className={`secondary-action project-upload-action measurement-import-drop-action${isImporting ? " is-disabled" : ""}${isDropTargetActive ? " is-drop-target" : ""}`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isImporting) {
+              setIsDropTargetActive(true);
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsDropTargetActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsDropTargetActive(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file) {
+              openImportDialog(file);
+            }
+          }}
+        >
+          <UploadCloud aria-hidden="true" size={15} />
+          <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
+          <input
+            className="project-upload-input"
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={isImporting}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
               if (file) {
                 openImportDialog(file);
+                event.target.value = "";
               }
             }}
-          >
-            <UploadCloud aria-hidden="true" size={15} />
-            <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
-            <input
-              className="project-upload-input"
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={isImporting}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  openImportDialog(file);
-                  event.target.value = "";
-                }
-              }}
-            />
-          </label>
-        ) : null}
+          />
+        </label>
       </div>
 
       {activeSubtab === "timesheet" ? (
