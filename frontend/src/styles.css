@@ -14844,6 +14844,38 @@ button.person-chip:focus-visible {
   box-shadow: none;
 }
 
+.site-detail-page.is-measurement-review-workspace .project-record-toolbar {
+  display: grid;
+  align-items: start;
+  gap: 7px;
+  margin: 18px 0 12px;
+  border: 1px solid var(--figma-border);
+  border-radius: 2px;
+  background: var(--figma-surface);
+  padding: 16px 18px;
+  box-shadow: none;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-toolbar h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--figma-text);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-toolbar h2 svg {
+  color: #334155;
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-toolbar p {
+  margin-top: 2px;
+  color: var(--figma-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 .measurement-review-package-row,
 .measurement-review-toolbar-row {
   display: flex;
