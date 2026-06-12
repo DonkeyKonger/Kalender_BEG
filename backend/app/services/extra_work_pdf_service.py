@@ -28,7 +28,7 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-photo-cache-v1"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v2"
 LOGGER = logging.getLogger(__name__)
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -346,7 +346,7 @@ class ExtraWorkPdfService:
                 self._draw_approval_fields(commands, ticket, entry)
             self._draw_billing_fields(commands, ticket, assignment, entry, rows)
             if page_index == len(chunks) - 1:
-                self._draw_signature_fields(commands, ticket)
+                self._draw_signature_fields(commands, ticket, assignment)
             pdf.add_page(commands)
         return pdf.build()
 
@@ -372,11 +372,11 @@ class ExtraWorkPdfService:
             _checkbox(commands, *CHECKBOX_CENTERS["material_yes"])
         else:
             _checkbox(commands, *CHECKBOX_CENTERS["material_no"])
-        _field(commands, FIELD_RECTS["Zusatzstundenachweis Nr"], _ticket_number(ticket, page_number, total_pages), size=9)
-        _field(commands, FieldRect(346.00, 351.12, 204.00, 17.01), _ticket_title_suffix(ticket), size=8)
+        _field(commands, FIELD_RECTS["Zusatzstundenachweis Nr"], _ticket_number(ticket, page_number, total_pages), size=8.2)
+        _field(commands, FieldRect(236.88, 366.00, 313.00, 10.00), _ticket_title_suffix(ticket), size=7.1)
         week_start, week_end = _week_range(assignment.start_date or created_date)
-        _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.6, align="center")
-        _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.6, align="center")
+        _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.0, align="center")
+        _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.0, align="center")
         if entry:
             _field(commands, FIELD_RECTS["Bauteil"], entry.component, size=8)
             _field(commands, FIELD_RECTS["Etage"], entry.floor, size=8)
@@ -428,18 +428,21 @@ class ExtraWorkPdfService:
             if approval_estimate is not None:
                 _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
 
-    def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket) -> None:
-        signature_y = 38
+    def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket, assignment: Assignment) -> None:
+        signature_y = 62
         column_width = 224
         worker_x = 62
         customer_x = 315
+        worker_place = _format_site_signature_location(ticket.site)
+        customer_place = ticket.customer_signature_place or worker_place
+        worker_name = _signature_worker_name(ticket, assignment)
 
         _text(commands, worker_x, signature_y + 42, "Unterschrift Monteur", 8, font="F2")
         _text(commands, customer_x, signature_y + 42, "Unterschrift Kunde", 8, font="F2")
 
         _text(commands, worker_x, signature_y + 26, "Name:", 6.8, font="F2")
         _text(commands, customer_x, signature_y + 26, "Name:", 6.8, font="F2")
-        _text(commands, worker_x + 34, signature_y + 26, ticket.worker_signature_name or "", 7)
+        _text(commands, worker_x + 34, signature_y + 26, _fit_text(worker_name, 172, 7), 7)
         _text(commands, customer_x + 34, signature_y + 26, ticket.customer_signature_name or "", 7)
 
         _text(commands, worker_x, signature_y + 12, "Datum:", 6.8, font="F2")
@@ -447,21 +450,23 @@ class ExtraWorkPdfService:
         _text(commands, worker_x + 40, signature_y + 12, _format_date_from_datetime(ticket.worker_signed_at), 7)
         _text(commands, customer_x + 40, signature_y + 12, _format_date_from_datetime(ticket.customer_signed_at), 7)
 
-        customer_place = ticket.customer_signature_place or _format_site_signature_location(ticket.site)
+        if worker_place:
+            _text(commands, worker_x, signature_y - 2, "Ort:", 6.8, font="F2")
+            _text(commands, worker_x + 24, signature_y - 2, _fit_text(worker_place, 176, 6.8), 6.8)
         if customer_place:
             _text(commands, customer_x, signature_y - 2, "Ort:", 6.8, font="F2")
             _text(commands, customer_x + 24, signature_y - 2, _fit_text(customer_place, 176, 6.8), 6.8)
 
         _line(commands, worker_x, signature_y + 4, worker_x + column_width, signature_y + 4, 0.6)
         _line(commands, customer_x, signature_y + 4, customer_x + column_width, signature_y + 4, 0.6)
-        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 102, y=signature_y + 6, width=112, height=34)
-        _draw_signature(commands, ticket.customer_signature_strokes, x=customer_x + 102, y=signature_y + 6, width=112, height=34)
+        _draw_signature(commands, ticket.worker_signature_strokes, x=worker_x + 102, y=signature_y + 8, width=108, height=30)
+        _draw_signature(commands, ticket.customer_signature_strokes, x=customer_x + 102, y=signature_y + 8, width=108, height=30)
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Dieser Benutzer ist keiner Person zugeordnet.")
         assignment = self.db.scalar(
-            select(Assignment).where(
+            select(Assignment).options(selectinload(Assignment.person)).where(
                 Assignment.id == assignment_id,
                 Assignment.person_id == current_user.person_id,
             )
@@ -957,12 +962,29 @@ def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) 
 
 
 def _ticket_display_title(ticket: ExtraWorkTicket) -> str:
-    prefix = "Stundenfreigabe" if ticket.kind == "approval" else "Stundenzettel"
-    return f"{prefix} {ticket.sequence_number} - {_ticket_title_suffix(ticket)}"
+    number = ticket.display_number or str(ticket.sequence_number)
+    return f"Zusatzauftrag {number} - {_ticket_title_suffix(ticket)}"
 
 
 def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:
     return _clean_text(ticket.title) or "Hauptauftrag"
+
+
+def _signature_worker_name(ticket: ExtraWorkTicket, assignment: Assignment) -> str:
+    stored_name = _clean_text(ticket.worker_signature_name)
+    assignment_name = _person_full_name(getattr(assignment, "person", None))
+    if stored_name and (" " in stored_name or not assignment_name):
+        return stored_name
+    return assignment_name or stored_name
+
+
+def _person_full_name(person: Any | None) -> str:
+    if person is None:
+        return ""
+    first_name = _clean_text(getattr(person, "first_name", None))
+    last_name = _clean_text(getattr(person, "last_name", None))
+    full_name = " ".join(part for part in [first_name, last_name] if part)
+    return full_name or _clean_text(getattr(person, "display_name", None))
 
 
 def _safe_filename_part(value: str) -> str:

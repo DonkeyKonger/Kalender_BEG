@@ -736,7 +736,7 @@ def test_mobile_extra_work_worker_signature_persists_without_status_change():
         ticket_id=ticket.id,
         current_user=current_user,
         payload=ExtraWorkWorkerSignatureCreate(
-            worker_name="Max Monteur",
+            worker_name="Max",
             signature_strokes=[[
                 ExtraWorkSignaturePoint(x=0.1, y=0.4),
                 ExtraWorkSignaturePoint(x=0.7, y=0.45),
@@ -972,9 +972,12 @@ def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
     )
 
     assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
-    assert len(PdfReader(BytesIO(content)).pages) == 2
+    pdf_reader = PdfReader(BytesIO(content))
+    pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+    assert len(pdf_reader.pages) == 2
     assert b"Fotoanlagen" in content
     assert b"baustelle.png" in content
+    assert "Zusatzauftrag 8007.SZ01 - Hauptauftrag · Schüchtermann Klinik" in pdf_text
 
 
 def test_mobile_extra_work_pdf_splits_four_workers_to_second_template_page():
