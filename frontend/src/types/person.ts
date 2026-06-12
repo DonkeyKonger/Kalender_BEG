@@ -58,8 +58,13 @@ export type PersonCreate = {
 export type PersonUpdate = Partial<PersonCreate>;
 
 export function calendarPersonCode(
-  person: Pick<Person, "first_name" | "last_name" | "display_name" | "short_code">,
+  person: Pick<Person, "first_name" | "last_name" | "display_name" | "short_code"> & {
+    person_type?: PersonType;
+  },
 ): string {
+  if (person.person_type === "external" || person.person_type === "external_temp") {
+    return person.display_name.trim() || person.short_code;
+  }
   const first = person.first_name.trim() || person.display_name.trim();
   const last = person.last_name.trim() || fallbackLastName(person.display_name);
   if (!first && !last) {
