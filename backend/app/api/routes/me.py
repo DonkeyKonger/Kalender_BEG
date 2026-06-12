@@ -29,11 +29,13 @@ from app.schemas.measurement import (
     WorkerSignatureCreate,
 )
 from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, MobileSelfPlanRequest, MobileSite
+from app.schemas.site_email_recipient import SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
+from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -64,6 +66,32 @@ def list_my_assignment_history(
         start=start,
         end=end,
         allow_history=True,
+    )
+
+
+@router.get("/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse)
+def get_my_assignment_email_recipients(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SiteEmailRecipientsResponse:
+    return SiteEmailRecipientService(db).get_for_assignment(
+        assignment_id=assignment_id,
+        current_user=current_user,
+    )
+
+
+@router.put("/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse)
+def update_my_assignment_email_recipients(
+    assignment_id: int,
+    payload: SiteEmailRecipientsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SiteEmailRecipientsResponse:
+    return SiteEmailRecipientService(db).update_for_assignment(
+        assignment_id=assignment_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

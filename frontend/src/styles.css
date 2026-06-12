@@ -12690,6 +12690,119 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
+.mobile-project-email-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(92vw, 460px);
+  max-height: min(82vh, 660px);
+  overflow: auto;
+  border: 1px solid #d8e3ef;
+  border-top: 4px solid #f4b73f;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 24px 55px rgb(15 23 42 / 20%);
+}
+
+.mobile-project-email-dialog-head {
+  display: grid;
+  gap: 4px;
+}
+
+.mobile-project-email-dialog-head h2,
+.mobile-project-email-dialog-head p,
+.mobile-project-email-empty {
+  margin: 0;
+}
+
+.mobile-project-email-dialog-head h2 {
+  color: #111827;
+  font-size: 1.08rem;
+}
+
+.mobile-project-email-dialog-head p,
+.mobile-project-email-empty {
+  color: #65738a;
+  font-size: 0.8rem;
+  font-weight: 760;
+}
+
+.mobile-project-email-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-project-email-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8e3ef;
+  border-radius: 9px;
+  background: #f8fbff;
+  padding: 10px;
+}
+
+.mobile-project-email-option input {
+  width: 20px;
+  height: 20px;
+  accent-color: #2f6096;
+}
+
+.mobile-project-email-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-project-email-option strong,
+.mobile-project-email-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-project-email-option strong {
+  color: #172033;
+  font-size: 0.88rem;
+}
+
+.mobile-project-email-option small {
+  color: #65738a;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.mobile-project-email-add {
+  display: grid;
+  gap: 9px;
+}
+
+.mobile-project-email-add label {
+  display: grid;
+  gap: 7px;
+  color: #42526b;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.mobile-project-email-add input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.mobile-project-email-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .mobile-measurement-row-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

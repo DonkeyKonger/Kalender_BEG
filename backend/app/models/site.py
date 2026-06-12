@@ -71,3 +71,6 @@ class Site(TimestampMixin, Base):
     extra_work_tickets = relationship(
         "ExtraWorkTicket", back_populates="site", cascade="all, delete-orphan"
     )
+    email_recipients = relationship(
+        "SiteEmailRecipient", back_populates="site", cascade="all, delete-orphan"
+    )

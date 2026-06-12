@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.main import app
 from app.models import Base
 from app.models.assignment import Assignment
+from app.models.customer import Customer, CustomerContact
 from app.models.enums import UserRole
 from app.models.extra_work_ticket import ExtraWorkTicketPhoto
 from app.models.person import Person
@@ -29,10 +30,12 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerSignatureCreate,
     ExtraWorkWorkerHours,
 )
+from app.schemas.site_email_recipient import SiteEmailRecipientPayload, SiteEmailRecipientsUpdate
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import extra_work_service as extra_work_module
 from app.services.extra_work_service import ExtraWorkService
+from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 
 def db_session() -> Session:
@@ -49,6 +52,81 @@ def sample_photo_bytes() -> bytes:
     buffer = BytesIO()
     Image.new("RGB", (48, 32), color=(36, 76, 128)).save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def test_mobile_assignment_email_recipients_use_customer_suggestions_and_persist_selection():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
+    customer = Customer(
+        company_name="Klinik GmbH",
+        project_lead_name="Kunde Leitung",
+        project_lead_email=" Leitung@Klinik.example ",
+        is_active=True,
+    )
+    customer.contacts = [
+        CustomerContact(contact_type="bauherr", name="Kunde Kontakt", email="kontakt@klinik.example"),
+        CustomerContact(contact_type="intern", name="Ohne Mail", email=None),
+    ]
+    db.add_all([person, site, customer])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = SiteEmailRecipientService(db)
+
+    initial = service.get_for_assignment(assignment_id=assignment.id, current_user=current_user)
+    suggestion_emails = {recipient.email for recipient in initial.suggestions}
+    updated = service.update_for_assignment(
+        assignment_id=assignment.id,
+        current_user=current_user,
+        payload=SiteEmailRecipientsUpdate(
+            recipients=[
+                SiteEmailRecipientPayload(email="leitung@klinik.example", label="Kunde Leitung"),
+                SiteEmailRecipientPayload(email="neu@kunde.example", label="Neue Adresse"),
+            ]
+        ),
+    )
+    reloaded = service.get_for_assignment(assignment_id=assignment.id, current_user=current_user)
+
+    assert suggestion_emails == {"leitung@klinik.example", "kontakt@klinik.example"}
+    assert {recipient.email for recipient in updated.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
+    assert {recipient.email for recipient in reloaded.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
+    assert "neu@kunde.example" in {recipient.email for recipient in reloaded.suggestions}
+
+
+def test_mobile_assignment_email_recipients_replace_selection_without_duplicates():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = SiteEmailRecipientService(db)
+
+    service.update_for_assignment(
+        assignment_id=assignment.id,
+        current_user=current_user,
+        payload=SiteEmailRecipientsUpdate(
+            recipients=[
+                SiteEmailRecipientPayload(email="kunde@example.de", label="Kunde"),
+                SiteEmailRecipientPayload(email="KUNDE@example.de", label="Kunde doppelt"),
+            ]
+        ),
+    )
+    replaced = service.update_for_assignment(
+        assignment_id=assignment.id,
+        current_user=current_user,
+        payload=SiteEmailRecipientsUpdate(recipients=[]),
+    )
+
+    assert replaced.recipients == []
+    assert [recipient.email for recipient in replaced.suggestions] == ["kunde@example.de"]
+    assert replaced.suggestions[0].is_selected is False
 
 
 def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submitted():

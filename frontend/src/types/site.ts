@@ -315,6 +315,29 @@ export type MobileExtraWorkTicket = {
   updated_at: string;
 };
 
+export type SiteEmailRecipient = {
+  id: number | null;
+  email: string;
+  label: string | null;
+  source: string | null;
+  is_selected: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type SiteEmailRecipientsResponse = {
+  site_id: number;
+  recipients: SiteEmailRecipient[];
+  suggestions: SiteEmailRecipient[];
+};
+
+export type SiteEmailRecipientsUpdate = {
+  recipients: Array<{
+    email: string;
+    label?: string | null;
+  }>;
+};
+
 export type MobileExtraWorkTicketPhoto = {
   id: number;
   site_id: number;

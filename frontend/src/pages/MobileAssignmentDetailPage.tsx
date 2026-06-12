@@ -11,6 +11,7 @@ import {
   Hammer,
   Images,
   MapPin,
+  Mail,
   Package,
   Pencil,
   Plus,
@@ -34,7 +35,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList } from "../types/site";
+import type { CustomerSignatureStroke, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -495,6 +496,10 @@ function MobileExtraWorkTab({
             setPhotoMessageTone("info");
             setMessage("Bezeichnung gespeichert.");
           }}
+          onEmailRecipientsSaved={(count) => {
+            setPhotoMessageTone("info");
+            setMessage(count === 1 ? "Ein Kundenempfänger gespeichert." : `${count} Kundenempfänger gespeichert.`);
+          }}
           onWorkerSigned={(updatedOrder) => {
             mergeUpdatedOrder(updatedOrder);
             setPhotoMessageTone("info");
@@ -610,6 +615,7 @@ function ExtraWorkOrderOverview({
   onOpenPhotos,
   onCustomerSigned,
   onTitleUpdated,
+  onEmailRecipientsSaved,
   onWorkerSigned,
   onSubmit,
 }: {
@@ -626,6 +632,7 @@ function ExtraWorkOrderOverview({
   onOpenPhotos: () => void;
   onCustomerSigned: (order: MobileExtraWorkTicket) => void;
   onTitleUpdated: (order: MobileExtraWorkTicket) => void;
+  onEmailRecipientsSaved: (count: number) => void;
   onWorkerSigned: (order: MobileExtraWorkTicket) => void;
   onSubmit: () => Promise<void>;
 }) {
@@ -638,6 +645,7 @@ function ExtraWorkOrderOverview({
   const [isSigningCustomer, setIsSigningCustomer] = useState(false);
   const [isSigningWorker, setIsSigningWorker] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isEditingEmailRecipients, setIsEditingEmailRecipients] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const hasCustomerSignature = Boolean(order.customer_signed_at);
   const hasWorkerSignature = Boolean(order.worker_signed_at);
@@ -743,6 +751,17 @@ function ExtraWorkOrderOverview({
           type="button"
           onClick={() => {
             setPdfError(null);
+            setIsEditingEmailRecipients(true);
+          }}
+        >
+          <Mail aria-hidden="true" size={18} />
+          <span>Kunden-E-Mail</span>
+        </button>
+        <button
+          className="mobile-measurement-overview-action"
+          type="button"
+          onClick={() => {
+            setPdfError(null);
             setIsSigningWorker(true);
           }}
           disabled={hasWorkerSignature}
@@ -783,6 +802,16 @@ function ExtraWorkOrderOverview({
           onSaved={(updatedOrder) => {
             setIsRenaming(false);
             onTitleUpdated(updatedOrder);
+          }}
+        />
+      ) : null}
+      {isEditingEmailRecipients ? (
+        <ProjectEmailRecipientsModal
+          assignmentId={assignmentId}
+          onClose={() => setIsEditingEmailRecipients(false)}
+          onSaved={(count) => {
+            setIsEditingEmailRecipients(false);
+            onEmailRecipientsSaved(count);
           }}
         />
       ) : null}
@@ -867,6 +896,187 @@ function ExtraWorkTitleDialog({
             Abbrechen
           </button>
           <button className="primary-action" type="button" onClick={() => void saveTitle()} disabled={!canRename || isSaving}>
+            {isSaving ? "Speichert..." : "Speichern"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectEmailRecipientsModal({
+  assignmentId,
+  onClose,
+  onSaved,
+}: {
+  assignmentId: number;
+  onClose: () => void;
+  onSaved: (count: number) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<SiteEmailRecipient[]>([]);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadRecipients(): Promise<void> {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await api.assignmentEmailRecipients(assignmentId);
+        if (!isActive) {
+          return;
+        }
+        setSuggestions(response.suggestions);
+        setSelectedEmails(response.recipients.map((recipient) => recipient.email));
+      } catch (requestError) {
+        if (isActive) {
+          setError(readApiError(requestError, "E-Mail-Empfänger konnten nicht geladen werden."));
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadRecipients();
+    return () => {
+      isActive = false;
+    };
+  }, [assignmentId]);
+
+  const suggestionByEmail = useMemo(() => {
+    const entries = new Map<string, SiteEmailRecipient>();
+    for (const suggestion of suggestions) {
+      entries.set(suggestion.email, suggestion);
+    }
+    return entries;
+  }, [suggestions]);
+
+  function toggleEmail(email: string): void {
+    setSelectedEmails((currentEmails) => (
+      currentEmails.includes(email)
+        ? currentEmails.filter((currentEmail) => currentEmail !== email)
+        : [...currentEmails, email]
+    ));
+  }
+
+  function addEmail(): void {
+    const normalizedEmail = normalizeProjectRecipientEmail(newEmail);
+    if (!normalizedEmail) {
+      setError("Bitte eine E-Mail-Adresse eingeben.");
+      return;
+    }
+    if (!isValidProjectRecipientEmail(normalizedEmail)) {
+      setError("E-Mail-Adresse ist nicht gültig.");
+      return;
+    }
+    setError(null);
+    setSuggestions((currentSuggestions) => (
+      currentSuggestions.some((suggestion) => suggestion.email === normalizedEmail)
+        ? currentSuggestions
+        : [
+          ...currentSuggestions,
+          {
+            id: null,
+            email: normalizedEmail,
+            label: null,
+            source: "manual",
+            is_selected: true,
+            created_at: null,
+            updated_at: null,
+          },
+        ]
+    ));
+    setSelectedEmails((currentEmails) => (
+      currentEmails.includes(normalizedEmail) ? currentEmails : [...currentEmails, normalizedEmail]
+    ));
+    setNewEmail("");
+  }
+
+  async function saveRecipients(): Promise<void> {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const recipients = selectedEmails.map((email) => {
+        const suggestion = suggestionByEmail.get(email);
+        return {
+          email,
+          label: suggestion?.label ?? null,
+        };
+      });
+      const response = await api.updateAssignmentEmailRecipients(assignmentId, { recipients });
+      onSaved(response.recipients.length);
+    } catch (requestError) {
+      setError(readApiError(requestError, "E-Mail-Empfänger konnten nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="mobile-project-email-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-project-email-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-project-email-dialog-head">
+          <h2 id="mobile-project-email-dialog-title">E-Mail-Empfänger</h2>
+          <p>Projektbezogene Kundenempfänger für spätere Dokumente und Mails.</p>
+        </div>
+
+        {isLoading ? <div className="empty-panel">Empfänger werden geladen...</div> : null}
+        {!isLoading ? (
+          <>
+            <div className="mobile-project-email-list">
+              {suggestions.length === 0 ? (
+                <p className="mobile-project-email-empty">Noch keine Kunden-E-Mail bekannt. Du kannst unten eine Adresse hinzufügen.</p>
+              ) : null}
+              {suggestions.map((recipient) => (
+                <label className="mobile-project-email-option" key={recipient.email}>
+                  <input
+                    type="checkbox"
+                    checked={selectedEmails.includes(recipient.email)}
+                    onChange={() => toggleEmail(recipient.email)}
+                  />
+                  <span>
+                    <strong>{recipient.label || recipient.email}</strong>
+                    {recipient.label ? <small>{recipient.email}</small> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mobile-project-email-add">
+              <label>
+                <span>Neue E-Mail-Adresse</span>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(event) => setNewEmail(event.target.value)}
+                  placeholder="kunde@example.de"
+                />
+              </label>
+              <button className="secondary-action" type="button" onClick={addEmail}>
+                Hinzufügen
+              </button>
+            </div>
+          </>
+        ) : null}
+        {error ? <p className="form-error">{error}</p> : null}
+        <div className="mobile-project-email-actions">
+          <button className="secondary-action" type="button" onClick={onClose} disabled={isSaving}>
+            Abbrechen
+          </button>
+          <button className="primary-action" type="button" onClick={() => void saveRecipients()} disabled={isLoading || isSaving}>
             {isSaving ? "Speichert..." : "Speichern"}
           </button>
         </div>
@@ -4661,6 +4871,15 @@ function normalizeExtraWorkWorkerName(
 
 function cleanExtraWorkNamePart(value: string | null | undefined): string {
   return (value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeProjectRecipientEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isValidProjectRecipientEmail(value: string): boolean {
+  const [, domain = ""] = value.split("@");
+  return Boolean(value.includes("@") && domain.includes("."));
 }
 
 function createClientRowId(): string {
