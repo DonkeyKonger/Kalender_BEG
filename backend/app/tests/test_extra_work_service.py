@@ -620,8 +620,18 @@ def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch
     assert deliveries == [
         {
             "recipients": ["kunde@example.de"],
-            "subject": "Anliegend erhalten Sie Schüchtermann Klinik - Stundenzettel 1 - Hauptauftrag",
-            "body": "Sehr geehrte Damen und Herren,\n\nanliegend erhalten Sie Schüchtermann Klinik - Stundenzettel 1 - Hauptauftrag.\n\nMit freundlichen Grüßen\n\nMax Monteur",
+            "subject": "Anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag",
+            "body": (
+                "Sehr geehrte Damen und Herren,\n\n"
+                "anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag.\n\n"
+                "Mit freundlichen Grüßen\n\n"
+                "Max Monteur\n\n"
+                "BEG Badener Elektro GmbH\n"
+                "Firmenweg 16 · 28832 Achim\n"
+                "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
+                "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
+                "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
+            ),
             "filename": "Stundenzettel_3_Hauptauftrag.pdf",
             "content": b"%PDF-test",
             "content_type": "application/pdf",

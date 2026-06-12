@@ -45,14 +45,19 @@ class ExtraWorkEmailService:
             current_user=current_user,
         )
         site_name = _clean_text(ticket.site.name if ticket.site else None) or "Baustelle"
-        document_name = _document_name(ticket, filename)
+        document_title = _email_document_title(ticket, site_name, filename)
         worker_name = _worker_name(assignment, current_user)
-        subject = f"Anliegend erhalten Sie {site_name} - {document_name}"
+        subject = f"Anliegend erhalten Sie {document_title}"
         body = (
             "Sehr geehrte Damen und Herren,\n\n"
-            f"anliegend erhalten Sie {site_name} - {document_name}.\n\n"
+            f"anliegend erhalten Sie {document_title}.\n\n"
             "Mit freundlichen Grüßen\n\n"
-            f"{worker_name}"
+            f"{worker_name}\n\n"
+            "BEG Badener Elektro GmbH\n"
+            "Firmenweg 16 · 28832 Achim\n"
+            "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
+            "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
+            "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
         )
         EmailDeliveryService().send_document_email(
             recipients=recipients,
@@ -127,12 +132,12 @@ class ExtraWorkEmailService:
         )
 
 
-def _document_name(ticket: ExtraWorkTicket, filename: str) -> str:
-    prefix = "Stundenfreigabe" if ticket.kind == "approval" else "Stundenzettel"
-    title = _clean_text(ticket.title) or "Hauptauftrag"
-    if ticket.sequence_number:
-        return f"{prefix} {ticket.sequence_number} - {title}"
-    return _clean_text(filename.removesuffix(".pdf")) or prefix
+def _email_document_title(ticket: ExtraWorkTicket, site_name: str, filename: str) -> str:
+    ticket_number = _clean_text(ticket.display_number) or str(ticket.sequence_number or "").strip()
+    if not ticket_number:
+        ticket_number = _clean_text(filename.removesuffix(".pdf")) or "ohne Nummer"
+    description = _clean_text(ticket.title) or "Hauptauftrag"
+    return f"Zusatzauftrag {ticket_number} - {site_name} - {description}"
 
 
 def _worker_name(assignment: Assignment, current_user: User) -> str:
