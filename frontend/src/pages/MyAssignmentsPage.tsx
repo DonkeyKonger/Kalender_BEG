@@ -690,6 +690,25 @@ function DayFocusCard({
   compact?: boolean;
   onEmptyDaySelect?: (date: string, label: string) => void;
 }) {
+  if (assignments.length > 1) {
+    return (
+      <article className={`mobile-focus-card mobile-home-day-assignment-cluster${compact ? " is-upcoming" : ""}`}>
+        <div className="mobile-home-day-assignment-head">
+          <strong>{formatHomeAssignmentDateLabel(date)}</strong>
+          <span>{assignments.length} Einsätze</span>
+        </div>
+        <div className="mobile-home-day-assignment-grid">
+          {assignments.map((daily) => (
+            <CompactHomeAssignmentCard
+              assignment={daily.assignment}
+              key={daily.key}
+            />
+          ))}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className={`mobile-focus-card${compact ? " is-upcoming" : ""}`}>
       {assignments.length ? assignments.map((daily) => (
@@ -710,6 +729,24 @@ function DayFocusCard({
         </button>
       )}
     </article>
+  );
+}
+
+function CompactHomeAssignmentCard({ assignment }: { assignment: MobileAssignment }) {
+  return (
+    <Link
+      className="mobile-home-assignment-card is-day-cluster-item"
+      to={`/me/assignments/${assignment.id}`}
+      state={{ assignment }}
+    >
+      <span>
+        <b>{assignment.site.name}</b>
+        <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
+      </span>
+      <span className="assignment-card-affordance">
+        <ChevronRight aria-hidden="true" size={15} />
+      </span>
+    </Link>
   );
 }
 
