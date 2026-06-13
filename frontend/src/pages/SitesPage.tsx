@@ -883,8 +883,12 @@ export function SiteFields({
         <label className="address-field site-address-search">
           <span>Adresse suchen</span>
           <input
+            autoCapitalize="none"
+            autoComplete="new-password"
+            autoCorrect="off"
             disabled={disabled}
             placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
+            spellCheck={false}
             value={addressSearch}
             onChange={(event) => {
               setSelectedGeocodeResult(null);
