@@ -273,17 +273,12 @@ export function DashboardPage() {
                         <strong>{formatDashboardManagerHeading(group.manager)}</strong>
                         <span>{formatAssignedSiteGroupMeta(group.sites)}</span>
                       </div>
-                      <div className="dashboard-site-list">
+                      <div className="dashboard-site-tile-grid">
                         {group.sites.map((siteSummary) => (
-                          <Link className="dashboard-site-item" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id}>
-                            <span className="dashboard-site-color" style={{ backgroundColor: siteSummary.site.color ?? "#2f6ea8" }} aria-hidden="true" />
-                            <span className="dashboard-site-body">
-                              <strong>{siteSummary.site.name}</strong>
-                              <span>
-                                {siteSummary.managerLabel} · {formatCount(siteSummary.internalCount, "Monteur", "Monteure")}
-                                {siteSummary.externalCount > 0 ? " · " + siteSummary.externalCount + " extern" : ""}
-                              </span>
-                              <small>{[siteSummary.site.site_number, siteSummary.site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</small>
+                          <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
+                            <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
+                            <span className="dashboard-site-tile-count">
+                              {formatCount(siteSummary.internalCount + siteSummary.externalCount, "Monteur", "Monteure")}
                             </span>
                             {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Pruefen</span>}
                           </Link>

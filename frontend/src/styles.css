@@ -11699,6 +11699,61 @@ button.person-chip:focus-visible {
   font-weight: 700;
 }
 
+.dashboard-site-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 112px));
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.dashboard-site-tile {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 2px;
+  background: #fbfdff;
+  color: inherit;
+  padding: 7px 8px;
+  text-decoration: none;
+}
+
+.dashboard-site-tile:hover,
+.dashboard-site-tile:focus-visible {
+  border-color: #9fb8d6;
+  background: #ffffff;
+  box-shadow: none;
+  outline: none;
+}
+
+.dashboard-site-tile-name,
+.dashboard-site-tile-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-site-tile-name {
+  color: #111827;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dashboard-site-tile-count {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+.dashboard-site-tile .dashboard-signal {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.56rem;
+  padding: 1px 4px;
+}
+
 .dashboard-site-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
