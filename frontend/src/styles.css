@@ -218,7 +218,7 @@ button:disabled {
   align-items: center;
   gap: 8px;
   min-height: 38px;
-  border-radius: 6px;
+  border-radius: 3px;
   color: #dce8f7;
   padding: 8px 10px;
   text-decoration: none;
