@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.assignment import Assignment
 from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket
+from app.models.enums import UserRole
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
@@ -1128,30 +1129,35 @@ class MeasurementService:
                 ).all()
             )
 
+        statement = (
+            select(SiteMeasurementBatch)
+            .join(SiteMeasurementBatch.site)
+            .options(
+                selectinload(SiteMeasurementBatch.site),
+                selectinload(SiteMeasurementBatch.entries),
+                selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+            )
+            .where(
+                SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
+                or_(
+                    SiteMeasurementBatch.status.in_(("submitted", "rejected")),
+                    SiteMeasurementBatch.customer_signed_at.is_not(None),
+                ),
+            )
+        )
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            statement = statement.where(Site.project_manager_person_id == current_user.person_id)
+
         batches = list(
             self.db.scalars(
-                select(SiteMeasurementBatch)
-                .options(
-                    selectinload(SiteMeasurementBatch.site),
-                    selectinload(SiteMeasurementBatch.entries),
-                    selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
-                )
-                .where(
-                    SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
-                    or_(
-                        SiteMeasurementBatch.status.in_(("submitted", "rejected")),
-                        SiteMeasurementBatch.customer_signed_at.is_not(None),
-                    ),
-                )
-                .order_by(
+                statement.order_by(
                     func.coalesce(
                         SiteMeasurementBatch.customer_signed_at,
                         SiteMeasurementBatch.submitted_at,
                         SiteMeasurementBatch.updated_at,
                     ).desc(),
                     SiteMeasurementBatch.updated_at.desc(),
-                )
-                .limit(limit + len(dismissed_keys))
+                ).limit(limit + len(dismissed_keys))
             ).all()
         )
         messages: list[MeasurementDashboardSubmissionRead] = []

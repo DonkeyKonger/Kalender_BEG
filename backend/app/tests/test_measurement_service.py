@@ -937,6 +937,99 @@ def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted
     ]
 
 
+def test_dashboard_submissions_for_project_manager_are_scoped_to_assigned_sites():
+    from app.models.enums import PersonType, UserRole
+    from app.models.person import Person
+    from app.models.user import User
+
+    db = db_session()
+    own_manager = Person(
+        first_name="Axel",
+        last_name="Biesewig",
+        display_name="Axel Biesewig",
+        short_code="AB",
+        person_type=PersonType.INTERNAL,
+    )
+    other_manager = Person(
+        first_name="Klara",
+        last_name="Extern",
+        display_name="Klara Extern",
+        short_code="KE",
+        person_type=PersonType.INTERNAL,
+    )
+    project_manager_user = User(
+        username="axel",
+        display_name="Axel Biesewig",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        person=own_manager,
+    )
+    unrelated_project_manager_user = User(
+        username="no-sites",
+        display_name="Projektleiter ohne Baustellen",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+    )
+    admin_user = User(
+        username="admin",
+        display_name="Administrator",
+        password_hash="x",
+        role=UserRole.ADMIN,
+    )
+    own_site = create_site(db)
+    own_site.name = "Eigene Baustelle"
+    own_site.project_manager = own_manager
+    other_site = create_site(db)
+    other_site.name = "Fremde Baustelle"
+    other_site.project_manager = other_manager
+    own_base = create_measurement_base(db, own_site)
+    other_base = create_measurement_base(db, other_site)
+    own_batch = SiteMeasurementBatch(
+        site=own_site,
+        measurement_base=own_base,
+        number=1,
+        title="Aufmaß eigene Baustelle",
+        status="submitted",
+        submitted_at=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+    other_batch = SiteMeasurementBatch(
+        site=other_site,
+        measurement_base=other_base,
+        number=1,
+        title="Aufmaß fremde Baustelle",
+        status="submitted",
+        submitted_at=datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc),
+    )
+    db.add_all(
+        [
+            own_manager,
+            other_manager,
+            project_manager_user,
+            unrelated_project_manager_user,
+            admin_user,
+            own_batch,
+            other_batch,
+        ]
+    )
+    db.commit()
+
+    service = MeasurementService(db)
+
+    project_manager_messages = service.list_dashboard_submissions(
+        limit=5,
+        current_user=project_manager_user,
+    )
+    unrelated_project_manager_messages = service.list_dashboard_submissions(
+        limit=5,
+        current_user=unrelated_project_manager_user,
+    )
+    admin_messages = service.list_dashboard_submissions(limit=5, current_user=admin_user)
+
+    assert [message.batch_id for message in project_manager_messages] == [own_batch.id]
+    assert unrelated_project_manager_messages == []
+    assert {message.batch_id for message in admin_messages} == {own_batch.id, other_batch.id}
+
+
 def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     from datetime import date
 
