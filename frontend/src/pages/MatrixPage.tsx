@@ -30,6 +30,7 @@ import {
   isWeekendDate,
   toDateInputValue,
   type HolidayInfo,
+  type PlanningRange,
 } from "../utils/dateRange";
 
 type CellKey = `${number}-${string}`;
@@ -133,12 +134,13 @@ export function MatrixPage() {
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
   const assignmentResizeRef = useRef<AssignmentResizeState | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
-  const didScrollToTodayRef = useRef(false);
+  const rangeScrollKeyRef = useRef<string | null>(null);
   const weekSnapTimeoutRef = useRef<number | null>(null);
   const isApplyingWeekSnapRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
+  const [isYearView, setIsYearView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
   const [assignmentDrag, setAssignmentDrag] = useState<AssignmentDragState | null>(null);
   const [assignmentResize, setAssignmentResize] = useState<AssignmentResizeState | null>(null);
@@ -148,6 +150,11 @@ export function MatrixPage() {
   const [isSiteCreateDrawerOpen, setIsSiteCreateDrawerOpen] = useState(false);
   const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
+  const matrixIsEditable = isEditable && !isYearView;
+  const activeRange = useMemo(
+    () => isYearView ? getYearPlanningRange(today) : defaultRange,
+    [defaultRange, isYearView, today],
+  );
   const dayColumnWidth = matrixDayColumnWidth(isCompactView);
   const selectedCellRange = useMemo(() => {
     if (!matrix || !selectionStartCell || !selectionEndCell) {
@@ -210,12 +217,12 @@ export function MatrixPage() {
     try {
       const [matrixData, personData, absenceData] = await Promise.all([
         api.matrix({
-          start: defaultRange.start,
-          end: defaultRange.end,
+          start: activeRange.start,
+          end: activeRange.end,
           includeWeekends: true,
         }),
         api.persons(),
-        api.absences({ start: defaultRange.start, end: defaultRange.end }),
+        api.absences({ start: activeRange.start, end: activeRange.end }),
       ]);
       setMatrix(matrixData);
       setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
@@ -226,22 +233,22 @@ export function MatrixPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [defaultRange.end, defaultRange.start]);
+  }, [activeRange.end, activeRange.start]);
 
   const refreshMatrixOnly = useCallback(async () => {
     const matrixData = await api.matrix({
-      start: defaultRange.start,
-      end: defaultRange.end,
+      start: activeRange.start,
+      end: activeRange.end,
       includeWeekends: true,
     });
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-  }, [defaultRange.end, defaultRange.start]);
+  }, [activeRange.end, activeRange.start]);
 
   const refreshAbsencesOnly = useCallback(async () => {
-    const absenceData = await api.absences({ start: defaultRange.start, end: defaultRange.end });
+    const absenceData = await api.absences({ start: activeRange.start, end: activeRange.end });
     setAbsences(absenceData);
-  }, [defaultRange.end, defaultRange.start]);
+  }, [activeRange.end, activeRange.start]);
 
   useEffect(() => {
     void loadMatrix();
@@ -265,18 +272,30 @@ export function MatrixPage() {
   }, [matrix, user?.person_id]);
 
   useEffect(() => {
-    if (!matrix || !matrixScrollRef.current || didScrollToTodayRef.current) {
+    if (!matrix || !matrixScrollRef.current) {
       return;
     }
-    if (!matrix.days.some((day) => day.date === today)) {
+    const firstDay = matrix.days[0]?.date;
+    const lastDay = matrix.days.at(-1)?.date;
+    if (firstDay !== activeRange.start || lastDay !== activeRange.end) {
       return;
     }
-    didScrollToTodayRef.current = true;
-    matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
-  }, [isCompactView, matrix, today]);
+    const scrollKey = `${isYearView ? "year" : "standard"}:${activeRange.start}:${activeRange.end}`;
+    if (rangeScrollKeyRef.current === scrollKey) {
+      return;
+    }
+    rangeScrollKeyRef.current = scrollKey;
+    if (isYearView) {
+      matrixScrollRef.current.scrollLeft = 0;
+      return;
+    }
+    if (matrix.days.some((day) => day.date === today)) {
+      matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
+    }
+  }, [activeRange.end, activeRange.start, isCompactView, isYearView, matrix, today]);
 
   const handleMatrixScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
-    if (!matrix || isApplyingWeekSnapRef.current) {
+    if (!matrix || isYearView || isApplyingWeekSnapRef.current) {
       return;
     }
     const scrollElement = event.currentTarget;
@@ -299,7 +318,7 @@ export function MatrixPage() {
         isApplyingWeekSnapRef.current = false;
       }, 250);
     }, 180);
-  }, [isCompactView, matrix]);
+  }, [isCompactView, isYearView, matrix]);
 
   useEffect(() => {
     return () => {
@@ -365,7 +384,7 @@ export function MatrixPage() {
 
   useEffect(() => {
     function handleMatrixKeyboard(event: KeyboardEvent) {
-      if (!isEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
+      if (!matrixIsEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
         return;
       }
       if (!activeCell || !activeEditorRange) {
@@ -425,13 +444,25 @@ export function MatrixPage() {
 
     document.addEventListener("keydown", handleMatrixKeyboard);
     return () => document.removeEventListener("keydown", handleMatrixKeyboard);
-  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, assignmentSuggestions, editorAnchor, highlightedPersonIndex, isEditable, isSelecting]);
+  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, assignmentSuggestions, editorAnchor, highlightedPersonIndex, isSelecting, matrixIsEditable]);
 
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
     if (user) {
       localStorage.setItem(matrixCompactPreferenceKey(user.id), String(value));
     }
+  }
+
+  function updateYearView(value: boolean) {
+    if (activeCell) {
+      closeOrSaveActiveEditor();
+    }
+    closeAbsenceEditor();
+    clearSelection();
+    updateAssignmentDrag(null);
+    updateAssignmentResize(null);
+    setIsSiteCreateDrawerOpen(false);
+    setIsYearView(value);
   }
 
   function openEditorForRange(row: MatrixRow, cell: MatrixCell, range: CellRange, anchor?: EditorAnchor) {
@@ -496,7 +527,7 @@ export function MatrixPage() {
     addSelectedPersonAndSave(String(suggestion.person.id));
   }
   function openAbsenceCell(date: string, anchor: EditorAnchor) {
-    if (!isEditable) {
+    if (!matrixIsEditable) {
       return;
     }
     closeActiveEditor();
@@ -540,7 +571,7 @@ export function MatrixPage() {
   }
 
   async function deleteAbsenceDayFromPlanning(absence: Absence, date: string) {
-    if (!isEditable || date < absence.start_date || date > absence.end_date) {
+    if (!matrixIsEditable || date < absence.start_date || date > absence.end_date) {
       return;
     }
     try {
@@ -684,7 +715,7 @@ export function MatrixPage() {
   }
 
   function startCellSelection(row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) {
-    if (!isEditable || event.button !== 0) {
+    if (!matrixIsEditable || event.button !== 0) {
       return;
     }
     event.preventDefault();
@@ -841,6 +872,9 @@ export function MatrixPage() {
   }, [isResizingAssignment]);
 
   async function undoLast() {
+    if (isYearView) {
+      return;
+    }
     const item = undoStack.at(-1);
     if (!item) {
       return;
@@ -887,7 +921,7 @@ export function MatrixPage() {
   }
 
   async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) {
-    if (!isEditable) {
+    if (!matrixIsEditable) {
       return;
     }
     const key = cellKey(row.site.id, cell.date);
@@ -926,7 +960,7 @@ export function MatrixPage() {
     segmentEndDate: string,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) {
-    if (!isEditable || event.button !== 0) {
+    if (!matrixIsEditable || event.button !== 0) {
       return;
     }
     event.preventDefault();
@@ -964,7 +998,7 @@ export function MatrixPage() {
     edge: AssignmentResizeEdge,
     event: ReactPointerEvent<HTMLSpanElement>,
   ) {
-    if (!isEditable || event.button !== 0) {
+    if (!matrixIsEditable || event.button !== 0) {
       return;
     }
     event.preventDefault();
@@ -1073,7 +1107,7 @@ export function MatrixPage() {
 
 
   async function clearCellMark(row: MatrixRow, cell: MatrixCell) {
-    if (!isEditable || !cell.mark) {
+    if (!matrixIsEditable || !cell.mark) {
       return;
     }
     const key = cellKey(row.site.id, cell.date);
@@ -1098,7 +1132,7 @@ export function MatrixPage() {
   }
 
   async function cycleCellMark(row: MatrixRow, cell: MatrixCell) {
-    if (!isEditable) {
+    if (!matrixIsEditable) {
       return;
     }
     const key = cellKey(row.site.id, cell.date);
@@ -1172,7 +1206,7 @@ export function MatrixPage() {
 
   async function saveSiteInfo(siteId: number) {
     const currentRow = matrix?.rows.find((row) => row.site.id === siteId);
-    if (!currentRow) {
+    if (!matrixIsEditable || !currentRow) {
       return;
     }
     const nextInfo = siteInfoDrafts[siteId]?.trim() || null;
@@ -1195,7 +1229,7 @@ export function MatrixPage() {
 
   async function saveSiteStatus(siteId: number, status: SiteStatus) {
     const currentRow = matrix?.rows.find((row) => row.site.id === siteId);
-    if (!currentRow || currentRow.site.status === status) {
+    if (!matrixIsEditable || !currentRow || currentRow.site.status === status) {
       return;
     }
     setSavingStatusSiteId(siteId);
@@ -1261,12 +1295,12 @@ export function MatrixPage() {
   }, [matrix, projectManagerFilter]);
 
   return (
-    <section className={isCompactView ? "matrix-page is-compact" : "matrix-page"}>
+    <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : ""].filter(Boolean).join(" ")}>
       <div className="matrix-toolbar">
         <div>
           <p className="eyebrow">Planung</p>
           <h1>Planmatrix</h1>
-          <p className="matrix-range">{defaultRange.label}</p>
+          <p className="matrix-range">{activeRange.label}</p>
         </div>
         <div className="matrix-actions">
           {projectManagerOptions.length > 0 && (
@@ -1298,9 +1332,18 @@ export function MatrixPage() {
             />
             <span>Kompakte Ansicht</span>
           </label>
+          <label className="switch-control matrix-year-toggle">
+            <input
+              checked={isYearView}
+              type="checkbox"
+              onChange={(event) => updateYearView(event.target.checked)}
+            />
+            <span>Ganzes Jahr</span>
+          </label>
+          {isYearView && <span className="matrix-readonly-note">Jahresansicht · Nur Anzeige</span>}
           <button
             className="icon-button secondary"
-            disabled={!undoStack.length}
+            disabled={isYearView || !undoStack.length}
             type="button"
             onClick={() => void undoLast()}
           >
@@ -1316,11 +1359,11 @@ export function MatrixPage() {
         <>
           <MatrixTable
             absences={absences}
-            canCreateSites={isEditable}
+            canCreateSites={matrixIsEditable}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
             isCompactView={isCompactView}
-            isEditable={isEditable}
+            isEditable={matrixIsEditable}
             assignmentDragTarget={assignmentDrag?.target ?? null}
             assignmentResize={assignmentResize}
             assignmentResizeRange={assignmentResizeRange}
@@ -1354,7 +1397,7 @@ export function MatrixPage() {
           />
 
           <SiteCreateDrawer
-            canEdit={isEditable}
+            canEdit={matrixIsEditable}
             initialProjectManagerPersonId={siteCreateProjectManagerId}
             isOpen={isSiteCreateDrawerOpen}
             onClose={() => setIsSiteCreateDrawerOpen(false)}
@@ -2593,6 +2636,15 @@ function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: numbe
 
 function matrixCompactPreferenceKey(userId: number): string {
   return `kb_matrix_compact_view_${userId}`;
+}
+
+function getYearPlanningRange(referenceDate: string): PlanningRange {
+  const year = Number(referenceDate.slice(0, 4));
+  return {
+    start: `${year}-01-01`,
+    end: `${year}-12-31`,
+    label: `01.01.${year} - 31.12.${year}`,
+  };
 }
 
 function siteCompactMeta(siteNumber: string | null, location: string | null): string {
