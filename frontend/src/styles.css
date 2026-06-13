@@ -5037,6 +5037,43 @@ button.person-chip:focus-visible {
   border-radius: 3px;
 }
 
+.persons-page .overview-create {
+  border-radius: 3px;
+}
+
+.persons-page .overview-search {
+  border-radius: 3px;
+}
+
+.persons-page .overview-group-section {
+  border-radius: 3px;
+}
+
+.persons-page .overview-group-count {
+  border-radius: 3px;
+}
+
+.persons-page .person-overview-card {
+  border-radius: 3px;
+}
+
+.persons-page .person-overview-card:hover,
+.persons-page .person-overview-card:focus-visible {
+  transform: none;
+}
+
+.persons-page .person-overview-card .entity-card-color {
+  border-radius: 0;
+}
+
+.persons-page .person-overview-card .entity-card-icon {
+  border-radius: 3px;
+}
+
+.persons-page .person-overview-card .status-badge {
+  border-radius: 3px;
+}
+
 .person-overview-card.is-external-person {
   background: #fffdf7;
 }
@@ -8201,6 +8238,14 @@ button.person-chip:focus-visible {
 .person-scope-tabs.overview-filter-tabs button.is-active span {
   background: rgb(255 255 255 / 18%);
   color: #ffffff;
+}
+
+.persons-page .person-scope-tabs span {
+  border-radius: 3px;
+}
+
+.persons-page .person-scope-tabs.overview-filter-tabs button {
+  border-radius: 3px;
 }
 
 .admin-create-panel,
