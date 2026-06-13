@@ -14,8 +14,9 @@ import {
   formatHalfHourFromMinutes as formatHalfHour,
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
+import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
-import type { AssignmentRead } from "../types/matrix";
+import type { AbsenceType, AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeReviewDecision } from "../types/timeEntry";
@@ -95,6 +96,8 @@ type TimeReviewWorkerSummary = {
   openIssueCount: number;
   reviewedEntryCount: number;
   totalMinutes: number;
+  submittedMinutes: number;
+  absenceType: AbsenceType | null;
   isReviewed: boolean;
   entries: TimeEntry[];
 };
@@ -224,6 +227,7 @@ export function TimeEntriesPage() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
   const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
+  const [reviewAbsences, setReviewAbsences] = useState<Absence[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -364,8 +368,8 @@ export function TimeEntriesPage() {
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
   const timeReviewWorkers = useMemo(
-    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries),
-    [people, reviewAllEntries, reviewEntries],
+    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences),
+    [people, reviewAbsences, reviewAllEntries, reviewEntries],
   );
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
@@ -526,6 +530,30 @@ export function TimeEntriesPage() {
       window.removeEventListener("resize", updateReviewWeekScrollState);
     };
   }, [activeTimeSubtab, reviewWeekOptions]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      setReviewAbsences([]);
+      return;
+    }
+
+    let ignore = false;
+    api.absences({ start: reviewWeekRange.start, end: reviewWeekRange.end })
+      .then((absenceData) => {
+        if (!ignore) {
+          setReviewAbsences(absenceData);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setReviewAbsences([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -1000,6 +1028,8 @@ export function TimeEntriesPage() {
                       "time-review-worker-bubble",
                       selectedReviewWorker?.personId === worker.personId ? "is-active" : "",
                       worker.isReviewed ? "is-reviewed" : "",
+                      worker.submittedMinutes <= 0 ? "has-no-submissions" : "",
+                      worker.absenceType ? `has-absence-${worker.absenceType}` : "",
                     ].filter(Boolean).join(" ")}
                     key={worker.personId}
                     type="button"
@@ -1007,8 +1037,8 @@ export function TimeEntriesPage() {
                   >
                     <span className="time-review-worker-name">{worker.personName}</span>
                     <small>
-                      {worker.entryCount > 0
-                        ? `${formatCount(worker.dayCount, "Tag", "Tage")} · ${formatCount(worker.entryCount, "Eintrag", "Einträge")}`
+                      {worker.submittedMinutes > 0
+                        ? `${formatSubmittedHours(worker.submittedMinutes)} Std. eingereicht`
                         : "Keine Meldung"}
                     </small>
                     {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
@@ -2144,6 +2174,13 @@ function formatCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formatSubmittedHours(minutes: number): string {
+  const hours = minutes / 60;
+  return Number.isInteger(hours)
+    ? String(hours)
+    : hours.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
 function addDaysToDateInput(value: string, days: number): string {
   const date = parseDateInput(value);
   date.setDate(date.getDate() + days);
@@ -2284,9 +2321,15 @@ function buildTimeReviewTableRows(
     ));
 }
 
-function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[], openEntries: TimeEntry[]): TimeReviewWorkerSummary[] {
+function buildTimeReviewWorkerSummaries(
+  people: Person[],
+  allEntries: TimeEntry[],
+  openEntries: TimeEntry[],
+  absences: Absence[],
+): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
+  const absenceTypeByPersonId = highestPriorityAbsenceTypeByPerson(absences);
 
   people
     .filter(isPayrollReviewWorker)
@@ -2299,6 +2342,8 @@ function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[
         openIssueCount: 0,
         reviewedEntryCount: 0,
         totalMinutes: 0,
+        submittedMinutes: 0,
+        absenceType: absenceTypeByPersonId.get(person.id) ?? null,
         isReviewed: false,
         entries: [],
       });
@@ -2318,6 +2363,9 @@ function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[
       const openIssueCount = summary.entries.filter((entry) => openEntryIds.has(entry.id)).length;
       const reviewedEntryCount = summary.entries.filter((entry) => !openEntryIds.has(entry.id)).length;
       const totalMinutes = summary.entries.reduce((sum, entry) => sum + (entry.corrected_work_minutes ?? entry.work_minutes ?? 0), 0);
+      const submittedMinutes = summary.entries.reduce((sum, entry) => (
+        entry.is_gps_suggestion ? sum : sum + entry.work_minutes
+      ), 0);
       return {
         ...summary,
         entryCount: summary.entries.length,
@@ -2325,6 +2373,8 @@ function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[
         openIssueCount,
         reviewedEntryCount,
         totalMinutes,
+        submittedMinutes,
+        absenceType: absenceTypeByPersonId.get(summary.personId) ?? null,
         isReviewed: summary.entries.length > 0 && openIssueCount === 0,
         entries: summary.entries.slice().sort(compareTimeReviewWorkerEntries),
       };
@@ -2341,6 +2391,30 @@ function isPayrollReviewWorker(person: Person): boolean {
     return true;
   }
   return activeRoles.length === 1 && activeRoles[0] === "monteur";
+}
+
+function highestPriorityAbsenceTypeByPerson(absences: Absence[]): Map<number, AbsenceType> {
+  const result = new Map<number, AbsenceType>();
+  absences
+    .filter((absence) => absence.status === "active")
+    .forEach((absence) => {
+      const currentType = result.get(absence.person_id);
+      if (!currentType || absenceTypePriority(absence.absence_type) < absenceTypePriority(currentType)) {
+        result.set(absence.person_id, absence.absence_type);
+      }
+    });
+  return result;
+}
+
+function absenceTypePriority(type: AbsenceType): number {
+  const priorities: Record<AbsenceType, number> = {
+    sick: 1,
+    vacation: 2,
+    school: 3,
+    free: 4,
+    other: 5,
+  };
+  return priorities[type];
 }
 
 function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): number {

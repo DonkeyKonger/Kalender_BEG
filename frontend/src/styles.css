@@ -9507,6 +9507,31 @@ button.person-chip:focus-visible {
   border-color: #b7d9c2;
 }
 
+.time-review-worker-bubble.has-no-submissions {
+  border-color: #d8e0ea;
+  background: #f8fafc;
+}
+
+.time-review-worker-bubble.has-absence-sick {
+  border-color: #dc2626;
+}
+
+.time-review-worker-bubble.has-absence-vacation {
+  border-color: #16a34a;
+}
+
+.time-review-worker-bubble.has-absence-school {
+  border-color: #2563eb;
+}
+
+.time-review-worker-bubble.has-absence-free {
+  border-color: #7c3aed;
+}
+
+.time-review-worker-bubble.has-absence-other {
+  border-color: #64748b;
+}
+
 .time-review-worker-name {
   overflow: hidden;
   text-overflow: ellipsis;
