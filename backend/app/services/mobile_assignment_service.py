@@ -22,6 +22,7 @@ from app.services.assignment_service import AssignmentService
 MAX_DEFAULT_DAYS = 45
 MAX_HISTORY_DAYS = 370
 MAX_RECENT_SITES = 20
+KNOWN_SITE_LOOKBACK_MONTHS = 6
 SELF_PLANNED_NOTE = "Vom Monteur selbst nachgetragen, weil keine Planung vorhanden war."
 
 
@@ -99,8 +100,8 @@ class MobileAssignmentService:
                 detail="Dieser Benutzer ist keiner Person zugeordnet.",
             )
 
-        bounded_months = min(max(months, 1), 24)
-        since = date.today() - timedelta(days=bounded_months * 31)
+        bounded_months = min(max(months, 1), KNOWN_SITE_LOOKBACK_MONTHS)
+        since = self._known_site_cutoff(months=bounded_months)
         latest_assignment = (
             select(
                 Assignment.site_id.label("site_id"),
@@ -148,16 +149,11 @@ class MobileAssignmentService:
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
 
-        was_previously_planned = self.db.scalar(
-            select(Assignment.id)
-            .where(
-                Assignment.person_id == current_user.person_id,
-                Assignment.site_id == payload.site_id,
-                Assignment.end_date < payload.work_date,
-            )
-            .limit(1)
-        ) is not None
-        if site.status != SiteStatus.ACTIVE and not was_previously_planned:
+        is_known_site = self._is_known_site_for_mobile(
+            person_id=current_user.person_id,
+            site_id=payload.site_id,
+        )
+        if site.status in [SiteStatus.COMPLETED, SiteStatus.DELETED] or not is_known_site:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 "Diese Baustelle kann mobil nicht nachgetragen werden.",
@@ -193,6 +189,21 @@ class MobileAssignmentService:
             audit_action="assignment.mobile_self_planned",
         )
         return self._build_assignment(result.assignment)
+
+    def _is_known_site_for_mobile(self, *, person_id: int, site_id: int) -> bool:
+        return self.db.scalar(
+            select(Assignment.id)
+            .where(
+                Assignment.person_id == person_id,
+                Assignment.site_id == site_id,
+                Assignment.end_date >= self._known_site_cutoff(),
+            )
+            .limit(1)
+        ) is not None
+
+    @staticmethod
+    def _known_site_cutoff(*, months: int = KNOWN_SITE_LOOKBACK_MONTHS) -> date:
+        return date.today() - timedelta(days=months * 31)
 
     def _build_assignment(self, assignment: Assignment) -> MobileAssignment:
         return MobileAssignment(

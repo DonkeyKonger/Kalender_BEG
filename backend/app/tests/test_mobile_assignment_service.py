@@ -128,6 +128,37 @@ def test_mobile_self_plan_creates_self_planned_assignment(monkeypatch):
     assert assignment.assignment_type == AssignmentType.SELF_PLANNED
 
 
+def test_mobile_self_plan_rejects_site_that_is_not_known_for_worker(monkeypatch):
+    FakeAssignmentService.calls = []
+    monkeypatch.setattr(mobile_assignment_module, "AssignmentService", FakeAssignmentService)
+    service = MobileAssignmentService.__new__(MobileAssignmentService)
+    service.db = FakeScalarDb([mobile_site(17), None])
+
+    with pytest.raises(HTTPException) as error:
+        service.self_plan_assignment(
+            current_user=SimpleNamespace(id=3, role=UserRole.MONTEUR, person_id=4),
+            payload=MobileSelfPlanRequest(site_id=17, work_date=date(2026, 6, 11)),
+        )
+
+    assert error.value.status_code == 403
+    assert FakeAssignmentService.calls == []
+
+
+def test_mobile_self_plan_allows_known_future_or_planned_site(monkeypatch):
+    FakeAssignmentService.calls = []
+    monkeypatch.setattr(mobile_assignment_module, "AssignmentService", FakeAssignmentService)
+    service = MobileAssignmentService.__new__(MobileAssignmentService)
+    service.db = FakeScalarDb([mobile_site(17, status=SiteStatus.PLANNED), 21, None])
+
+    assignment = service.self_plan_assignment(
+        current_user=SimpleNamespace(id=3, role=UserRole.MONTEUR, person_id=4),
+        payload=MobileSelfPlanRequest(site_id=17, work_date=date(2026, 6, 11)),
+    )
+
+    assert assignment.assignment_type == AssignmentType.SELF_PLANNED
+    assert len(FakeAssignmentService.calls) == 1
+
+
 def test_mobile_self_plan_returns_existing_duplicate(monkeypatch):
     FakeAssignmentService.calls = []
     monkeypatch.setattr(mobile_assignment_module, "AssignmentService", FakeAssignmentService)

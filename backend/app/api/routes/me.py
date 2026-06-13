@@ -107,7 +107,7 @@ def list_my_mobile_sites(
 
 @router.get("/sites/recently-planned", response_model=list[MobileSite])
 def list_my_recently_planned_sites(
-    months: int = Query(12, ge=1, le=24),
+    months: int = Query(6, ge=1, le=24),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[MobileSite]:

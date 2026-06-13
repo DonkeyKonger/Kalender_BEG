@@ -314,7 +314,7 @@ export function MyAssignmentsPage() {
 
     setIsLoadingSelfPlanSites(true);
     try {
-      const sites = await api.recentlyPlannedSites({ months: 12 });
+      const sites = await api.recentlyPlannedSites({ months: 6 });
       setRecentSelfPlanSites(sites);
     } catch (requestError) {
       setSelfPlanError(readApiError(requestError, "Baustellen konnten nicht geladen werden."));
