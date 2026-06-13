@@ -677,21 +677,6 @@ export function SiteFields({
     };
   }, [addressSearch, disabled, selectedGeocodeResult]);
 
-  function markLocationUnchecked(values: Partial<SiteCreate>): Partial<SiteCreate> {
-    return {
-      ...values,
-      address: null,
-      latitude: null,
-      longitude: null,
-      location_status: "unchecked",
-    };
-  }
-
-  function updateManualAddress(values: Partial<SiteCreate>) {
-    setSelectedGeocodeResult(null);
-    onChange(markLocationUnchecked(values));
-  }
-
   function applyGeocodeResult(result: SiteGeocodeSearchResult) {
     const selectedValues: Partial<SiteCreate> = {
       address: result.label,
@@ -876,10 +861,6 @@ export function SiteFields({
         onChange={(color) => onChange({ color })}
       />
       <section className="site-location-section">
-        <div>
-          <h3>Standort / GPS</h3>
-          <p>Adresse suchen, passenden Treffer auswaehlen. Koordinaten werden technisch gespeichert.</p>
-        </div>
         <label className="address-field site-address-search">
           <span>Adresse suchen</span>
           <input
@@ -912,50 +893,17 @@ export function SiteFields({
             </div>
           )}
         </label>
-        <label className="address-postal-field">
-          <span>PLZ</span>
-          <input
-            disabled={disabled}
-            value={draft.postal_code ?? ""}
-            onChange={(event) => updateManualAddress({ postal_code: event.target.value || null })}
-          />
-        </label>
-        <label className="address-city-field">
-          <span>Stadt</span>
-          <input
-            disabled={disabled}
-            value={draft.city ?? ""}
-            onChange={(event) => updateManualAddress({ city: event.target.value || null })}
-          />
-        </label>
-        <label className="address-street-field">
-          <span>Strasse</span>
-          <input
-            disabled={disabled}
-            value={draft.street ?? ""}
-            onChange={(event) => updateManualAddress({ street: event.target.value || null })}
-          />
-        </label>
-        <label className="address-house-number-field">
-          <span>Hausnummer</span>
-          <input
-            disabled={disabled}
-            value={draft.house_number ?? ""}
-            onChange={(event) => updateManualAddress({ house_number: event.target.value || null })}
-          />
-        </label>
-        <label className="address-extra-field address-field">
-          <span>Adresszusatz / Bereich</span>
-          <input
-            disabled={disabled}
-            value={draft.address_extra ?? ""}
-            onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
-          />
-        </label>
-        {draft.location_status !== "geocoded" && (
+        <div className="site-address-display-grid">
+          <AddressDisplayItem label="PLZ" value={draft.postal_code} />
+          <AddressDisplayItem label="Stadt" value={draft.city} />
+          <AddressDisplayItem label="Strasse" value={draft.street} />
+          <AddressDisplayItem label="Hausnummer" value={draft.house_number} />
+          <AddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
+        </div>
+        {onCheckLocation && draft.location_status !== "geocoded" && (
           <button
             className="icon-button secondary"
-            disabled={disabled || !onCheckLocation || isCheckingLocation}
+            disabled={disabled || isCheckingLocation}
             type="button"
             onClick={onCheckLocation}
           >
@@ -972,6 +920,15 @@ export function SiteFields({
           onChange={(event) => onChange({ info: event.target.value || null })}
         />
       </label>
+    </div>
+  );
+}
+
+function AddressDisplayItem({ label, value, wide = false }: { label: string; value: string | null | undefined; wide?: boolean }) {
+  return (
+    <div className={`site-address-display-item${wide ? " is-wide" : ""}`}>
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
     </div>
   );
 }

@@ -10794,43 +10794,47 @@ button.person-chip:focus-visible {
   box-shadow: none;
 }
 
-.site-location-section h3 {
-  margin: 0 0 4px;
-  color: #172033;
-  font-size: 0.9rem;
-  font-weight: 850;
-}
-
-.site-location-section p {
-  max-width: 42rem;
-  margin: 0;
-  color: #64748b;
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
 .site-location-section .icon-button.secondary {
   min-height: var(--site-drawer-control-height);
   border-radius: 2px;
   padding: 6px 9px;
 }
 
-.site-location-readonly {
+.site-address-display-grid {
   display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 0.86rem;
-  font-weight: 750;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
 }
 
-.site-location-readonly strong {
-  min-height: 38px;
-  border: 1px solid #dbe4ef;
-  border-radius: 6px;
-  background: #eef3f9;
+.site-address-display-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border-top: 1px solid #dce6f2;
+  padding-top: 6px;
+}
+
+.site-address-display-item span {
+  color: #66758c;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.site-address-display-item strong {
+  min-width: 0;
+  overflow: hidden;
   color: #172033;
-  padding: 9px 10px;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-address-display-item.is-wide {
+  grid-column: 1 / -1;
 }
 
 @media (min-width: 760px) {
@@ -10869,28 +10873,9 @@ button.person-chip:focus-visible {
     align-items: end;
   }
 
-  .site-location-section > div {
+  .site-address-display-grid {
     grid-column: 1 / -1;
-  }
-
-  .site-location-section .address-postal-field {
-    grid-column: span 1;
-  }
-
-  .site-location-section .address-city-field {
-    grid-column: span 3;
-  }
-
-  .site-location-section .address-street-field {
-    grid-column: span 3;
-  }
-
-  .site-location-section .address-house-number-field {
-    grid-column: span 1;
-  }
-
-  .site-location-section .address-extra-field {
-    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .site-form-grid.compact {
