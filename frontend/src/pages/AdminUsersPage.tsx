@@ -1,4 +1,4 @@
-import { ChevronDown, KeyRound, PlugZap, Save, Search, Trash2, UserCog, UserPlus } from "lucide-react";
+import { ChevronDown, KeyRound, Save, Search, Trash2, UserCog, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCard } from "../components/EntityCard";
@@ -8,7 +8,6 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { UserRole } from "../types/auth";
 import type { Person } from "../types/person";
-import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 
 type EditableUser = {
@@ -45,15 +44,6 @@ export function AdminUsersPage() {
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [graphTestResult, setGraphTestResult] = useState<MicrosoftGraphConnectionTestResponse | null>(null);
-  const [graphTestError, setGraphTestError] = useState<string | null>(null);
-  const [graphFolderResult, setGraphFolderResult] = useState<MicrosoftGraphCreateTestFolderResponse | null>(null);
-  const [graphFolderError, setGraphFolderError] = useState<string | null>(null);
-  const [graphBackfillResult, setGraphBackfillResult] = useState<MicrosoftGraphBackfillProjectFoldersResponse | null>(null);
-  const [graphBackfillError, setGraphBackfillError] = useState<string | null>(null);
-  const [isTestingGraph, setIsTestingGraph] = useState(false);
-  const [isCreatingGraphFolder, setIsCreatingGraphFolder] = useState(false);
-  const [isBackfillingGraphFolders, setIsBackfillingGraphFolders] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -227,55 +217,6 @@ export function AdminUsersPage() {
     setDrawer(null);
   }
 
-  async function testMicrosoftGraphConnection() {
-    setIsTestingGraph(true);
-    setGraphTestError(null);
-    setGraphTestResult(null);
-    try {
-      setGraphFolderResult(null);
-      setGraphFolderError(null);
-      setGraphBackfillResult(null);
-      setGraphBackfillError(null);
-      setGraphTestResult(await api.testMicrosoftGraphConnection());
-    } catch (requestError) {
-      setGraphTestError(readApiError(requestError, "Microsoft Graph konnte nicht getestet werden."));
-    } finally {
-      setIsTestingGraph(false);
-    }
-  }
-
-  async function createMicrosoftGraphTestFolder() {
-    setIsCreatingGraphFolder(true);
-    setGraphFolderError(null);
-    setGraphFolderResult(null);
-    try {
-      setGraphFolderResult(await api.createMicrosoftGraphTestProjectFolder());
-    } catch (requestError) {
-      setGraphFolderError(readApiError(requestError, "Testordner konnte nicht erstellt werden."));
-    } finally {
-      setIsCreatingGraphFolder(false);
-    }
-  }
-
-  async function backfillMicrosoftGraphProjectFolders() {
-    const confirmed = window.confirm(
-      "Es werden für bestehende Baustellen ohne Projektordner SharePoint-Ordner erstellt. Fortfahren?",
-    );
-    if (!confirmed) {
-      return;
-    }
-    setIsBackfillingGraphFolders(true);
-    setGraphBackfillError(null);
-    setGraphBackfillResult(null);
-    try {
-      setGraphBackfillResult(await api.backfillMicrosoftGraphProjectFolders());
-    } catch (requestError) {
-      setGraphBackfillError(readApiError(requestError, "Projektordner konnten nicht erstellt werden."));
-    } finally {
-      setIsBackfillingGraphFolders(false);
-    }
-  }
-
   return (
     <section className="admin-users-page overview-page">
       <div className="page-header entity-page-header overview-header">
@@ -304,21 +245,6 @@ export function AdminUsersPage() {
           </label>
         </div>
       </div>
-
-      <MicrosoftGraphTestPanel
-        result={graphTestResult}
-        error={graphTestError}
-        folderResult={graphFolderResult}
-        folderError={graphFolderError}
-        backfillResult={graphBackfillResult}
-        backfillError={graphBackfillError}
-        isLoading={isTestingGraph}
-        isCreatingFolder={isCreatingGraphFolder}
-        isBackfilling={isBackfillingGraphFolders}
-        onTest={() => void testMicrosoftGraphConnection()}
-        onCreateFolder={() => void createMicrosoftGraphTestFolder()}
-        onBackfill={() => void backfillMicrosoftGraphProjectFolders()}
-      />
 
       {isLoading && <div className="matrix-state">Benutzer werden geladen...</div>}
 
@@ -458,275 +384,6 @@ export function AdminUsersPage() {
         )}
       </EntityDetailDrawer>
     </section>
-  );
-}
-
-function MicrosoftGraphTestPanel({
-  result,
-  error,
-  folderResult,
-  folderError,
-  backfillResult,
-  backfillError,
-  isLoading,
-  isCreatingFolder,
-  isBackfilling,
-  onTest,
-  onCreateFolder,
-  onBackfill,
-}: {
-  result: MicrosoftGraphConnectionTestResponse | null;
-  error: string | null;
-  folderResult: MicrosoftGraphCreateTestFolderResponse | null;
-  folderError: string | null;
-  backfillResult: MicrosoftGraphBackfillProjectFoldersResponse | null;
-  backfillError: string | null;
-  isLoading: boolean;
-  isCreatingFolder: boolean;
-  isBackfilling: boolean;
-  onTest: () => void;
-  onCreateFolder: () => void;
-  onBackfill: () => void;
-}) {
-  return (
-    <section className="admin-integration-panel">
-      <div className="admin-integration-panel-header">
-        <div>
-          <h2>Microsoft 365 Verbindung</h2>
-          <p>Prüft die konfigurierte Graph-Verbindung. Ein Testordner wird nur per Klick erstellt.</p>
-        </div>
-        <div className="admin-integration-actions">
-          <button className="icon-button secondary" disabled={isLoading || isCreatingFolder || isBackfilling} type="button" onClick={onTest}>
-            <PlugZap aria-hidden="true" size={16} />
-            <span>{isLoading ? "Teste..." : "Microsoft Graph testen"}</span>
-          </button>
-          {result?.connected ? (
-            <>
-              <button
-                className="icon-button secondary"
-                disabled={isLoading || isCreatingFolder || isBackfilling}
-                type="button"
-                onClick={onCreateFolder}
-              >
-                <span>{isCreatingFolder ? "Erstelle..." : "Testordner erstellen"}</span>
-              </button>
-              <button
-                className="icon-button secondary"
-                disabled={isLoading || isCreatingFolder || isBackfilling}
-                type="button"
-                onClick={onBackfill}
-              >
-                <span>{isBackfilling ? "Erstelle..." : "Projektordner für bestehende Baustellen erstellen"}</span>
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? <p className="form-error">{error}</p> : null}
-      {folderError ? <p className="form-error">{folderError}</p> : null}
-      {backfillError ? <p className="form-error">{backfillError}</p> : null}
-      {result ? <MicrosoftGraphTestResult result={result} /> : null}
-      {folderResult ? <MicrosoftGraphFolderResult result={folderResult} /> : null}
-      {backfillResult ? <MicrosoftGraphBackfillResult result={backfillResult} /> : null}
-    </section>
-  );
-}
-
-function MicrosoftGraphFolderResult({ result }: { result: MicrosoftGraphCreateTestFolderResponse }) {
-  return (
-    <div className="admin-integration-result is-connected">
-      <div>
-        <span>Testordner erstellt</span>
-        <strong>{result.created ? "Ja" : "Nein"}</strong>
-      </div>
-      <GraphResource label="Ordner" resource={result.root_folder} />
-      {result.root_folder.web_url ? <GraphValue label="Web URL" value={result.root_folder.web_url} wide /> : null}
-      <div>
-        <span>Unterordner</span>
-        <strong>{result.subfolders.length}</strong>
-      </div>
-      {result.subfolders.length ? (
-        <div className="is-wide">
-          <span>Erstellte Unterordner</span>
-          <strong>{result.subfolders.map((folder) => folder.name).join(", ")}</strong>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MicrosoftGraphBackfillResult({ result }: { result: MicrosoftGraphBackfillProjectFoldersResponse }) {
-  return (
-    <div className={`admin-integration-result ${result.error_count ? "is-disconnected" : "is-connected"}`}>
-      <div>
-        <span>Kandidaten</span>
-        <strong>{result.total_candidates}</strong>
-      </div>
-      <div>
-        <span>Erstellt</span>
-        <strong>{result.created_count}</strong>
-      </div>
-      <div>
-        <span>Übersprungen</span>
-        <strong>{result.skipped_count}</strong>
-      </div>
-      <div>
-        <span>Fehler</span>
-        <strong>{result.error_count}</strong>
-      </div>
-      {result.created.length ? (
-        <div className="is-wide">
-          <span>Erstellte Projektordner</span>
-          <strong>
-            {result.created.map((site) => site.web_url ? (
-              <a key={site.site_id} href={site.web_url} target="_blank" rel="noreferrer">
-                {[site.site_number, site.site_name].filter(Boolean).join(" · ")}
-              </a>
-            ) : (
-              <span key={site.site_id}>{[site.site_number, site.site_name].filter(Boolean).join(" · ")}</span>
-            ))}
-          </strong>
-        </div>
-      ) : null}
-      {result.errors.length ? (
-        <div className="is-wide">
-          <span>Fehlerdetails</span>
-          <strong>{result.errors.map((item) => `${item.site_number ?? item.site_id}: ${item.safe_error}`).join(" | ")}</strong>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MicrosoftGraphTestResult({ result }: { result: MicrosoftGraphConnectionTestResponse }) {
-  return (
-    <div className={`admin-integration-result ${result.connected ? "is-connected" : "is-disconnected"}`}>
-      <div>
-        <span>Graph aktiviert</span>
-        <strong>{result.graph_enabled ? "Ja" : "Nein"}</strong>
-      </div>
-      <div>
-        <span>Verbunden</span>
-        <strong>{result.connected ? "Ja" : "Nein"}</strong>
-      </div>
-      {result.reason ? (
-        <div className="is-wide">
-          <span>Hinweis</span>
-          <strong>{result.reason}</strong>
-        </div>
-      ) : null}
-      {result.status_code ? (
-        <div>
-          <span>Statuscode</span>
-          <strong>{result.status_code}</strong>
-        </div>
-      ) : null}
-      {result.failed_step ? (
-        <div>
-          <span>Fehlgeschlagen bei</span>
-          <strong>{formatGraphStep(result.failed_step)}</strong>
-        </div>
-      ) : null}
-      {result.safe_error_code ? (
-        <div>
-          <span>Sicherer Fehlercode</span>
-          <strong>{result.safe_error_code}</strong>
-        </div>
-      ) : null}
-      {result.microsoft_error_code ? (
-        <div>
-          <span>Microsoft Fehlercode</span>
-          <strong>{result.microsoft_error_code}</strong>
-        </div>
-      ) : null}
-      {result.microsoft_error_message_short ? (
-        <div className="is-wide">
-          <span>Microsoft Hinweis</span>
-          <strong>{result.microsoft_error_message_short}</strong>
-        </div>
-      ) : null}
-      {result.missing_config.length ? (
-        <div className="is-wide">
-          <span>Fehlende Konfiguration</span>
-          <strong>{result.missing_config.join(", ")}</strong>
-        </div>
-      ) : null}
-      <GraphDiagnostic label="Konfiguration geladen" value={result.config_loaded} />
-      <GraphDiagnostic label="Token angefragt" value={result.token_request_attempted} />
-      <GraphDiagnostic
-        label="Token erhalten"
-        value={result.token_acquired}
-        statusCode={result.token_error_status_code}
-      />
-      {result.token_audience ? <GraphValue label="Token Audience" value={result.token_audience} /> : null}
-      <GraphDiagnostic label="Auth Header" value={result.authorization_header_present} />
-      {result.authorization_header_scheme ? (
-        <GraphValue label="Auth Schema" value={result.authorization_header_scheme} />
-      ) : null}
-      {result.graph_base_url_used ? <GraphValue label="Graph Base URL" value={result.graph_base_url_used} /> : null}
-      {result.drive_url_shape ? <GraphValue label="Drive URL" value={result.drive_url_shape} wide /> : null}
-      <GraphDiagnostic
-        label="Drive geprüft"
-        value={result.drive_check_attempted}
-        statusCode={result.drive_check_status ?? result.drive_error_status_code}
-      />
-      <GraphDiagnostic
-        label="Root-Ordner geprüft"
-        value={result.root_folder_check_attempted}
-        statusCode={result.root_folder_check_status ?? result.root_folder_error_status_code}
-      />
-      {result.site_check_attempted ? (
-        <GraphDiagnostic
-          label="Site geprüft"
-          value={result.site_check_attempted}
-          statusCode={result.site_check_status ?? result.site_error_status_code}
-        />
-      ) : null}
-      <GraphResource label="Drive" resource={result.drive} />
-      <GraphResource label="Root-Ordner" resource={result.root_folder} />
-    </div>
-  );
-}
-
-function GraphValue({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
-  return (
-    <div className={wide ? "is-wide" : undefined}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function GraphDiagnostic({ label, value, statusCode }: { label: string; value: boolean; statusCode?: number | null }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value ? `Ja${statusCode ? ` · ${statusCode}` : ""}` : "Nein"}</strong>
-    </div>
-  );
-}
-
-function formatGraphStep(step: string) {
-  const labels: Record<string, string> = {
-    config: "Konfiguration",
-    token: "Token",
-    drive: "Drive",
-    root_folder: "Root-Ordner",
-    site: "Site",
-  };
-  return labels[step] ?? step;
-}
-
-function GraphResource({ label, resource }: { label: string; resource: MicrosoftGraphConnectionTestResponse["drive"] }) {
-  if (!resource) {
-    return null;
-  }
-  return (
-    <div className="is-wide">
-      <span>{label}</span>
-      <strong>{[resource.name, resource.id].filter(Boolean).join(" · ") || "Gefunden"}</strong>
-    </div>
   );
 }
 
