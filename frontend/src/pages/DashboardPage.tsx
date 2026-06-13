@@ -33,6 +33,11 @@ type AssignedSiteSummary = {
   hasWarnings: boolean;
 };
 
+type AssignedSiteGroup = {
+  manager: ManagerSummary;
+  sites: AssignedSiteSummary[];
+};
+
 type FreeWorkerGroup = {
   manager: ManagerSummary;
   people: Person[];
@@ -62,6 +67,7 @@ type WorkerLookup = {
 
 type DashboardData = {
   todayAssignedSites: AssignedSiteSummary[];
+  todayAssignedSiteGroups: AssignedSiteGroup[];
   freeWorkerGroups: FreeWorkerGroup[];
   totalFreeWorkers: number;
   openStaffingNeeds: StaffingNeed[];
@@ -260,20 +266,30 @@ export function DashboardPage() {
           <div className="dashboard-main-grid">
             <DashboardCard title="Heute besetzte Baustellen" icon={<BriefcaseBusiness aria-hidden="true" size={20} />} className="dashboard-card-large">
               {dashboard.todayAssignedSites.length > 0 ? (
-                <div className="dashboard-site-list">
-                  {dashboard.todayAssignedSites.map((siteSummary) => (
-                    <Link className="dashboard-site-item" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id}>
-                      <span className="dashboard-site-color" style={{ backgroundColor: siteSummary.site.color ?? "#2f6ea8" }} aria-hidden="true" />
-                      <span className="dashboard-site-body">
-                        <strong>{siteSummary.site.name}</strong>
-                        <span>
-                          {siteSummary.managerLabel} · {siteSummary.internalCount} Monteure
-                          {siteSummary.externalCount > 0 ? " · " + siteSummary.externalCount + " extern" : ""}
-                        </span>
-                        <small>{[siteSummary.site.site_number, siteSummary.site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</small>
-                      </span>
-                      {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Pruefen</span>}
-                    </Link>
+                <div className="dashboard-site-group-list">
+                  {dashboard.todayAssignedSiteGroups.map((group) => (
+                    <section className="dashboard-site-group" key={group.manager.key}>
+                      <div className="dashboard-site-group-header">
+                        <strong>{formatDashboardManagerHeading(group.manager)}</strong>
+                        <span>{formatAssignedSiteGroupMeta(group.sites)}</span>
+                      </div>
+                      <div className="dashboard-site-list">
+                        {group.sites.map((siteSummary) => (
+                          <Link className="dashboard-site-item" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id}>
+                            <span className="dashboard-site-color" style={{ backgroundColor: siteSummary.site.color ?? "#2f6ea8" }} aria-hidden="true" />
+                            <span className="dashboard-site-body">
+                              <strong>{siteSummary.site.name}</strong>
+                              <span>
+                                {siteSummary.managerLabel} · {formatCount(siteSummary.internalCount, "Monteur", "Monteure")}
+                                {siteSummary.externalCount > 0 ? " · " + siteSummary.externalCount + " extern" : ""}
+                              </span>
+                              <small>{[siteSummary.site.site_number, siteSummary.site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</small>
+                            </span>
+                            {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Pruefen</span>}
+                          </Link>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               ) : <EmptyDashboardText text="Heute sind keine Baustellen besetzt." />}
@@ -502,8 +518,10 @@ function buildDashboardData(matrix: MatrixResponse, people: Person[], range: Dat
   const tomorrowAssignedSites = getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById);
   const workerLookup = buildWorkerLookup(matrix.rows, activeWorkers, range.today, lastManagerByPersonId);
 
+  const todayAssignedSites = getAssignedSitesForDay(matrix.rows, range.today, peopleById);
   return {
-    todayAssignedSites: getAssignedSitesForDay(matrix.rows, range.today, peopleById),
+    todayAssignedSites,
+    todayAssignedSiteGroups: groupAssignedSitesByManager(todayAssignedSites),
     freeWorkerGroups,
     totalFreeWorkers: freeWorkers.length,
     openStaffingNeeds,
@@ -542,7 +560,80 @@ function getAssignedSitesForDay(
       } satisfies AssignedSiteSummary;
     })
     .filter((summary): summary is AssignedSiteSummary => summary !== null)
-    .sort((first, second) => first.managerLabel.localeCompare(second.managerLabel, "de") || first.site.name.localeCompare(second.site.name, "de"));
+    .sort(compareAssignedSites);
+}
+
+function groupAssignedSitesByManager(sites: AssignedSiteSummary[]): AssignedSiteGroup[] {
+  const groups = new Map<string, AssignedSiteGroup>();
+  sites.forEach((siteSummary) => {
+    const manager = getManagerSummary(siteSummary.site.project_manager);
+    const existing = groups.get(manager.key) ?? { manager, sites: [] };
+    existing.sites.push(siteSummary);
+    groups.set(manager.key, existing);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      sites: group.sites.slice().sort(compareAssignedSites),
+    }))
+    .sort(compareAssignedSiteGroups);
+}
+
+function compareAssignedSiteGroups(first: AssignedSiteGroup, second: AssignedSiteGroup): number {
+  if (first.manager.key === "unassigned" && second.manager.key !== "unassigned") {
+    return 1;
+  }
+  if (second.manager.key === "unassigned" && first.manager.key !== "unassigned") {
+    return -1;
+  }
+  return first.manager.label.localeCompare(second.manager.label, "de")
+    || first.manager.name.localeCompare(second.manager.name, "de");
+}
+
+function compareAssignedSites(first: AssignedSiteSummary, second: AssignedSiteSummary): number {
+  return compareSiteNumbers(first.site.site_number, second.site.site_number)
+    || first.site.name.localeCompare(second.site.name, "de")
+    || first.site.id - second.site.id;
+}
+
+function formatDashboardManagerHeading(manager: ManagerSummary): string {
+  if (manager.key === "unassigned") {
+    return "Ohne Projektleiter";
+  }
+  return `${manager.label} · ${manager.name}`;
+}
+
+function formatAssignedSiteGroupMeta(sites: AssignedSiteSummary[]): string {
+  const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
+  return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
+}
+
+function formatCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function compareSiteNumbers(left: string | null, right: string | null): number {
+  const leftNumber = parseSiteNumber(left);
+  const rightNumber = parseSiteNumber(right);
+  if (leftNumber !== null && rightNumber !== null) {
+    return leftNumber - rightNumber;
+  }
+  if (leftNumber !== null) {
+    return -1;
+  }
+  if (rightNumber !== null) {
+    return 1;
+  }
+  return (left ?? "").localeCompare(right ?? "", "de");
+}
+
+function parseSiteNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const matches = value.match(/\d+/g);
+  return matches?.length ? Number(matches[matches.length - 1]) : null;
 }
 
 function groupFreeWorkersByLastManager(workers: Person[], lastManagerByPersonId: Map<number, ManagerSummary>): FreeWorkerGroup[] {

@@ -11667,6 +11667,38 @@ button.person-chip:focus-visible {
   gap: 7px;
 }
 
+.dashboard-site-group-list {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-site-group {
+  display: grid;
+  gap: 6px;
+}
+
+.dashboard-site-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 4px;
+}
+
+.dashboard-site-group-header strong {
+  color: #1f2937;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dashboard-site-group-header span {
+  color: #6b778c;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .dashboard-site-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
