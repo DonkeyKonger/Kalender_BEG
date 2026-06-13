@@ -4630,9 +4630,16 @@ button.person-chip:focus-visible {
 }
 
 .site-overview-create {
+  border: 1px solid #1f3657;
   border-radius: 2px;
-  background: #063b73;
+  background: #1f3657;
   box-shadow: none;
+}
+
+.site-overview-create:hover,
+.site-overview-create:focus-visible {
+  border-color: #152946;
+  background: #152946;
 }
 
 .site-overview-toolbar {
@@ -4689,29 +4696,45 @@ button.person-chip:focus-visible {
 .site-overview-toolbar .site-pm-filter button {
   min-width: 50px;
   min-height: 40px;
-  border-color: #ccd8e7;
+  border-color: #cbd5e1;
   border-radius: 2px;
   background: #ffffff;
-  color: #27364d;
+  color: #334155;
   padding: 8px 14px;
+  box-shadow: none;
+}
+
+.site-overview-toolbar .site-pm-filter button:hover,
+.site-overview-toolbar .site-pm-filter button:focus-visible {
+  border-color: #b9c7da;
+  background: #f6f9fd;
+  color: #1f3657;
+  box-shadow: none;
 }
 
 .site-overview-toolbar .site-pm-filter button.is-active {
-  border-color: #063b73;
-  background: #063b73;
-  color: #ffffff;
-  box-shadow: none;
+  border-color: #9db7da;
+  background: #eaf2fb;
+  color: #1f3657;
+  box-shadow: inset 0 0 0 1px rgb(157 183 218 / 38%);
 }
 
 .site-overview-toolbar .site-status-select {
   min-height: 40px;
-  border-color: #ccd8e7;
+  border-color: #cbd5e1;
   border-radius: 2px;
+  color: #334155;
   padding-inline: 12px 8px;
 }
 
+.site-overview-toolbar .site-status-select:hover,
+.site-overview-toolbar .site-status-select:focus-within {
+  border-color: #b9c7da;
+  background: #f6f9fd;
+}
+
 .site-overview-toolbar .site-status-select select {
-  color: #172033;
+  color: #334155;
 }
 
 .overview-page {
