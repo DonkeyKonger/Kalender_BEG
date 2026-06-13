@@ -9343,12 +9343,54 @@ button.person-chip:focus-visible {
   font-size: 0.95rem;
 }
 
+.time-week-strip-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.time-week-scroll-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d7e1ee;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #42526a;
+  padding: 0;
+}
+
+.time-week-scroll-button:hover,
+.time-week-scroll-button:focus-visible {
+  border-color: #9bbce0;
+  background: #f3f8ff;
+  color: #174678;
+  outline: none;
+}
+
+.time-week-scroll-button:disabled {
+  background: #f8fafc;
+  color: #97a3b6;
+  cursor: default;
+  opacity: 0.65;
+}
+
 .time-week-strip {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 2px 2px 5px;
-  scrollbar-gutter: stable;
+  min-width: 0;
+  padding: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.time-week-strip::-webkit-scrollbar {
+  display: none;
 }
 
 .time-week-strip button {
@@ -9356,7 +9398,7 @@ button.person-chip:focus-visible {
   min-width: 70px;
   min-height: 34px;
   border: 1px solid #d7e1ee;
-  border-radius: 8px;
+  border-radius: 3px;
   background: #ffffff;
   color: #42526a;
   font: inherit;
@@ -10431,7 +10473,13 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-strip button {
   border-color: var(--time-border);
-  border-radius: 6px;
+  border-radius: 3px;
+  background: var(--time-surface-soft);
+}
+
+.time-entries-page.is-figma-times-workspace .time-week-scroll-button {
+  border-color: var(--time-border);
+  border-radius: 3px;
   background: var(--time-surface-soft);
 }
 

@@ -1,4 +1,4 @@
-import { Clock3, Pencil, Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -238,6 +238,7 @@ export function TimeEntriesPage() {
   const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isDownloadingExport, setIsDownloadingExport] = useState(false);
   const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
+  const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canViewGpsVerification = canManageTimeEntries;
   const visibleTimeSubtabs = canViewGpsVerification
@@ -484,11 +485,29 @@ export function TimeEntriesPage() {
     }
     const animationFrameId = window.requestAnimationFrame(() => {
       scrollWeekStripToSelection(reviewWeekStripRef.current, reviewWeekOptions, selectedReviewWeek);
+      updateReviewWeekScrollState();
       hasAutoScrolledVisibleReviewWeekRef.current = true;
     });
 
     return () => window.cancelAnimationFrame(animationFrameId);
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      return;
+    }
+    const container = reviewWeekStripRef.current;
+    if (!container) {
+      return;
+    }
+    updateReviewWeekScrollState();
+    container.addEventListener("scroll", updateReviewWeekScrollState, { passive: true });
+    window.addEventListener("resize", updateReviewWeekScrollState);
+    return () => {
+      container.removeEventListener("scroll", updateReviewWeekScrollState);
+      window.removeEventListener("resize", updateReviewWeekScrollState);
+    };
+  }, [activeTimeSubtab, reviewWeekOptions]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -672,6 +691,28 @@ export function TimeEntriesPage() {
     });
   }
 
+  function updateReviewWeekScrollState(): void {
+    const container = reviewWeekStripRef.current;
+    if (!container) {
+      setReviewWeekScrollState({ canScrollLeft: false, canScrollRight: false });
+      return;
+    }
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    setReviewWeekScrollState({
+      canScrollLeft: container.scrollLeft > 1,
+      canScrollRight: container.scrollLeft < maxScrollLeft - 1,
+    });
+  }
+
+  function scrollReviewWeeks(direction: -1 | 1): void {
+    const container = reviewWeekStripRef.current;
+    if (!container) {
+      return;
+    }
+    const scrollAmount = Math.min(420, Math.max(260, container.clientWidth * 0.75));
+    container.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+  }
+
   async function decideReviewIssue(
     issue: TimeReviewIssue,
     decision: TimeReviewDecision,
@@ -845,22 +886,42 @@ export function TimeEntriesPage() {
               <span>Kalenderwoche</span>
               <strong>KW {selectedReviewWeek.week}</strong>
             </div>
-            <div className="time-week-strip" ref={reviewWeekStripRef}>
-              {reviewWeekOptions.map((option, index) => (
-                <button
-                  className={[
-                    option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
-                    option.isCurrent ? "is-current" : "",
-                  ].filter(Boolean).join(" ")}
-                  data-week-index={index}
-                  key={`${option.year}-${option.week}`}
-                  title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
-                  type="button"
-                  onClick={() => selectReviewWeek(option)}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="time-week-strip-shell">
+              <button
+                className="time-week-scroll-button"
+                disabled={!reviewWeekScrollState.canScrollLeft}
+                type="button"
+                aria-label="Kalenderwochen nach links scrollen"
+                onClick={() => scrollReviewWeeks(-1)}
+              >
+                <ChevronLeft aria-hidden="true" size={16} />
+              </button>
+              <div className="time-week-strip" ref={reviewWeekStripRef}>
+                {reviewWeekOptions.map((option, index) => (
+                  <button
+                    className={[
+                      option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
+                      option.isCurrent ? "is-current" : "",
+                    ].filter(Boolean).join(" ")}
+                    data-week-index={index}
+                    key={`${option.year}-${option.week}`}
+                    title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                    type="button"
+                    onClick={() => selectReviewWeek(option)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="time-week-scroll-button"
+                disabled={!reviewWeekScrollState.canScrollRight}
+                type="button"
+                aria-label="Kalenderwochen nach rechts scrollen"
+                onClick={() => scrollReviewWeeks(1)}
+              >
+                <ChevronRight aria-hidden="true" size={16} />
+              </button>
             </div>
           </div>
 
