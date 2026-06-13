@@ -10537,14 +10537,14 @@ button.person-chip:focus-visible {
 }
 
 .site-form-grid {
-  --site-drawer-control-height: 38px;
+  --site-drawer-control-height: 32px;
   display: grid;
-  gap: 11px;
+  gap: 9px;
 }
 
 .site-form-grid label {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: #42526a;
   font-size: 0.78rem;
   font-weight: 800;
@@ -10560,10 +10560,10 @@ button.person-chip:focus-visible {
   width: 100%;
   min-height: 0;
   border: 1px solid #d7e1ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
   color: #111827;
-  padding: 0 10px;
+  padding: 0 8px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
   font: inherit;
 }
@@ -10583,7 +10583,7 @@ button.person-chip:focus-visible {
 .site-color-select-field {
   position: relative;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: #42526a;
   font-size: 0.78rem;
   font-weight: 800;
@@ -10601,10 +10601,10 @@ button.person-chip:focus-visible {
   width: 100%;
   min-height: 0;
   border: 1px solid #d7e1ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
   color: #111827;
-  padding: 0 10px;
+  padding: 0 8px;
   font: inherit;
   cursor: pointer;
 }
@@ -10656,9 +10656,9 @@ button.person-chip:focus-visible {
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid #d7e1ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  box-shadow: 0 12px 28px rgb(15 23 42 / 12%);
+  box-shadow: 0 10px 22px rgb(15 23 42 / 10%);
   padding: 4px;
 }
 
@@ -10695,17 +10695,17 @@ button.person-chip:focus-visible {
   max-height: 260px;
   overflow-y: auto;
   border: 1px solid #d7e1ee;
-  border-radius: 10px;
+  border-radius: 2px;
   background: #ffffff;
-  box-shadow: 0 16px 34px rgb(15 23 42 / 14%);
+  box-shadow: 0 10px 22px rgb(15 23 42 / 10%);
   padding: 5px;
 }
 
 .site-customer-suggestions button,
 .site-customer-suggestion-empty {
-  min-height: 38px;
-  border-radius: 8px;
-  padding: 8px 10px;
+  min-height: 32px;
+  border-radius: 2px;
+  padding: 6px 8px;
   font-size: 0.78rem;
 }
 
@@ -10753,9 +10753,9 @@ button.person-chip:focus-visible {
 }
 
 .site-form-grid textarea {
-  min-height: 68px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  min-height: 74px;
+  padding-top: 6px;
+  padding-bottom: 6px;
   line-height: 1.45;
   resize: vertical;
 }
@@ -10784,12 +10784,12 @@ button.person-chip:focus-visible {
 
 .site-location-section {
   display: grid;
-  gap: 11px;
+  gap: 9px;
   border: 1px solid #dce6f2;
-  border-radius: 10px;
+  border-radius: 2px;
   background: #f8fafc;
-  padding: 13px;
-  box-shadow: 0 10px 24px rgb(15 23 42 / 5%);
+  padding: 10px;
+  box-shadow: none;
 }
 
 .site-location-section h3 {
@@ -10805,6 +10805,12 @@ button.person-chip:focus-visible {
   color: #64748b;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.site-location-section .icon-button.secondary {
+  min-height: var(--site-drawer-control-height);
+  border-radius: 2px;
+  padding: 6px 9px;
 }
 
 .site-location-readonly {
@@ -10887,6 +10893,12 @@ button.person-chip:focus-visible {
 
   .site-form-grid.compact {
     grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 759px) {
+  .site-form-grid {
+    --site-drawer-control-height: 38px;
   }
 }
 
@@ -12115,14 +12127,14 @@ button.person-chip:focus-visible {
 
 .site-address-results {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  padding: 6px;
-  box-shadow: 0 12px 28px rgb(18 29 52 / 10%);
+  padding: 4px;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 10%);
 }
 
 .site-address-results button {
@@ -12130,10 +12142,10 @@ button.person-chip:focus-visible {
   gap: 3px;
   width: 100%;
   border: 0;
-  border-radius: 6px;
+  border-radius: 2px;
   background: #ffffff;
   color: #172033;
-  padding: 9px 10px;
+  padding: 6px 8px;
   text-align: left;
 }
 
