@@ -1102,7 +1102,7 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card {
-  min-height: 104px;
+  min-height: 88px;
   overflow: hidden;
   border-color: #d7e1ee;
   border-radius: 2px;
@@ -1134,9 +1134,9 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-main {
-  gap: 10px;
-  min-height: 104px;
-  padding: 14px 8px 13px 12px;
+  gap: 8px;
+  min-height: 88px;
+  padding: 10px 7px 10px 10px;
 }
 
 .site-card-main:focus-visible {
@@ -1147,13 +1147,13 @@ button.entity-card:focus-visible,
 .site-overview-page .site-card-color {
   flex: 0 0 auto;
   width: 4px;
-  min-height: 74px;
+  min-height: 62px;
   border-radius: 0;
 }
 
 .site-overview-page .site-card-icon {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 2px;
   background: #eef6ff;
   color: #123f70;
@@ -1162,13 +1162,13 @@ button.entity-card:focus-visible,
 .site-overview-page .entity-card-title {
   max-width: 100%;
   color: #132037;
-  font-size: 0.96rem;
-  line-height: 1.25;
+  font-size: 0.87rem;
+  line-height: 1.2;
 }
 
 .site-overview-page .entity-card-subtitle {
   color: #62758f;
-  font-size: 0.79rem;
+  font-size: 0.73rem;
   font-weight: 700;
 }
 
@@ -1201,9 +1201,10 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-meta-grid {
-  margin-top: 2px;
+  margin-top: 1px;
   color: #5f728b;
-  font-size: 0.78rem;
+  font-size: 0.71rem;
+  line-height: 1.28;
 }
 
 .site-overview-page .site-card-meta-grid strong {
@@ -1217,7 +1218,7 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-status-control {
-  padding: 12px 14px 12px 2px;
+  padding: 10px 10px 10px 2px;
 }
 
 .site-card-status-select {
@@ -1231,11 +1232,12 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-status-select {
-  max-width: 86px;
-  min-height: 25px;
+  max-width: 78px;
+  min-height: 22px;
   border: 1px solid currentColor;
   border-radius: 2px;
-  padding: 3px 22px 3px 9px;
+  padding: 2px 18px 2px 7px;
+  font-size: 0.69rem;
 }
 
 .entity-drawer {
