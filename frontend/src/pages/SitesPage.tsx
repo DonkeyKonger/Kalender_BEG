@@ -82,6 +82,8 @@ export function SitesPage() {
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
   const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
+  const [hasInitializedSiteGroupCollapse, setHasInitializedSiteGroupCollapse] = useState(false);
+  const [collapsedSiteGroupKeys, setCollapsedSiteGroupKeys] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +134,26 @@ export function SitesPage() {
   }, [searchTerm, sites, statusFilter]);
 
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
+  const allSiteGroups = useMemo(() => groupSites(filteredSites, "all"), [filteredSites]);
   const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
+
+  useEffect(() => {
+    if (hasInitializedSiteGroupCollapse || isLoading) {
+      return;
+    }
+
+    const ownProjectManagerGroupKey = user?.role === "project_manager" && user.person_id ? String(user.person_id) : null;
+    const hasOwnProjectManagerGroup = Boolean(
+      ownProjectManagerGroupKey && allSiteGroups.some((group) => group.key === ownProjectManagerGroupKey),
+    );
+
+    setCollapsedSiteGroupKeys(
+      hasOwnProjectManagerGroup
+        ? new Set(allSiteGroups.filter((group) => group.key !== ownProjectManagerGroupKey).map((group) => group.key))
+        : new Set(),
+    );
+    setHasInitializedSiteGroupCollapse(true);
+  }, [allSiteGroups, hasInitializedSiteGroupCollapse, isLoading, user?.person_id, user?.role]);
 
   async function updateSiteStatus(site: SiteSummary, nextStatus: SiteStatus) {
     if (!canEdit || site.status === nextStatus) {
@@ -175,6 +196,18 @@ export function SitesPage() {
 
   function closeDrawer() {
     setIsCreateDrawerOpen(false);
+  }
+
+  function toggleSiteGroup(groupKey: string) {
+    setCollapsedSiteGroupKeys((current) => {
+      const next = new Set(current);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
   }
 
   return (
@@ -251,22 +284,37 @@ export function SitesPage() {
         <>
           {projectManagerFilter === "all" ? (
             <div className="site-group-list" role="list">
-              {siteGroups.map((group) => (
-                <section className="site-group-section" key={group.key}>
-                  {group.showHeading && (
-                    <div className="site-group-header">
-                      <h2>
-                        <ChevronDown aria-hidden="true" size={16} />
-                        <span>{compactSiteGroupLabel(group.label)}</span>
-                      </h2>
-                      <span className="site-group-count">{group.sites.length}</span>
-                    </div>
-                  )}
-                  <div className="entity-card-list site-card-grid">
-                    {group.sites.map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
-                  </div>
-                </section>
-              ))}
+              {siteGroups.map((group) => {
+                const isCollapsed = group.showHeading && collapsedSiteGroupKeys.has(group.key);
+                const cardsId = siteGroupCardsId(group.key);
+
+                return (
+                  <section className={`site-group-section${isCollapsed ? " is-collapsed" : ""}`} key={group.key}>
+                    {group.showHeading && (
+                      <div className="site-group-header">
+                        <button
+                          aria-controls={cardsId}
+                          aria-expanded={!isCollapsed}
+                          className="site-group-toggle"
+                          type="button"
+                          onClick={() => toggleSiteGroup(group.key)}
+                        >
+                          <span className="site-group-title">
+                            <ChevronDown className="site-group-chevron" aria-hidden="true" size={16} />
+                            <span>{compactSiteGroupLabel(group.label)}</span>
+                          </span>
+                          <span className="site-group-count">{group.sites.length}</span>
+                        </button>
+                      </div>
+                    )}
+                    {!isCollapsed && (
+                      <div className="entity-card-list site-card-grid" id={cardsId}>
+                        {group.sites.map((site) => renderSiteCard(site, (siteId) => navigate(`/sites/${siteId}`), canEdit, savingSiteId === site.id, updateSiteStatus))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div className="entity-card-list site-card-grid" role="list">
@@ -1298,6 +1346,10 @@ function compactSiteGroupLabel(label: string): string {
     return label;
   }
   return compactCodeFromText(label);
+}
+
+function siteGroupCardsId(groupKey: string): string {
+  return `site-group-cards-${groupKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
 function siteSearchText(site: SiteSummary): string {
