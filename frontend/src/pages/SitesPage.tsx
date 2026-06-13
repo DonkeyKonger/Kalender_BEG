@@ -584,12 +584,10 @@ export function SiteFields({
   customersLoading = false,
   disabled = false,
   hideTopLocationField = false,
-  isCheckingLocation = false,
   onChange,
   onCustomerFocus,
   onCustomerSelected,
   onCreateCustomer,
-  onCheckLocation,
   onGeocodeSelected,
 }: {
   draft: SiteCreate;
@@ -900,16 +898,6 @@ export function SiteFields({
           <AddressDisplayItem label="Hausnummer" value={draft.house_number} />
           <AddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
         </div>
-        {onCheckLocation && draft.location_status !== "geocoded" && (
-          <button
-            className="icon-button secondary"
-            disabled={disabled || isCheckingLocation}
-            type="button"
-            onClick={onCheckLocation}
-          >
-            {isCheckingLocation ? "Standort wird geprueft..." : "Standort pruefen"}
-          </button>
-        )}
       </section>
 
       <label className="site-info-field">
