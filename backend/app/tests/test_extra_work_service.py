@@ -40,6 +40,7 @@ from app.services import extra_work_email_service as extra_work_email_module
 from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import extra_work_service as extra_work_module
 from app.services.extra_work_service import ExtraWorkService
+from app.services.photo_filename import PHOTO_FILENAME_TIMEZONE
 from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 
@@ -379,8 +380,11 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         def upload_file_to_folder(self, *, drive_id, folder_item_id, filename, content, content_type):
             assert drive_id == "drive-1"
             assert folder_item_id == "folder-1"
-            assert filename.startswith("Stundenzettel-8007-SZ01_")
-            assert filename.endswith(".jpg")
+            date_prefix = datetime.now(PHOTO_FILENAME_TIMEZONE).strftime("%y%m%d")
+            assert filename == (
+                f"{date_prefix}_Schüchtermann_Klinik_"
+                "ZusatzauftragSZ01_Max_Monteur_02.jpg"
+            )
             assert content.startswith(b"\xff\xd8")
             assert content_type == "image/jpeg"
             return {
@@ -408,6 +412,23 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
     monkeypatch.setattr(extra_work_module, "ProjectStorageService", FakeProjectStorageService)
     service = ExtraWorkService(db)
     ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    date_prefix = datetime.now(PHOTO_FILENAME_TIMEZONE).strftime("%y%m%d")
+    existing_photo = ExtraWorkTicketPhoto(
+        site_id=site.id,
+        extra_work_ticket_id=ticket.id,
+        uploaded_by_user_id=current_user.id,
+        project_folder_key="fotos",
+        external_drive_id="drive-1",
+        external_item_id="existing-photo",
+        filename=(
+            f"{date_prefix}_Schüchtermann_Klinik_"
+            "ZusatzauftragSZ01_Max_Monteur.jpg"
+        ),
+        content_type="image/jpeg",
+        file_size_bytes=100,
+    )
+    db.add(existing_photo)
+    db.commit()
 
     photo = service.upload_mobile_ticket_photo(
         assignment_id=assignment.id,
@@ -438,15 +459,15 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
     assert photo.extra_work_ticket_id == ticket.id
     assert photo.file_size_bytes is not None and photo.file_size_bytes > 0
     assert photo.external_web_url == "https://example.invalid/photo-1"
-    assert [item.id for item in photos] == [photo.id]
+    assert [item.id for item in photos] == [existing_photo.id, photo.id]
     assert content == b"downloaded-image"
     assert content_type == "image/jpeg"
     assert filename == "download.jpg"
-    assert service.list_mobile_ticket_photos(
+    assert [item.id for item in service.list_mobile_ticket_photos(
         assignment_id=assignment.id,
         ticket_id=ticket.id,
         current_user=current_user,
-    ) == []
+    )] == [existing_photo.id]
 
 
 def test_mobile_extra_work_photo_upload_blocks_after_five_photos():

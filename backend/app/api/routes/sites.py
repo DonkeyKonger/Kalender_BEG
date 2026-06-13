@@ -51,6 +51,13 @@ from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.geo_service import search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
+from app.services.photo_filename import (
+    PHOTO_UPLOAD_FOLDER_KEY,
+    build_photo_filename,
+    is_supported_photo_upload,
+    photo_extension_from_upload,
+    user_photo_name,
+)
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
@@ -347,11 +354,37 @@ async def upload_project_folder_document(
     folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
         site_id, folder_key, current_user
     )
-    uploaded = ProjectStorageService().upload_file_to_folder(
+    content = await file.read()
+    storage = ProjectStorageService()
+    filename = file.filename
+    if folder_key == PHOTO_UPLOAD_FOLDER_KEY and is_supported_photo_upload(
+        filename=file.filename,
+        content_type=file.content_type,
+    ):
+        site = SiteService(db).get_site(site_id)
+        existing_names = {
+            str(item.get("name"))
+            for item in storage.list_folder_children(
+                drive_id=folder.external_drive_id,
+                folder_item_id=folder.external_item_id,
+            )
+            if item.get("name")
+        }
+        filename = build_photo_filename(
+            site_name=site.name,
+            document_label=None,
+            creator_name=user_photo_name(current_user),
+            extension=photo_extension_from_upload(
+                filename=file.filename,
+                content_type=file.content_type,
+            ),
+            existing_names=existing_names,
+        )
+    uploaded = storage.upload_file_to_folder(
         drive_id=folder.external_drive_id,
         folder_item_id=folder.external_item_id,
-        filename=file.filename,
-        content=await file.read(),
+        filename=filename,
+        content=content,
         content_type=file.content_type,
     )
     return ProjectFolderDocumentItem.model_validate(uploaded)

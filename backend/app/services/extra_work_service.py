@@ -1,6 +1,5 @@
 from datetime import UTC, datetime
 import logging
-from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -21,6 +20,12 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerSignatureCreate,
 )
 from app.services.document_photo_optimizer import optimize_document_photo
+from app.services.photo_filename import (
+    build_photo_filename,
+    extra_work_photo_document_label,
+    photo_extension_from_upload,
+    user_photo_name,
+)
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
@@ -395,11 +400,22 @@ class ExtraWorkService:
             EXTRA_WORK_PHOTO_FOLDER_KEY,
             current_user,
         )
-        upload_filename = _extra_work_photo_filename(
-            ticket=ticket,
-            user=current_user,
-            original_filename=filename,
-            content_type=optimized_photo.content_type,
+        existing_photo_names = set(
+            self.db.scalars(
+                select(ExtraWorkTicketPhoto.filename).where(
+                    ExtraWorkTicketPhoto.extra_work_ticket_id == ticket.id
+                )
+            ).all()
+        )
+        upload_filename = build_photo_filename(
+            site_name=ticket.site.name if ticket.site else "Baustelle",
+            document_label=extra_work_photo_document_label(ticket),
+            creator_name=user_photo_name(current_user),
+            extension=photo_extension_from_upload(
+                filename=filename,
+                content_type=optimized_photo.content_type,
+            ),
+            existing_names=existing_photo_names,
         )
         uploaded = ProjectStorageService().upload_file_to_folder(
             drive_id=folder.external_drive_id,
@@ -602,29 +618,3 @@ class ExtraWorkService:
 
 def _normalize_content_type(value: str | None) -> str:
     return (value or "application/octet-stream").split(";", 1)[0].strip().lower()
-
-
-def _extra_work_photo_filename(
-    *,
-    ticket: ExtraWorkTicket,
-    user: User,
-    original_filename: str | None,
-    content_type: str,
-) -> str:
-    extension = EXTRA_WORK_PHOTO_CONTENT_TYPES.get(content_type)
-    extension = extension or ".jpg"
-    user_label = _safe_filename_part(
-        (user.person.display_name if user.person else None)
-        or user.display_name
-        or f"user-{user.id}"
-    )
-    ticket_label = _safe_filename_part(ticket.display_number or f"stundenzettel-{ticket.id}")
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    suffix = uuid4().hex[:8]
-    return f"Stundenzettel-{ticket_label}_{timestamp}_{user_label}_{suffix}{extension}"
-
-
-def _safe_filename_part(value: str | None) -> str:
-    cleaned = "".join(char if char.isalnum() else "-" for char in (value or "").strip())
-    cleaned = "-".join(part for part in cleaned.split("-") if part)
-    return cleaned[:80] or "unbekannt"
