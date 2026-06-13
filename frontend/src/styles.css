@@ -11440,19 +11440,19 @@ button.person-chip:focus-visible {
 
 /* Dashboard overview */
 .dashboard-page {
-  gap: 18px;
+  gap: 12px;
 }
 
 .dashboard-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr) minmax(260px, 1fr);
-  gap: 14px;
+  gap: 10px;
   align-items: stretch;
   border: 1px solid #dce3ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  padding: 18px;
-  box-shadow: 0 12px 28px rgba(37, 65, 95, 0.06);
+  padding: 12px;
+  box-shadow: none;
 }
 
 .dashboard-hero-simple {
@@ -11462,9 +11462,9 @@ button.person-chip:focus-visible {
 
 .dashboard-hero-main h1,
 .dashboard-hero h1 {
-  margin: 2px 0 4px;
+  margin: 1px 0 3px;
   color: #111827;
-  font-size: clamp(1.7rem, 1.3rem + 1vw, 2.35rem);
+  font-size: clamp(1.35rem, 1.1rem + 0.7vw, 1.8rem);
   letter-spacing: 0;
 }
 
@@ -11472,6 +11472,7 @@ button.person-chip:focus-visible {
 .dashboard-hero-simple p {
   margin: 0;
   color: #5f6f86;
+  font-size: 0.9rem;
   line-height: 1.45;
 }
 
@@ -11479,12 +11480,12 @@ button.person-chip:focus-visible {
 .dashboard-free-summary {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fbff;
-  padding: 14px;
+  border-radius: 2px;
+  background: #fbfdff;
+  padding: 10px;
 }
 
 .dashboard-weather {
@@ -11493,13 +11494,15 @@ button.person-chip:focus-visible {
 
 .dashboard-weather svg {
   color: #2f6ea8;
+  width: 20px;
+  height: 20px;
 }
 
 .dashboard-weather span,
 .dashboard-free-summary span:first-child {
   display: block;
   color: #5f6f86;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -11508,21 +11511,21 @@ button.person-chip:focus-visible {
 .dashboard-free-summary strong {
   display: block;
   color: #111827;
-  font-size: 1.12rem;
+  font-size: 0.98rem;
   letter-spacing: 0;
 }
 
 .dashboard-weather p {
-  margin: 3px 0 0;
+  margin: 2px 0 0;
   color: #5f6f86;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   line-height: 1.35;
 }
 
 .dashboard-pill-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .dashboard-pill,
@@ -11530,9 +11533,9 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  border-radius: 999px;
-  padding: 5px 9px;
-  font-size: 0.82rem;
+  border-radius: 2px;
+  padding: 3px 6px;
+  font-size: 0.72rem;
   font-weight: 780;
   line-height: 1;
 }
@@ -11546,38 +11549,38 @@ button.person-chip:focus-visible {
 .dashboard-muted,
 .dashboard-empty-text {
   color: #6b778c;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 .dashboard-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .dashboard-card {
   min-width: 0;
   border: 1px solid #dce3ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  padding: 16px;
-  box-shadow: 0 10px 24px rgba(37, 65, 95, 0.045);
+  padding: 12px;
+  box-shadow: none;
 }
 
 .dashboard-card-header {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 13px;
+  gap: 7px;
+  margin-bottom: 9px;
 }
 
 .dashboard-card-header span:first-child {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
   background: #eaf2fb;
   color: #1d5c99;
 }
@@ -11585,25 +11588,25 @@ button.person-chip:focus-visible {
 .dashboard-card h2 {
   margin: 0;
   color: #111827;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
   letter-spacing: 0;
 }
 
 .dashboard-site-list,
 .dashboard-alert-list {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .dashboard-site-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #fbfdff;
-  padding: 10px;
+  padding: 8px;
   color: inherit;
   text-decoration: none;
 }
@@ -11611,19 +11614,20 @@ button.person-chip:focus-visible {
 .dashboard-site-item:hover,
 .dashboard-site-item:focus-visible {
   border-color: #9fb8d6;
-  box-shadow: 0 8px 18px rgba(37, 65, 95, 0.08);
+  background: #ffffff;
+  box-shadow: none;
   outline: none;
 }
 
 .dashboard-site-color {
-  width: 6px;
-  height: 44px;
-  border-radius: 999px;
+  width: 4px;
+  height: 38px;
+  border-radius: 0;
 }
 
 .dashboard-site-body {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -11637,17 +11641,18 @@ button.person-chip:focus-visible {
 
 .dashboard-site-body strong {
   color: #111827;
-  font-size: 0.98rem;
+  font-size: 0.88rem;
 }
 
 .dashboard-site-body span {
   color: #334155;
+  font-size: 0.78rem;
   font-weight: 690;
 }
 
 .dashboard-site-body small {
   color: #6b778c;
-  font-size: 0.85rem;
+  font-size: 0.74rem;
 }
 
 .signal-red {
@@ -11666,9 +11671,10 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-message-box {
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 2px;
+  background: #fbfdff;
+  padding: 10px;
 }
 
 .dashboard-message-box strong {
@@ -11676,18 +11682,19 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-message-box p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #5f6f86;
+  font-size: 0.84rem;
   line-height: 1.45;
 }
 
 .dashboard-alert-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px;
+  gap: 7px;
   align-items: start;
   border-bottom: 1px solid #edf2f7;
-  padding: 0 0 9px;
+  padding: 0 0 7px;
 }
 
 .dashboard-alert-row:last-child {
@@ -11702,19 +11709,19 @@ button.person-chip:focus-visible {
 
 .dashboard-alert-row strong {
   color: #111827;
-  font-size: 0.94rem;
+  font-size: 0.84rem;
 }
 
 .dashboard-alert-row span {
   margin-top: 2px;
   color: #5f6f86;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
 }
 
 .dashboard-message-link {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px;
+  gap: 7px;
   align-items: start;
   color: inherit;
   text-decoration: none;
@@ -11723,7 +11730,7 @@ button.person-chip:focus-visible {
 .dashboard-message-row {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dashboard-message-link:hover strong,
@@ -11734,14 +11741,14 @@ button.person-chip:focus-visible {
 .dashboard-message-dismiss-button {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: 0;
   border-radius: 2px;
   background: transparent;
   color: #aab5c4;
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -11759,8 +11766,8 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-alert-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   margin-top: 4px;
 }
@@ -11768,50 +11775,51 @@ button.person-chip:focus-visible {
 .dashboard-prep-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .dashboard-prep-summary div {
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 2px;
+  background: #fbfdff;
+  padding: 8px;
 }
 
 .dashboard-prep-summary span,
 .dashboard-prep-summary small {
   display: block;
   color: #6b778c;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
 .dashboard-prep-summary strong {
   display: block;
-  margin: 4px 0 2px;
+  margin: 2px 0 1px;
   color: #111827;
-  font-size: 1.35rem;
+  font-size: 1.05rem;
 }
 
 .dashboard-need-section {
   border-top: 1px solid #edf2f7;
-  padding-top: 12px;
+  padding-top: 9px;
 }
 
 .dashboard-need-section + .dashboard-need-section {
-  margin-top: 12px;
+  margin-top: 9px;
 }
 
 .dashboard-need-section h3 {
-  margin: 0 0 7px;
+  margin: 0 0 5px;
   color: #334155;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   letter-spacing: 0;
 }
 
 .dashboard-need-section ul {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -11820,37 +11828,37 @@ button.person-chip:focus-visible {
 .dashboard-need-section li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: #334155;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .dashboard-need-section p {
   margin: 0;
   color: #6b778c;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .dashboard-quick-bar {
   display: grid;
   grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   align-items: start;
   border: 1px solid #dce3ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  padding: 14px;
+  padding: 10px;
 }
 
 .dashboard-search-box {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid #c8d6e6;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 .dashboard-search-box svg {
@@ -11861,7 +11869,7 @@ button.person-chip:focus-visible {
   min-width: 0;
   width: 100%;
   border: 0;
-  padding: 11px 0;
+  padding: 8px 0;
   outline: none;
   font: inherit;
 }
@@ -11872,21 +11880,21 @@ button.person-chip:focus-visible {
   left: 0;
   z-index: 30;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   width: min(460px, 90vw);
   border: 1px solid #c8d6e6;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14);
-  padding: 8px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+  padding: 5px;
 }
 
 .dashboard-search-results div {
   display: grid;
   gap: 2px;
-  border-radius: 7px;
-  padding: 8px;
-  background: #f8fafc;
+  border-radius: 2px;
+  padding: 6px;
+  background: #fbfdff;
 }
 
 .dashboard-search-results strong {
@@ -11895,14 +11903,14 @@ button.person-chip:focus-visible {
 
 .dashboard-search-results span {
   color: #5f6f86;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
 }
 
 .dashboard-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dashboard-actions a,
@@ -11910,12 +11918,13 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   border: 1px solid #c8d6e6;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
   color: #173b66;
-  padding: 10px 12px;
+  padding: 7px 9px;
+  font-size: 0.86rem;
   font-weight: 800;
   text-decoration: none;
 }
