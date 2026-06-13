@@ -98,6 +98,17 @@ type TimeReviewWorkerSummary = {
   isReviewed: boolean;
   entries: TimeEntry[];
 };
+type TimeReviewCheckState = "ok" | "warning" | "unknown";
+type TimeReviewEntryCheck = {
+  entry: TimeEntry;
+  locationCheck: TimeReviewCheckState;
+  timeCheck: TimeReviewCheckState;
+};
+type TimeReviewWeekDay = {
+  date: string;
+  weekdayLabel: string;
+  entries: TimeReviewEntryCheck[];
+};
 type FinalHoursEntry = {
   id: number;
   workDate: string;
@@ -357,6 +368,10 @@ export function TimeEntriesPage() {
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
     [selectedReviewPersonId, timeReviewWorkers],
+  );
+  const selectedReviewWeekDays = useMemo(
+    () => buildTimeReviewWeekDays(selectedReviewWorker?.entries ?? [], reviewWeekRange.start),
+    [reviewWeekRange.start, selectedReviewWorker],
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
@@ -975,34 +990,57 @@ export function TimeEntriesPage() {
               <div className="time-review-worker-detail">
                 <div className="time-review-worker-detail-head">
                   <div>
-                    <span>Lohnprüfung</span>
+                    <span>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
                     <h3>{selectedReviewWorker.personName}</h3>
                   </div>
                   <div className="time-review-worker-detail-status">
                     {selectedReviewWorker.isReviewed ? <StatusBadge tone="active">Geprüft</StatusBadge> : <StatusBadge tone="warning">Offen</StatusBadge>}
                   </div>
                 </div>
-                <div className="time-review-worker-facts">
-                  <div><span>Tage</span><strong>{selectedReviewWorker.dayCount}</strong></div>
-                  <div><span>Einträge</span><strong>{selectedReviewWorker.entryCount}</strong></div>
-                  <div><span>Offene Hinweise</span><strong>{selectedReviewWorker.openIssueCount}</strong></div>
-                  <div><span>Summe</span><strong>{formatMinutes(selectedReviewWorker.totalMinutes)}</strong></div>
-                </div>
-                <div className="time-review-worker-entry-list">
-                  {selectedReviewWorker.entries.map((entry) => (
-                    <div className="time-review-worker-entry" key={entry.id}>
-                      <div>
-                        <strong>{formatDate(entry.work_date)} · {formatWeekday(entry.work_date)}</strong>
-                        <span>{timeEntrySiteLabel(entry)}</span>
+                <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
+                  <div className="time-review-week-check-head" role="row">
+                    <span role="columnheader">Tag</span>
+                    <span role="columnheader">Baustelle</span>
+                    <span role="columnheader">Ort passt</span>
+                    <span role="columnheader">Arbeitszeit passt</span>
+                  </div>
+                  {selectedReviewWeekDays.map((day) => (
+                    day.entries.length > 0 ? day.entries.map((check, index) => (
+                      <div className="time-review-week-check-row" key={`${day.date}-${check.entry.id}`} role="row">
+                        <div className="time-review-week-day" role="cell">
+                          {index === 0 && (
+                            <>
+                              <strong>{day.weekdayLabel}</strong>
+                              <span>{formatDate(day.date)}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="time-review-week-site" role="cell">
+                          <strong>{timeEntrySiteName(check.entry)}</strong>
+                          {check.entry.site_number && <span>{check.entry.site_number}</span>}
+                        </div>
+                        <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
+                        <div role="cell">{renderTimeReviewCheckMark(check.timeCheck)}</div>
                       </div>
-                      <div>
-                        <span>{formatMinutes(entry.corrected_work_minutes ?? entry.work_minutes)}</span>
-                        <StatusBadge tone={timeReviewIssue(entry) ? "warning" : "active"}>
-                          {timeReviewIssue(entry) ? "Offen" : "Geprüft"}
-                        </StatusBadge>
+                    )) : (
+                      <div className="time-review-week-check-row is-empty" key={day.date} role="row">
+                        <div className="time-review-week-day" role="cell">
+                          <strong>{day.weekdayLabel}</strong>
+                          <span>{formatDate(day.date)}</span>
+                        </div>
+                        <div className="time-review-week-site" role="cell">
+                          <strong>Keine Zeitmeldung</strong>
+                        </div>
+                        <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
+                        <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
                       </div>
-                    </div>
+                    )
                   ))}
+                </div>
+                <div className="time-review-worker-detail-actions">
+                  <button className="icon-button secondary" type="button" disabled title="Wochenstatus ist noch nicht als eigener Speicherstatus angebunden.">
+                    Monteurwoche als geprüft markieren
+                  </button>
                 </div>
               </div>
             ) : timeReviewWorkers.length > 0 ? (
@@ -2075,6 +2113,12 @@ function formatCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function addDaysToDateInput(value: string, days: number): string {
+  const date = parseDateInput(value);
+  date.setDate(date.getDate() + days);
+  return toDateInputValue(date);
+}
+
 function parseDateInput(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -2253,6 +2297,95 @@ function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): numb
   return left.work_date.localeCompare(right.work_date)
     || timeEntrySiteLabel(left).localeCompare(timeEntrySiteLabel(right), "de")
     || left.id - right.id;
+}
+
+function buildTimeReviewWeekDays(entries: TimeEntry[], weekStart: string): TimeReviewWeekDay[] {
+  const entriesByDate = new Map<string, TimeEntry[]>();
+  for (const entry of entries) {
+    const dayEntries = entriesByDate.get(entry.work_date) ?? [];
+    dayEntries.push(entry);
+    entriesByDate.set(entry.work_date, dayEntries);
+  }
+
+  return numberRange(0, 4).map((dayOffset) => {
+    const date = addDaysToDateInput(weekStart, dayOffset);
+    return {
+      date,
+      weekdayLabel: formatWeekday(date),
+      entries: (entriesByDate.get(date) ?? [])
+        .slice()
+        .sort(compareTimeReviewWorkerEntries)
+        .map((entry) => ({
+          entry,
+          locationCheck: classifyTimeReviewLocationCheck(entry),
+          timeCheck: classifyTimeReviewTimeCheck(entry),
+        })),
+    };
+  });
+}
+
+function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState {
+  const hasGpsSignal = Boolean(entry.gps_first_seen_at || entry.gps_last_seen_at || entry.gps_total_points);
+  if (
+    entry.gps_not_checkable
+    || entry.gps_status === "not_checkable"
+    || entry.review_notices.includes(GPS_NOT_CHECKABLE_NOTICE)
+  ) {
+    return "unknown";
+  }
+  if (entry.gps_status === "missing" || !hasGpsSignal) {
+    return entry.time_review_status !== "open" && entry.time_review_status !== "not_verifiable" ? "ok" : "unknown";
+  }
+  if (
+    entry.gps_status === "mismatch"
+    || entry.planned_vs_gps_mismatch
+    || entry.manual_vs_gps_mismatch
+    || entry.manual_vs_planned_mismatch
+    || (entry.gps_detected_location_type === "company" && Boolean(entry.site_id || entry.planned_site_labels.length))
+  ) {
+    return "warning";
+  }
+  if (entry.gps_status === "matched" || entry.time_review_status !== "open") {
+    return "ok";
+  }
+  return "unknown";
+}
+
+function classifyTimeReviewTimeCheck(entry: TimeEntry): TimeReviewCheckState {
+  if (entry.time_review_status !== "open") {
+    return entry.time_review_status === "not_verifiable" || entry.time_review_status === "clarification" ? "unknown" : "ok";
+  }
+  if (entry.is_gps_suggestion) {
+    return "warning";
+  }
+  const manualMinutes = Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
+  const gpsMinutes = entry.gps_work_minutes;
+  if (manualMinutes !== null && manualMinutes > 12 * 60) {
+    return "warning";
+  }
+  if (manualMinutes === null || gpsMinutes === null) {
+    return "unknown";
+  }
+  return Math.abs(gpsMinutes - manualMinutes) <= GPS_TIME_TOLERANCE_MINUTES ? "ok" : "warning";
+}
+
+function renderTimeReviewCheckMark(state: TimeReviewCheckState) {
+  const label = timeReviewCheckLabel(state);
+  return (
+    <span className={`time-review-check-mark is-${state}`} aria-label={label} title={label}>
+      {state === "ok" ? "✓" : state === "warning" ? "!" : "-"}
+    </span>
+  );
+}
+
+function timeReviewCheckLabel(state: TimeReviewCheckState): string {
+  if (state === "ok") {
+    return "Passt";
+  }
+  if (state === "warning") {
+    return "Prüfen";
+  }
+  return "nicht prüfbar";
 }
 
 function reviewRowsForStatus(

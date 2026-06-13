@@ -9572,69 +9572,122 @@ button.person-chip:focus-visible {
   font-size: 1rem;
 }
 
-.time-review-worker-facts {
+.time-review-week-check-table {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.time-review-worker-facts div {
-  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  border: 1px solid #dce6f2;
   border-radius: 3px;
   background: #ffffff;
-  padding: 8px 9px;
 }
 
-.time-review-worker-facts span,
-.time-review-worker-entry span {
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 760;
-}
-
-.time-review-worker-facts strong {
-  display: block;
-  margin-top: 2px;
-  color: #172033;
-  font-size: 0.92rem;
-}
-
-.time-review-worker-entry-list {
+.time-review-week-check-head,
+.time-review-week-check-row {
   display: grid;
-  gap: 6px;
-}
-
-.time-review-worker-entry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(76px, 0.8fr) minmax(180px, 2fr) minmax(92px, 0.75fr) minmax(120px, 0.9fr);
   gap: 10px;
   align-items: center;
-  border: 1px solid #e2e8f0;
-  border-radius: 3px;
-  background: #ffffff;
-  padding: 8px 9px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 10px;
 }
 
-.time-review-worker-entry > div {
+.time-review-week-check-head {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-review-week-check-row {
+  background: #ffffff;
+  min-height: 46px;
+}
+
+.time-review-week-check-row:last-child {
+  border-bottom: 0;
+}
+
+.time-review-week-check-row.is-empty {
+  background: #fbfdff;
+}
+
+.time-review-week-day,
+.time-review-week-site {
   display: grid;
-  gap: 2px;
   min-width: 0;
 }
 
-.time-review-worker-entry > div:last-child {
-  justify-items: end;
-}
-
-.time-review-worker-entry strong,
-.time-review-worker-entry span {
+.time-review-week-day strong,
+.time-review-week-site strong {
   overflow: hidden;
+  color: #172033;
+  font-size: 0.78rem;
+  font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.time-review-worker-entry strong {
-  color: #172033;
-  font-size: 0.8rem;
+.time-review-week-day span,
+.time-review-week-site span {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.time-review-check-mark.is-ok {
+  border-color: #9cd0aa;
+  background: #f0fbf3;
+  color: #166534;
+}
+
+.time-review-check-mark.is-warning {
+  border-color: #f2c078;
+  background: #fff8eb;
+  color: #9a5b00;
+}
+
+.time-review-worker-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.time-review-worker-detail-actions .icon-button {
+  border-radius: 3px;
+}
+
+@media (max-width: 760px) {
+  .time-review-worker-bubble {
+    min-width: min(100%, 150px);
+  }
+
+  .time-review-week-check-head,
+  .time-review-week-check-row {
+    grid-template-columns: minmax(58px, 0.75fr) minmax(0, 1fr) 48px 64px;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .time-review-week-check-head {
+    font-size: 0.62rem;
+    line-height: 1.2;
+  }
 }
 
 .time-review-week-label {
