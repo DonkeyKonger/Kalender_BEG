@@ -862,10 +862,14 @@ export function SiteFields({
         <label className="address-field site-address-search">
           <span>Adresse suchen</span>
           <input
+            aria-label="Adresse suchen"
             autoCapitalize="none"
             autoComplete="new-password"
             autoCorrect="off"
             disabled={disabled}
+            id="site-query-token"
+            inputMode="search"
+            name="site-query-token"
             placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
             spellCheck={false}
             value={addressSearch}
