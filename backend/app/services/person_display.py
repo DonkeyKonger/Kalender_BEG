@@ -1,3 +1,4 @@
+from app.models.enums import PersonType
 from app.models.person import Person
 
 
@@ -5,6 +6,8 @@ def calendar_short_code(person: Person) -> str:
     if getattr(person, "deleted_at", None) is not None:
         return "gelöscht"
     display_name = person.display_name.strip()
+    if getattr(person, "person_type", PersonType.INTERNAL) != PersonType.INTERNAL:
+        return display_name or person.short_code
     display_parts = name_parts(display_name)
     if len(display_parts) >= 2:
         return f"{display_parts[0][:1]}.{display_parts[-1]}"
