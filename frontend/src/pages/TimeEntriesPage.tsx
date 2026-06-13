@@ -362,8 +362,8 @@ export function TimeEntriesPage() {
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
   const timeReviewWorkers = useMemo(
-    () => buildTimeReviewWorkerSummaries(reviewAllEntries, reviewEntries),
-    [reviewAllEntries, reviewEntries],
+    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries),
+    [people, reviewAllEntries, reviewEntries],
   );
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
@@ -956,13 +956,16 @@ export function TimeEntriesPage() {
             {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length > 0 && (
               <p className="time-table-note">Kalenderwoche wird geladen...</p>
             )}
-            {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
+            {isLoadingPeople && timeReviewWorkers.length === 0 && (
+              <div className="empty-panel">Monteure werden geladen...</div>
+            )}
+            {!isLoadingPeople && (isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
               <div className="empty-panel">Stundenprüfung wird geladen...</div>
             )}
             {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
             {!isLoadingReviewAllEntries && reviewAllEntriesError && <div className="empty-panel">{reviewAllEntriesError}</div>}
-            {!isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
-              <div className="empty-panel">Für KW {selectedReviewWeek.week} liegen keine gemeldeten Monteurszeiten vor.</div>
+            {!isLoadingPeople && !isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
+              <div className="empty-panel">Keine aktiven internen Monteure für die Lohnprüfung gefunden.</div>
             )}
 
             {timeReviewWorkers.length > 0 && (
@@ -979,7 +982,11 @@ export function TimeEntriesPage() {
                     onClick={() => setSelectedReviewPersonId(worker.personId)}
                   >
                     <span className="time-review-worker-name">{worker.personName}</span>
-                    <small>{formatCount(worker.dayCount, "Tag", "Tage")} · {formatCount(worker.entryCount, "Eintrag", "Einträge")}</small>
+                    <small>
+                      {worker.entryCount > 0
+                        ? `${formatCount(worker.dayCount, "Tag", "Tage")} · ${formatCount(worker.entryCount, "Eintrag", "Einträge")}`
+                        : "Keine Meldung"}
+                    </small>
                     {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
                   </button>
                 ))}
@@ -2253,24 +2260,32 @@ function buildTimeReviewTableRows(
     ));
 }
 
-function buildTimeReviewWorkerSummaries(allEntries: TimeEntry[], openEntries: TimeEntry[]): TimeReviewWorkerSummary[] {
+function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[], openEntries: TimeEntry[]): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
 
+  people
+    .filter((person) => person.is_active && person.person_type === "internal")
+    .forEach((person) => {
+      summaries.set(person.id, {
+        personId: person.id,
+        personName: person.display_name,
+        entryCount: 0,
+        dayCount: 0,
+        openIssueCount: 0,
+        reviewedEntryCount: 0,
+        totalMinutes: 0,
+        isReviewed: false,
+        entries: [],
+      });
+    });
+
   allEntries.forEach((entry) => {
-    const existing = summaries.get(entry.person_id) ?? {
-      personId: entry.person_id,
-      personName: entry.person_name,
-      entryCount: 0,
-      dayCount: 0,
-      openIssueCount: 0,
-      reviewedEntryCount: 0,
-      totalMinutes: 0,
-      isReviewed: false,
-      entries: [],
-    };
+    const existing = summaries.get(entry.person_id);
+    if (!existing) {
+      return;
+    }
     existing.entries.push(entry);
-    summaries.set(entry.person_id, existing);
   });
 
   return Array.from(summaries.values())
