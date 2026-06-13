@@ -505,7 +505,12 @@ export function SiteCreateDrawer({
         subtitle="Stammdaten anlegen"
         onClose={closeSiteDrawer}
         footer={canEdit ? (
-          <button className="icon-button" disabled={savingSite} type="button" onClick={() => void createSite()}>
+          <button
+            className="icon-button site-create-submit-button"
+            disabled={savingSite}
+            type="button"
+            onClick={() => void createSite()}
+          >
             <PlusCircle aria-hidden="true" size={17} />
             <span>{savingSite ? "Baustelle wird angelegt..." : "Baustelle anlegen"}</span>
           </button>
@@ -745,11 +750,11 @@ export function SiteFields({
   return (
     <div className="site-form-grid">
       <label className="site-field-name">
-        <span>Baustelle</span>
+        <span>Baustellenname</span>
         <input disabled={disabled} value={draft.name} onChange={(event) => onChange({ name: event.target.value })} />
       </label>
       <label className="site-field-number">
-        <span>Nummer</span>
+        <span>Kommissions Nr.</span>
         <input
           disabled={disabled}
           value={draft.site_number ?? ""}

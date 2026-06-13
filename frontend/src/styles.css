@@ -1329,6 +1329,19 @@ button.entity-card:focus-visible,
   padding: 14px 22px;
 }
 
+.entity-drawer-footer .site-create-submit-button {
+  border: 1px solid #1f3657;
+  border-radius: 2px;
+  background: #1f3657;
+  box-shadow: none;
+}
+
+.entity-drawer-footer .site-create-submit-button:hover,
+.entity-drawer-footer .site-create-submit-button:focus-visible {
+  border-color: #152946;
+  background: #152946;
+}
+
 .drawer-field {
   display: grid;
   gap: 6px;
