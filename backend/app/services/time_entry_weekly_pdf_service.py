@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.enums import PersonType
+from app.models.enums import PersonType, UserRole
 from app.models.person import Person
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.pdf_export_service import SimplePdf
@@ -52,12 +52,13 @@ class TimeEntryWeeklyPdfService:
     def _active_internal_people(self) -> list[Person]:
         statement = (
             select(Person)
+            .options(selectinload(Person.users))
             .where(Person.is_active.is_(True))
             .where(Person.deleted_at.is_(None))
             .where(Person.person_type == PersonType.INTERNAL)
             .order_by(Person.display_name)
         )
-        return list(self.db.scalars(statement))
+        return [person for person in self.db.scalars(statement) if is_payroll_worker_person(person)]
 
     def _weekly_rows_by_person(self, *, start: date, end: date) -> dict[int, list[WeeklyHoursRow]]:
         statement = (
@@ -153,3 +154,12 @@ def format_hours(minutes: int | None) -> str:
 
 def format_short_date(value: date) -> str:
     return value.strftime("%d.%m.%y")
+
+
+def is_payroll_worker_person(person: Person) -> bool:
+    if not person.is_active or person.deleted_at is not None or person.person_type != PersonType.INTERNAL:
+        return False
+    active_roles = {user.role for user in person.users if user.is_active}
+    if not active_roles:
+        return True
+    return active_roles == {UserRole.MONTEUR}

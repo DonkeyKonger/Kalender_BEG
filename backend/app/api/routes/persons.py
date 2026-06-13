@@ -31,7 +31,7 @@ def list_persons(
     db: Session = Depends(get_db),
 ) -> list[PersonRead]:
     people = PersonService(db).list_people(is_active=is_active)
-    return [PersonRead.model_validate(person) for person in people if person.deleted_at is None]
+    return [person_read(person) for person in people if person.deleted_at is None]
 
 
 @router.get("/map", response_model=PersonMapResponse)
@@ -100,7 +100,7 @@ def create_person(
     db: Session = Depends(get_db),
 ) -> PersonRead:
     person = PersonService(db).create_person(payload, current_user.id)
-    return PersonRead.model_validate(person)
+    return person_read(person)
 
 
 @router.post("/external", response_model=PersonRead, status_code=201)
@@ -110,7 +110,7 @@ def create_external_person(
     db: Session = Depends(get_db),
 ) -> PersonRead:
     person = PersonService(db).create_external_person(payload, current_user.id)
-    return PersonRead.model_validate(person)
+    return person_read(person)
 
 
 @router.patch("/{person_id}", response_model=PersonRead)
@@ -121,4 +121,13 @@ def update_person(
     db: Session = Depends(get_db),
 ) -> PersonRead:
     person = PersonService(db).update_person(person_id, payload, current_user.id)
-    return PersonRead.model_validate(person)
+    return person_read(person)
+
+
+def person_read(person) -> PersonRead:
+    user_roles = sorted({
+        user.role
+        for user in getattr(person, "users", [])
+        if user.is_active
+    })
+    return PersonRead.model_validate(person).model_copy(update={"user_roles": user_roles})

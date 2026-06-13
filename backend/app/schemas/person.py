@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import PersonType, SiteLocationStatus
+from app.models.enums import PersonType, SiteLocationStatus, UserRole
 
 
 class PersonBase(BaseModel):
@@ -60,6 +60,7 @@ class PersonUpdate(BaseModel):
 
 class PersonRead(PersonBase):
     id: int
+    user_roles: list[UserRole] = Field(default_factory=list)
     deleted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

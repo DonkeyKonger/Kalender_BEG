@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import PersonType
 from app.models.person import Person
@@ -18,7 +18,12 @@ class PersonRepository:
         return person
 
     def list(self, is_active: bool | None = None) -> list[Person]:
-        statement = select(Person).where(Person.deleted_at.is_(None)).order_by(Person.display_name)
+        statement = (
+            select(Person)
+            .options(selectinload(Person.users))
+            .where(Person.deleted_at.is_(None))
+            .order_by(Person.display_name)
+        )
         if is_active is not None:
             statement = statement.where(Person.is_active == is_active)
         return list(self.db.scalars(statement))

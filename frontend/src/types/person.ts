@@ -5,6 +5,7 @@ export type PersonLocationStatus = "unchecked" | "geocoded" | "ambiguous" | "fai
 
 export type Person = {
   id: number;
+  user_roles?: UserRole[];
   first_name: string;
   last_name: string;
   display_name: string;

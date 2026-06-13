@@ -2289,7 +2289,7 @@ function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[
   const summaries = new Map<number, TimeReviewWorkerSummary>();
 
   people
-    .filter((person) => person.is_active && person.person_type === "internal")
+    .filter(isPayrollReviewWorker)
     .forEach((person) => {
       summaries.set(person.id, {
         personId: person.id,
@@ -2330,6 +2330,17 @@ function buildTimeReviewWorkerSummaries(people: Person[], allEntries: TimeEntry[
       };
     })
     .sort((left, right) => left.personName.localeCompare(right.personName, "de", { sensitivity: "base" }));
+}
+
+function isPayrollReviewWorker(person: Person): boolean {
+  if (!person.is_active || person.person_type !== "internal") {
+    return false;
+  }
+  const activeRoles = person.user_roles ?? [];
+  if (!activeRoles.length) {
+    return true;
+  }
+  return activeRoles.length === 1 && activeRoles[0] === "monteur";
 }
 
 function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): number {
