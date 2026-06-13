@@ -4629,15 +4629,15 @@ button.person-chip:focus-visible {
   font-size: clamp(1.85rem, 1.55rem + 0.8vw, 2.35rem);
 }
 
-.site-overview-create {
+.site-overview-page .site-overview-create {
   border: 1px solid #1f3657;
   border-radius: 2px;
   background: #1f3657;
   box-shadow: none;
 }
 
-.site-overview-create:hover,
-.site-overview-create:focus-visible {
+.site-overview-page .site-overview-create:hover,
+.site-overview-page .site-overview-create:focus-visible {
   border-color: #152946;
   background: #152946;
 }
