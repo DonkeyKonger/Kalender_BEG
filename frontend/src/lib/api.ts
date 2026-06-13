@@ -829,6 +829,11 @@ export const api = {
     return requestBlob(`/exports/time-entries/monthly-xlsx?${search.toString()}`);
   },
 
+  async weeklyWorkerHoursPdf(params: { weekStart: string }): Promise<Blob> {
+    const search = new URLSearchParams({ week_start: params.weekStart });
+    return requestBlob(`/exports/time-entries/weekly-worker-hours.pdf?${search.toString()}`);
+  },
+
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`);

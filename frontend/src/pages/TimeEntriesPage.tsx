@@ -256,6 +256,8 @@ export function TimeEntriesPage() {
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
+  const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
+  const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
   const [isDownloadingExport, setIsDownloadingExport] = useState(false);
   const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
@@ -869,6 +871,22 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function downloadWeeklyWorkerHoursPdf(): Promise<void> {
+    if (isDownloadingReviewHours) {
+      return;
+    }
+    setIsDownloadingReviewHours(true);
+    setReviewHoursDownloadError(null);
+    try {
+      const blob = await api.weeklyWorkerHoursPdf({ weekStart: reviewWeekRange.start });
+      downloadBlobFile(blob, `arbeitsstunden_kw${String(selectedReviewWeek.week).padStart(2, "0")}_${selectedReviewWeek.year}.pdf`);
+    } catch (requestError) {
+      setReviewHoursDownloadError(readApiError(requestError, "Arbeitsstunden-PDF konnte nicht erstellt werden."));
+    } finally {
+      setIsDownloadingReviewHours(false);
+    }
+  }
+
   return (
     <section className="time-entries-page is-figma-times-workspace">
       <div className="page-header entity-page-header">
@@ -947,12 +965,18 @@ export function TimeEntriesPage() {
                 <h2>Lohnprüfung pro Monteur</h2>
                 <p>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</p>
               </div>
-              {timeReviewWorkers.length > 0 && (
-                <span>{formatCount(timeReviewWorkers.length, "Monteur", "Monteure")}</span>
-              )}
+              <button
+                className="icon-button secondary time-review-download-button"
+                type="button"
+                disabled={isDownloadingReviewHours}
+                onClick={() => void downloadWeeklyWorkerHoursPdf()}
+              >
+                {isDownloadingReviewHours ? "Arbeitsstunden werden erstellt..." : "Arbeitsstunden downloaden"}
+              </button>
             </div>
 
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
+            {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
             {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length > 0 && (
               <p className="time-table-note">Kalenderwoche wird geladen...</p>
             )}

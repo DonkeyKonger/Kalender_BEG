@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -8,6 +8,7 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.services.pdf_export_service import PdfExportService
+from app.services.time_entry_weekly_pdf_service import TimeEntryWeeklyPdfService
 from app.services.time_entry_xlsx_export_service import TimeEntryXlsxExportService
 
 router = APIRouter(prefix="/exports", tags=["exports"])
@@ -32,7 +33,7 @@ def weekly_plan(
     _user=Depends(CAN_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
-    normalized_start = week_start
+    normalized_start = week_start - timedelta(days=week_start.weekday())
     content = PdfExportService(db).weekly_plan(normalized_start)
     filename = f"wochenplan-{normalized_start.isoformat()}.pdf"
     return pdf_response(content, filename)
@@ -52,6 +53,19 @@ def monthly_time_entries_xlsx(
     )
     filename = f"zeiten_export_{year}_{month:02d}.xlsx"
     return xlsx_response(content, filename)
+
+
+@router.get("/time-entries/weekly-worker-hours.pdf")
+def weekly_worker_hours_pdf(
+    week_start: date,
+    _current_user=Depends(CAN_EXPORT),
+    db: Session = Depends(get_db),
+) -> Response:
+    normalized_start = week_start
+    content = TimeEntryWeeklyPdfService(db).weekly_worker_hours(week_start=normalized_start)
+    iso_week = normalized_start.isocalendar()
+    filename = f"arbeitsstunden_kw{iso_week.week:02d}_{iso_week.year}.pdf"
+    return pdf_response(content, filename)
 
 
 def pdf_response(content: bytes, filename: str) -> Response:

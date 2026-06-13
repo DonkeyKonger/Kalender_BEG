@@ -9469,6 +9469,12 @@ button.person-chip:focus-visible {
   font-weight: 850;
 }
 
+.time-review-download-button {
+  min-height: 32px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
 .time-review-worker-bubbles {
   display: flex;
   flex-wrap: wrap;
