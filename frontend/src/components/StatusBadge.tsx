@@ -32,7 +32,7 @@ export const siteStatusLabels: Record<SiteStatus, string> = {
   paused: "Pause",
   planned: "Gepl.",
   completed: "Abges.",
-  deleted: "Geloesch.",
+  deleted: "Gelöscht",
 };
 
 export const roleLabels: Record<UserRole, string> = {
