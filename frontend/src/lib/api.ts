@@ -1174,12 +1174,16 @@ export const api = {
     start: string;
     end: string;
     includeWeekends: boolean;
+    yearView?: boolean;
   }): Promise<MatrixResponse> {
     const search = new URLSearchParams({
       start: params.start,
       end: params.end,
       include_weekends: String(params.includeWeekends),
     });
+    if (params.yearView) {
+      search.set("year_view", "true");
+    }
     return request<MatrixResponse>(`/matrix?${search.toString()}`);
   },
 

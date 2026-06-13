@@ -220,6 +220,7 @@ export function MatrixPage() {
           start: activeRange.start,
           end: activeRange.end,
           includeWeekends: true,
+          yearView: isYearView,
         }),
         api.persons(),
         api.absences({ start: activeRange.start, end: activeRange.end }),
@@ -233,17 +234,18 @@ export function MatrixPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeRange.end, activeRange.start]);
+  }, [activeRange.end, activeRange.start, isYearView]);
 
   const refreshMatrixOnly = useCallback(async () => {
     const matrixData = await api.matrix({
       start: activeRange.start,
       end: activeRange.end,
       includeWeekends: true,
+      yearView: isYearView,
     });
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-  }, [activeRange.end, activeRange.start]);
+  }, [activeRange.end, activeRange.start, isYearView]);
 
   const refreshAbsencesOnly = useCallback(async () => {
     const absenceData = await api.absences({ start: activeRange.start, end: activeRange.end });
@@ -1338,9 +1340,8 @@ export function MatrixPage() {
               type="checkbox"
               onChange={(event) => updateYearView(event.target.checked)}
             />
-            <span>Ganzes Jahr</span>
+            <span>Jahresansicht</span>
           </label>
-          {isYearView && <span className="matrix-readonly-note">Jahresansicht · Nur Anzeige</span>}
           <button
             className="icon-button secondary"
             disabled={isYearView || !undoStack.length}

@@ -25,6 +25,7 @@ from app.schemas.matrix import (
 )
 
 MAX_MATRIX_DAYS = 90
+MAX_MATRIX_YEAR_VIEW_DAYS = 366
 
 
 class MatrixService:
@@ -41,10 +42,12 @@ class MatrixService:
         end: date,
         include_weekends: bool = False,
         include_closed: bool = False,
+        year_view: bool = False,
     ) -> MatrixResponse:
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
-        if (end - start).days + 1 > MAX_MATRIX_DAYS:
+        max_days = MAX_MATRIX_YEAR_VIEW_DAYS if year_view else MAX_MATRIX_DAYS
+        if (end - start).days + 1 > max_days:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Matrixzeitraum ist zu gross.")
 
         all_days = self._date_range(start, end)

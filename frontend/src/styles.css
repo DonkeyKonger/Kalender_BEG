@@ -555,19 +555,6 @@ button:disabled {
   accent-color: #143c6d;
 }
 
-.matrix-readonly-note {
-  display: inline-flex;
-  align-items: center;
-  min-height: 38px;
-  border: 1px solid #d7e1ee;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #42526a;
-  padding: 8px 10px;
-  font-size: 0.86rem;
-  font-weight: 750;
-}
-
 .matrix-state {
   border: 1px solid #dce3ee;
   border-radius: 8px;
@@ -2462,7 +2449,6 @@ button.person-chip:focus-visible {
 .matrix-page.is-compact .matrix-pm-filter button,
 .matrix-page.is-compact .matrix-compact-toggle,
 .matrix-page.is-compact .matrix-year-toggle,
-.matrix-page.is-compact .matrix-readonly-note,
 .matrix-page.is-compact .icon-button.secondary {
   min-height: 30px;
   padding-top: 5px;

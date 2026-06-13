@@ -29,6 +29,7 @@ def get_matrix(
     end: date,
     include_weekends: bool = False,
     include_closed: bool = False,
+    year_view: bool = False,
     _user=Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> MatrixResponse:
@@ -37,6 +38,7 @@ def get_matrix(
         end=end,
         include_weekends=include_weekends,
         include_closed=include_closed,
+        year_view=year_view,
     )
 
 
