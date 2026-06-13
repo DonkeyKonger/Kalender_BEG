@@ -87,6 +87,17 @@ type TimeReviewTableRow = {
   systemHint: string;
   canConfirm: boolean;
 };
+type TimeReviewWorkerSummary = {
+  personId: number;
+  personName: string;
+  entryCount: number;
+  dayCount: number;
+  openIssueCount: number;
+  reviewedEntryCount: number;
+  totalMinutes: number;
+  isReviewed: boolean;
+  entries: TimeEntry[];
+};
 type FinalHoursEntry = {
   id: number;
   workDate: string;
@@ -233,9 +244,8 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
+  const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
-  const [reviewStatusFilter, setReviewStatusFilter] = useState<ReviewSummaryFilter>("all");
-  const [reviewPersonFilter, setReviewPersonFilter] = useState("");
   const [isDownloadingExport, setIsDownloadingExport] = useState(false);
   const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
@@ -340,29 +350,14 @@ export function TimeEntriesPage() {
     [activeRange.end, activeRange.start, assignments],
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
-  const reviewTableRows = useMemo(
-    () => buildTimeReviewTableRows(timeReviewIssues, reviewAllEntries, reviewStatusFilter, reviewPersonFilter),
-    [reviewAllEntries, reviewPersonFilter, reviewStatusFilter, timeReviewIssues],
+  const timeReviewWorkers = useMemo(
+    () => buildTimeReviewWorkerSummaries(reviewAllEntries, reviewEntries),
+    [reviewAllEntries, reviewEntries],
   );
-  const reviewSummary = useMemo(
-    () => calculateReviewSummary(timeReviewIssues, reviewAllEntries),
-    [reviewAllEntries, timeReviewIssues],
+  const selectedReviewWorker = useMemo(
+    () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
+    [selectedReviewPersonId, timeReviewWorkers],
   );
-  const reviewFilterTabs: Array<{ key: ReviewSummaryFilter; label: string; value: number }> = useMemo(
-    () => [
-      { key: "needs_review", label: "Prüfung empfohlen", value: reviewSummary.reviewRecommended },
-      { key: "all", label: "Alle", value: reviewSummary.all },
-      { key: "matches", label: "Automatisch geprüft", value: reviewSummary.autoPlausible },
-      { key: "verified", label: "Manuell geprüft", value: reviewSummary.verified },
-    ],
-    [reviewSummary],
-  );
-  const isReadOnlyReviewOverview = reviewStatusFilter === "all" || reviewStatusFilter === "matches";
-  const reviewTableClassName = [
-    "time-entries-table",
-    "time-review-compact-table",
-    isReadOnlyReviewOverview ? "is-read-only-overview" : "",
-  ].filter(Boolean).join(" ");
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const exportPreviewRows = useMemo(
@@ -437,6 +432,12 @@ export function TimeEntriesPage() {
       ignore = true;
     };
   }, [activeRange.end, activeRange.start, entriesRefreshKey, selectedPersonId]);
+
+  useEffect(() => {
+    if (selectedReviewPersonId !== null && !timeReviewWorkers.some((worker) => worker.personId === selectedReviewPersonId)) {
+      setSelectedReviewPersonId(null);
+    }
+  }, [selectedReviewPersonId, timeReviewWorkers]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -925,89 +926,88 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
-          <div className="project-record-subtabs time-review-filter-tabs" role="tablist" aria-label="Stundenprüfung Filter">
-            {reviewFilterTabs.map((tab) => (
-              <button
-                className={reviewStatusFilter === tab.key ? "is-active" : ""}
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={reviewStatusFilter === tab.key}
-                onClick={() => setReviewStatusFilter(tab.key)}
-              >
-                <span>{tab.label}</span>
-                <strong className="time-review-filter-count">{tab.value}</strong>
-              </button>
-            ))}
-          </div>
+          <div className="time-review-worker-panel">
+            <div className="time-review-worker-head">
+              <div>
+                <h2>Lohnprüfung pro Monteur</h2>
+                <p>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</p>
+              </div>
+              {timeReviewWorkers.length > 0 && (
+                <span>{formatCount(timeReviewWorkers.length, "Monteur", "Monteure")}</span>
+              )}
+            </div>
 
-          <div className="time-review-filters">
-            <label>
-              <span>Monteur</span>
-              <input
-                placeholder="Alle Monteure"
-                value={reviewPersonFilter}
-                onChange={(event) => setReviewPersonFilter(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="time-review-table-panel">
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
-            {isLoadingReviewEntries && reviewTableRows.length > 0 && (
+            {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length > 0 && (
               <p className="time-table-note">Kalenderwoche wird geladen...</p>
             )}
-            {isLoadingReviewEntries && reviewTableRows.length === 0 && <div className="empty-panel">Stundenprüfung wird geladen...</div>}
+            {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
+              <div className="empty-panel">Stundenprüfung wird geladen...</div>
+            )}
             {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
-            {!isLoadingReviewEntries && !reviewEntriesError && reviewTableRows.length === 0 && (
-              <div className="empty-panel">
-                {reviewStatusFilter === "all"
-                  ? "Keine Zeitprüffälle in dieser Kalenderwoche."
-                  : `Keine Fälle für diesen Status in KW ${selectedReviewWeek.week}.`}
+            {!isLoadingReviewAllEntries && reviewAllEntriesError && <div className="empty-panel">{reviewAllEntriesError}</div>}
+            {!isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
+              <div className="empty-panel">Für KW {selectedReviewWeek.week} liegen keine gemeldeten Monteurszeiten vor.</div>
+            )}
+
+            {timeReviewWorkers.length > 0 && (
+              <div className="time-review-worker-bubbles" aria-label="Monteure mit gemeldeten Zeiten">
+                {timeReviewWorkers.map((worker) => (
+                  <button
+                    className={[
+                      "time-review-worker-bubble",
+                      selectedReviewWorker?.personId === worker.personId ? "is-active" : "",
+                      worker.isReviewed ? "is-reviewed" : "",
+                    ].filter(Boolean).join(" ")}
+                    key={worker.personId}
+                    type="button"
+                    onClick={() => setSelectedReviewPersonId(worker.personId)}
+                  >
+                    <span className="time-review-worker-name">{worker.personName}</span>
+                    <small>{formatCount(worker.dayCount, "Tag", "Tage")} · {formatCount(worker.entryCount, "Eintrag", "Einträge")}</small>
+                    {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
+                  </button>
+                ))}
               </div>
             )}
-            {!reviewEntriesError && reviewTableRows.length > 0 && reviewStatusFilter === "verified" && (
-              <div className="time-review-log-list">
-                {renderReviewedLogItems(reviewTableRows)}
+
+            {selectedReviewWorker ? (
+              <div className="time-review-worker-detail">
+                <div className="time-review-worker-detail-head">
+                  <div>
+                    <span>Lohnprüfung</span>
+                    <h3>{selectedReviewWorker.personName}</h3>
+                  </div>
+                  <div className="time-review-worker-detail-status">
+                    {selectedReviewWorker.isReviewed ? <StatusBadge tone="active">Geprüft</StatusBadge> : <StatusBadge tone="warning">Offen</StatusBadge>}
+                  </div>
+                </div>
+                <div className="time-review-worker-facts">
+                  <div><span>Tage</span><strong>{selectedReviewWorker.dayCount}</strong></div>
+                  <div><span>Einträge</span><strong>{selectedReviewWorker.entryCount}</strong></div>
+                  <div><span>Offene Hinweise</span><strong>{selectedReviewWorker.openIssueCount}</strong></div>
+                  <div><span>Summe</span><strong>{formatMinutes(selectedReviewWorker.totalMinutes)}</strong></div>
+                </div>
+                <div className="time-review-worker-entry-list">
+                  {selectedReviewWorker.entries.map((entry) => (
+                    <div className="time-review-worker-entry" key={entry.id}>
+                      <div>
+                        <strong>{formatDate(entry.work_date)} · {formatWeekday(entry.work_date)}</strong>
+                        <span>{timeEntrySiteLabel(entry)}</span>
+                      </div>
+                      <div>
+                        <span>{formatMinutes(entry.corrected_work_minutes ?? entry.work_minutes)}</span>
+                        <StatusBadge tone={timeReviewIssue(entry) ? "warning" : "active"}>
+                          {timeReviewIssue(entry) ? "Offen" : "Geprüft"}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
-            {!reviewEntriesError && reviewTableRows.length > 0 && reviewStatusFilter !== "verified" && (
-              <div className="time-table-scroll">
-                <table className={reviewTableClassName}>
-                  <thead>
-                    <tr>
-                      <th>Tag</th>
-                      <th>Baustellennr.</th>
-                      <th>Baustellenname</th>
-                      <th>Notiz</th>
-                      <th>Gemeldete Zeit</th>
-                      <th>GPS-Zeit</th>
-                      <th>Zeitdifferenz</th>
-                      <th>Korrigierte Zeit</th>
-                      {!isReadOnlyReviewOverview && <th>Entscheidung</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {renderReviewTableRows({
-                      rows: reviewTableRows,
-                      expandedReviewEntryId,
-                      reviewDecisionForm,
-                      reviewActionEntryId,
-                      isSavingReviewDecision,
-                      siteOptions,
-                      canManageTimeEntries,
-                      showDecisionColumn: !isReadOnlyReviewOverview,
-                      onConfirm: confirmReviewRow,
-                      onOpenIssue: openReviewIssue,
-                      onCloseIssue: closeReviewIssue,
-                      onSaveDecision: saveReviewDecision,
-                      onReviewDecisionFormChange: setReviewDecisionForm,
-                      onDecideIssue: decideReviewIssue,
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            ) : timeReviewWorkers.length > 0 ? (
+              <div className="time-review-worker-empty-detail">Monteur auswählen, um die Lohnprüfung für KW {selectedReviewWeek.week} zu öffnen.</div>
+            ) : null}
           </div>
         </div>
       )}
@@ -2071,6 +2071,10 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function parseDateInput(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -2203,6 +2207,52 @@ function buildTimeReviewTableRows(
       || left.workDate.localeCompare(right.workDate)
       || left.id - right.id
     ));
+}
+
+function buildTimeReviewWorkerSummaries(allEntries: TimeEntry[], openEntries: TimeEntry[]): TimeReviewWorkerSummary[] {
+  const openEntryIds = new Set(openEntries.map((entry) => entry.id));
+  const summaries = new Map<number, TimeReviewWorkerSummary>();
+
+  allEntries.forEach((entry) => {
+    const existing = summaries.get(entry.person_id) ?? {
+      personId: entry.person_id,
+      personName: entry.person_name,
+      entryCount: 0,
+      dayCount: 0,
+      openIssueCount: 0,
+      reviewedEntryCount: 0,
+      totalMinutes: 0,
+      isReviewed: false,
+      entries: [],
+    };
+    existing.entries.push(entry);
+    summaries.set(entry.person_id, existing);
+  });
+
+  return Array.from(summaries.values())
+    .map((summary) => {
+      const dayCount = new Set(summary.entries.map((entry) => entry.work_date)).size;
+      const openIssueCount = summary.entries.filter((entry) => openEntryIds.has(entry.id)).length;
+      const reviewedEntryCount = summary.entries.filter((entry) => !openEntryIds.has(entry.id)).length;
+      const totalMinutes = summary.entries.reduce((sum, entry) => sum + (entry.corrected_work_minutes ?? entry.work_minutes ?? 0), 0);
+      return {
+        ...summary,
+        entryCount: summary.entries.length,
+        dayCount,
+        openIssueCount,
+        reviewedEntryCount,
+        totalMinutes,
+        isReviewed: summary.entries.length > 0 && openIssueCount === 0,
+        entries: summary.entries.slice().sort(compareTimeReviewWorkerEntries),
+      };
+    })
+    .sort((left, right) => left.personName.localeCompare(right.personName, "de", { sensitivity: "base" }));
+}
+
+function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): number {
+  return left.work_date.localeCompare(right.work_date)
+    || timeEntrySiteLabel(left).localeCompare(timeEntrySiteLabel(right), "de")
+    || left.id - right.id;
 }
 
 function reviewRowsForStatus(

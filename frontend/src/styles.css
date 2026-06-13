@@ -9427,6 +9427,216 @@ button.person-chip:focus-visible {
   box-shadow: 0 8px 18px rgb(31 95 159 / 20%);
 }
 
+.time-review-worker-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dce6f2;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.time-review-worker-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 10px;
+}
+
+.time-review-worker-head h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.time-review-worker-head p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.time-review-worker-head > span {
+  border: 1px solid #d7e1ee;
+  border-radius: 3px;
+  background: #f8fafc;
+  color: #42526a;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.time-review-worker-bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.time-review-worker-bubble {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  min-width: 168px;
+  max-width: 260px;
+  border: 1px solid #d7e1ee;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #172033;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.time-review-worker-bubble:hover,
+.time-review-worker-bubble:focus-visible,
+.time-review-worker-bubble.is-active {
+  border-color: #9bbce0;
+  background: #f8fbff;
+  outline: none;
+}
+
+.time-review-worker-bubble.is-reviewed {
+  border-color: #b7d9c2;
+}
+
+.time-review-worker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.time-review-worker-bubble small {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.time-review-worker-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #9cd0aa;
+  border-radius: 3px;
+  background: #f0fbf3;
+  color: #166534;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.time-review-worker-detail,
+.time-review-worker-empty-detail {
+  border: 1px solid #dce6f2;
+  border-radius: 3px;
+  background: #fbfdff;
+}
+
+.time-review-worker-empty-detail {
+  color: #64748b;
+  padding: 14px;
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.time-review-worker-detail {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.time-review-worker-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.time-review-worker-detail-head span {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-review-worker-detail-head h3 {
+  margin: 2px 0 0;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.time-review-worker-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.time-review-worker-facts div {
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 8px 9px;
+}
+
+.time-review-worker-facts span,
+.time-review-worker-entry span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.time-review-worker-facts strong {
+  display: block;
+  margin-top: 2px;
+  color: #172033;
+  font-size: 0.92rem;
+}
+
+.time-review-worker-entry-list {
+  display: grid;
+  gap: 6px;
+}
+
+.time-review-worker-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 8px 9px;
+}
+
+.time-review-worker-entry > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.time-review-worker-entry > div:last-child {
+  justify-items: end;
+}
+
+.time-review-worker-entry strong,
+.time-review-worker-entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-worker-entry strong {
+  color: #172033;
+  font-size: 0.8rem;
+}
+
 .time-review-week-label {
   color: #64748b;
   font-size: 0.82rem;
