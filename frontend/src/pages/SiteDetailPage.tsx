@@ -4314,7 +4314,7 @@ function DetailSection({
   return (
     <section className="site-detail-section">
       <h2><Icon aria-hidden="true" size={17} />{title}</h2>
-      <div>{children}</div>
+      <div className="site-detail-section-content">{children}</div>
     </section>
   );
 }

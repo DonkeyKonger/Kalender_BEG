@@ -5024,6 +5024,7 @@ button.person-chip:focus-visible {
 .site-detail-section,
 .site-notes-section {
   display: grid;
+  align-content: start;
   gap: 12px;
   border-bottom: 1px solid #dce3ee;
   padding-bottom: 18px;
@@ -5039,8 +5040,9 @@ button.person-chip:focus-visible {
   letter-spacing: 0;
 }
 
-.site-detail-section > div {
+.site-detail-section-content {
   display: grid;
+  align-content: start;
   gap: 10px;
 }
 
@@ -10506,7 +10508,7 @@ button.person-chip:focus-visible {
   min-height: 0;
   border: 1px solid #d7e1ee;
   border-radius: 8px;
-  background: #f7f9fc;
+  background: #ffffff;
   color: #111827;
   padding: 0 10px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
@@ -10547,7 +10549,7 @@ button.person-chip:focus-visible {
   min-height: 0;
   border: 1px solid #d7e1ee;
   border-radius: 8px;
-  background: #f7f9fc;
+  background: #ffffff;
   color: #111827;
   padding: 0 10px;
   font: inherit;
@@ -14702,6 +14704,18 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .project-document-browser,
 .site-detail-page.is-project-file-workspace .measurement-evaluation-grid > div {
   padding: 14px;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-section {
+  grid-template-rows: auto auto;
+  align-content: start;
+  justify-content: stretch;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-section-content {
+  align-content: start;
+  justify-content: stretch;
+  gap: 10px;
 }
 
 .site-detail-page.is-project-file-workspace .site-detail-section h2,
