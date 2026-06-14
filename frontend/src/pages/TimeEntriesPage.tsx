@@ -113,6 +113,30 @@ type TimeReviewWeekDay = {
   absenceType: AbsenceType | null;
   entries: TimeReviewEntryCheck[];
 };
+type TimeReviewPerfApiCall = {
+  name: string;
+  durationMs: number;
+  ok: boolean;
+  rows?: number;
+  details?: string;
+};
+type TimeReviewPerfCalculation = {
+  name: string;
+  durationMs: number;
+  details?: string;
+};
+type TimeReviewPerfState = {
+  apiCalls: TimeReviewPerfApiCall[];
+  calculations: TimeReviewPerfCalculation[];
+  completedApiCalls: Set<string>;
+  expectedApiCalls: string[];
+  flushScheduled: boolean;
+  from: CalendarWeekSelection;
+  hasLogged: boolean;
+  renderCountAtStart: number;
+  startedAt: number;
+  to: CalendarWeekSelection;
+};
 type FinalHoursEntry = {
   id: number;
   workDate: string;
@@ -158,6 +182,11 @@ type ExportPreviewSummary = {
 
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
+const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
+const TIME_REVIEW_API_OPEN_ENTRIES = "timeEntries(open review)";
+const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
+const TIME_REVIEW_API_ABSENCES = "absences";
+const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
 const EXPORT_MONTH_LABELS = [
   "Januar",
   "Februar",
@@ -276,6 +305,9 @@ export function TimeEntriesPage() {
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
+  const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
+  const timeReviewRenderCountRef = useRef(0);
+  timeReviewRenderCountRef.current += 1;
 
   useEffect(() => {
     void loadPeople();
@@ -374,23 +406,31 @@ export function TimeEntriesPage() {
     () => new Set(reviewWeeklyReviews.map((review) => review.person_id)),
     [reviewWeeklyReviews],
   );
-  const timeReviewWorkers = useMemo(
-    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds),
-    [people, reviewAbsences, reviewAllEntries, reviewEntries, reviewedWorkerIds],
-  );
+  const timeReviewWorkers = useMemo(() => {
+    const perfStart = timeReviewPerfNow();
+    const result = buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds);
+    recordTimeReviewPerfCalculation(timeReviewPerfRef, "worker summaries", perfStart, {
+      details: `${people.length} Personen · ${reviewAllEntries.length} Einträge · ${reviewAbsences.length} Abwesenheiten · ${result.length} Monteure`,
+    });
+    return result;
+  }, [people, reviewAbsences, reviewAllEntries, reviewEntries, reviewedWorkerIds]);
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
     [selectedReviewPersonId, timeReviewWorkers],
   );
-  const selectedReviewWeekDays = useMemo(
-    () => buildTimeReviewWeekDays(
+  const selectedReviewWeekDays = useMemo(() => {
+    const perfStart = timeReviewPerfNow();
+    const result = buildTimeReviewWeekDays(
       selectedReviewWorker?.entries ?? [],
       reviewAbsences,
       selectedReviewWorker?.personId ?? null,
       reviewWeekRange.start,
-    ),
-    [reviewAbsences, reviewWeekRange.start, selectedReviewWorker],
-  );
+    );
+    recordTimeReviewPerfCalculation(timeReviewPerfRef, "selected worker week rows", perfStart, {
+      details: `${selectedReviewWorker?.entries.length ?? 0} Einträge · ${reviewAbsences.length} Abwesenheiten`,
+    });
+    return result;
+  }, [reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const exportPreviewRows = useMemo(
@@ -478,6 +518,9 @@ export function TimeEntriesPage() {
     }
 
     let ignore = false;
+    const perfStart = timeReviewPerfNow();
+    let perfRows: number | undefined;
+    let perfOk = false;
     setIsLoadingReviewEntries(true);
     setReviewEntriesError(null);
 
@@ -488,6 +531,8 @@ export function TimeEntriesPage() {
       reviewOpenOnly: true,
     })
       .then((entryData) => {
+        perfRows = entryData.length;
+        perfOk = true;
         if (!ignore) {
           setReviewEntries(entryData);
         }
@@ -501,6 +546,11 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewEntries(false);
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_OPEN_ENTRIES, perfStart, {
+            details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
+            ok: perfOk,
+            rows: perfRows,
+          });
         }
       });
 
@@ -550,8 +600,13 @@ export function TimeEntriesPage() {
     }
 
     let ignore = false;
+    const perfStart = timeReviewPerfNow();
+    let perfRows: number | undefined;
+    let perfOk = false;
     api.absences({ start: reviewWeekRange.start, end: reviewWeekRange.end })
       .then((absenceData) => {
+        perfRows = absenceData.length;
+        perfOk = true;
         if (!ignore) {
           setReviewAbsences(absenceData);
         }
@@ -559,6 +614,15 @@ export function TimeEntriesPage() {
       .catch(() => {
         if (!ignore) {
           setReviewAbsences([]);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_ABSENCES, perfStart, {
+            details: `${reviewWeekRange.start} bis ${reviewWeekRange.end}`,
+            ok: perfOk,
+            rows: perfRows,
+          });
         }
       });
 
@@ -574,12 +638,17 @@ export function TimeEntriesPage() {
     }
 
     let ignore = false;
+    const perfStart = timeReviewPerfNow();
+    let perfRows: number | undefined;
+    let perfOk = false;
     setReviewWeeklyReviews([]);
     api.timeEntryWeeklyReviews({
       isoYear: selectedReviewWeek.year,
       isoWeek: selectedReviewWeek.week,
     })
       .then((weeklyReviews) => {
+        perfRows = weeklyReviews.length;
+        perfOk = true;
         if (!ignore) {
           setReviewWeeklyReviews(weeklyReviews);
         }
@@ -588,6 +657,15 @@ export function TimeEntriesPage() {
         if (!ignore) {
           setReviewWeeklyReviews([]);
           setReviewActionError(readApiError(requestError, "Wochenpruefstatus konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_WEEKLY_REVIEWS, perfStart, {
+            details: `KW ${selectedReviewWeek.week}/${selectedReviewWeek.year}`,
+            ok: perfOk,
+            rows: perfRows,
+          });
         }
       });
 
@@ -602,6 +680,9 @@ export function TimeEntriesPage() {
     }
 
     let ignore = false;
+    const perfStart = timeReviewPerfNow();
+    let perfRows: number | undefined;
+    let perfOk = false;
     setIsLoadingReviewAllEntries(true);
     setReviewAllEntriesError(null);
 
@@ -611,6 +692,8 @@ export function TimeEntriesPage() {
       includeGpsStatus: true,
     })
       .then((entryData) => {
+        perfRows = entryData.length;
+        perfOk = true;
         if (!ignore) {
           setReviewAllEntries(entryData);
         }
@@ -624,6 +707,11 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewAllEntries(false);
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_ALL_ENTRIES, perfStart, {
+            details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
+            ok: perfOk,
+            rows: perfRows,
+          });
         }
       });
 
@@ -771,6 +859,7 @@ export function TimeEntriesPage() {
     if (option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week) {
       return;
     }
+    startTimeReviewPerfSession(timeReviewPerfRef, timeReviewRenderCountRef.current, selectedReviewWeek, option, canManageTimeEntries);
     const scrollPosition = { left: window.scrollX, top: window.scrollY };
     setSelectedReviewWeek({ year: option.year, week: option.week });
     window.requestAnimationFrame(() => {
@@ -1740,6 +1829,151 @@ export function TimeEntriesPage() {
       )}
     </section>
   );
+}
+
+function isTimeReviewPerfEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.localStorage.getItem(TIME_REVIEW_PERF_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function timeReviewPerfNow(): number | null {
+  if (!isTimeReviewPerfEnabled() || typeof performance === "undefined") {
+    return null;
+  }
+  return performance.now();
+}
+
+function startTimeReviewPerfSession(
+  perfRef: { current: TimeReviewPerfState | null },
+  renderCountAtStart: number,
+  from: CalendarWeekSelection,
+  to: CalendarWeekSelection,
+  includeWeeklyReviews: boolean,
+): void {
+  const startedAt = timeReviewPerfNow();
+  if (startedAt === null) {
+    perfRef.current = null;
+    return;
+  }
+  perfRef.current = {
+    apiCalls: [],
+    calculations: [],
+    completedApiCalls: new Set(),
+    expectedApiCalls: [
+      TIME_REVIEW_API_OPEN_ENTRIES,
+      TIME_REVIEW_API_ALL_ENTRIES,
+      TIME_REVIEW_API_ABSENCES,
+      ...(includeWeeklyReviews ? [TIME_REVIEW_API_WEEKLY_REVIEWS] : []),
+    ],
+    flushScheduled: false,
+    from,
+    hasLogged: false,
+    renderCountAtStart,
+    startedAt,
+    to,
+  };
+}
+
+function recordTimeReviewPerfApiCall(
+  perfRef: { current: TimeReviewPerfState | null },
+  renderCountRef: { current: number },
+  name: string,
+  startedAt: number | null,
+  result: { details?: string; ok: boolean; rows?: number },
+): void {
+  const state = perfRef.current;
+  if (!state || startedAt === null || !state.expectedApiCalls.includes(name)) {
+    return;
+  }
+  state.apiCalls.push({
+    name,
+    details: result.details,
+    durationMs: performance.now() - startedAt,
+    ok: result.ok,
+    rows: result.rows,
+  });
+  state.completedApiCalls.add(name);
+  scheduleTimeReviewPerfFlush(perfRef, renderCountRef);
+}
+
+function recordTimeReviewPerfCalculation(
+  perfRef: { current: TimeReviewPerfState | null },
+  name: string,
+  startedAt: number | null,
+  result: { details?: string } = {},
+): void {
+  const state = perfRef.current;
+  if (!state || startedAt === null) {
+    return;
+  }
+  state.calculations.push({
+    name,
+    details: result.details,
+    durationMs: performance.now() - startedAt,
+  });
+}
+
+function scheduleTimeReviewPerfFlush(
+  perfRef: { current: TimeReviewPerfState | null },
+  renderCountRef: { current: number },
+): void {
+  const state = perfRef.current;
+  if (!state || state.hasLogged || state.flushScheduled) {
+    return;
+  }
+  const isComplete = state.expectedApiCalls.every((name) => state.completedApiCalls.has(name));
+  if (!isComplete) {
+    return;
+  }
+  state.flushScheduled = true;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      flushTimeReviewPerfSession(perfRef, renderCountRef);
+    });
+  });
+}
+
+function flushTimeReviewPerfSession(
+  perfRef: { current: TimeReviewPerfState | null },
+  renderCountRef: { current: number },
+): void {
+  const state = perfRef.current;
+  if (!state || state.hasLogged) {
+    return;
+  }
+  state.hasLogged = true;
+  const totalDurationMs = performance.now() - state.startedAt;
+  const renderCount = renderCountRef.current - state.renderCountAtStart;
+  console.groupCollapsed(
+    `[Lohnprüfung KW-Wechsel] KW ${state.from.week}/${state.from.year} → KW ${state.to.week}/${state.to.year}`,
+  );
+  console.info("selectedWeek", { nachher: state.to, vorher: state.from });
+  console.info("total duration", formatPerfMs(totalDurationMs));
+  console.info("render count", renderCount);
+  console.info("Stammdaten-Refetch", "Personen und Baustellen hängen nicht am KW-Wechsel; geloggt werden die week-spezifischen Requests.");
+  console.table(state.apiCalls.map((call) => ({
+    Request: call.name,
+    Dauer: formatPerfMs(call.durationMs),
+    Ergebnis: call.ok ? "ok" : "Fehler",
+    Zeilen: call.rows ?? "-",
+    Details: call.details ?? "",
+  })));
+  console.table(state.calculations.map((calculation) => ({
+    Berechnung: calculation.name,
+    Dauer: formatPerfMs(calculation.durationMs),
+    Details: calculation.details ?? "",
+  })));
+  console.groupEnd();
+}
+
+function formatPerfMs(value: number): string {
+  return `${Math.round(value)} ms`;
 }
 
 function renderReviewTableRows({
