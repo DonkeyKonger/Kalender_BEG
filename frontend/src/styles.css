@@ -9512,23 +9512,23 @@ button.person-chip:focus-visible {
 }
 
 .time-review-worker-bubble.has-absence-sick {
-  border-color: #dc2626;
+  border-color: #bf4a4a;
 }
 
 .time-review-worker-bubble.has-absence-vacation {
-  border-color: #16a34a;
+  border-color: #3f8f5a;
 }
 
 .time-review-worker-bubble.has-absence-school {
-  border-color: #2563eb;
+  border-color: #4b72c5;
 }
 
 .time-review-worker-bubble.has-absence-free {
-  border-color: #7c3aed;
+  border-color: #7a56c5;
 }
 
 .time-review-worker-bubble.has-absence-other {
-  border-color: #64748b;
+  border-color: #6f7d90;
 }
 
 .time-review-worker-name {
