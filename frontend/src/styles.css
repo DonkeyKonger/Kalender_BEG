@@ -9320,7 +9320,7 @@ button.person-chip:focus-visible {
   align-items: center;
   gap: 12px;
   border: 1px solid #dce6f2;
-  border-radius: 3px;
+  border-radius: 0;
   background: #ffffff;
   padding: 8px 10px;
 }
@@ -9358,7 +9358,7 @@ button.person-chip:focus-visible {
   width: 30px;
   height: 30px;
   border: 1px solid #d7e1ee;
-  border-radius: 2px;
+  border-radius: 0;
   background: #ffffff;
   color: #42526a;
   padding: 0;
@@ -9398,7 +9398,7 @@ button.person-chip:focus-visible {
   min-width: 66px;
   min-height: 30px;
   border: 1px solid #d7e1ee;
-  border-radius: 2px;
+  border-radius: 0;
   background: #ffffff;
   color: #42526a;
   font: inherit;
@@ -9424,14 +9424,14 @@ button.person-chip:focus-visible {
   border-color: #1f5f9f;
   background: #1f5f9f;
   color: #ffffff;
-  box-shadow: 0 8px 18px rgb(31 95 159 / 20%);
+  box-shadow: none;
 }
 
 .time-review-worker-panel {
   display: grid;
   gap: 14px;
   border: 1px solid #dce6f2;
-  border-radius: 3px;
+  border-radius: 0;
   background: #ffffff;
   padding: 14px;
 }
@@ -9461,7 +9461,7 @@ button.person-chip:focus-visible {
 
 .time-review-worker-head > span {
   border: 1px solid #d7e1ee;
-  border-radius: 3px;
+  border-radius: 0;
   background: #f8fafc;
   color: #42526a;
   padding: 4px 8px;
@@ -9471,7 +9471,7 @@ button.person-chip:focus-visible {
 
 .time-review-download-button {
   min-height: 30px;
-  border-radius: 2px;
+  border-radius: 0;
   padding: 5px 9px;
   font-size: 0.76rem;
   white-space: nowrap;
@@ -9490,7 +9490,7 @@ button.person-chip:focus-visible {
   align-items: center;
   width: 240px;
   border: 1px solid #d7e1ee;
-  border-radius: 3px;
+  border-radius: 0;
   background: #ffffff;
   color: #172033;
   padding: 8px 10px;
@@ -9556,7 +9556,7 @@ button.person-chip:focus-visible {
   width: 18px;
   height: 18px;
   border: 1px solid #9cd0aa;
-  border-radius: 3px;
+  border-radius: 0;
   background: #f0fbf3;
   color: #166534;
   font-size: 0.76rem;
@@ -9566,7 +9566,7 @@ button.person-chip:focus-visible {
 .time-review-worker-detail,
 .time-review-worker-empty-detail {
   border: 1px solid #dce6f2;
-  border-radius: 3px;
+  border-radius: 0;
   background: #fbfdff;
 }
 
@@ -9609,7 +9609,7 @@ button.person-chip:focus-visible {
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid #dce6f2;
-  border-radius: 3px;
+  border-radius: 0;
   background: #ffffff;
 }
 
@@ -9682,7 +9682,7 @@ button.person-chip:focus-visible {
   justify-self: start;
   width: fit-content;
   margin-top: 2px;
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .time-review-check-mark {
@@ -9692,7 +9692,7 @@ button.person-chip:focus-visible {
   width: 22px;
   height: 22px;
   border: 1px solid #cbd5e1;
-  border-radius: 3px;
+  border-radius: 0;
   background: #f8fafc;
   color: #64748b;
   font-size: 0.78rem;
@@ -9718,7 +9718,7 @@ button.person-chip:focus-visible {
 
 .time-review-worker-detail-actions .icon-button {
   min-height: 30px;
-  border-radius: 2px;
+  border-radius: 0;
   padding: 5px 9px;
   font-size: 0.76rem;
 }
@@ -10777,7 +10777,7 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-nav-panel {
   overflow: visible;
-  border-radius: 3px;
+  border-radius: 0;
   padding: 8px 10px;
 }
 
@@ -10792,13 +10792,13 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-strip button {
   border-color: var(--time-border);
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--time-surface-soft);
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-scroll-button {
   border-color: var(--time-border);
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--time-surface-soft);
 }
 
@@ -10932,6 +10932,24 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .primary-action,
 .time-entries-page.is-figma-times-workspace .secondary-action {
   border-radius: 6px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-entries-main.time-review-main,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-week-nav-panel,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-week-strip button,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-week-scroll-button,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-panel,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-download-button,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-bubble,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-check,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-detail,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-empty-detail,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-week-check-table,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-absence-badge,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-check-mark,
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-detail-actions .icon-button,
+.time-entries-page.is-figma-times-workspace .time-review-main .status-badge {
+  border-radius: 0;
 }
 
 .time-entries-page.is-figma-times-workspace .time-table-action {
