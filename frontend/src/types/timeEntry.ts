@@ -21,6 +21,9 @@ export type TimeEntry = {
   work_minutes: number;
   original_work_minutes: number | null;
   corrected_work_minutes: number | null;
+  payroll_corrected_start_time: string | null;
+  payroll_corrected_end_time: string | null;
+  payroll_corrected_work_minutes: number | null;
   note: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
@@ -75,6 +78,12 @@ export type TimeEntryUpdate = Partial<TimeEntryCreate>;
 
 export type TimeEntryCorrection = {
   corrected_work_minutes: number;
+};
+
+export type TimeEntryPayrollCorrection = {
+  payroll_corrected_start_time?: string | null;
+  payroll_corrected_end_time?: string | null;
+  payroll_corrected_work_minutes?: number | null;
 };
 
 export type TimeEntryReviewDecisionPayload = {

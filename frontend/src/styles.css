@@ -9759,6 +9759,11 @@ button.person-chip:focus-visible {
   background: #f8fbff;
 }
 
+.time-review-payroll-corrected-time {
+  color: #b45309;
+  font-weight: 850;
+}
+
 .time-review-worker-detail-actions {
   display: flex;
   justify-content: flex-end;
@@ -9862,6 +9867,54 @@ button.person-chip:focus-visible {
 .time-review-diagnostic-row strong {
   color: #172033;
   font-weight: 850;
+}
+
+.time-review-diagnostic-row.is-editable {
+  background: #fffaf2;
+}
+
+.time-review-diagnostic-row.is-editable label {
+  min-width: 0;
+}
+
+.time-review-diagnostic-row.is-editable input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  padding: 4px 6px;
+  font: inherit;
+}
+
+.time-review-diagnostic-row.is-editable input:focus {
+  border-color: #9bbce0;
+  outline: 1px solid #9bbce0;
+  outline-offset: 0;
+}
+
+.time-review-diagnostic-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding: 9px 10px;
+}
+
+.time-review-diagnostic-error {
+  margin: 0 auto 0 0;
+  color: #b91c1c;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.time-review-diagnostic-save {
+  min-height: 30px;
+  border-radius: 0;
+  padding: 5px 9px;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 760px) {

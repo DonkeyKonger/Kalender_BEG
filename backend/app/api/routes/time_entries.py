@@ -11,6 +11,7 @@ from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import (
     TimeEntryCorrection,
     TimeEntryCreate,
+    TimeEntryPayrollCorrectionUpdate,
     TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
@@ -177,6 +178,23 @@ def set_time_entry_payroll_review(
     return time_entry_read(entry)
 
 
+@router.post("/{entry_id}/payroll-correction", response_model=TimeEntryRead)
+def set_time_entry_payroll_correction(
+    entry_id: int,
+    payload: TimeEntryPayrollCorrectionUpdate,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryRead:
+    entry = TimeEntryService(db).set_payroll_time_correction(
+        entry_id,
+        start_time=payload.payroll_corrected_start_time,
+        end_time=payload.payroll_corrected_end_time,
+        work_minutes=payload.payroll_corrected_work_minutes,
+        current_user=current_user,
+    )
+    return time_entry_read(entry)
+
+
 @router.get("/weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
 def list_time_entry_weekly_reviews(
     iso_year: int,
@@ -264,6 +282,9 @@ def time_entry_read(
         work_minutes=entry.work_minutes,
         original_work_minutes=entry.original_work_minutes,
         corrected_work_minutes=entry.corrected_work_minutes,
+        payroll_corrected_start_time=entry.payroll_corrected_start_time,
+        payroll_corrected_end_time=entry.payroll_corrected_end_time,
+        payroll_corrected_work_minutes=entry.payroll_corrected_work_minutes,
         note=entry.note,
         source=entry.source,
         status=entry.status,
@@ -313,6 +334,9 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         work_minutes=0,
         original_work_minutes=None,
         corrected_work_minutes=None,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_work_minutes=None,
         note="GPS erkannt · kein manueller Eintrag",
         source="gps_suggestion",
         status="draft",

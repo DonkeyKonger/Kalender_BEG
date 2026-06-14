@@ -19,7 +19,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType, AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryStatus, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
 type TimeSubtab = "review" | "gpsVerification" | "workerTimes" | "evaluation" | "export";
@@ -55,6 +55,11 @@ type ReviewEditorMode = "corrected" | "assign_site" | null;
 type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
+};
+type PayrollCorrectionFormState = {
+  start_time: string;
+  end_time: string;
+  hours: string;
 };
 type CalendarWeekSelection = {
   year: number;
@@ -299,6 +304,9 @@ export function TimeEntriesPage() {
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
+  const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
+  const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
+  const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
@@ -523,6 +531,23 @@ export function TimeEntriesPage() {
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
+
+  useEffect(() => {
+    if (!timeReviewDiagnosticEntry) {
+      setPayrollCorrectionForm({ start_time: "", end_time: "", hours: "" });
+      setPayrollCorrectionError(null);
+      setIsSavingPayrollCorrection(false);
+      return;
+    }
+    setPayrollCorrectionForm({
+      start_time: timeInputValue(timeReviewDiagnosticEntry.payroll_corrected_start_time),
+      end_time: timeInputValue(timeReviewDiagnosticEntry.payroll_corrected_end_time),
+      hours: timeReviewDiagnosticEntry.payroll_corrected_work_minutes !== null
+        ? formatDecimalHours(timeReviewDiagnosticEntry.payroll_corrected_work_minutes)
+        : "",
+    });
+    setPayrollCorrectionError(null);
+  }, [timeReviewDiagnosticEntry]);
 
   useEffect(() => {
     if (!timeReviewDiagnosticEntry) {
@@ -1051,6 +1076,31 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function savePayrollTimeCorrection(): Promise<void> {
+    if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection || timeReviewDiagnosticEntry.id < 0) {
+      return;
+    }
+    const payload = buildPayrollCorrectionPayload(payrollCorrectionForm);
+    if (!payload.ok) {
+      setPayrollCorrectionError(payload.error);
+      return;
+    }
+
+    setIsSavingPayrollCorrection(true);
+    setPayrollCorrectionError(null);
+    try {
+      const updatedEntry = await api.setTimeEntryPayrollCorrection(timeReviewDiagnosticEntry.id, payload.payload);
+      applyUpdatedTimeEntry(updatedEntry);
+      setTimeReviewDiagnosticEntry((currentEntry) => (
+        currentEntry?.id === updatedEntry.id ? mergeTimeEntryReviewUpdate(currentEntry, updatedEntry) : currentEntry
+      ));
+    } catch (requestError) {
+      setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingPayrollCorrection(false);
+    }
+  }
+
   async function downloadTimeExportXlsx(): Promise<void> {
     if (!exportableRows.length || isDownloadingExport) {
       return;
@@ -1291,7 +1341,7 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.start_time)}</div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.end_time)}</div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.break_minutes, "minutes")}</div>
-                        <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.work_minutes, "hours")}</div>
+                        <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.timeCheck, {
@@ -1923,6 +1973,49 @@ export function TimeEntriesPage() {
                   <span role="cell">{row.total}</span>
                 </div>
               ))}
+              <div className="time-review-diagnostic-row is-editable" role="row">
+                <strong role="cell">Stunden Büro geprüft</strong>
+                <label role="cell">
+                  <span className="sr-only">Anfang Arbeitszeit Büro geprüft</span>
+                  <input
+                    type="time"
+                    value={payrollCorrectionForm.start_time}
+                    onChange={(event) => setPayrollCorrectionForm((current) => ({ ...current, start_time: event.target.value }))}
+                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                  />
+                </label>
+                <label role="cell">
+                  <span className="sr-only">Ende Arbeitszeit Büro geprüft</span>
+                  <input
+                    type="time"
+                    value={payrollCorrectionForm.end_time}
+                    onChange={(event) => setPayrollCorrectionForm((current) => ({ ...current, end_time: event.target.value }))}
+                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                  />
+                </label>
+                <label role="cell">
+                  <span className="sr-only">Gesamtstunden Büro geprüft</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="-"
+                    value={payrollCorrectionForm.hours}
+                    onChange={(event) => setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }))}
+                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="time-review-diagnostic-actions">
+              {payrollCorrectionError && <p className="time-review-diagnostic-error">{payrollCorrectionError}</p>}
+              <button
+                className="icon-button secondary time-review-diagnostic-save"
+                type="button"
+                disabled={!canManageTimeEntries || isSavingPayrollCorrection || timeReviewDiagnosticEntry.id < 0}
+                onClick={() => void savePayrollTimeCorrection()}
+              >
+                {isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern"}
+              </button>
             </div>
           </div>
         </div>
@@ -2977,6 +3070,17 @@ function renderTimeReviewCheckMark(state: TimeReviewCheckState, options: { onWar
   );
 }
 
+function renderPayrollWorkMinutes(entry: TimeEntry) {
+  if (entry.payroll_corrected_work_minutes !== null) {
+    return (
+      <span className="time-review-payroll-corrected-time" title="Büro-geprüfte Zeit">
+        {formatTimeEntryMinutes(entry.payroll_corrected_work_minutes, "hours")}
+      </span>
+    );
+  }
+  return formatTimeEntryMinutes(entry.work_minutes, "hours");
+}
+
 function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
   return [
     {
@@ -3715,6 +3819,37 @@ function buildTimeEntryPayload(
   };
 }
 
+function buildPayrollCorrectionPayload(
+  form: PayrollCorrectionFormState,
+): { ok: true; payload: TimeEntryPayrollCorrection } | { ok: false; error: string } {
+  const startTime = parseOptionalClockValue(form.start_time, "Anfang Arbeitszeit");
+  if (!startTime.ok) {
+    return startTime;
+  }
+  const endTime = parseOptionalClockValue(form.end_time, "Ende Arbeitszeit");
+  if (!endTime.ok) {
+    return endTime;
+  }
+  const workMinutes = parseOptionalHoursToMinutes(form.hours);
+  if (!workMinutes.ok) {
+    return workMinutes;
+  }
+  if (startTime.value && endTime.value && startTime.value >= endTime.value) {
+    return { ok: false, error: "Ende Arbeitszeit muss nach dem Anfang liegen." };
+  }
+  if (!startTime.value && !endTime.value && workMinutes.value === null) {
+    return { ok: false, error: "Bitte mindestens eine Bürozeit eintragen." };
+  }
+  return {
+    ok: true,
+    payload: {
+      payroll_corrected_start_time: startTime.value,
+      payroll_corrected_end_time: endTime.value,
+      payroll_corrected_work_minutes: workMinutes.value,
+    },
+  };
+}
+
 function parseHoursToMinutes(value: string): { ok: true; value: number } | { ok: false; error: string } {
   const trimmed = value.trim().replace(",", ".");
   if (!trimmed) {
@@ -3725,6 +3860,37 @@ function parseHoursToMinutes(value: string): { ok: true; value: number } | { ok:
     return { ok: false, error: "Arbeitszeit muss eine Zahl ab 0 sein." };
   }
   return { ok: true, value: Math.round(parsed * 60) };
+}
+
+function parseOptionalHoursToMinutes(value: string): { ok: true; value: number | null } | { ok: false; error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true, value: null };
+  }
+  const parsed = parseHoursToMinutes(trimmed);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return { ok: true, value: parsed.value };
+}
+
+function parseOptionalClockValue(value: string, label: string): { ok: true; value: string | null } | { ok: false; error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true, value: null };
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed)) {
+    return { ok: false, error: `${label} muss im Format HH:MM eingetragen werden.` };
+  }
+  return { ok: true, value: trimmed };
+}
+
+function timeInputValue(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  const clockMatch = /^(\d{2}:\d{2})(?::\d{2})?$/.exec(value);
+  return clockMatch ? clockMatch[1] : "";
 }
 
 function parseWholeMinutesField(value: string, label: string): { ok: true; value: number } | { ok: false; error: string } {

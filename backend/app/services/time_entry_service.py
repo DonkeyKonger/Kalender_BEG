@@ -166,6 +166,30 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def set_payroll_time_correction(
+        self,
+        entry_id: int,
+        *,
+        start_time: time | None,
+        end_time: time | None,
+        work_minutes: int | None,
+        current_user: User,
+    ) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        if work_minutes is not None and work_minutes < 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Arbeitszeit darf nicht negativ sein.")
+        if start_time is None and end_time is None and work_minutes is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte mindestens eine Bürozeit eintragen.")
+
+        entry.payroll_corrected_start_time = start_time
+        entry.payroll_corrected_end_time = end_time
+        entry.payroll_corrected_work_minutes = work_minutes
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
     def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)

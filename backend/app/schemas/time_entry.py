@@ -139,6 +139,22 @@ class TimeEntryPayrollReviewUpdate(BaseModel):
     reviewed: bool
 
 
+class TimeEntryPayrollCorrectionUpdate(BaseModel):
+    payroll_corrected_start_time: Time | None = None
+    payroll_corrected_end_time: Time | None = None
+    payroll_corrected_work_minutes: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_correction_has_value(self):
+        if (
+            self.payroll_corrected_start_time is None
+            and self.payroll_corrected_end_time is None
+            and self.payroll_corrected_work_minutes is None
+        ):
+            raise ValueError("Bitte mindestens eine Bürozeit eintragen.")
+        return self
+
+
 class TimeEntryWeeklyReviewRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -168,6 +184,9 @@ class TimeEntryRead(BaseModel):
     work_minutes: int
     original_work_minutes: int | None = None
     corrected_work_minutes: int | None = None
+    payroll_corrected_start_time: Time | None = None
+    payroll_corrected_end_time: Time | None = None
+    payroll_corrected_work_minutes: int | None = None
     note: str | None = None
     source: str
     status: str

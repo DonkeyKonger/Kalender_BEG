@@ -132,6 +132,37 @@ def test_set_payroll_row_review_toggles_independent_row_check():
     assert commits == [True, True]
 
 
+def test_set_payroll_time_correction_stores_office_checked_time():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_work_minutes=None,
+    )
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: commits.append(True),
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+
+    updated = item.set_payroll_time_correction(
+        entry.id,
+        start_time=time(7, 30),
+        end_time=time(13, 0),
+        work_minutes=330,
+        current_user=current_user,
+    )
+
+    assert updated.payroll_corrected_start_time == time(7, 30)
+    assert updated.payroll_corrected_end_time == time(13, 0)
+    assert updated.payroll_corrected_work_minutes == 330
+    assert commits == [True]
+
+
 def test_mark_weekly_review_creates_person_week_status():
     added: list[TimeEntryWeeklyReview] = []
     commits: list[bool] = []
