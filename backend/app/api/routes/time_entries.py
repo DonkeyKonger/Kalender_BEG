@@ -198,7 +198,7 @@ def set_time_entry_payroll_correction(
 @router.get("/weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
 def list_time_entry_weekly_reviews(
     iso_year: int,
-    iso_week: int,
+    iso_week: int | None = None,
     current_user: User = Depends(CAN_REVIEW),
     db: Session = Depends(get_db),
 ) -> list[TimeEntryWeeklyReviewRead]:

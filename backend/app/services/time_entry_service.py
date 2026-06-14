@@ -309,15 +309,14 @@ class TimeEntryService:
             self.db.commit()
         return changed
 
-    def list_weekly_reviews(self, *, iso_year: int, iso_week: int, current_user: User) -> list[TimeEntryWeeklyReview]:
+    def list_weekly_reviews(self, *, iso_year: int, iso_week: int | None = None, current_user: User) -> list[TimeEntryWeeklyReview]:
         self._ensure_can_review_time(current_user)
-        self._ensure_valid_iso_week(iso_year, iso_week)
-        statement = (
-            select(TimeEntryWeeklyReview)
-            .where(TimeEntryWeeklyReview.iso_year == iso_year)
-            .where(TimeEntryWeeklyReview.iso_week == iso_week)
-            .order_by(TimeEntryWeeklyReview.person_id)
-        )
+        if iso_week is not None:
+            self._ensure_valid_iso_week(iso_year, iso_week)
+        statement = select(TimeEntryWeeklyReview).where(TimeEntryWeeklyReview.iso_year == iso_year)
+        if iso_week is not None:
+            statement = statement.where(TimeEntryWeeklyReview.iso_week == iso_week)
+        statement = statement.order_by(TimeEntryWeeklyReview.iso_week, TimeEntryWeeklyReview.person_id)
         return list(self.db.scalars(statement))
 
     def mark_weekly_review(

@@ -270,6 +270,7 @@ export function TimeEntriesPage() {
   const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
   const [reviewAbsences, setReviewAbsences] = useState<Absence[]>([]);
   const [reviewWeeklyReviews, setReviewWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
+  const [reviewWeekCompletionReviews, setReviewWeekCompletionReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -406,6 +407,14 @@ export function TimeEntriesPage() {
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
     [currentReviewWeek],
+  );
+  const payrollReviewWorkerIds = useMemo(
+    () => people.filter(isPayrollReviewWorker).map((person) => person.id),
+    [people],
+  );
+  const completedReviewWeekKeys = useMemo(
+    () => buildCompletedReviewWeekKeys(reviewWeekCompletionReviews, payrollReviewWorkerIds),
+    [payrollReviewWorkerIds, reviewWeekCompletionReviews],
   );
   const currentExportMonthSelection = useMemo(() => currentExportMonth(), []);
   const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
@@ -723,6 +732,31 @@ export function TimeEntriesPage() {
       ignore = true;
     };
   }, [activeTimeSubtab, canManageTimeEntries, selectedReviewWeek.week, selectedReviewWeek.year]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" || !canManageTimeEntries || payrollReviewWorkerIds.length === 0) {
+      setReviewWeekCompletionReviews([]);
+      return;
+    }
+
+    let ignore = false;
+    const years = Array.from(new Set(reviewWeekOptions.map((option) => option.year)));
+    Promise.all(years.map((isoYear) => api.timeEntryWeeklyReviews({ isoYear })))
+      .then((reviewsByYear) => {
+        if (!ignore) {
+          setReviewWeekCompletionReviews(reviewsByYear.flat());
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setReviewWeekCompletionReviews([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, canManageTimeEntries, payrollReviewWorkerIds.length, reviewWeekOptions]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -1156,6 +1190,14 @@ export function TimeEntriesPage() {
         ));
         return [...withoutCurrent, weeklyReview];
       });
+      setReviewWeekCompletionReviews((current) => {
+        const withoutCurrent = current.filter((review) => !(
+          review.person_id === weeklyReview.person_id
+          && review.iso_year === weeklyReview.iso_year
+          && review.iso_week === weeklyReview.iso_week
+        ));
+        return [...withoutCurrent, weeklyReview];
+      });
     } catch (requestError) {
       setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht als geprüft markiert werden."));
     } finally {
@@ -1212,6 +1254,7 @@ export function TimeEntriesPage() {
                     className={[
                       option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
                       option.isCurrent ? "is-current" : "",
+                      completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
                     ].filter(Boolean).join(" ")}
                     data-week-index={index}
                     key={`${option.year}-${option.week}`}
@@ -2625,6 +2668,34 @@ function buildCalendarWeekOptions(currentWeek: CalendarWeekSelection): CalendarW
     ...numberRange(1, 54).map((week) => optionForWeek(currentWeek.year, week)),
     ...numberRange(1, 5).map((week) => optionForWeek(currentWeek.year + 1, week)),
   ];
+}
+
+function buildCompletedReviewWeekKeys(reviews: TimeEntryWeeklyReview[], workerIds: number[]): Set<string> {
+  const result = new Set<string>();
+  if (!workerIds.length) {
+    return result;
+  }
+  const workerIdSet = new Set(workerIds);
+  const reviewedWorkersByWeek = new Map<string, Set<number>>();
+  reviews.forEach((review) => {
+    if (!workerIdSet.has(review.person_id)) {
+      return;
+    }
+    const key = reviewWeekKey({ year: review.iso_year, week: review.iso_week });
+    const reviewedWorkers = reviewedWorkersByWeek.get(key) ?? new Set<number>();
+    reviewedWorkers.add(review.person_id);
+    reviewedWorkersByWeek.set(key, reviewedWorkers);
+  });
+  reviewedWorkersByWeek.forEach((reviewedWorkers, key) => {
+    if (workerIds.every((workerId) => reviewedWorkers.has(workerId))) {
+      result.add(key);
+    }
+  });
+  return result;
+}
+
+function reviewWeekKey(selection: CalendarWeekSelection): string {
+  return `${selection.year}-${selection.week}`;
 }
 
 function scrollWeekStripToSelection(

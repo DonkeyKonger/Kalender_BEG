@@ -505,11 +505,13 @@ export const api = {
     });
   },
 
-  async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview[]> {
+  async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number }): Promise<TimeEntryWeeklyReview[]> {
     const search = new URLSearchParams({
       iso_year: String(params.isoYear),
-      iso_week: String(params.isoWeek),
     });
+    if (params.isoWeek !== undefined) {
+      search.set("iso_week", String(params.isoWeek));
+    }
     return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`);
   },
 
