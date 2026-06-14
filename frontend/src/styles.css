@@ -9320,9 +9320,9 @@ button.person-chip:focus-visible {
   align-items: center;
   gap: 12px;
   border: 1px solid #dce6f2;
-  border-radius: 9px;
+  border-radius: 3px;
   background: #ffffff;
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .time-week-nav-title {
@@ -9355,10 +9355,10 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border: 1px solid #d7e1ee;
-  border-radius: 3px;
+  border-radius: 2px;
   background: #ffffff;
   color: #42526a;
   padding: 0;
@@ -9395,10 +9395,10 @@ button.person-chip:focus-visible {
 
 .time-week-strip button {
   flex: 0 0 auto;
-  min-width: 70px;
-  min-height: 34px;
+  min-width: 66px;
+  min-height: 30px;
   border: 1px solid #d7e1ee;
-  border-radius: 3px;
+  border-radius: 2px;
   background: #ffffff;
   color: #42526a;
   font: inherit;
@@ -9470,8 +9470,10 @@ button.person-chip:focus-visible {
 }
 
 .time-review-download-button {
-  min-height: 32px;
-  border-radius: 3px;
+  min-height: 30px;
+  border-radius: 2px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
   white-space: nowrap;
 }
 
@@ -9699,7 +9701,10 @@ button.person-chip:focus-visible {
 }
 
 .time-review-worker-detail-actions .icon-button {
-  border-radius: 3px;
+  min-height: 30px;
+  border-radius: 2px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 760px) {
@@ -10756,7 +10761,8 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-nav-panel {
   overflow: visible;
-  padding: 10px 12px;
+  border-radius: 3px;
+  padding: 8px 10px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-nav-title span,
@@ -10770,13 +10776,13 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-strip button {
   border-color: var(--time-border);
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--time-surface-soft);
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-scroll-button {
   border-color: var(--time-border);
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--time-surface-soft);
 }
 
