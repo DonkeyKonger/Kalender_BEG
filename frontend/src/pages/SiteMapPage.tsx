@@ -319,7 +319,8 @@ export function SiteMapPage() {
             <VisibleMarkerTracker sites={filteredSites} people={visiblePeopleForMap} onVisibleMarkersChange={updateVisibleMarkerState} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              referrerPolicy="strict-origin-when-cross-origin"
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {filteredSites.map((site) => {
               const isSelected = selectedSiteId === site.id;
