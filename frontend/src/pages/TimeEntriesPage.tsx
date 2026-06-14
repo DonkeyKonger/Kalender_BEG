@@ -1077,7 +1077,7 @@ export function TimeEntriesPage() {
       <div className="page-header entity-page-header">
         <div>
           <h1>Lohnprüfung</h1>
-          <p className="page-subtitle">Arbeitszeiten der Monteure wochen- oder monatsweise pruefen.</p>
+          <p className="page-subtitle">Arbeitszeiten der Monteure prüfen</p>
         </div>
       </div>
 
