@@ -9702,6 +9702,18 @@ button.person-chip:focus-visible {
   color: #9a5b00;
 }
 
+.time-review-check-mark.is-clickable {
+  cursor: pointer;
+}
+
+.time-review-check-mark.is-clickable:hover,
+.time-review-check-mark.is-clickable:focus-visible {
+  border-color: #d79034;
+  background: #fff1d6;
+  outline: 1px solid #d79034;
+  outline-offset: 1px;
+}
+
 .time-review-worker-detail-actions {
   display: flex;
   justify-content: flex-end;
@@ -9712,6 +9724,85 @@ button.person-chip:focus-visible {
   border-radius: 0;
   padding: 5px 9px;
   font-size: 0.76rem;
+}
+
+.time-review-diagnostic-popover {
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.time-review-diagnostic-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 9px 10px;
+}
+
+.time-review-diagnostic-head span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-review-diagnostic-head h4 {
+  margin: 2px 0 0;
+  color: #172033;
+  font-size: 0.88rem;
+}
+
+.time-review-diagnostic-close {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.time-review-diagnostic-close:hover,
+.time-review-diagnostic-close:focus-visible {
+  border-color: #9bbce0;
+  background: #f8fbff;
+  outline: none;
+}
+
+.time-review-diagnostic-table {
+  display: grid;
+}
+
+.time-review-diagnostic-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(96px, 1fr));
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  color: #334155;
+  font-size: 0.76rem;
+}
+
+.time-review-diagnostic-row:last-child {
+  border-bottom: 0;
+}
+
+.time-review-diagnostic-row.is-head {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-review-diagnostic-row strong {
+  color: #172033;
+  font-weight: 850;
 }
 
 @media (max-width: 760px) {

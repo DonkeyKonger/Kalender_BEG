@@ -113,6 +113,12 @@ type TimeReviewWeekDay = {
   absenceType: AbsenceType | null;
   entries: TimeReviewEntryCheck[];
 };
+type TimeReviewDiagnosticRow = {
+  source: string;
+  start: string;
+  end: string;
+  total: string;
+};
 type TimeReviewPerfApiCall = {
   name: string;
   durationMs: number;
@@ -291,6 +297,7 @@ export function TimeEntriesPage() {
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
+  const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
@@ -511,6 +518,10 @@ export function TimeEntriesPage() {
       setSelectedReviewPersonId(null);
     }
   }, [selectedReviewPersonId, timeReviewWorkers]);
+
+  useEffect(() => {
+    setTimeReviewDiagnosticEntry(null);
+  }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -1251,7 +1262,11 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.break_minutes, "minutes")}</div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.work_minutes, "hours")}</div>
                         <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
-                        <div role="cell">{renderTimeReviewCheckMark(check.timeCheck)}</div>
+                        <div role="cell">
+                          {renderTimeReviewCheckMark(check.timeCheck, {
+                            onWarningClick: () => setTimeReviewDiagnosticEntry(check.entry),
+                          })}
+                        </div>
                       </div>
                     )) : (
                       <div className="time-review-week-check-row is-empty" key={day.date} role="row">
@@ -1292,6 +1307,40 @@ export function TimeEntriesPage() {
                         : "Monteurwoche als geprüft markieren"}
                   </button>
                 </div>
+                {timeReviewDiagnosticEntry && (
+                  <div className="time-review-diagnostic-popover" role="dialog" aria-label="Arbeitszeit-Diagnose">
+                    <div className="time-review-diagnostic-head">
+                      <div>
+                        <span>Diagnose</span>
+                        <h4>Arbeitszeit-Prüfung</h4>
+                      </div>
+                      <button
+                        className="time-review-diagnostic-close"
+                        type="button"
+                        aria-label="Diagnose schließen"
+                        onClick={() => setTimeReviewDiagnosticEntry(null)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
+                      <div className="time-review-diagnostic-row is-head" role="row">
+                        <span role="columnheader">Quelle</span>
+                        <span role="columnheader">Anfang Arbeitszeit</span>
+                        <span role="columnheader">Ende Arbeitszeit</span>
+                        <span role="columnheader">Gesamtstunden</span>
+                      </div>
+                      {timeReviewDiagnosticRows(timeReviewDiagnosticEntry).map((row) => (
+                        <div className="time-review-diagnostic-row" key={row.source} role="row">
+                          <strong role="cell">{row.source}</strong>
+                          <span role="cell">{row.start}</span>
+                          <span role="cell">{row.end}</span>
+                          <span role="cell">{row.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : timeReviewWorkers.length > 0 ? (
               <div className="time-review-worker-empty-detail">Monteur auswählen, um die Lohnprüfung für KW {selectedReviewWeek.week} zu öffnen.</div>
@@ -2855,13 +2904,49 @@ function classifyTimeReviewTimeCheck(entry: TimeEntry): TimeReviewCheckState {
   return Math.abs(gpsMinutes - manualMinutes) <= GPS_TIME_TOLERANCE_MINUTES ? "ok" : "warning";
 }
 
-function renderTimeReviewCheckMark(state: TimeReviewCheckState) {
+function renderTimeReviewCheckMark(state: TimeReviewCheckState, options: { onWarningClick?: () => void } = {}) {
   const label = timeReviewCheckLabel(state);
+  if (state === "warning" && options.onWarningClick) {
+    return (
+      <button
+        className="time-review-check-mark is-warning is-clickable"
+        type="button"
+        aria-label="Arbeitszeit-Diagnose öffnen"
+        title="Arbeitszeit-Diagnose öffnen"
+        onClick={options.onWarningClick}
+      >
+        !
+      </button>
+    );
+  }
   return (
     <span className={`time-review-check-mark is-${state}`} aria-label={label} title={label}>
       {state === "ok" ? "✓" : state === "warning" ? "!" : "-"}
     </span>
   );
+}
+
+function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
+  return [
+    {
+      source: "Eingetragene Monteursstunden",
+      start: formatTimeEntryClock(entry.start_time),
+      end: formatTimeEntryClock(entry.end_time),
+      total: formatTimeEntryMinutes(entry.work_minutes, "hours"),
+    },
+    {
+      source: "Erkannte Handy GPS Stunden",
+      start: formatTimeEntryClock(entry.gps_first_seen_at),
+      end: formatTimeEntryClock(entry.gps_last_seen_at),
+      total: formatTimeEntryMinutes(entry.gps_work_minutes, "hours"),
+    },
+    {
+      source: "Erkannte Fahrzeug GPS Stunden",
+      start: "-",
+      end: "-",
+      total: "-",
+    },
+  ];
 }
 
 function formatTimeEntryClock(value: string | null): string {
