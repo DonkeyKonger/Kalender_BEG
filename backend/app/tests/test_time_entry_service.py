@@ -104,6 +104,34 @@ def test_approve_time_review_marks_entry_with_user_audit():
     assert commits == [True]
 
 
+def test_set_payroll_row_review_toggles_independent_row_check():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        payroll_reviewed_by_user_id=None,
+        payroll_reviewed_at=None,
+    )
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: commits.append(True),
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+
+    checked = item.set_payroll_row_review(entry.id, reviewed=True, current_user=current_user)
+
+    assert checked.payroll_reviewed_by_user_id == 7
+    assert checked.payroll_reviewed_at is not None
+
+    unchecked = item.set_payroll_row_review(entry.id, reviewed=False, current_user=current_user)
+
+    assert unchecked.payroll_reviewed_by_user_id is None
+    assert unchecked.payroll_reviewed_at is None
+    assert commits == [True, True]
+
+
 def test_mark_weekly_review_creates_person_week_status():
     added: list[TimeEntryWeeklyReview] = []
     commits: list[bool] = []

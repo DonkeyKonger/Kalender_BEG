@@ -491,6 +491,13 @@ export const api = {
     });
   },
 
+  async setTimeEntryPayrollReview(entryId: number, reviewed: boolean): Promise<TimeEntry> {
+    return request<TimeEntry>(`/time-entries/${entryId}/payroll-review`, {
+      method: "POST",
+      body: JSON.stringify({ reviewed }),
+    });
+  },
+
   async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview[]> {
     const search = new URLSearchParams({
       iso_year: String(params.isoYear),

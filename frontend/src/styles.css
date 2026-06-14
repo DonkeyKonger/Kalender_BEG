@@ -9607,10 +9607,10 @@ button.person-chip:focus-visible {
 .time-review-week-check-head,
 .time-review-week-check-row {
   display: grid;
-  grid-template-columns: minmax(72px, 0.65fr) minmax(150px, 1.55fr) repeat(4, minmax(70px, 0.62fr)) minmax(76px, 0.55fr) minmax(104px, 0.8fr);
+  grid-template-columns: minmax(72px, 0.65fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
   gap: 8px;
   align-items: center;
-  min-width: 760px;
+  min-width: 820px;
   border-bottom: 1px solid #e2e8f0;
   padding: 8px 10px;
 }
@@ -9712,6 +9712,51 @@ button.person-chip:focus-visible {
   background: #fff1d6;
   outline: 1px solid #d79034;
   outline-offset: 1px;
+}
+
+.time-review-payroll-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.time-review-payroll-mark.is-reviewed {
+  border-color: transparent;
+  background: transparent;
+  color: #166534;
+}
+
+.time-review-payroll-mark.is-empty,
+.time-review-payroll-mark:disabled {
+  cursor: default;
+}
+
+.time-review-payroll-mark.is-empty {
+  border-color: transparent;
+  background: transparent;
+  color: #94a3b8;
+}
+
+.time-review-payroll-mark:not(:disabled):hover,
+.time-review-payroll-mark:not(:disabled):focus-visible {
+  border-color: #9bbce0;
+  background: #f8fbff;
+  outline: 1px solid #9bbce0;
+  outline-offset: 1px;
+}
+
+.time-review-payroll-mark.is-reviewed:not(:disabled):hover,
+.time-review-payroll-mark.is-reviewed:not(:disabled):focus-visible {
+  background: #f8fbff;
 }
 
 .time-review-worker-detail-actions {
@@ -9816,8 +9861,9 @@ button.person-chip:focus-visible {
 
   .time-review-week-check-head,
   .time-review-week-check-row {
-    grid-template-columns: minmax(58px, 0.75fr) minmax(0, 1fr) 48px 64px;
+    grid-template-columns: minmax(58px, 0.75fr) minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
     gap: 6px;
+    min-width: 720px;
     padding: 7px;
   }
 

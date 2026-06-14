@@ -295,6 +295,7 @@ export function TimeEntriesPage() {
   const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
+  const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
@@ -1021,6 +1022,22 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
+    if (!canManageTimeEntries || payrollReviewActionEntryId !== null || entry.id < 0) {
+      return;
+    }
+    setPayrollReviewActionEntryId(entry.id);
+    setReviewActionError(null);
+    try {
+      const updatedEntry = await api.setTimeEntryPayrollReview(entry.id, entry.payroll_reviewed_at === null);
+      applyUpdatedTimeEntry(updatedEntry);
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Zeilenprüfung konnte nicht gespeichert werden."));
+    } finally {
+      setPayrollReviewActionEntryId(null);
+    }
+  }
+
   async function downloadTimeExportXlsx(): Promise<void> {
     if (!exportableRows.length || isDownloadingExport) {
       return;
@@ -1234,8 +1251,9 @@ export function TimeEntriesPage() {
                     <span role="columnheader">Montageende</span>
                     <span role="columnheader">Pause</span>
                     <span role="columnheader">Montagezeit</span>
-                    <span role="columnheader">Ort passt</span>
-                    <span role="columnheader">Arbeitszeit passt</span>
+                    <span role="columnheader">Ort</span>
+                    <span role="columnheader">Arbeitszeit</span>
+                    <span role="columnheader">Geprüft</span>
                   </div>
                   {selectedReviewWeekDays.map((day) => (
                     day.entries.length > 0 ? day.entries.map((check, index) => (
@@ -1267,6 +1285,13 @@ export function TimeEntriesPage() {
                             onWarningClick: () => setTimeReviewDiagnosticEntry(check.entry),
                           })}
                         </div>
+                        <div role="cell">
+                          {renderPayrollReviewMark(check.entry, {
+                            disabled: !canManageTimeEntries || payrollReviewActionEntryId !== null || check.entry.id < 0,
+                            isBusy: payrollReviewActionEntryId === check.entry.id,
+                            onToggle: () => void togglePayrollRowReview(check.entry),
+                          })}
+                        </div>
                       </div>
                     )) : (
                       <div className="time-review-week-check-row is-empty" key={day.date} role="row">
@@ -1289,6 +1314,7 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">-</div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
+                        <div role="cell">{renderPayrollReviewEmptyMark()}</div>
                       </div>
                     )
                   ))}
@@ -2947,6 +2973,33 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
       total: "-",
     },
   ];
+}
+
+function renderPayrollReviewMark(
+  entry: TimeEntry,
+  options: { disabled: boolean; isBusy: boolean; onToggle: () => void },
+) {
+  const isReviewed = entry.payroll_reviewed_at !== null;
+  return (
+    <button
+      className={["time-review-payroll-mark", isReviewed ? "is-reviewed" : ""].filter(Boolean).join(" ")}
+      type="button"
+      disabled={options.disabled}
+      aria-label={isReviewed ? "Zeilenprüfung entfernen" : "Zeile als geprüft markieren"}
+      title={isReviewed ? "Zeilenprüfung entfernen" : "Zeile als geprüft markieren"}
+      onClick={options.onToggle}
+    >
+      {options.isBusy ? "..." : isReviewed ? "✓" : "-"}
+    </button>
+  );
+}
+
+function renderPayrollReviewEmptyMark() {
+  return (
+    <span className="time-review-payroll-mark is-empty" aria-label="Keine Zeitzeile">
+      -
+    </span>
+  );
 }
 
 function formatTimeEntryClock(value: string | null): string {

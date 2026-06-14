@@ -11,6 +11,7 @@ from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import (
     TimeEntryCorrection,
     TimeEntryCreate,
+    TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
     TimeEntryUpdate,
@@ -161,6 +162,21 @@ def decide_time_entry_review(
     return time_entry_read(entry)
 
 
+@router.post("/{entry_id}/payroll-review", response_model=TimeEntryRead)
+def set_time_entry_payroll_review(
+    entry_id: int,
+    payload: TimeEntryPayrollReviewUpdate,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryRead:
+    entry = TimeEntryService(db).set_payroll_row_review(
+        entry_id,
+        reviewed=payload.reviewed,
+        current_user=current_user,
+    )
+    return time_entry_read(entry)
+
+
 @router.get("/weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
 def list_time_entry_weekly_reviews(
     iso_year: int,
@@ -262,6 +278,8 @@ def time_entry_read(
         created_by_user_id=entry.created_by_user_id,
         reviewed_by_user_id=entry.reviewed_by_user_id,
         reviewed_at=entry.reviewed_at,
+        payroll_reviewed_by_user_id=entry.payroll_reviewed_by_user_id,
+        payroll_reviewed_at=entry.payroll_reviewed_at,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
         planned_site_labels=planned_site_labels,
@@ -309,6 +327,8 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         created_by_user_id=None,
         reviewed_by_user_id=None,
         reviewed_at=None,
+        payroll_reviewed_by_user_id=None,
+        payroll_reviewed_at=None,
         created_at=stay.last_seen_at,
         updated_at=stay.last_seen_at,
         review_source="gps_suggestion",

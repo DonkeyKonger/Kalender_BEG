@@ -35,6 +35,8 @@ export type TimeEntry = {
   created_by_user_id: number | null;
   reviewed_by_user_id: number | null;
   reviewed_at: string | null;
+  payroll_reviewed_by_user_id: number | null;
+  payroll_reviewed_at: string | null;
   created_at: string;
   updated_at: string;
   review_source: "manual" | "gps_suggestion";

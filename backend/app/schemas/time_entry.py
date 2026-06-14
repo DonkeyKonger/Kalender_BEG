@@ -135,6 +135,10 @@ class TimeEntryWeeklyReviewCreate(BaseModel):
     iso_week: int = Field(ge=1, le=53)
 
 
+class TimeEntryPayrollReviewUpdate(BaseModel):
+    reviewed: bool
+
+
 class TimeEntryWeeklyReviewRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -178,6 +182,8 @@ class TimeEntryRead(BaseModel):
     created_by_user_id: int | None = None
     reviewed_by_user_id: int | None = None
     reviewed_at: datetime | None = None
+    payroll_reviewed_by_user_id: int | None = None
+    payroll_reviewed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     review_source: str = "manual"

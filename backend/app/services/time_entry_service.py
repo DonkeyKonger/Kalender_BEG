@@ -152,6 +152,20 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def set_payroll_row_review(self, entry_id: int, *, reviewed: bool, current_user: User) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        if reviewed:
+            entry.payroll_reviewed_by_user_id = current_user.id
+            entry.payroll_reviewed_at = datetime.now().astimezone()
+        else:
+            entry.payroll_reviewed_by_user_id = None
+            entry.payroll_reviewed_at = None
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
     def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
