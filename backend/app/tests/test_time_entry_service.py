@@ -1,10 +1,11 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
 from app.models.enums import UserRole
+from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.services.time_entry_service import TimeEntryService
 
 
@@ -101,6 +102,67 @@ def test_approve_time_review_marks_entry_with_user_audit():
     assert updated.reviewed_by_user_id == 7
     assert updated.reviewed_at is not None
     assert commits == [True]
+
+
+def test_mark_weekly_review_creates_person_week_status():
+    added: list[TimeEntryWeeklyReview] = []
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, model_id: SimpleNamespace(id=model_id),
+        scalar=lambda statement: None,
+        add=lambda review: added.append(review),
+        commit=lambda: commits.append(True),
+        refresh=lambda refreshed: setattr(refreshed, "id", 12),
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+
+    review = item.mark_weekly_review(person_id=4, iso_year=2026, iso_week=24, current_user=current_user)
+
+    assert review.id == 12
+    assert review.person_id == 4
+    assert review.iso_year == 2026
+    assert review.iso_week == 24
+    assert review.reviewed_by_user_id == 7
+    assert review.reviewed_at is not None
+    assert added == [review]
+    assert commits == [True]
+
+
+def test_mark_weekly_review_updates_existing_person_week_status():
+    existing = TimeEntryWeeklyReview(
+        person_id=4,
+        iso_year=2026,
+        iso_week=24,
+        reviewed_by_user_id=1,
+        reviewed_at=datetime(2026, 6, 1, 8, 0),
+    )
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, model_id: SimpleNamespace(id=model_id),
+        scalar=lambda statement: existing,
+        add=lambda review: pytest.fail("Existing weekly review should be reused."),
+        commit=lambda: commits.append(True),
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=8, role=UserRole.PROJECT_MANAGER)
+
+    review = item.mark_weekly_review(person_id=4, iso_year=2026, iso_week=24, current_user=current_user)
+
+    assert review is existing
+    assert review.reviewed_by_user_id == 8
+    assert review.reviewed_at is not None
+    assert commits == [True]
+
+
+def test_monteur_cannot_mark_weekly_review():
+    current_user = SimpleNamespace(id=9, role=UserRole.MONTEUR)
+
+    with pytest.raises(HTTPException) as error:
+        service().mark_weekly_review(person_id=4, iso_year=2026, iso_week=24, current_user=current_user)
+
+    assert error.value.status_code == 403
 
 
 def test_correct_time_review_preserves_original_and_marks_reviewed():

@@ -8,6 +8,7 @@ from app.models.assignment import Assignment
 from app.models.enums import UserRole
 from app.models.person import Person
 from app.models.site import Site
+from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
@@ -270,6 +271,52 @@ class TimeEntryService:
             self.db.commit()
         return changed
 
+    def list_weekly_reviews(self, *, iso_year: int, iso_week: int, current_user: User) -> list[TimeEntryWeeklyReview]:
+        self._ensure_can_review_time(current_user)
+        self._ensure_valid_iso_week(iso_year, iso_week)
+        statement = (
+            select(TimeEntryWeeklyReview)
+            .where(TimeEntryWeeklyReview.iso_year == iso_year)
+            .where(TimeEntryWeeklyReview.iso_week == iso_week)
+            .order_by(TimeEntryWeeklyReview.person_id)
+        )
+        return list(self.db.scalars(statement))
+
+    def mark_weekly_review(
+        self,
+        *,
+        person_id: int,
+        iso_year: int,
+        iso_week: int,
+        current_user: User,
+    ) -> TimeEntryWeeklyReview:
+        self._ensure_can_review_time(current_user)
+        self._ensure_person_exists(person_id)
+        self._ensure_valid_iso_week(iso_year, iso_week)
+        statement = (
+            select(TimeEntryWeeklyReview)
+            .where(TimeEntryWeeklyReview.person_id == person_id)
+            .where(TimeEntryWeeklyReview.iso_year == iso_year)
+            .where(TimeEntryWeeklyReview.iso_week == iso_week)
+        )
+        review = self.db.scalar(statement)
+        now = datetime.now().astimezone()
+        if review is None:
+            review = TimeEntryWeeklyReview(
+                person_id=person_id,
+                iso_year=iso_year,
+                iso_week=iso_week,
+                reviewed_by_user_id=current_user.id,
+                reviewed_at=now,
+            )
+            self.db.add(review)
+        else:
+            review.reviewed_by_user_id = current_user.id
+            review.reviewed_at = now
+        self.db.commit()
+        self.db.refresh(review)
+        return review
+
     @staticmethod
     def is_open_time_review_case(entry: WorkTimeEntry, gps_minutes: int | None) -> bool:
         review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
@@ -334,6 +381,11 @@ class TimeEntryService:
         if current_user.role in {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}:
             return
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Arbeitszeiten duerfen nur durch Buero oder Projektleitung geprueft werden.")
+
+    @staticmethod
+    def _ensure_valid_iso_week(iso_year: int, iso_week: int) -> None:
+        if iso_year < 2000 or iso_year > 2100 or iso_week < 1 or iso_week > 53:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kalenderwoche ist ungueltig.")
 
     @staticmethod
     def _mark_time_review(

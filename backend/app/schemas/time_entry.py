@@ -129,6 +129,25 @@ class TimeEntryReviewDecision(BaseModel):
         return cleaned
 
 
+class TimeEntryWeeklyReviewCreate(BaseModel):
+    person_id: int
+    iso_year: int = Field(ge=2000, le=2100)
+    iso_week: int = Field(ge=1, le=53)
+
+
+class TimeEntryWeeklyReviewRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    person_id: int
+    iso_year: int
+    iso_week: int
+    reviewed_by_user_id: int | None = None
+    reviewed_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
 class TimeEntryRead(BaseModel):
     id: int
     person_id: int

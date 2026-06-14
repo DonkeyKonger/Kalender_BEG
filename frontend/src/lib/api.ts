@@ -8,7 +8,7 @@ import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoi
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
-import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -488,6 +488,25 @@ export const api = {
     return request<TimeEntry>(`/time-entries/${entryId}/review/decision`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview[]> {
+    const search = new URLSearchParams({
+      iso_year: String(params.isoYear),
+      iso_week: String(params.isoWeek),
+    });
+    return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`);
+  },
+
+  async markTimeEntryWeeklyReview(payload: { personId: number; isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview> {
+    return request<TimeEntryWeeklyReview>("/time-entries/weekly-reviews", {
+      method: "POST",
+      body: JSON.stringify({
+        person_id: payload.personId,
+        iso_year: payload.isoYear,
+        iso_week: payload.isoWeek,
+      }),
     });
   },
 

@@ -14,6 +14,8 @@ from app.schemas.time_entry import (
     TimeEntryRead,
     TimeEntryReviewDecision,
     TimeEntryUpdate,
+    TimeEntryWeeklyReviewCreate,
+    TimeEntryWeeklyReviewRead,
 )
 from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService, GpsSiteStay
 from app.services.time_entry_service import TimeEntryService
@@ -157,6 +159,34 @@ def decide_time_entry_review(
         current_user=current_user,
     )
     return time_entry_read(entry)
+
+
+@router.get("/weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
+def list_time_entry_weekly_reviews(
+    iso_year: int,
+    iso_week: int,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> list[TimeEntryWeeklyReviewRead]:
+    return TimeEntryService(db).list_weekly_reviews(
+        iso_year=iso_year,
+        iso_week=iso_week,
+        current_user=current_user,
+    )
+
+
+@router.post("/weekly-reviews", response_model=TimeEntryWeeklyReviewRead, status_code=201)
+def mark_time_entry_weekly_review(
+    payload: TimeEntryWeeklyReviewCreate,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryWeeklyReviewRead:
+    return TimeEntryService(db).mark_weekly_review(
+        person_id=payload.person_id,
+        iso_year=payload.iso_year,
+        iso_week=payload.iso_week,
+        current_user=current_user,
+    )
 
 
 def time_entry_read(

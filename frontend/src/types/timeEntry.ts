@@ -80,3 +80,14 @@ export type TimeEntryReviewDecisionPayload = {
   final_work_minutes?: number | null;
   reviewed_site_id?: number | null;
 };
+
+export type TimeEntryWeeklyReview = {
+  id: number;
+  person_id: number;
+  iso_year: number;
+  iso_week: number;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string;
+  created_at: string;
+  updated_at: string;
+};

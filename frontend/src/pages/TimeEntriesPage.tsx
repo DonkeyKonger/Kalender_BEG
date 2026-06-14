@@ -19,7 +19,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType, AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeReviewDecision } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCreate, TimeEntryGpsStatus, TimeEntryStatus, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
 type RangeMode = "week" | "month";
 type TimeSubtab = "review" | "gpsVerification" | "workerTimes" | "evaluation" | "export";
@@ -229,6 +229,7 @@ export function TimeEntriesPage() {
   const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
   const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
   const [reviewAbsences, setReviewAbsences] = useState<Absence[]>([]);
+  const [reviewWeeklyReviews, setReviewWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRead[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -262,6 +263,7 @@ export function TimeEntriesPage() {
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
+  const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
   const [isDownloadingExport, setIsDownloadingExport] = useState(false);
@@ -368,9 +370,13 @@ export function TimeEntriesPage() {
     [activeRange.end, activeRange.start, assignments],
   );
   const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
+  const reviewedWorkerIds = useMemo(
+    () => new Set(reviewWeeklyReviews.map((review) => review.person_id)),
+    [reviewWeeklyReviews],
+  );
   const timeReviewWorkers = useMemo(
-    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences),
-    [people, reviewAbsences, reviewAllEntries, reviewEntries],
+    () => buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds),
+    [people, reviewAbsences, reviewAllEntries, reviewEntries, reviewedWorkerIds],
   );
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
@@ -560,6 +566,35 @@ export function TimeEntriesPage() {
       ignore = true;
     };
   }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" || !canManageTimeEntries) {
+      setReviewWeeklyReviews([]);
+      return;
+    }
+
+    let ignore = false;
+    setReviewWeeklyReviews([]);
+    api.timeEntryWeeklyReviews({
+      isoYear: selectedReviewWeek.year,
+      isoWeek: selectedReviewWeek.week,
+    })
+      .then((weeklyReviews) => {
+        if (!ignore) {
+          setReviewWeeklyReviews(weeklyReviews);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setReviewWeeklyReviews([]);
+          setReviewActionError(readApiError(requestError, "Wochenpruefstatus konnte nicht geladen werden."));
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, canManageTimeEntries, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -921,6 +956,33 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function markSelectedReviewWeekReviewed(): Promise<void> {
+    if (!canManageTimeEntries || !selectedReviewWorker || markingReviewWeekPersonId !== null || selectedReviewWorker.isReviewed) {
+      return;
+    }
+    setMarkingReviewWeekPersonId(selectedReviewWorker.personId);
+    setReviewActionError(null);
+    try {
+      const weeklyReview = await api.markTimeEntryWeeklyReview({
+        personId: selectedReviewWorker.personId,
+        isoYear: selectedReviewWeek.year,
+        isoWeek: selectedReviewWeek.week,
+      });
+      setReviewWeeklyReviews((current) => {
+        const withoutCurrent = current.filter((review) => !(
+          review.person_id === weeklyReview.person_id
+          && review.iso_year === weeklyReview.iso_year
+          && review.iso_week === weeklyReview.iso_week
+        ));
+        return [...withoutCurrent, weeklyReview];
+      });
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht als geprüft markiert werden."));
+    } finally {
+      setMarkingReviewWeekPersonId(null);
+    }
+  }
+
   return (
     <section className="time-entries-page is-figma-times-workspace">
       <div className="page-header entity-page-header">
@@ -1128,8 +1190,17 @@ export function TimeEntriesPage() {
                   ))}
                 </div>
                 <div className="time-review-worker-detail-actions">
-                  <button className="icon-button secondary" type="button" disabled title="Wochenstatus ist noch nicht als eigener Speicherstatus angebunden.">
-                    Monteurwoche als geprüft markieren
+                  <button
+                    className="icon-button secondary"
+                    type="button"
+                    disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                    onClick={() => void markSelectedReviewWeekReviewed()}
+                  >
+                    {selectedReviewWorker.isReviewed
+                      ? "Monteurwoche geprüft"
+                      : markingReviewWeekPersonId === selectedReviewWorker.personId
+                        ? "Monteurwoche wird geprüft..."
+                        : "Monteurwoche als geprüft markieren"}
                   </button>
                 </div>
               </div>
@@ -2355,6 +2426,7 @@ function buildTimeReviewWorkerSummaries(
   allEntries: TimeEntry[],
   openEntries: TimeEntry[],
   absences: Absence[],
+  reviewedWorkerIds: Set<number>,
 ): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
@@ -2404,7 +2476,7 @@ function buildTimeReviewWorkerSummaries(
         totalMinutes,
         submittedMinutes,
         absenceType: absenceTypeByPersonId.get(summary.personId) ?? null,
-        isReviewed: summary.entries.length > 0 && openIssueCount === 0,
+        isReviewed: reviewedWorkerIds.has(summary.personId),
         entries: summary.entries.slice().sort(compareTimeReviewWorkerEntries),
       };
     })

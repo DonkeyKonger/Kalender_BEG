@@ -18,6 +18,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
+from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.vehicle import (
     SiteVehicleAssignment,
@@ -51,6 +52,7 @@ __all__ = [
     "SiteMeasurementEntry",
     "SiteMeasurementItem",
     "SiteVehicleAssignment",
+    "TimeEntryWeeklyReview",
     "User",
     "Vehicle",
     "VehicleAsset",
