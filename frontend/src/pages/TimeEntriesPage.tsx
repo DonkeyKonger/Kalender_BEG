@@ -1068,6 +1068,10 @@ export function TimeEntriesPage() {
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader">Tag</span>
                     <span role="columnheader">Baustelle</span>
+                    <span role="columnheader">Montagebeginn</span>
+                    <span role="columnheader">Montageende</span>
+                    <span role="columnheader">Pause</span>
+                    <span role="columnheader">Montagezeit</span>
                     <span role="columnheader">Ort passt</span>
                     <span role="columnheader">Arbeitszeit passt</span>
                   </div>
@@ -1091,6 +1095,10 @@ export function TimeEntriesPage() {
                             </StatusBadge>
                           )}
                         </div>
+                        <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.start_time)}</div>
+                        <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.end_time)}</div>
+                        <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.break_minutes, "minutes")}</div>
+                        <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.work_minutes, "hours")}</div>
                         <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
                         <div role="cell">{renderTimeReviewCheckMark(check.timeCheck)}</div>
                       </div>
@@ -1109,6 +1117,10 @@ export function TimeEntriesPage() {
                             <strong>Keine Zeitmeldung</strong>
                           )}
                         </div>
+                        <div className="time-review-week-time" role="cell">-</div>
+                        <div className="time-review-week-time" role="cell">-</div>
+                        <div className="time-review-week-time" role="cell">-</div>
+                        <div className="time-review-week-time" role="cell">-</div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
                       </div>
@@ -2544,6 +2556,28 @@ function renderTimeReviewCheckMark(state: TimeReviewCheckState) {
       {state === "ok" ? "✓" : state === "warning" ? "!" : "-"}
     </span>
   );
+}
+
+function formatTimeEntryClock(value: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const clockMatch = /^(\d{2}:\d{2})(?::\d{2})?$/.exec(value);
+  if (clockMatch) {
+    return clockMatch[1];
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "-" : formatTime(value);
+}
+
+function formatTimeEntryMinutes(value: number | null | undefined, mode: "hours" | "minutes"): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "-";
+  }
+  if (mode === "minutes") {
+    return `${value} min`;
+  }
+  return `${formatSubmittedHours(value)} Std.`;
 }
 
 function timeReviewCheckLabel(state: TimeReviewCheckState): string {

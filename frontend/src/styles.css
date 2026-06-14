@@ -9606,7 +9606,8 @@ button.person-chip:focus-visible {
 
 .time-review-week-check-table {
   display: grid;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid #dce6f2;
   border-radius: 3px;
   background: #ffffff;
@@ -9615,9 +9616,10 @@ button.person-chip:focus-visible {
 .time-review-week-check-head,
 .time-review-week-check-row {
   display: grid;
-  grid-template-columns: minmax(76px, 0.8fr) minmax(180px, 2fr) minmax(92px, 0.75fr) minmax(120px, 0.9fr);
-  gap: 10px;
+  grid-template-columns: minmax(72px, 0.65fr) minmax(150px, 1.55fr) repeat(4, minmax(70px, 0.62fr)) minmax(76px, 0.55fr) minmax(104px, 0.8fr);
+  gap: 8px;
   align-items: center;
+  min-width: 760px;
   border-bottom: 1px solid #e2e8f0;
   padding: 8px 10px;
 }
@@ -9644,7 +9646,8 @@ button.person-chip:focus-visible {
 }
 
 .time-review-week-day,
-.time-review-week-site {
+.time-review-week-site,
+.time-review-week-time {
   display: grid;
   min-width: 0;
 }
@@ -9667,6 +9670,12 @@ button.person-chip:focus-visible {
   font-weight: 760;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.time-review-week-time {
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 800;
 }
 
 .time-review-week-site .time-review-absence-badge {
