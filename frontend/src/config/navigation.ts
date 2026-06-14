@@ -3,7 +3,6 @@ import {
   Building2,
   CalendarDays,
   CalendarX,
-  Clock3,
   Download,
   FolderKanban,
   Home,
@@ -16,33 +15,15 @@ import type { NavigationItem } from "../types/navigation";
 
 export const navigationItems: NavigationItem[] = [
   {
-    label: "Ubersicht",
+    label: "Übersicht",
     path: "/",
     icon: Home,
     roles: ["admin", "project_manager", "office", "monteur"],
   },
   {
-    label: "Planmatrix",
+    label: "Baustellenkalender",
     path: "/matrix",
     icon: CalendarDays,
-    roles: ["admin", "project_manager", "office"],
-  },
-  {
-    label: "Lohnprüfung",
-    path: "/time-entries",
-    icon: Clock3,
-    roles: ["admin", "project_manager", "office"],
-  },
-  {
-    label: "Baustellen",
-    path: "/sites",
-    icon: BriefcaseBusiness,
-    roles: ["admin", "project_manager", "office"],
-  },
-  {
-    label: "Baustellenkarte",
-    path: "/site-map",
-    icon: MapPinned,
     roles: ["admin", "project_manager", "office"],
   },
   {
@@ -52,16 +33,16 @@ export const navigationItems: NavigationItem[] = [
     roles: ["admin", "project_manager", "office"],
   },
   {
-    label: "Exporte",
-    path: "/exports",
-    icon: Download,
+    label: "Baustellen",
+    path: "/sites",
+    icon: BriefcaseBusiness,
     roles: ["admin", "project_manager", "office"],
   },
   {
-    label: "Benutzer",
-    path: "/users",
-    icon: ShieldCheck,
-    roles: ["admin"],
+    label: "Kartenübersicht",
+    path: "/site-map",
+    icon: MapPinned,
+    roles: ["admin", "project_manager", "office"],
   },
   {
     label: "Kunden",
@@ -74,6 +55,18 @@ export const navigationItems: NavigationItem[] = [
     path: "/persons",
     icon: Users,
     roles: ["admin", "project_manager"],
+  },
+  {
+    label: "Export",
+    path: "/exports",
+    icon: Download,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Benutzer (admin)",
+    path: "/users",
+    icon: ShieldCheck,
+    roles: ["admin"],
   },
   {
     label: "Meine Einsaetze",
