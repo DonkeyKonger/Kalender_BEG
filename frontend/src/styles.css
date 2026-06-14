@@ -9771,10 +9771,24 @@ button.person-chip:focus-visible {
   font-size: 0.76rem;
 }
 
+.time-review-diagnostic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 18%);
+  padding: 24px;
+}
+
 .time-review-diagnostic-popover {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
   border: 1px solid #d7e1ee;
   border-radius: 0;
   background: #ffffff;
+  box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
 }
 
 .time-review-diagnostic-head {

@@ -525,6 +525,19 @@ export function TimeEntriesPage() {
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
+    if (!timeReviewDiagnosticEntry) {
+      return;
+    }
+    function closeOnEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setTimeReviewDiagnosticEntry(null);
+      }
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [timeReviewDiagnosticEntry]);
+
+  useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
       return;
     }
@@ -1333,40 +1346,6 @@ export function TimeEntriesPage() {
                         : "Monteurwoche als geprüft markieren"}
                   </button>
                 </div>
-                {timeReviewDiagnosticEntry && (
-                  <div className="time-review-diagnostic-popover" role="dialog" aria-label="Arbeitszeit-Diagnose">
-                    <div className="time-review-diagnostic-head">
-                      <div>
-                        <span>Diagnose</span>
-                        <h4>Arbeitszeit-Prüfung</h4>
-                      </div>
-                      <button
-                        className="time-review-diagnostic-close"
-                        type="button"
-                        aria-label="Diagnose schließen"
-                        onClick={() => setTimeReviewDiagnosticEntry(null)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
-                      <div className="time-review-diagnostic-row is-head" role="row">
-                        <span role="columnheader">Quelle</span>
-                        <span role="columnheader">Anfang Arbeitszeit</span>
-                        <span role="columnheader">Ende Arbeitszeit</span>
-                        <span role="columnheader">Gesamtstunden</span>
-                      </div>
-                      {timeReviewDiagnosticRows(timeReviewDiagnosticEntry).map((row) => (
-                        <div className="time-review-diagnostic-row" key={row.source} role="row">
-                          <strong role="cell">{row.source}</strong>
-                          <span role="cell">{row.start}</span>
-                          <span role="cell">{row.end}</span>
-                          <span role="cell">{row.total}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : timeReviewWorkers.length > 0 ? (
               <div className="time-review-worker-empty-detail">Monteur auswählen, um die Lohnprüfung für KW {selectedReviewWeek.week} zu öffnen.</div>
@@ -1901,6 +1880,52 @@ export function TimeEntriesPage() {
           )}
         </div>
       </div>
+      )}
+      {timeReviewDiagnosticEntry && (
+        <div
+          className="time-review-diagnostic-backdrop"
+          role="presentation"
+          onClick={() => setTimeReviewDiagnosticEntry(null)}
+        >
+          <div
+            className="time-review-diagnostic-popover"
+            role="dialog"
+            aria-label="Arbeitszeit-Diagnose"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="time-review-diagnostic-head">
+              <div>
+                <span>Diagnose</span>
+                <h4>Arbeitszeit-Prüfung</h4>
+              </div>
+              <button
+                className="time-review-diagnostic-close"
+                type="button"
+                aria-label="Diagnose schließen"
+                onClick={() => setTimeReviewDiagnosticEntry(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
+              <div className="time-review-diagnostic-row is-head" role="row">
+                <span role="columnheader">Quelle</span>
+                <span role="columnheader">Anfang Arbeitszeit</span>
+                <span role="columnheader">Ende Arbeitszeit</span>
+                <span role="columnheader">Gesamtstunden</span>
+              </div>
+              {timeReviewDiagnosticRows(timeReviewDiagnosticEntry).map((row) => (
+                <div className="time-review-diagnostic-row" key={row.source} role="row">
+                  <strong role="cell">{row.source}</strong>
+                  <span role="cell">{row.start}</span>
+                  <span role="cell">{row.end}</span>
+                  <span role="cell">{row.total}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
