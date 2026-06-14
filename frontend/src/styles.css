@@ -10657,6 +10657,9 @@ button.person-chip:focus-visible {
   background: transparent;
   border: 0;
   box-shadow: none;
+  gap: 0;
+  width: 100%;
+  margin: 0;
   padding: 0;
 }
 
@@ -10777,8 +10780,11 @@ button.person-chip:focus-visible {
 
 .time-entries-page.is-figma-times-workspace .time-week-nav-panel {
   overflow: visible;
+  border: 0;
+  border-bottom: 1px solid var(--time-border);
   border-radius: 0;
-  padding: 8px 10px;
+  background: #ffffff;
+  padding: 8px 18px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-nav-title span,
@@ -10950,6 +10956,10 @@ button.person-chip:focus-visible {
 .time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-detail-actions .icon-button,
 .time-entries-page.is-figma-times-workspace .time-review-main .status-badge {
   border-radius: 0;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-panel {
+  margin: 14px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-table-action {
