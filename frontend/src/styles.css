@@ -9922,6 +9922,16 @@ button.person-chip:focus-visible {
   font-weight: 750;
 }
 
+.time-review-diagnostic-note {
+  margin: 0;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
 .time-review-diagnostic-save {
   min-height: 30px;
   border-radius: 0;

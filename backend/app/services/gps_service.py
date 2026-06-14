@@ -166,6 +166,18 @@ class GpsPresenceService:
         ]
 
     def evaluate_time_entry(self, entry: WorkTimeEntry) -> GpsPresenceEvaluation:
+        if is_current_local_work_date(entry.work_date):
+            planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
+            planned_context = self._planned_gps_context(entry, planned_sites, None)
+            return GpsPresenceEvaluation(
+                "not_checkable",
+                0,
+                0,
+                "gps_work_time_available_next_day",
+                **gps_range_from_points([]),
+                **planned_context,
+            )
+
         start_at, end_at = day_window(entry.work_date)
         points = self._location_points_for_person(
             person_id=entry.person_id,
@@ -530,6 +542,14 @@ def ensure_aware_utc(value: datetime) -> datetime:
 def is_gps_timestamp_in_allowed_window(value: datetime) -> bool:
     local_time = ensure_aware_utc(value).astimezone(GPS_PROCESSING_TIMEZONE).time()
     return GPS_ALLOWED_START_LOCAL <= local_time < GPS_ALLOWED_END_LOCAL
+
+
+def current_local_date() -> date:
+    return datetime.now(GPS_PROCESSING_TIMEZONE).date()
+
+
+def is_current_local_work_date(work_date: date) -> bool:
+    return work_date == current_local_date()
 
 
 def gps_points_in_allowed_window(points: list[GpsPoint]) -> list[GpsPoint]:

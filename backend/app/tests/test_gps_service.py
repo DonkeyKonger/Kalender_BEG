@@ -19,6 +19,7 @@ from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.gps import GpsLocationPointCreate
 from app.services.geo_service import is_point_inside_site_geofence
+from app.services import gps_service
 from app.services.gps_service import (
     NOTICE_GPS_DIFFERS_FROM_PLAN,
     NOTICE_GPS_NOT_CHECKABLE,
@@ -811,6 +812,71 @@ def test_time_entry_response_has_no_gps_work_time_without_site_contact():
             latitude=53.9,
             longitude=10.2,
             timestamp=datetime(2026, 6, 9, 18, 55, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    response = time_entry_read(entry, gps_service=GpsPresenceService(db))
+
+    assert response.gps_status == "not_checkable"
+    assert response.gps_first_seen_at is None
+    assert response.gps_last_seen_at is None
+    assert response.gps_work_minutes is None
+
+
+def test_current_work_date_hides_gps_work_time_until_next_day(monkeypatch: pytest.MonkeyPatch):
+    db = db_session()
+    work_date = date(2026, 6, 10)
+    monkeypatch.setattr(gps_service, "current_local_date", lambda: work_date)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    planned_site = Site(
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+    )
+    db.add_all([person, planned_site])
+    db.commit()
+
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=planned_site.id,
+        start_date=work_date,
+        end_date=work_date,
+    ))
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=planned_site.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    db.add_all([
+        entry,
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 10, 8, 0, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=datetime(2026, 6, 10, 16, 0, tzinfo=UTC),
         ),
     ])
     db.commit()

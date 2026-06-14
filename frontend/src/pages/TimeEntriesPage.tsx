@@ -2049,6 +2049,9 @@ export function TimeEntriesPage() {
                 </label>
               </div>
             </div>
+            {isCurrentLocalDateInput(timeReviewDiagnosticEntry.work_date) && (
+              <p className="time-review-diagnostic-note">GPS-Auswertung für den aktuellen Tag erst ab morgen verfügbar.</p>
+            )}
             <div className="time-review-diagnostic-actions">
               {payrollCorrectionError && <p className="time-review-diagnostic-error">{payrollCorrectionError}</p>}
               <button
@@ -3964,6 +3967,10 @@ function timeInputValue(value: string | null): string {
   }
   const clockMatch = /^(\d{2}:\d{2})(?::\d{2})?$/.exec(value);
   return clockMatch ? clockMatch[1] : "";
+}
+
+function isCurrentLocalDateInput(value: string): boolean {
+  return value === toDateInputValue(new Date());
 }
 
 function parseWholeMinutesField(value: string, label: string): { ok: true; value: number } | { ok: false; error: string } {
