@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Clock3, Pencil, Plus, RefreshCw } from "luci
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
-import { StatusBadge, type StatusBadgeTone } from "../components/StatusBadge";
+import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
   formatGermanDateKey as formatDate,
@@ -110,6 +110,7 @@ type TimeReviewEntryCheck = {
 type TimeReviewWeekDay = {
   date: string;
   weekdayLabel: string;
+  absenceType: AbsenceType | null;
   entries: TimeReviewEntryCheck[];
 };
 type FinalHoursEntry = {
@@ -376,8 +377,13 @@ export function TimeEntriesPage() {
     [selectedReviewPersonId, timeReviewWorkers],
   );
   const selectedReviewWeekDays = useMemo(
-    () => buildTimeReviewWeekDays(selectedReviewWorker?.entries ?? [], reviewWeekRange.start),
-    [reviewWeekRange.start, selectedReviewWorker],
+    () => buildTimeReviewWeekDays(
+      selectedReviewWorker?.entries ?? [],
+      reviewAbsences,
+      selectedReviewWorker?.personId ?? null,
+      reviewWeekRange.start,
+    ),
+    [reviewAbsences, reviewWeekRange.start, selectedReviewWorker],
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
@@ -1079,6 +1085,11 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-site" role="cell">
                           <strong>{timeEntrySiteName(check.entry)}</strong>
                           {check.entry.site_number && <span>{check.entry.site_number}</span>}
+                          {day.absenceType && (
+                            <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
+                              {absenceTypeLabels[day.absenceType]}
+                            </StatusBadge>
+                          )}
                         </div>
                         <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
                         <div role="cell">{renderTimeReviewCheckMark(check.timeCheck)}</div>
@@ -1090,7 +1101,13 @@ export function TimeEntriesPage() {
                           <span>{formatDate(day.date)}</span>
                         </div>
                         <div className="time-review-week-site" role="cell">
-                          <strong>Keine Zeitmeldung</strong>
+                          {day.absenceType ? (
+                            <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
+                              {absenceTypeLabels[day.absenceType]}
+                            </StatusBadge>
+                          ) : (
+                            <strong>Keine Zeitmeldung</strong>
+                          )}
                         </div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
                         <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
@@ -2423,7 +2440,12 @@ function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): numb
     || left.id - right.id;
 }
 
-function buildTimeReviewWeekDays(entries: TimeEntry[], weekStart: string): TimeReviewWeekDay[] {
+function buildTimeReviewWeekDays(
+  entries: TimeEntry[],
+  absences: Absence[],
+  personId: number | null,
+  weekStart: string,
+): TimeReviewWeekDay[] {
   const entriesByDate = new Map<string, TimeEntry[]>();
   for (const entry of entries) {
     const dayEntries = entriesByDate.get(entry.work_date) ?? [];
@@ -2436,6 +2458,7 @@ function buildTimeReviewWeekDays(entries: TimeEntry[], weekStart: string): TimeR
     return {
       date,
       weekdayLabel: formatWeekday(date),
+      absenceType: personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date),
       entries: (entriesByDate.get(date) ?? [])
         .slice()
         .sort(compareTimeReviewWorkerEntries)
@@ -2446,6 +2469,27 @@ function buildTimeReviewWeekDays(entries: TimeEntry[], weekStart: string): TimeR
         })),
     };
   });
+}
+
+function highestPriorityAbsenceTypeForPersonDate(
+  absences: Absence[],
+  personId: number,
+  date: string,
+): AbsenceType | null {
+  let result: AbsenceType | null = null;
+  absences
+    .filter((absence) => (
+      absence.status === "active"
+      && absence.person_id === personId
+      && absence.start_date <= date
+      && absence.end_date >= date
+    ))
+    .forEach((absence) => {
+      if (!result || absenceTypePriority(absence.absence_type) < absenceTypePriority(result)) {
+        result = absence.absence_type;
+      }
+    });
+  return result;
 }
 
 function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState {

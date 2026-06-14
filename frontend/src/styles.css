@@ -9669,6 +9669,13 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
+.time-review-week-site .time-review-absence-badge {
+  justify-self: start;
+  width: fit-content;
+  margin-top: 2px;
+  border-radius: 2px;
+}
+
 .time-review-check-mark {
   display: inline-flex;
   align-items: center;
