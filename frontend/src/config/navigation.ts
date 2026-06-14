@@ -3,6 +3,7 @@ import {
   Building2,
   CalendarDays,
   CalendarX,
+  Clock3,
   Download,
   FolderKanban,
   Home,
@@ -30,6 +31,12 @@ export const navigationItems: NavigationItem[] = [
     label: "Abwesenheiten",
     path: "/absences",
     icon: CalendarX,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Lohnprüfung",
+    path: "/time-entries",
+    icon: Clock3,
     roles: ["admin", "project_manager", "office"],
   },
   {
