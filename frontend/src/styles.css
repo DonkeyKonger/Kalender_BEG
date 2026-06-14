@@ -9557,9 +9557,8 @@ button.person-chip:focus-visible {
 
 .time-review-worker-detail,
 .time-review-worker-empty-detail {
-  border: 1px solid #dce6f2;
   border-radius: 0;
-  background: #fbfdff;
+  background: #ffffff;
 }
 
 .time-review-worker-empty-detail {
