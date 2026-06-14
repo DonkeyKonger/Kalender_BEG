@@ -53,7 +53,7 @@ export function App() {
             <Route
               path="time-entries"
               element={
-                <Suspense fallback={<div className="empty-state">Zeiten werden geladen...</div>}>
+                <Suspense fallback={<div className="empty-state">Lohnprüfung wird geladen...</div>}>
                   <TimeEntriesPage />
                 </Suspense>
               }

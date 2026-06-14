@@ -28,7 +28,7 @@ export const navigationItems: NavigationItem[] = [
     roles: ["admin", "project_manager", "office"],
   },
   {
-    label: "Zeiten",
+    label: "Lohnprüfung",
     path: "/time-entries",
     icon: Clock3,
     roles: ["admin", "project_manager", "office"],
