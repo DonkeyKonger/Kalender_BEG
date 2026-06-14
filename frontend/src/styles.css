@@ -10782,7 +10782,7 @@ button.person-chip:focus-visible {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-main {
-  background: transparent;
+  background: #ffffff;
   border: 0;
   box-shadow: none;
   gap: 0;
