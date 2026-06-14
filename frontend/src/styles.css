@@ -11586,12 +11586,41 @@ button.person-chip:focus-visible {
 }
 
 .absence-matrix thead .absence-person-col {
-  top: 0;
   z-index: 7;
   height: 40px;
   background: #eef3f9;
   font-size: 0.75rem;
   font-weight: 900;
+}
+
+.absence-matrix thead .absence-week-row th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  height: 22px;
+  padding: 2px 4px;
+  border-bottom: 1px solid #d7e2f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.absence-matrix thead .absence-week-row .absence-person-col {
+  top: 0;
+  z-index: 8;
+  background: #f8fafc;
+}
+
+.absence-matrix thead .absence-day-row .absence-person-col {
+  top: 22px;
+}
+
+.absence-week-fixed {
+  color: transparent;
 }
 
 .absence-person-col span,
@@ -11616,7 +11645,7 @@ button.person-chip:focus-visible {
 
 .absence-day-col {
   position: sticky;
-  top: 0;
+  top: 22px;
   z-index: 3;
   width: 42px;
   min-width: 42px;

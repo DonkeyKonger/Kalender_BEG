@@ -13,6 +13,7 @@ import {
   formatDayHeader,
   formatDayNumber,
   getDefaultPlanningRange,
+  getIsoWeekInfo,
   isWeekendDate,
   toDateInputValue,
 } from "../utils/dateRange";
@@ -52,6 +53,11 @@ type AbsenceCell = {
 type PersonAbsenceRow = {
   person: Person;
   cells: AbsenceCell[];
+};
+type AbsenceWeekGroup = {
+  isoYear: number;
+  week: number;
+  dayCount: number;
 };
 
 function emptyAbsence(personId = 0, date = toDateInputValue(new Date())): AbsenceCreate {
@@ -624,6 +630,8 @@ function AbsenceMatrix({
   onOpenAbsence: (absenceId: number) => void;
   onStartSelection: (personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) => void;
 }) {
+  const weekGroups = useMemo(() => buildAbsenceWeekGroups(days), [days]);
+
   if (!rows.length) {
     return (
       <div className="empty-panel">
@@ -642,7 +650,20 @@ function AbsenceMatrix({
     >
       <table className="absence-matrix">
         <thead>
-          <tr>
+          <tr className="absence-week-row">
+            <th className="absence-person-col absence-week-fixed" aria-hidden="true" />
+            {weekGroups.map((group) => (
+              <th
+                className="absence-week-cell"
+                colSpan={group.dayCount}
+                key={`${group.isoYear}-${group.week}`}
+                scope="colgroup"
+              >
+                KW {group.week}
+              </th>
+            ))}
+          </tr>
+          <tr className="absence-day-row">
             <th className="absence-person-col">Person</th>
             {days.map((day) => (
               <th className={absenceDayClassName(day, today)} key={day}>
@@ -959,6 +980,19 @@ function absenceBlockClassName(absence: Absence): string {
     `absence-block-${absence.absence_type}`,
     absence.status === "cancelled" ? "is-cancelled" : "",
   ].filter(Boolean).join(" ");
+}
+
+function buildAbsenceWeekGroups(days: string[]): AbsenceWeekGroup[] {
+  return days.reduce<AbsenceWeekGroup[]>((groups, day) => {
+    const isoWeek = getIsoWeekInfo(day);
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.isoYear === isoWeek.isoYear && currentGroup.week === isoWeek.week) {
+      currentGroup.dayCount += 1;
+      return groups;
+    }
+    groups.push({ isoYear: isoWeek.isoYear, week: isoWeek.week, dayCount: 1 });
+    return groups;
+  }, []);
 }
 
 function absenceDayClassName(date: string, today: string): string {
