@@ -3037,17 +3037,16 @@ function buildTimeReviewWeekDays(
 
   return numberRange(0, 4).map((dayOffset) => {
     const date = addDaysToDateInput(weekStart, dayOffset);
+    const dayEntries = (entriesByDate.get(date) ?? []).slice().sort(compareTimeReviewWorkerEntries);
     return {
       date,
       weekdayLabel: formatWeekday(date),
       absenceType: personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date),
-      entries: (entriesByDate.get(date) ?? [])
-        .slice()
-        .sort(compareTimeReviewWorkerEntries)
+      entries: dayEntries
         .map((entry) => ({
           entry,
           locationCheck: classifyTimeReviewLocationCheck(entry),
-          timeCheck: classifyTimeReviewTimeCheck(entry),
+          timeCheck: classifyTimeReviewTimeCheck(entry, { hasMultipleEntriesOnDay: dayEntries.length > 1 }),
         })),
     };
   });
@@ -3101,7 +3100,7 @@ function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState
   return "unknown";
 }
 
-function classifyTimeReviewTimeCheck(entry: TimeEntry): TimeReviewCheckState {
+function classifyTimeReviewTimeCheck(entry: TimeEntry, options: { hasMultipleEntriesOnDay?: boolean } = {}): TimeReviewCheckState {
   if (entry.time_review_status !== "open") {
     return entry.time_review_status === "not_verifiable" || entry.time_review_status === "clarification" ? "unknown" : "ok";
   }
@@ -3114,6 +3113,9 @@ function classifyTimeReviewTimeCheck(entry: TimeEntry): TimeReviewCheckState {
     return "warning";
   }
   if (manualMinutes === null || gpsMinutes === null) {
+    return "unknown";
+  }
+  if (options.hasMultipleEntriesOnDay) {
     return "unknown";
   }
   return Math.abs(gpsMinutes - manualMinutes) <= GPS_TIME_TOLERANCE_MINUTES ? "ok" : "warning";

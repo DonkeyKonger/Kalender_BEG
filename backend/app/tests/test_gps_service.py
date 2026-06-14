@@ -591,7 +591,7 @@ def test_gps_not_checkable_adds_notice_without_source_mismatch():
     assert len(open_entries) == 1
 
 
-def test_time_entry_response_uses_latest_gps_point_for_planned_site():
+def test_time_entry_response_uses_site_contact_range_for_gps_work_time():
     db = db_session()
     work_date = date(2026, 6, 1)
     person = Person(
@@ -634,7 +634,7 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
         longitude=10.1,
         timestamp=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
     )
-    latest_inside_point = GpsPoint(
+    first_inside_point = GpsPoint(
         source_type=GpsSourceType.PHONE,
         source_id="mobile:test",
         person_id=person.id,
@@ -642,7 +642,15 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
         longitude=9.0263,
         timestamp=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
     )
-    db.add_all([entry, older_outside_point, latest_inside_point])
+    latest_inside_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=53.0142,
+        longitude=9.0263,
+        timestamp=datetime(2026, 6, 1, 13, 0, tzinfo=UTC),
+    )
+    db.add_all([entry, older_outside_point, first_inside_point, latest_inside_point])
     db.commit()
 
     response = time_entry_read(entry, gps_service=GpsPresenceService(db))
@@ -650,13 +658,169 @@ def test_time_entry_response_uses_latest_gps_point_for_planned_site():
     assert response.gps_status == "matched"
     assert response.gps_matched_points == 1
     assert response.gps_total_points == 1
-    assert response.gps_first_seen_at == older_outside_point.timestamp
+    assert response.gps_first_seen_at == first_inside_point.timestamp
     assert response.gps_last_seen_at == latest_inside_point.timestamp
-    assert response.gps_work_minutes == 240
+    assert response.gps_work_minutes == 60
     assert response.planned_site_labels == ["8007 - Klinik"]
     assert response.gps_detected_site_id == planned_site.id
     assert response.planned_vs_gps_mismatch is False
     assert response.mismatch_notice is None
+
+
+def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_sites():
+    db = db_session()
+    work_date = date(2026, 6, 8)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    first_site = Site(
+        site_number="A",
+        name="Baustelle A",
+        latitude=52.0,
+        longitude=8.0,
+        geofence_radius_m=800,
+        status=SiteStatus.ACTIVE,
+    )
+    second_site = Site(
+        site_number="B",
+        name="Baustelle B",
+        latitude=53.0,
+        longitude=9.0,
+        geofence_radius_m=800,
+        status=SiteStatus.ACTIVE,
+    )
+    db.add_all([person, first_site, second_site])
+    db.commit()
+
+    db.add_all([
+        Assignment(person_id=person.id, site_id=first_site.id, start_date=work_date, end_date=work_date),
+        Assignment(person_id=person.id, site_id=second_site.id, start_date=work_date, end_date=work_date),
+    ])
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=first_site.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    early_tracking_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=51.0,
+        longitude=7.0,
+        timestamp=datetime(2026, 6, 8, 5, 30, tzinfo=UTC),
+    )
+    first_site_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=52.0,
+        longitude=8.0,
+        timestamp=datetime(2026, 6, 8, 6, 0, tzinfo=UTC),
+    )
+    transfer_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=52.5,
+        longitude=8.5,
+        timestamp=datetime(2026, 6, 8, 10, 0, tzinfo=UTC),
+    )
+    last_site_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=53.0,
+        longitude=9.0,
+        timestamp=datetime(2026, 6, 8, 16, 12, tzinfo=UTC),
+    )
+    late_tracking_point = GpsPoint(
+        source_type=GpsSourceType.PHONE,
+        source_id="mobile:test",
+        person_id=person.id,
+        latitude=51.0,
+        longitude=7.0,
+        timestamp=datetime(2026, 6, 8, 18, 55, tzinfo=UTC),
+    )
+    db.add_all([entry, early_tracking_point, first_site_point, transfer_point, last_site_point, late_tracking_point])
+    db.commit()
+
+    response = time_entry_read(entry, gps_service=GpsPresenceService(db))
+
+    assert response.gps_first_seen_at == first_site_point.timestamp
+    assert response.gps_last_seen_at == last_site_point.timestamp
+    assert response.gps_work_minutes == 612
+
+
+def test_time_entry_response_has_no_gps_work_time_without_site_contact():
+    db = db_session()
+    work_date = date(2026, 6, 9)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    planned_site = Site(
+        site_number="8007",
+        name="Klinik",
+        latitude=53.0142,
+        longitude=9.0263,
+        geofence_radius_m=5000,
+    )
+    db.add_all([person, planned_site])
+    db.commit()
+
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=planned_site.id,
+        start_date=work_date,
+        end_date=work_date,
+    ))
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        site_id=planned_site.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+    )
+    db.add_all([
+        entry,
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.8,
+            longitude=10.1,
+            timestamp=datetime(2026, 6, 9, 5, 13, tzinfo=UTC),
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="mobile:test",
+            person_id=person.id,
+            latitude=53.9,
+            longitude=10.2,
+            timestamp=datetime(2026, 6, 9, 18, 55, tzinfo=UTC),
+        ),
+    ])
+    db.commit()
+
+    response = time_entry_read(entry, gps_service=GpsPresenceService(db))
+
+    assert response.gps_status == "not_checkable"
+    assert response.gps_first_seen_at is None
+    assert response.gps_last_seen_at is None
+    assert response.gps_work_minutes is None
 
 
 def test_review_response_flags_planned_site_gps_mismatch():

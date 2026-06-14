@@ -172,15 +172,18 @@ class GpsPresenceService:
             start_datetime=start_at,
             end_datetime=end_at,
         )
-        gps_range = gps_range_from_points(points)
         planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
-        planned_context = self._planned_gps_context(entry, planned_sites, points[-1] if points else None)
+        contact_points = self._site_contact_points(points, planned_sites)
+        gps_range = gps_range_from_points(contact_points)
+        planned_context = self._planned_gps_context(entry, planned_sites, contact_points[-1] if contact_points else None)
         if not planned_sites:
             return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range, **planned_context)
         if not points:
             return GpsPresenceEvaluation("not_checkable", 0, 0, "no_gps_point_for_work_date", **gps_range, **planned_context)
+        if not contact_points:
+            return GpsPresenceEvaluation("not_checkable", 0, len(points), "no_site_contact_for_work_date", **gps_range, **planned_context)
 
-        plausibility = self._evaluate_point_against_planned_sites(points[-1], planned_sites)
+        plausibility = self._evaluate_point_against_planned_sites(contact_points[-1], planned_sites)
         return self._presence_evaluation_from_point_plausibility(
             plausibility,
             gps_range={**gps_range, **planned_context},
@@ -426,6 +429,15 @@ class GpsPresenceService:
             if has_valid_coordinates(site)
         ]
         return matching_candidate_sites({site.id: site for site in active_sites}, planned_sites)
+
+    def _site_contact_points(self, points: list[GpsPoint], planned_sites: list[Site]) -> list[GpsPoint]:
+        candidate_sites = self._matching_candidate_sites(planned_sites)
+        planned_site_ids = {site.id for site in planned_sites}
+        return [
+            point
+            for point in points
+            if self._matched_site_for_point(point, candidate_sites, planned_site_ids=planned_site_ids) is not None
+        ]
 
     def _location_points_for_person(
         self,
