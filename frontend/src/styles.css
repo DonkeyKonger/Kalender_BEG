@@ -10776,6 +10776,7 @@ button.person-chip:focus-visible {
   border-bottom: 1px solid var(--time-border);
   border-radius: 0;
   background: #ffffff;
+  margin-top: 10px;
   padding: 8px 18px;
 }
 
