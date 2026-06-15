@@ -109,7 +109,7 @@ export function PersonsPage() {
     setError(null);
     setMessage(null);
     try {
-      const payload = normalizePersonPayload(createForm);
+      const payload = normalizePersonPayload({ ...createForm, person_type: "internal" });
       const created = await api.createPerson(payload);
       setPeople((current) => [...current, created].sort(comparePeople));
       setDrafts((current) => ({ ...current, [created.id]: toEditablePerson(created) }));
@@ -216,7 +216,7 @@ export function PersonsPage() {
   function openNewPersonDrawer() {
     setCreateForm({
       ...emptyPerson,
-      person_type: personScope === "external" ? "external_temp" : "internal",
+      person_type: "internal",
     });
     setIsEditingPerson(false);
     setDrawer({ mode: "new" });
@@ -362,7 +362,8 @@ export function PersonsPage() {
       >
         <PersonFields
           draft={createForm}
-          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+          isCreateForm
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values, person_type: "internal" }))}
         />
       </EntityDetailDrawer>
 
@@ -495,10 +496,12 @@ function ReadItem({ label, value }: { label: string; value: string }) {
 
 function PersonFields({
   draft,
+  isCreateForm = false,
   onChange,
   onGeocodeSelected,
 }: {
   draft: PersonCreate;
+  isCreateForm?: boolean;
   onChange: (values: Partial<PersonCreate>) => void;
   onGeocodeSelected?: (values: Partial<PersonCreate>) => void;
 }) {
@@ -613,26 +616,30 @@ function PersonFields({
           onChange={(event) => onChange({ display_name: event.target.value })}
         />
       </label>
-      <label>
-        <span>Kuerzel/Suche</span>
-        <input
-          value={draft.short_code}
-          onChange={(event) => onChange({ short_code: event.target.value })}
-        />
-      </label>
-      <label>
-        <span>Typ</span>
-        <select
-          value={draft.person_type}
-          onChange={(event) => onChange({ person_type: event.target.value as PersonType })}
-        >
-          {Object.entries(personTypeLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!isCreateForm && (
+        <>
+          <label>
+            <span>Kuerzel/Suche</span>
+            <input
+              value={draft.short_code}
+              onChange={(event) => onChange({ short_code: event.target.value })}
+            />
+          </label>
+          <label>
+            <span>Typ</span>
+            <select
+              value={draft.person_type}
+              onChange={(event) => onChange({ person_type: event.target.value as PersonType })}
+            >
+              {Object.entries(personTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       <label>
         <span>E-Mail</span>
         <input
@@ -665,14 +672,23 @@ function PersonFields({
       </label>
 
       <section className="person-location-section site-location-section">
-        <div>
-          <h3>Adresse / Startort</h3>
-          <p>Adresse suchen, passenden Treffer auswaehlen. Koordinaten werden technisch gespeichert.</p>
-        </div>
+        {!isCreateForm && (
+          <div>
+            <h3>Adresse / Startort</h3>
+            <p>Adresse suchen, passenden Treffer auswaehlen. Koordinaten werden technisch gespeichert.</p>
+          </div>
+        )}
         <label className="address-field site-address-search">
           <span>Adresse suchen</span>
           <input
+            aria-label="Adresse suchen"
+            autoCapitalize="none"
+            autoComplete="new-password"
+            autoCorrect="off"
+            inputMode="search"
+            name={isCreateForm ? "person-location-query" : undefined}
             placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
+            spellCheck={false}
             value={addressSearch}
             onChange={(event) => {
               setSelectedGeocodeResult(null);
@@ -696,41 +712,53 @@ function PersonFields({
             </div>
           )}
         </label>
-        <label className="address-postal-field">
-          <span>PLZ</span>
-          <input
-            value={draft.address_postal_code ?? ""}
-            onChange={(event) => updateManualAddress({ address_postal_code: event.target.value || null })}
-          />
-        </label>
-        <label className="address-city-field">
-          <span>Stadt</span>
-          <input
-            value={draft.address_city ?? ""}
-            onChange={(event) => updateManualAddress({ address_city: event.target.value || null })}
-          />
-        </label>
-        <label className="address-street-field">
-          <span>Strasse</span>
-          <input
-            value={draft.address_street ?? ""}
-            onChange={(event) => updateManualAddress({ address_street: event.target.value || null })}
-          />
-        </label>
-        <label className="address-house-number-field">
-          <span>Hausnummer</span>
-          <input
-            value={draft.address_house_number ?? ""}
-            onChange={(event) => updateManualAddress({ address_house_number: event.target.value || null })}
-          />
-        </label>
-        <label className="address-extra-field address-field">
-          <span>Adresszusatz / Bereich</span>
-          <input
-            value={draft.address_extra ?? ""}
-            onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
-          />
-        </label>
+        {isCreateForm ? (
+          <div className="site-address-display-grid person-address-display-grid">
+            <PersonAddressDisplayItem label="PLZ" value={draft.address_postal_code} />
+            <PersonAddressDisplayItem label="Stadt" value={draft.address_city} />
+            <PersonAddressDisplayItem label="Strasse" value={draft.address_street} />
+            <PersonAddressDisplayItem label="Hausnummer" value={draft.address_house_number} />
+            <PersonAddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
+          </div>
+        ) : (
+          <>
+            <label className="address-postal-field">
+              <span>PLZ</span>
+              <input
+                value={draft.address_postal_code ?? ""}
+                onChange={(event) => updateManualAddress({ address_postal_code: event.target.value || null })}
+              />
+            </label>
+            <label className="address-city-field">
+              <span>Stadt</span>
+              <input
+                value={draft.address_city ?? ""}
+                onChange={(event) => updateManualAddress({ address_city: event.target.value || null })}
+              />
+            </label>
+            <label className="address-street-field">
+              <span>Strasse</span>
+              <input
+                value={draft.address_street ?? ""}
+                onChange={(event) => updateManualAddress({ address_street: event.target.value || null })}
+              />
+            </label>
+            <label className="address-house-number-field">
+              <span>Hausnummer</span>
+              <input
+                value={draft.address_house_number ?? ""}
+                onChange={(event) => updateManualAddress({ address_house_number: event.target.value || null })}
+              />
+            </label>
+            <label className="address-extra-field address-field">
+              <span>Adresszusatz / Bereich</span>
+              <input
+                value={draft.address_extra ?? ""}
+                onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
+              />
+            </label>
+          </>
+        )}
       </section>
 
       <label className="notes-field">
@@ -740,6 +768,15 @@ function PersonFields({
           onChange={(event) => onChange({ notes: event.target.value || null })}
         />
       </label>
+    </div>
+  );
+}
+
+function PersonAddressDisplayItem({ label, value, wide = false }: { label: string; value: string | null | undefined; wide?: boolean }) {
+  return (
+    <div className={`site-address-display-item${wide ? " is-wide" : ""}`}>
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
     </div>
   );
 }
