@@ -721,6 +721,16 @@ def remove_site(
     return SiteRemoveResponse(action=action, site=SiteRead.model_validate(site) if site else None)
 
 
+@router.delete("/{site_id}", response_model=SiteRemoveResponse)
+def delete_site(
+    site_id: int,
+    current_user: User = Depends(CAN_ADMIN),
+    db: Session = Depends(get_db),
+) -> SiteRemoveResponse:
+    action, site = SiteService(db).remove_site(site_id, current_user.id)
+    return SiteRemoveResponse(action=action, site=SiteRead.model_validate(site) if site else None)
+
+
 @router.post("", response_model=SiteRead, status_code=201)
 def create_site(
     payload: SiteCreate,

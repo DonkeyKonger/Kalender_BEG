@@ -810,7 +810,7 @@ export const api = {
   },
 
   async removeSite(siteId: number): Promise<SiteRemoveResponse> {
-    return request<SiteRemoveResponse>(`/sites/${siteId}/remove`, { method: "POST" });
+    return request<SiteRemoveResponse>(`/sites/${siteId}`, { method: "DELETE" });
   },
 
   async absences(params: { start?: string; end?: string; personId?: number | null } = {}): Promise<Absence[]> {

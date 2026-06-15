@@ -313,6 +313,26 @@ def add_site(
     return site
 
 
+def test_remove_site_marks_deleted_and_hides_site_from_default_reads():
+    db = db_session()
+    site = add_site(db, name="Zu löschen", site_number="8099")
+    service = SiteService(db)
+
+    action, removed_site = service.remove_site(site.id, user_id=1)
+
+    assert action == "deleted"
+    assert removed_site is not None
+    assert removed_site.status == SiteStatus.DELETED
+    assert removed_site.closed_at is not None
+    assert removed_site.closed_by_user_id == 1
+    with pytest.raises(HTTPException) as error:
+        service.get_site(site.id)
+    assert error.value.status_code == 404
+    assert "gelöscht" in error.value.detail
+    assert service.get_site(site.id, include_deleted=True).id == site.id
+    assert all(entry.id != site.id for entry in service.list_sites())
+
+
 def test_backfill_project_folders_requires_feature_flag():
     db = db_session()
     storage = FakeProjectStorage(

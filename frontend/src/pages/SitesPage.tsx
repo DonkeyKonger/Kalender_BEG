@@ -1,7 +1,7 @@
 import { BriefcaseBusiness, ChevronDown, PlusCircle, Search, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
@@ -74,6 +74,7 @@ const SITE_COLOR_OPTIONS: SiteColorOption[] = [
 
 export function SitesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const [sites, setSites] = useState<SiteSummary[]>([]);
@@ -94,6 +95,15 @@ export function SitesPage() {
   useEffect(() => {
     void loadData();
   }, [includeInactiveSites]);
+
+  useEffect(() => {
+    const state = location.state as { message?: string } | null;
+    if (!state?.message) {
+      return;
+    }
+    setMessage(state.message);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   async function loadData() {
     setIsLoading(true);

@@ -84,18 +84,21 @@ class SiteService:
                 missing_location += 1
         return SiteMapResponse(sites=map_sites, missing_location=missing_location)
 
-    def get_site(self, site_id: int) -> Site:
-        site = self.sites.get(site_id)
+    def get_site(self, site_id: int, *, include_deleted: bool = False) -> Site:
+        site = self.sites.get(site_id, include_deleted=include_deleted)
         if site is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Baustelle nicht gefunden oder gelöscht.",
+            )
         return site
 
     def remove_plan(self, site_id: int) -> str:
-        self.get_site(site_id)
+        self.get_site(site_id, include_deleted=True)
         return "delete"
 
     def remove_site(self, site_id: int, user_id: int) -> tuple[str, Site | None]:
-        site = self.get_site(site_id)
+        site = self.get_site(site_id, include_deleted=True)
         if site.status == SiteStatus.DELETED:
             return "deleted", site
         old_value = site_snapshot(site)

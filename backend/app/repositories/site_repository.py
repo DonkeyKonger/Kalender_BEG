@@ -12,12 +12,14 @@ class SiteRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get(self, site_id: int) -> Site | None:
+    def get(self, site_id: int, *, include_deleted: bool = False) -> Site | None:
         statement = (
             select(Site)
             .options(selectinload(Site.project_manager))
             .where(Site.id == site_id)
         )
+        if not include_deleted:
+            statement = statement.where(Site.status != SiteStatus.DELETED)
         return self.db.scalar(statement)
 
     def list(self, include_closed: bool = False) -> list[Site]:
