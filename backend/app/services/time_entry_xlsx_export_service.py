@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta, time
+from importlib import resources
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -50,6 +51,10 @@ WEEKLY_WORKER_COLUMN_WIDTHS = [10, 14, 18, 34, 16, 16, 12, 16, 14, 18, 30, 42]
 EXPORTABLE_CORRECTION_METHODS = {"accept_gps", "manual_correction", "assign_site"}
 EXPORTABLE_MANUAL_STATUSES = {"manually_approved", "not_verifiable", "auto_closed_by_deadline"}
 GERMAN_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+WEEKLY_WORKER_TABLE_NAME = "LohnpruefungMonteurwoche"
+WEEKLY_WORKER_HEADER_ROW_INDEX = 8
+WEEKLY_WORKER_DATA_START_ROW_INDEX = WEEKLY_WORKER_HEADER_ROW_INDEX + 1
+WEEKLY_WORKER_LOGO_RESOURCE = "assets/beg_logo_icon.png"
 
 
 @dataclass(frozen=True)
@@ -117,21 +122,14 @@ class TimeEntryXlsxExportService:
         gps_service = GpsPresenceService(self.db)
         gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
 
-        week_number = start.isocalendar().week
-        sheet_rows = [
-            ["Monteur", person.display_name],
-            ["Kalenderwoche", f"KW {week_number:02d}/{start.isocalendar().year}"],
-            ["Zeitraum", f"{start.strftime('%d.%m.%Y')} bis {end.strftime('%d.%m.%Y')}"],
-            [],
-            WEEKLY_WORKER_HEADERS,
-        ]
-        sheet_rows.extend(weekly_worker_row_values(row) for row in weekly_worker_rows(start, end, entries, gps_evaluations))
-        return build_xlsx_archive(
-            [{
-                "name": unique_sheet_name(person.display_name, set()),
-                "rows": sheet_rows,
-            }],
-            WEEKLY_WORKER_COLUMN_WIDTHS,
+        iso_week = start.isocalendar()
+        return build_weekly_worker_xlsx(
+            person_name=person.display_name,
+            week_number=iso_week.week,
+            year=iso_week.year,
+            start=start,
+            end=end,
+            rows=weekly_worker_rows(start, end, entries, gps_evaluations),
         )
 
     def _export_row(
@@ -244,6 +242,58 @@ def build_xlsx_archive(sheets: list[dict[str, object]], column_widths: list[int]
     return output.getvalue()
 
 
+def build_weekly_worker_xlsx(
+    *,
+    person_name: str,
+    week_number: int,
+    year: int,
+    start: date,
+    end: date,
+    rows: list[WeeklyWorkerExportRow],
+) -> bytes:
+    sheet_name = unique_sheet_name(person_name, set())
+    data_values = [weekly_worker_row_values(row) for row in rows]
+    table_last_row = WEEKLY_WORKER_HEADER_ROW_INDEX + max(len(data_values), 1)
+    logo_bytes = load_weekly_worker_logo()
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", weekly_worker_content_types_xml(include_logo=logo_bytes is not None))
+        archive.writestr("_rels/.rels", package_relationships_xml())
+        archive.writestr("xl/workbook.xml", weekly_worker_workbook_xml(sheet_name))
+        archive.writestr("xl/_rels/workbook.xml.rels", workbook_relationships_xml(1))
+        archive.writestr("xl/styles.xml", weekly_worker_styles_xml())
+        archive.writestr(
+            "xl/worksheets/sheet1.xml",
+            weekly_worker_worksheet_xml(
+                person_name=person_name,
+                week_number=week_number,
+                year=year,
+                start=start,
+                end=end,
+                data_values=data_values,
+                table_last_row=table_last_row,
+                include_logo=logo_bytes is not None,
+            ),
+        )
+        archive.writestr(
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            weekly_worker_sheet_relationships_xml(include_logo=logo_bytes is not None),
+        )
+        archive.writestr("xl/tables/table1.xml", weekly_worker_table_xml(table_last_row))
+        if logo_bytes is not None:
+            archive.writestr("xl/drawings/drawing1.xml", weekly_worker_drawing_xml())
+            archive.writestr("xl/drawings/_rels/drawing1.xml.rels", weekly_worker_drawing_relationships_xml())
+            archive.writestr("xl/media/beg_logo_icon.png", logo_bytes)
+    return output.getvalue()
+
+
+def load_weekly_worker_logo() -> bytes | None:
+    try:
+        return resources.files("app").joinpath(WEEKLY_WORKER_LOGO_RESOURCE).read_bytes()
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return None
+
+
 def build_sheet_payloads(
     rows_by_person: dict[str, list[TimeEntryExportRow]],
 ) -> list[dict[str, object]]:
@@ -308,13 +358,13 @@ def weekly_worker_rows(
     return rows
 
 
-def weekly_worker_row_values(row: WeeklyWorkerExportRow) -> list[str]:
+def weekly_worker_row_values(row: WeeklyWorkerExportRow) -> list[object]:
     entry = row.entry
     gps_evaluation = row.gps_evaluation
     if entry is None:
         return [
             GERMAN_WEEKDAYS[row.work_date.weekday()],
-            row.work_date.strftime("%d.%m.%Y"),
+            row.work_date,
             "",
             "Keine Zeitmeldung",
             "-",
@@ -334,7 +384,7 @@ def weekly_worker_row_values(row: WeeklyWorkerExportRow) -> list[str]:
     )
     return [
         GERMAN_WEEKDAYS[row.work_date.weekday()],
-        row.work_date.strftime("%d.%m.%Y"),
+        row.work_date,
         site_number(entry),
         site_name(entry) or "Keine Baustelle",
         format_clock(entry.start_time),
@@ -500,6 +550,44 @@ def content_types_xml(sheet_count: int) -> str:
     )
 
 
+def weekly_worker_content_types_xml(*, include_logo: bool) -> str:
+    overrides = [
+        override_xml(
+            "/xl/workbook.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+        ),
+        override_xml(
+            "/xl/styles.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml",
+        ),
+        override_xml(
+            "/xl/worksheets/sheet1.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml",
+        ),
+        override_xml(
+            "/xl/tables/table1.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml",
+        ),
+    ]
+    if include_logo:
+        overrides.append(
+            override_xml(
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml",
+            )
+        )
+    png_default = '<Default Extension="png" ContentType="image/png"/>' if include_logo else ""
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        f'<Default Extension="rels" ContentType="{PACKAGE_RELATIONSHIP_CONTENT_TYPE}"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        f'{png_default}'
+        f'{"".join(overrides)}'
+        '</Types>'
+    )
+
+
 def package_relationships_xml() -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -525,6 +613,30 @@ def workbook_relationships_xml(sheet_count: int) -> str:
     )
 
 
+def weekly_worker_sheet_relationships_xml(*, include_logo: bool) -> str:
+    relationships: list[str] = []
+    if include_logo:
+        relationships.append(relationship_xml("rId1", "drawing", "../drawings/drawing1.xml"))
+        relationships.append(relationship_xml("rId2", "table", "../tables/table1.xml"))
+    else:
+        relationships.append(relationship_xml("rId1", "table", "../tables/table1.xml"))
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'{"".join(relationships)}'
+        '</Relationships>'
+    )
+
+
+def weekly_worker_drawing_relationships_xml() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'{relationship_xml("rId1", "image", "../media/beg_logo_icon.png")}'
+        '</Relationships>'
+    )
+
+
 def workbook_xml(sheets: list[dict[str, object]]) -> str:
     sheet_nodes = [
         f'<sheet name="{xml_escape(str(sheet["name"]))}" sheetId="{index}" r:id="rId{index}"/>'
@@ -537,6 +649,109 @@ def workbook_xml(sheets: list[dict[str, object]]) -> str:
         f'<sheets>{"".join(sheet_nodes)}</sheets>'
         "</workbook>"
     )
+
+
+def weekly_worker_workbook_xml(sheet_name: str) -> str:
+    print_title_sheet = excel_formula_sheet_name(sheet_name)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets>'
+        f'<sheet name="{xml_escape(sheet_name)}" sheetId="1" r:id="rId1"/>'
+        '</sheets>'
+        '<definedNames>'
+        f'<definedName name="_xlnm.Print_Titles" localSheetId="0">'
+        f"{xml_escape(print_title_sheet)}!$8:$8"
+        '</definedName>'
+        '</definedNames>'
+        '</workbook>'
+    )
+
+
+def weekly_worker_worksheet_xml(
+    *,
+    person_name: str,
+    week_number: int,
+    year: int,
+    start: date,
+    end: date,
+    data_values: list[list[object]],
+    table_last_row: int,
+    include_logo: bool,
+) -> str:
+    row_nodes = [
+        worksheet_row_xml(1, ["Lohnprüfung Monteurwoche"], [1], height=30),
+        worksheet_row_xml(3, ["Monteur:", person_name], [2, 3], height=20),
+        worksheet_row_xml(4, ["Kalenderwoche:", f"KW {week_number:02d}/{year}"], [2, 3], height=20),
+        worksheet_row_xml(5, ["Zeitraum:", f"{start.strftime('%d.%m.%Y')} bis {end.strftime('%d.%m.%Y')}"], [2, 3], height=20),
+        worksheet_row_xml(6, ["Exportdatum:", date.today().strftime("%d.%m.%Y")], [2, 3], height=20),
+        worksheet_row_xml(
+            WEEKLY_WORKER_HEADER_ROW_INDEX,
+            WEEKLY_WORKER_HEADERS,
+            [4] * len(WEEKLY_WORKER_HEADERS),
+            height=24,
+        ),
+    ]
+    for offset, values in enumerate(data_values):
+        row_index = WEEKLY_WORKER_DATA_START_ROW_INDEX + offset
+        row_nodes.append(
+            worksheet_row_xml(
+                row_index,
+                values,
+                weekly_worker_data_style_ids(),
+                height=32,
+            )
+        )
+
+    drawing_node = '<drawing r:id="rId1"/>' if include_logo else ""
+    table_relationship_id = "rId2" if include_logo else "rId1"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'
+        f'<dimension ref="A1:L{table_last_row}"/>'
+        '<sheetViews><sheetView workbookViewId="0">'
+        '<pane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/>'
+        '<selection pane="bottomLeft"/>'
+        '</sheetView></sheetViews>'
+        '<sheetFormatPr defaultRowHeight="15"/>'
+        f'{columns_xml(WEEKLY_WORKER_COLUMN_WIDTHS)}'
+        f'<sheetData>{"".join(row_nodes)}</sheetData>'
+        '<mergeCells count="1"><mergeCell ref="A1:H1"/></mergeCells>'
+        '<pageMargins left="0.35" right="0.35" top="0.45" bottom="0.45" header="0.2" footer="0.2"/>'
+        '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>'
+        f'{drawing_node}'
+        f'<tableParts count="1"><tablePart r:id="{table_relationship_id}"/></tableParts>'
+        '</worksheet>'
+    )
+
+
+def worksheet_row_xml(
+    row_index: int,
+    values: list[object],
+    style_ids: list[int],
+    *,
+    height: int | None = None,
+) -> str:
+    height_attributes = f' ht="{height}" customHeight="1"' if height else ""
+    cells = [
+        worksheet_cell_xml(column_index, row_index, value, style_id=style_ids[column_index - 1])
+        for column_index, value in enumerate(values, start=1)
+    ]
+    return f'<row r="{row_index}"{height_attributes}>{"".join(cells)}</row>'
+
+
+def worksheet_cell_xml(column_index: int, row_index: int, value: object, *, style_id: int) -> str:
+    reference = cell_reference(column_index, row_index)
+    if isinstance(value, date):
+        return f'<c r="{reference}" s="{style_id}"><v>{excel_date_serial(value)}</v></c>'
+    return inline_string_cell(column_index, row_index, str(value), style_id=style_id)
+
+
+def weekly_worker_data_style_ids() -> list[int]:
+    return [5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7]
 
 
 def worksheet_xml(rows: list[list[str]], column_widths: list[int]) -> str:
@@ -574,6 +789,47 @@ def inline_string_cell(column_index: int, row_index: int, value: str, *, style_i
     )
 
 
+def weekly_worker_table_xml(table_last_row: int) -> str:
+    table_ref = f"A{WEEKLY_WORKER_HEADER_ROW_INDEX}:L{table_last_row}"
+    columns = "".join(
+        f'<tableColumn id="{index}" name="{xml_escape(header)}"/>'
+        for index, header in enumerate(WEEKLY_WORKER_HEADERS, start=1)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        f'id="1" name="{WEEKLY_WORKER_TABLE_NAME}" displayName="{WEEKLY_WORKER_TABLE_NAME}" '
+        f'ref="{table_ref}" totalsRowShown="0">'
+        f'<autoFilter ref="{table_ref}"/>'
+        f'<tableColumns count="{len(WEEKLY_WORKER_HEADERS)}">{columns}</tableColumns>'
+        '<tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" '
+        'showRowStripes="1" showColumnStripes="0"/>'
+        '</table>'
+    )
+
+
+def weekly_worker_drawing_xml() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        '<xdr:twoCellAnchor editAs="oneCell">'
+        '<xdr:from><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+        '<xdr:to><xdr:col>12</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>'
+        '<xdr:pic>'
+        '<xdr:nvPicPr><xdr:cNvPr id="1" name="BEG Logo"/><xdr:cNvPicPr/></xdr:nvPicPr>'
+        '<xdr:blipFill>'
+        '<a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/>'
+        '<a:stretch><a:fillRect/></a:stretch>'
+        '</xdr:blipFill>'
+        '<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
+        '</xdr:pic>'
+        '<xdr:clientData/>'
+        '</xdr:twoCellAnchor>'
+        '</xdr:wsDr>'
+    )
+
+
 def cell_reference(column_index: int, row_index: int) -> str:
     letters = ""
     value = column_index
@@ -581,6 +837,60 @@ def cell_reference(column_index: int, row_index: int) -> str:
         value, remainder = divmod(value - 1, 26)
         letters = chr(65 + remainder) + letters
     return f"{letters}{row_index}"
+
+
+def excel_date_serial(value: date) -> int:
+    return (value - date(1899, 12, 30)).days
+
+
+def excel_formula_sheet_name(value: str) -> str:
+    escaped = value.replace("'", "''")
+    return f"'{escaped}'"
+
+
+def weekly_worker_styles_xml() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<numFmts count="1"><numFmt numFmtId="164" formatCode="dd.mm.yy"/></numFmts>'
+        '<fonts count="4">'
+        '<font><sz val="10"/><color rgb="FF172033"/><name val="Calibri"/><family val="2"/></font>'
+        '<font><b/><sz val="16"/><color rgb="FF172033"/><name val="Calibri"/><family val="2"/></font>'
+        '<font><b/><sz val="10"/><color rgb="FF475569"/><name val="Calibri"/><family val="2"/></font>'
+        '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>'
+        '</fonts>'
+        '<fills count="4">'
+        '<fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFEFF4F9"/><bgColor indexed="64"/></patternFill></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF1F3657"/><bgColor indexed="64"/></patternFill></fill>'
+        '</fills>'
+        '<borders count="3">'
+        '<border/>'
+        '<border><bottom style="thin"><color rgb="FFD7E1EE"/></bottom></border>'
+        '<border><left style="thin"><color rgb="FFE2E8F0"/></left>'
+        '<right style="thin"><color rgb="FFE2E8F0"/></right>'
+        '<top style="thin"><color rgb="FFE2E8F0"/></top>'
+        '<bottom style="thin"><color rgb="FFE2E8F0"/></bottom></border>'
+        '</borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="8">'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
+        '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="3" fillId="3" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1">'
+        '<alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1">'
+        '<alignment vertical="center" wrapText="1"/></xf>'
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyBorder="1">'
+        '<alignment vertical="center"/></xf>'
+        '<xf numFmtId="0" fontId="2" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1">'
+        '<alignment vertical="center" wrapText="1"/></xf>'
+        '</cellXfs>'
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        '</styleSheet>'
+    )
 
 
 def styles_xml() -> str:
