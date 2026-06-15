@@ -3993,9 +3993,10 @@ button.person-chip:focus-visible {
   display: grid;
   gap: 4px;
   border: 1px solid #d8e1ee;
-  border-radius: 3px;
+  border-radius: 16px;
   background: #ffffff;
   padding: 11px 12px;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
 }
 
 .mobile-time-day-head span {
@@ -4033,7 +4034,7 @@ button.person-chip:focus-visible {
   gap: 4px;
   min-width: 0;
   border: 1px solid #d8e1ee;
-  border-radius: 3px;
+  border-radius: 12px;
   background: #ffffff;
   color: #111827;
   font: inherit;
@@ -4090,14 +4091,14 @@ button.person-chip:focus-visible {
 
 .mobile-time-picker-section.is-primary {
   border: 1px solid #d8e3ef;
-  border-radius: 3px;
+  border-radius: 16px;
   background: #f8fbff;
   padding: 9px;
 }
 
 .mobile-time-picker-section.is-secondary {
   border: 1px solid #e3e8ef;
-  border-radius: 3px;
+  border-radius: 14px;
   background: #ffffff;
   border-top: 1px solid #edf0f4;
   padding: 9px;
@@ -4134,7 +4135,7 @@ button.person-chip:focus-visible {
   align-items: center;
   justify-content: center;
   min-height: 22px;
-  border-radius: 2px;
+  border-radius: 999px;
   background: #eef3f8;
   color: #65738a;
   font-size: 0.72rem;
@@ -4154,7 +4155,7 @@ button.person-chip:focus-visible {
 .mobile-time-site-action {
   min-height: 38px;
   border: 1px solid #143c6d;
-  border-radius: 2px;
+  border-radius: 10px;
   background: #143c6d;
   color: #ffffff;
   font: inherit;
@@ -4192,7 +4193,7 @@ button.person-chip:focus-visible {
 
 .mobile-time-picker-empty {
   margin: 0;
-  border-radius: 2px;
+  border-radius: 10px;
   background: #f5f7fa;
   padding: 8px 9px;
 }
@@ -4614,9 +4615,10 @@ button.person-chip:focus-visible {
   display: grid;
   gap: 7px;
   border: 1px solid #d8e1ee;
-  border-radius: 3px;
+  border-radius: 14px;
   background: #ffffff;
   padding: 9px;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
 }
 
 .mobile-time-day-entries-heading {
@@ -4638,7 +4640,7 @@ button.person-chip:focus-visible {
   align-items: center;
   justify-content: center;
   min-height: 22px;
-  border-radius: 2px;
+  border-radius: 999px;
   background: #eef3f8;
   color: #65738a;
   font-size: 0.72rem;
@@ -4662,7 +4664,7 @@ button.person-chip:focus-visible {
   gap: 2px;
   width: 100%;
   border: 1px solid #d8e1ee;
-  border-radius: 3px;
+  border-radius: 12px;
   background: #ffffff;
   color: #111827;
   font: inherit;
