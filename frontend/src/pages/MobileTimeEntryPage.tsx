@@ -64,7 +64,7 @@ type TimeOverlapConflict = {
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const BREAK_THRESHOLD_MINUTES = 510;
-const BREAK_OPTION_MINUTES = [0, 15, 30, 45, 60];
+const BREAK_OPTION_MINUTES = [0, 15, 30, 45, 60, 90];
 const TIME_PICKER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const TIME_PICKER_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
 
@@ -696,10 +696,10 @@ export function MobileTimeEntryPage() {
                     <button
                       className="mobile-time-summary-card mobile-time-break-card"
                       type="button"
-                      onClick={() => setIsBreakPickerOpen((current) => !current)}
+                      onClick={() => setIsBreakPickerOpen(true)}
                     >
                       <span>{form.breakMinutesOverride === null ? "Pause automatisch" : "Pause manuell"}</span>
-                      <strong>{breakMinutes !== null ? formatHoursFromMinutes(breakMinutes) : "-"}</strong>
+                      <strong>{breakMinutes !== null ? formatBreakHoursFromMinutes(breakMinutes) : "-"}</strong>
                     </button>
                     <div>
                       <span>Arbeitszeit netto</span>
@@ -710,41 +710,6 @@ export function MobileTimeEntryPage() {
                       <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
                     </div>
                   </div>
-                  {isBreakPickerOpen ? (
-                    <div className="mobile-time-break-picker" aria-label="Pause auswählen">
-                      {BREAK_OPTION_MINUTES.map((minutes) => {
-                        const isDisabled = grossMinutes !== null && minutes > grossMinutes;
-                        const isActive = breakMinutes === minutes;
-                        return (
-                          <button
-                            className={isActive ? "is-active" : ""}
-                            disabled={isDisabled}
-                            key={minutes}
-                            type="button"
-                            onClick={() => {
-                              setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: minutes }));
-                              setFormError(null);
-                              setTimeConflict(null);
-                            }}
-                          >
-                            {minutes} min
-                          </button>
-                        );
-                      })}
-                      <button
-                        className={form.breakMinutesOverride === null ? "is-active" : ""}
-                        type="button"
-                        onClick={() => {
-                          setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: null }));
-                          setFormError(null);
-                          setTimeConflict(null);
-                        }}
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  ) : null}
-
                   {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
                   {breakValidationMessage ? <p className="form-error">{breakValidationMessage}</p> : null}
                   {formError ? <p className="form-error">{formError}</p> : null}
@@ -786,6 +751,70 @@ export function MobileTimeEntryPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          ) : null}
+
+          {isBreakPickerOpen && sheetMode !== "closed" ? (
+            <div
+              className="mobile-time-break-modal-backdrop"
+              role="presentation"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsBreakPickerOpen(false);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div
+                className="mobile-time-break-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mobile-time-break-modal-title"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <div className="mobile-time-break-modal-head">
+                  <span>Pause</span>
+                  <h2 id="mobile-time-break-modal-title">Pause anpassen</h2>
+                  <p>{form.breakMinutesOverride === null ? "Automatischer Vorschlag aktiv." : "Manueller Pausenwert aktiv."}</p>
+                </div>
+                <div className="mobile-time-break-modal-options" aria-label="Pause auswählen">
+                  {BREAK_OPTION_MINUTES.map((minutes) => {
+                    const isDisabled = grossMinutes !== null && minutes > grossMinutes;
+                    const isActive = breakMinutes === minutes && form.breakMinutesOverride !== null;
+                    return (
+                      <button
+                        className={isActive ? "is-active" : ""}
+                        disabled={isDisabled}
+                        key={minutes}
+                        type="button"
+                        onClick={() => {
+                          setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: minutes }));
+                          setFormError(null);
+                          setTimeConflict(null);
+                          setIsBreakPickerOpen(false);
+                        }}
+                      >
+                        {formatBreakHoursFromMinutes(minutes)}
+                      </button>
+                    );
+                  })}
+                  <button
+                    className={form.breakMinutesOverride === null ? "is-active" : ""}
+                    type="button"
+                    onClick={() => {
+                      setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: null }));
+                      setFormError(null);
+                      setTimeConflict(null);
+                      setIsBreakPickerOpen(false);
+                    }}
+                  >
+                    Auto
+                  </button>
+                </div>
+                <div className="mobile-time-break-modal-actions">
+                  <button type="button" onClick={() => setIsBreakPickerOpen(false)}>Abbrechen</button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -1076,6 +1105,18 @@ function calculateNetMinutes(startTime: string, endTime: string, breakMinutesOve
     return null;
   }
   return Math.max(grossMinutes - breakMinutes, 0);
+}
+
+function formatBreakHoursFromMinutes(minutes: number): string {
+  if (minutes === 0) {
+    return "0 h";
+  }
+  const hours = minutes / 60;
+  const fractionDigits = Number.isInteger(hours) || minutes % 30 === 0 ? 1 : 2;
+  return `${hours.toLocaleString("de-DE", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })} h`;
 }
 
 function getBreakValidationMessage(grossMinutes: number | null, breakMinutes: number | null): string | null {
