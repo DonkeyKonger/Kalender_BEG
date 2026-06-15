@@ -114,6 +114,13 @@ type TimeReviewDiagnosticRow = {
   end: string;
   total: string;
 };
+type LocationReviewDiagnosticRow = {
+  source: string;
+  siteName: string;
+  siteNumber: string;
+  location: string;
+  note: string;
+};
 type TimeReviewPerfApiCall = {
   name: string;
   durationMs: number;
@@ -247,6 +254,7 @@ export function TimeEntriesPage() {
   const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
+  const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
@@ -429,6 +437,7 @@ export function TimeEntriesPage() {
 
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
+    setLocationReviewDiagnosticEntry(null);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -449,17 +458,18 @@ export function TimeEntriesPage() {
   }, [timeReviewDiagnosticEntry]);
 
   useEffect(() => {
-    if (!timeReviewDiagnosticEntry) {
+    if (!timeReviewDiagnosticEntry && !locationReviewDiagnosticEntry) {
       return;
     }
     function closeOnEscape(event: KeyboardEvent): void {
       if (event.key === "Escape") {
         setTimeReviewDiagnosticEntry(null);
+        setLocationReviewDiagnosticEntry(null);
       }
     }
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [timeReviewDiagnosticEntry]);
+  }, [locationReviewDiagnosticEntry, timeReviewDiagnosticEntry]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
@@ -1266,7 +1276,12 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.end_time)}</div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.break_minutes, "minutes")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
-                        <div role="cell">{renderTimeReviewCheckMark(check.locationCheck)}</div>
+                        <div role="cell">
+                          {renderTimeReviewCheckMark(check.locationCheck, {
+                            onWarningClick: () => setLocationReviewDiagnosticEntry(check.entry),
+                            warningLabel: "Ort-Diagnose öffnen",
+                          })}
+                        </div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.timeCheck, {
                             onWarningClick: () => setTimeReviewDiagnosticEntry(check.entry),
@@ -1718,6 +1733,55 @@ export function TimeEntriesPage() {
               >
                 {isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {locationReviewDiagnosticEntry && (
+        <div
+          className="time-review-diagnostic-backdrop"
+          role="presentation"
+          onClick={() => setLocationReviewDiagnosticEntry(null)}
+        >
+          <div
+            className="time-review-diagnostic-popover is-location"
+            role="dialog"
+            aria-label="Ort-Diagnose"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="time-review-diagnostic-head">
+              <div>
+                <span>Diagnose</span>
+                <h4>Ort-Prüfung</h4>
+              </div>
+              <button
+                className="time-review-diagnostic-close"
+                type="button"
+                aria-label="Diagnose schließen"
+                onClick={() => setLocationReviewDiagnosticEntry(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="time-review-diagnostic-table" role="table" aria-label="Ort-Diagnosewerte">
+              <div className="time-review-diagnostic-row is-head is-location" role="row">
+                <span role="columnheader">Quelle</span>
+                <span role="columnheader">Erkannte / eingetragene Baustelle</span>
+                <span role="columnheader">Baustellennummer</span>
+                <span role="columnheader">Ort / Adresse</span>
+                <span role="columnheader">Hinweis</span>
+              </div>
+              {locationReviewDiagnosticRows(locationReviewDiagnosticEntry, sites).map((row) => (
+                <div className="time-review-diagnostic-row is-location" key={row.source} role="row">
+                  <strong role="cell">{row.source}</strong>
+                  <span role="cell">{row.siteName}</span>
+                  <span role="cell">{row.siteNumber}</span>
+                  <span role="cell">{row.location}</span>
+                  <span role="cell">{row.note}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -2728,15 +2792,19 @@ function classifyTimeReviewTimeCheck(entry: TimeEntry, options: { hasMultipleEnt
   return Math.abs(gpsMinutes - manualMinutes) <= GPS_TIME_TOLERANCE_MINUTES ? "ok" : "warning";
 }
 
-function renderTimeReviewCheckMark(state: TimeReviewCheckState, options: { onWarningClick?: () => void } = {}) {
+function renderTimeReviewCheckMark(
+  state: TimeReviewCheckState,
+  options: { onWarningClick?: () => void; warningLabel?: string } = {},
+) {
   const label = timeReviewCheckLabel(state);
   if (state === "warning" && options.onWarningClick) {
+    const warningLabel = options.warningLabel ?? "Arbeitszeit-Diagnose öffnen";
     return (
       <button
         className="time-review-check-mark is-warning is-clickable"
         type="button"
-        aria-label="Arbeitszeit-Diagnose öffnen"
-        title="Arbeitszeit-Diagnose öffnen"
+        aria-label={warningLabel}
+        title={warningLabel}
         onClick={options.onWarningClick}
       >
         !
@@ -2782,6 +2850,60 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
       total: "-",
     },
   ];
+}
+
+function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
+  const manualSite = findSiteSummary(sites, entry.site_id);
+  const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
+  return [
+    {
+      source: "Eingetragene Monteursbaustelle",
+      siteName: displayDiagnosticValue(entry.site_name),
+      siteNumber: displayDiagnosticValue(entry.site_number),
+      location: siteLocationLabel(manualSite),
+      note: "Aus Zeitmeldung",
+    },
+    {
+      source: "Erkannte Handy-GPS-Baustelle",
+      siteName: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_name) : "-",
+      siteNumber: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_number) : "-",
+      location: hasGpsSiteMatch(entry) ? siteLocationLabel(gpsSite) : "-",
+      note: hasGpsSiteMatch(entry) ? "Baustellen-Match durch Handy-GPS" : "Kein Baustellen-Match erkannt",
+    },
+    {
+      source: "Erkannte Fahrzeug-GPS-Baustelle",
+      siteName: "-",
+      siteNumber: "-",
+      location: "-",
+      note: "Kein Fahrzeug-GPS-Baustellen-Match vorhanden",
+    },
+  ];
+}
+
+function hasGpsSiteMatch(entry: TimeEntry): boolean {
+  return (
+    entry.gps_detected_location_type === "site"
+    && Boolean(entry.gps_detected_site_id || entry.gps_detected_site_name || entry.gps_detected_site_number)
+  );
+}
+
+function findSiteSummary(sites: SiteSummary[], siteId: number | null): SiteSummary | null {
+  if (siteId === null) {
+    return null;
+  }
+  return sites.find((site) => site.id === siteId) ?? null;
+}
+
+function siteLocationLabel(site: SiteSummary | null): string {
+  if (!site) {
+    return "-";
+  }
+  return [site.location, site.city].filter(Boolean).join(" · ") || "-";
+}
+
+function displayDiagnosticValue(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed || "-";
 }
 
 function renderPayrollReviewMark(

@@ -9825,6 +9825,10 @@ button.person-chip:focus-visible {
   box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
 }
 
+.time-review-diagnostic-popover.is-location {
+  width: min(820px, calc(100vw - 32px));
+}
+
 .time-review-diagnostic-head {
   display: flex;
   align-items: flex-start;
@@ -9879,6 +9883,15 @@ button.person-chip:focus-visible {
   padding: 8px 10px;
   color: #334155;
   font-size: 0.76rem;
+}
+
+.time-review-diagnostic-row.is-location {
+  grid-template-columns:
+    minmax(150px, 1.1fr)
+    minmax(160px, 1.3fr)
+    minmax(92px, 0.7fr)
+    minmax(140px, 1.1fr)
+    minmax(150px, 1.2fr);
 }
 
 .time-review-diagnostic-row:last-child {
