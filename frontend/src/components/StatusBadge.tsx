@@ -38,7 +38,7 @@ export const siteStatusLabels: Record<SiteStatus, string> = {
 export const roleLabels: Record<UserRole, string> = {
   admin: "Admin",
   project_manager: "Projektleiter",
-  office: "Buero",
+  office: "Büro",
   monteur: "Monteur",
 };
 
