@@ -250,6 +250,7 @@ export function TimeEntriesPage() {
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
+  const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
@@ -940,6 +941,31 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function downloadSelectedReviewWeekXlsx(): Promise<void> {
+    if (!selectedReviewWorker || !selectedReviewWorker.isReviewed || isDownloadingReviewWeekXlsx) {
+      return;
+    }
+    setIsDownloadingReviewWeekXlsx(true);
+    setReviewHoursDownloadError(null);
+    try {
+      const blob = await api.weeklyWorkerTimeEntriesXlsx({
+        personId: selectedReviewWorker.personId,
+        weekStart: reviewWeekRange.start,
+      });
+      const filename = [
+        "Lohnpruefung",
+        `KW${String(selectedReviewWeek.week).padStart(2, "0")}`,
+        String(selectedReviewWeek.year),
+        sanitizeFilenamePart(selectedReviewWorker.personName),
+      ].filter(Boolean).join("_");
+      downloadBlobFile(blob, `${filename}.xlsx`);
+    } catch (requestError) {
+      setReviewHoursDownloadError(readApiError(requestError, "Monteurwochen-Excel konnte nicht erstellt werden."));
+    } finally {
+      setIsDownloadingReviewWeekXlsx(false);
+    }
+  }
+
   async function markSelectedReviewWeekReviewed(): Promise<void> {
     if (!canManageTimeEntries || !selectedReviewWorker || markingReviewWeekPersonId !== null || selectedReviewWorker.isReviewed) {
       return;
@@ -1196,18 +1222,30 @@ export function TimeEntriesPage() {
                   ))}
                 </div>
                 <div className="time-review-worker-detail-actions">
-                  <button
-                    className="icon-button secondary"
-                    type="button"
-                    disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                    onClick={() => void markSelectedReviewWeekReviewed()}
-                  >
-                    {selectedReviewWorker.isReviewed
-                      ? "Monteurwoche geprüft"
-                      : markingReviewWeekPersonId === selectedReviewWorker.personId
-                        ? "Monteurwoche wird geprüft..."
-                        : "Monteurwoche als geprüft markieren"}
-                  </button>
+                  <div className="time-review-worker-detail-action-stack">
+                    <button
+                      className="icon-button secondary"
+                      type="button"
+                      disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                      onClick={() => void markSelectedReviewWeekReviewed()}
+                    >
+                      {selectedReviewWorker.isReviewed
+                        ? "Monteurwoche geprüft"
+                        : markingReviewWeekPersonId === selectedReviewWorker.personId
+                          ? "Monteurwoche wird geprüft..."
+                          : "Monteurwoche als geprüft markieren"}
+                    </button>
+                    {selectedReviewWorker.isReviewed && (
+                      <button
+                        className="icon-button secondary time-review-week-xlsx-button"
+                        type="button"
+                        disabled={isDownloadingReviewWeekXlsx}
+                        onClick={() => void downloadSelectedReviewWeekXlsx()}
+                      >
+                        {isDownloadingReviewWeekXlsx ? "Excel wird erstellt..." : "Monteurwoche Downloaden (Excel)"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : timeReviewWorkers.length > 0 ? (
@@ -3089,6 +3127,15 @@ function calculateExportPreviewSummary(rows: ExportPreviewRow[]): ExportPreviewS
     exportable: 0,
     notExportable: 0,
   });
+}
+
+function sanitizeFilenamePart(value: string): string {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|.]+/g, " ")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function downloadBlobFile(blob: Blob, filename: string): void {

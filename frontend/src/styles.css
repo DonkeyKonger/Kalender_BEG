@@ -9792,6 +9792,12 @@ button.person-chip:focus-visible {
   justify-content: flex-end;
 }
 
+.time-review-worker-detail-action-stack {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
 .time-review-worker-detail-actions .icon-button {
   min-height: 30px;
   border-radius: 0;

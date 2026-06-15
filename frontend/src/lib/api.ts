@@ -869,6 +869,14 @@ export const api = {
     return requestBlob(`/exports/time-entries/weekly-worker-hours.pdf?${search.toString()}`);
   },
 
+  async weeklyWorkerTimeEntriesXlsx(params: { personId: number; weekStart: string }): Promise<Blob> {
+    const search = new URLSearchParams({
+      person_id: String(params.personId),
+      week_start: params.weekStart,
+    });
+    return requestBlob(`/exports/time-entries/weekly-worker-xlsx?${search.toString()}`);
+  },
+
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`);

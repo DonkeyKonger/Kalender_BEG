@@ -68,6 +68,24 @@ def weekly_worker_hours_pdf(
     return pdf_response(content, filename)
 
 
+@router.get("/time-entries/weekly-worker-xlsx")
+def weekly_worker_time_entries_xlsx(
+    person_id: int = Query(gt=0),
+    week_start: date = Query(),
+    current_user=Depends(CAN_EXPORT),
+    db: Session = Depends(get_db),
+) -> Response:
+    normalized_start = week_start - timedelta(days=week_start.weekday())
+    content = TimeEntryXlsxExportService(db).weekly_worker_export(
+        person_id=person_id,
+        week_start=normalized_start,
+        current_user=current_user,
+    )
+    iso_week = normalized_start.isocalendar()
+    filename = f"lohnpruefung_kw{iso_week.week:02d}_{iso_week.year}_person_{person_id}.xlsx"
+    return xlsx_response(content, filename)
+
+
 def pdf_response(content: bytes, filename: str) -> Response:
     return Response(
         content=content,
