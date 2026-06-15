@@ -424,7 +424,7 @@ export function PersonsPage() {
                   onClick={() => void deletePerson(selectedPerson.id)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Loescht..." : "Loeschen"}</span>
+                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
@@ -456,7 +456,7 @@ export function PersonsPage() {
                   onClick={() => void deletePerson(selectedPerson.id)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Loescht..." : "Loeschen"}</span>
+                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
                 </button>
               )}
               <button className="icon-button secondary" type="button" onClick={closeDrawer}>
