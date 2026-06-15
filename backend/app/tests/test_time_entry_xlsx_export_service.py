@@ -19,13 +19,20 @@ def test_weekly_worker_xlsx_uses_polished_table_layout():
         names = set(workbook.namelist())
         worksheet = workbook.read("xl/worksheets/sheet1.xml").decode()
         table = workbook.read("xl/tables/table1.xml").decode()
+        drawing = workbook.read("xl/drawings/drawing1.xml").decode()
+        styles = workbook.read("xl/styles.xml").decode()
 
     assert "xl/tables/table1.xml" in names
     assert "xl/drawings/drawing1.xml" in names
     assert "xl/media/beg_logo_icon.png" in names
     assert "LohnpruefungMonteurwoche" in table
+    assert "TableStyleLight9" in table
     assert 'ref="A8:L15"' in table
     assert 'topLeftCell="A9"' in worksheet
     assert 'orientation="landscape"' in worksheet
     assert 'fitToWidth="1"' in worksheet
     assert 'ht="32" customHeight="1"' in worksheet
+    assert '<mergeCell ref="J1:L6"/>' in worksheet
+    assert '<xdr:oneCellAnchor>' in drawing
+    assert '<xdr:ext cx="920000" cy="920000"/>' in drawing
+    assert 'fgColor rgb="FFE8EEF5"' in styles
