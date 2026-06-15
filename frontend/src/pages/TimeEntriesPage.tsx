@@ -1328,13 +1328,14 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
-                            onWarningClick: () => setLocationReviewDiagnosticEntry(check.entry),
-                            warningLabel: "Ort-Diagnose öffnen",
+                            onClick: () => setLocationReviewDiagnosticEntry(check.entry),
+                            label: "Ort-Diagnose öffnen",
                           })}
                         </div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.timeCheck, {
-                            onWarningClick: () => setTimeReviewDiagnosticEntry(check.entry),
+                            onClick: () => setTimeReviewDiagnosticEntry(check.entry),
+                            label: "Arbeitszeit-Diagnose öffnen",
                           })}
                         </div>
                         <div role="cell">
@@ -2869,20 +2870,21 @@ function classifyTimeReviewTimeCheck(entry: TimeEntry, options: { hasMultipleEnt
 
 function renderTimeReviewCheckMark(
   state: TimeReviewCheckState,
-  options: { onWarningClick?: () => void; warningLabel?: string } = {},
+  options: { onClick?: () => void; label?: string; onWarningClick?: () => void; warningLabel?: string } = {},
 ) {
   const label = timeReviewCheckLabel(state);
-  if (state === "warning" && options.onWarningClick) {
-    const warningLabel = options.warningLabel ?? "Arbeitszeit-Diagnose öffnen";
+  const clickHandler = options.onClick ?? (state === "warning" ? options.onWarningClick : undefined);
+  if (clickHandler) {
+    const actionLabel = options.label ?? options.warningLabel ?? "Diagnose öffnen";
     return (
       <button
-        className="time-review-check-mark is-warning is-clickable"
+        className={`time-review-check-mark is-${state} is-clickable`}
         type="button"
-        aria-label={warningLabel}
-        title={warningLabel}
-        onClick={options.onWarningClick}
+        aria-label={`${actionLabel}: ${label}`}
+        title={`${actionLabel}: ${label}`}
+        onClick={clickHandler}
       >
-        !
+        {state === "ok" ? "✓" : state === "warning" ? "!" : "-"}
       </button>
     );
   }

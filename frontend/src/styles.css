@@ -9789,10 +9789,24 @@ button.person-chip:focus-visible {
 
 .time-review-check-mark.is-clickable:hover,
 .time-review-check-mark.is-clickable:focus-visible {
+  border-color: #9bbce0;
+  background: #f8fbff;
+  outline: 1px solid #9bbce0;
+  outline-offset: 1px;
+}
+
+.time-review-check-mark.is-ok.is-clickable:hover,
+.time-review-check-mark.is-ok.is-clickable:focus-visible {
+  border-color: #7fbf91;
+  background: #eaf8ee;
+  outline-color: #7fbf91;
+}
+
+.time-review-check-mark.is-warning.is-clickable:hover,
+.time-review-check-mark.is-warning.is-clickable:focus-visible {
   border-color: #d79034;
   background: #fff1d6;
-  outline: 1px solid #d79034;
-  outline-offset: 1px;
+  outline-color: #d79034;
 }
 
 .time-review-payroll-mark {
