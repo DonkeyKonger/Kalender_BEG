@@ -593,21 +593,6 @@ function PersonFields({
     };
   }, [addressSearch, selectedGeocodeResult]);
 
-  function markAddressUnchecked(values: Partial<PersonCreate>): Partial<PersonCreate> {
-    return {
-      ...values,
-      address_formatted: null,
-      address_latitude: null,
-      address_longitude: null,
-      address_location_status: "unchecked",
-    };
-  }
-
-  function updateManualAddress(values: Partial<PersonCreate>) {
-    setSelectedGeocodeResult(null);
-    onChange(markAddressUnchecked(values));
-  }
-
   function applyGeocodeResult(result: PersonGeocodeSearchResult) {
     const selectedValues: Partial<PersonCreate> = {
       address_postal_code: result.postal_code,
@@ -748,53 +733,13 @@ function PersonFields({
             </div>
           )}
         </label>
-        {isCreateForm ? (
-          <div className="site-address-display-grid person-address-display-grid">
-            <PersonAddressDisplayItem label="PLZ" value={draft.address_postal_code} />
-            <PersonAddressDisplayItem label="Stadt" value={draft.address_city} />
-            <PersonAddressDisplayItem label="Strasse" value={draft.address_street} />
-            <PersonAddressDisplayItem label="Hausnummer" value={draft.address_house_number} />
-            <PersonAddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
-          </div>
-        ) : (
-          <>
-            <label className="address-postal-field">
-              <span>PLZ</span>
-              <input
-                value={draft.address_postal_code ?? ""}
-                onChange={(event) => updateManualAddress({ address_postal_code: event.target.value || null })}
-              />
-            </label>
-            <label className="address-city-field">
-              <span>Stadt</span>
-              <input
-                value={draft.address_city ?? ""}
-                onChange={(event) => updateManualAddress({ address_city: event.target.value || null })}
-              />
-            </label>
-            <label className="address-street-field">
-              <span>Strasse</span>
-              <input
-                value={draft.address_street ?? ""}
-                onChange={(event) => updateManualAddress({ address_street: event.target.value || null })}
-              />
-            </label>
-            <label className="address-house-number-field">
-              <span>Hausnummer</span>
-              <input
-                value={draft.address_house_number ?? ""}
-                onChange={(event) => updateManualAddress({ address_house_number: event.target.value || null })}
-              />
-            </label>
-            <label className="address-extra-field address-field">
-              <span>Adresszusatz / Bereich</span>
-              <input
-                value={draft.address_extra ?? ""}
-                onChange={(event) => updateManualAddress({ address_extra: event.target.value || null })}
-              />
-            </label>
-          </>
-        )}
+        <div className="site-address-display-grid person-address-display-grid">
+          <PersonAddressDisplayItem label="PLZ" value={draft.address_postal_code} />
+          <PersonAddressDisplayItem label="Stadt" value={draft.address_city} />
+          <PersonAddressDisplayItem label="Strasse" value={draft.address_street} />
+          <PersonAddressDisplayItem label="Hausnummer" value={draft.address_house_number} />
+          <PersonAddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
+        </div>
       </section>
 
       <label className="notes-field">
