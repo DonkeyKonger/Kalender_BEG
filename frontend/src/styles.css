@@ -16095,7 +16095,7 @@ button.person-chip:focus-visible {
 
 .site-detail-page.is-project-file-workspace .project-record-subtabs button {
   min-height: 28px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--pf-muted-surface);
   color: #475569;
   font-size: 0.78rem;
@@ -16123,6 +16123,10 @@ button.person-chip:focus-visible {
   background: var(--pf-surface);
   padding: 14px 16px;
   box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .project-record-toolbar {
+  border-radius: 0;
 }
 
 .site-detail-page.is-project-file-workspace .project-record-toolbar h2 {
@@ -16628,7 +16632,7 @@ button.person-chip:focus-visible {
 
 .site-detail-page.is-measurement-review-workspace .project-record-subtabs button {
   min-height: 28px;
-  border-radius: 4px;
+  border-radius: 0;
   background: #f1f5f9;
   color: #475569;
   font-size: 0.78rem;
