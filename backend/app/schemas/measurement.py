@@ -47,10 +47,26 @@ class MeasurementItemRead(BaseModel):
     minutes_per_unit: Decimal | None
     list_minutes_total: Decimal | None
     is_nep: bool
+    is_free_position: bool = False
     sort_order: int
     measurement_base: MeasurementBaseRead | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class MobileMeasurementFreeItemCreate(BaseModel):
+    position: str | None = Field(default=None, max_length=80)
+    description: str = Field(..., min_length=1, max_length=2000)
+    unit: str = Field(..., min_length=1, max_length=40)
+    quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    area_or_comment: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("position", "description", "unit", "area_or_comment", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class MeasurementEntryCreate(BaseModel):

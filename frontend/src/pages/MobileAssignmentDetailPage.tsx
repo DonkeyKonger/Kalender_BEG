@@ -54,6 +54,13 @@ function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
 type MobileDetailActionKey = MobileDetailTab | "timesheet";
 type MeasurementViewMode = "list" | "table";
+type MeasurementFreePositionDraft = {
+  position: string;
+  description: string;
+  unit: string;
+  quantity: string;
+  areaOrComment: string;
+};
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
 const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
@@ -62,6 +69,13 @@ const PDF_MAX_CANVAS_PIXELS = 8_000_000;
 const MOBILE_DOCUMENT_PHOTO_LIMIT = 5;
 const MAX_PHOTO_DIMENSION = 1600;
 const PHOTO_JPEG_QUALITY = 0.8;
+const EMPTY_MEASUREMENT_FREE_POSITION_DRAFT: MeasurementFreePositionDraft = {
+  position: "",
+  description: "",
+  unit: "Stck",
+  quantity: "0,00",
+  areaOrComment: "",
+};
 
 type PdfContentSize = {
   width: number;
@@ -2692,6 +2706,7 @@ function MobileMeasurementTab({
   const [batches, setBatches] = useState<MobileMeasurementBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<MobileMeasurementBatch | null>(null);
   const [isBatchPositionOverviewOpen, setIsBatchPositionOverviewOpen] = useState(false);
+  const [isFreePositionFormOpen, setIsFreePositionFormOpen] = useState(false);
   const [items, setItems] = useState<MobileMeasurementItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MobileMeasurementItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -2702,6 +2717,8 @@ function MobileMeasurementTab({
   const [formComment, setFormComment] = useState("");
   const [formQuantity, setFormQuantity] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [freePositionDraft, setFreePositionDraft] = useState<MeasurementFreePositionDraft>(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+  const [freePositionError, setFreePositionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
   const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [workerSignatureBatch, setWorkerSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
@@ -2788,8 +2805,11 @@ function MobileMeasurementTab({
     setSelectedBatch(null);
     setSelectedItem(null);
     setIsBatchPositionOverviewOpen(false);
+    setIsFreePositionFormOpen(false);
     setItems([]);
     setError(null);
+    setFreePositionError(null);
+    setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
   }
 
   async function openMeasurementBatchPdf(batch: MobileMeasurementBatch): Promise<void> {
@@ -2863,6 +2883,51 @@ function MobileMeasurementTab({
     }
   }
 
+  async function handleCreateFreePosition(batch: MobileMeasurementBatch): Promise<void> {
+    const description = freePositionDraft.description.trim();
+    const unit = freePositionDraft.unit.trim();
+    const quantity = parseOptionalMeasurementQuantity(freePositionDraft.quantity);
+    const areaOrComment = normalizeMeasurementArea(freePositionDraft.areaOrComment);
+
+    if (!description) {
+      setFreePositionError("Bitte Kurztext oder Leistungsbeschreibung eintragen.");
+      return;
+    }
+    if (!unit) {
+      setFreePositionError("Bitte Einheit eintragen.");
+      return;
+    }
+    if (quantity === null || quantity < 0) {
+      setFreePositionError("Bitte eine gültige Menge ab 0,00 eintragen.");
+      return;
+    }
+
+    setIsSaving(true);
+    setFreePositionError(null);
+    try {
+      const createdItem = await api.createMobileMeasurementFreeItem(assignment.id, batch.id, {
+        position: freePositionDraft.position.trim() || null,
+        description,
+        unit,
+        quantity,
+        area_or_comment: areaOrComment || null,
+      });
+      await loadBatches(batch.id);
+      await loadBatchItems(batch);
+      setItems((currentItems) => (
+        currentItems.some((item) => item.id === createdItem.id) ? currentItems : [...currentItems, createdItem]
+      ));
+      setSelectedItem(null);
+      setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+      setIsFreePositionFormOpen(false);
+      setSearchTerm("");
+    } catch (requestError) {
+      setFreePositionError(readApiError(requestError, "Position konnte nicht erstellt werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const filteredItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
     return items.filter((item) => {
@@ -2878,6 +2943,31 @@ function MobileMeasurementTab({
     onEntryModeChange?.(Boolean(selectedBatch && selectedItem));
     return () => onEntryModeChange?.(false);
   }, [onEntryModeChange, selectedBatch, selectedItem]);
+
+  if (selectedBatch && isFreePositionFormOpen) {
+    return (
+      <MeasurementFreePositionForm
+        draft={freePositionDraft}
+        error={freePositionError}
+        isSaving={isSaving}
+        onBack={() => {
+          setIsFreePositionFormOpen(false);
+          setFreePositionError(null);
+          setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+        }}
+        onCancel={() => {
+          setIsFreePositionFormOpen(false);
+          setFreePositionError(null);
+          setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+        }}
+        onChange={(patch) => {
+          setFreePositionDraft((currentDraft) => ({ ...currentDraft, ...patch }));
+          setFreePositionError(null);
+        }}
+        onSave={() => void handleCreateFreePosition(selectedBatch)}
+      />
+    );
+  }
 
   if (selectedBatch && selectedItem) {
     return (
@@ -3058,8 +3148,14 @@ function MobileMeasurementTab({
         searchTerm={searchTerm}
         onBack={() => {
           setIsBatchPositionOverviewOpen(false);
+          setIsFreePositionFormOpen(false);
           setSelectedItem(null);
           setError(null);
+        }}
+        onCreatePosition={() => {
+          setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+          setFreePositionError(null);
+          setIsFreePositionFormOpen(true);
         }}
         viewMode={viewMode}
         onViewModeChange={updateViewMode}
@@ -3768,6 +3864,7 @@ function MeasurementBatchDetail({
   searchTerm,
   viewMode,
   onBack,
+  onCreatePosition,
   onViewModeChange,
   onSearchChange,
   onSelectItem,
@@ -3780,6 +3877,7 @@ function MeasurementBatchDetail({
   searchTerm: string;
   viewMode: MeasurementViewMode;
   onBack: () => void;
+  onCreatePosition: () => void;
   onViewModeChange: (mode: MeasurementViewMode) => void;
   onSearchChange: (value: string) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
@@ -3790,6 +3888,10 @@ function MeasurementBatchDetail({
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
           <span>Aufmaß</span>
+        </button>
+        <button className="mobile-measurement-create-position-button" type="button" onClick={onCreatePosition}>
+          <Plus aria-hidden="true" size={15} />
+          <span>Position erstellen</span>
         </button>
       </div>
       {batch.is_locked_for_worker ? (
@@ -3830,7 +3932,10 @@ function MeasurementBatchDetail({
                 onClick={() => onSelectItem(item)}
               >
                 <div className="mobile-measurement-row-top">
-                  <strong className="mobile-measurement-row-position">{item.position}</strong>
+                  <span className="mobile-measurement-row-position-wrap">
+                    <strong className="mobile-measurement-row-position">{item.position}</strong>
+                    {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
+                  </span>
                   <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
                 </div>
                 <span className="mobile-measurement-row-description">{item.description}</span>
@@ -3842,6 +3947,107 @@ function MeasurementBatchDetail({
       {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
         <MobileMeasurementTable items={items} onSelectItem={onSelectItem} />
       ) : null}
+    </div>
+  );
+}
+
+function MeasurementFreePositionForm({
+  draft,
+  error,
+  isSaving,
+  onBack,
+  onCancel,
+  onChange,
+  onSave,
+}: {
+  draft: MeasurementFreePositionDraft;
+  error: string | null;
+  isSaving: boolean;
+  onBack: () => void;
+  onCancel: () => void;
+  onChange: (patch: Partial<MeasurementFreePositionDraft>) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-free-position-page">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Positionen</span>
+        </button>
+      </div>
+
+      <header className="mobile-entry-head">
+        <div>
+          <span>Aufmaß</span>
+          <h1>Position erstellen</h1>
+          <p>Freie Zusatzposition nur für dieses Aufmaß anlegen.</p>
+        </div>
+      </header>
+
+      <div className="mobile-measurement-form mobile-measurement-free-position-form">
+        <label>
+          <span>Positionsnummer / Kennung</span>
+          <input
+            type="text"
+            value={draft.position}
+            onChange={(event) => onChange({ position: event.target.value })}
+            placeholder="optional, z. B. FREI-1"
+          />
+        </label>
+
+        <label>
+          <span>Kurztext / Leistungsbeschreibung</span>
+          <textarea
+            required
+            value={draft.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            placeholder="Leistung beschreiben"
+          />
+        </label>
+
+        <div className="mobile-measurement-form-grid">
+          <label>
+            <span>Einheit</span>
+            <select value={draft.unit} onChange={(event) => onChange({ unit: event.target.value })}>
+              <option value="m">m</option>
+              <option value="Stck">Stck</option>
+              <option value="h">h</option>
+              <option value="pauschal">pauschal</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Menge</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={draft.quantity}
+              onChange={(event) => onChange({ quantity: event.target.value })}
+              placeholder="0,00"
+            />
+          </label>
+        </div>
+
+        <label>
+          <span>Bereich / Kommentar</span>
+          <input
+            type="text"
+            value={draft.areaOrComment}
+            onChange={(event) => onChange({ areaOrComment: event.target.value })}
+            placeholder="optional, z. B. 2. OG"
+          />
+        </label>
+
+        {error ? <p className="form-error">{error}</p> : null}
+
+        <div className="mobile-form-actions mobile-measurement-free-position-actions">
+          <button className="secondary-action" type="button" onClick={onCancel} disabled={isSaving}>Abbrechen</button>
+          <button className="primary-action" type="button" onClick={onSave} disabled={isSaving}>
+            {isSaving ? "Speichert..." : "Position speichern"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3880,6 +4086,7 @@ function MobileMeasurementTable({
               <th className="measurement-matrix-position-heading" key={item.id}>
                 <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
                   {item.position}
+                  {item.is_free_position ? <span className="mobile-measurement-free-badge">frei</span> : null}
                 </button>
               </th>
             ))}
@@ -5006,6 +5213,15 @@ function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
 function getMeasurementEntryQuantity(entry: MeasurementEntry): number {
   const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
   return Number.isFinite(quantity) ? quantity : 0;
+}
+
+function parseOptionalMeasurementQuantity(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) {
+    return 0;
+  }
+  const quantity = Number(normalized);
+  return Number.isFinite(quantity) ? quantity : null;
 }
 
 function applyMeasurementQuantityKey(value: string, key: MeasurementQuantityKey): string {

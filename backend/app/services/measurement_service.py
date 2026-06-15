@@ -29,6 +29,7 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
+    MobileMeasurementFreeItemCreate,
     MeasurementTimeAnalysisExtraWorkTicketRead,
     MeasurementTimeAnalysisRead,
     MeasurementTimeAnalysisRowRead,
@@ -320,6 +321,96 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(entry)
         return self._build_entry(entry)
+
+    def create_mobile_free_item(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+        payload: MobileMeasurementFreeItemCreate,
+    ) -> MobileMeasurementItemRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.status != "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
+            )
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
+
+        description = " ".join(payload.description.split())
+        unit = payload.unit.strip()
+        if not description:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
+        if not unit:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
+        if payload.quantity < 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
+
+        position = payload.position.strip() if payload.position else ""
+        if position:
+            existing_position = self.db.scalar(
+                select(SiteMeasurementItem.id).where(
+                    SiteMeasurementItem.site_id == batch.site_id,
+                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    func.lower(SiteMeasurementItem.position) == position.lower(),
+                )
+            )
+            if existing_position is not None:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Diese Positionsnummer existiert in diesem Aufmaß bereits.",
+                )
+        else:
+            position = self._next_free_measurement_position(batch)
+
+        next_sort_order = (
+            self.db.scalar(
+                select(func.max(SiteMeasurementItem.sort_order)).where(
+                    SiteMeasurementItem.site_id == batch.site_id,
+                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                )
+            )
+            or 0
+        ) + 10
+
+        item = SiteMeasurementItem(
+            site_id=batch.site_id,
+            measurement_base_id=batch.measurement_base_id,
+            source_file_name=None,
+            source_project_number=None,
+            source_invoice_number=None,
+            source_customer_name=None,
+            position=position,
+            description=description,
+            list_quantity=None,
+            unit=unit,
+            minutes_per_unit=None,
+            list_minutes_total=None,
+            is_nep=False,
+            is_free_position=True,
+            sort_order=next_sort_order,
+        )
+        self.db.add(item)
+        self.db.flush()
+
+        if payload.quantity > 0:
+            comment = " ".join((payload.area_or_comment or "").split()) or "Allgemein"
+            entry = SiteMeasurementEntry(
+                measurement_batch_id=batch.id,
+                measurement_item_id=item.id,
+                site_id=item.site_id,
+                quantity=payload.quantity,
+                area_or_comment=comment,
+                status="saved",
+                created_by_user_id=current_user.id,
+            )
+            self.db.add(entry)
+
+        self.db.commit()
+        self.db.refresh(item)
+        return self._build_mobile_item(item, batch.id)
 
     def delete_mobile_entry(
         self, *, assignment_id: int, batch_id: int, entry_id: int, current_user: User
@@ -1605,6 +1696,22 @@ class MeasurementService:
         )
         return snapshot
 
+    def _next_free_measurement_position(self, batch: SiteMeasurementBatch) -> str:
+        existing_positions = set(
+            self.db.scalars(
+                select(SiteMeasurementItem.position).where(
+                    SiteMeasurementItem.site_id == batch.site_id,
+                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                )
+            ).all()
+        )
+        index = 1
+        while True:
+            candidate = f"FREI-{index}"
+            if candidate not in existing_positions:
+                return candidate
+            index += 1
+
     def _build_measurement_snapshot(
         self,
         *,
@@ -1706,6 +1813,7 @@ class MeasurementService:
             minutes_per_unit=item.minutes_per_unit,
             list_minutes_total=item.list_minutes_total,
             is_nep=item.is_nep,
+            is_free_position=item.is_free_position,
             sort_order=item.sort_order,
             measurement_base=self._build_measurement_base(item.measurement_base) if item.measurement_base else None,
             created_at=item.created_at,

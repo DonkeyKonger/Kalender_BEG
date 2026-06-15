@@ -26,6 +26,7 @@ from app.schemas.measurement import (
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
     MobileMeasurementBatchPhotoRead,
+    MobileMeasurementFreeItemCreate,
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
 )
@@ -654,6 +655,25 @@ def list_my_assignment_measurement_batch_items(
         assignment_id=assignment_id,
         batch_id=batch_id,
         current_user=current_user,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/items",
+    response_model=MobileMeasurementItemRead,
+)
+def create_my_assignment_measurement_free_item(
+    assignment_id: int,
+    batch_id: int,
+    payload: MobileMeasurementFreeItemCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementItemRead:
+    return MeasurementService(db).create_mobile_free_item(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

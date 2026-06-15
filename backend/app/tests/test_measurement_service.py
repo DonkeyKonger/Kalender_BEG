@@ -171,6 +171,84 @@ def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypat
     assert all_items[0].measurement_base_id != all_items[1].measurement_base_id
 
 
+def test_mobile_free_measurement_item_is_stored_on_batch_base():
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementEntry
+    from app.models.user import User
+    from app.schemas.measurement import MobileMeasurementFreeItemCreate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 6, 15),
+        end_date=date(2026, 6, 15),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    existing_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, existing_item])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    item = service.create_mobile_free_item(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+        payload=MobileMeasurementFreeItemCreate(
+            description="Zusätzliche Kabelbefestigung",
+            unit="Stck",
+            quantity=Decimal("2.00"),
+            area_or_comment="2. OG",
+        ),
+    )
+
+    stored_item = db.get(SiteMeasurementItem, item.id)
+    stored_entry = db.scalar(
+        select(SiteMeasurementEntry).where(SiteMeasurementEntry.measurement_item_id == item.id)
+    )
+    assert stored_item is not None
+    assert stored_item.measurement_base_id == base.id
+    assert stored_item.position == "FREI-1"
+    assert stored_item.is_free_position is True
+    assert stored_item.source_file_name is None
+    assert item.is_free_position is True
+    assert item.reported_quantity == Decimal("2.00")
+    assert stored_entry is not None
+    assert stored_entry.measurement_batch_id == batch.id
+    assert stored_entry.area_or_comment == "2. OG"
+    assert stored_entry.quantity == Decimal("2.00")
+
+
 def test_new_measurement_base_import_becomes_only_active_base(monkeypatch):
     db = db_session()
     site = create_site(db)

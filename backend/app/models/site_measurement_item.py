@@ -54,6 +54,7 @@ class SiteMeasurementItem(TimestampMixin, Base):
     minutes_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     list_minutes_total: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     is_nep: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_free_position: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     site = relationship("Site", back_populates="measurement_items")

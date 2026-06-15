@@ -14349,6 +14349,29 @@ button.person-chip:focus-visible {
   font-weight: 760;
 }
 
+.mobile-measurement-row-position-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-measurement-free-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid #d6dee9;
+  border-radius: 2px;
+  background: #f6f8fb;
+  color: #65738a;
+  font-size: 0.64rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 2px 5px;
+  text-transform: uppercase;
+}
+
 .mobile-measurement-card-meta {
   display: flex;
   align-items: center;
@@ -14659,6 +14682,29 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-detail-topbar .mobile-back-button {
   min-width: 0;
+}
+
+.mobile-measurement-create-position-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid #cbd7e6;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #143c6d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+.mobile-measurement-create-position-button:hover,
+.mobile-measurement-create-position-button:focus-visible {
+  border-color: #9db7d6;
+  background: #f4f8fc;
+  outline: none;
 }
 
 .mobile-measurement-submit-action {
@@ -15199,7 +15245,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-form input,
-.mobile-measurement-form textarea {
+.mobile-measurement-form textarea,
+.mobile-measurement-form select {
   width: 100%;
   border: 1px solid #cbd7e6;
   border-radius: 8px;
@@ -15207,6 +15254,32 @@ button.person-chip:focus-visible {
   color: #111827;
   font: inherit;
   padding: 10px;
+}
+
+.mobile-measurement-free-position-form {
+  border: 1px solid #d8e3ef;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.mobile-measurement-free-position-form input,
+.mobile-measurement-free-position-form textarea,
+.mobile-measurement-free-position-form select {
+  border-radius: 3px;
+}
+
+.mobile-measurement-free-position-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.mobile-measurement-free-position-actions {
+  align-items: stretch;
+}
+
+.mobile-measurement-free-position-actions button {
+  border-radius: 3px;
 }
 
 .mobile-measurement-entry-page .mobile-measurement-form input {

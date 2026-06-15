@@ -218,6 +218,7 @@ export type MeasurementItem = {
   minutes_per_unit: MeasurementNumericValue;
   list_minutes_total: MeasurementNumericValue;
   is_nep: boolean;
+  is_free_position: boolean;
   sort_order: number;
   measurement_base: MeasurementBase | null;
   created_at: string;
@@ -243,6 +244,14 @@ export type MeasurementEntry = {
 export type MeasurementEntryPayload = {
   area_or_comment: string;
   quantity: number;
+};
+
+export type MobileMeasurementFreeItemPayload = {
+  position?: string | null;
+  description: string;
+  unit: string;
+  quantity?: number;
+  area_or_comment?: string | null;
 };
 
 export type MobileMeasurementBatch = {
