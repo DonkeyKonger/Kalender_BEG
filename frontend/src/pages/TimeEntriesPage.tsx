@@ -119,7 +119,6 @@ type LocationReviewDiagnosticRow = {
   siteName: string;
   siteNumber: string;
   location: string;
-  note: string;
 };
 type TimeReviewPerfApiCall = {
   name: string;
@@ -255,6 +254,9 @@ export function TimeEntriesPage() {
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
+  const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
+  const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
+  const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
@@ -456,6 +458,17 @@ export function TimeEntriesPage() {
     });
     setPayrollCorrectionError(null);
   }, [timeReviewDiagnosticEntry]);
+
+  useEffect(() => {
+    if (!locationReviewDiagnosticEntry) {
+      setLocationReviewSiteId("");
+      setLocationReviewError(null);
+      setIsSavingLocationReview(false);
+      return;
+    }
+    setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
+    setLocationReviewError(null);
+  }, [locationReviewDiagnosticEntry]);
 
   useEffect(() => {
     if (!timeReviewDiagnosticEntry && !locationReviewDiagnosticEntry) {
@@ -998,6 +1011,46 @@ export function TimeEntriesPage() {
       setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
     } finally {
       setIsSavingPayrollCorrection(false);
+    }
+  }
+
+  async function saveLocationReviewSite(): Promise<void> {
+    if (!canManageTimeEntries || !locationReviewDiagnosticEntry || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0) {
+      return;
+    }
+
+    const parsedSiteId = Number(locationReviewSiteId);
+    if (!Number.isInteger(parsedSiteId) || parsedSiteId <= 0) {
+      setLocationReviewError("Bitte eine gültige Baustelle auswählen.");
+      return;
+    }
+
+    setIsSavingLocationReview(true);
+    setLocationReviewError(null);
+    try {
+      const updatedEntry = await api.decideTimeEntryReview(locationReviewDiagnosticEntry.id, {
+        decision: "assign_site",
+        final_work_minutes: null,
+        reviewed_site_id: parsedSiteId,
+      });
+      const selectedSite = sites.find((site) => site.id === parsedSiteId) ?? null;
+      const hydratedEntry: TimeEntry = selectedSite
+        ? {
+            ...updatedEntry,
+            site_id: selectedSite.id,
+            site_name: selectedSite.name,
+            site_number: selectedSite.site_number,
+          }
+        : updatedEntry;
+      applyUpdatedTimeEntry(hydratedEntry);
+      setLocationReviewDiagnosticEntry((currentEntry) => (
+        currentEntry?.id === hydratedEntry.id ? mergeTimeEntryReviewUpdate(currentEntry, hydratedEntry) : currentEntry
+      ));
+      setLocationReviewSiteId(String(parsedSiteId));
+    } catch (requestError) {
+      setLocationReviewError(readApiError(requestError, "Ort konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingLocationReview(false);
     }
   }
 
@@ -1765,9 +1818,8 @@ export function TimeEntriesPage() {
               <div className="time-review-diagnostic-row is-head is-location" role="row">
                 <span role="columnheader">Quelle</span>
                 <span role="columnheader">Erkannte / eingetragene Baustelle</span>
-                <span role="columnheader">Baustellennummer</span>
+                <span role="columnheader">Kommission</span>
                 <span role="columnheader">Ort / Adresse</span>
-                <span role="columnheader">Hinweis</span>
               </div>
               {locationReviewDiagnosticRows(locationReviewDiagnosticEntry, sites).map((row) => (
                 <div className="time-review-diagnostic-row is-location" key={row.source} role="row">
@@ -1775,9 +1827,36 @@ export function TimeEntriesPage() {
                   <span role="cell">{row.siteName}</span>
                   <span role="cell">{row.siteNumber}</span>
                   <span role="cell">{row.location}</span>
-                  <span role="cell">{row.note}</span>
                 </div>
               ))}
+            </div>
+            <div className="time-review-location-decision">
+              <label>
+                <span>Endgültige Baustelle</span>
+                <select
+                  value={locationReviewSiteId}
+                  onChange={(event) => setLocationReviewSiteId(event.target.value)}
+                  disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                >
+                  <option value="">Baustelle auswählen</option>
+                  {siteOptions.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {siteOptionLabel(site)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="time-review-diagnostic-actions">
+              {locationReviewError && <p className="time-review-diagnostic-error">{locationReviewError}</p>}
+              <button
+                className="icon-button secondary time-review-diagnostic-save"
+                type="button"
+                disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                onClick={() => void saveLocationReviewSite()}
+              >
+                {isSavingLocationReview ? "Ort wird gespeichert..." : "Ort speichern"}
+              </button>
             </div>
           </div>
         </div>
@@ -2857,21 +2936,18 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
       siteName: displayDiagnosticValue(entry.site_name),
       siteNumber: displayDiagnosticValue(entry.site_number),
       location: siteLocationLabel(manualSite),
-      note: "Aus Zeitmeldung",
     },
     {
       source: "Erkannte Handy-GPS-Baustelle",
       siteName: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_name) : "-",
       siteNumber: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_number) : "-",
       location: hasGpsSiteMatch(entry) ? siteLocationLabel(gpsSite) : "-",
-      note: hasGpsSiteMatch(entry) ? "Baustellen-Match durch Handy-GPS" : "Kein Baustellen-Match erkannt",
     },
     {
       source: "Erkannte Fahrzeug-GPS-Baustelle",
       siteName: "-",
       siteNumber: "-",
       location: "-",
-      note: "Kein Fahrzeug-GPS-Baustellen-Match vorhanden",
     },
   ];
 }
