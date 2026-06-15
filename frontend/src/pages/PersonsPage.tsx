@@ -349,7 +349,12 @@ export function PersonsPage() {
         subtitle="Stammdaten anlegen"
         onClose={closeDrawer}
         footer={(
-          <button className="icon-button" disabled={savingPersonId === 0} type="button" onClick={() => void createPerson()}>
+          <button
+            className="icon-button person-create-submit-button"
+            disabled={savingPersonId === 0}
+            type="button"
+            onClick={() => void createPerson()}
+          >
             <UserPlus aria-hidden="true" size={17} />
             <span>Person anlegen</span>
           </button>

@@ -1329,7 +1329,8 @@ button.entity-card:focus-visible,
   padding: 14px 22px;
 }
 
-.entity-drawer-footer .site-create-submit-button {
+.entity-drawer-footer .site-create-submit-button,
+.entity-drawer-footer .person-create-submit-button {
   border: 1px solid #1f3657;
   border-radius: 2px;
   background: #1f3657;
@@ -1337,7 +1338,9 @@ button.entity-card:focus-visible,
 }
 
 .entity-drawer-footer .site-create-submit-button:hover,
-.entity-drawer-footer .site-create-submit-button:focus-visible {
+.entity-drawer-footer .site-create-submit-button:focus-visible,
+.entity-drawer-footer .person-create-submit-button:hover,
+.entity-drawer-footer .person-create-submit-button:focus-visible {
   border-color: #152946;
   background: #152946;
 }
@@ -8409,39 +8412,70 @@ button.person-chip:focus-visible {
 
 .person-form-grid {
   display: grid;
-  gap: 12px;
+  --person-drawer-control-height: 32px;
+  gap: 9px;
 }
 
 .person-form-grid label {
   display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 0.86rem;
-  font-weight: 750;
+  gap: 4px;
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
-.person-form-grid input,
+.person-form-grid label > span {
+  letter-spacing: 0;
+}
+
+.person-form-grid input:not([type="checkbox"]),
 .person-form-grid select,
 .person-form-grid textarea {
   width: 100%;
-  min-height: 38px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  min-height: 0;
+  border: 1px solid #d7e1ee;
+  border-radius: 2px;
   background: #ffffff;
   color: #111827;
-  padding: 9px 10px;
+  padding: 0 8px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
+  font: inherit;
+}
+
+.person-form-grid input:not([type="checkbox"]),
+.person-form-grid select {
+  height: var(--person-drawer-control-height);
 }
 
 .person-form-grid textarea {
-  min-height: 70px;
+  min-height: 74px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 1.45;
   resize: vertical;
 }
 
-.person-form-grid input:focus,
+.person-form-grid input:not([type="checkbox"]):focus,
 .person-form-grid select:focus,
 .person-form-grid textarea:focus {
-  border-color: #1d5c99;
-  outline: 3px solid rgb(29 92 153 / 18%);
+  border-color: #7aa2d2;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.person-form-grid .checkbox-field {
+  min-height: var(--person-drawer-control-height);
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.person-form-grid .checkbox-field input {
+  flex: 0 0 16px;
+  width: 16px;
+  min-height: 16px;
+  border-radius: 0;
 }
 
 .person-list {
@@ -8570,6 +8604,24 @@ button.person-chip:focus-visible {
   grid-column: 1 / -1;
 }
 
+.person-location-section > div:first-child {
+  grid-column: 1 / -1;
+}
+
+.person-location-section > div:first-child h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 0.86rem;
+}
+
+.person-location-section > div:first-child p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 
 @media (min-width: 760px) {
   .person-form-grid {
@@ -8597,6 +8649,12 @@ button.person-chip:focus-visible {
   .customer-contact-form-row {
     grid-template-columns: minmax(120px, 0.9fr) repeat(3, minmax(0, 1fr)) auto;
     align-items: end;
+  }
+}
+
+@media (max-width: 759px) {
+  .person-form-grid {
+    --person-drawer-control-height: 38px;
   }
 }
 
