@@ -334,7 +334,7 @@ export function AdminUsersPage() {
                 onClick={() => void deleteUser(selectedUser.id)}
               >
                 <Trash2 aria-hidden="true" size={16} />
-                <span>{savingUserId === selectedUser.id ? "Loescht..." : "Loeschen"}</span>
+                <span>{savingUserId === selectedUser.id ? "Löscht..." : "Löschen"}</span>
               </button>
             )}
             <button

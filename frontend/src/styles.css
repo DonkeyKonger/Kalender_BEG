@@ -8469,6 +8469,16 @@ button.person-chip:focus-visible {
   font-weight: 800;
 }
 
+.admin-users-page .admin-form-grid.drawer-form-grid .checkbox-field input {
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  border-radius: 0;
+  padding: 0;
+  accent-color: #166534;
+  box-shadow: none;
+}
+
 .checkbox-field {
   display: inline-flex !important;
   align-items: center;
