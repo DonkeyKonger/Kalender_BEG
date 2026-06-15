@@ -1335,7 +1335,7 @@ export function TimeEntriesPage() {
       )}
 
       {activeTimeSubtab === "evaluation" && (
-        <div className="time-entries-main time-review-main">
+        <div className="time-entries-main time-review-main time-evaluation-main">
           <div className="time-week-nav-panel" aria-label="Kalenderwochen Auswertung">
             <div className="time-week-nav-title">
               <span>Kalenderwoche</span>

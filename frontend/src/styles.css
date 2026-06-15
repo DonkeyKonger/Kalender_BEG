@@ -11307,6 +11307,17 @@ button.person-chip:focus-visible {
   gap: 12px;
 }
 
+.time-entries-page.is-figma-times-workspace .time-evaluation-main,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-week-nav-panel,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-week-strip button,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-week-scroll-button,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-final-hours-panel,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-entries-toolbar,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-summary-strip > div,
+.time-entries-page.is-figma-times-workspace .time-evaluation-main .time-final-summary-list {
+  border-radius: 0;
+}
+
 .time-entries-page.is-figma-times-workspace .gps-verification-panel {
   background: var(--time-surface);
 }
