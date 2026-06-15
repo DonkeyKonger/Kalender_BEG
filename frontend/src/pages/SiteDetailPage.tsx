@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, Trash2, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
@@ -65,7 +65,6 @@ const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
 export function SiteDetailPage() {
   const { user } = useAuth();
   const canEditSite = user?.role === "admin" || user?.role === "project_manager";
-  const canDeleteSite = user?.role === "admin";
   const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
   const location = useLocation();
@@ -86,9 +85,6 @@ export function SiteDetailPage() {
   const [isCheckingSiteLocation, setIsCheckingSiteLocation] = useState(false);
   const [siteSaveError, setSiteSaveError] = useState<string | null>(null);
   const [siteSaveMessage, setSiteSaveMessage] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeletingSite, setIsDeletingSite] = useState(false);
-  const [siteDeleteError, setSiteDeleteError] = useState<string | null>(null);
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
@@ -852,35 +848,6 @@ export function SiteDetailPage() {
     }
   }
 
-  function openDeleteDialog(): void {
-    setSiteDeleteError(null);
-    setIsDeleteDialogOpen(true);
-  }
-
-  function closeDeleteDialog(): void {
-    if (isDeletingSite) {
-      return;
-    }
-    setIsDeleteDialogOpen(false);
-    setSiteDeleteError(null);
-  }
-
-  async function confirmSiteDelete(): Promise<void> {
-    if (!site || isDeletingSite) {
-      return;
-    }
-    setIsDeletingSite(true);
-    setSiteDeleteError(null);
-    try {
-      await api.removeSite(site.id);
-      navigate("/sites", { replace: true, state: { message: "Baustelle gelöscht." } });
-    } catch (requestError) {
-      setSiteDeleteError(readApiError(requestError, "Baustelle konnte nicht gelöscht werden."));
-    } finally {
-      setIsDeletingSite(false);
-    }
-  }
-
   async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
     if (!site || uploadingFolderKey) {
       return;
@@ -958,85 +925,9 @@ export function SiteDetailPage() {
           <p>{[site.site_number, site.customer].filter(Boolean).join(" - ")}</p>
         </div>
         <div className="site-detail-header-actions">
-          {canDeleteSite ? (
-            <button
-              className="site-delete-action"
-              type="button"
-              onClick={openDeleteDialog}
-            >
-              <Trash2 aria-hidden="true" size={15} />
-              <span>Baustelle löschen</span>
-            </button>
-          ) : null}
           <SiteStatusBadge status={site.status} />
         </div>
       </div>
-
-      {isDeleteDialogOpen ? (
-        <div
-          className="site-delete-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeDeleteDialog();
-            }
-          }}
-        >
-          <div
-            aria-labelledby="site-delete-dialog-title"
-            aria-modal="true"
-            className="site-delete-dialog"
-            role="dialog"
-          >
-            <div className="site-delete-dialog-header">
-              <div>
-                <p className="eyebrow">Endgültiges Löschen</p>
-                <h2 id="site-delete-dialog-title">Baustelle löschen</h2>
-              </div>
-              <button
-                aria-label="Dialog schließen"
-                className="site-delete-dialog-close"
-                type="button"
-                onClick={closeDeleteDialog}
-              >
-                ×
-              </button>
-            </div>
-            <p>
-              Diese Baustelle wird endgültig gelöscht. Dieser Vorgang kann nicht rückgängig gemacht werden.
-            </p>
-            <dl className="site-delete-dialog-meta">
-              <div>
-                <dt>Baustelle</dt>
-                <dd>{site.name}</dd>
-              </div>
-              <div>
-                <dt>Kommission</dt>
-                <dd>{site.site_number || "—"}</dd>
-              </div>
-            </dl>
-            {siteDeleteError ? <p className="form-error">{siteDeleteError}</p> : null}
-            <div className="site-delete-dialog-actions">
-              <button
-                className="icon-button secondary"
-                disabled={isDeletingSite}
-                type="button"
-                onClick={closeDeleteDialog}
-              >
-                Abbrechen
-              </button>
-              <button
-                className="icon-button danger"
-                disabled={isDeletingSite}
-                type="button"
-                onClick={() => void confirmSiteDelete()}
-              >
-                {isDeletingSite ? "Wird gelöscht..." : "Endgültig löschen"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <ProjectRecordTabs activeTab={activeTab} onChange={setActiveTab} />
 
