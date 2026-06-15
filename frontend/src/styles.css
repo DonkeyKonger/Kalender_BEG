@@ -1351,6 +1351,26 @@ button.entity-card:focus-visible,
   background: #152946;
 }
 
+.persons-page .entity-drawer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 1px;
+}
+
+.persons-page .entity-drawer-header-actions .icon-button,
+.persons-page .entity-drawer-footer .icon-button {
+  min-height: 32px;
+  border-radius: 1px;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.persons-page .entity-drawer-footer .icon-button.danger {
+  border-color: #f0b8b2;
+  background: #fff5f4;
+  color: #9f1c12;
+}
+
 .drawer-field {
   display: grid;
   gap: 6px;
