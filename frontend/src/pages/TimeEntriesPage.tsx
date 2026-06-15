@@ -2765,8 +2765,30 @@ function absenceTypePriority(type: AbsenceType): number {
 
 function compareTimeReviewWorkerEntries(left: TimeEntry, right: TimeEntry): number {
   return left.work_date.localeCompare(right.work_date)
+    || compareTimeEntryStartTimes(left, right)
     || timeEntrySiteLabel(left).localeCompare(timeEntrySiteLabel(right), "de")
     || left.id - right.id;
+}
+
+function compareTimeEntryStartTimes(left: TimeEntry, right: TimeEntry): number {
+  const leftStart = timeEntryStartSortValue(left.start_time);
+  const rightStart = timeEntryStartSortValue(right.start_time);
+  return leftStart - rightStart;
+}
+
+function timeEntryStartSortValue(value: string | null): number {
+  if (!value) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const clockMatch = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (clockMatch) {
+    return Number(clockMatch[1]) * 60 + Number(clockMatch[2]);
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return parsed.getHours() * 60 + parsed.getMinutes();
 }
 
 function buildTimeReviewWeekDays(
