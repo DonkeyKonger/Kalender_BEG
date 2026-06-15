@@ -15261,15 +15261,17 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-free-position-form {
   border: 1px solid #d8e3ef;
-  border-radius: 3px;
+  border-radius: 12px;
   background: #ffffff;
   padding: 12px;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 6%);
 }
 
 .mobile-measurement-free-position-form input,
 .mobile-measurement-free-position-form textarea,
 .mobile-measurement-free-position-form select {
-  border-radius: 3px;
+  min-height: 46px;
+  border-radius: 10px;
 }
 
 .mobile-measurement-free-position-form textarea {
@@ -15282,7 +15284,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-free-position-actions button {
-  border-radius: 3px;
+  min-height: 44px;
+  border-radius: 10px;
 }
 
 .mobile-measurement-entry-page .mobile-measurement-form input {

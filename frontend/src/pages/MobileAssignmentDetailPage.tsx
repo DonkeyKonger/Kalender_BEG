@@ -61,6 +61,7 @@ type MeasurementFreePositionDraft = {
   quantity: string;
   areaOrComment: string;
 };
+const MOBILE_MEASUREMENT_FREE_UNITS = ["st", "m", "psch", "std"] as const;
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
 const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
@@ -72,7 +73,7 @@ const PHOTO_JPEG_QUALITY = 0.8;
 const EMPTY_MEASUREMENT_FREE_POSITION_DRAFT: MeasurementFreePositionDraft = {
   position: "",
   description: "",
-  unit: "Stck",
+  unit: "st",
   quantity: "0,00",
   areaOrComment: "",
 };
@@ -2913,11 +2914,9 @@ function MobileMeasurementTab({
         area_or_comment: areaOrComment || null,
       });
       await loadBatches(batch.id);
-      await loadBatchItems(batch);
-      setItems((currentItems) => (
-        currentItems.some((item) => item.id === createdItem.id) ? currentItems : [...currentItems, createdItem]
-      ));
-      setSelectedItem(null);
+      await loadBatchItems(batch, createdItem.id);
+      setFormComment("");
+      setFormQuantity("");
       setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
       setIsFreePositionFormOpen(false);
       setSearchTerm("");
@@ -3968,6 +3967,8 @@ function MeasurementFreePositionForm({
   onChange: (patch: Partial<MeasurementFreePositionDraft>) => void;
   onSave: () => void;
 }) {
+  const quantityLabel = `Menge (${draft.unit || "Einheit"})`;
+
   return (
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-free-position-page">
       <div className="mobile-measurement-detail-topbar">
@@ -4010,21 +4011,25 @@ function MeasurementFreePositionForm({
           <label>
             <span>Einheit</span>
             <select value={draft.unit} onChange={(event) => onChange({ unit: event.target.value })}>
-              <option value="m">m</option>
-              <option value="Stck">Stck</option>
-              <option value="h">h</option>
-              <option value="pauschal">pauschal</option>
+              {MOBILE_MEASUREMENT_FREE_UNITS.map((unit) => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
             </select>
           </label>
 
           <label>
-            <span>Menge</span>
+            <span>{quantityLabel}</span>
             <input
               type="text"
-              inputMode="decimal"
-              value={draft.quantity}
-              onChange={(event) => onChange({ quantity: event.target.value })}
+              inputMode="none"
+              readOnly
+              value={draft.quantity || "0,00"}
+              aria-label={quantityLabel}
               placeholder="0,00"
+            />
+            <MeasurementQuantityKeypad
+              disabled={isSaving}
+              onKeyPress={(key) => onChange({ quantity: applyMeasurementQuantityKey(draft.quantity, key) })}
             />
           </label>
         </div>
@@ -4044,7 +4049,7 @@ function MeasurementFreePositionForm({
         <div className="mobile-form-actions mobile-measurement-free-position-actions">
           <button className="secondary-action" type="button" onClick={onCancel} disabled={isSaving}>Abbrechen</button>
           <button className="primary-action" type="button" onClick={onSave} disabled={isSaving}>
-            {isSaving ? "Speichert..." : "Position speichern"}
+            {isSaving ? "Speichert..." : "Speichern"}
           </button>
         </div>
       </div>
