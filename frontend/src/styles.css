@@ -1374,6 +1374,23 @@ button.entity-card:focus-visible,
   color: #9f1c12;
 }
 
+.persons-page .detail-read-view {
+  gap: 12px;
+}
+
+.persons-page .detail-read-section {
+  border-radius: 0;
+  padding: 12px;
+}
+
+.persons-page .detail-address-card {
+  border-radius: 0;
+}
+
+.persons-page .detail-read-item .status-badge {
+  border-radius: 0;
+}
+
 .drawer-field {
   display: grid;
   gap: 6px;
