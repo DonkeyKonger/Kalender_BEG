@@ -27,6 +27,7 @@ type TimeFormState = {
   siteId: string;
   startTime: string;
   endTime: string;
+  breakMinutesOverride: number | null;
 };
 
 type TimeEntrySheetMode = "closed" | "site" | "manual";
@@ -63,6 +64,7 @@ type TimeOverlapConflict = {
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const BREAK_THRESHOLD_MINUTES = 510;
+const BREAK_OPTION_MINUTES = [0, 15, 30, 45, 60];
 const TIME_PICKER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const TIME_PICKER_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
 
@@ -80,8 +82,9 @@ export function MobileTimeEntryPage() {
   const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
   const [activeSites, setActiveSites] = useState<MobileSite[]>([]);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
-  const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "" });
+  const [form, setForm] = useState<TimeFormState>({ siteId: "", startTime: "", endTime: "", breakMinutesOverride: null });
   const [sheetMode, setSheetMode] = useState<TimeEntrySheetMode>("closed");
+  const [isBreakPickerOpen, setIsBreakPickerOpen] = useState(false);
   const [manualSiteText, setManualSiteText] = useState("");
   const [timeConflict, setTimeConflict] = useState<TimeOverlapConflict | null>(null);
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
@@ -228,9 +231,11 @@ export function MobileTimeEntryPage() {
   const calendarDays = useMemo(() => buildMonthGrid(visibleMonth, today), [today, visibleMonth]);
   const weekDays = useMemo(() => buildWeekDays(selectedDate, today), [selectedDate, today]);
   const grossMinutes = calculateGrossMinutes(form.startTime, form.endTime);
-  const breakMinutes = calculateBreakMinutes(form.startTime, form.endTime);
-  const netMinutes = calculateNetMinutes(form.startTime, form.endTime);
+  const automaticBreakMinutes = calculateBreakMinutes(form.startTime, form.endTime);
+  const breakMinutes = form.breakMinutesOverride ?? automaticBreakMinutes;
+  const netMinutes = calculateNetMinutes(form.startTime, form.endTime, breakMinutes);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
+  const breakValidationMessage = getBreakValidationMessage(grossMinutes, breakMinutes);
 
   function showMonth(month: Date) {
     const monthStart = startOfMonth(month);
@@ -273,12 +278,14 @@ export function MobileTimeEntryPage() {
       siteId: String(siteId),
       startTime: suggestedStart ?? "",
       endTime: suggestedEnd ?? "",
+      breakMinutesOverride: null,
     });
     setManualSiteText("");
     setSheetMode("site");
     setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
     setTimeConflict(null);
+    setIsBreakPickerOpen(false);
   }
 
   function openManualEntry(initialText = "") {
@@ -289,18 +296,21 @@ export function MobileTimeEntryPage() {
       siteId: "",
       startTime: suggestedStart ?? "",
       endTime: suggestedEnd ?? "",
+      breakMinutesOverride: null,
     });
     setManualSiteText(initialText);
     setSheetMode("manual");
     setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
     setTimeConflict(null);
+    setIsBreakPickerOpen(false);
   }
 
   function closeTimeEntrySheet() {
     setSheetMode("closed");
     setEditingEntryId(null);
-    setForm({ siteId: "", startTime: "", endTime: "" });
+    setForm({ siteId: "", startTime: "", endTime: "", breakMinutesOverride: null });
+    setIsBreakPickerOpen(false);
     setManualSiteText("");
     setSuggestionMessage(null);
     setFormError(null);
@@ -329,8 +339,8 @@ export function MobileTimeEntryPage() {
       setFormError("Bitte Baustelle oder Ort beschreiben.");
       return;
     }
-    if (timeValidationMessage || breakMinutes === null || netMinutes === null) {
-      setFormError(timeValidationMessage ?? "Die Arbeitszeit konnte nicht berechnet werden.");
+    if (timeValidationMessage || breakValidationMessage || breakMinutes === null || netMinutes === null) {
+      setFormError(timeValidationMessage ?? breakValidationMessage ?? "Die Arbeitszeit konnte nicht berechnet werden.");
       return;
     }
 
@@ -391,17 +401,22 @@ export function MobileTimeEntryPage() {
   }
 
   function editEntry(entry: TimeEntry) {
+    const startTime = normalizeTimeInput(entry.start_time) ?? "";
+    const endTime = normalizeTimeInput(entry.end_time) ?? "";
+    const automaticEntryBreakMinutes = calculateBreakMinutes(startTime, endTime);
     setEditingEntryId(entry.id);
     setForm({
       siteId: entry.site_id !== null ? String(entry.site_id) : "",
-      startTime: normalizeTimeInput(entry.start_time) ?? "",
-      endTime: normalizeTimeInput(entry.end_time) ?? "",
+      startTime,
+      endTime,
+      breakMinutesOverride: entry.break_minutes === automaticEntryBreakMinutes ? null : entry.break_minutes,
     });
     setManualSiteText(entry.site_id === null ? extractManualSiteText(entry.note) : "");
     setSheetMode(entry.site_id === null ? "manual" : "site");
     setSuggestionMessage(null);
     setFormError(null);
     setTimeConflict(null);
+    setIsBreakPickerOpen(false);
   }
 
   function openTimePicker(target: TimePickerTarget): void {
@@ -678,10 +693,14 @@ export function MobileTimeEntryPage() {
                   </div>
 
                   <div className="mobile-time-summary">
-                    <div>
-                      <span>Pause automatisch</span>
+                    <button
+                      className="mobile-time-summary-card mobile-time-break-card"
+                      type="button"
+                      onClick={() => setIsBreakPickerOpen((current) => !current)}
+                    >
+                      <span>{form.breakMinutesOverride === null ? "Pause automatisch" : "Pause manuell"}</span>
                       <strong>{breakMinutes !== null ? formatHoursFromMinutes(breakMinutes) : "-"}</strong>
-                    </div>
+                    </button>
                     <div>
                       <span>Arbeitszeit netto</span>
                       <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
@@ -691,8 +710,43 @@ export function MobileTimeEntryPage() {
                       <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
                     </div>
                   </div>
+                  {isBreakPickerOpen ? (
+                    <div className="mobile-time-break-picker" aria-label="Pause auswählen">
+                      {BREAK_OPTION_MINUTES.map((minutes) => {
+                        const isDisabled = grossMinutes !== null && minutes > grossMinutes;
+                        const isActive = breakMinutes === minutes;
+                        return (
+                          <button
+                            className={isActive ? "is-active" : ""}
+                            disabled={isDisabled}
+                            key={minutes}
+                            type="button"
+                            onClick={() => {
+                              setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: minutes }));
+                              setFormError(null);
+                              setTimeConflict(null);
+                            }}
+                          >
+                            {minutes} min
+                          </button>
+                        );
+                      })}
+                      <button
+                        className={form.breakMinutesOverride === null ? "is-active" : ""}
+                        type="button"
+                        onClick={() => {
+                          setForm((currentForm) => ({ ...currentForm, breakMinutesOverride: null }));
+                          setFormError(null);
+                          setTimeConflict(null);
+                        }}
+                      >
+                        Auto
+                      </button>
+                    </div>
+                  ) : null}
 
                   {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
+                  {breakValidationMessage ? <p className="form-error">{breakValidationMessage}</p> : null}
                   {formError ? <p className="form-error">{formError}</p> : null}
                   {timeConflict ? (
                     <div className="mobile-time-conflict" role="alert">
@@ -1015,13 +1069,26 @@ function calculateBreakMinutes(startTime: string, endTime: string): number | nul
   return grossMinutes < BREAK_THRESHOLD_MINUTES ? 30 : 60;
 }
 
-function calculateNetMinutes(startTime: string, endTime: string): number | null {
+function calculateNetMinutes(startTime: string, endTime: string, breakMinutesOverride?: number | null): number | null {
   const grossMinutes = calculateGrossMinutes(startTime, endTime);
-  const breakMinutes = calculateBreakMinutes(startTime, endTime);
+  const breakMinutes = breakMinutesOverride ?? calculateBreakMinutes(startTime, endTime);
   if (grossMinutes === null || breakMinutes === null) {
     return null;
   }
   return Math.max(grossMinutes - breakMinutes, 0);
+}
+
+function getBreakValidationMessage(grossMinutes: number | null, breakMinutes: number | null): string | null {
+  if (grossMinutes === null || breakMinutes === null) {
+    return null;
+  }
+  if (breakMinutes < 0) {
+    return "Pause darf nicht negativ sein.";
+  }
+  if (breakMinutes > grossMinutes) {
+    return "Pause darf nicht größer als die Bruttozeit sein.";
+  }
+  return null;
 }
 
 function getTimeValidationMessage(startTime: string, endTime: string): string | null {

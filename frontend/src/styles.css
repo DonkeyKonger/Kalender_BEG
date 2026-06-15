@@ -4356,16 +4356,59 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
-.mobile-time-summary div {
+.mobile-time-summary div,
+.mobile-time-summary-card {
   display: grid;
   gap: 4px;
+  width: 100%;
+  border: 0;
   border-radius: 14px;
   background: #f5f7fa;
+  color: inherit;
   padding: 10px;
+  text-align: left;
 }
 
 .mobile-time-summary strong {
   font-size: 1rem;
+}
+
+.mobile-time-break-card {
+  cursor: pointer;
+}
+
+.mobile-time-break-card:focus-visible {
+  box-shadow: 0 0 0 3px rgb(20 60 109 / 12%);
+  outline: 2px solid #143c6d;
+  outline-offset: 1px;
+}
+
+.mobile-time-break-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.mobile-time-break-picker button {
+  min-height: 38px;
+  border: 1px solid #d8e1ee;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #31415a;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 8px 6px;
+}
+
+.mobile-time-break-picker button.is-active {
+  border-color: #143c6d;
+  background: #eaf2ff;
+  color: #143c6d;
+}
+
+.mobile-time-break-picker button:disabled {
+  opacity: 0.45;
 }
 
 .mobile-time-save-message {
