@@ -311,7 +311,8 @@ export function AdminUsersPage() {
         <label className="drawer-field">
           <span>Startpasswort</span>
           <input
-            type="password"
+            autoComplete="off"
+            type="text"
             value={createForm.password}
             onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
           />
@@ -375,7 +376,8 @@ export function AdminUsersPage() {
             <label className="drawer-field">
               <span>Neues temporaeres Startpasswort</span>
               <input
-                type="password"
+                autoComplete="off"
+                type="text"
                 value={selectedDraft.reset_password}
                 onChange={(event) => updateDraft(selectedUser.id, { reset_password: event.target.value })}
               />
