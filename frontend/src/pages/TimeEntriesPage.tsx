@@ -2821,7 +2821,6 @@ function highestPriorityAbsenceTypeForPersonDate(
 }
 
 function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState {
-  const hasGpsSignal = Boolean(entry.gps_first_seen_at || entry.gps_last_seen_at || entry.gps_total_points);
   if (
     entry.gps_not_checkable
     || entry.gps_status === "not_checkable"
@@ -2829,21 +2828,31 @@ function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState
   ) {
     return "unknown";
   }
-  if (entry.gps_status === "missing" || !hasGpsSignal) {
-    return entry.time_review_status !== "open" && entry.time_review_status !== "not_verifiable" ? "ok" : "unknown";
+
+  if (!hasGpsSiteMatch(entry)) {
+    return "unknown";
   }
-  if (
-    entry.gps_status === "mismatch"
-    || entry.planned_vs_gps_mismatch
-    || entry.manual_vs_gps_mismatch
-    || entry.manual_vs_planned_mismatch
-    || (entry.gps_detected_location_type === "company" && Boolean(entry.site_id || entry.planned_site_labels.length))
-  ) {
+
+  if (entry.site_id !== null && entry.gps_detected_site_id !== null) {
+    return entry.site_id === entry.gps_detected_site_id ? "ok" : "warning";
+  }
+
+  if (entry.site_number && entry.gps_detected_site_number) {
+    return normalizeComparableSiteValue(entry.site_number) === normalizeComparableSiteValue(entry.gps_detected_site_number)
+      ? "ok"
+      : "warning";
+  }
+
+  if (entry.site_name && entry.gps_detected_site_name) {
+    return normalizeComparableSiteValue(entry.site_name) === normalizeComparableSiteValue(entry.gps_detected_site_name)
+      ? "ok"
+      : "warning";
+  }
+
+  if (entry.manual_vs_gps_mismatch) {
     return "warning";
   }
-  if (entry.gps_status === "matched" || entry.time_review_status !== "open") {
-    return "ok";
-  }
+
   return "unknown";
 }
 
@@ -2959,6 +2968,10 @@ function hasGpsSiteMatch(entry: TimeEntry): boolean {
     entry.gps_detected_location_type === "site"
     && Boolean(entry.gps_detected_site_id || entry.gps_detected_site_name || entry.gps_detected_site_number)
   );
+}
+
+function normalizeComparableSiteValue(value: string): string {
+  return value.trim().toLocaleLowerCase("de-DE");
 }
 
 function findSiteSummary(sites: SiteSummary[], siteId: number | null): SiteSummary | null {
