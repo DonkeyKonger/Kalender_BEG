@@ -34,12 +34,6 @@ export const navigationItems: NavigationItem[] = [
     roles: ["admin", "project_manager", "office"],
   },
   {
-    label: "Lohnprüfung",
-    path: "/time-entries",
-    icon: Clock3,
-    roles: ["admin", "project_manager", "office"],
-  },
-  {
     label: "Baustellen",
     path: "/sites",
     icon: BriefcaseBusiness,
@@ -49,6 +43,12 @@ export const navigationItems: NavigationItem[] = [
     label: "Kartenübersicht",
     path: "/site-map",
     icon: MapPinned,
+    roles: ["admin", "project_manager", "office"],
+  },
+  {
+    label: "Lohnprüfung",
+    path: "/time-entries",
+    icon: Clock3,
     roles: ["admin", "project_manager", "office"],
   },
   {
