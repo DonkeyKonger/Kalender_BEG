@@ -11188,6 +11188,13 @@ button.person-chip:focus-visible {
   border-radius: 0;
 }
 
+.time-entries-page.is-figma-times-workspace .time-review-diagnostic-save {
+  min-height: 30px;
+  border-radius: 0;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+}
+
 .time-entries-page.is-figma-times-workspace .time-review-main .time-review-worker-panel {
   margin: 14px;
 }
