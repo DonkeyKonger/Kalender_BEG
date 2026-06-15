@@ -2898,6 +2898,10 @@ function MobileMeasurementTab({
       setFreePositionError("Bitte Einheit eintragen.");
       return;
     }
+    if (!areaOrComment) {
+      setFreePositionError("Bitte Bereich / Ort angeben.");
+      return;
+    }
     if (quantity === null || quantity < 0) {
       setFreePositionError("Bitte eine gültige Menge ab 0,00 eintragen.");
       return;
@@ -2911,7 +2915,7 @@ function MobileMeasurementTab({
         description,
         unit,
         quantity,
-        area_or_comment: areaOrComment || null,
+        area_or_comment: areaOrComment,
       });
       await loadBatches(batch.id);
       await loadBatchItems(batch, createdItem.id);
@@ -2937,6 +2941,7 @@ function MobileMeasurementTab({
       return matchesSearch;
     });
   }, [items, searchTerm]);
+  const freePositionAreaSuggestions = useMemo(() => collectMeasurementAreaTags(items), [items]);
 
   useEffect(() => {
     onEntryModeChange?.(Boolean(selectedBatch && selectedItem));
@@ -2949,6 +2954,7 @@ function MobileMeasurementTab({
         draft={freePositionDraft}
         error={freePositionError}
         isSaving={isSaving}
+        areaSuggestions={freePositionAreaSuggestions}
         onBack={() => {
           setIsFreePositionFormOpen(false);
           setFreePositionError(null);
@@ -3954,6 +3960,7 @@ function MeasurementFreePositionForm({
   draft,
   error,
   isSaving,
+  areaSuggestions,
   onBack,
   onCancel,
   onChange,
@@ -3962,6 +3969,7 @@ function MeasurementFreePositionForm({
   draft: MeasurementFreePositionDraft;
   error: string | null;
   isSaving: boolean;
+  areaSuggestions: string[];
   onBack: () => void;
   onCancel: () => void;
   onChange: (patch: Partial<MeasurementFreePositionDraft>) => void;
@@ -4016,31 +4024,49 @@ function MeasurementFreePositionForm({
               ))}
             </select>
           </label>
-
-          <label>
-            <span>{quantityLabel}</span>
-            <input
-              type="text"
-              inputMode="none"
-              readOnly
-              value={draft.quantity || "0,00"}
-              aria-label={quantityLabel}
-              placeholder="0,00"
-            />
-            <MeasurementQuantityKeypad
-              disabled={isSaving}
-              onKeyPress={(key) => onChange({ quantity: applyMeasurementQuantityKey(draft.quantity, key) })}
-            />
-          </label>
         </div>
 
         <label>
-          <span>Bereich / Kommentar</span>
+          <span>Bereich / Ort</span>
           <input
             type="text"
+            required
             value={draft.areaOrComment}
             onChange={(event) => onChange({ areaOrComment: event.target.value })}
-            placeholder="optional, z. B. 2. OG"
+            placeholder="z. B. 2. OG"
+          />
+          {areaSuggestions.length > 0 ? (
+            <div className="mobile-area-tag-list" aria-label="Bereichsvorschläge">
+              {areaSuggestions.map((area) => (
+                <button
+                  className={getMeasurementAreaKey(draft.areaOrComment) === getMeasurementAreaKey(area) ? "mobile-area-tag is-selected" : "mobile-area-tag"}
+                  key={area}
+                  type="button"
+                  onClick={() => {
+                    onChange({ areaOrComment: area });
+                    blurActiveFormElement();
+                  }}
+                >
+                  {area}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </label>
+
+        <label>
+          <span>{quantityLabel}</span>
+          <input
+            type="text"
+            inputMode="none"
+            readOnly
+            value={draft.quantity || "0,00"}
+            aria-label={quantityLabel}
+            placeholder="0,00"
+          />
+          <MeasurementQuantityKeypad
+            disabled={isSaving}
+            onKeyPress={(key) => onChange({ quantity: applyMeasurementQuantityKey(draft.quantity, key) })}
           />
         </label>
 
