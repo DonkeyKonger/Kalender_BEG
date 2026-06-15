@@ -1301,7 +1301,7 @@ export function MatrixPage() {
       <div className="matrix-toolbar">
         <div>
           <p className="eyebrow">Planung</p>
-          <h1>Planmatrix</h1>
+          <h1>Baustellenkalender</h1>
           <p className="matrix-range">{activeRange.label}</p>
         </div>
         <div className="matrix-actions">
@@ -2096,6 +2096,7 @@ type MatrixTableRowProps = MatrixTableCalendarProps & { row: MatrixRow };
 
 function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   const assignmentRunLayout = useMemo(() => buildAssignmentRunLayout(row.cells), [row.cells]);
+  const hasSiteAddress = matrixSiteHasAddress(row.site);
 
   return (
     <tr>
@@ -2107,9 +2108,20 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           />
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>
             <strong>{row.site.name}</strong>
-            {row.site.site_number && <small className="matrix-site-number">{row.site.site_number}</small>}
+            {(row.site.site_number || !hasSiteAddress) && (
+              <small className="matrix-site-number">
+                {row.site.site_number}
+                {!hasSiteAddress && (
+                  <span className="matrix-site-missing-address">
+                    {row.site.site_number ? " · " : ""}Keine Adresse hinterlegt
+                  </span>
+                )}
+              </small>
+            )}
             {row.site.location && <span className="matrix-site-location">{row.site.location}</span>}
-            <span className="matrix-site-compact-meta">{siteCompactMeta(row.site.site_number, row.site.location)}</span>
+            <span className={`matrix-site-compact-meta${!hasSiteAddress ? " is-missing-address" : ""}`}>
+              {siteCompactMeta(row.site.site_number, row.site.location)}
+            </span>
           </Link>
         </div>
       </th>
@@ -2649,7 +2661,11 @@ function getYearPlanningRange(referenceDate: string): PlanningRange {
 }
 
 function siteCompactMeta(siteNumber: string | null, location: string | null): string {
-  return [siteNumber, location].filter(Boolean).join(" · ");
+  return [siteNumber, location || "Keine Adresse hinterlegt"].filter(Boolean).join(" · ");
+}
+
+function matrixSiteHasAddress(site: MatrixRow["site"]): boolean {
+  return Boolean(site.location?.trim());
 }
 
 function projectManagerOptionsFromRows(rows: MatrixRow[]): ProjectManagerOption[] {

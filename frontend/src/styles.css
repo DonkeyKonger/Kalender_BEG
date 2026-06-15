@@ -916,6 +916,12 @@ button:disabled {
   font-size: 0.72rem;
 }
 
+.matrix-site-missing-address,
+.matrix-site-compact-meta.is-missing-address {
+  color: #b42318;
+  font-weight: 800;
+}
+
 .matrix-site-location,
 .matrix-site-compact-meta {
   max-width: 210px;
