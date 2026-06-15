@@ -1804,7 +1804,7 @@ export function TimeEntriesPage() {
             <div className="time-review-diagnostic-head">
               <div>
                 <span>Diagnose</span>
-                <h4>Ort-Prüfung</h4>
+                <h4>Ort-Prüfung | {formatTimeEntryRange(locationReviewDiagnosticEntry)}</h4>
               </div>
               <button
                 className="time-review-diagnostic-close"
@@ -3030,6 +3030,13 @@ function formatTimeEntryClock(value: string | null): string {
   }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "-" : formatTime(value);
+}
+
+function formatTimeEntryRange(entry: TimeEntry): string {
+  if (!entry.start_time && !entry.end_time) {
+    return "-";
+  }
+  return `${formatTimeEntryClock(entry.start_time)} - ${formatTimeEntryClock(entry.end_time)}`;
 }
 
 function formatTimeEntryMinutes(value: number | null | undefined, mode: "hours" | "minutes"): string {

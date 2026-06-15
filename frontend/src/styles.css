@@ -10153,12 +10153,12 @@ button.person-chip:focus-visible {
 .time-review-location-decision {
   border-top: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 9px 10px;
+  padding: 12px 12px 10px;
 }
 
 .time-review-location-decision label {
   display: grid;
-  gap: 4px;
+  gap: 7px;
   color: #42526a;
   font-size: 0.74rem;
   font-weight: 850;
@@ -10166,12 +10166,12 @@ button.person-chip:focus-visible {
 
 .time-review-location-decision select {
   width: 100%;
-  min-height: 30px;
+  min-height: 34px;
   border: 1px solid #d7e1ee;
   border-radius: 0;
   background: #ffffff;
   color: #172033;
-  padding: 4px 7px;
+  padding: 6px 8px;
   font: inherit;
 }
 
