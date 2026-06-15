@@ -9484,9 +9484,9 @@ button.person-chip:focus-visible {
 }
 
 .time-week-strip button.is-current {
-  border-color: #b7d9c2;
-  background: #f3fbf5;
-  color: #166534;
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
 }
 
 .time-week-strip button.is-active {
@@ -11115,9 +11115,9 @@ button.person-chip:focus-visible {
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-strip button.is-current {
-  border-color: #b9dfca;
-  background: #eefaf3;
-  color: var(--time-success);
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
 }
 
 .time-entries-page.is-figma-times-workspace .time-week-strip button.is-active {
