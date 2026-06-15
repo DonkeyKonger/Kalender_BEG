@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -455,6 +456,32 @@ class ProjectStorageService:
             raise _safe_graph_files_exception(error) from error
         return _document_item(response)
 
+    def upload_file_to_folder_without_overwrite(
+        self,
+        *,
+        drive_id: str | None,
+        folder_item_id: str | None,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        safe_filename = _safe_upload_filename(filename)
+        if not safe_filename:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Dateiname fehlt.")
+
+        existing_names = {
+            str(item.get("name") or "")
+            for item in self.list_folder_children(drive_id=drive_id, folder_item_id=folder_item_id)
+        }
+        upload_filename = _unique_upload_filename(safe_filename, existing_names)
+        return self.upload_file_to_folder(
+            drive_id=drive_id,
+            folder_item_id=folder_item_id,
+            filename=upload_filename,
+            content=content,
+            content_type=content_type,
+        )
+
     def _create_folder(self, parent_item_id: str, name: str) -> dict[str, Any]:
         payload = {
             "name": name,
@@ -561,6 +588,22 @@ def _safe_upload_filename(filename: str | None) -> str:
         return ""
     sanitized = filename.replace("\\", "/").split("/")[-1].strip(" .")
     return sanitized[:180].strip(" .")
+
+
+def _unique_upload_filename(filename: str, existing_names: set[str]) -> str:
+    if filename not in existing_names:
+        return filename
+
+    path = Path(filename)
+    suffix = path.suffix
+    stem = path.stem if suffix else filename
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    for counter in range(1, 1000):
+        counter_suffix = "" if counter == 1 else f"_{counter:02d}"
+        candidate = f"{stem}_{timestamp}{counter_suffix}{suffix}"
+        if candidate not in existing_names:
+            return candidate
+    raise HTTPException(status.HTTP_409_CONFLICT, "Eindeutiger Dateiname konnte nicht erzeugt werden.")
 
 
 def _safe_graph_files_exception(error: MicrosoftGraphRequestError) -> HTTPException:

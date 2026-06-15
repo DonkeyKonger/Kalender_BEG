@@ -277,4 +277,7 @@ class MeasurementImportResponse(BaseModel):
     source_project_number: str | None
     source_invoice_number: str | None
     source_customer_name: str | None
+    timesheet_document_saved: bool = False
+    timesheet_document_name: str | None = None
+    timesheet_document_error: str | None = None
     items: list[MeasurementItemRead]

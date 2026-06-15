@@ -726,7 +726,17 @@ export function SiteDetailPage() {
       setMeasurementBatches([]);
       setMeasurementLoaded(true);
       setMeasurementBatchesLoaded(false);
-      setMeasurementImportMessage(`Zeitenliste importiert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`);
+      setFoldersLoaded(false);
+      setFolderDocumentsReloadKey((currentKey) => currentKey + 1);
+      if (result.timesheet_document_saved) {
+        setMeasurementImportMessage(
+          `Zeitenliste importiert und unter 9. Dokumentation gespeichert: ${result.imported_count} Positionen in ${formatMeasurementBaseName(result.measurement_base)} erkannt.`,
+        );
+      } else {
+        setMeasurementImportMessage(
+          "Zeitenliste importiert. Speicherung unter 9. Dokumentation fehlgeschlagen.",
+        );
+      }
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Zeitenliste konnte nicht importiert werden."));
       throw requestError;

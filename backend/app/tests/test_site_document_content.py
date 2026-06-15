@@ -59,6 +59,96 @@ def _install_document_content_fakes(monkeypatch, download):
     return calls
 
 
+def test_timesheet_pdf_copy_is_stored_in_documentation_folder(monkeypatch):
+    calls = {"folder": [], "upload": []}
+
+    class FakeProjectFolderService:
+        def __init__(self, db):
+            self.db = db
+
+        def get_project_folder_for_site_by_key(self, site_id, folder_key, current_user):
+            calls["folder"].append((site_id, folder_key, current_user.role))
+            return SimpleNamespace(
+                external_drive_id="drive-1",
+                external_item_id="documentation-folder-1",
+            )
+
+    class FakeProjectStorageService:
+        def upload_file_to_folder_without_overwrite(
+            self,
+            *,
+            drive_id,
+            folder_item_id,
+            filename,
+            content,
+            content_type,
+        ):
+            calls["upload"].append((drive_id, folder_item_id, filename, content, content_type))
+            return {"name": filename}
+
+    monkeypatch.setattr(sites, "ProjectFolderService", FakeProjectFolderService)
+    monkeypatch.setattr(sites, "ProjectStorageService", FakeProjectStorageService)
+
+    result = sites.store_timesheet_pdf_in_project_files(
+        db=object(),
+        site_id=7,
+        current_user=SimpleNamespace(role=UserRole.PROJECT_MANAGER),
+        file_name="Zeitenliste 8007.pdf",
+        pdf_content=b"pdf-bytes",
+        content_type="application/pdf",
+    )
+
+    assert result == {
+        "timesheet_document_saved": True,
+        "timesheet_document_name": "Zeitenliste 8007.pdf",
+        "timesheet_document_error": None,
+    }
+    assert calls["folder"] == [(7, "dokumentation", UserRole.PROJECT_MANAGER)]
+    assert calls["upload"] == [
+        (
+            "drive-1",
+            "documentation-folder-1",
+            "Zeitenliste 8007.pdf",
+            b"pdf-bytes",
+            "application/pdf",
+        )
+    ]
+
+
+def test_timesheet_pdf_copy_returns_failed_status_for_storage_errors(monkeypatch):
+    class FakeProjectFolderService:
+        def __init__(self, db):
+            self.db = db
+
+        def get_project_folder_for_site_by_key(self, site_id, folder_key, current_user):
+            return SimpleNamespace(
+                external_drive_id="drive-1",
+                external_item_id="documentation-folder-1",
+            )
+
+    class FakeProjectStorageService:
+        def upload_file_to_folder_without_overwrite(self, **_kwargs):
+            raise HTTPException(400, "SharePoint-Ordner ist noch nicht angebunden.")
+
+    monkeypatch.setattr(sites, "ProjectFolderService", FakeProjectFolderService)
+    monkeypatch.setattr(sites, "ProjectStorageService", FakeProjectStorageService)
+
+    result = sites.store_timesheet_pdf_in_project_files(
+        db=object(),
+        site_id=7,
+        current_user=SimpleNamespace(role=UserRole.PROJECT_MANAGER),
+        file_name="Zeitenliste.pdf",
+        pdf_content=b"pdf-bytes",
+        content_type="application/pdf",
+    )
+
+    assert result == {
+        "timesheet_document_saved": False,
+        "timesheet_document_name": None,
+        "timesheet_document_error": "SharePoint-Ordner ist noch nicht angebunden.",
+    }
+
+
 def test_project_folder_document_content_serves_safe_pdf_inline(monkeypatch):
     calls = _install_document_content_fakes(
         monkeypatch,

@@ -538,6 +538,29 @@ def test_upload_file_to_folder_uses_encoded_filename_and_returns_document_item()
     assert "super-secret-value" not in str(result)
 
 
+def test_upload_file_to_folder_without_overwrite_adds_timestamp_when_name_exists():
+    graph = FakeGraphClient()
+    service = ProjectStorageService(
+        config=enabled_config(),
+        graph_client=graph,
+    )
+
+    service.upload_file_to_folder_without_overwrite(
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+        filename="Angebot.pdf",
+        content=b"pdf-bytes",
+        content_type="application/pdf",
+    )
+
+    assert len(graph.puts) == 1
+    path, content, content_type = graph.puts[0]
+    assert path.startswith("/drives/drive-1/items/folder-1:/Angebot_")
+    assert path.endswith(".pdf:/content")
+    assert content == b"pdf-bytes"
+    assert content_type == "application/pdf"
+
+
 def test_create_project_folder_for_site_returns_error_without_raising():
     class FailingPostGraphClient(FakeGraphClient):
         def post(self, path, payload):

@@ -514,6 +514,9 @@ export type MeasurementImportResponse = {
   source_project_number: string | null;
   source_invoice_number: string | null;
   source_customer_name: string | null;
+  timesheet_document_saved: boolean;
+  timesheet_document_name: string | null;
+  timesheet_document_error: string | null;
   items: MeasurementItem[];
 };
 

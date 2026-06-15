@@ -77,6 +77,7 @@ SAFE_INLINE_CONTENT_TYPES = {
     "image/webp",
     "text/plain",
 }
+TIMESHEET_DOCUMENTATION_FOLDER_KEY = "dokumentation"
 
 
 @router.get("", response_model=list[SiteRead])
@@ -682,25 +683,72 @@ async def import_measurement_timesheet(
     import_mode: str = Form("existing"),
     measurement_base_id: int | None = Form(None),
     measurement_base_name: str | None = Form(None),
-    _user: User = Depends(CAN_WRITE),
+    current_user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MeasurementImportResponse:
     file_name = file.filename or "zeitenliste.pdf"
     if not file_name.lower().endswith(".pdf"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine PDF-Datei hochladen.")
 
+    pdf_content = await file.read()
     summary, items = MeasurementService(db).import_timesheet(
         site_id,
         file_name=file_name,
-        pdf_content=await file.read(),
+        pdf_content=pdf_content,
         import_mode=import_mode,
         measurement_base_id=measurement_base_id,
         measurement_base_name=measurement_base_name,
     )
+    document_result = store_timesheet_pdf_in_project_files(
+        db=db,
+        site_id=site_id,
+        current_user=current_user,
+        file_name=file_name,
+        pdf_content=pdf_content,
+        content_type=file.content_type,
+    )
     return MeasurementImportResponse(
         **summary,
+        **document_result,
         items=[MeasurementItemRead.model_validate(item) for item in items],
     )
+
+
+def store_timesheet_pdf_in_project_files(
+    *,
+    db: Session,
+    site_id: int,
+    current_user: User,
+    file_name: str,
+    pdf_content: bytes,
+    content_type: str | None,
+) -> dict[str, object]:
+    try:
+        folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
+            site_id,
+            TIMESHEET_DOCUMENTATION_FOLDER_KEY,
+            current_user,
+        )
+        uploaded = ProjectStorageService().upload_file_to_folder_without_overwrite(
+            drive_id=folder.external_drive_id,
+            folder_item_id=folder.external_item_id,
+            filename=file_name,
+            content=pdf_content,
+            content_type=content_type or "application/pdf",
+        )
+    except HTTPException as error:
+        detail = error.detail if isinstance(error.detail, str) else "Speicherung fehlgeschlagen."
+        return {
+            "timesheet_document_saved": False,
+            "timesheet_document_name": None,
+            "timesheet_document_error": detail,
+        }
+
+    return {
+        "timesheet_document_saved": True,
+        "timesheet_document_name": uploaded.get("name") or file_name,
+        "timesheet_document_error": None,
+    }
 
 @router.get("/{site_id}/removal-plan", response_model=SiteRemovePlan)
 def site_removal_plan(
