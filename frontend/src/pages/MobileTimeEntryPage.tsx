@@ -37,6 +37,7 @@ type MobileTimeSiteOption = {
   id: number;
   site_number: string | null;
   name: string;
+  location: string | null;
 };
 
 type MobileTimeRecentSiteOption = MobileTimeSiteOption & {
@@ -236,6 +237,9 @@ export function MobileTimeEntryPage() {
   const netMinutes = calculateNetMinutes(form.startTime, form.endTime, breakMinutes);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
   const breakValidationMessage = getBreakValidationMessage(grossMinutes, breakMinutes);
+  const selectedDateTotalMinutes = selectedDateEntries.reduce((total, entry) => total + entry.work_minutes, 0);
+  const selectedDateStatusLabel = `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)} erfasst`;
+  const plannedSiteCountLabel = formatCountLabel(plannedSiteOptions.length, "Baustelle", "Baustellen");
 
   function showMonth(month: Date) {
     const monthStart = startOfMonth(month);
@@ -570,40 +574,48 @@ export function MobileTimeEntryPage() {
           </section>
 
           <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
-            <div className="mobile-time-entry-heading">
+            <div className="mobile-time-day-head">
               <span>{formatCalendarWeek(selectedDate)}</span>
               <h1>{formatDetailDate(selectedDate)}</h1>
+              <p>{selectedDateStatusLabel}</p>
             </div>
 
             <div className="mobile-time-site-picker">
-              <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
-                <strong>Abweichend von Planung</strong>
-                <span>Baustelle manuell beschreiben</span>
-              </button>
-
               <section className="mobile-time-picker-section is-primary" aria-label="Geplante Baustellen">
                 <div className="mobile-time-picker-heading">
-                  <span>Geplante Baustellen</span>
-                  <strong>{plannedSiteOptions.length}</strong>
+                  <span>Heute geplant</span>
+                  <strong>{plannedSiteCountLabel}</strong>
                 </div>
                 {plannedSiteOptions.length ? (
                   <div className="mobile-time-site-grid">
                     {plannedSiteOptions.map((site) => (
-                      <button className="mobile-time-site-card is-planned" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
-                        <strong>{site.name}</strong>
-                        {site.site_number ? <span>{site.site_number}</span> : null}
-                      </button>
+                      <article className="mobile-time-site-card is-planned" key={site.id}>
+                        <div>
+                          <strong>{site.name}</strong>
+                          {formatSiteMeta(site) ? <span>{formatSiteMeta(site)}</span> : null}
+                        </div>
+                        <button className="mobile-time-site-action" type="button" onClick={() => openSiteEntry(site.id)}>
+                          Zeit erfassen
+                        </button>
+                      </article>
                     ))}
                   </div>
                 ) : (
                   <p className="mobile-time-picker-empty">Keine geplante Baustelle für diesen Tag.</p>
                 )}
+
+                <div className="mobile-time-manual-action">
+                  <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
+                    <strong>Abweichend eintragen</strong>
+                    <span>Baustelle manuell beschreiben</span>
+                  </button>
+                </div>
               </section>
 
               <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
                 <div className="mobile-time-day-entries-heading">
-                  <span>Einträge an diesem Tag</span>
-                  <strong>{selectedDateEntries.length}</strong>
+                  <span>Heute erfasst</span>
+                  <strong>{selectedDateEntries.length === 0 ? "0 Einträge · 0,0 h" : `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)}`}</strong>
                 </div>
                 {selectedDateEntries.length === 0 ? (
                   <p>Noch keine Zeit für diesen Tag erfasst.</p>
@@ -617,7 +629,7 @@ export function MobileTimeEntryPage() {
                         onClick={() => editEntry(entry)}
                       >
                         <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-                        <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)}</span>
+                        <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
                       </button>
                     ))}
                   </div>
@@ -626,7 +638,8 @@ export function MobileTimeEntryPage() {
 
               <section className="mobile-time-picker-section is-secondary" aria-label="Vergangene geplante Baustellen">
                 <div className="mobile-time-picker-heading">
-                  <span>Vergangene geplante Baustellen (6 Monate)</span>
+                  <span>Vergangene Baustellen</span>
+                  <small>Aus den letzten 6 Monaten</small>
                 </div>
                 {recentSiteOptions.length ? (
                   <div className="mobile-time-site-grid">
@@ -930,6 +943,7 @@ function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[
       id: site.id,
       site_number: site.site_number,
       name: site.name,
+      location: site.location,
     });
   }
   for (const assignment of assignments) {
@@ -937,14 +951,17 @@ function buildSiteOptionMap(assignments: MobileAssignment[], entries: TimeEntry[
       id: assignment.site.id,
       site_number: assignment.site.site_number,
       name: assignment.site.name,
+      location: assignment.site.location,
     });
   }
   for (const entry of entries) {
     if (entry.site_id !== null && entry.site_name) {
+      const existingSite = sites.get(entry.site_id);
       sites.set(entry.site_id, {
         id: entry.site_id,
         site_number: entry.site_number,
         name: entry.site_name,
+        location: existingSite?.location ?? null,
       });
     }
   }
@@ -973,6 +990,7 @@ function buildRecentPlannedSiteOptions({
       id: assignment.site.id,
       site_number: assignment.site.site_number,
       name: assignment.site.name,
+      location: assignment.site.location,
     };
     const current = latestBySite.get(site.id);
     if (!current || assignment.end_date > current.lastPlannedDate) {
@@ -981,7 +999,7 @@ function buildRecentPlannedSiteOptions({
   }
   return Array.from(latestBySite.values())
     .sort((first, second) => second.lastPlannedDate.localeCompare(first.lastPlannedDate) || compareSites(first, second))
-    .slice(0, 6);
+    .slice(0, 3);
 }
 
 function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, MobileTimeSiteOption>): DayWorkSummary[] {
@@ -1291,6 +1309,10 @@ function addDays(value: Date, count: number): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
 }
 
+function formatCountLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function formatCalendarWeek(value: string): string {
   const { week, year } = getIsoWeek(parseDateInput(value));
   return `KW ${week} · ${year}`;
@@ -1340,6 +1362,10 @@ function formatTimeRange(startTime: string | null | undefined, endTime: string |
 
 function siteOptionLabel(site: MobileTimeSiteOption): string {
   return [site.site_number, site.name].filter(Boolean).join(" - ") || `Baustelle ${site.id}`;
+}
+
+function formatSiteMeta(site: MobileTimeSiteOption): string {
+  return [site.site_number, site.location].filter(Boolean).join(" · ");
 }
 
 function getIsoWeek(value: Date): { week: number; year: number } {

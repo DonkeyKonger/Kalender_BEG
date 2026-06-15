@@ -3989,6 +3989,39 @@ button.person-chip:focus-visible {
   padding: 9px;
 }
 
+.mobile-time-day-head {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d8e1ee;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 11px 12px;
+}
+
+.mobile-time-day-head span {
+  color: #65738a;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mobile-time-day-head h1,
+.mobile-time-day-head p {
+  margin: 0;
+}
+
+.mobile-time-day-head h1 {
+  color: #111827;
+  font-size: 1.36rem;
+  line-height: 1.1;
+}
+
+.mobile-time-day-head p {
+  color: #536179;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
 .mobile-time-site-picker {
   display: grid;
   gap: 10px;
@@ -4000,7 +4033,7 @@ button.person-chip:focus-visible {
   gap: 4px;
   min-width: 0;
   border: 1px solid #d8e1ee;
-  border-radius: 12px;
+  border-radius: 3px;
   background: #ffffff;
   color: #111827;
   font: inherit;
@@ -4033,6 +4066,9 @@ button.person-chip:focus-visible {
 }
 
 .mobile-time-site-card.is-planned {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
   border-color: #b8cce4;
   background: #ffffff;
   padding: 10px 11px;
@@ -4054,14 +4090,17 @@ button.person-chip:focus-visible {
 
 .mobile-time-picker-section.is-primary {
   border: 1px solid #d8e3ef;
-  border-radius: 14px;
+  border-radius: 3px;
   background: #f8fbff;
   padding: 9px;
 }
 
 .mobile-time-picker-section.is-secondary {
+  border: 1px solid #e3e8ef;
+  border-radius: 3px;
+  background: #ffffff;
   border-top: 1px solid #edf0f4;
-  padding-top: 8px;
+  padding: 9px;
 }
 
 .mobile-time-picker-heading {
@@ -4084,22 +4123,53 @@ button.person-chip:focus-visible {
   font-weight: 800;
 }
 
+.mobile-time-picker-heading small {
+  color: #7a8798;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
 .mobile-time-picker-heading strong {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 999px;
+  min-height: 22px;
+  border-radius: 2px;
   background: #eef3f8;
   color: #65738a;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  padding: 3px 7px;
 }
 
 .mobile-time-site-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
+}
+
+.mobile-time-picker-section.is-primary .mobile-time-site-grid {
+  grid-template-columns: 1fr;
+}
+
+.mobile-time-site-action {
+  min-height: 38px;
+  border: 1px solid #143c6d;
+  border-radius: 2px;
+  background: #143c6d;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+  padding: 8px 10px;
+}
+
+.mobile-time-manual-action {
+  border-top: 1px solid #e4ebf3;
+  padding-top: 8px;
+}
+
+.mobile-time-manual-action .mobile-time-manual-card {
+  width: 100%;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-site-card {
@@ -4122,7 +4192,7 @@ button.person-chip:focus-visible {
 
 .mobile-time-picker-empty {
   margin: 0;
-  border-radius: 10px;
+  border-radius: 2px;
   background: #f5f7fa;
   padding: 8px 9px;
 }
@@ -4543,8 +4613,10 @@ button.person-chip:focus-visible {
 .mobile-time-day-entries {
   display: grid;
   gap: 7px;
-  border-top: 1px solid #edf0f4;
-  padding-top: 8px;
+  border: 1px solid #d8e1ee;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 9px;
 }
 
 .mobile-time-day-entries-heading {
@@ -4565,12 +4637,12 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 999px;
+  min-height: 22px;
+  border-radius: 2px;
   background: #eef3f8;
   color: #65738a;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  padding: 3px 7px;
 }
 
 .mobile-time-day-entries p {
@@ -4590,7 +4662,7 @@ button.person-chip:focus-visible {
   gap: 2px;
   width: 100%;
   border: 1px solid #d8e1ee;
-  border-radius: 11px;
+  border-radius: 3px;
   background: #ffffff;
   color: #111827;
   font: inherit;
