@@ -1936,12 +1936,28 @@ function ExtraWorkEntryPage({
 }
 
 function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
+  const addressLabel = formatMobileSiteAddressLabel(assignment.site);
+  const directionsUrl = buildGoogleMapsDirectionsUrl(assignment.site);
+
   return (
     <div className="mobile-detail-panel">
       <h2>Übersicht</h2>
       <div className="assignment-detail-list">
-        {(assignment.site.location || assignment.site.address) && (
-          <p><MapPin aria-hidden="true" size={16} /><span>{[assignment.site.location, assignment.site.address].filter(Boolean).join(" - ")}</span></p>
+        {addressLabel && (
+          directionsUrl ? (
+            <a
+              className="assignment-address-link"
+              href={directionsUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Route zu ${addressLabel} in Google Maps öffnen`}
+            >
+              <MapPin aria-hidden="true" size={16} />
+              <span>{addressLabel}</span>
+            </a>
+          ) : (
+            <p><MapPin aria-hidden="true" size={16} /><span>{addressLabel}</span></p>
+          )
         )}
         {assignment.site.project_manager && (
           <p><UserRound aria-hidden="true" size={16} /><span>{assignment.site.project_manager.display_name}</span></p>
@@ -5382,6 +5398,21 @@ function formatMobileSignatureLocation(site: MobileAssignment["site"]): string {
     return location;
   }
   return "Baustelle";
+}
+
+function formatMobileSiteAddressLabel(site: MobileAssignment["site"]): string {
+  return [site.location, site.address].map((part) => part?.trim()).filter(Boolean).join(" - ");
+}
+
+function buildGoogleMapsDirectionsUrl(site: MobileAssignment["site"]): string | null {
+  const address = site.address?.trim();
+  const location = site.location?.trim();
+  const destination = address || location;
+  if (!destination) {
+    return null;
+  }
+  const destinationWithCountry = /deutschland/i.test(destination) ? destination : `${destination}, Deutschland`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationWithCountry)}&travelmode=driving&dir_action=navigate`;
 }
 
 function getMobileMeasurementPdfFilename(batch: MobileMeasurementBatch): string {

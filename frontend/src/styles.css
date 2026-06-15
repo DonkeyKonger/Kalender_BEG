@@ -4588,7 +4588,8 @@ button.person-chip:focus-visible {
 }
 
 .assignment-date,
-.assignment-detail-list p {
+.assignment-detail-list p,
+.assignment-detail-list .assignment-address-link {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -4618,17 +4619,27 @@ button.person-chip:focus-visible {
   font-size: 0.92rem;
 }
 
-.assignment-detail-list p {
+.assignment-detail-list p,
+.assignment-detail-list .assignment-address-link {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fbfdff;
+  color: inherit;
   padding: 8px 9px;
+  text-decoration: none;
 }
 
 .assignment-detail-list svg,
 .assignment-date svg {
   flex: 0 0 auto;
   margin-top: 1px;
+}
+
+.assignment-detail-list .assignment-address-link:hover,
+.assignment-detail-list .assignment-address-link:focus-visible {
+  border-color: #b9c7da;
+  background: #f8fbff;
+  outline: none;
 }
 
 .assignment-note {
