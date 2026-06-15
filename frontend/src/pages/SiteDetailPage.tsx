@@ -3323,7 +3323,7 @@ function MeasurementReviewPanel({
                       void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
                     }}
                   >
-                    {isExportingOriginalPdf ? "PDF..." : "Aufmaß"}
+                    {isExportingOriginalPdf ? "PDF..." : "Originales Monteur-Aufmaß"}
                   </button>
                 </div>
               </div>
