@@ -1336,7 +1336,8 @@ button.entity-card:focus-visible,
 }
 
 .entity-drawer-footer .site-create-submit-button,
-.entity-drawer-footer .person-create-submit-button {
+.entity-drawer-footer .person-create-submit-button,
+.entity-drawer-footer .admin-create-submit-button {
   border: 1px solid #1f3657;
   border-radius: 2px;
   background: #1f3657;
@@ -1346,7 +1347,9 @@ button.entity-card:focus-visible,
 .entity-drawer-footer .site-create-submit-button:hover,
 .entity-drawer-footer .site-create-submit-button:focus-visible,
 .entity-drawer-footer .person-create-submit-button:hover,
-.entity-drawer-footer .person-create-submit-button:focus-visible {
+.entity-drawer-footer .person-create-submit-button:focus-visible,
+.entity-drawer-footer .admin-create-submit-button:hover,
+.entity-drawer-footer .admin-create-submit-button:focus-visible {
   border-color: #152946;
   background: #152946;
 }
@@ -8356,32 +8359,77 @@ button.person-chip:focus-visible {
   gap: 12px;
 }
 
-.admin-form-grid label,
-.password-reset-row label {
-  display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 0.86rem;
-  font-weight: 750;
+.admin-users-page .entity-drawer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
 }
 
-.admin-form-grid input,
-.admin-form-grid select,
-.password-reset-row input {
+.admin-users-page .entity-drawer-footer .icon-button {
+  min-height: 32px;
+  border-radius: 2px;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.admin-users-page .admin-form-grid.drawer-form-grid {
+  --admin-drawer-control-height: 32px;
+  gap: 9px;
+}
+
+.admin-users-page .admin-form-grid label,
+.admin-users-page .password-reset-row label {
+  display: grid;
+  gap: 4px;
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-users-page .entity-drawer-content > .drawer-field {
+  display: grid;
+  gap: 4px;
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-users-page .admin-form-grid input,
+.admin-users-page .admin-form-grid select,
+.admin-users-page .password-reset-row input,
+.admin-users-page .entity-drawer-content > .drawer-field input {
   width: 100%;
-  min-height: 38px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  min-height: 0;
+  border: 1px solid #d7e1ee;
+  border-radius: 2px;
   background: #ffffff;
   color: #111827;
-  padding: 9px 10px;
+  padding: 0 8px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
+  font: inherit;
 }
 
-.admin-form-grid input:focus,
-.admin-form-grid select:focus,
-.password-reset-row input:focus {
-  border-color: #1d5c99;
-  outline: 3px solid rgb(29 92 153 / 18%);
+.admin-users-page .admin-form-grid.drawer-form-grid input,
+.admin-users-page .admin-form-grid.drawer-form-grid select,
+.admin-users-page .entity-drawer-content > .drawer-field input {
+  height: var(--admin-drawer-control-height, 32px);
+}
+
+.admin-users-page .admin-form-grid input:focus,
+.admin-users-page .admin-form-grid select:focus,
+.admin-users-page .password-reset-row input:focus,
+.admin-users-page .entity-drawer-content > .drawer-field input:focus {
+  border-color: #7aa2d2;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.admin-users-page .admin-form-grid.drawer-form-grid .checkbox-field {
+  min-height: var(--admin-drawer-control-height, 32px);
+  color: #42526a;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .checkbox-field {

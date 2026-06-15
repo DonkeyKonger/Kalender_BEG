@@ -297,7 +297,7 @@ export function AdminUsersPage() {
         subtitle="Internen Zugang anlegen"
         onClose={closeDrawer}
         footer={(
-          <button className="icon-button" disabled={savingUserId === 0} type="button" onClick={() => void createUser()}>
+          <button className="icon-button admin-create-submit-button" disabled={savingUserId === 0} type="button" onClick={() => void createUser()}>
             <UserPlus aria-hidden="true" size={17} />
             <span>Benutzer anlegen</span>
           </button>
