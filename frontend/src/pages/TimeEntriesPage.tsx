@@ -244,6 +244,7 @@ export function TimeEntriesPage() {
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
+  const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
@@ -257,13 +258,16 @@ export function TimeEntriesPage() {
   const [isDownloadingExport, setIsDownloadingExport] = useState(false);
   const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
+  const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canViewGpsVerification = canManageTimeEntries;
   const visibleTimeSubtabs = canViewGpsVerification
     ? timeSubtabs
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
+  const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
+  const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
   const timeReviewRenderCountRef = useRef(0);
   timeReviewRenderCountRef.current += 1;
@@ -312,11 +316,19 @@ export function TimeEntriesPage() {
     () => isoWeekRange(selectedReviewWeek.year, selectedReviewWeek.week),
     [selectedReviewWeek.week, selectedReviewWeek.year],
   );
+  const evaluationWeekRange = useMemo(
+    () => isoWeekRange(selectedEvaluationWeek.year, selectedEvaluationWeek.week),
+    [selectedEvaluationWeek.week, selectedEvaluationWeek.year],
+  );
   const exportMonthRange = useMemo(
     () => monthRange(selectedExportMonth.year, selectedExportMonth.month),
     [selectedExportMonth.month, selectedExportMonth.year],
   );
-  const reviewDataRange = activeTimeSubtab === "export" ? exportMonthRange : reviewWeekRange;
+  const reviewDataRange = activeTimeSubtab === "export"
+    ? exportMonthRange
+    : activeTimeSubtab === "evaluation"
+      ? evaluationWeekRange
+      : reviewWeekRange;
   const exportMonthLabel = `${EXPORT_MONTH_LABELS[selectedExportMonth.month - 1]} ${selectedExportMonth.year}`;
   const exportYearOptions = useMemo(
     () => buildExportYearOptions(selectedExportMonth.year),
@@ -339,7 +351,7 @@ export function TimeEntriesPage() {
     () => [...sites].sort((left, right) => siteOptionLabel(left).localeCompare(siteOptionLabel(right), "de")),
     [sites],
   );
-  const timeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewEntries), [reviewEntries]);
+  const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.map((review) => review.person_id)),
     [reviewWeeklyReviews],
@@ -507,6 +519,23 @@ export function TimeEntriesPage() {
     return () => window.cancelAnimationFrame(animationFrameId);
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
+  useLayoutEffect(() => {
+    if (activeTimeSubtab !== "evaluation") {
+      hasAutoScrolledVisibleEvaluationWeekRef.current = false;
+      return;
+    }
+    if (hasAutoScrolledVisibleEvaluationWeekRef.current) {
+      return;
+    }
+    const animationFrameId = window.requestAnimationFrame(() => {
+      scrollWeekStripToSelection(evaluationWeekStripRef.current, reviewWeekOptions, selectedEvaluationWeek);
+      updateEvaluationWeekScrollState();
+      hasAutoScrolledVisibleEvaluationWeekRef.current = true;
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [activeTimeSubtab, reviewWeekOptions, selectedEvaluationWeek]);
+
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
       return;
@@ -521,6 +550,23 @@ export function TimeEntriesPage() {
     return () => {
       container.removeEventListener("scroll", updateReviewWeekScrollState);
       window.removeEventListener("resize", updateReviewWeekScrollState);
+    };
+  }, [activeTimeSubtab, reviewWeekOptions]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "evaluation") {
+      return;
+    }
+    const container = evaluationWeekStripRef.current;
+    if (!container) {
+      return;
+    }
+    updateEvaluationWeekScrollState();
+    container.addEventListener("scroll", updateEvaluationWeekScrollState, { passive: true });
+    window.addEventListener("resize", updateEvaluationWeekScrollState);
+    return () => {
+      container.removeEventListener("scroll", updateEvaluationWeekScrollState);
+      window.removeEventListener("resize", updateEvaluationWeekScrollState);
     };
   }, [activeTimeSubtab, reviewWeekOptions]);
 
@@ -722,6 +768,17 @@ export function TimeEntriesPage() {
     });
   }
 
+  function selectEvaluationWeek(option: CalendarWeekSelection): void {
+    if (option.year === selectedEvaluationWeek.year && option.week === selectedEvaluationWeek.week) {
+      return;
+    }
+    const scrollPosition = { left: window.scrollX, top: window.scrollY };
+    setSelectedEvaluationWeek({ year: option.year, week: option.week });
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ ...scrollPosition, behavior: "auto" });
+    });
+  }
+
   function updateReviewWeekScrollState(): void {
     const container = reviewWeekStripRef.current;
     if (!container) {
@@ -735,8 +792,30 @@ export function TimeEntriesPage() {
     });
   }
 
+  function updateEvaluationWeekScrollState(): void {
+    const container = evaluationWeekStripRef.current;
+    if (!container) {
+      setEvaluationWeekScrollState({ canScrollLeft: false, canScrollRight: false });
+      return;
+    }
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    setEvaluationWeekScrollState({
+      canScrollLeft: container.scrollLeft > 1,
+      canScrollRight: container.scrollLeft < maxScrollLeft - 1,
+    });
+  }
+
   function scrollReviewWeeks(direction: -1 | 1): void {
     const container = reviewWeekStripRef.current;
+    if (!container) {
+      return;
+    }
+    const scrollAmount = Math.min(420, Math.max(260, container.clientWidth * 0.75));
+    container.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+  }
+
+  function scrollEvaluationWeeks(direction: -1 | 1): void {
+    const container = evaluationWeekStripRef.current;
     if (!container) {
       return;
     }
@@ -1256,19 +1335,63 @@ export function TimeEntriesPage() {
       )}
 
       {activeTimeSubtab === "evaluation" && (
-        <div className="time-entries-main">
+        <div className="time-entries-main time-review-main">
+          <div className="time-week-nav-panel" aria-label="Kalenderwochen Auswertung">
+            <div className="time-week-nav-title">
+              <span>Kalenderwoche</span>
+              <strong>KW {selectedEvaluationWeek.week}</strong>
+            </div>
+            <div className="time-week-strip-shell">
+              <button
+                className="time-week-scroll-button"
+                disabled={!evaluationWeekScrollState.canScrollLeft}
+                type="button"
+                aria-label="Kalenderwochen nach links scrollen"
+                onClick={() => scrollEvaluationWeeks(-1)}
+              >
+                <ChevronLeft aria-hidden="true" size={16} />
+              </button>
+              <div className="time-week-strip" ref={evaluationWeekStripRef}>
+                {reviewWeekOptions.map((option, index) => (
+                  <button
+                    className={[
+                      option.year === selectedEvaluationWeek.year && option.week === selectedEvaluationWeek.week ? "is-active" : "",
+                      option.isCurrent ? "is-current" : "",
+                      completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
+                    ].filter(Boolean).join(" ")}
+                    data-week-index={index}
+                    key={`${option.year}-${option.week}`}
+                    title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                    type="button"
+                    onClick={() => selectEvaluationWeek(option)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="time-week-scroll-button"
+                disabled={!evaluationWeekScrollState.canScrollRight}
+                type="button"
+                aria-label="Kalenderwochen nach rechts scrollen"
+                onClick={() => scrollEvaluationWeeks(1)}
+              >
+                <ChevronRight aria-hidden="true" size={16} />
+              </button>
+            </div>
+          </div>
           <div className="time-final-hours-panel">
             <div className="time-entries-toolbar">
               <div>
                 <h2>Auswertung</h2>
-                <p>Summen, Lohnbasis und spätere Stundenzettel-Auswertung.</p>
+                <p>KW {selectedEvaluationWeek.week} · {formatRangeLabel(evaluationWeekRange.start, evaluationWeekRange.end)}</p>
               </div>
             </div>
             {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
             {isLoadingReviewAllEntries && <p className="time-table-note">Auswertung wird geladen...</p>}
             <div className="time-summary-strip">
               <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
-              <div><span>Offene Prüffälle</span><strong>{timeReviewIssues.length}</strong></div>
+              <div><span>Offene Prüffälle</span><strong>{evaluationTimeReviewIssues.length}</strong></div>
               <div><span>Monteure</span><strong>{finalHoursTotals.byPerson.length}</strong></div>
               <div><span>Baustellen</span><strong>{finalHoursTotals.bySite.length}</strong></div>
             </div>
