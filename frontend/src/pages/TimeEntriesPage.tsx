@@ -1406,7 +1406,6 @@ export function TimeEntriesPage() {
               </div>
             </div>
             {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
-            {isLoadingReviewAllEntries && <p className="time-table-note">Auswertung wird geladen...</p>}
             <div className="time-summary-strip">
               <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
               <div><span>Offene Prüffälle</span><strong>{evaluationTimeReviewIssues.length}</strong></div>
