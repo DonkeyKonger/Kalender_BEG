@@ -4480,7 +4480,7 @@ button.person-chip:focus-visible {
   z-index: 1750;
   display: grid;
   place-items: center;
-  background: rgb(15 23 42 / 34%);
+  background: rgb(15 23 42 / 42%);
   padding: max(18px, env(safe-area-inset-top, 0px)) 18px max(18px, env(safe-area-inset-bottom, 0px));
 }
 
@@ -4490,7 +4490,7 @@ button.person-chip:focus-visible {
   width: min(100%, 360px);
   border: 1px solid #d8e1ee;
   border-top: 5px solid #f2b84b;
-  border-radius: 2px;
+  border-radius: 18px;
   background: #ffffff;
   padding: 16px;
   box-shadow: 0 18px 42px rgb(15 23 42 / 24%);
@@ -4535,7 +4535,7 @@ button.person-chip:focus-visible {
 .mobile-time-break-modal-actions button {
   min-height: 44px;
   border: 1px solid #d8e1ee;
-  border-radius: 2px;
+  border-radius: 12px;
   background: #ffffff;
   color: #31415a;
   font: inherit;
@@ -4548,6 +4548,7 @@ button.person-chip:focus-visible {
   border-color: #143c6d;
   background: #eaf2ff;
   color: #143c6d;
+  box-shadow: 0 0 0 3px rgb(20 60 109 / 10%);
 }
 
 .mobile-time-break-modal-options button:disabled {
