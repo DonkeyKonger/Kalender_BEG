@@ -1262,6 +1262,29 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert service.list_dashboard_submissions(limit=5) == []
 
 
+def test_measurement_pdf_signature_place_uses_site_city():
+    from app.services.measurement_pdf_service import _site_signature_city
+
+    db = db_session()
+    site = create_site(db)
+    site.address = "Ulmenallee 5, 49214 Bad Rothenfelde"
+    site.city = "Bad Rothenfelde"
+
+    assert _site_signature_city(site, "Ulmenallee 5, 49214 Bad Rothenfelde") == "Bad Rothenfelde"
+
+
+def test_measurement_pdf_signature_place_extracts_city_from_legacy_address():
+    from app.services.measurement_pdf_service import _site_signature_city
+
+    db = db_session()
+    site = create_site(db)
+    site.city = None
+    site.address = None
+    site.location = None
+
+    assert _site_signature_city(site, "Ulmenallee 5, 49214 Bad Rothenfelde") == "Bad Rothenfelde"
+
+
 def test_measurement_pdf_matrix_separates_original_and_checked_values():
     from datetime import datetime, timezone
 

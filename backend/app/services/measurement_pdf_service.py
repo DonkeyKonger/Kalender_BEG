@@ -6,6 +6,7 @@ from decimal import Decimal
 from io import BytesIO
 import logging
 from pathlib import Path
+import re
 import struct
 from time import perf_counter
 from textwrap import wrap
@@ -26,7 +27,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
-from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, format_site_signature_location
+from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
@@ -690,7 +691,7 @@ class MeasurementPdfService:
                 worker_signed_at=batch.worker_signed_at,
                 worker_signature_strokes=batch.worker_signature_strokes,
                 customer_name=batch.customer_signature_name,
-                customer_signature_place=batch.customer_signature_place or format_site_signature_location(batch.site),
+                customer_signature_place=_site_signature_city(batch.site, batch.customer_signature_place),
                 customer_signed_at=batch.customer_signed_at,
                 customer_signature_strokes=batch.customer_signature_strokes,
             )
@@ -896,15 +897,9 @@ def _signature_block(
     _text(commands, 53, 42.6, "ordnungsgemäße Montage bescheinigen:", 7)
     _text(commands, 54, 20.0, "Ort / Datum:", 7, "F2")
     if customer_signed_at is not None:
-        location_date = " · ".join(
-            part
-            for part in [
-                customer_signature_place,
-                _format_date(customer_signed_at),
-            ]
-            if part
-        )
-        _text_fitted(commands, 139, 19.8, location_date, 6.8, max_width=95)
+        if customer_signature_place:
+            _text_fitted(commands, 139, 19.8, customer_signature_place, 6.8, max_width=48)
+        _text(commands, 232, 19.8, _format_date(customer_signed_at), 6.8, align_right=True)
     _line(commands, 136, 14.6, 233.5, 14.6, 0.8)
 
     _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")
@@ -923,6 +918,47 @@ def _signature_block(
     _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
     _draw_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
     _line(commands, 661, 14.6, 764, 14.6, 0.8)
+
+
+def _site_signature_city(site, fallback_place: str | None = None) -> str:
+    if site is not None:
+        city = _clean_signature_place_part(getattr(site, "city", None))
+        if city:
+            return city
+
+    for value in (
+        fallback_place,
+        getattr(site, "address", None) if site is not None else None,
+        getattr(site, "location", None) if site is not None else None,
+    ):
+        city = _city_from_location_text(value)
+        if city:
+            return city
+    return ""
+
+
+def _city_from_location_text(value: str | None) -> str:
+    text = _clean_signature_place_part(value)
+    if not text:
+        return ""
+
+    candidates = [part.strip() for part in text.split(",") if part.strip()] or [text]
+    for candidate in reversed(candidates):
+        postal_city_match = re.match(r"^(?:[A-Z]{1,3}-)?\d{4,5}\s+(.+)$", candidate)
+        if postal_city_match:
+            return postal_city_match.group(1).strip()
+
+    if len(candidates) > 1:
+        return ""
+    if re.search(r"\d", text):
+        return ""
+    return text
+
+
+def _clean_signature_place_part(value: str | None) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split()).strip()
 
 
 def _draw_signature(
