@@ -18,6 +18,7 @@ const personTypeLabels: Record<PersonType, string> = {
 type EditablePerson = PersonCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
 type PersonScope = "internal" | "external";
+type PeopleOverviewGroup = { key: string; label: string; people: Person[]; collapsible?: boolean };
 
 const emptyPerson: PersonCreate = {
   first_name: "",
@@ -51,6 +52,7 @@ export function PersonsPage() {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingPerson, setIsEditingPerson] = useState(false);
   const [personScope, setPersonScope] = useState<PersonScope>("internal");
+  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
@@ -246,6 +248,18 @@ export function PersonsPage() {
     setDrawer(null);
   }
 
+  function togglePersonGroup(groupKey: string) {
+    setCollapsedPersonGroupKeys((current) => {
+      const next = new Set(current);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }
+
   return (
     <section className="persons-page overview-page">
       <div className="page-header entity-page-header overview-header">
@@ -307,33 +321,55 @@ export function PersonsPage() {
         <>
           {personGroups.length ? (
             <div className="overview-group-list">
-              {personGroups.map((group) => (
-                <section className="overview-group-section" key={group.key}>
-                  <div className="overview-group-header">
-                    <h2>
-                      <ChevronDown aria-hidden="true" size={16} />
-                      <span>{group.label}</span>
-                    </h2>
-                    <span className="overview-group-count">{group.people.length}</span>
-                  </div>
-                  <div className="entity-card-list overview-card-grid">
-                    {group.people.map((person) => (
-                      <EntityCard
-                        key={person.id}
-                        className={`overview-card person-overview-card ${person.person_type !== "internal" ? "is-external-person" : ""}`}
-                        color={personCardColor(person)}
-                        title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
-                        subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
-                        meta={personCardMeta(person)}
-                        icon={<Users aria-hidden="true" size={17} />}
-                        status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
-                        isInactive={!person.is_active}
-                        onClick={() => openPersonDrawer(person.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {personGroups.map((group) => {
+                const groupId = `person-overview-group-${group.key}`;
+                const isCollapsed = Boolean(group.collapsible && collapsedPersonGroupKeys.has(group.key));
+                return (
+                  <section className={`overview-group-section ${isCollapsed ? "is-collapsed" : ""}`} key={group.key}>
+                    {group.collapsible ? (
+                      <button
+                        className="overview-group-header overview-group-toggle"
+                        type="button"
+                        aria-expanded={!isCollapsed}
+                        aria-controls={groupId}
+                        onClick={() => togglePersonGroup(group.key)}
+                      >
+                        <h2>
+                          <ChevronDown aria-hidden="true" size={16} />
+                          <span>{group.label}</span>
+                        </h2>
+                        <span className="overview-group-count">{group.people.length}</span>
+                      </button>
+                    ) : (
+                      <div className="overview-group-header">
+                        <h2>
+                          <ChevronDown aria-hidden="true" size={16} />
+                          <span>{group.label}</span>
+                        </h2>
+                        <span className="overview-group-count">{group.people.length}</span>
+                      </div>
+                    )}
+                    {!isCollapsed && (
+                      <div className="entity-card-list overview-card-grid" id={groupId}>
+                        {group.people.map((person) => (
+                          <EntityCard
+                            key={person.id}
+                            className={`overview-card person-overview-card ${person.person_type !== "internal" ? "is-external-person" : ""}`}
+                            color={personCardColor(person)}
+                            title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
+                            subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
+                            meta={personCardMeta(person)}
+                            icon={<Users aria-hidden="true" size={17} />}
+                            status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                            isInactive={!person.is_active}
+                            onClick={() => openPersonDrawer(person.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div className="empty-panel">
@@ -855,7 +891,7 @@ function personInScope(person: Person, scope: PersonScope): boolean {
   return person.person_type !== "internal";
 }
 
-function groupPeopleForOverview(people: Person[], scope: PersonScope): Array<{ key: string; label: string; people: Person[] }> {
+function groupPeopleForOverview(people: Person[], scope: PersonScope): PeopleOverviewGroup[] {
   if (scope === "external") {
     return [
       { key: "external", label: "Externe / Leiharbeiter", people: people.filter((person) => person.is_active && person.person_type === "external") },
@@ -863,10 +899,28 @@ function groupPeopleForOverview(people: Person[], scope: PersonScope): Array<{ k
       { key: "inactive-external", label: "Inaktive Externe", people: people.filter((person) => !person.is_active) },
     ].filter((group) => group.people.length > 0);
   }
+  const internalPeople = people.filter((person) => person.person_type === "internal");
   return [
-    { key: "internal", label: "Eigenes Personal", people: people.filter((person) => person.is_active) },
-    { key: "inactive-internal", label: "Inaktive", people: people.filter((person) => !person.is_active) },
+    { key: "internal-project-managers", label: "Projektleiter", people: internalPeople.filter(isProjectManagerPerson), collapsible: true },
+    { key: "internal-office", label: "Büro", people: internalPeople.filter(isOfficePerson), collapsible: true },
+    { key: "internal-workers", label: "Monteure", people: internalPeople.filter(isWorkerPerson), collapsible: true },
   ].filter((group) => group.people.length > 0);
+}
+
+function isProjectManagerPerson(person: Person): boolean {
+  return person.user_roles?.includes("project_manager") ?? false;
+}
+
+function isOfficePerson(person: Person): boolean {
+  if (isProjectManagerPerson(person)) {
+    return false;
+  }
+  const roles = person.user_roles ?? [];
+  return roles.includes("office") || roles.includes("admin");
+}
+
+function isWorkerPerson(person: Person): boolean {
+  return !isProjectManagerPerson(person) && !isOfficePerson(person);
 }
 
 function personCardColor(person: Person): string {

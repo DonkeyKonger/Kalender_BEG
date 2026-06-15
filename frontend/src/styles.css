@@ -5135,6 +5135,30 @@ button.person-chip:focus-visible {
   border-radius: 0;
 }
 
+.persons-page .overview-group-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.persons-page .overview-group-toggle:hover,
+.persons-page .overview-group-toggle:focus-visible {
+  background: #f8fbff;
+  outline: 1px solid #c8d8eb;
+  outline-offset: 0;
+}
+
+.persons-page .overview-group-section.is-collapsed {
+  gap: 0;
+}
+
+.persons-page .overview-group-section.is-collapsed .overview-group-header svg {
+  transform: rotate(-90deg);
+}
+
 .persons-page .overview-group-count {
   border-radius: 0;
 }
