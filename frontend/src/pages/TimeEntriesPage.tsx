@@ -260,7 +260,7 @@ export function TimeEntriesPage() {
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
-  const canViewGpsVerification = canManageTimeEntries;
+  const canViewGpsVerification = user?.role === "admin";
   const visibleTimeSubtabs = canViewGpsVerification
     ? timeSubtabs
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
@@ -283,6 +283,12 @@ export function TimeEntriesPage() {
     }
     void loadRecentGpsPoints();
   }, [canViewGpsVerification]);
+
+  useEffect(() => {
+    if (!canViewGpsVerification && activeTimeSubtab === "gpsVerification") {
+      setActiveTimeSubtab("review");
+    }
+  }, [activeTimeSubtab, canViewGpsVerification]);
 
   async function loadPeople() {
     setIsLoadingPeople(true);
