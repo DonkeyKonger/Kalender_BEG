@@ -1187,9 +1187,6 @@ export function TimeEntriesPage() {
 
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
             {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
-            {(isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length > 0 && (
-              <p className="time-table-note">Kalenderwoche wird geladen...</p>
-            )}
             {isLoadingPeople && timeReviewWorkers.length === 0 && (
               <div className="empty-panel">Monteure werden geladen...</div>
             )}
