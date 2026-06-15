@@ -1237,7 +1237,7 @@ function renderSiteCard(
   );
 }
 
-const siteStatusOptions: Array<{ value: SiteStatus; label: string }> = [
+export const siteStatusOptions: Array<{ value: SiteStatus; label: string }> = [
   { value: "active", label: siteStatusLabels.active },
   { value: "paused", label: siteStatusLabels.paused },
   { value: "planned", label: siteStatusLabels.planned },

@@ -17,7 +17,7 @@ import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
-import { SiteFields, normalizeSitePayload, toEditableSite, validateSitePayload } from "./SitesPage";
+import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
@@ -82,6 +82,7 @@ export function SiteDetailPage() {
   const [activeTab, setActiveTab] = useState<ProjectRecordTab>("overview");
   const [editMode, setEditMode] = useState(false);
   const [isSavingSite, setIsSavingSite] = useState(false);
+  const [isSavingSiteStatus, setIsSavingSiteStatus] = useState(false);
   const [isCheckingSiteLocation, setIsCheckingSiteLocation] = useState(false);
   const [siteSaveError, setSiteSaveError] = useState<string | null>(null);
   const [siteSaveMessage, setSiteSaveMessage] = useState<string | null>(null);
@@ -790,6 +791,25 @@ export function SiteDetailPage() {
     setSiteDraft(toEditableSite(updated));
   }
 
+  async function updateSiteHeaderStatus(nextStatus: Site["status"]): Promise<void> {
+    if (!site || !canEditSite || site.status === nextStatus || isSavingSiteStatus) {
+      return;
+    }
+    setIsSavingSiteStatus(true);
+    setSiteSaveError(null);
+    setSiteSaveMessage(null);
+    try {
+      const updated = await api.updateSite(site.id, { status: nextStatus });
+      setSite(updated);
+      setSiteDraft(toEditableSite(updated));
+      setSiteSaveMessage(`Status aktualisiert: ${siteStatusLabels[updated.status]}.`);
+    } catch (requestError) {
+      setSiteSaveError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingSiteStatus(false);
+    }
+  }
+
   async function saveSiteNotes(info: string | null): Promise<void> {
     await saveSiteInline({ info });
   }
@@ -925,7 +945,23 @@ export function SiteDetailPage() {
           <p>{[site.site_number, site.customer].filter(Boolean).join(" - ")}</p>
         </div>
         <div className="site-detail-header-actions">
-          <SiteStatusBadge status={site.status} />
+          {canEditSite ? (
+            <select
+              aria-label={`Status fuer ${site.name} aendern`}
+              className={`site-detail-status-select site-card-status-select status-badge-${site.status}`}
+              disabled={isSavingSiteStatus}
+              value={site.status}
+              onChange={(event) => void updateSiteHeaderStatus(event.target.value as Site["status"])}
+            >
+              {siteStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <SiteStatusBadge status={site.status} />
+          )}
         </div>
       </div>
 

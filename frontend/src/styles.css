@@ -15976,6 +15976,21 @@ button.person-chip:focus-visible {
   font-size: 0.74rem;
 }
 
+.site-detail-page.is-project-file-workspace .site-detail-status-select {
+  align-self: start;
+  max-width: 92px;
+  min-height: 26px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding: 3px 20px 3px 8px;
+  font-size: 0.72rem;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-status-select:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .site-detail-page.is-project-file-workspace .site-detail-header-actions {
   display: grid;
   justify-items: end;
