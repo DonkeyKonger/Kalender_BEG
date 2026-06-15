@@ -34,6 +34,7 @@ class UserService:
             username=username,
             display_name=clean_display_name(payload.display_name),
             password_hash=hash_password(payload.password),
+            last_admin_password_plain=payload.password,
             role=payload.role,
             is_active=payload.is_active,
             must_change_password=True,
@@ -79,6 +80,7 @@ class UserService:
     def reset_password(self, user_id: int, payload: UserPasswordReset) -> User:
         user = self._get_user(user_id)
         user.password_hash = hash_password(payload.password)
+        user.last_admin_password_plain = payload.password
         user.must_change_password = True
         self.db.commit()
         self.db.refresh(user)

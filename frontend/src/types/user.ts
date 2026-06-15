@@ -7,6 +7,7 @@ export type AdminUser = {
   role: UserRole;
   is_active: boolean;
   must_change_password: boolean;
+  last_admin_password_plain: string | null;
   person_id: number | null;
   last_login_at: string | null;
   created_at: string;

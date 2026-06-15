@@ -3,8 +3,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from app.core.security import verify_password
 from app.models.enums import UserRole
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserPasswordReset, UserUpdate
 from app.services.user_service import UserService
 
 
@@ -14,6 +15,18 @@ class FakeDb:
 
     def refresh(self, _item):
         raise AssertionError("refresh should not be reached")
+
+
+class RecordingDb:
+    def __init__(self):
+        self.committed = False
+        self.refreshed = None
+
+    def commit(self):
+        self.committed = True
+
+    def refresh(self, item):
+        self.refreshed = item
 
 
 class FakeUsers:
@@ -104,3 +117,43 @@ def test_duplicate_username_is_blocked_on_create():
         )
 
     assert error.value.status_code == 409
+
+
+def test_admin_password_reset_stores_last_admin_plain_password():
+    user = SimpleNamespace(
+        id=2,
+        password_hash="old-hash",
+        last_admin_password_plain="old-start",
+        must_change_password=False,
+    )
+    db = RecordingDb()
+    service = service_with(user=user)
+    service.db = db
+
+    service.reset_password(2, UserPasswordReset(password="NewStart123"))
+
+    assert db.committed is True
+    assert db.refreshed is user
+    assert user.last_admin_password_plain == "NewStart123"
+    assert user.must_change_password is True
+    assert verify_password("NewStart123", user.password_hash)
+
+
+def test_own_password_change_does_not_overwrite_last_admin_plain_password():
+    user = SimpleNamespace(
+        id=2,
+        password_hash="old-hash",
+        last_admin_password_plain="AdminStart123",
+        must_change_password=True,
+    )
+    db = RecordingDb()
+    service = service_with(user=user)
+    service.db = db
+
+    service.change_own_password(2, "OwnSecret123")
+
+    assert db.committed is True
+    assert db.refreshed is user
+    assert user.last_admin_password_plain == "AdminStart123"
+    assert user.must_change_password is False
+    assert verify_password("OwnSecret123", user.password_hash)

@@ -33,6 +33,7 @@ class UserRead(BaseModel):
     role: UserRole
     is_active: bool
     must_change_password: bool
+    last_admin_password_plain: str | None = None
     person_id: int | None = None
     last_login_at: datetime | None = None
     created_at: datetime

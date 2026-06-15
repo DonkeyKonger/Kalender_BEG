@@ -8462,6 +8462,11 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
+.admin-users-page .entity-drawer-content > .drawer-field input[readonly] {
+  background: #f8fafc;
+  color: #42526a;
+}
+
 .admin-users-page .admin-form-grid.drawer-form-grid .checkbox-field {
   min-height: var(--admin-drawer-control-height, 32px);
   color: #42526a;

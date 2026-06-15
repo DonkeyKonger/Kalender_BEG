@@ -374,7 +374,16 @@ export function AdminUsersPage() {
               onChange={(values) => updateDraft(selectedUser.id, values)}
             />
             <label className="drawer-field">
-              <span>Neues temporaeres Startpasswort</span>
+              <span>Letztes vom Admin vergebenes Startpasswort</span>
+              <input
+                readOnly
+                type="text"
+                value={selectedUser.last_admin_password_plain ?? ""}
+                placeholder="-"
+              />
+            </label>
+            <label className="drawer-field">
+              <span>Neues temporäres Startpasswort</span>
               <input
                 autoComplete="off"
                 type="text"
