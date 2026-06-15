@@ -4,7 +4,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin
+from app.api.dependencies import get_db, require_admin, require_roles
+from app.models.enums import UserRole
 from app.models.user import User
 from app.services.ctrack_client import (
     CtrackClient,
@@ -16,6 +17,7 @@ from app.services.ctrack_client import (
 router = APIRouter(prefix="/admin/integrations/ctrack", tags=["admin-integrations"])
 integration_router = APIRouter(prefix="/integrations/ctrack", tags=["vehicle-integrations"])
 vehicles_router = APIRouter(prefix="/vehicles", tags=["vehicles"])
+CAN_READ_VEHICLE_POSITIONS = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 
 
 @router.get("/vehicles")
@@ -46,7 +48,7 @@ def list_vehicle_assets(
 
 @vehicles_router.get("/latest-positions")
 def list_vehicle_latest_positions(
-    _current_user: User = Depends(require_admin),
+    _current_user: User = Depends(CAN_READ_VEHICLE_POSITIONS),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     return CtrackVehicleSyncService(db).list_latest_positions()
