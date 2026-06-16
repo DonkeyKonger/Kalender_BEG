@@ -15981,7 +15981,7 @@ button.person-chip:focus-visible {
   max-width: 92px;
   min-height: 26px;
   border: 1px solid currentColor;
-  border-radius: 2px;
+  border-radius: 0;
   padding: 3px 20px 3px 8px;
   font-size: 0.72rem;
 }
