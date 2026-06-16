@@ -291,7 +291,7 @@ export function MatrixPage() {
     if (firstDay !== activeRange.start || lastDay !== activeRange.end) {
       return;
     }
-    const scrollKey = `${isYearView ? "year" : "standard"}:${activeRange.start}:${activeRange.end}`;
+    const scrollKey = `${isYearView ? "year" : "standard"}:${projectManagerFilter}:${activeRange.start}:${activeRange.end}`;
     if (rangeScrollKeyRef.current === scrollKey) {
       return;
     }
@@ -303,7 +303,7 @@ export function MatrixPage() {
     if (matrix.days.some((day) => day.date === today)) {
       matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
     }
-  }, [activeRange.end, activeRange.start, isCompactView, isYearView, matrix, today]);
+  }, [activeRange.end, activeRange.start, isCompactView, isYearView, matrix, projectManagerFilter, today]);
 
   const handleMatrixScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
     if (!matrix || isYearView || isApplyingWeekSnapRef.current) {
