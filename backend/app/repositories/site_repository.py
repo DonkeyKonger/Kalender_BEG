@@ -22,12 +22,20 @@ class SiteRepository:
             statement = statement.where(Site.status != SiteStatus.DELETED)
         return self.db.scalar(statement)
 
-    def list(self, include_closed: bool = False) -> list[Site]:
+    def list(
+        self,
+        include_closed: bool = False,
+        project_manager_person_id: int | None = None,
+    ) -> list[Site]:
         statement = (
             select(Site)
             .options(selectinload(Site.project_manager))
             .order_by(Site.name)
         )
+        if project_manager_person_id is not None:
+            statement = statement.where(
+                Site.project_manager_person_id == project_manager_person_id
+            )
         if not include_closed:
             statement = statement.where(
                 Site.status.not_in([SiteStatus.COMPLETED, SiteStatus.DELETED])

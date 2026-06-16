@@ -217,12 +217,14 @@ export function MatrixPage() {
     setError(null);
     try {
       const shouldLoadPeople = !hasLoadedPeopleRef.current;
+      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
       const [matrixData, personData, absenceData] = await Promise.all([
         api.matrix({
           start: activeRange.start,
           end: activeRange.end,
           includeWeekends: true,
           yearView: isYearView,
+          projectManagerPersonId,
         }),
         shouldLoadPeople ? api.persons() : Promise.resolve<Person[] | null>(null),
         api.absences({ start: activeRange.start, end: activeRange.end }),
@@ -239,18 +241,20 @@ export function MatrixPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeRange.end, activeRange.start, isYearView]);
+  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
 
   const refreshMatrixOnly = useCallback(async () => {
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
     const matrixData = await api.matrix({
       start: activeRange.start,
       end: activeRange.end,
       includeWeekends: true,
       yearView: isYearView,
+      projectManagerPersonId,
     });
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-  }, [activeRange.end, activeRange.start, isYearView]);
+  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
 
   const refreshAbsencesOnly = useCallback(async () => {
     const absenceData = await api.absences({ start: activeRange.start, end: activeRange.end });
@@ -273,7 +277,7 @@ export function MatrixPage() {
       return;
     }
     didSetInitialProjectManagerFilter.current = true;
-    if (user?.person_id && matrix.rows.some((row) => row.site.project_manager_person_id === user.person_id)) {
+    if (user?.person_id && matrix.project_managers.some((manager) => manager.id === user.person_id)) {
       setProjectManagerFilter(String(user.person_id));
     }
   }, [matrix, user?.person_id]);
@@ -1295,7 +1299,7 @@ export function MatrixPage() {
     if (!matrix) {
       return [];
     }
-    return projectManagerOptionsFromRows(matrix.rows);
+    return projectManagerOptionsFromPeople(matrix.project_managers);
   }, [matrix]);
 
   const visibleRowGroups = useMemo(() => {
@@ -2677,20 +2681,22 @@ function matrixSiteHasAddress(site: MatrixRow["site"]): boolean {
   return Boolean(site.location?.trim());
 }
 
-function projectManagerOptionsFromRows(rows: MatrixRow[]): ProjectManagerOption[] {
-  const options = new Map<number, ProjectManagerOption>();
-  rows.forEach((row) => {
-    const manager = row.site.project_manager;
-    if (!manager) {
-      return;
-    }
-    options.set(manager.id, {
-      id: manager.id,
-      name: manager.display_name,
-      shortCode: manager.short_code,
-    });
-  });
-  return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, "de"));
+function projectManagerOptionsFromPeople(people: MatrixPerson[]): ProjectManagerOption[] {
+  return people
+    .map((person) => ({
+      id: person.id,
+      name: person.display_name,
+      shortCode: person.short_code,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, "de"));
+}
+
+function matrixProjectManagerPersonIdFromFilter(projectManagerFilter: string): number | undefined {
+  if (projectManagerFilter === "all") {
+    return undefined;
+  }
+  const personId = Number(projectManagerFilter);
+  return Number.isFinite(personId) ? personId : undefined;
 }
 
 function groupMatrixRows(rows: MatrixRow[], projectManagerFilter: string): MatrixRowGroup[] {

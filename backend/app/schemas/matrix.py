@@ -68,6 +68,7 @@ class MatrixResponse(BaseModel):
     start_date: Date
     end_date: Date
     days: list[MatrixDay]
+    project_managers: list[MatrixPerson] = Field(default_factory=list)
     rows: list[MatrixRow]
 
 

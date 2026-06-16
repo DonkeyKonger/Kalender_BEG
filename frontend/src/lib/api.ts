@@ -1240,6 +1240,7 @@ export const api = {
     end: string;
     includeWeekends: boolean;
     yearView?: boolean;
+    projectManagerPersonId?: number;
   }): Promise<MatrixResponse> {
     const search = new URLSearchParams({
       start: params.start,
@@ -1248,6 +1249,9 @@ export const api = {
     });
     if (params.yearView) {
       search.set("year_view", "true");
+    }
+    if (params.projectManagerPersonId !== undefined) {
+      search.set("project_manager_person_id", String(params.projectManagerPersonId));
     }
     return request<MatrixResponse>(`/matrix?${search.toString()}`);
   },

@@ -43,6 +43,7 @@ class MatrixService:
         include_weekends: bool = False,
         include_closed: bool = False,
         year_view: bool = False,
+        project_manager_person_id: int | None = None,
     ) -> MatrixResponse:
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
@@ -67,7 +68,16 @@ class MatrixService:
             if include_weekends or day.weekday() < 5 or day in planned_weekend_dates
         ]
 
-        visible_sites = self.sites.list(include_closed=include_closed)
+        all_visible_sites = self.sites.list(include_closed=include_closed)
+        project_managers = self._build_project_managers(all_visible_sites)
+        visible_sites = (
+            all_visible_sites
+            if project_manager_person_id is None
+            else self.sites.list(
+                include_closed=include_closed,
+                project_manager_person_id=project_manager_person_id,
+            )
+        )
         site_ids = {site.id for site in visible_sites}
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
         marks = self._list_marks(site_ids=site_ids, start=start, end=end)
@@ -86,6 +96,7 @@ class MatrixService:
             start_date=start,
             end_date=end,
             days=[self._build_day(day) for day in visible_days],
+            project_managers=project_managers,
             rows=rows,
         )
 
@@ -212,6 +223,20 @@ class MatrixService:
             short_code=calendar_short_code(person),
             person_type=person.person_type,
         )
+
+    def _build_project_managers(self, sites: list[Site]) -> list[MatrixPerson]:
+        people_by_id = {
+            site.project_manager.id: site.project_manager
+            for site in sites
+            if site.project_manager is not None
+        }
+        return [
+            self._build_person(person)
+            for person in sorted(
+                people_by_id.values(),
+                key=lambda person: (person.display_name, person.id),
+            )
+        ]
 
     def _build_day(self, day: date) -> MatrixDay:
         return MatrixDay(date=day, weekday=day.weekday(), is_weekend=day.weekday() >= 5)

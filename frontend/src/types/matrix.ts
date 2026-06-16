@@ -76,6 +76,7 @@ export type MatrixResponse = {
   start_date: string;
   end_date: string;
   days: MatrixDay[];
+  project_managers: MatrixPerson[];
   rows: MatrixRow[];
 };
 
