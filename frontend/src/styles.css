@@ -369,12 +369,28 @@ button:disabled {
     z-index: 60;
     width: 72px;
     height: 100vh;
-    overflow-x: hidden;
-    overflow-y: auto;
-    border-right: 1px solid rgb(148 163 184 / 20%);
+    overflow: visible;
+    border-right: 0;
     border-bottom: 0;
     padding: 18px 10px;
-    transition: width 160ms ease, box-shadow 160ms ease, padding 160ms ease;
+    background: transparent;
+    contain: layout;
+  }
+
+  .sidebar::before {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+    width: 260px;
+    border-right: 1px solid rgb(148 163 184 / 20%);
+    background: linear-gradient(180deg, #06294d 0%, #041d38 100%);
+    box-shadow: 14px 0 28px rgb(4 29 56 / 22%);
+    content: "";
+    transform: scaleX(0.277);
+    transform-origin: left center;
+    transition: transform 160ms ease;
   }
 
   .app-main {
@@ -382,63 +398,62 @@ button:disabled {
     min-width: 0;
   }
 
-  .sidebar:hover,
-  .sidebar:focus-within {
-    width: 260px;
-    padding: 18px;
-    box-shadow: 14px 0 28px rgb(4 29 56 / 22%);
+  .sidebar:hover::before,
+  .sidebar:focus-within::before {
+    transform: scaleX(1);
   }
 
   .brand-block {
-    justify-content: center;
-    gap: 0;
-  }
-
-  .sidebar:hover .brand-block,
-  .sidebar:focus-within .brand-block {
     justify-content: flex-start;
     gap: 10px;
+    pointer-events: none;
+    width: 240px;
   }
 
   .brand-copy,
   .nav-label {
-    width: 0;
-    max-width: 0;
     overflow: hidden;
     opacity: 0;
+    pointer-events: none;
+    transform: translateX(-6px);
     white-space: nowrap;
-    transition: opacity 120ms ease, max-width 160ms ease;
+    transition: opacity 120ms ease, transform 160ms ease;
   }
 
   .sidebar:hover .brand-copy,
   .sidebar:focus-within .brand-copy {
-    width: auto;
-    max-width: 190px;
     opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
   }
 
   .sidebar:hover .nav-label,
   .sidebar:focus-within .nav-label {
-    width: auto;
-    max-width: 160px;
     opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
   }
 
   .nav-list {
     display: grid;
+    width: 224px;
     margin-top: 22px;
     overflow: visible;
+    pointer-events: none;
   }
 
   .nav-list a {
-    width: 100%;
+    width: 52px;
     justify-content: center;
     gap: 0;
+    overflow: hidden;
+    pointer-events: auto;
     padding: 8px;
   }
 
   .sidebar:hover .nav-list a,
   .sidebar:focus-within .nav-list a {
+    width: 224px;
     justify-content: flex-start;
     gap: 8px;
     padding: 8px 10px;
