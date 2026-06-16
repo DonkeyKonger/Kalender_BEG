@@ -620,11 +620,6 @@ export function SiteFields({
   onCheckLocation?: () => void;
   onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
 }) {
-  const [addressSearch, setAddressSearch] = useState("");
-  const [addressResults, setAddressResults] = useState<SiteGeocodeSearchResult[]>([]);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
-  const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
-  const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
   const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false);
   const [activeCustomerSuggestionIndex, setActiveCustomerSuggestionIndex] = useState(0);
   const projectManagerOptions = useMemo(
@@ -643,74 +638,6 @@ export function SiteFields({
   }, [customerQuery, customers]);
   const canUseCustomerAutocomplete = Boolean(onCustomerSelected || onCreateCustomer);
   const showCustomerSuggestions = canUseCustomerAutocomplete && isCustomerSuggestionsOpen && !disabled;
-
-  useEffect(() => {
-    const query = addressSearch.trim();
-    if (selectedGeocodeResult && query === selectedGeocodeResult.label) {
-      setAddressResults([]);
-      setIsSearchingAddress(false);
-      return;
-    }
-    if (query.length < 3 || disabled) {
-      setAddressResults([]);
-      setIsSearchingAddress(false);
-      setAddressSearchMessage(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsSearchingAddress(true);
-    setAddressSearchMessage(null);
-    const timer = window.setTimeout(() => {
-      api
-        .searchSiteAddress(query)
-        .then((results) => {
-          if (cancelled) {
-            return;
-          }
-          setAddressResults(results);
-          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Eingabe pruefen oder genauer formulieren.");
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setAddressResults([]);
-            setAddressSearchMessage("Adresssuche aktuell nicht verfuegbar.");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setIsSearchingAddress(false);
-          }
-        });
-    }, 400);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [addressSearch, disabled, selectedGeocodeResult]);
-
-  function applyGeocodeResult(result: SiteGeocodeSearchResult) {
-    const selectedValues: Partial<SiteCreate> = {
-      address: result.label,
-      postal_code: result.postal_code,
-      city: result.city,
-      location: result.city ?? draft.location,
-      street: result.street,
-      house_number: result.house_number,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      location_status: "geocoded",
-    };
-    setSelectedGeocodeResult(result);
-    onChange(selectedValues);
-    onGeocodeSelected?.(selectedValues);
-    setAddressSearch("");
-    setAddressResults([]);
-    setIsSearchingAddress(false);
-    setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
-    (document.activeElement as HTMLElement | null)?.blur();
-  }
 
   function selectCustomer(customer: Customer) {
     onChange({ customer: customer.company_name });
@@ -874,42 +801,12 @@ export function SiteFields({
         onChange={(color) => onChange({ color })}
       />
       <section className="site-location-section">
-        <label className="address-field site-address-search">
-          <span>Adresse suchen</span>
-          <input
-            aria-label="Adresse suchen"
-            autoCapitalize="none"
-            autoComplete="new-password"
-            autoCorrect="off"
-            disabled={disabled}
-            id="site-query-token"
-            inputMode="search"
-            name="site-query-token"
-            placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
-            spellCheck={false}
-            value={addressSearch}
-            onChange={(event) => {
-              setSelectedGeocodeResult(null);
-              setAddressSearch(event.target.value);
-            }}
-          />
-          {isSearchingAddress && <small>Adresse wird gesucht...</small>}
-          {addressSearchMessage && <small>{addressSearchMessage}</small>}
-          {addressResults.length > 0 && (
-            <div className="site-address-results" role="listbox">
-              {addressResults.map((result) => (
-                <button
-                  key={`${result.latitude}-${result.longitude}-${result.label}`}
-                  type="button"
-                  onClick={() => applyGeocodeResult(result)}
-                >
-                  <strong>{result.label}</strong>
-                  <span>{formatGeocodeMeta(result)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </label>
+        <SiteAddressSearch
+          draft={draft}
+          disabled={disabled}
+          onChange={onChange}
+          onGeocodeSelected={onGeocodeSelected}
+        />
         <div className="site-address-display-grid">
           <AddressDisplayItem label="PLZ" value={draft.postal_code} />
           <AddressDisplayItem label="Stadt" value={draft.city} />
@@ -928,6 +825,131 @@ export function SiteFields({
         />
       </label>
     </div>
+  );
+}
+
+export function SiteAddressSearch({
+  draft,
+  disabled = false,
+  onChange,
+  onGeocodeSelected,
+}: {
+  draft: SiteCreate;
+  disabled?: boolean;
+  onChange: (values: Partial<SiteCreate>) => void;
+  onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
+}) {
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressResults, setAddressResults] = useState<SiteGeocodeSearchResult[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
+  const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
+
+  useEffect(() => {
+    const query = addressSearch.trim();
+    if (selectedGeocodeResult && query === selectedGeocodeResult.label) {
+      setAddressResults([]);
+      setIsSearchingAddress(false);
+      return;
+    }
+    if (query.length < 3 || disabled) {
+      setAddressResults([]);
+      setIsSearchingAddress(false);
+      setAddressSearchMessage(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingAddress(true);
+    setAddressSearchMessage(null);
+    const timer = window.setTimeout(() => {
+      api
+        .searchSiteAddress(query)
+        .then((results) => {
+          if (cancelled) {
+            return;
+          }
+          setAddressResults(results);
+          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Eingabe pruefen oder genauer formulieren.");
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAddressResults([]);
+            setAddressSearchMessage("Adresssuche aktuell nicht verfuegbar.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsSearchingAddress(false);
+          }
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [addressSearch, disabled, selectedGeocodeResult]);
+
+  function applyGeocodeResult(result: SiteGeocodeSearchResult) {
+    const selectedValues: Partial<SiteCreate> = {
+      address: result.label,
+      postal_code: result.postal_code,
+      city: result.city,
+      location: result.city ?? draft.location,
+      street: result.street,
+      house_number: result.house_number,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      location_status: "geocoded",
+    };
+    setSelectedGeocodeResult(result);
+    onChange(selectedValues);
+    onGeocodeSelected?.(selectedValues);
+    setAddressSearch("");
+    setAddressResults([]);
+    setIsSearchingAddress(false);
+    setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
+
+  return (
+    <label className="address-field site-address-search">
+      <span>Adresse suchen</span>
+      <input
+        aria-label="Adresse suchen"
+        autoCapitalize="none"
+        autoComplete="new-password"
+        autoCorrect="off"
+        disabled={disabled}
+        id="site-query-token"
+        inputMode="search"
+        name="site-query-token"
+        placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
+        spellCheck={false}
+        value={addressSearch}
+        onChange={(event) => {
+          setSelectedGeocodeResult(null);
+          setAddressSearch(event.target.value);
+        }}
+      />
+      {isSearchingAddress && <small>Adresse wird gesucht...</small>}
+      {addressSearchMessage && <small>{addressSearchMessage}</small>}
+      {addressResults.length > 0 && (
+        <div className="site-address-results" role="listbox">
+          {addressResults.map((result) => (
+            <button
+              key={`${result.latitude}-${result.longitude}-${result.label}`}
+              type="button"
+              onClick={() => applyGeocodeResult(result)}
+            >
+              <strong>{result.label}</strong>
+              <span>{formatGeocodeMeta(result)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
   );
 }
 

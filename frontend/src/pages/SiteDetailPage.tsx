@@ -17,7 +17,7 @@ import type { AssignmentRead } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
-import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
+import { SiteAddressSearch, SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
@@ -1311,6 +1311,14 @@ function OverviewTab({
             </DetailSection>
 
             <DetailSection title="Adresse / Standort" icon={MapPin}>
+              {canEdit && draft ? (
+                <SiteAddressSearch
+                  draft={draft}
+                  disabled={isSaving}
+                  onChange={onDraftChange}
+                  onGeocodeSelected={onGeocodeSelected}
+                />
+              ) : null}
               <InlineEditableDetailItem
                 label="Ort"
                 value={site.location}
