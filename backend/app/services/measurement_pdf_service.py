@@ -688,7 +688,6 @@ class MeasurementPdfService:
                 commands,
                 contractor_name=submitted_by,
                 worker_name=batch.worker_signature_name,
-                worker_signed_at=batch.worker_signed_at,
                 worker_signature_strokes=batch.worker_signature_strokes,
                 customer_name=batch.customer_signature_name,
                 customer_signature_place=_site_signature_city(batch.site, batch.customer_signature_place),
@@ -886,7 +885,6 @@ def _signature_block(
     *,
     contractor_name: str,
     worker_name: str | None = None,
-    worker_signed_at: datetime | None = None,
     worker_signature_strokes: list[list[dict[str, float]]] | None = None,
     customer_name: str | None = None,
     customer_signature_place: str | None = None,
@@ -904,8 +902,6 @@ def _signature_block(
 
     _text(commands, 248.5, 45.4, "Name Auftragnehmer (BEG):", 7, "F2")
     _text_fitted(commands, 396, 45.0, worker_name or contractor_name, 8, max_width=158)
-    if worker_signed_at is not None:
-        _text_fitted(commands, 139, 44.8, _format_date(worker_signed_at), 8, max_width=90)
     _line(commands, 394.9, 41.3, 566.6, 41.3, 0.8)
     _text(commands, 598.6, 44.6, "Unterschrift:", 7, "F2")
     _draw_signature(commands, worker_signature_strokes, x=661, y=43.7, width=103, height=24)
