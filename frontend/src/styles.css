@@ -856,17 +856,17 @@ button:disabled {
 .day-col-width,
 .day-col,
 .matrix-cell {
-  width: var(--day-column-width, 104px);
-  min-width: var(--day-column-width, 104px);
-  max-width: var(--day-column-width, 104px);
+  width: var(--day-column-width, 124px);
+  min-width: var(--day-column-width, 124px);
+  max-width: var(--day-column-width, 124px);
 }
 
 .day-col-width.weekend,
 .day-col.weekend,
 .matrix-cell.weekend {
-  width: var(--weekend-column-width, 62px);
-  min-width: var(--weekend-column-width, 62px);
-  max-width: var(--weekend-column-width, 62px);
+  width: var(--weekend-column-width, 70px);
+  min-width: var(--weekend-column-width, 70px);
+  max-width: var(--weekend-column-width, 70px);
 }
 
 .day-col {
@@ -1844,7 +1844,7 @@ button.person-chip:focus-visible {
 .person-chip.is-assignment-run .person-chip-label {
   position: sticky;
   left: calc(var(--fixed-columns-width, 552px) + 10px);
-  max-width: min(140px, 100%);
+  max-width: min(220px, calc(100% - 12px));
 }
 
 
@@ -2584,6 +2584,10 @@ button.person-chip:focus-visible {
   width: var(--assignment-run-width, auto);
   max-width: none;
   overflow: visible;
+}
+
+.matrix-page.is-compact .person-chip.is-assignment-run .person-chip-label {
+  max-width: min(120px, calc(100% - 10px));
 }
 
 .matrix-page.is-compact .absence-chip {
