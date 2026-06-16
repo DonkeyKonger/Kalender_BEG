@@ -5,6 +5,7 @@ from datetime import date as Date, datetime
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import AssignmentType
+from app.schemas.matrix import MatrixCell
 
 
 class DateRangeModel(BaseModel):
@@ -76,7 +77,13 @@ class AssignmentRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AssignmentUpdatedSiteCells(BaseModel):
+    site_id: int
+    cells: list[MatrixCell] = Field(default_factory=list)
+
+
 class AssignmentMutationResponse(BaseModel):
     assignment: AssignmentRead
     warnings: list[ConflictMessageRead] = Field(default_factory=list)
     infos: list[ConflictMessageRead] = Field(default_factory=list)
+    updated_site_cells: list[AssignmentUpdatedSiteCells] = Field(default_factory=list)

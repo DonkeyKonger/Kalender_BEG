@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date as Date, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,8 +9,16 @@ from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.person_repository import PersonRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.assignment import AssignmentCreate, AssignmentSegmentMove, AssignmentUpdate
+from app.schemas.matrix import MatrixCell
 from app.services.audit_service import AuditService
 from app.services.conflict_service import ConflictCheckResult, ConflictMessage, ConflictService
+from app.services.matrix_service import MatrixService
+
+
+@dataclass(frozen=True)
+class AssignmentUpdatedSiteCells:
+    site_id: int
+    cells: list[MatrixCell]
 
 
 @dataclass(frozen=True)
@@ -18,6 +26,7 @@ class AssignmentMutationResult:
     assignment: Assignment
     warnings: list[ConflictMessage]
     infos: list[ConflictMessage]
+    updated_site_cells: list[AssignmentUpdatedSiteCells]
 
 
 class AssignmentService:
@@ -72,6 +81,9 @@ class AssignmentService:
             assignment=assignment,
             warnings=conflict_result.warnings,
             infos=conflict_result.infos,
+            updated_site_cells=self._updated_site_cells([
+                (assignment.site_id, assignment.start_date, assignment.end_date),
+            ]),
         )
 
     def update_assignment(
@@ -85,6 +97,9 @@ class AssignmentService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
 
         old_value = self._assignment_snapshot(assignment)
+        old_site_id = assignment.site_id
+        old_start_date = assignment.start_date
+        old_end_date = assignment.end_date
         values = payload.model_dump(exclude_unset=True)
         person_id = values.get("person_id", assignment.person_id)
         site_id = values.get("site_id", assignment.site_id)
@@ -123,12 +138,19 @@ class AssignmentService:
             assignment=assignment,
             warnings=conflict_result.warnings,
             infos=conflict_result.infos,
+            updated_site_cells=self._updated_site_cells([
+                (old_site_id, old_start_date, old_end_date),
+                (assignment.site_id, assignment.start_date, assignment.end_date),
+            ]),
         )
 
-    def delete_assignment(self, assignment_id: int, user_id: int) -> None:
+    def delete_assignment(self, assignment_id: int, user_id: int) -> AssignmentMutationResult:
         assignment = self.assignments.get(assignment_id)
         if assignment is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
+        affected_site_id = assignment.site_id
+        affected_start_date = assignment.start_date
+        affected_end_date = assignment.end_date
         old_value = self._assignment_snapshot(assignment)
         self.assignments.delete(assignment)
         self.audit.record(
@@ -140,6 +162,14 @@ class AssignmentService:
             new_value=None,
         )
         self.db.commit()
+        return AssignmentMutationResult(
+            assignment=assignment,
+            warnings=[],
+            infos=[],
+            updated_site_cells=self._updated_site_cells([
+                (affected_site_id, affected_start_date, affected_end_date),
+            ]),
+        )
 
     def move_assignment_segment(
         self,
@@ -164,7 +194,12 @@ class AssignmentService:
             and payload.target_start_date == payload.segment_start_date
             and target_end_date == payload.segment_end_date
         ):
-            return AssignmentMutationResult(assignment=assignment, warnings=[], infos=[])
+            return AssignmentMutationResult(
+                assignment=assignment,
+                warnings=[],
+                infos=[],
+                updated_site_cells=[],
+            )
 
         old_value = self._assignment_snapshot(assignment)
         conflict_result = self.conflicts.check_assignment(
@@ -184,6 +219,7 @@ class AssignmentService:
 
         original_start_date = assignment.start_date
         original_end_date = assignment.end_date
+        original_site_id = assignment.site_id
 
         if (
             payload.segment_start_date == original_start_date
@@ -249,7 +285,40 @@ class AssignmentService:
             assignment=moved_assignment,
             warnings=conflict_result.warnings,
             infos=conflict_result.infos,
+            updated_site_cells=self._updated_site_cells([
+                (original_site_id, original_start_date, original_end_date),
+                (moved_assignment.site_id, moved_assignment.start_date, moved_assignment.end_date),
+            ]),
         )
+
+    def _updated_site_cells(
+        self,
+        ranges: list[tuple[int, Date, Date]],
+    ) -> list[AssignmentUpdatedSiteCells]:
+        if not ranges:
+            return []
+        merged_ranges: dict[int, tuple[Date, Date]] = {}
+        for site_id, start_date, end_date in ranges:
+            if site_id not in merged_ranges:
+                merged_ranges[site_id] = (start_date, end_date)
+                continue
+            current_start, current_end = merged_ranges[site_id]
+            merged_ranges[site_id] = (
+                min(current_start, start_date),
+                max(current_end, end_date),
+            )
+        matrix_service = MatrixService(self.db)
+        return [
+            AssignmentUpdatedSiteCells(
+                site_id=site_id,
+                cells=matrix_service.get_site_cells(
+                    site_id=site_id,
+                    start=start_date,
+                    end=end_date,
+                ),
+            )
+            for site_id, (start_date, end_date) in merged_ranges.items()
+        ]
 
     def _reject_if_blocked(
         self,

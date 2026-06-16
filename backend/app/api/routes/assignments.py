@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
@@ -12,6 +12,7 @@ from app.schemas.assignment import (
     AssignmentMutationResponse,
     AssignmentRead,
     AssignmentSegmentMove,
+    AssignmentUpdatedSiteCells,
     AssignmentUpdate,
     ConflictMessageRead,
 )
@@ -73,14 +74,14 @@ def move_assignment_segment(
     return _mutation_response(result)
 
 
-@router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assignment_id}", response_model=AssignmentMutationResponse)
 def delete_assignment(
     assignment_id: int,
     current_user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
-) -> Response:
-    AssignmentService(db).delete_assignment(assignment_id, current_user.id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+) -> AssignmentMutationResponse:
+    result = AssignmentService(db).delete_assignment(assignment_id, current_user.id)
+    return _mutation_response(result)
 
 
 def _mutation_response(result: AssignmentMutationResult) -> AssignmentMutationResponse:
@@ -88,4 +89,8 @@ def _mutation_response(result: AssignmentMutationResult) -> AssignmentMutationRe
         assignment=AssignmentRead.model_validate(result.assignment),
         warnings=[ConflictMessageRead(**item.to_dict()) for item in result.warnings],
         infos=[ConflictMessageRead(**item.to_dict()) for item in result.infos],
+        updated_site_cells=[
+            AssignmentUpdatedSiteCells(site_id=item.site_id, cells=item.cells)
+            for item in result.updated_site_cells
+        ],
     )

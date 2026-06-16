@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { AssignmentRead, AssignmentType, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
+import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
@@ -27,6 +27,7 @@ type AssignmentMutationApiResponse = {
   assignment: { id: number };
   warnings: MatrixConflictMessage[];
   infos: MatrixConflictMessage[];
+  updated_site_cells?: Array<{ site_id: number; cells: MatrixCell[] }>;
 };
 
 type AssignmentPayload = {
@@ -1208,8 +1209,8 @@ export const api = {
     });
   },
 
-  async deleteAssignment(assignmentId: number): Promise<void> {
-    return request<void>(`/assignments/${assignmentId}`, { method: "DELETE" });
+  async deleteAssignment(assignmentId: number): Promise<AssignmentMutationApiResponse> {
+    return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}`, { method: "DELETE" });
   },
 
   async assignments(params: {

@@ -87,6 +87,7 @@ type AssignmentResizeState = {
 type PlanningAbsenceItem = { absence: Absence };
 type CellTypingPreview = { siteId: number; date: string; text: string };
 type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
+type UpdatedMatrixSiteCells = { site_id: number; cells: MatrixCell[] };
 
 type UndoItem = {
   siteId: number;
@@ -935,6 +936,16 @@ export function MatrixPage() {
     });
   }
 
+  async function replaceMatrixSiteCellsOrRefresh(updatedSiteCells: UpdatedMatrixSiteCells[] | undefined) {
+    if (!updatedSiteCells?.length) {
+      await refreshMatrixOnly();
+      return;
+    }
+    updatedSiteCells.forEach((item) => {
+      replaceMatrixCells(item.site_id, item.cells);
+    });
+  }
+
   async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) {
     if (!matrixIsEditable) {
       return;
@@ -944,10 +955,10 @@ export function MatrixPage() {
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
-      await api.deleteAssignment(assignment.id);
+      const response = await api.deleteAssignment(assignment.id);
       setError(null);
       showTemporaryCellFeedback(key, assignment.start_date === assignment.end_date ? "Monteur entfernt" : "Einsatz entfernt");
-      await refreshMatrixOnly();
+      await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
     } catch (requestError) {
       const message = readApiError(requestError, "Einsatz konnte nicht entfernt werden.");
       setError(message);
@@ -1060,8 +1071,9 @@ export function MatrixPage() {
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
+      let response: Awaited<ReturnType<typeof api.createAssignment>>;
       if (drag.mode === "copy") {
-        await api.createAssignment({
+        response = await api.createAssignment({
           site_id: drag.target.siteId,
           person_id: drag.assignment.person.id,
           start_date: targetStartDate,
@@ -1070,13 +1082,13 @@ export function MatrixPage() {
           note: drag.assignment.note,
         });
       } else if (isFullAssignmentDrag(drag)) {
-        await api.updateAssignment(drag.assignment.id, {
+        response = await api.updateAssignment(drag.assignment.id, {
           site_id: drag.target.siteId,
           start_date: targetStartDate,
           end_date: targetEndDate,
         });
       } else {
-        await api.moveAssignmentSegment(drag.assignment.id, {
+        response = await api.moveAssignmentSegment(drag.assignment.id, {
           segment_start_date: drag.segmentStartDate,
           segment_end_date: drag.segmentEndDate,
           target_site_id: drag.target.siteId,
@@ -1085,7 +1097,7 @@ export function MatrixPage() {
       }
       setError(null);
       showTemporaryCellFeedback(key, drag.mode === "copy" ? "Einsatz kopiert" : "Einsatz verschoben");
-      await refreshMatrixOnly();
+      await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
     } catch (requestError) {
       const message = readApiError(requestError, drag.mode === "copy"
         ? "Einsatz konnte nicht kopiert werden."
@@ -1105,14 +1117,14 @@ export function MatrixPage() {
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
     try {
-      await api.updateAssignment(resize.assignment.id, {
+      const response = await api.updateAssignment(resize.assignment.id, {
         site_id: resize.siteId,
         start_date: resize.previewStartDate,
         end_date: resize.previewEndDate,
       });
       setError(null);
       showTemporaryCellFeedback(key, "Einsatz angepasst");
-      await refreshMatrixOnly();
+      await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
     } catch (requestError) {
       setError(readApiError(requestError, "Einsatz konnte nicht angepasst werden."));
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
