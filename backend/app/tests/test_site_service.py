@@ -11,7 +11,7 @@ from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
-from app.schemas.site import SiteCreate
+from app.schemas.site import SiteCreate, SiteUpdate
 from app.services.project_folder_service import ProjectFolderService
 from app.services.site_service import (
     SiteService,
@@ -409,6 +409,21 @@ def test_remove_site_marks_deleted_and_hides_site_from_default_reads():
     assert "gelöscht" in error.value.detail
     assert service.get_site(site.id, include_deleted=True).id == site.id
     assert all(entry.id != site.id for entry in service.list_sites())
+
+
+def test_deleted_site_can_be_restored_via_status_update():
+    db = db_session()
+    site = add_site(db, name="Zurückholen", site_number="8098")
+    service = SiteService(db)
+    service.remove_site(site.id, user_id=1)
+
+    restored = service.update_site(site.id, SiteUpdate(status=SiteStatus.PAUSED), user_id=2)
+
+    assert restored.status == SiteStatus.PAUSED
+    assert restored.closed_at is None
+    assert restored.closed_by_user_id is None
+    assert service.get_site(site.id).id == site.id
+    assert any(entry.id == site.id for entry in service.list_sites())
 
 
 def test_backfill_project_folders_requires_feature_flag():

@@ -227,7 +227,7 @@ class SiteService:
         }
 
     def update_site(self, site_id: int, payload: SiteUpdate, user_id: int) -> Site:
-        site = self.sites.get(site_id)
+        site = self.sites.get(site_id, include_deleted=True)
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
 
@@ -279,7 +279,7 @@ class SiteService:
         return site
 
     def reactivate_site(self, site_id: int, user_id: int) -> Site:
-        site = self.get_site(site_id)
+        site = self.get_site(site_id, include_deleted=True)
         if site.status == SiteStatus.ACTIVE and site.closed_at is None:
             return site
         old_value = site_snapshot(site)
