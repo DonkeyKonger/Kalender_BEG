@@ -358,21 +358,28 @@ button:disabled {
 
 @media (min-width: 900px) {
   .app-shell {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
+    display: block;
   }
 
   .sidebar {
-    position: sticky;
+    position: fixed;
     top: 0;
+    bottom: 0;
+    left: 0;
     z-index: 60;
     width: 72px;
-    min-height: 100vh;
-    overflow: hidden;
+    height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
     border-right: 1px solid rgb(148 163 184 / 20%);
     border-bottom: 0;
     padding: 18px 10px;
     transition: width 160ms ease, box-shadow 160ms ease, padding 160ms ease;
+  }
+
+  .app-main {
+    margin-left: 72px;
+    min-width: 0;
   }
 
   .sidebar:hover,
@@ -12444,6 +12451,35 @@ button.person-chip:focus-visible {
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 750;
+}
+
+.absence-person-group-row th,
+.absence-person-group-row td {
+  height: 26px;
+}
+
+.absence-person-group-heading {
+  z-index: 5;
+  background: #eef3f9;
+  color: #334155;
+  padding: 4px 8px;
+}
+
+.absence-person-group-heading span {
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.absence-person-group-heading small {
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.absence-person-group-fill {
+  background: #f8fafc;
+  padding: 0;
 }
 
 .absence-day-col {

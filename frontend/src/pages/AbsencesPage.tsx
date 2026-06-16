@@ -1,5 +1,5 @@
 import { CalendarDays, CalendarX, ChevronLeft, ChevronRight, PlusCircle, Save, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -53,6 +53,12 @@ type AbsenceCell = {
 type PersonAbsenceRow = {
   person: Person;
   cells: AbsenceCell[];
+};
+type AbsencePersonGroupKey = "project-managers" | "office" | "workers" | "external" | "other";
+type PersonAbsenceGroup = {
+  key: AbsencePersonGroupKey;
+  label: string;
+  rows: PersonAbsenceRow[];
 };
 type AbsenceWeekGroup = {
   isoYear: number;
@@ -143,8 +149,8 @@ export function AbsencesPage() {
       .sort(comparePeople);
   }, [absences, people, searchTerm, visibleDays]);
 
-  const rows = useMemo(
-    () => buildAbsenceRows(filteredPeople, absences, visibleDays),
+  const personGroups = useMemo(
+    () => buildGroupedAbsenceRows(filteredPeople, absences, visibleDays),
     [absences, filteredPeople, visibleDays],
   );
 
@@ -493,7 +499,7 @@ export function AbsencesPage() {
           canEdit={canEdit}
           days={visibleDays}
           mode={viewMode}
-          rows={rows}
+          personGroups={personGroups}
           scrollRef={matrixScrollRef}
           today={today}
           onDeleteAbsenceDay={(absence, date) => void deleteAbsenceDay(absence, date)}
@@ -610,7 +616,7 @@ function AbsenceMatrix({
   canEdit,
   days,
   mode,
-  rows,
+  personGroups,
   scrollRef,
   today,
   onDeleteAbsenceDay,
@@ -622,7 +628,7 @@ function AbsenceMatrix({
   canEdit: boolean;
   days: string[];
   mode: AbsenceViewMode;
-  rows: PersonAbsenceRow[];
+  personGroups: PersonAbsenceGroup[];
   scrollRef: RefObject<HTMLDivElement | null>;
   today: string;
   onDeleteAbsenceDay: (absence: Absence, date: string) => void;
@@ -631,8 +637,9 @@ function AbsenceMatrix({
   onStartSelection: (personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) => void;
 }) {
   const weekGroups = useMemo(() => buildAbsenceWeekGroups(days), [days]);
+  const hasRows = personGroups.some((group) => group.rows.length > 0);
 
-  if (!rows.length) {
+  if (!hasRows) {
     return (
       <div className="empty-panel">
         <CalendarDays aria-hidden="true" size={22} />
@@ -674,61 +681,72 @@ function AbsenceMatrix({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.person.id}>
-              <th className="absence-person-col" scope="row">
-                <span>{row.person.display_name}</span>
-                <small>{row.person.short_code}</small>
-              </th>
-              {row.cells.map((cell) => (
-                <td
-                  className={absenceCellClassName(
-                    cell.date,
-                    today,
-                    Boolean(
-                      activeSelection
-                      && activeSelection.personId === row.person.id
-                      && isDateWithinAbsenceSelection(cell.date, activeSelection),
-                    ),
-                  )}
-                  key={`${row.person.id}-${cell.date}`}
-                  onMouseDown={(event) => {
-                    if (canEdit && !cell.absences.length) {
-                      onStartSelection(row.person.id, cell.date, event);
-                    }
-                  }}
-                  onMouseEnter={() => {
-                    if (canEdit) {
-                      onExtendSelection(row.person.id, cell.date);
-                    }
-                  }}
-                >
-                  <div className="absence-cell-stack">
-                    {cell.absences.map((absence) => (
-                      <button
-                        className={absenceBlockClassName(absence)}
-                        key={absence.id}
-                        title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
-                        type="button"
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (canEdit) {
-                            onDeleteAbsenceDay(absence, cell.date);
-                          }
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenAbsence(absence.id);
-                        }}
-                      >
-                        {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
-                      </button>
-                    ))}
-                  </div>
-                </td>
+          {personGroups.map((group) => (
+            <Fragment key={group.key}>
+              <tr className="absence-person-group-row">
+                <th className="absence-person-col absence-person-group-heading" scope="rowgroup">
+                  <span>{group.label}</span>
+                  <small>{group.rows.length}</small>
+                </th>
+                <td className="absence-person-group-fill" colSpan={days.length} />
+              </tr>
+              {group.rows.map((row) => (
+                <tr key={row.person.id}>
+                  <th className="absence-person-col" scope="row">
+                    <span>{row.person.display_name}</span>
+                    <small>{row.person.short_code}</small>
+                  </th>
+                  {row.cells.map((cell) => (
+                    <td
+                      className={absenceCellClassName(
+                        cell.date,
+                        today,
+                        Boolean(
+                          activeSelection
+                          && activeSelection.personId === row.person.id
+                          && isDateWithinAbsenceSelection(cell.date, activeSelection),
+                        ),
+                      )}
+                      key={`${row.person.id}-${cell.date}`}
+                      onMouseDown={(event) => {
+                        if (canEdit && !cell.absences.length) {
+                          onStartSelection(row.person.id, cell.date, event);
+                        }
+                      }}
+                      onMouseEnter={() => {
+                        if (canEdit) {
+                          onExtendSelection(row.person.id, cell.date);
+                        }
+                      }}
+                    >
+                      <div className="absence-cell-stack">
+                        {cell.absences.map((absence) => (
+                          <button
+                            className={absenceBlockClassName(absence)}
+                            key={absence.id}
+                            title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
+                            type="button"
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (canEdit) {
+                                onDeleteAbsenceDay(absence, cell.date);
+                              }
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenAbsence(absence.id);
+                            }}
+                          >
+                            {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -825,6 +843,29 @@ function AbsenceFields({
 
 const ABSENCE_DAY_WIDTH = 42;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const absencePersonGroupOrder: { key: AbsencePersonGroupKey; label: string }[] = [
+  { key: "project-managers", label: "Projektleiter" },
+  { key: "office", label: "Büro" },
+  { key: "workers", label: "Monteure" },
+  { key: "external", label: "Externe / Gastnutzer" },
+  { key: "other", label: "Sonstige / Unklare Zuordnung" },
+];
+
+function buildGroupedAbsenceRows(people: Person[], absences: Absence[], days: string[]): PersonAbsenceGroup[] {
+  const groupedPeople = new Map<AbsencePersonGroupKey, Person[]>(
+    absencePersonGroupOrder.map((group) => [group.key, []]),
+  );
+  people.forEach((person) => {
+    groupedPeople.get(getAbsencePersonGroupKey(person))?.push(person);
+  });
+
+  return absencePersonGroupOrder
+    .map((group) => ({
+      ...group,
+      rows: buildAbsenceRows((groupedPeople.get(group.key) ?? []).sort(comparePeople), absences, days),
+    }))
+    .filter((group) => group.rows.length > 0);
+}
 
 function buildAbsenceRows(people: Person[], absences: Absence[], days: string[]): PersonAbsenceRow[] {
   return people.map((person) => ({
@@ -836,6 +877,36 @@ function buildAbsenceRows(people: Person[], absences: Absence[], days: string[])
         .sort(compareAbsences),
     })),
   }));
+}
+
+function getAbsencePersonGroupKey(person: Person): AbsencePersonGroupKey {
+  switch (person.person_type) {
+    case "external":
+    case "external_temp":
+      return "external";
+    case "internal":
+      if (isAbsenceProjectManagerPerson(person)) {
+        return "project-managers";
+      }
+      if (isAbsenceOfficePerson(person)) {
+        return "office";
+      }
+      return "workers";
+    default:
+      return "other";
+  }
+}
+
+function isAbsenceProjectManagerPerson(person: Person): boolean {
+  return person.user_roles?.includes("project_manager") ?? false;
+}
+
+function isAbsenceOfficePerson(person: Person): boolean {
+  if (isAbsenceProjectManagerPerson(person)) {
+    return false;
+  }
+  const roles = person.user_roles ?? [];
+  return roles.includes("office") || roles.includes("admin");
 }
 
 function daysBetween(start: string, end: string): string[] {
@@ -950,6 +1021,7 @@ function personSearchText(person: Person): string {
     person.last_name,
     person.short_code,
     person.person_type,
+    ...(person.user_roles ?? []),
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
