@@ -29,7 +29,7 @@ export function AppShell() {
             const Icon = item.icon;
             return (
               <NavLink key={item.path} to={item.path} end={item.path === "/"}>
-                <Icon aria-hidden="true" size={18} />
+                <Icon aria-hidden="true" size={20} />
                 <span className="nav-label">{item.label}</span>
               </NavLink>
             );

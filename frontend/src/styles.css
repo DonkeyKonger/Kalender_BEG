@@ -444,11 +444,18 @@ button:disabled {
 
   .nav-list a {
     width: 52px;
+    min-height: 42px;
     justify-content: center;
     gap: 0;
     overflow: hidden;
     pointer-events: auto;
     padding: 8px;
+  }
+
+  .nav-list a svg {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
   }
 
   .sidebar:hover .nav-list a,
