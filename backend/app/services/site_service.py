@@ -159,7 +159,9 @@ class SiteService:
 
     def create_site(self, payload: SiteCreate, user_id: int) -> Site:
         values = clean_site_values(payload.model_dump())
+        validate_site_create_values(values)
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
+        self._ensure_site_number_available(values.get("site_number"))
         apply_selected_geocode(values)
         site = Site(**values)
         self._apply_status_metadata(site, site.status, user_id)
@@ -369,6 +371,13 @@ class SiteService:
         if person_id is not None and self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Projektleiter-Person nicht gefunden.")
 
+    def _ensure_site_number_available(self, site_number: str | None) -> None:
+        if site_number is None:
+            return
+        existing_id = self.db.scalar(select(Site.id).where(Site.site_number == site_number).limit(1))
+        if existing_id is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Kommissionsnummer ist bereits vorhanden.")
+
 
 def clean_site_values(values: dict) -> dict:
     cleaned = dict(values)
@@ -382,6 +391,19 @@ def clean_site_values(values: dict) -> dict:
     if "name" in cleaned and not cleaned.get("name"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustellenname darf nicht leer sein.")
     return cleaned
+
+
+def validate_site_create_values(values: dict) -> None:
+    if not values.get("name"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustellenname fehlt.")
+    if not values.get("site_number"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kommissionsnummer fehlt.")
+    if values.get("project_manager_person_id") is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Projektleiter fehlt.")
+    if values.get("status") is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Status fehlt.")
+    if not values.get("color"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Farbe fehlt.")
 
 
 def backfill_site_result(

@@ -987,7 +987,19 @@ function withCurrentProjectManagerOption(
 
 export function validateSitePayload(site: SiteCreate): string | null {
   if (!site.name.trim()) {
-    return "Baustellenname ist Pflicht.";
+    return "Baustellenname fehlt.";
+  }
+  if (!site.site_number?.trim()) {
+    return "Kommissionsnummer fehlt.";
+  }
+  if (site.project_manager_person_id === null) {
+    return "Projektleiter fehlt.";
+  }
+  if (!site.status) {
+    return "Status fehlt.";
+  }
+  if (!site.color?.trim()) {
+    return "Farbe fehlt.";
   }
   return null;
 }

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Base
 from app.models.enums import SiteLocationStatus, SiteStatus
+from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
 from app.schemas.site import SiteCreate
@@ -41,6 +42,18 @@ class FakeProjectStorage:
         self.calls.append({"site_id": site_id, "site_number": site_number, "site_name": site_name})
         index = min(len(self.calls) - 1, len(self.results) - 1)
         return self.results[index]
+
+
+def create_project_manager(db: Session, *, short_code: str = "KE") -> Person:
+    person = Person(
+        first_name="Keno",
+        last_name="Erichsen",
+        display_name="Keno Erichsen",
+        short_code=short_code,
+    )
+    db.add(person)
+    db.flush()
+    return person
 
 
 def test_clean_site_values_trims_name_and_turns_blank_optional_text_to_none():
@@ -228,6 +241,7 @@ def test_site_dependency_check_keeps_site_with_location_archivable():
 
 def test_create_site_stores_created_project_folder_metadata():
     db = db_session()
+    project_manager = create_project_manager(db)
     storage = FakeProjectStorage(
         {
             "status": "created",
@@ -247,7 +261,12 @@ def test_create_site_stores_created_project_folder_metadata():
     )
 
     site = SiteService(db, project_storage=storage).create_site(
-        SiteCreate(name="Testbaustelle", site_number="8007"),
+        SiteCreate(
+            name="Testbaustelle",
+            site_number="8007",
+            project_manager_person_id=project_manager.id,
+            color="#D97706",
+        ),
         user_id=1,
     )
 
@@ -270,6 +289,7 @@ def test_create_site_stores_created_project_folder_metadata():
 
 def test_create_site_keeps_site_when_project_folder_creation_fails():
     db = db_session()
+    project_manager = create_project_manager(db)
     storage = FakeProjectStorage(
         {
             "status": "error",
@@ -279,7 +299,12 @@ def test_create_site_keeps_site_when_project_folder_creation_fails():
     )
 
     site = SiteService(db, project_storage=storage).create_site(
-        SiteCreate(name="Testbaustelle", site_number="8007"),
+        SiteCreate(
+            name="Testbaustelle",
+            site_number="8007",
+            project_manager_person_id=project_manager.id,
+            color="#D97706",
+        ),
         user_id=1,
     )
 
@@ -288,6 +313,59 @@ def test_create_site_keeps_site_when_project_folder_creation_fails():
     assert site.project_folder_name == "8007_Testbaustelle"
     assert site.project_folder_error == "Microsoft Graph folder creation failed with status 403."
     assert db.get(type(site), site.id) is not None
+
+
+def test_create_site_accepts_missing_customer_and_address():
+    db = db_session()
+    project_manager = create_project_manager(db)
+
+    site = SiteService(db, project_storage=FakeProjectStorage({"status": "disabled"})).create_site(
+        SiteCreate(
+            name="Wohnung Grönländer Damm",
+            site_number="1000",
+            project_manager_person_id=project_manager.id,
+            status=SiteStatus.PAUSED,
+            color="#D97706",
+            customer=None,
+            location=None,
+            address=None,
+            postal_code=None,
+            city=None,
+            street=None,
+            house_number=None,
+            address_extra=None,
+        ),
+        user_id=1,
+    )
+
+    assert site.id is not None
+    assert site.customer is None
+    assert site.location is None
+    assert site.address is None
+    assert site.city is None
+    assert site.project_manager_person_id == project_manager.id
+    assert site.status == SiteStatus.PAUSED
+    assert site.color == "#D97706"
+
+
+def test_create_site_rejects_duplicate_site_number_with_clear_message():
+    db = db_session()
+    project_manager = create_project_manager(db)
+    add_site(db, name="Bestand", site_number="1000")
+
+    with pytest.raises(HTTPException) as error:
+        SiteService(db, project_storage=FakeProjectStorage({"status": "disabled"})).create_site(
+            SiteCreate(
+                name="Wohnung Grönländer Damm",
+                site_number="1000",
+                project_manager_person_id=project_manager.id,
+                color="#D97706",
+            ),
+            user_id=1,
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Kommissionsnummer ist bereits vorhanden."
 
 
 def add_site(
