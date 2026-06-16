@@ -137,6 +137,7 @@ export function MatrixPage() {
   const rangeScrollKeyRef = useRef<string | null>(null);
   const weekSnapTimeoutRef = useRef<number | null>(null);
   const isApplyingWeekSnapRef = useRef(false);
+  const hasLoadedPeopleRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
@@ -215,6 +216,7 @@ export function MatrixPage() {
     setIsLoading(true);
     setError(null);
     try {
+      const shouldLoadPeople = !hasLoadedPeopleRef.current;
       const [matrixData, personData, absenceData] = await Promise.all([
         api.matrix({
           start: activeRange.start,
@@ -222,12 +224,15 @@ export function MatrixPage() {
           includeWeekends: true,
           yearView: isYearView,
         }),
-        api.persons(),
+        shouldLoadPeople ? api.persons() : Promise.resolve<Person[] | null>(null),
         api.absences({ start: activeRange.start, end: activeRange.end }),
       ]);
       setMatrix(matrixData);
       setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-      setPeople(personData);
+      if (personData) {
+        setPeople(personData);
+        hasLoadedPeopleRef.current = personData.length > 0;
+      }
       setAbsences(absenceData);
     } catch (requestError) {
       setError(readApiError(requestError, "Matrixdaten konnten nicht geladen werden."));
@@ -505,7 +510,11 @@ export function MatrixPage() {
     }
     try {
       const person = await api.createExternalPerson(displayName);
-      setPeople((current) => upsertPerson(current, person));
+      setPeople((current) => {
+        const nextPeople = upsertPerson(current, person);
+        hasLoadedPeopleRef.current = nextPeople.length > 0;
+        return nextPeople;
+      });
       const nextEntries = addDraftEntry(draftEntries, {
         key: `p-${person.id}`,
         label: calendarPersonCode(person),
