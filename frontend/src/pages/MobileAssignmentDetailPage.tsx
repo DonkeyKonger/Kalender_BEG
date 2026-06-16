@@ -4028,13 +4028,6 @@ function MeasurementFreePositionForm({
 
         <label>
           <span>Bereich / Ort</span>
-          <input
-            type="text"
-            required
-            value={draft.areaOrComment}
-            onChange={(event) => onChange({ areaOrComment: event.target.value })}
-            placeholder="z. B. 2. OG"
-          />
           {areaSuggestions.length > 0 ? (
             <div className="mobile-area-tag-list" aria-label="Bereichsvorschläge">
               {areaSuggestions.map((area) => (
@@ -4052,6 +4045,13 @@ function MeasurementFreePositionForm({
               ))}
             </div>
           ) : null}
+          <input
+            type="text"
+            required
+            value={draft.areaOrComment}
+            onChange={(event) => onChange({ areaOrComment: event.target.value })}
+            placeholder="z. B. 2. OG"
+          />
         </label>
 
         <label>
