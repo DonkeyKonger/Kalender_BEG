@@ -601,17 +601,23 @@ button:disabled {
   border-collapse: separate;
   border-spacing: 0;
   color: #111827;
-  font-size: 0.84rem;
+  font-family: Arial, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.18;
 }
 
 .matrix-table th,
 .matrix-table td {
-  height: 36px;
+  height: 40px;
   border-right: 1px solid #dce3ee;
   border-bottom: 1px solid #dce3ee;
   background: #ffffff;
   padding: 4px 5px;
   vertical-align: middle;
+}
+
+.matrix-table tbody tr {
+  height: 40px;
 }
 
 .matrix-table thead th {
@@ -725,10 +731,11 @@ button:disabled {
   font: inherit;
   font-size: 0.61rem;
   font-weight: 850;
-  line-height: 1;
+  line-height: 14px;
 }
 
 .matrix-status-chip {
+  height: 18px;
   min-height: 18px;
   max-width: 100%;
   background: transparent;
@@ -885,15 +892,18 @@ button:disabled {
 }
 
 .row-heading {
+  overflow: hidden;
   text-align: left;
 }
 
 .row-heading-content {
   display: flex;
   gap: 6px;
-  align-items: stretch;
+  align-items: center;
   height: 100%;
+  max-height: 34px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .matrix-site-link {
@@ -901,6 +911,9 @@ button:disabled {
   gap: 2px;
   align-self: center;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.12;
 }
 
 .row-heading strong,
@@ -920,7 +933,7 @@ button:disabled {
 }
 
 .matrix-info-cell {
-  overflow: visible;
+  overflow: hidden;
   white-space: normal;
 }
 
@@ -930,12 +943,15 @@ button:disabled {
 
 .row-heading strong {
   max-width: 210px;
+  font-size: 12.5px;
   font-weight: 800;
+  line-height: 14px;
 }
 
 .row-heading small {
   color: #65738a;
-  font-size: 0.72rem;
+  font-size: 11px;
+  line-height: 12px;
 }
 
 .matrix-site-missing-address,
@@ -948,8 +964,9 @@ button:disabled {
 .matrix-site-compact-meta {
   max-width: 210px;
   color: #7a8799;
-  font-size: 0.68rem;
+  font-size: 10.5px;
   font-weight: 700;
+  line-height: 12px;
 }
 
 .matrix-site-compact-meta {
@@ -1636,14 +1653,16 @@ button.entity-card:focus-visible,
   align-items: center;
   width: 38px;
   max-width: 92px;
-  min-height: 17px;
+  height: 18px;
+  min-height: 18px;
   overflow: hidden;
   border-radius: 5px;
-  padding: 2px 5px;
+  padding: 1px 5px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.68rem;
   font-weight: 800;
+  line-height: 16px;
 }
 
 .person-chip {
@@ -1812,6 +1831,7 @@ button.person-chip:focus-visible {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .person-chip.is-assignment-run .person-chip-label {
@@ -2302,7 +2322,7 @@ button.person-chip:focus-visible {
   box-sizing: border-box;
   width: 100%;
   min-height: 32px;
-  max-height: 64px;
+  max-height: 32px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
@@ -2310,8 +2330,9 @@ button.person-chip:focus-visible {
   padding: 3px 4px;
   font-size: 0.68rem;
   line-height: 1.16;
-  resize: vertical;
+  resize: none;
   white-space: normal;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -2526,10 +2547,12 @@ button.person-chip:focus-visible {
 .matrix-page.is-compact .absence-chip {
   width: 34px;
   max-width: 80px;
-  min-height: 15px;
+  height: 16px;
+  min-height: 16px;
   border-radius: 5px;
   padding: 1px 4px;
   font-size: 0.6rem;
+  line-height: 14px;
 }
 
 .matrix-page.is-compact .person-chip {
