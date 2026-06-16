@@ -374,7 +374,7 @@ button:disabled {
     border-bottom: 0;
     padding: 18px 10px;
     background: transparent;
-    contain: layout;
+    contain: layout style;
   }
 
   .sidebar::before {
@@ -388,9 +388,9 @@ button:disabled {
     background: linear-gradient(180deg, #06294d 0%, #041d38 100%);
     box-shadow: 14px 0 28px rgb(4 29 56 / 22%);
     content: "";
-    transform: scaleX(0.277);
-    transform-origin: left center;
+    transform: translate3d(-188px, 0, 0);
     transition: transform 160ms ease;
+    will-change: transform;
   }
 
   .app-main {
@@ -400,7 +400,7 @@ button:disabled {
 
   .sidebar:hover::before,
   .sidebar:focus-within::before {
-    transform: scaleX(1);
+    transform: translate3d(0, 0, 0);
   }
 
   .brand-block {
@@ -418,6 +418,7 @@ button:disabled {
     transform: translateX(-6px);
     white-space: nowrap;
     transition: opacity 120ms ease, transform 160ms ease;
+    will-change: opacity, transform;
   }
 
   .sidebar:hover .brand-copy,
@@ -443,13 +444,15 @@ button:disabled {
   }
 
   .nav-list a {
-    width: 52px;
+    width: 224px;
     min-height: 42px;
-    justify-content: center;
-    gap: 0;
+    justify-content: flex-start;
+    gap: 10px;
+    clip-path: inset(0 172px 0 0);
+    contain: layout paint;
     overflow: hidden;
     pointer-events: auto;
-    padding: 8px;
+    padding: 8px 10px;
   }
 
   .nav-list a svg {
@@ -460,10 +463,7 @@ button:disabled {
 
   .sidebar:hover .nav-list a,
   .sidebar:focus-within .nav-list a {
-    width: 224px;
-    justify-content: flex-start;
-    gap: 8px;
-    padding: 8px 10px;
+    clip-path: inset(0 0 0 0);
   }
 
   .topbar {
