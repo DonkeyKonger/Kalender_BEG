@@ -48,6 +48,7 @@ class MeasurementItemRead(BaseModel):
     list_minutes_total: Decimal | None
     is_nep: bool
     is_free_position: bool = False
+    is_hidden: bool = False
     sort_order: int
     measurement_base: MeasurementBaseRead | None = None
     created_at: datetime

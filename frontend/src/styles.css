@@ -7025,43 +7025,48 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table th:nth-child(1),
 .measurement-timesheet-table td:nth-child(1) {
-  width: 110px;
+  width: 34px;
 }
 
 .measurement-timesheet-table th:nth-child(2),
 .measurement-timesheet-table td:nth-child(2) {
-  width: auto;
+  width: 110px;
 }
 
 .measurement-timesheet-table th:nth-child(3),
 .measurement-timesheet-table td:nth-child(3) {
-  width: 70px;
+  width: auto;
 }
 
 .measurement-timesheet-table th:nth-child(4),
-.measurement-timesheet-table td:nth-child(4),
-.measurement-timesheet-table th:nth-child(5),
-.measurement-timesheet-table td:nth-child(5) {
-  width: 120px;
+.measurement-timesheet-table td:nth-child(4) {
+  width: 70px;
 }
 
+.measurement-timesheet-table th:nth-child(5),
+.measurement-timesheet-table td:nth-child(5),
 .measurement-timesheet-table th:nth-child(6),
 .measurement-timesheet-table td:nth-child(6) {
-  width: 110px;
+  width: 120px;
 }
 
 .measurement-timesheet-table th:nth-child(7),
 .measurement-timesheet-table td:nth-child(7) {
-  width: 100px;
+  width: 110px;
 }
 
 .measurement-timesheet-table th:nth-child(8),
 .measurement-timesheet-table td:nth-child(8) {
-  width: 130px;
+  width: 100px;
 }
 
 .measurement-timesheet-table th:nth-child(9),
 .measurement-timesheet-table td:nth-child(9) {
+  width: 130px;
+}
+
+.measurement-timesheet-table th:nth-child(10),
+.measurement-timesheet-table td:nth-child(10) {
   width: 120px;
 }
 
@@ -7087,13 +7092,49 @@ button.person-chip:focus-visible {
   vertical-align: top;
 }
 
-.measurement-timesheet-table tbody td:first-child strong {
+.measurement-timesheet-table tbody td:nth-child(2) strong {
   color: #1f2f46;
   font-weight: 700;
 }
 
-.measurement-timesheet-table td:nth-child(2) {
+.measurement-timesheet-table td:nth-child(3) {
   min-width: auto;
+}
+
+.measurement-timesheet-remove-col,
+.measurement-timesheet-remove-cell {
+  width: 34px;
+  padding-left: 6px !important;
+  padding-right: 4px !important;
+  text-align: center;
+}
+
+.measurement-timesheet-hide-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #8a97a8;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.measurement-timesheet-hide-button:hover:not(:disabled),
+.measurement-timesheet-hide-button:focus-visible {
+  border-color: #f0b7b7;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.measurement-timesheet-hide-button:disabled {
+  cursor: progress;
+  opacity: 0.55;
 }
 
 .measurement-timesheet-description {
@@ -7114,7 +7155,7 @@ button.person-chip:focus-visible {
   text-align: right;
 }
 
-.measurement-timesheet-table tbody tr.has-quantity td:first-child {
+.measurement-timesheet-table tbody tr.has-quantity td:nth-child(2) {
   box-shadow: inset 2px 0 0 #9bb6d3;
 }
 

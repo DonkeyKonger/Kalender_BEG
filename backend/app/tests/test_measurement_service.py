@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementBatchPhoto, SiteMeasurementItem
+from app.models.site_measurement_item import (
+    SiteMeasurementBase,
+    SiteMeasurementBatch,
+    SiteMeasurementBatchPhoto,
+    SiteMeasurementEntry,
+    SiteMeasurementItem,
+)
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -346,6 +352,77 @@ def test_site_measurement_lists_can_be_scoped_to_active_offer():
     assert all_batches[0].offer_name == old_base.name
     assert all_batches[1].offer_id == active_base.id
     assert all_batches[1].offer_name == active_base.name
+
+
+def test_measurement_item_hide_excludes_active_views_but_keeps_entries():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    visible_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.01",
+        description="Sichtbare Position",
+        list_quantity=Decimal("5.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("50.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    hidden_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.02",
+        description="Ausgeblendete Position",
+        list_quantity=Decimal("7.00"),
+        unit="m",
+        minutes_per_unit=Decimal("10.00"),
+        list_minutes_total=Decimal("70.00"),
+        is_nep=False,
+        sort_order=2,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="submitted",
+    )
+    db.add_all([visible_item, hidden_item, batch])
+    db.flush()
+    hidden_entry = SiteMeasurementEntry(
+        measurement_batch_id=batch.id,
+        measurement_item_id=hidden_item.id,
+        site_id=site.id,
+        quantity=Decimal("2.00"),
+        area_or_comment="1. OG",
+        status="saved",
+    )
+    visible_entry = SiteMeasurementEntry(
+        measurement_batch_id=batch.id,
+        measurement_item_id=visible_item.id,
+        site_id=site.id,
+        quantity=Decimal("1.00"),
+        area_or_comment="EG",
+        status="saved",
+    )
+    db.add_all([hidden_entry, visible_entry])
+    db.commit()
+
+    service = MeasurementService(db)
+    service.hide_item(site_id=site.id, measurement_item_id=hidden_item.id)
+
+    listed_items = service.list_items(site.id)
+    timesheet = service.get_site_measurement_timesheet(site.id)
+    mobile_items = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    stored_hidden_entry = db.get(SiteMeasurementEntry, hidden_entry.id)
+
+    assert [item.id for item in listed_items] == [visible_item.id]
+    assert [row.position_id for row in timesheet.rows] == [visible_item.id]
+    assert [item.id for item in mobile_items] == [visible_item.id]
+    assert stored_hidden_entry is not None
+    assert stored_hidden_entry.measurement_item_id == hidden_item.id
 
 
 def test_measurement_base_activate_and_delete_rules():

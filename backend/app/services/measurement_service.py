@@ -29,6 +29,7 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
+    MeasurementItemRead,
     MobileMeasurementFreeItemCreate,
     MeasurementTimeAnalysisExtraWorkTicketRead,
     MeasurementTimeAnalysisRead,
@@ -152,7 +153,10 @@ class MeasurementService:
         statement = (
             select(SiteMeasurementItem)
             .options(selectinload(SiteMeasurementItem.measurement_base))
-            .where(SiteMeasurementItem.site_id == site_id)
+            .where(
+                SiteMeasurementItem.site_id == site_id,
+                SiteMeasurementItem.is_hidden.is_(False),
+            )
         )
         if measurement_base_id is not None:
             statement = statement.where(SiteMeasurementItem.measurement_base_id == measurement_base_id)
@@ -233,6 +237,7 @@ class MeasurementService:
                 .where(
                     SiteMeasurementItem.site_id == batch.site_id,
                     SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    SiteMeasurementItem.is_hidden.is_(False),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
@@ -257,7 +262,12 @@ class MeasurementService:
             )
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
-        if item is None or item.site_id != site_id or item.measurement_base_id != batch.measurement_base_id:
+        if (
+            item is None
+            or item.site_id != site_id
+            or item.measurement_base_id != batch.measurement_base_id
+            or item.is_hidden
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
 
         comment = payload.area_or_comment.strip()
@@ -277,6 +287,22 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(entry)
         return self._build_entry(entry)
+
+    def hide_item(self, *, site_id: int, measurement_item_id: int) -> MeasurementItemRead:
+        self._get_site(site_id)
+        item = self.db.scalar(
+            select(SiteMeasurementItem).where(
+                SiteMeasurementItem.id == measurement_item_id,
+                SiteMeasurementItem.site_id == site_id,
+            )
+        )
+        if item is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
+        if not item.is_hidden:
+            item.is_hidden = True
+            self.db.commit()
+            self.db.refresh(item)
+        return MeasurementItemRead.model_validate(item)
 
     def create_mobile_entry(
         self,
@@ -301,6 +327,7 @@ class MeasurementService:
             item is None
             or item.site_id != assignment.site_id
             or item.measurement_base_id != batch.measurement_base_id
+            or item.is_hidden
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
 
@@ -763,6 +790,7 @@ class MeasurementService:
                 .where(
                     SiteMeasurementItem.site_id == batch.site_id,
                     SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    SiteMeasurementItem.is_hidden.is_(False),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
@@ -829,6 +857,7 @@ class MeasurementService:
                 .where(
                     SiteMeasurementItem.site_id == site_id,
                     SiteMeasurementItem.measurement_base_id == active_base_id,
+                    SiteMeasurementItem.is_hidden.is_(False),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
@@ -1567,7 +1596,10 @@ class MeasurementService:
     def _build_measurement_base(self, base: SiteMeasurementBase) -> MeasurementBaseRead:
         result = MeasurementBaseRead.model_validate(base)
         result.item_count = self.db.scalar(
-            select(func.count(SiteMeasurementItem.id)).where(SiteMeasurementItem.measurement_base_id == base.id)
+            select(func.count(SiteMeasurementItem.id)).where(
+                SiteMeasurementItem.measurement_base_id == base.id,
+                SiteMeasurementItem.is_hidden.is_(False),
+            )
         ) or 0
         result.batch_count = self.db.scalar(
             select(func.count(SiteMeasurementBatch.id)).where(SiteMeasurementBatch.measurement_base_id == base.id)
@@ -1579,8 +1611,13 @@ class MeasurementService:
         batch: SiteMeasurementBatch,
         active_base_id: int | None = None,
     ) -> MobileMeasurementBatchRead:
-        position_ids = {entry.measurement_item_id for entry in batch.entries}
-        reported_minutes = self._sum_reported_minutes(batch.entries)
+        visible_entries = [
+            entry
+            for entry in batch.entries
+            if not (entry.measurement_item and entry.measurement_item.is_hidden)
+        ]
+        position_ids = {entry.measurement_item_id for entry in visible_entries}
+        reported_minutes = self._sum_reported_minutes(visible_entries)
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
         is_current_offer = (
             batch.measurement_base_id == active_base_id
@@ -1616,7 +1653,7 @@ class MeasurementService:
             created_at=batch.created_at,
             updated_at=batch.updated_at,
             position_count=len(position_ids),
-            entry_count=len(batch.entries),
+            entry_count=len(visible_entries),
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
             photo_count=self.db.scalar(

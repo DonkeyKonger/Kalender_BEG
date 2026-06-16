@@ -709,6 +709,12 @@ export const api = {
     return request<MeasurementTimesheet>(`/sites/${siteId}/measurement-timesheet`);
   },
 
+  async hideMeasurementItem(siteId: number, measurementItemId: number): Promise<MeasurementItem> {
+    return request<MeasurementItem>(`/sites/${siteId}/measurement-items/${measurementItemId}/hide`, {
+      method: "POST",
+    });
+  },
+
   async measurementTimeAnalysis(siteId: number): Promise<MeasurementTimeAnalysis> {
     return request<MeasurementTimeAnalysis>(`/sites/${siteId}/measurement-time-analysis`);
   },

@@ -511,6 +511,16 @@ def get_measurement_timesheet(
     return MeasurementService(db).get_site_measurement_timesheet(site_id)
 
 
+@router.post("/{site_id}/measurement-items/{measurement_item_id}/hide", response_model=MeasurementItemRead)
+def hide_measurement_item(
+    site_id: int,
+    measurement_item_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MeasurementItemRead:
+    return MeasurementService(db).hide_item(site_id=site_id, measurement_item_id=measurement_item_id)
+
+
 @router.get("/{site_id}/measurement-time-analysis", response_model=MeasurementTimeAnalysisRead)
 def get_measurement_time_analysis(
     site_id: int,

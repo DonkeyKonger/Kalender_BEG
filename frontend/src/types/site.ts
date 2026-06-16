@@ -219,6 +219,7 @@ export type MeasurementItem = {
   list_minutes_total: MeasurementNumericValue;
   is_nep: boolean;
   is_free_position: boolean;
+  is_hidden: boolean;
   sort_order: number;
   measurement_base: MeasurementBase | null;
   created_at: string;

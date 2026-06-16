@@ -111,6 +111,8 @@ export function SiteDetailPage() {
   const [measurementImporting, setMeasurementImporting] = useState(false);
   const [measurementImportMessage, setMeasurementImportMessage] = useState<string | null>(null);
   const [measurementImportError, setMeasurementImportError] = useState<string | null>(null);
+  const [measurementHideError, setMeasurementHideError] = useState<string | null>(null);
+  const [measurementHidingItemId, setMeasurementHidingItemId] = useState<number | null>(null);
   const [measurementSubtab, setMeasurementSubtab] = useState<MeasurementSubtab>("timesheet");
   const [measurementBatches, setMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [measurementBatchesLoading, setMeasurementBatchesLoading] = useState(false);
@@ -705,6 +707,30 @@ export function SiteDetailPage() {
     }
   }
 
+  async function hideMeasurementItem(measurementItemId: number): Promise<void> {
+    if (!site || !canEditSite || measurementHidingItemId !== null) {
+      return;
+    }
+    setMeasurementHidingItemId(measurementItemId);
+    setMeasurementHideError(null);
+    setMeasurementImportMessage(null);
+    try {
+      await api.hideMeasurementItem(site.id, measurementItemId);
+      const [bases, timesheet] = await Promise.all([
+        api.measurementBases(site.id),
+        api.measurementTimesheet(site.id),
+      ]);
+      setMeasurementBases(bases);
+      setMeasurementTimesheet(timesheet);
+      setMeasurementBatches([]);
+      setMeasurementBatchesLoaded(false);
+    } catch (requestError) {
+      setMeasurementHideError(readApiError(requestError, "Aufmaßposition konnte nicht ausgeblendet werden."));
+    } finally {
+      setMeasurementHidingItemId(null);
+    }
+  }
+
   async function importMeasurementTimesheet(file: File, options: MeasurementImportOptions): Promise<void> {
     if (!site || measurementImporting) {
       return;
@@ -1030,19 +1056,24 @@ export function SiteDetailPage() {
           timeAnalysis={measurementTimeAnalysis}
           timeAnalysisLoading={measurementTimeAnalysisLoading}
           timeAnalysisError={measurementTimeAnalysisError}
+          canHideItems={canEditSite}
           isLoading={measurementLoading}
           error={measurementError}
           isImporting={measurementImporting}
           importMessage={measurementImportMessage}
           importError={measurementImportError}
+          hideError={measurementHideError}
+          hidingItemId={measurementHidingItemId}
           onImport={importMeasurementTimesheet}
           onUpdateBase={(base, payload) => void updateMeasurementBase(base, payload)}
           onActivateBase={(base) => void activateMeasurementBase(base)}
           onDeleteBase={(base) => void deleteMeasurementBase(base)}
+          onHideItem={(measurementItemId) => void hideMeasurementItem(measurementItemId)}
           onRetry={() => {
             setMeasurementLoaded(false);
             setMeasurementTimesheet(null);
             setMeasurementError(null);
+            setMeasurementHideError(null);
           }}
           onRetryTimeAnalysis={() => {
             setMeasurementTimeAnalysisLoaded(false);
@@ -1875,15 +1906,19 @@ function MeasurementTab({
   timeAnalysis,
   timeAnalysisLoading,
   timeAnalysisError,
+  canHideItems,
   isLoading,
   error,
   isImporting,
   importMessage,
   importError,
+  hideError,
+  hidingItemId,
   onImport,
   onUpdateBase,
   onActivateBase,
   onDeleteBase,
+  onHideItem,
   onRetry,
   onRetryTimeAnalysis,
   batches,
@@ -1915,15 +1950,19 @@ function MeasurementTab({
   timeAnalysis: MeasurementTimeAnalysis | null;
   timeAnalysisLoading: boolean;
   timeAnalysisError: string | null;
+  canHideItems: boolean;
   isLoading: boolean;
   error: string | null;
   isImporting: boolean;
   importMessage: string | null;
   importError: string | null;
+  hideError: string | null;
+  hidingItemId: number | null;
   onImport: (file: File, options: MeasurementImportOptions) => Promise<void>;
   onUpdateBase: (base: MeasurementBase, payload: MeasurementBaseUpdate) => void;
   onActivateBase: (base: MeasurementBase) => void;
   onDeleteBase: (base: MeasurementBase) => void;
+  onHideItem: (measurementItemId: number) => void;
   onRetry: () => void;
   onRetryTimeAnalysis: () => void;
   batches: MobileMeasurementBatch[];
@@ -2096,7 +2135,11 @@ function MeasurementTab({
           isImportDialogOpen={isImportDialogOpen}
           importMessage={importMessage}
           importError={importError}
+          canHideItems={canHideItems}
+          hideError={hideError}
+          hidingItemId={hidingItemId}
           onRetry={onRetry}
+          onHideItem={onHideItem}
         />
       ) : null}
 
@@ -2247,7 +2290,11 @@ function MeasurementTimesheetPanel({
   isImportDialogOpen,
   importMessage,
   importError,
+  canHideItems,
   onRetry,
+  hideError,
+  hidingItemId,
+  onHideItem,
 }: {
   timesheet: MeasurementTimesheet | null;
   workerHeadCount: number;
@@ -2257,7 +2304,11 @@ function MeasurementTimesheetPanel({
   isImportDialogOpen: boolean;
   importMessage: string | null;
   importError: string | null;
+  canHideItems: boolean;
   onRetry: () => void;
+  hideError: string | null;
+  hidingItemId: number | null;
+  onHideItem: (measurementItemId: number) => void;
 }) {
   const [activeFilter, setActiveFilter] = useState<MeasurementTimesheetFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -2494,6 +2545,7 @@ function MeasurementTimesheetPanel({
         {fileSelectionError ? <div className="project-record-empty-state is-error"><strong>{fileSelectionError}</strong></div> : null}
         {importMessage ? <div className="project-record-empty-state is-success">{importMessage}</div> : null}
         {importError && !isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
+        {hideError ? <div className="project-record-empty-state is-error"><strong>{hideError}</strong></div> : null}
 
         {isLoading ? <div className="matrix-state">Aufmaßpositionen werden geladen...</div> : null}
         {error ? (
@@ -2585,6 +2637,7 @@ function MeasurementTimesheetPanel({
                     <table className="measurement-table measurement-timesheet-table">
                       <thead>
                         <tr>
+                          <th className="measurement-timesheet-remove-col" aria-label="Ausblenden" />
                           <th>Pos.-Nr.</th>
                           <th>Bezeichnung</th>
                           <th>Einheit</th>
@@ -2599,7 +2652,7 @@ function MeasurementTimesheetPanel({
                       <tbody>
                         {virtualProjectPositionRows.topSpacerHeight > 0 ? (
                           <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
-                            <td colSpan={9} style={{ height: virtualProjectPositionRows.topSpacerHeight }} />
+                            <td colSpan={10} style={{ height: virtualProjectPositionRows.topSpacerHeight }} />
                           </tr>
                         ) : null}
                         {virtualProjectPositionRows.rows.map((row) => (
@@ -2607,6 +2660,20 @@ function MeasurementTimesheetPanel({
                             key={row.positionId}
                             className={row.measuredQuantity > 0 ? "has-quantity" : ""}
                           >
+                            <td className="measurement-timesheet-remove-cell">
+                              {canHideItems ? (
+                                <button
+                                  type="button"
+                                  className="measurement-timesheet-hide-button"
+                                  disabled={hidingItemId === row.positionId}
+                                  aria-label={`Position ${row.positionNumber} ausblenden`}
+                                  title="Position ausblenden"
+                                  onClick={() => onHideItem(row.positionId)}
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </td>
                             <td><strong>{row.positionNumber}</strong></td>
                             <td className="measurement-timesheet-description">{row.description}</td>
                             <td>{row.unit ?? "-"}</td>
@@ -2631,7 +2698,7 @@ function MeasurementTimesheetPanel({
                         ))}
                         {virtualProjectPositionRows.bottomSpacerHeight > 0 ? (
                           <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
-                            <td colSpan={9} style={{ height: virtualProjectPositionRows.bottomSpacerHeight }} />
+                            <td colSpan={10} style={{ height: virtualProjectPositionRows.bottomSpacerHeight }} />
                           </tr>
                         ) : null}
                       </tbody>
