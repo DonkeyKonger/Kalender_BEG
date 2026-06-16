@@ -398,8 +398,8 @@ button:disabled {
     min-width: 0;
   }
 
-  .sidebar:hover::before,
-  .sidebar:focus-within::before {
+  .sidebar.is-pointer-expanded::before,
+  .sidebar.is-keyboard-expanded::before {
     transform: translate3d(0, 0, 0);
   }
 
@@ -421,15 +421,15 @@ button:disabled {
     will-change: opacity, transform;
   }
 
-  .sidebar:hover .brand-copy,
-  .sidebar:focus-within .brand-copy {
+  .sidebar.is-pointer-expanded .brand-copy,
+  .sidebar.is-keyboard-expanded .brand-copy {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
   }
 
-  .sidebar:hover .nav-label,
-  .sidebar:focus-within .nav-label {
+  .sidebar.is-pointer-expanded .nav-label,
+  .sidebar.is-keyboard-expanded .nav-label {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
@@ -461,8 +461,8 @@ button:disabled {
     height: 20px;
   }
 
-  .sidebar:hover .nav-list a,
-  .sidebar:focus-within .nav-list a {
+  .sidebar.is-pointer-expanded .nav-list a,
+  .sidebar.is-keyboard-expanded .nav-list a {
     clip-path: inset(0 0 0 0);
   }
 

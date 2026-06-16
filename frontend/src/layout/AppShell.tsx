@@ -1,4 +1,6 @@
 import { LogOut } from "lucide-react";
+import { useRef, useState } from "react";
+import type { FocusEvent, KeyboardEvent, PointerEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -7,13 +9,73 @@ import { navigationItems } from "../config/navigation";
 export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [sidebarMode, setSidebarMode] = useState<"collapsed" | "pointer" | "keyboard">("collapsed");
+  const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
   const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
   const showUserTopbar = location.pathname === "/";
   const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
 
+  function handleSidebarPointerEnter() {
+    lastSidebarInputRef.current = "pointer";
+    setSidebarMode("pointer");
+  }
+
+  function handleSidebarPointerDown() {
+    lastSidebarInputRef.current = "pointer";
+  }
+
+  function handleSidebarPointerLeave(event: PointerEvent<HTMLElement>) {
+    setSidebarMode("collapsed");
+
+    const activeElement = document.activeElement;
+    if (
+      lastSidebarInputRef.current === "pointer" &&
+      activeElement instanceof HTMLElement &&
+      event.currentTarget.contains(activeElement)
+    ) {
+      activeElement.blur();
+    }
+  }
+
+  function handleSidebarKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === "Tab") {
+      lastSidebarInputRef.current = "keyboard";
+      setSidebarMode("keyboard");
+    }
+  }
+
+  function handleSidebarFocus(event: FocusEvent<HTMLElement>) {
+    if (lastSidebarInputRef.current === "keyboard" || !event.currentTarget.matches(":hover")) {
+      setSidebarMode("keyboard");
+    }
+  }
+
+  function handleSidebarBlur(event: FocusEvent<HTMLElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setSidebarMode("collapsed");
+    }
+  }
+
+  const sidebarClassName = [
+    "sidebar",
+    sidebarMode === "pointer" ? "is-pointer-expanded" : "",
+    sidebarMode === "keyboard" ? "is-keyboard-expanded" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Hauptnavigation">
+      <aside
+        className={sidebarClassName}
+        aria-label="Hauptnavigation"
+        onBlur={handleSidebarBlur}
+        onFocus={handleSidebarFocus}
+        onKeyDown={handleSidebarKeyDown}
+        onPointerDown={handleSidebarPointerDown}
+        onPointerEnter={handleSidebarPointerEnter}
+        onPointerLeave={handleSidebarPointerLeave}
+      >
         <div className="brand-block">
           <span className="brand-mark brand-logo-mark">
             <img src="/beg-logo.png" alt="BEG Logo" />
