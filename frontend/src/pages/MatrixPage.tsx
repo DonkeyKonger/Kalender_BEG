@@ -137,6 +137,10 @@ export function MatrixPage() {
   const didSetInitialProjectManagerFilter = useRef(false);
   const rangeScrollKeyRef = useRef<string | null>(null);
   const weekSnapTimeoutRef = useRef<number | null>(null);
+  const rangeScrollFrameRef = useRef<number | null>(null);
+  const rangeScrollSecondFrameRef = useRef<number | null>(null);
+  const rangeScrollFallbackTimeoutRef = useRef<number | null>(null);
+  const initialScrollSnapResetTimeoutRef = useRef<number | null>(null);
   const isApplyingWeekSnapRef = useRef(false);
   const hasLoadedPeopleRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
@@ -283,28 +287,127 @@ export function MatrixPage() {
     }
   }, [matrix, user?.person_id]);
 
-  useEffect(() => {
+  const clearScheduledMatrixRangeScroll = useCallback(() => {
+    if (rangeScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(rangeScrollFrameRef.current);
+      rangeScrollFrameRef.current = null;
+    }
+    if (rangeScrollSecondFrameRef.current !== null) {
+      window.cancelAnimationFrame(rangeScrollSecondFrameRef.current);
+      rangeScrollSecondFrameRef.current = null;
+    }
+    if (rangeScrollFallbackTimeoutRef.current !== null) {
+      window.clearTimeout(rangeScrollFallbackTimeoutRef.current);
+      rangeScrollFallbackTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleScrollToCurrentWeek = useCallback(() => {
     if (!matrix || !matrixScrollRef.current) {
       return;
     }
-    const firstDay = matrix.days[0]?.date;
-    const lastDay = matrix.days.at(-1)?.date;
+    const firstDay = matrix.days[0]?.date ?? "";
+    const lastDay = matrix.days.at(-1)?.date ?? "";
     if (firstDay !== activeRange.start || lastDay !== activeRange.end) {
       return;
     }
-    const scrollKey = `${isYearView ? "year" : "standard"}:${projectManagerFilter}:${activeRange.start}:${activeRange.end}`;
+
+    const scrollKey = [
+      isYearView ? "year" : "standard",
+      projectManagerFilter,
+      isCompactView ? "compact" : "normal",
+      activeRange.start,
+      activeRange.end,
+      matrix.days.length,
+      firstDay,
+      lastDay,
+    ].join(":");
     if (rangeScrollKeyRef.current === scrollKey) {
       return;
     }
-    rangeScrollKeyRef.current = scrollKey;
+
+    clearScheduledMatrixRangeScroll();
+    if (weekSnapTimeoutRef.current) {
+      window.clearTimeout(weekSnapTimeoutRef.current);
+      weekSnapTimeoutRef.current = null;
+    }
+    if (initialScrollSnapResetTimeoutRef.current) {
+      window.clearTimeout(initialScrollSnapResetTimeoutRef.current);
+      initialScrollSnapResetTimeoutRef.current = null;
+    }
+
     if (isYearView) {
-      matrixScrollRef.current.scrollLeft = 0;
+      const scrollElement = matrixScrollRef.current;
+      scrollElement.scrollLeft = 0;
+      rangeScrollKeyRef.current = scrollKey;
       return;
     }
-    if (matrix.days.some((day) => day.date === today)) {
-      matrixScrollRef.current.scrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
+
+    if (!matrix.days.some((day) => day.date === today)) {
+      return;
     }
-  }, [activeRange.end, activeRange.start, isCompactView, isYearView, matrix, projectManagerFilter, today]);
+
+    const desiredScrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
+    const expectedTableWidth = matrixNumericTableWidth(matrix.days, isCompactView);
+    let attempt = 0;
+    const applyScroll = () => {
+      const scrollElement = matrixScrollRef.current;
+      if (!scrollElement) {
+        return;
+      }
+      attempt += 1;
+      const maxScrollLeft = Math.max(0, scrollElement.scrollWidth - scrollElement.clientWidth);
+      const targetScrollLeft = Math.min(desiredScrollLeft, maxScrollLeft);
+      const isLikelyBeforeLayout = expectedTableWidth > scrollElement.clientWidth && maxScrollLeft === 0;
+      if (isLikelyBeforeLayout && attempt < 5) {
+        rangeScrollFallbackTimeoutRef.current = window.setTimeout(() => {
+          rangeScrollFallbackTimeoutRef.current = null;
+          applyScroll();
+        }, 80);
+        return;
+      }
+      isApplyingWeekSnapRef.current = true;
+      scrollElement.scrollLeft = targetScrollLeft;
+
+      const wasApplied = Math.abs(scrollElement.scrollLeft - targetScrollLeft) <= 2;
+      if (wasApplied || attempt >= 3) {
+        if (wasApplied && !isLikelyBeforeLayout) {
+          rangeScrollKeyRef.current = scrollKey;
+        }
+        initialScrollSnapResetTimeoutRef.current = window.setTimeout(() => {
+          isApplyingWeekSnapRef.current = false;
+          initialScrollSnapResetTimeoutRef.current = null;
+        }, 120);
+        return;
+      }
+
+      rangeScrollFallbackTimeoutRef.current = window.setTimeout(() => {
+        rangeScrollFallbackTimeoutRef.current = null;
+        applyScroll();
+      }, 80);
+    };
+
+    rangeScrollFrameRef.current = window.requestAnimationFrame(() => {
+      rangeScrollFrameRef.current = null;
+      rangeScrollSecondFrameRef.current = window.requestAnimationFrame(() => {
+        rangeScrollSecondFrameRef.current = null;
+        applyScroll();
+      });
+    });
+  }, [
+    activeRange.end,
+    activeRange.start,
+    clearScheduledMatrixRangeScroll,
+    isCompactView,
+    isYearView,
+    matrix,
+    projectManagerFilter,
+    today,
+  ]);
+
+  useEffect(() => {
+    scheduleScrollToCurrentWeek();
+  }, [scheduleScrollToCurrentWeek]);
 
   const handleMatrixScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
     if (!matrix || isYearView || isApplyingWeekSnapRef.current) {
@@ -334,6 +437,7 @@ export function MatrixPage() {
 
   useEffect(() => {
     return () => {
+      clearScheduledMatrixRangeScroll();
       Object.values(cellMessageTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
       if (errorTimeoutRef.current) {
         window.clearTimeout(errorTimeoutRef.current);
@@ -341,8 +445,12 @@ export function MatrixPage() {
       if (weekSnapTimeoutRef.current) {
         window.clearTimeout(weekSnapTimeoutRef.current);
       }
+      if (initialScrollSnapResetTimeoutRef.current) {
+        window.clearTimeout(initialScrollSnapResetTimeoutRef.current);
+      }
+      isApplyingWeekSnapRef.current = false;
     };
-  }, []);
+  }, [clearScheduledMatrixRangeScroll]);
 
   useEffect(() => {
     if (errorTimeoutRef.current) {
@@ -2608,9 +2716,13 @@ function matrixColumnWidthForDate(date: string, isCompactView: boolean): number 
 }
 
 function matrixTableWidth(days: MatrixResponse["days"], isCompactView: boolean): string {
+  return `${matrixNumericTableWidth(days, isCompactView)}px`;
+}
+
+function matrixNumericTableWidth(days: MatrixResponse["days"], isCompactView: boolean): number {
   const fixedWidth = isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH;
   const daysWidth = days.reduce((total, day) => total + matrixColumnWidthForDate(day.date, isCompactView), 0);
-  return `${fixedWidth + daysWidth}px`;
+  return fixedWidth + daysWidth;
 }
 
 function matrixHolidayMap(days: MatrixResponse["days"]): Map<string, HolidayInfo> {
