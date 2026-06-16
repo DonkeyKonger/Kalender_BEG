@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type UIEvent as ReactUIEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -136,7 +136,7 @@ export function MatrixPage() {
   const assignmentResizeRef = useRef<AssignmentResizeState | null>(null);
   const didSetInitialProjectManagerFilter = useRef(false);
   const rangeScrollKeyRef = useRef<string | null>(null);
-  const weekSnapTimeoutRef = useRef<number | null>(null);
+  const interactionWeekSnapKeyRef = useRef<string | null>(null);
   const rangeScrollFrameRef = useRef<number | null>(null);
   const rangeScrollSecondFrameRef = useRef<number | null>(null);
   const rangeScrollFallbackTimeoutRef = useRef<number | null>(null);
@@ -327,10 +327,6 @@ export function MatrixPage() {
     }
 
     clearScheduledMatrixRangeScroll();
-    if (weekSnapTimeoutRef.current) {
-      window.clearTimeout(weekSnapTimeoutRef.current);
-      weekSnapTimeoutRef.current = null;
-    }
     if (initialScrollSnapResetTimeoutRef.current) {
       window.clearTimeout(initialScrollSnapResetTimeoutRef.current);
       initialScrollSnapResetTimeoutRef.current = null;
@@ -409,31 +405,42 @@ export function MatrixPage() {
     scheduleScrollToCurrentWeek();
   }, [scheduleScrollToCurrentWeek]);
 
-  const handleMatrixScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
+  const handleMatrixFirstInteraction = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!matrix || isYearView || isApplyingWeekSnapRef.current) {
       return;
     }
     const scrollElement = event.currentTarget;
-    if (weekSnapTimeoutRef.current) {
-      window.clearTimeout(weekSnapTimeoutRef.current);
+    const firstDay = matrix.days[0]?.date ?? "";
+    const lastDay = matrix.days.at(-1)?.date ?? "";
+    const snapKey = [
+      projectManagerFilter,
+      isCompactView ? "compact" : "normal",
+      activeRange.start,
+      activeRange.end,
+      matrix.days.length,
+      firstDay,
+      lastDay,
+    ].join(":");
+    if (interactionWeekSnapKeyRef.current === snapKey) {
+      return;
     }
-    weekSnapTimeoutRef.current = window.setTimeout(() => {
-      const leftVisibleDate = matrixDateAtScrollOffset(matrix.days, scrollElement.scrollLeft, isCompactView);
-      if (!leftVisibleDate) {
-        return;
-      }
-      const weekStartDate = matrixWeekStartDate(leftVisibleDate);
-      const targetScrollLeft = matrixScrollOffsetForDate(matrix.days, weekStartDate, isCompactView);
-      if (Math.abs(scrollElement.scrollLeft - targetScrollLeft) < 2) {
-        return;
-      }
-      isApplyingWeekSnapRef.current = true;
-      scrollElement.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
-      window.setTimeout(() => {
-        isApplyingWeekSnapRef.current = false;
-      }, 250);
-    }, 180);
-  }, [isCompactView, isYearView, matrix]);
+    const leftVisibleDate = matrixDateAtScrollOffset(matrix.days, scrollElement.scrollLeft, isCompactView);
+    if (!leftVisibleDate) {
+      return;
+    }
+    const weekStartDate = matrixWeekStartDate(leftVisibleDate);
+    const targetScrollLeft = matrixScrollOffsetForDate(matrix.days, weekStartDate, isCompactView);
+    interactionWeekSnapKeyRef.current = snapKey;
+    if (Math.abs(scrollElement.scrollLeft - targetScrollLeft) < 2) {
+      return;
+    }
+    isApplyingWeekSnapRef.current = true;
+    scrollElement.scrollLeft = targetScrollLeft;
+    initialScrollSnapResetTimeoutRef.current = window.setTimeout(() => {
+      isApplyingWeekSnapRef.current = false;
+      initialScrollSnapResetTimeoutRef.current = null;
+    }, 80);
+  }, [activeRange.end, activeRange.start, isCompactView, isYearView, matrix, projectManagerFilter]);
 
   useEffect(() => {
     return () => {
@@ -441,9 +448,6 @@ export function MatrixPage() {
       Object.values(cellMessageTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
       if (errorTimeoutRef.current) {
         window.clearTimeout(errorTimeoutRef.current);
-      }
-      if (weekSnapTimeoutRef.current) {
-        window.clearTimeout(weekSnapTimeoutRef.current);
       }
       if (initialScrollSnapResetTimeoutRef.current) {
         window.clearTimeout(initialScrollSnapResetTimeoutRef.current);
@@ -1512,7 +1516,7 @@ export function MatrixPage() {
             onCreateSiteForGroup={openSiteCreateDrawer}
             onCycleCellMark={cycleCellMark}
             onMatrixContextMenu={handleMatrixContextMenu}
-            onMatrixScroll={handleMatrixScroll}
+            onMatrixFirstInteraction={handleMatrixFirstInteraction}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
             onInfoSave={(siteId) => void saveSiteInfo(siteId)}
             onStatusChange={(siteId, status) => void saveSiteStatus(siteId, status)}
@@ -1933,7 +1937,7 @@ type MatrixTableProps = {
   onInfoChange: (siteId: number, value: string) => void;
   onInfoSave: (siteId: number) => void;
   onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
-  onMatrixScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
+  onMatrixFirstInteraction: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
   onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (row: MatrixRow, assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
@@ -1976,7 +1980,7 @@ function MatrixTable(props: MatrixTableProps) {
       aria-label="Planmatrix"
       style={matrixCssVars}
       onContextMenu={props.onMatrixContextMenu}
-      onScroll={props.onMatrixScroll}
+      onPointerDownCapture={props.onMatrixFirstInteraction}
     >
       <table className="matrix-table" style={tableStyle}>
         <colgroup>
