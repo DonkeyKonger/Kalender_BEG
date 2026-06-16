@@ -5522,6 +5522,46 @@ button.person-chip:focus-visible {
   gap: 10px;
 }
 
+.site-detail-address-search {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 4px;
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.site-detail-address-search > span {
+  letter-spacing: 0;
+}
+
+.site-detail-address-search input {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #111827;
+  padding: 0 8px;
+  font: inherit;
+  font-weight: 650;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%);
+}
+
+.site-detail-address-search input:focus {
+  border-color: #7aa2d2;
+  box-shadow: 0 0 0 3px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.site-detail-address-search .site-address-results {
+  border-radius: 0;
+}
+
+.site-detail-address-search .site-address-results button {
+  border-radius: 0;
+}
+
 .detail-item {
   display: grid;
   gap: 3px;

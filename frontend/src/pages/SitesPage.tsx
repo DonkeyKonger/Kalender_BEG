@@ -829,11 +829,13 @@ export function SiteFields({
 }
 
 export function SiteAddressSearch({
+  className = "",
   draft,
   disabled = false,
   onChange,
   onGeocodeSelected,
 }: {
+  className?: string;
   draft: SiteCreate;
   disabled?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
@@ -914,7 +916,7 @@ export function SiteAddressSearch({
   }
 
   return (
-    <label className="address-field site-address-search">
+    <label className={`address-field site-address-search${className ? ` ${className}` : ""}`}>
       <span>Adresse suchen</span>
       <input
         aria-label="Adresse suchen"

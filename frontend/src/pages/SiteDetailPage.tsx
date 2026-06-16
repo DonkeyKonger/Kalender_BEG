@@ -1313,6 +1313,7 @@ function OverviewTab({
             <DetailSection title="Adresse / Standort" icon={MapPin}>
               {canEdit && draft ? (
                 <SiteAddressSearch
+                  className="site-detail-address-search"
                   draft={draft}
                   disabled={isSaving}
                   onChange={onDraftChange}
