@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -35,6 +35,7 @@ import {
 
 type CellKey = `${number}-${string}`;
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
+type MatrixKeyboardEvent = KeyboardEvent | ReactKeyboardEvent<HTMLElement>;
 type DraftEntry = MatrixEntryInput & { key: string; label: string };
 type AssignmentSuggestion =
   | { kind: "person"; person: Person }
@@ -130,6 +131,8 @@ export function MatrixPage() {
   const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
   const errorTimeoutRef = useRef<number | null>(null);
   const skipNextDraftAutosaveRef = useRef(false);
+  const activeCellRef = useRef<ActiveCell | null>(null);
+  const activeEditorRangeRef = useRef<CellRange | null>(null);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
@@ -518,69 +521,76 @@ export function MatrixPage() {
     setHighlightedPersonIndex(assignmentSuggestions.length === 1 ? 0 : -1);
   }, [assignmentSuggestions.length, editorAnchor, personSearchSeed]);
 
-  useEffect(() => {
-    function handleMatrixKeyboard(event: KeyboardEvent) {
-      if (!matrixIsEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
-        return;
-      }
-      if (!activeCell || !activeEditorRange) {
-        return;
-      }
-      if (isKeyboardEventFromFormControl(event)) {
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (editorAnchor) {
-          closeKeyboardEntry();
-        } else {
-          closeActiveEditor();
-        }
-        return;
-      }
-      if (editorAnchor) {
-        if (event.key === "ArrowDown" && assignmentSuggestions.length > 0) {
-          event.preventDefault();
-          setHighlightedPersonIndex((current) => (current < 0 ? 0 : (current + 1) % assignmentSuggestions.length));
-          return;
-        }
-        if (event.key === "ArrowUp" && assignmentSuggestions.length > 0) {
-          event.preventDefault();
-          setHighlightedPersonIndex((current) => (current < 0 ? assignmentSuggestions.length - 1 : current <= 0 ? assignmentSuggestions.length - 1 : current - 1));
-          return;
-        }
-        if (event.key === "Enter") {
-          event.preventDefault();
-          const selectedPerson = highlightedPersonIndex >= 0
-            ? assignmentSuggestions[highlightedPersonIndex]
-            : assignmentSuggestions.length === 1 ? assignmentSuggestions[0] : null;
-          if (selectedPerson) {
-            void applyAssignmentSuggestion(selectedPerson);
-          }
-          return;
-        }
-        if (event.key === "Backspace") {
-          event.preventDefault();
-          setPersonSearchSeed((current) => current.slice(0, -1));
-          return;
-        }
-        if (isSearchStartKey(event)) {
-          event.preventDefault();
-          setPersonSearchSeed((current) => current + event.key);
-        }
-        return;
-      }
-      if (!isSearchStartKey(event)) {
-        return;
-      }
-      event.preventDefault();
-      setPersonSearchSeed(event.key);
-      setEditorAnchor(selectionAnchorRef.current ?? fallbackEditorAnchor(matrixScrollRef.current));
+  const handleMatrixKeyboard = useCallback((event: MatrixKeyboardEvent) => {
+    if (!matrixIsEditable || isSelecting || assignmentDrag || activeAbsenceCell) {
+      return;
     }
+    if (!(activeCell ?? activeCellRef.current) || !(activeEditorRange ?? activeEditorRangeRef.current)) {
+      return;
+    }
+    if (isKeyboardEventFromFormControl(event)) {
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (editorAnchor) {
+        closeKeyboardEntry();
+      } else {
+        closeActiveEditor();
+      }
+      return;
+    }
+    if (editorAnchor) {
+      if (event.key === "ArrowDown" && assignmentSuggestions.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        setHighlightedPersonIndex((current) => (current < 0 ? 0 : (current + 1) % assignmentSuggestions.length));
+        return;
+      }
+      if (event.key === "ArrowUp" && assignmentSuggestions.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        setHighlightedPersonIndex((current) => (current < 0 ? assignmentSuggestions.length - 1 : current <= 0 ? assignmentSuggestions.length - 1 : current - 1));
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        const selectedPerson = highlightedPersonIndex >= 0
+          ? assignmentSuggestions[highlightedPersonIndex]
+          : assignmentSuggestions.length === 1 ? assignmentSuggestions[0] : null;
+        if (selectedPerson) {
+          void applyAssignmentSuggestion(selectedPerson);
+        }
+        return;
+      }
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        event.stopPropagation();
+        setPersonSearchSeed((current) => current.slice(0, -1));
+        return;
+      }
+      if (isSearchStartKey(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPersonSearchSeed((current) => current + event.key);
+      }
+      return;
+    }
+    if (!isSearchStartKey(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setPersonSearchSeed(event.key);
+    setEditorAnchor(selectionAnchorRef.current ?? fallbackEditorAnchor(matrixScrollRef.current));
+  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, assignmentSuggestions, editorAnchor, highlightedPersonIndex, isSelecting, matrixIsEditable]);
 
+  useEffect(() => {
     document.addEventListener("keydown", handleMatrixKeyboard);
     return () => document.removeEventListener("keydown", handleMatrixKeyboard);
-  }, [activeAbsenceCell, activeCell, activeEditorRange, assignmentDrag, assignmentSuggestions, editorAnchor, highlightedPersonIndex, isSelecting, matrixIsEditable]);
+  }, [handleMatrixKeyboard]);
 
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
@@ -603,11 +613,15 @@ export function MatrixPage() {
 
   function openEditorForRange(row: MatrixRow, cell: MatrixCell, range: CellRange, anchor?: EditorAnchor) {
     closeAbsenceEditor();
+    matrixScrollRef.current?.focus({ preventScroll: true });
     const key = cellKey(row.site.id, range.startDate);
+    const nextActiveCell = { siteId: row.site.id, date: range.startDate, endDate: range.endDate, key };
     const entries = entriesFromCell(cell);
     skipNextDraftAutosaveRef.current = true;
     selectionAnchorRef.current = anchor ?? selectionAnchorRef.current;
-    setActiveCell({ siteId: row.site.id, date: range.startDate, endDate: range.endDate, key });
+    activeCellRef.current = nextActiveCell;
+    activeEditorRangeRef.current = range;
+    setActiveCell(nextActiveCell);
     setActiveEditorRange(range);
     setEditorAnchor(null);
     setPersonSearchSeed("");
@@ -757,6 +771,8 @@ export function MatrixPage() {
   }
 
   function closeActiveEditor() {
+    activeCellRef.current = null;
+    activeEditorRangeRef.current = null;
     setActiveCell(null);
     setEditorAnchor(null);
     setActiveEditorRange(null);
@@ -840,6 +856,7 @@ export function MatrixPage() {
       if (options.closeOnSuccess) {
         closeActiveEditor();
       } else {
+        activeEditorRangeRef.current = null;
         setActiveEditorRange(null);
         clearSelection();
       }
@@ -859,6 +876,7 @@ export function MatrixPage() {
       return;
     }
     event.preventDefault();
+    matrixScrollRef.current?.focus({ preventScroll: true });
     if (activeCell) {
       closeActiveEditor();
     }
@@ -1527,6 +1545,7 @@ export function MatrixPage() {
             onClearCellMark={clearCellMark}
             onCreateSiteForGroup={openSiteCreateDrawer}
             onCycleCellMark={cycleCellMark}
+            onMatrixKeyDown={handleMatrixKeyboard}
             onMatrixContextMenu={handleMatrixContextMenu}
             onMatrixFirstInteraction={handleMatrixFirstInteraction}
             onInfoChange={(siteId, value) => setSiteInfoDrafts((current) => ({ ...current, [siteId]: value }))}
@@ -1950,6 +1969,7 @@ type MatrixTableProps = {
   onInfoSave: (siteId: number) => void;
   onMatrixContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onMatrixFirstInteraction: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onMatrixKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onStatusChange: (siteId: number, status: SiteStatus) => void;
   onStartAssignmentDrag: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment, segmentStartDate: string, segmentEndDate: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onStartAssignmentResize: (row: MatrixRow, assignment: MatrixAssignment, edge: AssignmentResizeEdge, event: ReactPointerEvent<HTMLSpanElement>) => void;
@@ -1991,7 +2011,9 @@ function MatrixTable(props: MatrixTableProps) {
       role="region"
       aria-label="Planmatrix"
       style={matrixCssVars}
+      tabIndex={0}
       onContextMenu={props.onMatrixContextMenu}
+      onKeyDown={props.onMatrixKeyDown}
       onPointerDownCapture={props.onMatrixFirstInteraction}
     >
       <table className="matrix-table" style={tableStyle}>
@@ -2659,14 +2681,14 @@ function fallbackEditorAnchor(container: HTMLElement | null): EditorAnchor {
   };
 }
 
-function isSearchStartKey(event: KeyboardEvent): boolean {
+function isSearchStartKey(event: MatrixKeyboardEvent): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) {
     return false;
   }
   return event.key.length === 1 && event.key.trim().length > 0;
 }
 
-function isKeyboardEventFromFormControl(event: KeyboardEvent): boolean {
+function isKeyboardEventFromFormControl(event: MatrixKeyboardEvent): boolean {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) {
     return false;
