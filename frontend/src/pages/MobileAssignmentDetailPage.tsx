@@ -1175,44 +1175,20 @@ function ProjectEmailRecipientsModal({
     ));
   }
 
-  function addEmail(): void {
-    const normalizedEmail = normalizeProjectRecipientEmail(newEmail);
-    if (!normalizedEmail) {
-      setError("Bitte eine E-Mail-Adresse eingeben.");
-      return;
-    }
-    if (!isValidProjectRecipientEmail(normalizedEmail)) {
-      setError("E-Mail-Adresse ist nicht gültig.");
-      return;
-    }
-    setError(null);
-    setSuggestions((currentSuggestions) => (
-      currentSuggestions.some((suggestion) => suggestion.email === normalizedEmail)
-        ? currentSuggestions
-        : [
-          ...currentSuggestions,
-          {
-            id: null,
-            email: normalizedEmail,
-            label: null,
-            source: "manual",
-            is_selected: true,
-            created_at: null,
-            updated_at: null,
-          },
-        ]
-    ));
-    setSelectedEmails((currentEmails) => (
-      currentEmails.includes(normalizedEmail) ? currentEmails : [...currentEmails, normalizedEmail]
-    ));
-    setNewEmail("");
-  }
-
   async function saveRecipients(): Promise<void> {
     setIsSaving(true);
     setError(null);
     try {
-      const recipients = selectedEmails.map((email) => {
+      const normalizedEmail = normalizeProjectRecipientEmail(newEmail);
+      if (normalizedEmail && !isValidProjectRecipientEmail(normalizedEmail)) {
+        setError("E-Mail-Adresse ist nicht gültig.");
+        return;
+      }
+
+      const emailsToSave = normalizedEmail && !selectedEmails.includes(normalizedEmail)
+        ? [...selectedEmails, normalizedEmail]
+        : selectedEmails;
+      const recipients = emailsToSave.map((email) => {
         const suggestion = suggestionByEmail.get(email);
         return {
           email,
@@ -1274,9 +1250,6 @@ function ProjectEmailRecipientsModal({
                   placeholder="kunde@example.de"
                 />
               </label>
-              <button className="secondary-action" type="button" onClick={addEmail}>
-                Hinzufügen
-              </button>
             </div>
           </>
         ) : null}
