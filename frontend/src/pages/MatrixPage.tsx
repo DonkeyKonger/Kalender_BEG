@@ -277,16 +277,6 @@ export function MatrixPage() {
     setIsCompactView(localStorage.getItem(matrixCompactPreferenceKey(user.id)) === "true");
   }, [user?.id]);
 
-  useEffect(() => {
-    if (!matrix || didSetInitialProjectManagerFilter.current) {
-      return;
-    }
-    didSetInitialProjectManagerFilter.current = true;
-    if (user?.person_id && matrix.project_managers.some((manager) => manager.id === user.person_id)) {
-      setProjectManagerFilter(String(user.person_id));
-    }
-  }, [matrix, user?.person_id]);
-
   const clearScheduledMatrixRangeScroll = useCallback(() => {
     if (rangeScrollFrameRef.current !== null) {
       window.cancelAnimationFrame(rangeScrollFrameRef.current);
@@ -301,6 +291,28 @@ export function MatrixPage() {
       rangeScrollFallbackTimeoutRef.current = null;
     }
   }, []);
+
+  const updateProjectManagerFilter = useCallback((nextFilter: string) => {
+    rangeScrollKeyRef.current = null;
+    interactionWeekSnapKeyRef.current = null;
+    clearScheduledMatrixRangeScroll();
+    if (initialScrollSnapResetTimeoutRef.current) {
+      window.clearTimeout(initialScrollSnapResetTimeoutRef.current);
+      initialScrollSnapResetTimeoutRef.current = null;
+    }
+    isApplyingWeekSnapRef.current = false;
+    setProjectManagerFilter(nextFilter);
+  }, [clearScheduledMatrixRangeScroll]);
+
+  useEffect(() => {
+    if (!matrix || didSetInitialProjectManagerFilter.current) {
+      return;
+    }
+    didSetInitialProjectManagerFilter.current = true;
+    if (user?.person_id && matrix.project_managers.some((manager) => manager.id === user.person_id)) {
+      updateProjectManagerFilter(String(user.person_id));
+    }
+  }, [matrix, updateProjectManagerFilter, user?.person_id]);
 
   const scheduleScrollToCurrentWeek = useCallback(() => {
     if (!matrix || !matrixScrollRef.current) {
@@ -1447,7 +1459,7 @@ export function MatrixPage() {
               <button
                 className={projectManagerFilter === "all" ? "is-active" : ""}
                 type="button"
-                onClick={() => setProjectManagerFilter("all")}
+                onClick={() => updateProjectManagerFilter("all")}
               >
                 Alle
               </button>
@@ -1456,7 +1468,7 @@ export function MatrixPage() {
                   className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
                   key={manager.id}
                   type="button"
-                  onClick={() => setProjectManagerFilter(String(manager.id))}
+                  onClick={() => updateProjectManagerFilter(String(manager.id))}
                 >
                   {isCompactView ? compactProjectManagerFilterLabel(manager) : manager.shortCode || manager.name}
                 </button>
