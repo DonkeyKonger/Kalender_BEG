@@ -2277,12 +2277,21 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   return (
     <tr>
       <td className="sticky-col site-number-col matrix-site-number-cell">
-        {row.site.site_number || "-"}
+        <div className="matrix-site-number-content">
+          <span
+            className="site-color matrix-site-number-color"
+            style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
+          />
+          <span className="matrix-site-number-stack">
+            <strong>{row.site.site_number || "-"}</strong>
+            <span aria-hidden="true" className="matrix-site-number-spacer" />
+          </span>
+        </div>
       </td>
       <th className="sticky-col site-col row-heading" scope="row">
         <div className="row-heading-content">
           <span
-            className="site-color"
+            className="site-color matrix-site-heading-color"
             style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
           />
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>
