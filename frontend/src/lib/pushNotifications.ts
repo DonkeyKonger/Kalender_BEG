@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 import { api, getApiBaseUrl } from "./api";
 import type { CurrentUser } from "../types/auth";
@@ -13,26 +14,9 @@ type PushNotificationAction = {
   };
 };
 
-interface PushNotificationsPlugin {
-  checkPermissions: () => Promise<{ receive: "granted" | "denied" | "prompt" | "prompt-with-rationale" }>;
-  requestPermissions: () => Promise<{ receive: "granted" | "denied" | "prompt" | "prompt-with-rationale" }>;
-  register: () => Promise<void>;
-  addListener(
-    eventName: "registration",
-    listenerFunc: (token: PushRegistrationToken) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
-  addListener(
-    eventName: "registrationError",
-    listenerFunc: (error: unknown) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
-  addListener(
-    eventName: "pushNotificationActionPerformed",
-    listenerFunc: (action: PushNotificationAction) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
-}
-
 let initializedForUserId: number | null = null;
 let listenersAttached = false;
+let pushInitStarted = false;
 
 export function canUsePushNotifications(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
@@ -41,6 +25,16 @@ export function canUsePushNotifications(): boolean {
 export async function initializePushNotifications(currentUser: CurrentUser): Promise<boolean> {
   const platform = Capacitor.getPlatform();
   const isNativePlatform = Capacitor.isNativePlatform();
+
+  if (pushInitStarted) {
+    console.info("[Push] init skipped; already started", {
+      userId: currentUser.id,
+      initializedForUserId,
+      platform,
+    });
+    return initializedForUserId === currentUser.id;
+  }
+
   console.info("[Push] init entered", {
     userId: currentUser.id,
     platform,
@@ -64,12 +58,17 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
   }
 
   console.info("[Push] native platform detected", { platform });
+  pushInitStarted = true;
 
-  const PushNotifications = await loadPushNotificationsPlugin();
+  const pluginMethodsAvailable =
+    typeof PushNotifications.addListener === "function" &&
+    typeof PushNotifications.checkPermissions === "function" &&
+    typeof PushNotifications.requestPermissions === "function" &&
+    typeof PushNotifications.register === "function";
   console.info("[Push] PushNotifications plugin available", {
-    available: Boolean(PushNotifications),
+    available: pluginMethodsAvailable,
   });
-  if (!PushNotifications) {
+  if (!pluginMethodsAvailable) {
     return false;
   }
 
@@ -135,20 +134,6 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
   await PushNotifications.register();
   initializedForUserId = currentUser.id;
   return true;
-}
-
-async function loadPushNotificationsPlugin(): Promise<PushNotificationsPlugin | null> {
-  try {
-    const pluginModule = await import("@capacitor/push-notifications");
-    return pluginModule.PushNotifications as PushNotificationsPlugin;
-  } catch (error) {
-    console.warn("[Push] Capacitor Push Notifications plugin load failed", {
-      step: "loadPushNotificationsPlugin",
-      message: getErrorMessage(error),
-      error,
-    });
-    return null;
-  }
 }
 
 function getErrorMessage(error: unknown): string {
