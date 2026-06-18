@@ -971,23 +971,22 @@ button:disabled {
 
 .matrix-site-number-content {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 52px;
-  padding-top: 7px;
 }
 
 .matrix-site-number-color {
   flex: 0 0 7px;
   height: 23px;
-  margin-top: 0;
   border-radius: 999px;
 }
 
 .matrix-site-number-stack {
   display: grid;
   gap: 2px;
+  align-self: center;
   line-height: 1.12;
 }
 
