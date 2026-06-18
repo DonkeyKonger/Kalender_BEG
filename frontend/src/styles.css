@@ -7652,20 +7652,20 @@ button.person-chip:focus-visible {
   border: 1px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #64748b;
+  color: #cbd5e1;
   cursor: pointer;
   font: inherit;
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 0.95rem;
+  font-weight: 650;
   line-height: 1;
   padding: 0;
 }
 
 .measurement-review-delete-action:hover,
 .measurement-review-delete-action:focus-visible {
-  border-color: rgb(180 35 24 / 28%);
-  background: #fff1ef;
-  color: #b42318;
+  border-color: transparent;
+  background: transparent;
+  color: #94a3b8;
   outline: none;
 }
 
