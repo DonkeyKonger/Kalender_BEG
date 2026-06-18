@@ -4573,17 +4573,7 @@ function MobileMeasurementTable({
                       const isActive = isInlineCellActive(item, area, "add-row");
                       return (
                         <td className={isActive ? "measurement-matrix-empty-cell is-tablet-editable is-inline-editing" : "measurement-matrix-empty-cell is-tablet-editable"} key={item.id}>
-                          {isActive ? renderActiveCell(item, area, "add-row") : (
-                            <button
-                              className="measurement-matrix-add-row-button"
-                              type="button"
-                              onClick={() => void activateInlineCell(item, area, "add-row")}
-                              aria-label={`Neue Menge für ${item.position} in ${area}`}
-                              title={`Neue Menge für ${item.position} in ${area}`}
-                            >
-                              <Plus aria-hidden="true" size={15} />
-                            </button>
-                          )}
+                          {isActive ? renderActiveCell(item, area, "add-row") : null}
                         </td>
                       );
                     })}
