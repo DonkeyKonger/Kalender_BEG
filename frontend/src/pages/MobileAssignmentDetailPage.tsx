@@ -2861,7 +2861,7 @@ function MobileMeasurementTab({
     const description = freePositionDraft.description.trim();
     const unit = freePositionDraft.unit.trim();
     const quantity = parseOptionalMeasurementQuantity(freePositionDraft.quantity);
-    const areaOrComment = normalizeMeasurementArea(freePositionDraft.areaOrComment);
+    const areaOrComment = normalizeMeasurementAreaInput(normalizeMeasurementArea(freePositionDraft.areaOrComment));
 
     if (!description) {
       setFreePositionError("Bitte Kurztext oder Leistungsbeschreibung eintragen.");
@@ -2982,7 +2982,7 @@ function MobileMeasurementTab({
         }}
         onSave={async () => {
           const quantity = Number(formQuantity.replace(",", "."));
-          const normalizedArea = normalizeMeasurementArea(formComment);
+          const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(formComment));
           if (!Number.isFinite(quantity) || quantity <= 0) {
             setFormError("Bitte eine gültige Menge größer 0 eingeben.");
             return;
@@ -4009,7 +4009,7 @@ function MeasurementFreePositionForm({
                   key={area}
                   type="button"
                   onClick={() => {
-                    onChange({ areaOrComment: area });
+                    onChange({ areaOrComment: normalizeMeasurementAreaInput(area) });
                     blurActiveFormElement();
                   }}
                 >
@@ -4022,8 +4022,11 @@ function MeasurementFreePositionForm({
             type="text"
             required
             value={draft.areaOrComment}
-            onChange={(event) => onChange({ areaOrComment: event.target.value })}
+            onChange={(event) => onChange({ areaOrComment: normalizeMeasurementAreaInput(event.target.value) })}
             placeholder="z. B. 2. OG"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
           />
         </label>
 
@@ -4219,7 +4222,7 @@ function MeasurementDetail({
                       key={area}
                       type="button"
                       onClick={() => {
-                        onCommentChange(area);
+                        onCommentChange(normalizeMeasurementAreaInput(area));
                         blurActiveFormElement();
                       }}
                     >
@@ -4231,8 +4234,11 @@ function MeasurementDetail({
               <input
                 ref={areaInputRef}
                 value={formComment}
-                onChange={(event) => onCommentChange(event.target.value)}
+                onChange={(event) => onCommentChange(normalizeMeasurementAreaInput(event.target.value))}
                 placeholder="z. B. 1. OG"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </label>
             <label>
@@ -5280,6 +5286,10 @@ function normalizeMeasurementArea(input: string): string {
   }
 
   return trimmed;
+}
+
+function normalizeMeasurementAreaInput(input: string): string {
+  return input.toLocaleUpperCase("de-DE");
 }
 
 function getMeasurementAreaKey(value: string): string {
