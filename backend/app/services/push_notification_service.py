@@ -3,18 +3,21 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 import jwt
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
+from app.models.assignment import Assignment
 from app.models.enums import UserRole
 from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
+from app.models.site import Site
+from app.models.site_measurement_item import SiteMeasurementBatch
 from app.models.user import User
 from app.schemas.push import PushDeviceRegister
 
@@ -116,12 +119,10 @@ class PushNotificationService:
         sent_count = 0
         now = _utcnow()
         for pending in pending_notifications:
-            body = "Deine Einsatzplanung wurde aktualisiert. Bitte prüfe deine nächsten Einsätze."
-            if pending.change_count > 1:
-                body = (
-                    f"Deine Einsatzplanung wurde {pending.change_count}x aktualisiert. "
-                    "Bitte prüfe deine nächsten Einsätze."
-                )
+            body = self._build_plan_change_body(
+                user_id=pending.user_id,
+                change_count=pending.change_count,
+            )
             self.send_to_user(
                 user_id=pending.user_id,
                 title="Einsatzplanung aktualisiert",
@@ -150,7 +151,7 @@ class PushNotificationService:
         self.send_to_user(
             user_id=user_id,
             title="Aufmaß geprüft",
-            body="Dein Aufmaß wurde geprüft.",
+            body=self._build_measurement_reviewed_body(site_id=site_id, batch_id=batch_id),
             data={
                 "type": "measurement_reviewed",
                 "site_id": str(site_id),
@@ -204,6 +205,67 @@ class PushNotificationService:
             if result == "invalid_token":
                 device.is_active = False
         self.db.commit()
+
+    def _build_plan_change_body(self, *, user_id: int, change_count: int) -> str:
+        user = self.db.get(User, user_id)
+        if user is not None and user.person_id is not None:
+            tomorrow = date.today() + timedelta(days=1)
+            overmorrow = tomorrow + timedelta(days=1)
+            lines = []
+            for label, target_date in (("Morgen", tomorrow), ("Übermorgen", overmorrow)):
+                site_names = self._assignment_site_names(
+                    person_id=user.person_id,
+                    target_date=target_date,
+                )
+                if site_names:
+                    lines.append(f"{label}: {', '.join(site_names)}")
+            if lines:
+                return "Deine nächsten Einsätze:\n" + "\n".join(lines)
+
+        if change_count > 1:
+            return (
+                f"Deine Einsatzplanung wurde {change_count}x aktualisiert. "
+                "Bitte prüfe deine nächsten Einsätze."
+            )
+        return "Deine Einsatzplanung wurde aktualisiert. Bitte prüfe deine nächsten Einsätze."
+
+    def _assignment_site_names(self, *, person_id: int, target_date: date) -> list[str]:
+        assignments = list(
+            self.db.scalars(
+                select(Assignment)
+                .options(selectinload(Assignment.site))
+                .where(
+                    Assignment.person_id == person_id,
+                    Assignment.start_date <= target_date,
+                    Assignment.end_date >= target_date,
+                )
+                .order_by(Assignment.start_date, Assignment.end_date, Assignment.id)
+            )
+        )
+        site_names: list[str] = []
+        for assignment in assignments:
+            site_name = _clean_text(assignment.site.name if assignment.site else None)
+            if site_name and site_name not in site_names:
+                site_names.append(site_name)
+        return site_names
+
+    def _build_measurement_reviewed_body(self, *, site_id: int, batch_id: int) -> str:
+        batch = self.db.scalar(
+            select(SiteMeasurementBatch)
+            .options(selectinload(SiteMeasurementBatch.site).selectinload(Site.project_manager))
+            .where(
+                SiteMeasurementBatch.id == batch_id,
+                SiteMeasurementBatch.site_id == site_id,
+            )
+        )
+        measurement_label = _measurement_label(batch)
+        project_manager_name = _clean_text(
+            batch.site.project_manager.display_name
+            if batch is not None and batch.site and batch.site.project_manager
+            else None
+        )
+        reviewer = project_manager_name or "dem Projektleiter"
+        return f"Dein {measurement_label} wurde von {reviewer} geprüft"
 
 
 def _send_fcm_message(
@@ -346,6 +408,22 @@ def _create_fcm_access_token(service_account: dict[str, Any]) -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _measurement_label(batch: SiteMeasurementBatch | None) -> str:
+    if batch is None:
+        return "Aufmaß"
+    if batch.number is not None:
+        return f"Aufmaß {batch.number}"
+    title = _clean_text(batch.title)
+    return title or "Aufmaß"
+
+
+def _clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
 
 
 def _token_suffix(token: str | None) -> str:
