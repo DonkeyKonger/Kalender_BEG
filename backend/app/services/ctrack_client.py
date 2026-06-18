@@ -24,8 +24,9 @@ class CtrackConfigError(Exception):
 
 
 class CtrackRequestError(Exception):
-    def __init__(self, status_code: int | None, message: str) -> None:
+    def __init__(self, status_code: int | None, message: str, *, url: str | None = None) -> None:
         self.status_code = status_code
+        self.url = url
         super().__init__(message)
 
 
@@ -62,24 +63,28 @@ class CtrackClient:
     def _get_json(self, path: str, params: dict[str, str | None] | None = None) -> Any:
         self._ensure_config()
         url = f"{self.config.ctrack_base_url.rstrip('/')}/{path.lstrip('/')}"
+        safe_url = url
         try:
             response = httpx.get(url, params=params, timeout=15.0)
         except httpx.TimeoutException as error:
-            raise CtrackRequestError(None, "Ctrack request timed out.") from error
+            raise CtrackRequestError(None, "Ctrack request timed out.", url=safe_url) from error
         except httpx.HTTPError as error:
-            raise CtrackRequestError(None, "Ctrack request failed.") from error
+            raise CtrackRequestError(None, "Ctrack request failed.", url=safe_url) from error
 
         data = _safe_json(response)
         if response.status_code >= 400:
             raise CtrackRequestError(
                 response.status_code,
                 f"Ctrack request failed with status {response.status_code}.",
+                url=safe_url,
             )
         return data
 
     def _ensure_config(self) -> None:
         missing = []
         if not self.config.ctrack_base_url:
+            missing.append("CTRACK_BASE_URL")
+        elif not self.config.ctrack_base_url.startswith(("http://", "https://")):
             missing.append("CTRACK_BASE_URL")
         if not self.config.ctrack_username:
             missing.append("CTRACK_USERNAME")
