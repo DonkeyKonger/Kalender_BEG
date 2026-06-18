@@ -7631,6 +7631,49 @@ button.person-chip:focus-visible {
   text-align: left;
 }
 
+.measurement-review-card.has-delete-action {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.measurement-review-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-left: 12px;
+}
+
+.measurement-review-delete-action {
+  display: inline-grid;
+  width: 22px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+}
+
+.measurement-review-delete-action:hover,
+.measurement-review-delete-action:focus-visible {
+  border-color: rgb(180 35 24 / 28%);
+  background: #fff1ef;
+  color: #b42318;
+  outline: none;
+}
+
+.measurement-review-delete-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .measurement-review-card-open {
   display: grid;
   grid-template-columns: 152px minmax(0, 1fr) auto;
@@ -7644,6 +7687,11 @@ button.person-chip:focus-visible {
   font: inherit;
   padding: 12px;
   text-align: left;
+}
+
+.measurement-review-card.has-delete-action .measurement-review-card-open {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-left: 0;
 }
 
 .measurement-review-card-open:hover,

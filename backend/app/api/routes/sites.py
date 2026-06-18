@@ -620,6 +620,20 @@ def reset_measurement_batch_to_submitted(
     )
 
 
+@router.delete("/{site_id}/measurement-batches/{batch_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_measurement_batch(
+    site_id: int,
+    batch_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> None:
+    MeasurementService(db).delete_site_batch(
+        site_id=site_id,
+        batch_id=batch_id,
+        current_user=current_user,
+    )
+
+
 @router.get("/{site_id}/measurement-batches/{batch_id}/pdf")
 def download_measurement_batch_pdf(
     site_id: int,

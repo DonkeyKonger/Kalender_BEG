@@ -760,6 +760,12 @@ export const api = {
     });
   },
 
+  async deleteSiteMeasurementBatch(siteId: number, batchId: number): Promise<void> {
+    await request<void>(`/sites/${siteId}/measurement-batches/${batchId}`, {
+      method: "DELETE",
+    });
+  },
+
   async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number, mode: "checked" | "original" = "checked"): Promise<Blob> {
     return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
   },

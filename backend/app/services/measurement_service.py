@@ -797,6 +797,22 @@ class MeasurementService:
         )
         return [self._build_mobile_item(item, batch.id) for item in items]
 
+    def delete_site_batch(self, *, site_id: int, batch_id: int, current_user: User) -> None:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        photos = list(batch.photos)
+        storage_service = ProjectStorageService() if photos else None
+        for photo in photos:
+            if storage_service is None:
+                continue
+            storage_service.delete_file_from_folder(
+                drive_id=photo.external_drive_id,
+                folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+                item_id=photo.external_item_id,
+            )
+        self.db.delete(batch)
+        self.db.commit()
+
     def get_site_measurement_timesheet(self, site_id: int) -> MeasurementTimesheetRead:
         self._get_site(site_id)
         active_base_id = self._get_active_measurement_base_id(site_id)
@@ -1577,6 +1593,7 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.photos),
                 selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
             )

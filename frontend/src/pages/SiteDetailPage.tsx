@@ -1,7 +1,7 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -544,6 +544,41 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage(`${batch.title} wurde als geprüft markiert.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Prüfstatus konnte nicht gespeichert werden."));
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
+  async function deleteMeasurementBatch(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    const displayTitle = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title);
+    if (!window.confirm(`${displayTitle} wirklich löschen?`)) {
+      return;
+    }
+    if (!window.confirm("Endgültig löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.")) {
+      return;
+    }
+
+    const wasSelectedBatch = selectedMeasurementBatch?.id === batch.id;
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      await api.deleteSiteMeasurementBatch(site.id, batch.id);
+      setMeasurementBatches((current) => current.filter((entry) => entry.id !== batch.id));
+      setSelectedMeasurementBatch((current) => (current?.id === batch.id ? null : current));
+      setMeasurementBatchItems((current) => (wasSelectedBatch ? [] : current));
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementTimeAnalysisError(null);
+      setMeasurementReviewMessage(`${displayTitle} wurde gelöscht.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaß konnte nicht gelöscht werden."));
+      throw requestError;
     } finally {
       setMeasurementReviewActionLoading(false);
     }
@@ -1104,6 +1139,7 @@ export function SiteDetailPage() {
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
           onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
+          onDeleteBatch={deleteMeasurementBatch}
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
@@ -1946,6 +1982,7 @@ function MeasurementTab({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onDeleteBatch,
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
@@ -1990,6 +2027,7 @@ function MeasurementTab({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -2170,6 +2208,7 @@ function MeasurementTab({
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onMarkReviewed={onMarkReviewed}
+          onDeleteBatch={onDeleteBatch}
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
           onResetToSubmitted={onResetToSubmitted}
@@ -3075,6 +3114,7 @@ function MeasurementReviewPanel({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onDeleteBatch,
   onUpdateEntry,
   onCreateEntry,
   onResetToSubmitted,
@@ -3096,6 +3136,7 @@ function MeasurementReviewPanel({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -3106,6 +3147,7 @@ function MeasurementReviewPanel({
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
+  const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -3276,6 +3318,21 @@ function MeasurementReviewPanel({
     }
   }
 
+  async function deleteBatch(event: MouseEvent<HTMLButtonElement>, batch: MobileMeasurementBatch): Promise<void> {
+    event.stopPropagation();
+    if (deletingBatchId !== null || reviewActionLoading) {
+      return;
+    }
+    setDeletingBatchId(batch.id);
+    try {
+      await onDeleteBatch(batch);
+    } catch {
+      // The parent handler already surfaces the API error.
+    } finally {
+      setDeletingBatchId(null);
+    }
+  }
+
   if (selectedBatch) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
@@ -3402,16 +3459,28 @@ function MeasurementReviewPanel({
             return (
               <div
                 key={batch.id}
-                className={`measurement-review-card${batch.status === "submitted" ? " is-submitted" : ""}${isOldOffer ? " is-old-offer" : ""}`}
+                className={`measurement-review-card has-delete-action${batch.status === "submitted" ? " is-submitted" : ""}${isOldOffer ? " is-old-offer" : ""}`}
               >
+                <div className="measurement-review-card-controls">
+                  <button
+                    type="button"
+                    className="measurement-review-delete-action"
+                    disabled={reviewActionLoading || deletingBatchId !== null}
+                    title="Aufmaß löschen"
+                    aria-label={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)} löschen`}
+                    onClick={(event) => void deleteBatch(event, batch)}
+                  >
+                    {deletingBatchId === batch.id ? "..." : "×"}
+                  </button>
+                  <span className={statusBadge.className}>
+                    {statusBadge.label}
+                  </span>
+                </div>
                 <button
                   type="button"
                   className="measurement-review-card-open"
                   onClick={() => onSelectBatch(batch)}
                 >
-                  <span className={statusBadge.className}>
-                    {statusBadge.label}
-                  </span>
                   <div className="measurement-review-card-main">
                     <div className="measurement-review-card-title-row">
                       <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
