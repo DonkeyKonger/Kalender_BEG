@@ -14,6 +14,7 @@ type PushNotificationAction = {
 };
 
 interface PushNotificationsPlugin {
+  checkPermissions: () => Promise<{ receive: "granted" | "denied" | "prompt" | "prompt-with-rationale" }>;
   requestPermissions: () => Promise<{ receive: "granted" | "denied" | "prompt" | "prompt-with-rationale" }>;
   register: () => Promise<void>;
   addListener(
@@ -34,23 +35,54 @@ let initializedForUserId: number | null = null;
 let listenersAttached = false;
 
 export function canUsePushNotifications(): boolean {
-  return Capacitor.isNativePlatform();
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 }
 
 export async function initializePushNotifications(currentUser: CurrentUser): Promise<boolean> {
-  if (initializedForUserId === currentUser.id || !Capacitor.isNativePlatform()) {
+  const platform = Capacitor.getPlatform();
+  const isNativePlatform = Capacitor.isNativePlatform();
+  console.info("[Push] init entered", {
+    userId: currentUser.id,
+    platform,
+    isNativePlatform,
+  });
+
+  if (initializedForUserId === currentUser.id) {
+    console.info("[Push] init skipped; already initialized for user", {
+      userId: currentUser.id,
+      platform,
+    });
+    return true;
+  }
+
+  if (!isNativePlatform || platform !== "android") {
+    console.info("[Push] init skipped; native Android platform required", {
+      platform,
+      isNativePlatform,
+    });
     return initializedForUserId === currentUser.id;
   }
 
+  console.info("[Push] native platform detected", { platform });
+
   const PushNotifications = await loadPushNotificationsPlugin();
+  console.info("[Push] PushNotifications plugin available", {
+    available: Boolean(PushNotifications),
+  });
   if (!PushNotifications) {
     return false;
   }
 
   if (!listenersAttached) {
+    console.info("[Push] listener registration started");
     listenersAttached = true;
     await PushNotifications.addListener("registration", (token) => {
-      console.info("Push token received; registering device with backend.", {
+      console.info("[Push] registration token received", {
+        apiBaseUrl: getApiBaseUrl(),
+        platform: Capacitor.getPlatform(),
+        tokenLength: token.value.length,
+      });
+      console.info("[Push] registerPushDevice API call started", {
         apiBaseUrl: getApiBaseUrl(),
         platform: Capacitor.getPlatform(),
       });
@@ -59,29 +91,47 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
         token: token.value,
       })
         .then((device) => {
-          console.info("Push token registered with backend", {
+          console.info("[Push] registerPushDevice API call success", {
             pushDeviceId: device.id,
             platform: device.platform,
             isActive: device.is_active,
           });
         })
         .catch((error) => {
-          console.warn("Push token registration failed", error);
+          console.warn("[Push] registerPushDevice API call failed", {
+            step: "registerPushDevice",
+            message: getErrorMessage(error),
+            error,
+          });
         });
     });
     await PushNotifications.addListener("registrationError", (error) => {
-      console.warn("Push registration failed", error);
+      console.warn("[Push] PushNotifications registration error event received", {
+        step: "PushNotifications registration",
+        message: getErrorMessage(error),
+        error,
+      });
     });
     await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
       handlePushNotificationAction(action);
     });
+    console.info("[Push] listener registration complete");
+  } else {
+    console.info("[Push] listener registration skipped; listeners already attached");
   }
 
+  const permissionCheck = await PushNotifications.checkPermissions();
+  console.info("[Push] permission check result", permissionCheck);
   const permissionStatus = await PushNotifications.requestPermissions();
+  console.info("[Push] permission request result", permissionStatus);
   if (permissionStatus.receive !== "granted") {
-    console.warn("Push permission was not granted", permissionStatus.receive);
+    console.warn("[Push] permission was not granted", {
+      step: "requestPermissions",
+      receive: permissionStatus.receive,
+    });
     return false;
   }
+  console.info("[Push] PushNotifications.register() called");
   await PushNotifications.register();
   initializedForUserId = currentUser.id;
   return true;
@@ -92,9 +142,20 @@ async function loadPushNotificationsPlugin(): Promise<PushNotificationsPlugin | 
     const pluginModule = await import("@capacitor/push-notifications");
     return pluginModule.PushNotifications as PushNotificationsPlugin;
   } catch (error) {
-    console.warn("Capacitor Push Notifications plugin is not available", error);
+    console.warn("[Push] Capacitor Push Notifications plugin load failed", {
+      step: "loadPushNotificationsPlugin",
+      message: getErrorMessage(error),
+      error,
+    });
     return null;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function handlePushNotificationAction(action: PushNotificationAction): void {
