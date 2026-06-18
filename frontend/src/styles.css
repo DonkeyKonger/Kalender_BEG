@@ -5231,26 +5231,68 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table {
-    min-width: max(760px, 100%);
+    min-width: max(560px, 100%);
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table th,
   .app-shell.is-mobile-workspace .mobile-measurement-table td {
-    min-width: 136px;
-    padding: 9px 10px;
+    min-width: 72px;
+    padding: 4px 6px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis {
-    min-width: 160px;
-    max-width: 220px;
+    min-width: 116px;
+    max-width: 150px;
     white-space: normal;
     overflow-wrap: anywhere;
     box-shadow: 8px 0 14px rgb(15 23 42 / 7%);
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-heading {
+    min-width: 74px;
+    max-width: 96px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-description-heading {
+    min-width: 86px;
+    max-width: 108px;
+    font-weight: 450;
+    line-height: 1.15;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-text,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-description-text {
+    display: block;
+    max-height: 4.6em;
+    overflow-y: auto;
+    color: inherit;
+    font-weight: 450;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-text::-webkit-scrollbar,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-description-text::-webkit-scrollbar {
+    display: none;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-header-button,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-cell-button {
-    min-height: 38px;
+    min-height: 24px;
+    font-weight: 450;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    line-height: 1.05;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row .measurement-matrix-cell-button {
+    min-height: 14px;
   }
 
   .app-shell.is-mobile-workspace .mobile-customer-signature-pdf {

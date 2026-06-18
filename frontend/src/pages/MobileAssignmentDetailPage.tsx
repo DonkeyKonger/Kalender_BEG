@@ -4272,7 +4272,7 @@ function MobileMeasurementTable({
             {items.map((item) => (
               <th className="measurement-matrix-position-heading" key={item.id}>
                 <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
-                  {item.position}
+                  <span className="measurement-matrix-position-text">{item.position}</span>
                   {item.is_free_position ? <span className="mobile-measurement-free-badge">frei</span> : null}
                 </button>
               </th>
@@ -4281,7 +4281,9 @@ function MobileMeasurementTable({
           <tr>
             <th className="measurement-matrix-axis">Beschreibung</th>
             {items.map((item) => (
-              <th className="measurement-matrix-description-heading" key={item.id}>{item.description}</th>
+              <th className="measurement-matrix-description-heading" key={item.id}>
+                <span className="measurement-matrix-description-text">{item.description}</span>
+              </th>
             ))}
           </tr>
           <tr>
