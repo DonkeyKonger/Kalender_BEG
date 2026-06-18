@@ -32,6 +32,7 @@ class PushNotificationService:
     def register_device(self, *, user: User, payload: PushDeviceRegister) -> UserPushDevice:
         now = _utcnow()
         device = self.db.scalar(select(UserPushDevice).where(UserPushDevice.token == payload.token))
+        was_new_device = device is None
         if device is None:
             device = UserPushDevice(
                 user_id=user.id,
@@ -50,6 +51,16 @@ class PushNotificationService:
             device.last_seen_at = now
         self.db.commit()
         self.db.refresh(device)
+        logger.info(
+            "Push token registered: user_id=%s push_device_id=%s platform=%s is_active=%s token_suffix=%s last_seen_at=%s was_new=%s.",
+            user.id,
+            device.id,
+            device.platform,
+            device.is_active,
+            _token_suffix(device.token),
+            device.last_seen_at.isoformat() if device.last_seen_at else None,
+            was_new_device,
+        )
         return device
 
     def deactivate_device(self, *, user: User, token: str) -> None:
@@ -156,6 +167,7 @@ class PushNotificationService:
         body: str,
         data: dict[str, str] | None = None,
     ) -> None:
+        notification_type = (data or {}).get("type")
         devices = list(
             self.db.scalars(
                 select(UserPushDevice).where(
@@ -164,8 +176,14 @@ class PushNotificationService:
                 )
             )
         )
+        logger.info(
+            "Push active token count: user_id=%s count=%s type=%s.",
+            user_id,
+            len(devices),
+            notification_type,
+        )
         if not devices:
-            logger.info("Push skipped: no active device tokens for user_id=%s.", user_id)
+            logger.info("Push skipped: no active device tokens for user_id=%s type=%s.", user_id, notification_type)
             return
 
         for device in devices:
@@ -181,7 +199,7 @@ class PushNotificationService:
                 device.id,
                 device.platform,
                 result,
-                (data or {}).get("type"),
+                notification_type,
             )
             if result == "invalid_token":
                 device.is_active = False
@@ -195,18 +213,35 @@ def _send_fcm_message(
     body: str,
     data: dict[str, str],
 ) -> str:
+    notification_type = data.get("type")
+    token_suffix = _token_suffix(token)
     if not settings.fcm_enabled:
-        logger.info("FCM send skipped because FCM_ENABLED is false.")
+        logger.info(
+            "FCM send skipped: result=disabled type=%s token_suffix=%s fcm_enabled=false.",
+            notification_type,
+            token_suffix,
+        )
         return "disabled"
 
     service_account = _load_fcm_service_account()
     if not service_account:
-        logger.warning("FCM send skipped because no service account is configured.")
+        logger.warning(
+            "FCM send skipped: result=missing_config type=%s token_suffix=%s has_project_id=%s has_json=%s has_file=%s.",
+            notification_type,
+            token_suffix,
+            bool(settings.fcm_project_id),
+            bool(settings.fcm_service_account_json),
+            bool(settings.fcm_service_account_file),
+        )
         return "missing_config"
 
     project_id = settings.fcm_project_id or service_account.get("project_id")
     if not project_id:
-        logger.warning("FCM send skipped because no project id is configured.")
+        logger.warning(
+            "FCM send skipped: result=missing_config type=%s token_suffix=%s reason=no_project_id.",
+            notification_type,
+            token_suffix,
+        )
         return "missing_config"
 
     try:
@@ -225,20 +260,41 @@ def _send_fcm_message(
             timeout=settings.fcm_request_timeout_seconds,
         )
     except Exception:
-        logger.exception("FCM send failed unexpectedly.")
+        logger.exception(
+            "FCM send failed unexpectedly: type=%s token_suffix=%s.",
+            notification_type,
+            token_suffix,
+        )
         return "error"
 
     if response.status_code < 400:
+        logger.info(
+            "FCM send success: type=%s token_suffix=%s project_id=%s.",
+            notification_type,
+            token_suffix,
+            project_id,
+        )
         return "sent"
 
     response_text = response.text
     if response.status_code in {400, 404} and (
         "UNREGISTERED" in response_text or "INVALID_ARGUMENT" in response_text
     ):
-        logger.info("FCM token is invalid and will be deactivated.")
+        logger.info(
+            "FCM token is invalid and will be deactivated: type=%s token_suffix=%s status=%s.",
+            notification_type,
+            token_suffix,
+            response.status_code,
+        )
         return "invalid_token"
 
-    logger.warning("FCM send failed: status=%s body=%s", response.status_code, response_text)
+    logger.warning(
+        "FCM send failed: type=%s token_suffix=%s status=%s body=%s",
+        notification_type,
+        token_suffix,
+        response.status_code,
+        response_text,
+    )
     return "error"
 
 
@@ -290,3 +346,9 @@ def _create_fcm_access_token(service_account: dict[str, Any]) -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _token_suffix(token: str | None) -> str:
+    if not token:
+        return "-"
+    return token[-8:]

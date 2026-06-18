@@ -47,17 +47,24 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
     return false;
   }
 
-  initializedForUserId = currentUser.id;
-
   if (!listenersAttached) {
     listenersAttached = true;
     await PushNotifications.addListener("registration", (token) => {
+      console.info("Push token received; registering device with backend.");
       void api.registerPushDevice({
         platform: Capacitor.getPlatform(),
         token: token.value,
-      }).catch((error) => {
-        console.warn("Push token registration failed", error);
-      });
+      })
+        .then((device) => {
+          console.info("Push token registered with backend", {
+            pushDeviceId: device.id,
+            platform: device.platform,
+            isActive: device.is_active,
+          });
+        })
+        .catch((error) => {
+          console.warn("Push token registration failed", error);
+        });
     });
     await PushNotifications.addListener("registrationError", (error) => {
       console.warn("Push registration failed", error);
@@ -69,9 +76,11 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
 
   const permissionStatus = await PushNotifications.requestPermissions();
   if (permissionStatus.receive !== "granted") {
+    console.warn("Push permission was not granted", permissionStatus.receive);
     return false;
   }
   await PushNotifications.register();
+  initializedForUserId = currentUser.id;
   return true;
 }
 

@@ -1178,6 +1178,19 @@ class MeasurementService:
             or batch.created_by_user_id
             or next((entry.created_by_user_id for entry in batch.entries if entry.created_by_user_id), None)
         )
+        entry_author_user_ids = sorted(
+            {entry.created_by_user_id for entry in batch.entries if entry.created_by_user_id is not None}
+        )
+        LOGGER.info(
+            "Measurement reviewed trigger fired: site_id=%s batch_id=%s previous_status=%s submitted_by_user_id=%s created_by_user_id=%s entry_author_user_ids=%s recipient_user_id=%s.",
+            site_id,
+            batch.id,
+            previous_status,
+            batch.submitted_by_user_id,
+            batch.created_by_user_id,
+            entry_author_user_ids,
+            notification_user_id,
+        )
 
         batch.status = "reviewed"
         for entry in batch.entries:
@@ -1198,6 +1211,13 @@ class MeasurementService:
                     batch.id,
                     notification_user_id,
                 )
+        else:
+            LOGGER.info(
+                "Measurement reviewed push skipped: batch already reviewed (site_id=%s batch_id=%s user_id=%s).",
+                site_id,
+                batch.id,
+                notification_user_id,
+            )
         return self._build_mobile_batch(batch)
 
     def update_site_entry(
