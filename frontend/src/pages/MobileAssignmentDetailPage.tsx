@@ -4522,6 +4522,25 @@ function MobileMeasurementTable({
               {items.map((item) => <td key={item.id} />)}
               {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
+            {canAddFromTable && areaRows.length === 0 ? (
+              <tr className="measurement-matrix-add-row">
+                <th className="measurement-matrix-axis measurement-matrix-add-row-axis">
+                  <button
+                    className="measurement-matrix-add-row-button"
+                    type="button"
+                    onClick={() => onSelectItem(items[0])}
+                    aria-label="Erste Eingabezeile anlegen"
+                    title="Erste Eingabezeile anlegen"
+                  >
+                    <Plus aria-hidden="true" size={15} />
+                  </button>
+                </th>
+                {items.map((item) => (
+                  <td className="measurement-matrix-empty-cell is-tablet-editable" key={item.id} />
+                ))}
+                <td className="measurement-matrix-add-column-cell" />
+              </tr>
+            ) : null}
             {areaRows.map((area) => (
               <Fragment key={area}>
                 <tr>

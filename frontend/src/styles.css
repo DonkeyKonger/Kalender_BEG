@@ -5187,6 +5187,13 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page {
+    justify-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    margin-right: 0;
+    margin-left: 0;
     padding-right: clamp(12px, 1.6vw, 18px);
     padding-bottom: 152px;
     padding-left: clamp(12px, 1.6vw, 18px);
@@ -5248,9 +5255,11 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table-wrap {
+    width: 100%;
     max-width: 100%;
-    overflow: auto;
-    overscroll-behavior-inline: contain;
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     scroll-padding-left: 170px;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
