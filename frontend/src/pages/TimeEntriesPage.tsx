@@ -2966,7 +2966,7 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
   return [
     {
       source: "Eingetragene Monteursbaustelle",
-      siteName: displayDiagnosticValue(entry.site_name),
+      siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
       siteNumber: displayDiagnosticValue(entry.site_number),
       location: siteLocationLabel(manualSite),
     },
@@ -3750,7 +3750,8 @@ function isCurrentLocalDateInput(value: string): boolean {
 }
 
 function timeEntrySiteLabel(entry: TimeEntry): string {
-  return [entry.site_name, entry.site_number].filter(Boolean).join(" · ") || "-";
+  const linkedSiteLabel = [entry.site_name, entry.site_number].filter(Boolean).join(" · ");
+  return linkedSiteLabel || manualTimeEntrySiteText(entry) || "-";
 }
 
 function timeEntrySiteNumber(entry: TimeEntry): string {
@@ -3758,7 +3759,14 @@ function timeEntrySiteNumber(entry: TimeEntry): string {
 }
 
 function timeEntrySiteName(entry: TimeEntry): string {
-  return entry.site_name || "-";
+  return entry.site_name || manualTimeEntrySiteText(entry) || "-";
+}
+
+function manualTimeEntrySiteText(entry: TimeEntry): string {
+  if (entry.site_id !== null || !entry.note) {
+    return "";
+  }
+  return entry.note.replace(/^Manuelle Baustelle:\s*/i, "").trim();
 }
 
 function siteOptionLabel(site: SiteSummary): string {
