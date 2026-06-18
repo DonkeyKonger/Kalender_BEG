@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from urllib.parse import quote
 
@@ -43,6 +44,7 @@ from app.services.extra_work_email_service import ExtraWorkEmailService
 from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 router = APIRouter(prefix="/me", tags=["me"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/push-devices/register", response_model=PushDeviceRead)
@@ -51,6 +53,14 @@ def register_my_push_device(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PushDeviceRead:
+    logger.info(
+        "Push device registration requested: user_id=%s person_id=%s role=%s platform=%s has_device_id=%s",
+        current_user.id,
+        current_user.person_id,
+        current_user.role.value if current_user.role else None,
+        payload.platform,
+        bool(payload.device_id),
+    )
     return PushNotificationService(db).register_device(user=current_user, payload=payload)
 
 

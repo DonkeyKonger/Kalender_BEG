@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from urllib.parse import quote
 
@@ -63,6 +64,7 @@ from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
 
 router = APIRouter(prefix="/sites", tags=["sites"])
+logger = logging.getLogger(__name__)
 
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 CAN_FOLDER_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
@@ -598,9 +600,16 @@ def mark_measurement_batch_open(
 def mark_measurement_batch_reviewed(
     site_id: int,
     batch_id: int,
-    _user: User = Depends(CAN_WRITE),
+    current_user: User = Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
+    logger.info(
+        "Measurement mark-reviewed endpoint called: site_id=%s batch_id=%s actor_user_id=%s actor_role=%s",
+        site_id,
+        batch_id,
+        current_user.id,
+        current_user.role.value if current_user.role else None,
+    )
     return MeasurementService(db).set_site_batch_reviewed(site_id=site_id, batch_id=batch_id)
 
 
