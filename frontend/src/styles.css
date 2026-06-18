@@ -3154,6 +3154,11 @@ button.person-chip:focus-visible {
   margin: 0;
 }
 
+.mobile-settings-list {
+  display: grid;
+  gap: 10px;
+}
+
 .mobile-location-settings-card {
   display: grid;
   gap: 9px;

@@ -33,14 +33,18 @@ interface PushNotificationsPlugin {
 let initializedForUserId: number | null = null;
 let listenersAttached = false;
 
-export async function initializePushNotifications(currentUser: CurrentUser): Promise<void> {
+export function canUsePushNotifications(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+export async function initializePushNotifications(currentUser: CurrentUser): Promise<boolean> {
   if (initializedForUserId === currentUser.id || !Capacitor.isNativePlatform()) {
-    return;
+    return initializedForUserId === currentUser.id;
   }
 
   const PushNotifications = await loadPushNotificationsPlugin();
   if (!PushNotifications) {
-    return;
+    return false;
   }
 
   initializedForUserId = currentUser.id;
@@ -65,9 +69,10 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
 
   const permissionStatus = await PushNotifications.requestPermissions();
   if (permissionStatus.receive !== "granted") {
-    return;
+    return false;
   }
   await PushNotifications.register();
+  return true;
 }
 
 async function loadPushNotificationsPlugin(): Promise<PushNotificationsPlugin | null> {

@@ -8,6 +8,7 @@ import {
   MapPin,
   Plane,
   RefreshCcw,
+  Settings,
   UserCircle,
   UserRound,
 } from "lucide-react";
@@ -29,11 +30,13 @@ import {
   startAndroidBackgroundGpsTracking,
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
+import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
+const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_DAY_WINDOW = 7;
 const MOBILE_HOME_VISIBLE_DAY_COUNT = 4;
 
@@ -76,7 +79,7 @@ export function MyAssignmentsPage() {
   const [isLoadingSelfPlanSites, setIsLoadingSelfPlanSites] = useState(false);
   const [selfPlanError, setSelfPlanError] = useState<string | null>(null);
   const [selfPlanningSiteId, setSelfPlanningSiteId] = useState<number | null>(null);
-  const [activeScreen, setActiveScreen] = useState<"home" | "assignments">("home");
+  const [activeScreen, setActiveScreen] = useState<"home" | "assignments" | "settings">("home");
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
   const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
   const [lastAutomaticGpsSentAt, setLastAutomaticGpsSentAt] = useState<string | null>(null);
@@ -85,6 +88,10 @@ export function MyAssignmentsPage() {
   const [isHandlingGpsPermission, setIsHandlingGpsPermission] = useState(false);
   const [isTogglingGpsTracking, setIsTogglingGpsTracking] = useState(false);
   const [isGpsTrackingEnabled, setIsGpsTrackingEnabled] = useState(() => readGpsTrackingPreference());
+  const [isPushNotificationsEnabled, setIsPushNotificationsEnabled] = useState(() => readPushNotificationPreference());
+  const [isTogglingPushNotifications, setIsTogglingPushNotifications] = useState(false);
+  const [pushNotificationMessage, setPushNotificationMessage] = useState<string | null>(null);
+  const [pushNotificationMessageTone, setPushNotificationMessageTone] = useState<"info" | "error">("info");
 
   const range = useMemo(() => getRange(mode), [mode]);
 
@@ -184,6 +191,15 @@ export function MyAssignmentsPage() {
   }, [syncAndroidGpsTracking]);
 
   useEffect(() => {
+    if (!isPushNotificationsEnabled || status !== "authenticated" || !user) {
+      return;
+    }
+    void initializePushNotifications(user).catch((pushError) => {
+      console.warn("Push notification initialization failed", pushError);
+    });
+  }, [isPushNotificationsEnabled, status, user]);
+
+  useEffect(() => {
     if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
       return undefined;
     }
@@ -266,6 +282,51 @@ export function MyAssignmentsPage() {
       setGpsMessageTone("error");
     } finally {
       setIsTogglingGpsTracking(false);
+    }
+  }
+
+  async function handlePushNotificationsToggle(nextEnabled: boolean): Promise<void> {
+    if (isTogglingPushNotifications) {
+      return;
+    }
+
+    setIsTogglingPushNotifications(true);
+    setPushNotificationMessageTone("info");
+    setPushNotificationMessage(nextEnabled ? "Benachrichtigungen werden aktiviert ..." : "Benachrichtigungen ausgeschaltet.");
+    setIsPushNotificationsEnabled(nextEnabled);
+    writePushNotificationPreference(nextEnabled);
+
+    try {
+      if (!nextEnabled) {
+        setPushNotificationMessage("Benachrichtigungen für dieses Gerät ausgeschaltet.");
+        return;
+      }
+      if (status !== "authenticated" || !user || !canUsePushNotifications()) {
+        setPushNotificationMessage("Benachrichtigungen sind nur in der Android-App verfügbar.");
+        setPushNotificationMessageTone("error");
+        setIsPushNotificationsEnabled(false);
+        writePushNotificationPreference(false);
+        return;
+      }
+
+      const registered = await initializePushNotifications(user);
+      if (!registered) {
+        setPushNotificationMessage("Benachrichtigungen wurden nicht erlaubt.");
+        setPushNotificationMessageTone("error");
+        setIsPushNotificationsEnabled(false);
+        writePushNotificationPreference(false);
+        return;
+      }
+      setPushNotificationMessage("Benachrichtigungen ein.");
+      setPushNotificationMessageTone("info");
+    } catch (pushError) {
+      console.warn("Push notification toggle failed", pushError);
+      setPushNotificationMessage("Benachrichtigungen konnten nicht aktiviert werden.");
+      setPushNotificationMessageTone("error");
+      setIsPushNotificationsEnabled(false);
+      writePushNotificationPreference(false);
+    } finally {
+      setIsTogglingPushNotifications(false);
     }
   }
 
@@ -377,6 +438,8 @@ export function MyAssignmentsPage() {
   const showGpsDebugStatus = showGpsDebug && user?.role === "monteur";
   const canUseAndroidGpsTracking = user?.role === "monteur" && isAndroidAppContext();
   const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
+  const canUseAppPushNotifications = canUsePushNotifications();
+  const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
   const greetingName = getGreetingName(user?.display_name || user?.username || "");
 
   if (activeScreen === "assignments") {
@@ -431,6 +494,105 @@ export function MyAssignmentsPage() {
             )) : <p className="empty-inline">Keine Einsätze im Zeitraum.</p>}
           </div>
         ) : null}
+      </section>
+    );
+  }
+
+  if (activeScreen === "settings") {
+    return (
+      <section className="mobile-page mobile-home-page">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveScreen("home")}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Zurück</span>
+        </button>
+
+        <header className="mobile-subpage-title">
+          <p className="eyebrow">Optionen</p>
+          <h1>Einstellungen</h1>
+        </header>
+
+        <div className="mobile-settings-list">
+          <section className="mobile-location-settings-card" aria-label="Standortprüfung">
+            <div className="mobile-location-settings-head">
+              <div>
+                <h2>Standortprüfung</h2>
+                <p>{gpsToggleLabel}</p>
+              </div>
+              <label className="mobile-toggle">
+                <input
+                  checked={isGpsTrackingEnabled}
+                  disabled={!canUseAndroidGpsTracking || isTogglingGpsTracking}
+                  type="checkbox"
+                  onChange={(event) => void handleGpsTrackingToggle(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            <p className="mobile-location-settings-text">
+              Standortdaten helfen dem Büro später zu prüfen, ob gemeldete Baustellenzeiten plausibel zur geplanten Baustelle passen. Es geht nicht um Live-Überwachung.
+            </p>
+            {canUseAndroidGpsTracking && isGpsTrackingEnabled && androidGpsPermissionPrompt ? (
+              <div className="form-info mobile-gps-status">
+                <strong>{androidGpsPermissionPrompt.title}</strong>
+                <p>{androidGpsPermissionPrompt.text}</p>
+                <button
+                  className="icon-button secondary"
+                  disabled={isHandlingGpsPermission}
+                  type="button"
+                  onClick={() => void handleAndroidGpsPermissionAction()}
+                >
+                  <MapPin aria-hidden="true" size={17} />
+                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
+                </button>
+              </div>
+            ) : null}
+            {!canUseAndroidGpsTracking ? <p className="cache-note mobile-gps-status">Ortung ist nur in der Android-App verfügbar.</p> : null}
+            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
+            {showGpsDebugStatus && isAndroidAppContext() ? (
+              <>
+                <p className="cache-note mobile-gps-status">
+                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
+                </p>
+                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
+              </>
+            ) : null}
+            {showGpsDebugStatus ? (
+              <MobileGpsDebugCard
+                platform={mobileGpsPlatform}
+                permissions={androidGpsPermissions}
+                status={androidGpsStatus}
+                lastAutomaticSentAt={lastAutomaticGpsSentAt}
+              />
+            ) : null}
+          </section>
+
+          <section className="mobile-location-settings-card" aria-label="Benachrichtigungen">
+            <div className="mobile-location-settings-head">
+              <div>
+                <h2>Benachrichtigungen</h2>
+                <p>{pushToggleLabel}</p>
+              </div>
+              <label className="mobile-toggle">
+                <input
+                  checked={isPushNotificationsEnabled}
+                  disabled={!canUseAppPushNotifications || isTogglingPushNotifications}
+                  type="checkbox"
+                  onChange={(event) => void handlePushNotificationsToggle(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            <p className="mobile-location-settings-text">
+              Hinweise zu geänderten Einsätzen und geprüften Aufmaßen erhalten.
+            </p>
+            {!canUseAppPushNotifications ? <p className="cache-note mobile-gps-status">Benachrichtigungen sind nur in der Android-App verfügbar.</p> : null}
+            {pushNotificationMessage ? (
+              <p className={pushNotificationMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>
+                {pushNotificationMessage}
+              </p>
+            ) : null}
+          </section>
+        </div>
       </section>
     );
   }
@@ -525,61 +687,13 @@ export function MyAssignmentsPage() {
                   text: "Diese persönliche Akte wird später Resturlaub, Krankheitstage, Statistiken sowie Wagen- und Werkzeugzuordnung anzeigen.",
                 })}
               />
-            </div>
-          </section>
-
-          <section className="mobile-location-settings-card" aria-label="Standortprüfung">
-            <div className="mobile-location-settings-head">
-              <div>
-                <h2>Standortprüfung</h2>
-                <p>{gpsToggleLabel}</p>
-              </div>
-              <label className="mobile-toggle">
-                <input
-                  checked={isGpsTrackingEnabled}
-                  disabled={!canUseAndroidGpsTracking || isTogglingGpsTracking}
-                  type="checkbox"
-                  onChange={(event) => void handleGpsTrackingToggle(event.target.checked)}
-                />
-                <span aria-hidden="true" />
-              </label>
-            </div>
-            <p className="mobile-location-settings-text">
-              Standortdaten helfen dem Büro später zu prüfen, ob gemeldete Baustellenzeiten plausibel zur geplanten Baustelle passen. Es geht nicht um Live-Überwachung.
-            </p>
-            {canUseAndroidGpsTracking && isGpsTrackingEnabled && androidGpsPermissionPrompt ? (
-              <div className="form-info mobile-gps-status">
-                <strong>{androidGpsPermissionPrompt.title}</strong>
-                <p>{androidGpsPermissionPrompt.text}</p>
-                <button
-                  className="icon-button secondary"
-                  disabled={isHandlingGpsPermission}
-                  type="button"
-                  onClick={() => void handleAndroidGpsPermissionAction()}
-                >
-                  <MapPin aria-hidden="true" size={17} />
-                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
-                </button>
-              </div>
-            ) : null}
-            {!canUseAndroidGpsTracking ? <p className="cache-note mobile-gps-status">Ortung ist nur in der Android-App verfügbar.</p> : null}
-            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
-            {showGpsDebugStatus && isAndroidAppContext() ? (
-              <>
-                <p className="cache-note mobile-gps-status">
-                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
-                </p>
-                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
-              </>
-            ) : null}
-            {showGpsDebugStatus ? (
-              <MobileGpsDebugCard
-                platform={mobileGpsPlatform}
-                permissions={androidGpsPermissions}
-                status={androidGpsStatus}
-                lastAutomaticSentAt={lastAutomaticGpsSentAt}
+              <PlaceholderAction
+                icon={Settings}
+                title="Einstellungen"
+                text="Standortprüfung und Benachrichtigungen verwalten."
+                onOpen={() => setActiveScreen("settings")}
               />
-            ) : null}
+            </div>
           </section>
         </>
       )}
@@ -633,6 +747,22 @@ function readGpsTrackingPreference(): boolean {
 function writeGpsTrackingPreference(isEnabled: boolean): void {
   try {
     localStorage.setItem(GPS_TRACKING_ENABLED_KEY, String(isEnabled));
+  } catch {
+    // Ignore storage failures; the in-memory toggle still controls this session.
+  }
+}
+
+function readPushNotificationPreference(): boolean {
+  try {
+    return localStorage.getItem(PUSH_NOTIFICATIONS_ENABLED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writePushNotificationPreference(isEnabled: boolean): void {
+  try {
+    localStorage.setItem(PUSH_NOTIFICATIONS_ENABLED_KEY, String(isEnabled));
   } catch {
     // Ignore storage failures; the in-memory toggle still controls this session.
   }
