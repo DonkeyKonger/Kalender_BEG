@@ -27,7 +27,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -76,9 +76,11 @@ function useMediaQuery(query: string): boolean {
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
 type MobileDetailActionKey = MobileDetailTab | "timesheet";
 type MeasurementViewMode = "list" | "table";
+type InlineMeasurementEditMode = "cell" | "add-row";
 type InlineMeasurementCell = {
   itemId: number;
   area: string;
+  mode: InlineMeasurementEditMode;
 };
 type MeasurementFreePositionDraft = {
   position: string;
@@ -2944,10 +2946,10 @@ function MobileMeasurementTab({
     }
   }
 
-  function startInlineMeasurementEdit(item: MobileMeasurementItem, area: string): void {
+  function startInlineMeasurementEdit(item: MobileMeasurementItem, area: string, mode: InlineMeasurementEditMode = "cell"): void {
     const quantity = getMobileMeasurementAreaQuantity(item, area);
-    setInlineCell({ itemId: item.id, area });
-    setInlineQuantity(quantity > 0 ? formatMeasurementNumber(quantity) : "");
+    setInlineCell({ itemId: item.id, area, mode });
+    setInlineQuantity(mode === "add-row" ? "" : quantity > 0 ? formatMeasurementNumber(quantity) : "");
     setInlineError(null);
   }
 
@@ -2968,19 +2970,24 @@ function MobileMeasurementTab({
     }
 
     const areaKey = getMeasurementAreaKey(inlineCell.area);
-    const existingEntries = item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
-    const existingQuantity = getMobileMeasurementAreaQuantity(item, inlineCell.area);
+    const isAddRow = inlineCell.mode === "add-row";
+    const existingEntries = isAddRow ? [] : item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
+    const existingQuantity = isAddRow ? 0 : getMobileMeasurementAreaQuantity(item, inlineCell.area);
     const quantity = parseOptionalMeasurementQuantity(inlineQuantity);
     const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(inlineCell.area));
     if (quantity === null || quantity < 0) {
       setInlineError("Bitte eine gültige Menge ab 0,00 eingeben.");
       return;
     }
+    if (isAddRow && quantity <= 0) {
+      setInlineError("Bitte eine Menge größer 0 eingeben.");
+      return;
+    }
     if (!normalizedArea) {
       setInlineError("Bitte Bereich oder Kommentar angeben.");
       return;
     }
-    if (Math.abs(quantity - existingQuantity) < 0.0001) {
+    if (!isAddRow && Math.abs(quantity - existingQuantity) < 0.0001) {
       cancelInlineMeasurementEdit();
       return;
     }
@@ -3033,7 +3040,7 @@ function MobileMeasurementTab({
     return () => onEntryModeChange?.(false);
   }, [onEntryModeChange, selectedBatch, selectedItem]);
 
-  if (selectedBatch && isFreePositionFormOpen) {
+  if (selectedBatch && isFreePositionFormOpen && (!canUseInlineMeasurementTable || !isBatchPositionOverviewOpen)) {
     return (
       <MeasurementFreePositionForm
         draft={freePositionDraft}
@@ -3229,54 +3236,95 @@ function MobileMeasurementTab({
 
   if (selectedBatch && isBatchPositionOverviewOpen) {
     return (
-      <MeasurementBatchDetail
-        batch={selectedBatch}
-        items={filteredItems}
-        allItems={items}
-        isItemsLoading={isItemsLoading}
-        error={error}
-        searchTerm={searchTerm}
-        onBack={() => {
-          cancelInlineMeasurementEdit();
-          setIsBatchPositionOverviewOpen(false);
-          setIsFreePositionFormOpen(false);
-          setSelectedItem(null);
-          setError(null);
-        }}
-        onCreatePosition={() => {
-          setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
-          setFreePositionError(null);
-          setIsFreePositionFormOpen(true);
-        }}
-        viewMode={viewMode}
-        onViewModeChange={(mode) => {
-          cancelInlineMeasurementEdit();
-          updateViewMode(mode);
-        }}
-        onSearchChange={(value) => {
-          cancelInlineMeasurementEdit();
-          setSearchTerm(value);
-        }}
-        onSelectItem={(item) => {
-          setSelectedItem(item);
-          setFormComment("");
-          setFormQuantity("");
-          setFormError(null);
-          cancelInlineMeasurementEdit();
-        }}
-        inlineCell={inlineCell}
-        inlineQuantity={inlineQuantity}
-        inlineError={inlineError}
-        isInlineSaving={isSaving}
-        isInlineEditingEnabled={canUseInlineMeasurementTable}
-        onInlineEditStart={startInlineMeasurementEdit}
-        onInlineQuantityChange={(value) => {
-          setInlineQuantity(value);
-          setInlineError(null);
-        }}
-        onInlineSave={() => void saveInlineMeasurementEdit()}
-        onInlineCancel={cancelInlineMeasurementEdit}
-      />
+      <>
+        <MeasurementBatchDetail
+          batch={selectedBatch}
+          items={filteredItems}
+          allItems={items}
+          isItemsLoading={isItemsLoading}
+          error={error}
+          searchTerm={searchTerm}
+          onBack={() => {
+            cancelInlineMeasurementEdit();
+            setIsBatchPositionOverviewOpen(false);
+            setIsFreePositionFormOpen(false);
+            setSelectedItem(null);
+            setError(null);
+          }}
+          onCreatePosition={() => {
+            cancelInlineMeasurementEdit();
+            setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+            setFreePositionError(null);
+            setIsFreePositionFormOpen(true);
+          }}
+          viewMode={viewMode}
+          onViewModeChange={(mode) => {
+            cancelInlineMeasurementEdit();
+            updateViewMode(mode);
+          }}
+          onSearchChange={(value) => {
+            cancelInlineMeasurementEdit();
+            setSearchTerm(value);
+          }}
+          onSelectItem={(item) => {
+            setSelectedItem(item);
+            setFormComment("");
+            setFormQuantity("");
+            setFormError(null);
+            cancelInlineMeasurementEdit();
+          }}
+          inlineCell={inlineCell}
+          inlineQuantity={inlineQuantity}
+          inlineError={inlineError}
+          isInlineSaving={isSaving}
+          isInlineEditingEnabled={canUseInlineMeasurementTable}
+          onInlineEditStart={startInlineMeasurementEdit}
+          onInlineQuantityChange={(value) => {
+            setInlineQuantity(value);
+            setInlineError(null);
+          }}
+          onInlineSave={() => void saveInlineMeasurementEdit()}
+          onInlineCancel={cancelInlineMeasurementEdit}
+        />
+        {isFreePositionFormOpen ? (
+          <div
+            className="mobile-measurement-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setIsFreePositionFormOpen(false);
+                setFreePositionError(null);
+                setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+              }
+            }}
+          >
+            <div className="mobile-measurement-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-measurement-position-dialog-title">
+              <MeasurementFreePositionForm
+                draft={freePositionDraft}
+                error={freePositionError}
+                isSaving={isSaving}
+                areaSuggestions={freePositionAreaSuggestions}
+                variant="dialog"
+                onBack={() => {
+                  setIsFreePositionFormOpen(false);
+                  setFreePositionError(null);
+                  setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+                }}
+                onCancel={() => {
+                  setIsFreePositionFormOpen(false);
+                  setFreePositionError(null);
+                  setFreePositionDraft(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
+                }}
+                onChange={(patch) => {
+                  setFreePositionDraft((currentDraft) => ({ ...currentDraft, ...patch }));
+                  setFreePositionError(null);
+                }}
+                onSave={() => void handleCreateFreePosition(selectedBatch)}
+              />
+            </div>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -4005,7 +4053,7 @@ function MeasurementBatchDetail({
   inlineError: string | null;
   isInlineSaving: boolean;
   isInlineEditingEnabled: boolean;
-  onInlineEditStart: (item: MobileMeasurementItem, area: string) => void;
+  onInlineEditStart: (item: MobileMeasurementItem, area: string, mode?: InlineMeasurementEditMode) => void;
   onInlineQuantityChange: (value: string) => void;
   onInlineSave: () => void;
   onInlineCancel: () => void;
@@ -4086,6 +4134,7 @@ function MeasurementBatchDetail({
           onInlineQuantityChange={onInlineQuantityChange}
           onInlineSave={onInlineSave}
           onInlineCancel={onInlineCancel}
+          onCreatePosition={onCreatePosition}
           onSelectItem={onSelectItem}
         />
       ) : null}
@@ -4098,6 +4147,7 @@ function MeasurementFreePositionForm({
   error,
   isSaving,
   areaSuggestions,
+  variant = "page",
   onBack,
   onCancel,
   onChange,
@@ -4107,6 +4157,7 @@ function MeasurementFreePositionForm({
   error: string | null;
   isSaving: boolean;
   areaSuggestions: string[];
+  variant?: "page" | "dialog";
   onBack: () => void;
   onCancel: () => void;
   onChange: (patch: Partial<MeasurementFreePositionDraft>) => void;
@@ -4115,7 +4166,7 @@ function MeasurementFreePositionForm({
   const quantityLabel = `Menge (${draft.unit || "Einheit"})`;
 
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-free-position-page">
+    <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-free-position-page${variant === "dialog" ? " is-dialog" : ""}`}>
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -4126,7 +4177,7 @@ function MeasurementFreePositionForm({
       <header className="mobile-entry-head">
         <div>
           <span>Aufmaß</span>
-          <h1>Position erstellen</h1>
+          <h1 id={variant === "dialog" ? "mobile-measurement-position-dialog-title" : undefined}>Position erstellen</h1>
           <p>Freie Zusatzposition nur für dieses Aufmaß anlegen.</p>
         </div>
       </header>
@@ -4249,6 +4300,7 @@ function MobileMeasurementTable({
   onInlineQuantityChange,
   onInlineSave,
   onInlineCancel,
+  onCreatePosition,
   onSelectItem,
 }: {
   items: MobileMeasurementItem[];
@@ -4257,13 +4309,80 @@ function MobileMeasurementTable({
   inlineError: string | null;
   isInlineSaving: boolean;
   isInlineEditingEnabled: boolean;
-  onInlineEditStart: (item: MobileMeasurementItem, area: string) => void;
+  onInlineEditStart: (item: MobileMeasurementItem, area: string, mode?: InlineMeasurementEditMode) => void;
   onInlineQuantityChange: (value: string) => void;
   onInlineSave: () => void;
   onInlineCancel: () => void;
+  onCreatePosition: () => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const areaRows = collectMeasurementAreaTags(items);
+  const canAddFromTable = isInlineEditingEnabled && items.length > 0;
+
+  function isInlineCellActive(item: MobileMeasurementItem, area: string, mode: InlineMeasurementEditMode): boolean {
+    return Boolean(
+      isInlineEditingEnabled
+        && inlineCell?.itemId === item.id
+        && inlineCell.mode === mode
+        && getMeasurementAreaKey(inlineCell.area) === getMeasurementAreaKey(area),
+    );
+  }
+
+  function renderInlineEditor(item: MobileMeasurementItem, area: string): ReactElement {
+    return (
+      <div
+        className="mobile-measurement-inline-editor"
+        onBlur={(event) => {
+          const nextTarget = event.relatedTarget;
+          if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+            return;
+          }
+          onInlineSave();
+        }}
+      >
+        <input
+          autoFocus
+          aria-label={`Menge ${item.position} ${area}`}
+          disabled={isInlineSaving}
+          inputMode="decimal"
+          type="text"
+          value={inlineQuantity}
+          onChange={(event) => onInlineQuantityChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onInlineSave();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onInlineCancel();
+            }
+          }}
+        />
+        <button
+          aria-label="Menge übernehmen"
+          className="mobile-measurement-inline-action is-save"
+          disabled={isInlineSaving}
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onInlineSave}
+        >
+          <CheckCircle2 aria-hidden="true" size={15} />
+        </button>
+        <button
+          aria-label="Eingabe abbrechen"
+          className="mobile-measurement-inline-action"
+          disabled={isInlineSaving}
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onInlineCancel}
+        >
+          <X aria-hidden="true" size={15} />
+        </button>
+        {inlineError ? <span className="mobile-measurement-inline-error">{inlineError}</span> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
@@ -4279,6 +4398,13 @@ function MobileMeasurementTable({
                 </button>
               </th>
             ))}
+            {canAddFromTable ? (
+              <th className="measurement-matrix-add-column-heading">
+                <button className="measurement-matrix-add-column-button" type="button" onClick={onCreatePosition} aria-label="Position erstellen" title="Position erstellen">
+                  <Plus aria-hidden="true" size={16} />
+                </button>
+              </th>
+            ) : null}
           </tr>
           <tr>
             <th className="measurement-matrix-axis">Beschreibung</th>
@@ -4287,103 +4413,91 @@ function MobileMeasurementTable({
                 <span className="measurement-matrix-description-text">{item.description}</span>
               </th>
             ))}
+            {canAddFromTable ? <th className="measurement-matrix-add-column-heading is-spacer" aria-hidden="true" /> : null}
           </tr>
           <tr>
             <th className="measurement-matrix-axis">Einheit</th>
             {items.map((item) => (
               <th key={item.id}>{item.unit ?? "-"}</th>
             ))}
+            {canAddFromTable ? <th className="measurement-matrix-add-column-heading is-spacer" aria-hidden="true" /> : null}
           </tr>
         </thead>
         <tbody>
           <tr className="measurement-matrix-section-row">
             <th className="measurement-matrix-axis">Bauteil / Ort</th>
             {items.map((item) => <td key={item.id} />)}
+            {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
           </tr>
           {areaRows.map((area) => (
-            <tr key={area}>
-              <th className="measurement-matrix-axis">{area}</th>
-              {items.map((item) => {
-                const quantity = getMobileMeasurementAreaQuantity(item, area);
-                const isActive = isInlineEditingEnabled && inlineCell?.itemId === item.id && getMeasurementAreaKey(inlineCell.area) === getMeasurementAreaKey(area);
-                const cellClassName = [
-                  quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell",
-                  isInlineEditingEnabled ? "is-tablet-editable" : "",
-                  isActive ? "is-inline-editing" : "",
-                ].filter(Boolean).join(" ");
-                return (
-                  <td className={cellClassName} key={item.id}>
-                    {isActive ? (
-                      <div
-                        className="mobile-measurement-inline-editor"
-                        onBlur={(event) => {
-                          const nextTarget = event.relatedTarget;
-                          if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
-                            return;
-                          }
-                          onInlineSave();
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          aria-label={`Menge ${item.position} ${area}`}
-                          disabled={isInlineSaving}
-                          inputMode="decimal"
-                          type="text"
-                          value={inlineQuantity}
-                          onChange={(event) => onInlineQuantityChange(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              onInlineSave();
+            <Fragment key={area}>
+              <tr>
+                <th className="measurement-matrix-axis">{area}</th>
+                {items.map((item) => {
+                  const quantity = getMobileMeasurementAreaQuantity(item, area);
+                  const isActive = isInlineCellActive(item, area, "cell");
+                  const cellClassName = [
+                    quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell",
+                    isInlineEditingEnabled ? "is-tablet-editable" : "",
+                    isActive ? "is-inline-editing" : "",
+                  ].filter(Boolean).join(" ");
+                  return (
+                    <td className={cellClassName} key={item.id}>
+                      {isActive ? renderInlineEditor(item, area) : (
+                        <button
+                          className="measurement-matrix-cell-button"
+                          type="button"
+                          onClick={() => {
+                            if (isInlineEditingEnabled) {
+                              onInlineEditStart(item, area);
+                              return;
                             }
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              onInlineCancel();
-                            }
+                            onSelectItem(item);
                           }}
-                        />
-                        <button
-                          aria-label="Menge übernehmen"
-                          className="mobile-measurement-inline-action is-save"
-                          disabled={isInlineSaving}
-                          type="button"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={onInlineSave}
                         >
-                          <CheckCircle2 aria-hidden="true" size={15} />
+                          {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
                         </button>
-                        <button
-                          aria-label="Eingabe abbrechen"
-                          className="mobile-measurement-inline-action"
-                          disabled={isInlineSaving}
-                          type="button"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={onInlineCancel}
-                        >
-                          <X aria-hidden="true" size={15} />
-                        </button>
-                        {inlineError ? <span className="mobile-measurement-inline-error">{inlineError}</span> : null}
-                      </div>
-                    ) : (
-                      <button
-                        className="measurement-matrix-cell-button"
-                        type="button"
-                        onClick={() => {
-                          if (isInlineEditingEnabled) {
-                            onInlineEditStart(item, area);
-                            return;
-                          }
-                          onSelectItem(item);
-                        }}
-                      >
-                        {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
-                      </button>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+                      )}
+                    </td>
+                  );
+                })}
+                {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
+              </tr>
+              {canAddFromTable ? (
+                <tr className="measurement-matrix-add-row">
+                  <th className="measurement-matrix-axis measurement-matrix-add-row-axis">
+                    <button
+                      className="measurement-matrix-add-row-button"
+                      type="button"
+                      onClick={() => onInlineEditStart(items[0], area, "add-row")}
+                      aria-label={`Neue Eingabezeile für ${area}`}
+                      title={`Neue Eingabezeile für ${area}`}
+                    >
+                      <Plus aria-hidden="true" size={15} />
+                    </button>
+                  </th>
+                  {items.map((item) => {
+                    const isActive = isInlineCellActive(item, area, "add-row");
+                    return (
+                      <td className={isActive ? "measurement-matrix-empty-cell is-tablet-editable is-inline-editing" : "measurement-matrix-empty-cell is-tablet-editable"} key={item.id}>
+                        {isActive ? renderInlineEditor(item, area) : (
+                          <button
+                            className="measurement-matrix-add-row-button"
+                            type="button"
+                            onClick={() => onInlineEditStart(item, area, "add-row")}
+                            aria-label={`Neue Menge für ${item.position} in ${area}`}
+                            title={`Neue Menge für ${item.position} in ${area}`}
+                          >
+                            <Plus aria-hidden="true" size={15} />
+                          </button>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="measurement-matrix-add-column-cell" />
+                </tr>
+              ) : null}
+            </Fragment>
           ))}
           <tr className="measurement-matrix-total-row">
             <th className="measurement-matrix-axis">Gesamt</th>
@@ -4394,6 +4508,7 @@ function MobileMeasurementTable({
                 </button>
               </td>
             ))}
+            {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
           </tr>
         </tbody>
       </table>

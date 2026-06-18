@@ -5329,6 +5329,30 @@ button.person-chip:focus-visible {
     font-weight: 450;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row td {
+    height: 30px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row-button {
+    min-height: 26px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-heading,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-cell {
+    width: 44px;
+    min-width: 44px !important;
+    max-width: 44px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-button {
+    min-height: 30px;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row th,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row td {
     padding-top: 2px;
@@ -8003,10 +8027,66 @@ button.person-chip:focus-visible {
 }
 
 .measurement-matrix-cell-button:focus-visible,
-.measurement-matrix-header-button:focus-visible {
+.measurement-matrix-header-button:focus-visible,
+.measurement-matrix-add-row-button:focus-visible,
+.measurement-matrix-add-column-button:focus-visible {
   border-radius: 6px;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
   outline: none;
+}
+
+.measurement-matrix-add-row th,
+.measurement-matrix-add-row td {
+  height: 34px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  background: #fbfdff;
+}
+
+.measurement-matrix-add-row .measurement-matrix-axis {
+  background: #f8fafc;
+}
+
+.measurement-matrix-add-row-button,
+.measurement-matrix-add-column-button {
+  display: inline-grid;
+  place-items: center;
+  width: 100%;
+  min-height: 30px;
+  border: 1px dashed #b7cbe4;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.measurement-matrix-add-row-button:hover,
+.measurement-matrix-add-row-button:focus-visible,
+.measurement-matrix-add-column-button:hover,
+.measurement-matrix-add-column-button:focus-visible {
+  border-color: #2563eb;
+  background: #eef6ff;
+}
+
+.measurement-matrix-add-column-heading,
+.measurement-matrix-add-column-cell {
+  width: 52px;
+  min-width: 52px !important;
+  max-width: 52px;
+  text-align: center !important;
+}
+
+.measurement-matrix-add-column-heading {
+  background: #eef4fb !important;
+}
+
+.measurement-matrix-add-column-heading.is-spacer,
+.measurement-matrix-add-column-cell {
+  background: #fbfdff !important;
+}
+
+.measurement-matrix-add-column-button {
+  min-height: 34px;
 }
 
 .mobile-measurement-table.is-inline-editing-enabled .measurement-matrix-empty-cell.is-tablet-editable,
@@ -15970,7 +16050,7 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-free-position-form {
   border: 1px solid #d8e3ef;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #ffffff;
   padding: 12px;
   box-shadow: 0 10px 22px rgb(18 29 52 / 6%);
@@ -15994,7 +16074,35 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-free-position-actions button {
   min-height: 44px;
-  border-radius: 10px;
+  border-radius: 8px;
+}
+
+.mobile-measurement-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 34%);
+  padding: 16px;
+}
+
+.mobile-measurement-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgb(15 23 42 / 28%);
+}
+
+.mobile-measurement-free-position-page.is-dialog {
+  min-height: 0;
+  padding: 14px;
+}
+
+.mobile-measurement-free-position-page.is-dialog .mobile-entry-head {
+  margin-bottom: 10px;
 }
 
 .mobile-measurement-entry-page .mobile-measurement-form input {
