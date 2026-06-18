@@ -125,9 +125,15 @@ export function AppShell() {
   ]
     .filter(Boolean)
     .join(" ");
+  const appShellClassName = [
+    "app-shell",
+    user?.role === "monteur" ? "is-mobile-workspace" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="app-shell">
+    <div className={appShellClassName}>
       <aside
         className={sidebarClassName}
         aria-label="Hauptnavigation"

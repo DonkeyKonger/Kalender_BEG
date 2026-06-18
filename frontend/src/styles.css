@@ -530,6 +530,21 @@ button:disabled {
   }
 }
 
+@media (min-width: 900px) and (max-width: 1199px) {
+  .app-shell.is-mobile-workspace .sidebar,
+  .app-shell.is-mobile-workspace .topbar {
+    display: none;
+  }
+
+  .app-shell.is-mobile-workspace .app-main {
+    margin-left: 0;
+  }
+
+  .app-shell.is-mobile-workspace .content-area {
+    padding: clamp(14px, 2.4vw, 24px);
+  }
+}
+
 .matrix-page {
   display: grid;
   gap: 14px;
@@ -5034,6 +5049,107 @@ button.person-chip:focus-visible {
 
   .mobile-header .icon-button {
     width: auto;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) {
+  .app-shell.is-mobile-workspace .mobile-page,
+  .app-shell.is-mobile-workspace .mobile-detail-page,
+  .app-shell.is-mobile-workspace .mobile-measurement-page,
+  .app-shell.is-mobile-workspace .mobile-measurement-entry-page,
+  .app-shell.is-mobile-workspace .mobile-measurement-free-position-page,
+  .app-shell.is-mobile-workspace .mobile-measurement-photo-gallery {
+    width: min(100%, 1040px);
+    max-width: 1040px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-detail-page.is-entry-mode {
+    max-width: 1040px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-home-page {
+    gap: 18px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-home-title-card,
+  .app-shell.is-mobile-workspace .mobile-detail-summary,
+  .app-shell.is-mobile-workspace .mobile-detail-panel,
+  .app-shell.is-mobile-workspace .mobile-measurement-summary-card,
+  .app-shell.is-mobile-workspace .mobile-measurement-entry-form,
+  .app-shell.is-mobile-workspace .mobile-measurement-free-position-form,
+  .app-shell.is-mobile-workspace .mobile-extra-work-section {
+    border-radius: 10px;
+    padding: clamp(16px, 2vw, 22px);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-focus-grid,
+  .app-shell.is-mobile-workspace .mobile-action-list,
+  .app-shell.is-mobile-workspace .assignment-list,
+  .app-shell.is-mobile-workspace .mobile-measurement-list,
+  .app-shell.is-mobile-workspace .mobile-measurement-overview-actions,
+  .app-shell.is-mobile-workspace .mobile-measurement-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell.is-mobile-workspace .mobile-home-assignment-group,
+  .app-shell.is-mobile-workspace .mobile-measurement-overview-panel,
+  .app-shell.is-mobile-workspace .mobile-measurement-panel,
+  .app-shell.is-mobile-workspace .mobile-measurement-entry-page,
+  .app-shell.is-mobile-workspace .mobile-extra-work-form {
+    gap: 16px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-detail-actions,
+  .app-shell.is-mobile-workspace .mobile-measurement-form-grid,
+  .app-shell.is-mobile-workspace .mobile-extra-work-week-grid,
+  .app-shell.is-mobile-workspace .mobile-time-form-grid,
+  .app-shell.is-mobile-workspace .mobile-time-summary,
+  .app-shell.is-mobile-workspace .mobile-time-conflict-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell.is-mobile-workspace .mobile-detail-actions button,
+  .app-shell.is-mobile-workspace .mobile-measurement-overview-action,
+  .app-shell.is-mobile-workspace .mobile-action-card,
+  .app-shell.is-mobile-workspace .mobile-message-card {
+    min-height: 68px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-entry-page .mobile-form-actions,
+  .app-shell.is-mobile-workspace .mobile-measurement-free-position-actions,
+  .app-shell.is-mobile-workspace .mobile-project-email-actions,
+  .app-shell.is-mobile-workspace .mobile-customer-signature-actions,
+  .app-shell.is-mobile-workspace .mobile-worker-signature-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-camera-button {
+    margin-top: 24px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-customer-signature-pdf {
+    padding: 16px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-customer-signature-sheet {
+    right: max(18px, env(safe-area-inset-right, 0px));
+    bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    left: auto;
+    width: min(420px, calc(100vw - 36px));
+    max-height: min(70vh, 560px);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-signature-canvas {
+    height: min(28vh, 220px);
+    min-height: 170px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-project-email-dialog,
+  .app-shell.is-mobile-workspace .mobile-extra-work-title-dialog,
+  .app-shell.is-mobile-workspace .mobile-worker-signature-dialog {
+    width: min(680px, 92vw);
   }
 }
 
