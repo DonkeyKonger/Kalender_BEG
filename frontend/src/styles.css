@@ -8106,6 +8106,31 @@ button.person-chip:focus-visible {
   background: #eef6ff;
 }
 
+.measurement-matrix-area-draft-input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid #93b4df;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-weight: 850;
+  padding: 5px 7px;
+}
+
+.measurement-matrix-area-draft-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  outline: none;
+}
+
+.measurement-matrix-area-draft-label {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-weight: 850;
+}
+
 .measurement-matrix-add-column-heading,
 .measurement-matrix-add-column-cell {
   width: 52px;
