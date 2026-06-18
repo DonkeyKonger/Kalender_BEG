@@ -5053,20 +5053,27 @@ button.person-chip:focus-visible {
 }
 
 @media (min-width: 700px) and (max-width: 1199px) {
+  .app-shell.is-mobile-workspace .content-area {
+    padding:
+      max(16px, calc(env(safe-area-inset-top, 0px) + 12px))
+      clamp(18px, 3vw, 32px)
+      max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  }
+
   .app-shell.is-mobile-workspace .mobile-page,
   .app-shell.is-mobile-workspace .mobile-detail-page,
   .app-shell.is-mobile-workspace .mobile-measurement-page,
   .app-shell.is-mobile-workspace .mobile-measurement-entry-page,
   .app-shell.is-mobile-workspace .mobile-measurement-free-position-page,
   .app-shell.is-mobile-workspace .mobile-measurement-photo-gallery {
-    width: min(100%, 1040px);
-    max-width: 1040px;
+    width: min(100%, 980px);
+    max-width: 980px;
     margin-right: auto;
     margin-left: auto;
   }
 
   .app-shell.is-mobile-workspace .mobile-detail-page.is-entry-mode {
-    max-width: 1040px;
+    max-width: 980px;
   }
 
   .app-shell.is-mobile-workspace .mobile-home-page {
@@ -5087,6 +5094,7 @@ button.person-chip:focus-visible {
   .app-shell.is-mobile-workspace .mobile-focus-grid,
   .app-shell.is-mobile-workspace .mobile-action-list,
   .app-shell.is-mobile-workspace .assignment-list,
+  .app-shell.is-mobile-workspace .mobile-home-day-assignment-grid,
   .app-shell.is-mobile-workspace .mobile-measurement-list,
   .app-shell.is-mobile-workspace .mobile-measurement-overview-actions,
   .app-shell.is-mobile-workspace .mobile-measurement-photo-grid {
@@ -5126,7 +5134,41 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-camera-button {
+    justify-self: end;
     margin-top: 24px;
+    margin-right: clamp(0px, 1.5vw, 18px);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table-wrap {
+    max-width: 100%;
+    overflow: auto;
+    overscroll-behavior-inline: contain;
+    scroll-padding-left: 170px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table {
+    min-width: max(760px, 100%);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table td {
+    min-width: 136px;
+    padding: 9px 10px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis {
+    min-width: 160px;
+    max-width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    box-shadow: 8px 0 14px rgb(15 23 42 / 7%);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-header-button,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-cell-button {
+    min-height: 38px;
   }
 
   .app-shell.is-mobile-workspace .mobile-customer-signature-pdf {
