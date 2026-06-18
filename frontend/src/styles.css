@@ -5188,6 +5188,7 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page {
     padding-right: clamp(12px, 1.6vw, 18px);
+    padding-bottom: 152px;
     padding-left: clamp(12px, 1.6vw, 18px);
   }
 
@@ -5329,6 +5330,12 @@ button.person-chip:focus-visible {
     font-weight: 450;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-active-cell {
+    min-height: 26px;
+    padding: 2px 5px;
+    font-weight: 650;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row th,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row td {
     height: 30px;
@@ -5362,6 +5369,21 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-total-row .measurement-matrix-cell-button {
     min-height: 14px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-fixed-keypad {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 248px;
+    padding: 7px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-fixed-keypad-grid {
+    gap: 5px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-fixed-key {
+    min-height: 34px;
   }
 
   .app-shell.is-mobile-workspace .mobile-customer-signature-pdf {
@@ -8028,6 +8050,7 @@ button.person-chip:focus-visible {
 
 .measurement-matrix-cell-button:focus-visible,
 .measurement-matrix-header-button:focus-visible,
+.measurement-matrix-active-cell:focus-visible,
 .measurement-matrix-add-row-button:focus-visible,
 .measurement-matrix-add-column-button:focus-visible {
   border-radius: 6px;
@@ -8105,6 +8128,41 @@ button.person-chip:focus-visible {
   box-shadow: inset 0 0 0 2px #2563eb;
 }
 
+.measurement-matrix-active-cell {
+  position: relative;
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #0f2f5f;
+  cursor: text;
+  font: inherit;
+  font-weight: 850;
+  padding: 3px 6px;
+  text-align: right;
+}
+
+.measurement-matrix-active-cell span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.measurement-matrix-active-cell small {
+  color: #52627a;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.measurement-matrix-active-cell.is-saving {
+  background: #f8fbff;
+  color: #52627a;
+  cursor: wait;
+}
+
 .mobile-measurement-inline-editor {
   display: grid;
   grid-template-columns: minmax(86px, 1fr) 34px 34px;
@@ -8162,6 +8220,61 @@ button.person-chip:focus-visible {
   font-weight: 800;
   line-height: 1.25;
   white-space: normal;
+}
+
+.mobile-measurement-fixed-keypad {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 70;
+  width: min(268px, calc(100vw - 28px));
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 22%);
+  padding: 8px;
+}
+
+.mobile-measurement-fixed-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mobile-measurement-fixed-key {
+  min-height: 38px;
+  border: 1px solid #cbd7e6;
+  border-radius: 7px;
+  background: #f8fbff;
+  color: #143c6d;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+}
+
+.mobile-measurement-fixed-key.is-muted {
+  background: #f4f7fb;
+  color: #42526b;
+  font-size: 0.78rem;
+}
+
+.mobile-measurement-fixed-key.is-commit {
+  border-color: #93b4df;
+  background: #eaf2fb;
+  color: #143c6d;
+  font-size: 0.78rem;
+}
+
+.mobile-measurement-fixed-key:hover:not(:disabled),
+.mobile-measurement-fixed-key:focus-visible:not(:disabled) {
+  border-color: #2563eb;
+  background: #eef6ff;
+  outline: none;
+}
+
+.mobile-measurement-fixed-key:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .measurement-review-list,
