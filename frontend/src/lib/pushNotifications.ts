@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
-import { api } from "./api";
+import { api, getApiBaseUrl } from "./api";
 import type { CurrentUser } from "../types/auth";
 
 type PushRegistrationToken = {
@@ -50,7 +50,10 @@ export async function initializePushNotifications(currentUser: CurrentUser): Pro
   if (!listenersAttached) {
     listenersAttached = true;
     await PushNotifications.addListener("registration", (token) => {
-      console.info("Push token received; registering device with backend.");
+      console.info("Push token received; registering device with backend.", {
+        apiBaseUrl: getApiBaseUrl(),
+        platform: Capacitor.getPlatform(),
+      });
       void api.registerPushDevice({
         platform: Capacitor.getPlatform(),
         token: token.value,
