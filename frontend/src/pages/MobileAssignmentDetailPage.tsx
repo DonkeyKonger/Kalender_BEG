@@ -51,9 +51,35 @@ function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
   return pdfJsLoader;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQuery.matches);
+    handleChange();
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [query]);
+
+  return matches;
+}
+
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
 type MobileDetailActionKey = MobileDetailTab | "timesheet";
 type MeasurementViewMode = "list" | "table";
+type InlineMeasurementCell = {
+  itemId: number;
+  area: string;
+};
 type MeasurementFreePositionDraft = {
   position: string;
   description: string;
@@ -96,6 +122,7 @@ type PdfPinchState = {
 };
 
 const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
+const TABLET_INLINE_MEASUREMENT_QUERY = "(min-width: 700px) and (max-width: 1199px)";
 const EXTRA_WORK_WEEK_DAYS = [
   { key: "monday_hours", label: "Mo" },
   { key: "tuesday_hours", label: "Di" },
@@ -2703,7 +2730,11 @@ function MobileMeasurementTab({
   const [photoGalleryVersion, setPhotoGalleryVersion] = useState(0);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [inlineCell, setInlineCell] = useState<InlineMeasurementCell | null>(null);
+  const [inlineQuantity, setInlineQuantity] = useState("");
+  const [inlineError, setInlineError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
     setBatches((currentBatches) => sortMobileMeasurementBatches(
@@ -2770,6 +2801,14 @@ function MobileMeasurementTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment.id]);
 
+  useEffect(() => {
+    if (!canUseInlineMeasurementTable) {
+      setInlineCell(null);
+      setInlineQuantity("");
+      setInlineError(null);
+    }
+  }, [canUseInlineMeasurementTable]);
+
   function updateViewMode(mode: MeasurementViewMode): void {
     setViewMode(mode);
     persistMeasurementViewMode(mode);
@@ -2778,6 +2817,7 @@ function MobileMeasurementTab({
   function closeBatchOverview(): void {
     setSelectedBatch(null);
     setSelectedItem(null);
+    cancelInlineMeasurementEdit();
     setIsBatchPositionOverviewOpen(false);
     setIsFreePositionFormOpen(false);
     setItems([]);
@@ -2899,6 +2939,78 @@ function MobileMeasurementTab({
       setSearchTerm("");
     } catch (requestError) {
       setFreePositionError(readApiError(requestError, "Position konnte nicht erstellt werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function startInlineMeasurementEdit(item: MobileMeasurementItem, area: string): void {
+    const quantity = getMobileMeasurementAreaQuantity(item, area);
+    setInlineCell({ itemId: item.id, area });
+    setInlineQuantity(quantity > 0 ? formatMeasurementNumber(quantity) : "");
+    setInlineError(null);
+  }
+
+  function cancelInlineMeasurementEdit(): void {
+    setInlineCell(null);
+    setInlineQuantity("");
+    setInlineError(null);
+  }
+
+  async function saveInlineMeasurementEdit(): Promise<void> {
+    if (!selectedBatch || !inlineCell || isSaving) {
+      return;
+    }
+    const item = items.find((currentItem) => currentItem.id === inlineCell.itemId);
+    if (!item) {
+      setInlineError("Position wurde nicht gefunden.");
+      return;
+    }
+
+    const areaKey = getMeasurementAreaKey(inlineCell.area);
+    const existingEntries = item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
+    const existingQuantity = getMobileMeasurementAreaQuantity(item, inlineCell.area);
+    const quantity = parseOptionalMeasurementQuantity(inlineQuantity);
+    const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(inlineCell.area));
+    if (quantity === null || quantity < 0) {
+      setInlineError("Bitte eine gültige Menge ab 0,00 eingeben.");
+      return;
+    }
+    if (!normalizedArea) {
+      setInlineError("Bitte Bereich oder Kommentar angeben.");
+      return;
+    }
+    if (Math.abs(quantity - existingQuantity) < 0.0001) {
+      cancelInlineMeasurementEdit();
+      return;
+    }
+
+    setIsSaving(true);
+    setInlineError(null);
+    try {
+      if (existingEntries.length > 0) {
+        await Promise.all(existingEntries.map((entry) => api.deleteMobileMeasurementEntry(assignment.id, selectedBatch.id, entry.id)));
+      }
+      if (quantity > 0) {
+        await api.createMobileMeasurementEntry(assignment.id, selectedBatch.id, item.id, {
+          area_or_comment: normalizedArea,
+          quantity,
+        });
+      }
+      setInlineCell(null);
+      setInlineQuantity("");
+      await loadBatches(selectedBatch.id);
+      await loadBatchItems(selectedBatch);
+    } catch (requestError) {
+      const message = readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden.");
+      try {
+        await loadBatches(selectedBatch.id);
+        await loadBatchItems(selectedBatch);
+      } catch {
+        // Keep the original save error visible; the next manual reload will reconcile the table.
+      }
+      setInlineError(message);
+      setError(message);
     } finally {
       setIsSaving(false);
     }
@@ -3125,6 +3237,7 @@ function MobileMeasurementTab({
         error={error}
         searchTerm={searchTerm}
         onBack={() => {
+          cancelInlineMeasurementEdit();
           setIsBatchPositionOverviewOpen(false);
           setIsFreePositionFormOpen(false);
           setSelectedItem(null);
@@ -3136,14 +3249,33 @@ function MobileMeasurementTab({
           setIsFreePositionFormOpen(true);
         }}
         viewMode={viewMode}
-        onViewModeChange={updateViewMode}
-        onSearchChange={setSearchTerm}
+        onViewModeChange={(mode) => {
+          cancelInlineMeasurementEdit();
+          updateViewMode(mode);
+        }}
+        onSearchChange={(value) => {
+          cancelInlineMeasurementEdit();
+          setSearchTerm(value);
+        }}
         onSelectItem={(item) => {
           setSelectedItem(item);
           setFormComment("");
           setFormQuantity("");
           setFormError(null);
+          cancelInlineMeasurementEdit();
         }}
+        inlineCell={inlineCell}
+        inlineQuantity={inlineQuantity}
+        inlineError={inlineError}
+        isInlineSaving={isSaving}
+        isInlineEditingEnabled={canUseInlineMeasurementTable}
+        onInlineEditStart={startInlineMeasurementEdit}
+        onInlineQuantityChange={(value) => {
+          setInlineQuantity(value);
+          setInlineError(null);
+        }}
+        onInlineSave={() => void saveInlineMeasurementEdit()}
+        onInlineCancel={cancelInlineMeasurementEdit}
       />
     );
   }
@@ -3846,6 +3978,15 @@ function MeasurementBatchDetail({
   onViewModeChange,
   onSearchChange,
   onSelectItem,
+  inlineCell,
+  inlineQuantity,
+  inlineError,
+  isInlineSaving,
+  isInlineEditingEnabled,
+  onInlineEditStart,
+  onInlineQuantityChange,
+  onInlineSave,
+  onInlineCancel,
 }: {
   batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
@@ -3859,9 +4000,18 @@ function MeasurementBatchDetail({
   onViewModeChange: (mode: MeasurementViewMode) => void;
   onSearchChange: (value: string) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
+  inlineCell: InlineMeasurementCell | null;
+  inlineQuantity: string;
+  inlineError: string | null;
+  isInlineSaving: boolean;
+  isInlineEditingEnabled: boolean;
+  onInlineEditStart: (item: MobileMeasurementItem, area: string) => void;
+  onInlineQuantityChange: (value: string) => void;
+  onInlineSave: () => void;
+  onInlineCancel: () => void;
 }) {
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel">
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -3923,7 +4073,19 @@ function MeasurementBatchDetail({
         </div>
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
-        <MobileMeasurementTable items={items} onSelectItem={onSelectItem} />
+        <MobileMeasurementTable
+          items={items}
+          inlineCell={inlineCell}
+          inlineQuantity={inlineQuantity}
+          inlineError={inlineError}
+          isInlineSaving={isInlineSaving}
+          isInlineEditingEnabled={isInlineEditingEnabled && !batch.is_locked_for_worker}
+          onInlineEditStart={onInlineEditStart}
+          onInlineQuantityChange={onInlineQuantityChange}
+          onInlineSave={onInlineSave}
+          onInlineCancel={onInlineCancel}
+          onSelectItem={onSelectItem}
+        />
       ) : null}
     </div>
   );
@@ -4076,16 +4238,34 @@ function MeasurementViewToggle({
 
 function MobileMeasurementTable({
   items,
+  inlineCell,
+  inlineQuantity,
+  inlineError,
+  isInlineSaving,
+  isInlineEditingEnabled,
+  onInlineEditStart,
+  onInlineQuantityChange,
+  onInlineSave,
+  onInlineCancel,
   onSelectItem,
 }: {
   items: MobileMeasurementItem[];
+  inlineCell: InlineMeasurementCell | null;
+  inlineQuantity: string;
+  inlineError: string | null;
+  isInlineSaving: boolean;
+  isInlineEditingEnabled: boolean;
+  onInlineEditStart: (item: MobileMeasurementItem, area: string) => void;
+  onInlineQuantityChange: (value: string) => void;
+  onInlineSave: () => void;
+  onInlineCancel: () => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const areaRows = collectMeasurementAreaTags(items);
 
   return (
     <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-      <table className="measurement-table-view measurement-matrix-table mobile-measurement-table">
+      <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
         <thead>
           <tr>
             <th className="measurement-matrix-axis">Pos.-Nr.</th>
@@ -4121,11 +4301,81 @@ function MobileMeasurementTable({
               <th className="measurement-matrix-axis">{area}</th>
               {items.map((item) => {
                 const quantity = getMobileMeasurementAreaQuantity(item, area);
+                const isActive = isInlineEditingEnabled && inlineCell?.itemId === item.id && getMeasurementAreaKey(inlineCell.area) === getMeasurementAreaKey(area);
+                const cellClassName = [
+                  quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell",
+                  isInlineEditingEnabled ? "is-tablet-editable" : "",
+                  isActive ? "is-inline-editing" : "",
+                ].filter(Boolean).join(" ");
                 return (
-                  <td className={quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell"} key={item.id}>
-                    <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
-                      {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
-                    </button>
+                  <td className={cellClassName} key={item.id}>
+                    {isActive ? (
+                      <div
+                        className="mobile-measurement-inline-editor"
+                        onBlur={(event) => {
+                          const nextTarget = event.relatedTarget;
+                          if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+                            return;
+                          }
+                          onInlineSave();
+                        }}
+                      >
+                        <input
+                          autoFocus
+                          aria-label={`Menge ${item.position} ${area}`}
+                          disabled={isInlineSaving}
+                          inputMode="decimal"
+                          type="text"
+                          value={inlineQuantity}
+                          onChange={(event) => onInlineQuantityChange(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              onInlineSave();
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              onInlineCancel();
+                            }
+                          }}
+                        />
+                        <button
+                          aria-label="Menge übernehmen"
+                          className="mobile-measurement-inline-action is-save"
+                          disabled={isInlineSaving}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={onInlineSave}
+                        >
+                          <CheckCircle2 aria-hidden="true" size={15} />
+                        </button>
+                        <button
+                          aria-label="Eingabe abbrechen"
+                          className="mobile-measurement-inline-action"
+                          disabled={isInlineSaving}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={onInlineCancel}
+                        >
+                          <X aria-hidden="true" size={15} />
+                        </button>
+                        {inlineError ? <span className="mobile-measurement-inline-error">{inlineError}</span> : null}
+                      </div>
+                    ) : (
+                      <button
+                        className="measurement-matrix-cell-button"
+                        type="button"
+                        onClick={() => {
+                          if (isInlineEditingEnabled) {
+                            onInlineEditStart(item, area);
+                            return;
+                          }
+                          onSelectItem(item);
+                        }}
+                      >
+                        {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
+                      </button>
+                    )}
                   </td>
                 );
               })}
