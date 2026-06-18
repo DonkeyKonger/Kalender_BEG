@@ -4026,18 +4026,20 @@ function MeasurementBatchDetail({
         <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
 
-      <div className="mobile-measurement-search">
-        <Search aria-hidden="true" size={17} />
-        <input
-          type="search"
-          placeholder="Position oder Leistung suchen..."
-          value={searchTerm}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
-      </div>
+      <div className="mobile-measurement-toolbar">
+        <div className="mobile-measurement-search">
+          <Search aria-hidden="true" size={17} />
+          <input
+            type="search"
+            placeholder="Position oder Leistung suchen..."
+            value={searchTerm}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
 
-      <div className="mobile-measurement-view-actions">
-        <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+        <div className="mobile-measurement-view-actions">
+          <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+        </div>
       </div>
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
