@@ -9,6 +9,7 @@ from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.project_folder import ProjectFolder
+from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.models.site_measurement_item import (
@@ -43,6 +44,7 @@ __all__ = [
     "GpsPoint",
     "Person",
     "PlanningCellMark",
+    "PendingPlanPushNotification",
     "ProjectFolder",
     "Site",
     "SiteEmailRecipient",
@@ -54,6 +56,7 @@ __all__ = [
     "SiteVehicleAssignment",
     "TimeEntryWeeklyReview",
     "User",
+    "UserPushDevice",
     "Vehicle",
     "VehicleAsset",
     "VehicleLatestPosition",

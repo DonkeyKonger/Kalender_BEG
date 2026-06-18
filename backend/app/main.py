@@ -28,6 +28,7 @@ from app.services.ctrack_scheduler import (
     start_ctrack_sync_scheduler,
     stop_ctrack_sync_scheduler,
 )
+from app.services.push_scheduler import start_push_plan_scheduler, stop_push_plan_scheduler
 
 
 def ensure_site_status_enum_values() -> None:
@@ -82,10 +83,12 @@ def create_app() -> FastAPI:
             with SessionLocal() as db:
                 seed_admin(db)
         start_ctrack_sync_scheduler()
+        start_push_plan_scheduler()
 
     @app.on_event("shutdown")
     async def stop_background_tasks() -> None:
         await stop_ctrack_sync_scheduler()
+        await stop_push_plan_scheduler()
 
     return app
 

@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { api, ApiError } from "../lib/api";
+import { initializePushNotifications } from "../lib/pushNotifications";
 import type { CurrentUser } from "../types/auth";
 
 type AuthStatus = "loading" | "authenticated" | "anonymous";
@@ -50,6 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadCurrentUser();
   }, [loadCurrentUser]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    void initializePushNotifications(user);
+  }, [user]);
 
   const login = useCallback(async (username: string, password: string) => {
     const token = await api.login(username, password);

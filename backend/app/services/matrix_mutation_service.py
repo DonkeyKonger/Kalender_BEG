@@ -15,6 +15,7 @@ from app.services.audit_service import AuditService
 from app.services.conflict_service import ConflictMessage, ConflictService
 from app.services.external_person_service import ExternalPersonService
 from app.services.matrix_service import MatrixService
+from app.services.push_notification_service import PushNotificationService
 
 
 class MatrixMutationService:
@@ -117,6 +118,7 @@ class MatrixMutationService:
 
         people = self._resolve_entries(entries)
         existing = self.assignments.list(start=start_date, end=end_date, site_id=site_id)
+        affected_person_ids = {assignment.person_id for assignment in existing}
         excluded_ids = {assignment.id for assignment in existing}
         blockers: list[ConflictMessage] = []
         warnings: list[ConflictMessage] = []
@@ -172,6 +174,7 @@ class MatrixMutationService:
 
         created = []
         for person in people:
+            affected_person_ids.add(person.id)
             assignment = Assignment(
                 site_id=site_id,
                 person_id=person.id,
@@ -191,6 +194,9 @@ class MatrixMutationService:
             old_value=old_value,
             new_value={**requested, "created_count": len(created)},
         )
+        push_notifications = PushNotificationService(self.db)
+        for person_id in affected_person_ids:
+            push_notifications.record_plan_change_for_person(person_id)
         self.db.commit()
         return {
             "warnings": [item.to_dict() for item in warnings],

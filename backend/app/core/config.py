@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     smtp_from_email: str | None = Field(default=None, alias="SMTP_FROM_EMAIL")
     smtp_from_name: str = Field(default="BEG Baustellenkalender", alias="SMTP_FROM_NAME")
     smtp_use_starttls: bool = Field(default=True, alias="SMTP_USE_STARTTLS")
+    fcm_enabled: bool = Field(default=False, alias="FCM_ENABLED")
+    fcm_project_id: str | None = Field(default=None, alias="FCM_PROJECT_ID")
+    fcm_service_account_json: str | None = Field(default=None, alias="FCM_SERVICE_ACCOUNT_JSON")
+    fcm_service_account_file: str | None = Field(default=None, alias="FCM_SERVICE_ACCOUNT_FILE")
+    fcm_request_timeout_seconds: float = Field(default=10.0, alias="FCM_REQUEST_TIMEOUT_SECONDS")
+    push_plan_scheduler_enabled: bool = Field(default=True, alias="PUSH_PLAN_SCHEDULER_ENABLED")
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

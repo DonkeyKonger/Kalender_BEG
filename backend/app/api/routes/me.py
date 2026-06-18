@@ -31,16 +31,27 @@ from app.schemas.measurement import (
     WorkerSignatureCreate,
 )
 from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, MobileSelfPlanRequest, MobileSite
+from app.schemas.push import PushDeviceRead, PushDeviceRegister
 from app.schemas.site_email_recipient import SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
+from app.services.push_notification_service import PushNotificationService
 from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.extra_work_email_service import ExtraWorkEmailService
 from app.services.site_email_recipient_service import SiteEmailRecipientService
 
 router = APIRouter(prefix="/me", tags=["me"])
+
+
+@router.post("/push-devices/register", response_model=PushDeviceRead)
+def register_my_push_device(
+    payload: PushDeviceRegister,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PushDeviceRead:
+    return PushNotificationService(db).register_device(user=current_user, payload=payload)
 
 
 @router.get("/assignments", response_model=MobileAssignmentsResponse)

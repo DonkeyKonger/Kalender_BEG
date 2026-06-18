@@ -260,6 +260,20 @@ export const api = {
     return request<void>("/auth/logout", { method: "POST" }, false);
   },
 
+  async registerPushDevice(payload: {
+    platform: string;
+    token: string;
+    device_id?: string | null;
+  }): Promise<{ id: number; platform: string; is_active: boolean; last_seen_at: string | null }> {
+    return request<{ id: number; platform: string; is_active: boolean; last_seen_at: string | null }>(
+      "/me/push-devices/register",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
   async createGpsLocationPoint(payload: GpsLocationPointCreate): Promise<GpsLocationPointRead> {
     return request<GpsLocationPointRead>("/gps/location-points", {
       method: "POST",

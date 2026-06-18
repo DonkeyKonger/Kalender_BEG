@@ -57,6 +57,7 @@ from app.services.photo_filename import (
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
+from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
 
 
@@ -1176,6 +1177,11 @@ class MeasurementService:
             entry.status = "reviewed"
         self.db.commit()
         self.db.refresh(batch)
+        PushNotificationService(self.db).send_measurement_reviewed(
+            user_id=batch.submitted_by_user_id,
+            site_id=site_id,
+            batch_id=batch.id,
+        )
         return self._build_mobile_batch(batch)
 
     def update_site_entry(
