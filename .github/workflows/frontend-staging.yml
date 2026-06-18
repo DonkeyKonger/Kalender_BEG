@@ -3,6 +3,10 @@ name: Frontend Staging Deploy
 on:
   workflow_dispatch:
 
+concurrency:
+  group: azure-static-web-apps-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
