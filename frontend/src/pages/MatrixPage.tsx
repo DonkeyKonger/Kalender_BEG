@@ -2278,10 +2278,6 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
     <tr>
       <td className="sticky-col site-number-col matrix-site-number-cell">
         <div className="matrix-site-number-content">
-          <span
-            className="site-color matrix-site-number-color"
-            style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
-          />
           <span className="matrix-site-number-stack">
             <strong>{row.site.site_number || "-"}</strong>
             <span aria-hidden="true" className="matrix-site-number-spacer" />

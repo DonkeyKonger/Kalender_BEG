@@ -973,14 +973,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
   min-height: 52px;
-}
-
-.matrix-site-number-color {
-  flex: 0 0 7px;
-  height: 23px;
-  border-radius: 999px;
 }
 
 .matrix-site-number-stack {
