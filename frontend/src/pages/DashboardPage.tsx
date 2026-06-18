@@ -81,7 +81,7 @@ type DashboardData = {
 };
 
 const MAX_PREVIEW_ITEMS = 6;
-const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
+const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -143,48 +143,19 @@ export function DashboardPage() {
   }, [range.historyStart, range.nextWeekEnd, user?.role]);
 
   useEffect(() => {
-    if (!user || user.role === "monteur") {
-      return undefined;
-    }
-
-    let active = true;
-    let requestInFlight = false;
-
-    async function pollMeasurementMessages() {
-      if (requestInFlight || document.visibilityState === "hidden") {
-        return;
-      }
-      requestInFlight = true;
-      try {
-        const measurementData = await api.dashboardMeasurementSubmissions();
-        if (active) {
-          setMeasurementMessages(measurementData);
-        }
-      } catch (pollError) {
-        if (active) {
-          console.warn("Dashboard messages polling failed", pollError);
-        }
-      } finally {
-        requestInFlight = false;
+    function handleDashboardMessagesUpdated(event: Event) {
+      const messages = (event as CustomEvent<MeasurementDashboardSubmission[]>).detail;
+      if (Array.isArray(messages)) {
+        setMeasurementMessages(messages);
       }
     }
 
-    const intervalId = window.setInterval(() => {
-      void pollMeasurementMessages();
-    }, DASHBOARD_MESSAGES_POLL_INTERVAL_MS);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void pollMeasurementMessages();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener(DASHBOARD_MESSAGES_UPDATED_EVENT, handleDashboardMessagesUpdated);
 
     return () => {
-      active = false;
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener(DASHBOARD_MESSAGES_UPDATED_EVENT, handleDashboardMessagesUpdated);
     };
-  }, [user?.role]);
+  }, []);
 
   useEffect(() => {
     let active = true;

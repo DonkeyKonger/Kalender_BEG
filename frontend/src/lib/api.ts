@@ -294,8 +294,13 @@ export const api = {
     return request<WeatherSummary>("/dashboard/weather");
   },
 
-  async dashboardMeasurementSubmissions(): Promise<MeasurementDashboardSubmission[]> {
-    return request<MeasurementDashboardSubmission[]>("/dashboard/measurement-submissions");
+  async dashboardMeasurementSubmissions(params: { limit?: number } = {}): Promise<MeasurementDashboardSubmission[]> {
+    const search = new URLSearchParams();
+    if (params.limit !== undefined) {
+      search.set("limit", String(params.limit));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<MeasurementDashboardSubmission[]>(`/dashboard/measurement-submissions${suffix}`);
   },
 
   async dismissDashboardMessage(messageKey: string): Promise<void> {

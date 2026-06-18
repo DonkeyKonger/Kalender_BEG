@@ -213,6 +213,7 @@ button:disabled {
 }
 
 .nav-list a {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -222,6 +223,25 @@ button:disabled {
   color: #dce8f7;
   padding: 8px 10px;
   text-decoration: none;
+}
+
+.nav-notification-badge {
+  position: absolute;
+  top: 4px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  border: 2px solid #12385f;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .nav-list a.active,

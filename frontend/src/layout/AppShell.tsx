@@ -1,19 +1,81 @@
 import { LogOut } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, PointerEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { navigationItems } from "../config/navigation";
+import { api } from "../lib/api";
+import type { UserRole } from "../types/auth";
+
+const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
+const DASHBOARD_MESSAGES_BADGE_LIMIT = 20;
+const DASHBOARD_MESSAGES_EVENT_LIMIT = 6;
+const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
+const DASHBOARD_MESSAGE_ROLES: UserRole[] = ["admin", "project_manager", "office"];
 
 export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [sidebarMode, setSidebarMode] = useState<"collapsed" | "pointer" | "keyboard">("collapsed");
+  const [dashboardMessageCount, setDashboardMessageCount] = useState(0);
   const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
   const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
   const showUserTopbar = location.pathname === "/";
   const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
+
+  useEffect(() => {
+    if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role)) {
+      setDashboardMessageCount(0);
+      return undefined;
+    }
+
+    let active = true;
+    let requestInFlight = false;
+
+    async function pollDashboardMessages() {
+      if (requestInFlight || document.visibilityState === "hidden") {
+        return;
+      }
+      requestInFlight = true;
+      try {
+        const messages = await api.dashboardMeasurementSubmissions({
+          limit: DASHBOARD_MESSAGES_BADGE_LIMIT,
+        });
+        if (active) {
+          setDashboardMessageCount(messages.length);
+          window.dispatchEvent(
+            new CustomEvent(DASHBOARD_MESSAGES_UPDATED_EVENT, {
+              detail: messages.slice(0, DASHBOARD_MESSAGES_EVENT_LIMIT),
+            }),
+          );
+        }
+      } catch (pollError) {
+        if (active) {
+          console.warn("Dashboard message badge polling failed", pollError);
+        }
+      } finally {
+        requestInFlight = false;
+      }
+    }
+
+    void pollDashboardMessages();
+    const intervalId = window.setInterval(() => {
+      void pollDashboardMessages();
+    }, DASHBOARD_MESSAGES_POLL_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pollDashboardMessages();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user?.id, user?.role]);
 
   function handleSidebarPointerEnter() {
     lastSidebarInputRef.current = "pointer";
@@ -89,9 +151,15 @@ export function AppShell() {
         <nav className="nav-list">
           {visibleItems.map((item) => {
             const Icon = item.icon;
+            const showDashboardMessageBadge = item.path === "/" && dashboardMessageCount > 0;
             return (
               <NavLink key={item.path} to={item.path} end={item.path === "/"}>
                 <Icon aria-hidden="true" size={20} />
+                {showDashboardMessageBadge ? (
+                  <span className="nav-notification-badge" aria-label={`${dashboardMessageCount} offene Meldungen`}>
+                    {dashboardMessageCount}
+                  </span>
+                ) : null}
                 <span className="nav-label">{item.label}</span>
               </NavLink>
             );
