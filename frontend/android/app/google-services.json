@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "714243756480",
+    "project_id": "kalender-baustellen",
+    "storage_bucket": "kalender-baustellen.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714243756480:android:e33b9661546fbbe217b825",
+        "android_client_info": {
+          "package_name": "de.beg.kalenderbaustellen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcSkIQ-L2k2Q2UwgrtSCf0h9KGz-Uj-wA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
