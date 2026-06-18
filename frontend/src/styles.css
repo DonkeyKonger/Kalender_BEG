@@ -5257,31 +5257,37 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table {
-    min-width: max(560px, 100%);
+    width: max-content;
+    min-width: max-content;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table th,
   .app-shell.is-mobile-workspace .mobile-measurement-table td {
+    width: 72px;
     min-width: 72px;
+    max-width: 72px;
     padding: 4px 6px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis {
+    width: 116px;
     min-width: 116px;
-    max-width: 150px;
+    max-width: 116px;
     white-space: normal;
     overflow-wrap: anywhere;
     box-shadow: 8px 0 14px rgb(15 23 42 / 7%);
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-heading {
+    width: 74px;
     min-width: 74px;
-    max-width: 96px;
+    max-width: 74px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-description-heading {
+    width: 86px;
     min-width: 86px;
-    max-width: 108px;
+    max-width: 86px;
     font-weight: 450;
     line-height: 1.15;
   }
