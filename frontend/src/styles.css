@@ -1004,10 +1004,6 @@ button:disabled {
   visibility: hidden;
 }
 
-.matrix-site-heading-color {
-  display: none;
-}
-
 .row-heading strong {
   max-width: 210px;
   font-size: 12.5px;
@@ -2523,10 +2519,6 @@ button.person-chip:focus-visible {
   height: auto;
   min-height: 20px;
   margin-block: 2px;
-}
-
-.matrix-page.is-compact .matrix-site-heading-color {
-  display: inline-block;
 }
 
 .matrix-page.is-compact .row-heading-content .site-color {

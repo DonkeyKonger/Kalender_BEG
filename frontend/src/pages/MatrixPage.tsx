@@ -2290,10 +2290,12 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
       </td>
       <th className="sticky-col site-col row-heading" scope="row">
         <div className="row-heading-content">
-          <span
-            className="site-color matrix-site-heading-color"
-            style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
-          />
+          {props.isCompactView ? (
+            <span
+              className="site-color"
+              style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
+            />
+          ) : null}
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>
             <strong>{row.site.name}</strong>
             {!hasSiteAddress && (
