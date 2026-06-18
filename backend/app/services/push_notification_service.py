@@ -124,7 +124,18 @@ class PushNotificationService:
 
     def send_measurement_reviewed(self, *, user_id: int | None, site_id: int, batch_id: int) -> None:
         if user_id is None:
+            logger.info(
+                "Measurement reviewed push skipped: no target user (site_id=%s batch_id=%s).",
+                site_id,
+                batch_id,
+            )
             return
+        logger.info(
+            "Measurement reviewed push requested: user_id=%s site_id=%s batch_id=%s.",
+            user_id,
+            site_id,
+            batch_id,
+        )
         self.send_to_user(
             user_id=user_id,
             title="Aufmaß geprüft",
@@ -133,6 +144,7 @@ class PushNotificationService:
                 "type": "measurement_reviewed",
                 "site_id": str(site_id),
                 "batch_id": str(batch_id),
+                "measurement_id": str(batch_id),
             },
         )
 
@@ -153,6 +165,7 @@ class PushNotificationService:
             )
         )
         if not devices:
+            logger.info("Push skipped: no active device tokens for user_id=%s.", user_id)
             return
 
         for device in devices:
@@ -161,6 +174,14 @@ class PushNotificationService:
                 title=title,
                 body=body,
                 data=data or {},
+            )
+            logger.info(
+                "Push delivery result: user_id=%s device_id=%s platform=%s result=%s type=%s.",
+                user_id,
+                device.id,
+                device.platform,
+                result,
+                (data or {}).get("type"),
             )
             if result == "invalid_token":
                 device.is_active = False

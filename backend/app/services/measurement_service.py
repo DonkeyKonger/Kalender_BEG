@@ -1172,16 +1172,32 @@ class MeasurementService:
                 "Unterschriebene Aufmaße bleiben bis zum Abschluss in der Prüfung.",
             )
 
+        previous_status = batch.status
+        notification_user_id = (
+            batch.submitted_by_user_id
+            or batch.created_by_user_id
+            or next((entry.created_by_user_id for entry in batch.entries if entry.created_by_user_id), None)
+        )
+
         batch.status = "reviewed"
         for entry in batch.entries:
             entry.status = "reviewed"
         self.db.commit()
         self.db.refresh(batch)
-        PushNotificationService(self.db).send_measurement_reviewed(
-            user_id=batch.submitted_by_user_id,
-            site_id=site_id,
-            batch_id=batch.id,
-        )
+        if previous_status != "reviewed":
+            try:
+                PushNotificationService(self.db).send_measurement_reviewed(
+                    user_id=notification_user_id,
+                    site_id=site_id,
+                    batch_id=batch.id,
+                )
+            except Exception:
+                LOGGER.exception(
+                    "Measurement reviewed push failed: site_id=%s batch_id=%s user_id=%s",
+                    site_id,
+                    batch.id,
+                    notification_user_id,
+                )
         return self._build_mobile_batch(batch)
 
     def update_site_entry(
