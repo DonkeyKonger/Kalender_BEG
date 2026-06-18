@@ -2018,6 +2018,7 @@ function MatrixTable(props: MatrixTableProps) {
     >
       <table className="matrix-table" style={tableStyle}>
         <colgroup>
+          <col className="site-number-col-width" />
           <col className="site-col-width" />
           <col className="pm-col-width" />
           <col className="info-col-width" />
@@ -2028,6 +2029,7 @@ function MatrixTable(props: MatrixTableProps) {
         </colgroup>
         <thead>
           <tr className="matrix-week-row">
+            <th className="sticky-col site-number-col matrix-week-fixed" aria-hidden="true" />
             <th className="sticky-col site-col matrix-week-fixed" aria-hidden="true" />
             <th className="sticky-col pm-col matrix-week-fixed" aria-hidden="true" />
             <th className="sticky-col info-col matrix-week-fixed" aria-hidden="true" />
@@ -2045,6 +2047,7 @@ function MatrixTable(props: MatrixTableProps) {
             ))}
           </tr>
           <tr className="matrix-day-row">
+            <th className="sticky-col site-number-col">Nummer</th>
             <th className="sticky-col site-col">Baustelle</th>
             <th className="sticky-col pm-col">PL</th>
             <th className="sticky-col info-col">Info</th>
@@ -2103,6 +2106,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
 
   return (
     <tr className="matrix-absence-row" style={rowStyle}>
+      <td className="sticky-col site-number-col matrix-absence-empty" />
       <th className="sticky-col site-col row-heading matrix-absence-heading" scope="row">
         <div className="row-heading-content">
           <span className="matrix-absence-icon" />
@@ -2240,6 +2244,7 @@ function MatrixAddSiteRow({
 }: MatrixAddSiteRowProps) {
   return (
     <tr className="matrix-add-site-row">
+      <td className="sticky-col site-number-col matrix-add-site-empty" />
       <th className="sticky-col site-col row-heading" scope="row">
         <button
           className="matrix-add-site-button"
@@ -2271,6 +2276,9 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
 
   return (
     <tr>
+      <td className="sticky-col site-number-col matrix-site-number-cell">
+        {row.site.site_number || "-"}
+      </td>
       <th className="sticky-col site-col row-heading" scope="row">
         <div className="row-heading-content">
           <span
@@ -2279,14 +2287,9 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           />
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>
             <strong>{row.site.name}</strong>
-            {(row.site.site_number || !hasSiteAddress) && (
+            {!hasSiteAddress && (
               <small className="matrix-site-number">
-                {row.site.site_number}
-                {!hasSiteAddress && (
-                  <span className="matrix-site-missing-address">
-                    {row.site.site_number ? " · " : ""}Keine Adresse hinterlegt
-                  </span>
-                )}
+                <span className="matrix-site-missing-address">Keine Adresse hinterlegt</span>
               </small>
             )}
             {row.site.location && <span className="matrix-site-location">{row.site.location}</span>}
@@ -2643,7 +2646,7 @@ const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
 const ASSIGNMENT_AUTOCOMPLETE_WIDTH = 280;
 const STATUS_MENU_HEIGHT = 142;
 const STATUS_MENU_WIDTH = 128;
-const FIXED_MATRIX_COLUMNS_WIDTH = 538;
+const FIXED_MATRIX_COLUMNS_WIDTH = 614;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "planned", "completed", "deleted"];

@@ -680,30 +680,40 @@ button:disabled {
   z-index: 3;
 }
 
-.site-col {
+.site-number-col {
   left: 0;
+  width: 76px;
+  min-width: 76px;
+}
+
+.site-col {
+  left: 76px;
   width: 260px;
   min-width: 260px;
 }
 
 .pm-col {
-  left: 260px;
+  left: 336px;
   width: 56px;
   min-width: 56px;
 }
 
 .info-col {
-  left: 316px;
+  left: 392px;
   width: 150px;
   min-width: 150px;
 }
 
 .status-col {
-  left: 466px;
+  left: 542px;
   width: 72px;
   min-width: 72px;
   border-right: 2px solid #cbd7e6;
   box-shadow: 8px 0 14px rgb(18 29 52 / 10%);
+}
+
+.site-number-col-width {
+  width: 76px;
 }
 
 .site-col-width {
@@ -947,6 +957,16 @@ button:disabled {
 
 .matrix-table .sticky-col {
   background: #ffffff;
+}
+
+.matrix-site-number-cell {
+  color: #263244;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .row-heading strong {
@@ -2398,6 +2418,13 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .matrix-table thead .matrix-day-row th {
   top: 20px;
+}
+
+.matrix-page.is-compact .site-number-col,
+.matrix-page.is-compact .site-number-col-width {
+  display: none;
+  width: 0;
+  min-width: 0;
 }
 
 .matrix-page.is-compact .site-col {
