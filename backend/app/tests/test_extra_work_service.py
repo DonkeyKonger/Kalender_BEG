@@ -775,7 +775,7 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
     assert audit_log.new_value_json["customer_signature_present"] is True
 
 
-def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeypatch):
+def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_signature(monkeypatch):
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
     site = Site(site_number="8007", name="Schüchtermann Klinik")
@@ -788,10 +788,8 @@ def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeyp
         measurement_base=measurement_base,
         number=1,
         title="Aufmaß 8007.01",
-        status="reviewed",
-        worker_signature_name="Max Monteur",
-        worker_signature_strokes=[[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]],
-        worker_signed_at=datetime(2026, 6, 11, tzinfo=UTC),
+        status="submitted",
+        submitted_at=datetime(2026, 6, 11, tzinfo=UTC),
     )
     db.add_all([
         measurement_base,
@@ -837,6 +835,8 @@ def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeyp
 
     db.refresh(batch)
     audit_log = db.query(AuditLog).filter_by(action="measurement.email_sent").one()
+    assert batch.status == "submitted"
+    assert batch.worker_signed_at is None
     assert batch.customer_signed_at is None
     assert result.recipients == ["kunde@example.de"]
     assert result.filename == "Aufmass_geprueft_8007.01.pdf"

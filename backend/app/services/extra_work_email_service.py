@@ -102,8 +102,6 @@ class ExtraWorkEmailService:
     ) -> ExtraWorkTicketEmailSendRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         batch = self._get_measurement_batch(batch_id, assignment.site_id)
-        if batch.worker_signed_at is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteursunterschrift fehlt.")
 
         recipients = self._selected_recipients(assignment.site_id)
         if not recipients:
