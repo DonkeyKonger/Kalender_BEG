@@ -16975,8 +16975,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-batch-status-signed {
-  background: #e8f7fa;
-  color: #0f6f83;
+  background: #eaf8ef;
+  color: #166534;
 }
 
 .mobile-batch-status-signature-missing {
@@ -16985,8 +16985,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-batch-status-reviewed {
-  background: #eaf8ef;
-  color: #166534;
+  background: #e8f7fa;
+  color: #0f6f83;
 }
 
 .mobile-batch-status-closed {
