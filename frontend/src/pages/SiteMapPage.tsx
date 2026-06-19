@@ -40,12 +40,15 @@ const SELECTED_VEHICLE_MARKER_ICON = divIcon({
 
 type SiteLabelMode = "full" | "number" | "points";
 type PersonLabelMode = "full" | "short" | "points";
+type VehicleLabelMode = "full" | "points";
 type VisibleMarkerState = {
   sites: number;
   persons: number;
+  vehicles: number;
   zoom: number;
   hasDenseSites: boolean;
   hasDensePersons: boolean;
+  hasDenseVehicles: boolean;
 };
 
 type MapProjectManagerOption = {
@@ -78,9 +81,11 @@ export function SiteMapPage() {
   const [visibleMarkers, setVisibleMarkers] = useState<VisibleMarkerState>({
     sites: 15,
     persons: 15,
+    vehicles: 15,
     zoom: DEFAULT_ZOOM,
     hasDenseSites: false,
     hasDensePersons: false,
+    hasDenseVehicles: false,
   });
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
@@ -241,15 +246,17 @@ export function SiteMapPage() {
     () => people.filter((person) => personFilter === ALL_FILTER || String(person.project_manager_assignment?.id) === personFilter),
     [people, personFilter],
   );
-  const siteLabelMode = siteLabelModeForVisibleMarkers(visibleMarkers);
-  const personLabelMode = personLabelModeForVisibleMarkers(visibleMarkers);
-  const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
-  const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
   const visiblePeopleForMap = useMemo(() => showPersons ? filteredPeople : [], [filteredPeople, showPersons]);
   const visibleVehiclesForMap = useMemo(
     () => showVehicles ? vehicles.filter(hasValidVehicleCoordinates) : [],
     [showVehicles, vehicles],
   );
+  const siteLabelMode = siteLabelModeForVisibleMarkers(visibleMarkers);
+  const personLabelMode = personLabelModeForVisibleMarkers(visibleMarkers);
+  const vehicleLabelMode = vehicleLabelModeForVisibleMarkers(visibleMarkers);
+  const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
+  const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
+  const vehicleLabelOffsets = useMemo(() => buildVehicleLabelOffsets(visibleVehiclesForMap), [visibleVehiclesForMap]);
   const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerState) => {
     setVisibleMarkers((current) => areVisibleMarkerStatesEqual(current, nextMarkers) ? current : nextMarkers);
   }, []);
@@ -316,7 +323,12 @@ export function SiteMapPage() {
           <div className="empty-state">Keine Marker fuer die aktuellen Filter vorhanden.</div>
         ) : (
           <MapContainer center={GERMANY_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom className="site-map-canvas">
-            <VisibleMarkerTracker sites={filteredSites} people={visiblePeopleForMap} onVisibleMarkersChange={updateVisibleMarkerState} />
+            <VisibleMarkerTracker
+              sites={filteredSites}
+              people={visiblePeopleForMap}
+              vehicles={visibleVehiclesForMap}
+              onVisibleMarkersChange={updateVisibleMarkerState}
+            />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               referrerPolicy="strict-origin-when-cross-origin"
@@ -413,10 +425,11 @@ export function SiteMapPage() {
                   }}
                 >
                   <Tooltip
+                    permanent={vehicleLabelMode !== "points"}
                     direction="top"
-                    offset={[0, -9]}
+                    offset={vehicleLabelMode === "points" ? [0, -9] : vehicleLabelOffsets[item.vehicle.id] ?? LABEL_OFFSET_PATTERN[0]}
                     opacity={1}
-                    className="site-map-marker-label site-map-marker-label-hover site-map-vehicle-label"
+                    className={vehicleLabelMode === "points" ? "site-map-marker-label site-map-marker-label-hover site-map-vehicle-label" : "site-map-marker-label site-map-vehicle-label"}
                   >
                     {vehicleMarkerLabel(item)}
                   </Tooltip>
@@ -436,10 +449,12 @@ export function SiteMapPage() {
 function VisibleMarkerTracker({
   sites,
   people,
+  vehicles,
   onVisibleMarkersChange,
 }: {
   sites: SiteMapItem[];
   people: PersonMapItem[];
+  vehicles: VehicleLatestPositionItem[];
   onVisibleMarkersChange: (markers: VisibleMarkerState) => void;
 }) {
   const map = useMapEvents({
@@ -454,19 +469,22 @@ function VisibleMarkerTracker({
     const bounds = map.getBounds();
     const visibleSites = sites.filter((site) => bounds.contains([site.latitude, site.longitude]));
     const visiblePeople = people.filter((person) => bounds.contains([person.address_latitude, person.address_longitude]));
+    const visibleVehicles = vehicles.filter((vehicle) => bounds.contains(vehicleMarkerCenter(vehicle)));
     const zoom = map.getZoom?.() ?? DEFAULT_ZOOM;
     onVisibleMarkersChange({
       sites: visibleSites.length,
       persons: visiblePeople.length,
+      vehicles: visibleVehicles.length,
       zoom,
       hasDenseSites: hasDenseSiteGroup(visibleSites, zoom),
       hasDensePersons: hasDensePersonGroup(visiblePeople, zoom),
+      hasDenseVehicles: hasDenseVehicleGroup(visibleVehicles, zoom),
     });
   }
 
   useEffect(() => {
     updateVisibleMarkers();
-  }, [map, onVisibleMarkersChange, people, sites]);
+  }, [map, onVisibleMarkersChange, people, sites, vehicles]);
 
   return null;
 }
@@ -654,12 +672,27 @@ function personLabelModeForVisibleMarkers(markers: VisibleMarkerState): PersonLa
   return "points";
 }
 
+function vehicleLabelModeForVisibleMarkers(markers: VisibleMarkerState): VehicleLabelMode {
+  if (markers.vehicles <= 0) {
+    return "points";
+  }
+  if (markers.vehicles < 5) {
+    return markers.zoom >= 8 && !markers.hasDenseVehicles ? "full" : "points";
+  }
+  if (markers.vehicles < 15) {
+    return markers.zoom >= 13 && !markers.hasDenseVehicles ? "full" : "points";
+  }
+  return "points";
+}
+
 function areVisibleMarkerStatesEqual(left: VisibleMarkerState, right: VisibleMarkerState): boolean {
   return left.sites === right.sites
     && left.persons === right.persons
+    && left.vehicles === right.vehicles
     && left.zoom === right.zoom
     && left.hasDenseSites === right.hasDenseSites
-    && left.hasDensePersons === right.hasDensePersons;
+    && left.hasDensePersons === right.hasDensePersons
+    && left.hasDenseVehicles === right.hasDenseVehicles;
 }
 
 function hasDenseSiteGroup(sites: SiteMapItem[], zoom: number): boolean {
@@ -672,6 +705,13 @@ function hasDenseSiteGroup(sites: SiteMapItem[], zoom: number): boolean {
 function hasDensePersonGroup(people: PersonMapItem[], zoom: number): boolean {
   return hasDenseMarkerGroup(
     people.map((person) => ({ latitude: person.address_latitude, longitude: person.address_longitude })),
+    zoom,
+  );
+}
+
+function hasDenseVehicleGroup(vehicles: VehicleLatestPositionItem[], zoom: number): boolean {
+  return hasDenseMarkerGroup(
+    vehicles.map((item) => ({ latitude: Number(item.position.latitude), longitude: Number(item.position.longitude) })),
     zoom,
   );
 }
@@ -729,6 +769,16 @@ function buildLabelOffsets<T extends { id: number; latitude?: number; longitude?
       });
   });
   return offsets;
+}
+
+function buildVehicleLabelOffsets(items: VehicleLatestPositionItem[]): Record<number, [number, number]> {
+  return buildLabelOffsets(
+    items.map((item) => ({
+      id: item.vehicle.id,
+      latitude: Number(item.position.latitude),
+      longitude: Number(item.position.longitude),
+    })),
+  );
 }
 
 function mapProjectManagerOptions(sites: SiteMapItem[]): MapProjectManagerOption[] {
