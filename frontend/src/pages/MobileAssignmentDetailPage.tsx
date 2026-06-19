@@ -742,12 +742,14 @@ function ExtraWorkOrderOverview({
   const canRename = order.status === "draft" && !hasCustomerSignature;
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
   const emailPdfFilename = `${formatMobileExtraWorkOrderTitle(order)}.pdf`;
-  const emailSendPrerequisitesMet = emailRecipients.length > 0 && hasCustomerSignature && hasWorkerSignature;
+  const emailSendPrerequisitesMet = emailRecipients.length > 0;
+  const shouldWarnMissingCustomerSignatureForEmail = emailRecipients.length > 0 && !hasCustomerSignature;
   const emailSendHint = getDocumentEmailSendHint({
     hasRecipients: emailRecipients.length > 0,
     hasCustomerSignature,
     hasWorkerSignature,
     isLoadingRecipients: isLoadingEmailRecipients,
+    allowMissingCustomerSignature: true,
   });
 
   useEffect(() => {
@@ -913,7 +915,7 @@ function ExtraWorkOrderOverview({
           <span>Kunden-E-Mail</span>
         </button>
         <button
-          className="mobile-measurement-overview-action"
+          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
           type="button"
           onClick={() => {
             setEmailSendError(null);
@@ -982,6 +984,7 @@ function ExtraWorkOrderOverview({
           isSending={isSendingEmail}
           recipients={emailRecipients}
           error={emailSendError}
+          warning={shouldWarnMissingCustomerSignatureForEmail ? "Für diesen Zusatzauftrag liegt noch keine Kundenunterschrift vor. Das PDF wird ohne Kundenunterschrift versendet. Die Unterschrift muss anschließend vom Kunden eingeholt werden." : null}
           title="Stundenzettel senden?"
           onClose={() => setIsConfirmingEmailSend(false)}
           onConfirm={() => void sendExtraWorkEmail()}

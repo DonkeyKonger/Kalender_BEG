@@ -32,8 +32,6 @@ class ExtraWorkEmailService:
     ) -> ExtraWorkTicketEmailSendRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
-        if ticket.customer_signed_at is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kundenunterschrift fehlt.")
         if ticket.worker_signed_at is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteursunterschrift fehlt.")
 
@@ -85,6 +83,7 @@ class ExtraWorkEmailService:
                 "recipients": recipients,
                 "filename": filename,
                 "sent_at": sent_at.isoformat(),
+                "customer_signature_present": ticket.customer_signed_at is not None,
             },
         )
         self.db.commit()

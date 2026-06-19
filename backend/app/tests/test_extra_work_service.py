@@ -589,7 +589,7 @@ def test_mobile_extra_work_email_send_requires_selected_recipients():
     assert error.value.detail == "Keine E-Mail-Empfänger hinterlegt."
 
 
-def test_mobile_extra_work_email_send_requires_signatures():
+def test_mobile_extra_work_email_send_requires_worker_signature():
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
     site = Site(site_number="8007", name="Schüchtermann Klinik")
@@ -618,10 +618,96 @@ def test_mobile_extra_work_email_send_requires_signatures():
         )
 
     assert error.value.status_code == 400
-    assert error.value.detail == "Kundenunterschrift fehlt."
+    assert error.value.detail == "Monteursunterschrift fehlt."
 
 
-def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch):
+def test_mobile_extra_work_email_send_allows_missing_customer_signature(monkeypatch):
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    db.add_all([
+        assignment,
+        SiteEmailRecipient(
+            site_id=site.id,
+            email="kunde@example.de",
+            label="Kunde",
+            source="manual",
+            is_selected=True,
+        ),
+    ])
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    ticket = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    stored_ticket = db.get(extra_work_module.ExtraWorkTicket, ticket.id)
+    assert stored_ticket is not None
+    stored_ticket.worker_signature_name = "Max Monteur"
+    stored_ticket.worker_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    stored_ticket.worker_signed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    db.commit()
+    deliveries = []
+
+    class FakePdfService:
+        def __init__(self, db):
+            self.db = db
+
+        def build_mobile_ticket_pdf(self, *, assignment_id, ticket_id, current_user):
+            return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
+
+    class FakeEmailDeliveryService:
+        def send_document_email(self, *, recipients, subject, body, attachment):
+            deliveries.append({
+                "recipients": recipients,
+                "subject": subject,
+                "body": body,
+                "filename": attachment.filename,
+                "content": attachment.content,
+                "content_type": attachment.content_type,
+            })
+
+    monkeypatch.setattr(extra_work_email_module, "ExtraWorkPdfService", FakePdfService)
+    monkeypatch.setattr(extra_work_email_module, "EmailDeliveryService", FakeEmailDeliveryService)
+
+    result = ExtraWorkEmailService(db).send_mobile_ticket_email(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    audit_log = db.query(AuditLog).filter_by(action="extra_work.email_sent").one()
+    db.refresh(stored_ticket)
+    assert stored_ticket.customer_signed_at is None
+    assert result.recipients == ["kunde@example.de"]
+    assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
+    assert deliveries == [
+        {
+            "recipients": ["kunde@example.de"],
+            "subject": "Anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag",
+            "body": (
+                "Sehr geehrte Damen und Herren,\n\n"
+                "anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag.\n\n"
+                "Mit freundlichen Grüßen\n\n"
+                "Max Monteur\n\n"
+                "BEG Badener Elektro GmbH\n"
+                "Firmenweg 16 · 28832 Achim\n"
+                "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
+                "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
+                "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
+            ),
+            "filename": "Stundenzettel_3_Hauptauftrag.pdf",
+            "content": b"%PDF-test",
+            "content_type": "application/pdf",
+        }
+    ]
+    assert audit_log.entity_type == "extra_work_ticket"
+    assert audit_log.entity_id == ticket.id
+    assert audit_log.new_value_json["recipients"] == ["kunde@example.de"]
+    assert audit_log.new_value_json["customer_signature_present"] is False
+
+
+def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monkeypatch):
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
     site = Site(site_number="8007", name="Schüchtermann Klinik")
@@ -664,7 +750,6 @@ def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch
             deliveries.append({
                 "recipients": recipients,
                 "subject": subject,
-                "body": body,
                 "filename": attachment.filename,
                 "content": attachment.content,
                 "content_type": attachment.content_type,
@@ -682,29 +767,12 @@ def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch
     audit_log = db.query(AuditLog).filter_by(action="extra_work.email_sent").one()
     assert result.recipients == ["kunde@example.de"]
     assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
-    assert deliveries == [
-        {
-            "recipients": ["kunde@example.de"],
-            "subject": "Anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag",
-            "body": (
-                "Sehr geehrte Damen und Herren,\n\n"
-                "anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag.\n\n"
-                "Mit freundlichen Grüßen\n\n"
-                "Max Monteur\n\n"
-                "BEG Badener Elektro GmbH\n"
-                "Firmenweg 16 · 28832 Achim\n"
-                "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
-                "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
-                "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
-            ),
-            "filename": "Stundenzettel_3_Hauptauftrag.pdf",
-            "content": b"%PDF-test",
-            "content_type": "application/pdf",
-        }
-    ]
+    assert deliveries[0]["recipients"] == ["kunde@example.de"]
+    assert deliveries[0]["content"] == b"%PDF-test"
+    assert deliveries[0]["content_type"] == "application/pdf"
     assert audit_log.entity_type == "extra_work_ticket"
     assert audit_log.entity_id == ticket.id
-    assert audit_log.new_value_json["recipients"] == ["kunde@example.de"]
+    assert audit_log.new_value_json["customer_signature_present"] is True
 
 
 def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeypatch):
