@@ -15311,7 +15311,7 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-list {
   display: grid;
-  gap: 6px;
+  gap: 7px;
 }
 
 .mobile-measurement-card {
@@ -15320,20 +15320,20 @@ button.person-chip:focus-visible {
   gap: 3px;
   width: 100%;
   min-height: 112px;
-  border: 1px solid #d8e3ef;
+  border: 1px solid #e1e8f0;
   border-radius: 8px;
   background: #ffffff;
   color: #172033;
-  padding: 8px 10px 8px 60px;
+  padding: 9px 10px 9px 60px;
   text-align: left;
-  box-shadow: 0 8px 18px rgb(18 29 52 / 6%);
+  box-shadow: 0 4px 12px rgb(18 29 52 / 4%);
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .mobile-measurement-card:hover,
 .mobile-measurement-card:focus-visible {
-  border-color: #9db7d6;
-  box-shadow: 0 12px 24px rgb(18 29 52 / 9%);
+  border-color: #b8c8da;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 7%);
   outline: none;
   transform: translateY(-1px);
 }
@@ -15379,10 +15379,14 @@ button.person-chip:focus-visible {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  line-height: 1.2;
 }
 
 .mobile-measurement-card .mobile-measurement-card-title {
   min-width: 0;
+  color: #172033;
+  font-size: 0.98rem;
+  font-weight: 820;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -15419,7 +15423,13 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
-.mobile-measurement-card .mobile-customer-email-status,
+.mobile-measurement-card .mobile-customer-email-status {
+  color: #7a8798;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
 .mobile-measurement-summary-card .mobile-customer-email-status {
   color: #64748b;
   font-size: 0.74rem;
@@ -15427,24 +15437,33 @@ button.person-chip:focus-visible {
   line-height: 1.25;
 }
 
-.mobile-measurement-card .mobile-customer-email-status.is-not-sent,
 .mobile-measurement-summary-card .mobile-customer-email-status.is-not-sent {
   color: #94a3b8;
 }
 
-.mobile-measurement-card .mobile-customer-email-status.is-signature-open,
+.mobile-measurement-card .mobile-customer-email-status.is-not-sent {
+  color: #a0a9b6;
+}
+
 .mobile-measurement-summary-card .mobile-customer-email-status.is-signature-open {
   color: #b7791f;
 }
 
-.mobile-measurement-card .mobile-customer-email-status.is-complete,
+.mobile-measurement-card .mobile-customer-email-status.is-signature-open {
+  color: #9a6a1c;
+}
+
 .mobile-measurement-summary-card .mobile-customer-email-status.is-complete {
   color: #2f6096;
 }
 
+.mobile-measurement-card .mobile-customer-email-status.is-complete {
+  color: #4f708f;
+}
+
 .mobile-measurement-card-date {
-  font-size: 0.84rem;
-  font-weight: 760;
+  font-size: 0.78rem;
+  font-weight: 620;
 }
 
 .mobile-measurement-row-position-wrap {
@@ -15493,6 +15512,7 @@ button.person-chip:focus-visible {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  line-height: 1.2;
 }
 
 .mobile-measurement-card-footer .mobile-measurement-card-date {
@@ -15503,9 +15523,9 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-card-hours {
-  color: #42526b;
-  font-size: 0.84rem;
-  font-weight: 850;
+  color: #5f6e82;
+  font-size: 0.78rem;
+  font-weight: 700;
   margin-left: auto;
   text-align: right;
   white-space: nowrap;
