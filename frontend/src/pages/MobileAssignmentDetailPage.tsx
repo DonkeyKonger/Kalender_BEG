@@ -3391,16 +3391,16 @@ function MobileMeasurementTab({
                   void loadBatchItems(batch);
                 }}
               >
+                <span className={`mobile-measurement-card-side-status measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <span className="mobile-measurement-card-head">
                   <strong className="mobile-measurement-card-title">{formatMobileMeasurementBatchTitle(batch, assignment.site.site_number)}</strong>
                   <span className="mobile-measurement-card-date">{displayDate}</span>
                 </span>
-                <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <MobileCustomerEmailStatus item={batch} />
-                {batch.created_by_name ? (
-                  <span className="mobile-measurement-card-date">Ersteller: {batch.created_by_name}</span>
-                ) : null}
-                <span className="mobile-measurement-card-hours">Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+                <span className="mobile-measurement-card-footer">
+                  <span className="mobile-measurement-card-date">{batch.created_by_name ? `Ersteller: ${batch.created_by_name}` : "Ohne Ersteller"}</span>
+                  <span className="mobile-measurement-card-hours">Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+                </span>
               </button>
             );
           })}
@@ -6025,7 +6025,7 @@ function MobileCustomerEmailStatus({ item }: { item: MobileCustomerEmailStatusIt
 function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { label: string; className: string } {
   if (!item.customer_email_sent_at) {
     return {
-      label: "📧 Nicht gesendet",
+      label: "Nicht gesendet",
       className: "is-not-sent",
     };
   }
@@ -6033,12 +6033,12 @@ function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { la
     || item.customer_email_signature_present === true;
   if (signaturePresent) {
     return {
-      label: "📧 Gesendet · Unterschrift erhalten",
+      label: "Gesendet · Unterschrift erhalten",
       className: "is-complete",
     };
   }
   return {
-    label: "📧 Gesendet · Unterschrift fehlt",
+    label: "Gesendet · Unterschrift fehlt",
     className: "is-signature-open",
   };
 }
