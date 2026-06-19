@@ -1965,9 +1965,8 @@ function ExtraWorkTab({
                     <div className="measurement-review-card-title-row">
                       <strong>{formatExtraWorkTicketTitle(ticket)}</strong>
                     </div>
-                    <small>{formatExtraWorkTicketMeta(ticket)}</small>
-                    <small>{formatExtraWorkTicketPeriod(ticket)}</small>
                     <CustomerEmailStatusLine item={ticket} />
+                    <small className="measurement-review-submitter-status">{formatExtraWorkTicketSubmitter(ticket)}</small>
                   </div>
                   <b>{formatExtraWorkTicketHours(ticket)}</b>
                 </button>
@@ -5158,16 +5157,10 @@ function formatExtraWorkTicketTitle(ticket: MobileExtraWorkTicket): string {
   return `Zusatzauftrag ${ticket.display_number}${suffix ? ` - ${suffix}` : ""}`;
 }
 
-function formatExtraWorkTicketMeta(ticket: MobileExtraWorkTicket): string {
-  const creator = ticket.created_by_name ? `Ersteller: ${ticket.created_by_name}` : "Ersteller: -";
-  const created = ticket.created_at ? `Angelegt: ${formatDateTime(ticket.created_at)}` : null;
-  const submitted = ticket.submitted_at ? `Eingereicht: ${formatDateTime(ticket.submitted_at)}` : null;
-  return [creator, created, submitted].filter(Boolean).join(" · ");
-}
-
-function formatExtraWorkTicketPeriod(ticket: MobileExtraWorkTicket): string {
-  const dateValue = ticket.submitted_at ?? ticket.created_at;
-  return dateValue ? `Leistungsdatum: ${formatIsoDateOnly(dateValue)}` : "Leistungsdatum: -";
+function formatExtraWorkTicketSubmitter(ticket: MobileExtraWorkTicket): string {
+  const submitter = ticket.created_by_name ? `Von ${ticket.created_by_name}` : "Ohne Einreicher";
+  const submittedAt = ticket.submitted_at ?? ticket.created_at;
+  return submittedAt ? `${submitter} · ${formatDateTime(submittedAt)}` : submitter;
 }
 
 function formatExtraWorkTicketHours(ticket: MobileExtraWorkTicket): string {
