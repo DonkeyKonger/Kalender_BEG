@@ -5122,7 +5122,7 @@ function CustomerEmailStatusLine({ item }: { item: CustomerEmailStatusItem }) {
 function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string; className: string } {
   if (!item.customer_email_sent_at) {
     return {
-      label: "📧 Nicht an Kunden gesendet",
+      label: "Nicht an Kunden gesendet",
       className: "is-not-sent",
     };
   }
@@ -5131,12 +5131,12 @@ function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string;
   const sentAt = formatCustomerEmailSentDate(item.customer_email_sent_at);
   if (signaturePresent) {
     return {
-      label: `📧 An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
+      label: `An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
       className: "is-complete",
     };
   }
   return {
-    label: `📧 An Kunden gesendet · Unterschrift fehlt · ${sentAt}`,
+    label: `An Kunden gesendet · Unterschrift fehlt · ${sentAt}`,
     className: "is-signature-open",
   };
 }
