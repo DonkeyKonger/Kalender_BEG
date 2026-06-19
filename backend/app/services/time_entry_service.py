@@ -139,6 +139,13 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def delete_entry(self, entry_id: int, current_user: User) -> None:
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        self._ensure_entry_can_be_deleted(entry)
+        self.db.delete(entry)
+        self.db.commit()
+
     def approve_time_review(self, entry_id: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
@@ -418,6 +425,22 @@ class TimeEntryService:
         if current_user.role in {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}:
             return
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Arbeitszeiten duerfen nur durch Buero oder Projektleitung geprueft werden.")
+
+    @staticmethod
+    def _ensure_entry_can_be_deleted(entry: WorkTimeEntry) -> None:
+        review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
+        if (
+            review_status != OPEN_TIME_REVIEW_STATUS
+            or getattr(entry, "status", None) == "reviewed"
+            or getattr(entry, "reviewed_by_user_id", None) is not None
+            or getattr(entry, "reviewed_at", None) is not None
+            or getattr(entry, "payroll_reviewed_by_user_id", None) is not None
+            or getattr(entry, "payroll_reviewed_at", None) is not None
+            or getattr(entry, "payroll_corrected_work_minutes", None) is not None
+            or getattr(entry, "payroll_corrected_start_time", None) is not None
+            or getattr(entry, "payroll_corrected_end_time", None) is not None
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Geprüfte Arbeitszeiten können nicht gelöscht werden.")
 
     @staticmethod
     def _ensure_valid_iso_week(iso_year: int, iso_week: int) -> None:

@@ -163,6 +163,64 @@ def test_set_payroll_time_correction_stores_office_checked_time():
     assert commits == [True]
 
 
+def test_delete_entry_removes_open_own_time_entry():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        status="submitted",
+        time_review_status="open",
+        reviewed_by_user_id=None,
+        reviewed_at=None,
+        payroll_reviewed_by_user_id=None,
+        payroll_reviewed_at=None,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_work_minutes=None,
+    )
+    deleted: list[object] = []
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        delete=lambda removed: deleted.append(removed),
+        commit=lambda: commits.append(True),
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.MONTEUR, person_id=4)
+
+    item.delete_entry(entry.id, current_user)
+
+    assert deleted == [entry]
+    assert commits == [True]
+
+
+def test_delete_entry_blocks_reviewed_time_entry():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        status="reviewed",
+        time_review_status="manually_approved",
+        reviewed_by_user_id=7,
+        reviewed_at=datetime(2026, 6, 1, 8, 0),
+        payroll_reviewed_by_user_id=None,
+        payroll_reviewed_at=None,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_work_minutes=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        delete=lambda removed: pytest.fail("Reviewed entries must not be deleted."),
+        commit=lambda: pytest.fail("Reviewed entries must not be committed."),
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.MONTEUR, person_id=4)
+
+    with pytest.raises(HTTPException) as error:
+        item.delete_entry(entry.id, current_user)
+
+    assert error.value.status_code == 409
+
+
 def test_mark_weekly_review_creates_person_week_status():
     added: list[TimeEntryWeeklyReview] = []
     commits: list[bool] = []

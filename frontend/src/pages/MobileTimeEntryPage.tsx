@@ -94,6 +94,8 @@ export function MobileTimeEntryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [entryActionError, setEntryActionError] = useState<string | null>(null);
+  const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
   const [timePickerTarget, setTimePickerTarget] = useState<TimePickerTarget | null>(null);
   const [timePickerDraftHour, setTimePickerDraftHour] = useState(7);
   const [timePickerDraftMinute, setTimePickerDraftMinute] = useState(0);
@@ -391,6 +393,7 @@ export function MobileTimeEntryPage() {
         ? await api.updateTimeEntry(targetEntryId, payload)
         : await api.createTimeEntry(payload);
       setEntries((currentEntries) => upsertEntry(currentEntries, savedEntry));
+      setEntryActionError(null);
       closeTimeEntrySheet();
     } catch (error) {
       const apiConflict = parseApiOverlapConflict(error, siteById);
@@ -401,6 +404,28 @@ export function MobileTimeEntryPage() {
       }
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function deleteEntry(entry: TimeEntry) {
+    if (deletingEntryId !== null) {
+      return;
+    }
+    if (!window.confirm("Zeiteintrag löschen?")) {
+      return;
+    }
+    setEntryActionError(null);
+    setDeletingEntryId(entry.id);
+    try {
+      await api.deleteTimeEntry(entry.id);
+      setEntries((currentEntries) => currentEntries.filter((currentEntry) => currentEntry.id !== entry.id));
+      if (editingEntryId === entry.id) {
+        closeTimeEntrySheet();
+      }
+    } catch (error) {
+      setEntryActionError(getErrorMessage(error, "Zeiteintrag konnte nicht gelöscht werden."));
+    } finally {
+      setDeletingEntryId(null);
     }
   }
 
@@ -617,21 +642,35 @@ export function MobileTimeEntryPage() {
                   <span>Heute erfasst</span>
                   <strong>{selectedDateEntries.length === 0 ? "0 Einträge · 0,0 h" : `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)}`}</strong>
                 </div>
+                {entryActionError ? <p className="form-error">{entryActionError}</p> : null}
                 {selectedDateEntries.length === 0 ? (
                   <p>Noch keine Zeit für diesen Tag erfasst.</p>
                 ) : (
                   <div className="mobile-time-entry-bubbles">
-                    {selectedDateEntries.map((entry) => (
-                      <button
-                        className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
-                        key={entry.id}
-                        type="button"
-                        onClick={() => editEntry(entry)}
-                      >
-                        <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-                        <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
-                      </button>
-                    ))}
+                    {selectedDateEntries.map((entry) => {
+                      const isDeleting = deletingEntryId === entry.id;
+                      return (
+                        <article
+                          className={classNames("mobile-time-entry-bubble", editingEntry?.id === entry.id && "is-editing")}
+                          key={entry.id}
+                        >
+                          <button className="mobile-time-entry-bubble-open" type="button" onClick={() => editEntry(entry)}>
+                            <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
+                            <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
+                          </button>
+                          <button
+                            aria-label={`${formatEntryBubbleTitle(entry, siteById)} löschen`}
+                            className="mobile-time-entry-delete"
+                            disabled={deletingEntryId !== null || isSaving}
+                            title="Zeiteintrag löschen"
+                            type="button"
+                            onClick={() => deleteEntry(entry)}
+                          >
+                            {isDeleting ? "..." : "×"}
+                          </button>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </section>

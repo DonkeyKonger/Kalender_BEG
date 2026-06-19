@@ -4821,20 +4821,35 @@ button.person-chip:focus-visible {
 
 .mobile-time-entry-bubble {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   border: 1px solid #d8e1ee;
   border-radius: 12px;
   background: #ffffff;
   color: #111827;
   font: inherit;
-  padding: 8px 10px;
+  padding: 0 4px 0 0;
   text-align: left;
 }
 
 .mobile-time-entry-bubble.is-editing {
   border-color: #143c6d;
   background: #f0f6ff;
+}
+
+.mobile-time-entry-bubble-open {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 10px;
+  text-align: left;
 }
 
 .mobile-time-entry-bubble strong,
@@ -4852,6 +4867,34 @@ button.person-chip:focus-visible {
   color: #536179;
   font-size: 0.76rem;
   font-weight: 750;
+}
+
+.mobile-time-entry-delete {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0;
+}
+
+.mobile-time-entry-delete:hover,
+.mobile-time-entry-delete:focus-visible {
+  color: #94a3b8;
+  outline: none;
+}
+
+.mobile-time-entry-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 @media (max-width: 430px) {

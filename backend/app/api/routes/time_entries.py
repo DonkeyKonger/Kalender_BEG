@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_roles
@@ -123,6 +123,15 @@ def update_time_entry(
 ) -> TimeEntryRead:
     entry = TimeEntryService(db).update_entry(entry_id, payload, current_user)
     return time_entry_read(entry)
+
+
+@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_time_entry(
+    entry_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> None:
+    TimeEntryService(db).delete_entry(entry_id, current_user)
 
 
 @router.post("/{entry_id}/review/approve", response_model=TimeEntryRead)

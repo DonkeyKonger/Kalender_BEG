@@ -493,6 +493,10 @@ export const api = {
     });
   },
 
+  async deleteTimeEntry(entryId: number): Promise<void> {
+    await request<void>(`/time-entries/${entryId}`, { method: "DELETE" });
+  },
+
   async approveTimeEntryReview(entryId: number): Promise<TimeEntry> {
     return request<TimeEntry>(`/time-entries/${entryId}/review/approve`, { method: "POST" });
   },
