@@ -8537,6 +8537,23 @@ button.person-chip:focus-visible {
   font-size: 0.88rem;
 }
 
+.measurement-review-card-main .measurement-review-email-status {
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.measurement-review-email-status.is-not-sent {
+  color: #94a3b8;
+}
+
+.measurement-review-email-status.is-signature-open {
+  color: #b7791f;
+}
+
+.measurement-review-email-status.is-complete {
+  color: #2f6096;
+}
+
 .measurement-review-detail {
   display: grid;
   gap: 12px;

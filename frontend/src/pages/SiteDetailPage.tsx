@@ -1967,6 +1967,7 @@ function ExtraWorkTab({
                     </div>
                     <small>{formatExtraWorkTicketMeta(ticket)}</small>
                     <small>{formatExtraWorkTicketPeriod(ticket)}</small>
+                    <CustomerEmailStatusLine item={ticket} />
                   </div>
                   <b>{formatExtraWorkTicketHours(ticket)}</b>
                 </button>
@@ -3558,6 +3559,7 @@ function MeasurementReviewPanel({
                       {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
                       {isOldOffer && batch.offer_name ? ` · ${batch.offer_name}` : ""}
                     </small>
+                    <CustomerEmailStatusLine item={batch} />
                   </div>
                   <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
                 </button>
@@ -5101,6 +5103,41 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
   return {
     label: labels[status] ?? status,
     className: ["measurement-status", "measurement-review-status-badge", `is-${status}`].join(" "),
+  };
+}
+
+type CustomerEmailStatusItem = {
+  customer_email_sent_at: string | null;
+  customer_email_signature_present: boolean | null;
+  customer_signed_at: string | null;
+  customer_signature_name?: string | null;
+  is_locked_for_worker?: boolean;
+};
+
+function CustomerEmailStatusLine({ item }: { item: CustomerEmailStatusItem }) {
+  const status = getCustomerEmailStatus(item);
+  return <small className={`measurement-review-email-status ${status.className}`}>{status.label}</small>;
+}
+
+function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string; className: string } {
+  if (!item.customer_email_sent_at) {
+    return {
+      label: "📧 Nicht an Kunden gesendet",
+      className: "is-not-sent",
+    };
+  }
+  const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
+    || item.customer_email_signature_present === true;
+  const sentAt = formatDateTime(item.customer_email_sent_at);
+  if (signaturePresent) {
+    return {
+      label: `📧 An Kunde gesendet · vollständig · ${sentAt}`,
+      className: "is-complete",
+    };
+  }
+  return {
+    label: `📧 An Kunde gesendet · Unterschrift offen · ${sentAt}`,
+    className: "is-signature-open",
   };
 }
 

@@ -274,6 +274,8 @@ export type MobileMeasurementBatch = {
   customer_signed_at: string | null;
   customer_signature_name: string | null;
   customer_signature_place: string | null;
+  customer_email_sent_at: string | null;
+  customer_email_signature_present: boolean | null;
   worker_signed_at: string | null;
   worker_signature_name: string | null;
   is_locked_for_worker: boolean;
@@ -318,6 +320,8 @@ export type MobileExtraWorkTicket = {
   customer_signature_name: string | null;
   customer_signature_place: string | null;
   customer_signed_at: string | null;
+  customer_email_sent_at: string | null;
+  customer_email_signature_present: boolean | null;
   worker_signature_name: string | null;
   worker_signed_at: string | null;
   entry_count: number;

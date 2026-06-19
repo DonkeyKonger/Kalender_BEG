@@ -19,7 +19,7 @@ from app.models.audit_log import AuditLog
 from app.models.assignment import Assignment
 from app.models.customer import Customer, CustomerContact
 from app.models.enums import UserRole
-from app.models.extra_work_ticket import ExtraWorkTicketPhoto
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
@@ -844,6 +844,42 @@ def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeyp
     assert deliveries[0]["content"] == b"%PDF-measurement"
     assert deliveries[0]["content_type"] == "application/pdf"
     assert audit_log.new_value_json["customer_signature_present"] is False
+
+
+def test_site_extra_work_tickets_include_customer_email_status():
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add(site)
+    db.commit()
+    ticket = ExtraWorkTicket(
+        site_id=site.id,
+        sequence_number=1,
+        display_number="8007.SZ01",
+        title="Hauptauftrag",
+        kind="billing",
+        status="submitted",
+    )
+    db.add(ticket)
+    db.commit()
+    db.add(
+        AuditLog(
+            user_id=None,
+            action="extra_work.email_sent",
+            entity_type="extra_work_ticket",
+            entity_id=ticket.id,
+            old_value_json=None,
+            new_value_json={
+                "recipients": ["kunde@example.de"],
+                "customer_signature_present": True,
+            },
+        )
+    )
+    db.commit()
+
+    [read_ticket] = ExtraWorkService(db).list_site_tickets(site.id)
+
+    assert read_ticket.customer_email_sent_at is not None
+    assert read_ticket.customer_email_signature_present is True
 
 
 def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():

@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.enums import UserRole
@@ -72,6 +73,8 @@ MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/heif": ".heif",
 }
 LOGGER = logging.getLogger(__name__)
+
+CustomerEmailStatus = tuple[datetime, bool | None]
 
 
 class MeasurementService:
@@ -194,7 +197,19 @@ class MeasurementService:
             ).all()
         )
         active_base_id = self._get_active_measurement_base_id(assignment.site_id)
-        return [self._build_mobile_batch(batch, active_base_id=active_base_id) for batch in batches]
+        customer_email_statuses = self._latest_customer_email_statuses(
+            entity_type="measurement_batch",
+            action="measurement.email_sent",
+            entity_ids=[batch.id for batch in batches],
+        )
+        return [
+            self._build_mobile_batch(
+                batch,
+                active_base_id=active_base_id,
+                customer_email_status=customer_email_statuses.get(batch.id),
+            )
+            for batch in batches
+        ]
 
     def create_mobile_batch(
         self, *, assignment_id: int, current_user: User
@@ -773,7 +788,19 @@ class MeasurementService:
                 statement.order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
-        return [self._build_mobile_batch(batch, active_base_id=active_base_id) for batch in batches]
+        customer_email_statuses = self._latest_customer_email_statuses(
+            entity_type="measurement_batch",
+            action="measurement.email_sent",
+            entity_ids=[batch.id for batch in batches],
+        )
+        return [
+            self._build_mobile_batch(
+                batch,
+                active_base_id=active_base_id,
+                customer_email_status=customer_email_statuses.get(batch.id),
+            )
+            for batch in batches
+        ]
 
     def list_site_batch_items(
         self, *, site_id: int, batch_id: int
@@ -1702,6 +1729,7 @@ class MeasurementService:
         self,
         batch: SiteMeasurementBatch,
         active_base_id: int | None = None,
+        customer_email_status: CustomerEmailStatus | None = None,
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
@@ -1739,6 +1767,12 @@ class MeasurementService:
             customer_signed_at=batch.customer_signed_at,
             customer_signature_name=batch.customer_signature_name,
             customer_signature_place=batch.customer_signature_place,
+            customer_email_sent_at=customer_email_status[0] if customer_email_status else None,
+            customer_email_signature_present=(
+                customer_email_status[1]
+                if customer_email_status and customer_email_status[1] is not None
+                else (batch.customer_signed_at is not None if customer_email_status else None)
+            ),
             worker_signed_at=batch.worker_signed_at,
             worker_signature_name=batch.worker_signature_name,
             is_locked_for_worker=batch.customer_signed_at is not None,
@@ -1754,6 +1788,38 @@ class MeasurementService:
                 )
             ) or 0,
         )
+
+    def _latest_customer_email_statuses(
+        self,
+        *,
+        entity_type: str,
+        action: str,
+        entity_ids: list[int],
+    ) -> dict[int, CustomerEmailStatus]:
+        if not entity_ids:
+            return {}
+        logs = list(
+            self.db.scalars(
+                select(AuditLog)
+                .where(
+                    AuditLog.action == action,
+                    AuditLog.entity_type == entity_type,
+                    AuditLog.entity_id.in_(entity_ids),
+                )
+                .order_by(AuditLog.entity_id, AuditLog.created_at.desc(), AuditLog.id.desc())
+            )
+        )
+        statuses: dict[int, CustomerEmailStatus] = {}
+        for log in logs:
+            if log.entity_id is None or log.entity_id in statuses:
+                continue
+            payload = log.new_value_json or {}
+            signature_present = payload.get("customer_signature_present")
+            statuses[log.entity_id] = (
+                log.created_at,
+                signature_present if isinstance(signature_present, bool) else None,
+            )
+        return statuses
 
     def _build_mobile_photo(self, photo: SiteMeasurementBatchPhoto) -> MobileMeasurementBatchPhotoRead:
         return MobileMeasurementBatchPhotoRead(

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.site import Site
 from app.models.user import User
@@ -50,6 +51,8 @@ EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES = {
 }
 LOGGER = logging.getLogger(__name__)
 
+CustomerEmailStatus = tuple[datetime, bool | None]
+
 
 class ExtraWorkService:
     def __init__(self, db: Session) -> None:
@@ -65,7 +68,14 @@ class ExtraWorkService:
                 .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
             ).all()
         )
-        return [self._build_ticket_read(ticket) for ticket in tickets]
+        customer_email_statuses = self._latest_customer_email_statuses([ticket.id for ticket in tickets])
+        return [
+            self._build_ticket_read(
+                ticket,
+                customer_email_status=customer_email_statuses.get(ticket.id),
+            )
+            for ticket in tickets
+        ]
 
     def create_site_ticket(
         self,
@@ -542,10 +552,47 @@ class ExtraWorkService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
 
-    def _build_ticket_read(self, ticket: ExtraWorkTicket) -> ExtraWorkTicketRead:
+    def _build_ticket_read(
+        self,
+        ticket: ExtraWorkTicket,
+        customer_email_status: CustomerEmailStatus | None = None,
+    ) -> ExtraWorkTicketRead:
         result = ExtraWorkTicketRead.model_validate(ticket)
         result.created_by_name = self._format_user_display_name(ticket.created_by)
+        if customer_email_status is not None:
+            result.customer_email_sent_at = customer_email_status[0]
+            result.customer_email_signature_present = (
+                customer_email_status[1]
+                if customer_email_status[1] is not None
+                else ticket.customer_signed_at is not None
+            )
         return result
+
+    def _latest_customer_email_statuses(self, ticket_ids: list[int]) -> dict[int, CustomerEmailStatus]:
+        if not ticket_ids:
+            return {}
+        logs = list(
+            self.db.scalars(
+                select(AuditLog)
+                .where(
+                    AuditLog.action == "extra_work.email_sent",
+                    AuditLog.entity_type == "extra_work_ticket",
+                    AuditLog.entity_id.in_(ticket_ids),
+                )
+                .order_by(AuditLog.entity_id, AuditLog.created_at.desc(), AuditLog.id.desc())
+            )
+        )
+        statuses: dict[int, CustomerEmailStatus] = {}
+        for log in logs:
+            if log.entity_id is None or log.entity_id in statuses:
+                continue
+            payload = log.new_value_json or {}
+            signature_present = payload.get("customer_signature_present")
+            statuses[log.entity_id] = (
+                log.created_at,
+                signature_present if isinstance(signature_present, bool) else None,
+            )
+        return statuses
 
     def _build_mobile_photo(self, photo: ExtraWorkTicketPhoto) -> ExtraWorkTicketPhotoRead:
         return ExtraWorkTicketPhotoRead(

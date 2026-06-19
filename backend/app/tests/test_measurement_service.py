@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.models import Base
+from app.models.audit_log import AuditLog
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.site import Site
 from app.models.site_measurement_item import (
@@ -1550,3 +1551,37 @@ def test_measurement_pdf_does_not_add_extra_customer_signature_notice_when_unsig
 
     assert "Name Auftraggeber (Kunde):" in pdf_text
     assert "Unterschrift Kunde / Auftraggeber" not in pdf_text
+
+
+def test_site_measurement_batches_include_customer_email_status():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="reviewed",
+    )
+    db.add(batch)
+    db.commit()
+    db.add(
+        AuditLog(
+            user_id=None,
+            action="measurement.email_sent",
+            entity_type="measurement_batch",
+            entity_id=batch.id,
+            old_value_json=None,
+            new_value_json={
+                "recipients": ["kunde@example.de"],
+                "customer_signature_present": False,
+            },
+        )
+    )
+    db.commit()
+
+    [read_batch] = MeasurementService(db).list_site_batches(site.id)
+
+    assert read_batch.customer_email_sent_at is not None
+    assert read_batch.customer_email_signature_present is False
