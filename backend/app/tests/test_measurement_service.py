@@ -1501,7 +1501,7 @@ def test_measurement_pdf_matrix_separates_original_and_checked_values():
     assert signed_checked_totals[item.id] == Decimal("12.00")
 
 
-def test_measurement_pdf_marks_empty_customer_signature_field():
+def test_measurement_pdf_does_not_add_extra_customer_signature_notice_when_unsigned():
     from io import BytesIO
 
     from pypdf import PdfReader
@@ -1548,5 +1548,5 @@ def test_measurement_pdf_marks_empty_customer_signature_field():
     )
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_content)).pages)
 
-    assert "Unterschrift Kunde / Auftraggeber" in pdf_text
-    assert "Ort / Datum" in pdf_text
+    assert "Name Auftraggeber (Kunde):" in pdf_text
+    assert "Unterschrift Kunde / Auftraggeber" not in pdf_text
