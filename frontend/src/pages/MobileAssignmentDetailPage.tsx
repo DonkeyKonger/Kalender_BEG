@@ -3381,7 +3381,7 @@ function MobileMeasurementTab({
             const displayDate = formatMobileMeasurementBatchDate(batch);
             return (
               <button
-                className={batch.is_current_offer ? "mobile-measurement-card is-document-card" : "mobile-measurement-card is-document-card is-old-offer"}
+                className={batch.is_current_offer ? "mobile-measurement-card is-document-card is-measurement-batch-card" : "mobile-measurement-card is-document-card is-measurement-batch-card is-old-offer"}
                 key={batch.id}
                 type="button"
                 onClick={() => {

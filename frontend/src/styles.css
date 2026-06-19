@@ -15478,6 +15478,10 @@ button.person-chip:focus-visible {
   margin-top: -1px;
 }
 
+.mobile-measurement-card.is-measurement-batch-card .mobile-measurement-card-head + .mobile-customer-email-status {
+  margin-top: -4px;
+}
+
 .mobile-measurement-summary-card .mobile-customer-email-status {
   color: #64748b;
   font-size: 0.74rem;
@@ -16962,23 +16966,27 @@ button.person-chip:focus-visible {
 }
 
 .mobile-batch-status-draft {
-  background: #eef2f7;
-  color: #42526b;
+  background: #f1f5f9;
+  color: #475569;
 }
 
-.mobile-batch-status-submitted,
+.mobile-batch-status-submitted {
+  background: #eaf2ff;
+  color: #1e4f8f;
+}
+
 .mobile-batch-status-signed {
-  background: #e8f1ff;
-  color: #1d4f91;
+  background: #e8f7fa;
+  color: #0f6f83;
 }
 
 .mobile-batch-status-signature-missing {
-  background: #fff3d8;
-  color: #8a4f00;
+  background: #fff7e8;
+  color: #8a5a1f;
 }
 
 .mobile-batch-status-reviewed {
-  background: #e4f7e9;
+  background: #eaf8ef;
   color: #166534;
 }
 
