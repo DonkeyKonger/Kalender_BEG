@@ -6038,7 +6038,7 @@ function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { la
     };
   }
   return {
-    label: "Gesendet · Unterschrift fehlt",
+    label: "Mail an Kunden gesendet",
     className: "is-signature-open",
   };
 }
