@@ -5136,7 +5136,7 @@ function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string;
     };
   }
   return {
-    label: `📧 An Kunde gesendet · Unterschrift offen · ${sentAt}`,
+    label: `📧 An Kunden gesendet · Unterschrift fehlt · ${sentAt}`,
     className: "is-signature-open",
   };
 }

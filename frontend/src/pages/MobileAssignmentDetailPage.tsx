@@ -6024,7 +6024,7 @@ function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { la
     };
   }
   return {
-    label: "📧 Gesendet · Unterschrift offen",
+    label: "📧 Gesendet · Unterschrift fehlt",
     className: "is-signature-open",
   };
 }
