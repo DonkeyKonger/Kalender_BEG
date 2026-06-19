@@ -8460,7 +8460,7 @@ button.person-chip:focus-visible {
 .measurement-review-pdf-action {
   min-height: 32px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 2px;
   background: #ffffff;
   color: #1e293b;
   cursor: pointer;
