@@ -3554,12 +3554,12 @@ function MeasurementReviewPanel({
                       <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
                       {isOldOffer ? <span className="measurement-status is-old-offer">Altes Angebot</span> : null}
                     </div>
+                    <CustomerEmailStatusLine item={batch} />
                     <small>
                       {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
                       {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
                       {isOldOffer && batch.offer_name ? ` · ${batch.offer_name}` : ""}
                     </small>
-                    <CustomerEmailStatusLine item={batch} />
                   </div>
                   <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
                 </button>
