@@ -8449,8 +8449,8 @@ button.person-chip:focus-visible {
   height: 100%;
   min-height: 26px;
   border: 0;
-  border-right: 1px solid #d8e1ec;
   padding-left: 6px;
+  padding-right: 4px;
   color: #aeb8c6;
 }
 
@@ -8475,7 +8475,6 @@ button.person-chip:focus-visible {
 
 .measurement-review-status-badge.has-delete-control .measurement-review-delete-action:hover,
 .measurement-review-status-badge.has-delete-control .measurement-review-delete-action:focus-visible {
-  border-right-color: #cbd5e1;
   background: #f1f5f9;
   color: #64748b;
 }
