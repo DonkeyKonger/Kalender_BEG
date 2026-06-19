@@ -5131,7 +5131,7 @@ function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string;
   const sentAt = formatDateTime(item.customer_email_sent_at);
   if (signaturePresent) {
     return {
-      label: `📧 An Kunde gesendet · vollständig · ${sentAt}`,
+      label: `📧 An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
       className: "is-complete",
     };
   }
