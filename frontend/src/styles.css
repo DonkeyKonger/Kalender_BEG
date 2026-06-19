@@ -7864,9 +7864,9 @@ button.person-chip:focus-visible {
   border-radius: 2px;
   background: #f8fafc;
   color: #334155;
-  padding: 0 12px 0 15px;
+  padding: 0 12px 0 18px;
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   overflow: hidden;
   text-align: center;
@@ -7880,8 +7880,8 @@ button.person-chip:focus-visible {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 3px;
-  background: #94a3b8;
+  width: 6px;
+  background: #64748b;
 }
 
 .measurement-status.is-draft {
@@ -17565,7 +17565,7 @@ button.person-chip:focus-visible {
 }
 
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-draft::before {
-  background: #94a3b8;
+  background: #64748b;
 }
 
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-review-required,
@@ -17589,7 +17589,7 @@ button.person-chip:focus-visible {
 }
 
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-reviewed::before {
-  background: #4f46e5;
+  background: #16a34a;
 }
 
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-signed-review,
