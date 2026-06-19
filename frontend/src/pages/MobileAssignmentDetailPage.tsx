@@ -653,7 +653,7 @@ function MobileExtraWorkTab({
             const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
             return (
               <button
-                className="mobile-measurement-card"
+                className="mobile-measurement-card is-document-card"
                 key={order.id}
                 type="button"
                 onClick={() => {
@@ -662,16 +662,15 @@ function MobileExtraWorkTab({
                   setMessage(null);
                 }}
               >
-                <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-                <span className="mobile-measurement-card-date">{formatMobileExtraWorkKindLabel(order.kind)}</span>
-                <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
-                <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
+                <span className={`mobile-measurement-card-side-status measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                <span className="mobile-measurement-card-head">
+                  <strong className="mobile-measurement-card-title">{formatMobileExtraWorkOrderTitle(order)}</strong>
+                  <span className="mobile-measurement-card-date">{formatMobileExtraWorkOrderDate(order)}</span>
+                </span>
                 <MobileCustomerEmailStatus item={order} />
-                {order.created_by_name ? (
-                  <span className="mobile-measurement-card-date">Ersteller: {order.created_by_name}</span>
-                ) : null}
-                <span className="mobile-measurement-card-meta">
-                  <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
+                <span className="mobile-measurement-card-footer">
+                  <span className="mobile-measurement-card-date">{order.created_by_name ? `Ersteller: ${order.created_by_name}` : "Ohne Ersteller"}</span>
+                  <span className="mobile-measurement-card-hours">Stunden: {formatExtraWorkHours(order.total_hours)}</span>
                 </span>
               </button>
             );
@@ -3382,7 +3381,7 @@ function MobileMeasurementTab({
             const displayDate = formatMobileMeasurementBatchDate(batch);
             return (
               <button
-                className={batch.is_current_offer ? "mobile-measurement-card" : "mobile-measurement-card is-old-offer"}
+                className={batch.is_current_offer ? "mobile-measurement-card is-document-card" : "mobile-measurement-card is-document-card is-old-offer"}
                 key={batch.id}
                 type="button"
                 onClick={() => {

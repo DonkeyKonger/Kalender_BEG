@@ -15330,6 +15330,10 @@ button.person-chip:focus-visible {
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
+.mobile-measurement-card.is-document-card {
+  gap: 2px;
+}
+
 .mobile-measurement-card:hover,
 .mobile-measurement-card:focus-visible {
   border-color: #b8c8da;
@@ -15428,6 +15432,10 @@ button.person-chip:focus-visible {
   font-size: 0.72rem;
   font-weight: 650;
   line-height: 1.2;
+}
+
+.mobile-measurement-card.is-document-card .mobile-measurement-card-head + .mobile-customer-email-status {
+  margin-top: -1px;
 }
 
 .mobile-measurement-summary-card .mobile-customer-email-status {
