@@ -3578,7 +3578,7 @@ function MeasurementBatchOverview({
           {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
         <button
-          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
+          className="mobile-measurement-overview-action"
           type="button"
           onClick={() => {
             setEmailSendError(null);
@@ -3590,7 +3590,7 @@ function MeasurementBatchOverview({
           <span>Kunden-E-Mail</span>
         </button>
         <button
-          className="mobile-measurement-overview-action"
+          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
           type="button"
           onClick={() => {
             setEmailSendError(null);
