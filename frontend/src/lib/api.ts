@@ -797,6 +797,12 @@ export const api = {
     return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/pdf`);
   },
 
+  async deleteSiteExtraWorkTicket(siteId: number, ticketId: number): Promise<void> {
+    await request<void>(`/sites/${siteId}/extra-work-tickets/${ticketId}`, {
+      method: "DELETE",
+    });
+  },
+
   async createSiteMeasurementEntry(
     siteId: number,
     batchId: number,

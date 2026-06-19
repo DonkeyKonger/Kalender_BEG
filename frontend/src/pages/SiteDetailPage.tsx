@@ -130,6 +130,7 @@ export function SiteDetailPage() {
   const [extraWorkLoaded, setExtraWorkLoaded] = useState(false);
   const [extraWorkError, setExtraWorkError] = useState<string | null>(null);
   const [extraWorkPdfAction, setExtraWorkPdfAction] = useState<string | null>(null);
+  const [deletingExtraWorkTicketId, setDeletingExtraWorkTicketId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -687,6 +688,30 @@ export function SiteDetailPage() {
     }
   }
 
+  async function deleteExtraWorkTicket(ticket: MobileExtraWorkTicket): Promise<void> {
+    if (!site || deletingExtraWorkTicketId !== null || extraWorkPdfAction) {
+      return;
+    }
+    const displayTitle = formatExtraWorkTicketTitle(ticket);
+    if (!window.confirm(`${displayTitle} wirklich löschen?`)) {
+      return;
+    }
+    if (!window.confirm("Endgültig löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.")) {
+      return;
+    }
+
+    setDeletingExtraWorkTicketId(ticket.id);
+    setExtraWorkError(null);
+    try {
+      await api.deleteSiteExtraWorkTicket(site.id, ticket.id);
+      setExtraWorkTickets((current) => current.filter((entry) => entry.id !== ticket.id));
+    } catch (requestError) {
+      setExtraWorkError(readApiError(requestError, "Zusatzauftrag konnte nicht gelöscht werden."));
+    } finally {
+      setDeletingExtraWorkTicketId(null);
+    }
+  }
+
 
   async function updateMeasurementBase(base: MeasurementBase, payload: MeasurementBaseUpdate): Promise<void> {
     if (!site || measurementImporting) {
@@ -1157,12 +1182,14 @@ export function SiteDetailPage() {
           isLoading={extraWorkLoading}
           error={extraWorkError}
           pdfAction={extraWorkPdfAction}
+          deletingTicketId={deletingExtraWorkTicketId}
           onRetry={() => {
             setExtraWorkLoaded(false);
             setExtraWorkError(null);
           }}
           onOpenPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "open")}
           onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
+          onDeleteTicket={(ticket) => void deleteExtraWorkTicket(ticket)}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -1859,18 +1886,22 @@ function ExtraWorkTab({
   isLoading,
   error,
   pdfAction,
+  deletingTicketId,
   onRetry,
   onOpenPdf,
   onDownloadPdf,
+  onDeleteTicket,
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
   isLoading: boolean;
   error: string | null;
   pdfAction: string | null;
+  deletingTicketId: number | null;
   onRetry: () => void;
   onOpenPdf: (ticket: MobileExtraWorkTicket) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
+  onDeleteTicket: (ticket: MobileExtraWorkTicket) => void;
 }) {
   const sortedTickets = useMemo(
     () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
@@ -1904,19 +1935,32 @@ function ExtraWorkTab({
             const isOpeningPdf = pdfAction === openActionKey;
             const isDownloadingPdf = pdfAction === downloadActionKey;
             const isPdfBusy = isOpeningPdf || isDownloadingPdf;
+            const isDeleting = deletingTicketId === ticket.id;
             return (
               <div
                 key={ticket.id}
-                className={`measurement-review-card project-extra-work-card${ticket.status === "submitted" ? " is-submitted" : ""}`}
+                className={`measurement-review-card project-extra-work-card has-delete-action${ticket.status === "submitted" ? " is-submitted" : ""}`}
               >
+                <div className="measurement-review-card-controls">
+                  <button
+                    type="button"
+                    className="measurement-review-delete-action"
+                    disabled={deletingTicketId !== null || isPdfBusy}
+                    title="Zusatzauftrag löschen"
+                    aria-label={`${formatExtraWorkTicketTitle(ticket)} löschen`}
+                    onClick={() => onDeleteTicket(ticket)}
+                  >
+                    {isDeleting ? "..." : "×"}
+                  </button>
+                  <span className={statusBadge.className}>
+                    {statusBadge.label}
+                  </span>
+                </div>
                 <button
                   type="button"
                   className="measurement-review-card-open"
                   onClick={() => onOpenPdf(ticket)}
                 >
-                  <span className={statusBadge.className}>
-                    {statusBadge.label}
-                  </span>
                   <div className="measurement-review-card-main">
                     <div className="measurement-review-card-title-row">
                       <strong>{formatExtraWorkTicketTitle(ticket)}</strong>

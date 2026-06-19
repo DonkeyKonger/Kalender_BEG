@@ -468,6 +468,20 @@ def create_extra_work_ticket(
     )
 
 
+@router.delete("/{site_id}/extra-work-tickets/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_extra_work_ticket(
+    site_id: int,
+    ticket_id: int,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> None:
+    ExtraWorkService(db).delete_site_ticket(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+    )
+
+
 @router.get("/{site_id}/extra-work-tickets/{ticket_id}/pdf")
 def download_extra_work_ticket_pdf(
     site_id: int,

@@ -98,6 +98,21 @@ class ExtraWorkService:
         self.db.refresh(ticket)
         return self._build_ticket_read(ticket)
 
+    def delete_site_ticket(self, *, site_id: int, ticket_id: int, current_user: User) -> None:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(ticket_id, site_id)
+        storage_service = ProjectStorageService() if ticket.photos else None
+        for photo in list(ticket.photos):
+            if storage_service is None:
+                continue
+            storage_service.delete_file_from_folder(
+                drive_id=photo.external_drive_id,
+                folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+                item_id=photo.external_item_id,
+            )
+        self.db.delete(ticket)
+        self.db.commit()
+
     def list_mobile_tickets(
         self,
         *,
@@ -511,7 +526,10 @@ class ExtraWorkService:
     def _get_ticket_for_site(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
         ticket = self.db.scalar(
             select(ExtraWorkTicket)
-            .options(selectinload(ExtraWorkTicket.created_by).selectinload(User.person))
+            .options(
+                selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
+                selectinload(ExtraWorkTicket.photos),
+            )
             .where(
                 ExtraWorkTicket.id == ticket_id,
                 ExtraWorkTicket.site_id == site_id,

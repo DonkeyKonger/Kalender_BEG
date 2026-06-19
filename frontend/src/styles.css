@@ -17143,12 +17143,21 @@ button.person-chip:focus-visible {
   align-items: center;
 }
 
+.site-detail-page.is-project-file-workspace .project-extra-work-card.has-delete-action {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-card-open {
   grid-template-columns: 152px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-height: 74px;
   padding: 12px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-card.has-delete-action .measurement-review-card-open {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-card .measurement-review-card-main {

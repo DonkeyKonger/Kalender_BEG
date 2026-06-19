@@ -193,6 +193,31 @@ def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submit
     assert other_tickets == []
 
 
+def test_site_extra_work_ticket_can_be_deleted():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    service.delete_site_ticket(site_id=site.id, ticket_id=ticket.id, current_user=current_user)
+
+    assert db.get(extra_work_module.ExtraWorkTicket, ticket.id) is None
+    assert service.list_site_tickets(site.id) == []
+
+
 def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval():
     db = db_session()
     person = Person(
