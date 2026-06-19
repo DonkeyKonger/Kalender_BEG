@@ -6011,40 +6011,22 @@ function MobileCustomerEmailStatus({ item }: { item: MobileCustomerEmailStatusIt
 function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { label: string; className: string } {
   if (!item.customer_email_sent_at) {
     return {
-      label: "📧 Nicht an Kunden gesendet",
+      label: "📧 Nicht gesendet",
       className: "is-not-sent",
     };
   }
   const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
     || item.customer_email_signature_present === true;
-  const sentAt = formatCompactDateTimeLabel(item.customer_email_sent_at);
   if (signaturePresent) {
     return {
-      label: `📧 An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
+      label: "📧 Gesendet · Unterschrift erhalten",
       className: "is-complete",
     };
   }
   return {
-    label: `📧 An Kunde gesendet · Unterschrift offen · ${sentAt}`,
+    label: "📧 Gesendet · Unterschrift offen",
     className: "is-signature-open",
   };
-}
-
-function formatCompactDateTimeLabel(value: string | null | undefined): string {
-  if (!value) {
-    return "-";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "-";
-  }
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(parsed).replace(",", " ·");
 }
 
 function getDocumentEmailSendHint({
