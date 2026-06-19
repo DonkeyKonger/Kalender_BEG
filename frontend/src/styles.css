@@ -16989,6 +16989,11 @@ button.person-chip:focus-visible {
   color: #166534;
 }
 
+.mobile-batch-status-closed {
+  background: #1f2937;
+  color: #f8fafc;
+}
+
 .mobile-status-submitted,
 .mobile-status-in_review {
   background: #fff4de;

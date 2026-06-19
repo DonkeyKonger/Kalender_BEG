@@ -6328,6 +6328,9 @@ function getMobileMeasurementPdfFilename(batch: MobileMeasurementBatch): string 
 
 function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { label: string; className: string } {
   const status = batch.status.toLowerCase();
+  if (isClosedMobileMeasurementBatchStatus(status)) {
+    return { label: "Geschlossen", className: "mobile-batch-status-closed" };
+  }
   if (isReviewedMobileMeasurementBatchStatus(status)) {
     return { label: "Geprüft", className: "mobile-batch-status-reviewed" };
   }
@@ -6475,6 +6478,10 @@ async function prepareMeasurementPhotoFile(file: File): Promise<File> {
 
 function isReviewedMobileMeasurementBatchStatus(status: string): boolean {
   return ["approved", "billed", "reviewed", "checked", "closed"].includes(status);
+}
+
+function isClosedMobileMeasurementBatchStatus(status: string): boolean {
+  return ["approved", "billed", "checked", "closed"].includes(status);
 }
 
 function isSubmittedMobileMeasurementBatchStatus(status: string): boolean {
