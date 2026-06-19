@@ -3392,18 +3392,15 @@ function MobileMeasurementTab({
                 }}
               >
                 <span className="mobile-measurement-card-head">
-                  <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                  <strong className="mobile-measurement-card-title">{formatMobileMeasurementBatchTitle(batch, assignment.site.site_number)}</strong>
                   <span className="mobile-measurement-card-date">{displayDate}</span>
                 </span>
-                <strong>{formatMobileMeasurementBatchTitle(batch, assignment.site.site_number)}</strong>
+                <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <MobileCustomerEmailStatus item={batch} />
                 {batch.created_by_name ? (
                   <span className="mobile-measurement-card-date">Ersteller: {batch.created_by_name}</span>
                 ) : null}
-                <span className="mobile-measurement-card-meta">
-                  <span>Positionen: {batch.position_count}</span>
-                  <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
-                </span>
+                <span className="mobile-measurement-card-hours">Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
               </button>
             );
           })}

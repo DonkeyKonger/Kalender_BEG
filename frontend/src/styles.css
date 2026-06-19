@@ -15366,9 +15366,16 @@ button.person-chip:focus-visible {
   min-width: 0;
 }
 
-.mobile-measurement-card-head .measurement-status {
-  max-width: 56%;
+.mobile-measurement-card .mobile-measurement-card-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-measurement-card > .measurement-status {
   justify-content: center;
+  width: 116px;
   white-space: nowrap;
 }
 
@@ -15442,6 +15449,15 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-card-meta span:last-child {
   margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mobile-measurement-card-hours {
+  justify-self: end;
+  color: #42526b;
+  font-size: 0.84rem;
+  font-weight: 850;
   text-align: right;
   white-space: nowrap;
 }
