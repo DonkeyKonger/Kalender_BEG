@@ -8537,9 +8537,15 @@ button.person-chip:focus-visible {
   font-size: 0.88rem;
 }
 
-.measurement-review-card-main .measurement-review-email-status {
+.measurement-review-card-main .measurement-review-email-status,
+.measurement-review-card-main .measurement-review-submitter-status {
   font-size: 0.78rem;
   font-weight: 760;
+  line-height: 1.25;
+}
+
+.measurement-review-card-main .measurement-review-submitter-status {
+  color: #64748b;
 }
 
 .measurement-review-email-status.is-not-sent {
