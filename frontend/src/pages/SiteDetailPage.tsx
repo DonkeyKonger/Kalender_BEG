@@ -1942,18 +1942,18 @@ function ExtraWorkTab({
                 className={`measurement-review-card project-extra-work-card has-delete-action${ticket.status === "submitted" ? " is-submitted" : ""}`}
               >
                 <div className="measurement-review-card-controls">
-                  <button
-                    type="button"
-                    className="measurement-review-delete-action"
-                    disabled={deletingTicketId !== null || isPdfBusy}
-                    title="Zusatzauftrag löschen"
-                    aria-label={`${formatExtraWorkTicketTitle(ticket)} löschen`}
-                    onClick={() => onDeleteTicket(ticket)}
-                  >
-                    {isDeleting ? "..." : "×"}
-                  </button>
-                  <span className={statusBadge.className}>
-                    {statusBadge.label}
+                  <span className={`${statusBadge.className} has-delete-control`}>
+                    <button
+                      type="button"
+                      className="measurement-review-delete-action"
+                      disabled={deletingTicketId !== null || isPdfBusy}
+                      title="Zusatzauftrag löschen"
+                      aria-label={`${formatExtraWorkTicketTitle(ticket)} löschen`}
+                      onClick={() => onDeleteTicket(ticket)}
+                    >
+                      {isDeleting ? "..." : "×"}
+                    </button>
+                    <span className="measurement-review-status-label">{statusBadge.label}</span>
                   </span>
                 </div>
                 <button
@@ -5097,6 +5097,9 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
     return { label: "Eingereicht", className: "measurement-status measurement-review-status-badge is-review-required" };
   }
   const labels: Record<string, string> = {
+    approved: "Abgeschlossen",
+    billed: "Abgeschlossen",
+    closed: "Abgeschlossen",
     draft: "Entwurf",
   };
   return {
