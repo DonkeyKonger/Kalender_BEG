@@ -3391,9 +3391,11 @@ function MobileMeasurementTab({
                   void loadBatchItems(batch);
                 }}
               >
-                <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                <span className="mobile-measurement-card-head">
+                  <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+                  <span className="mobile-measurement-card-date">{displayDate}</span>
+                </span>
                 <strong>{formatMobileMeasurementBatchTitle(batch, assignment.site.site_number)}</strong>
-                <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
                 <MobileCustomerEmailStatus item={batch} />
                 {batch.created_by_name ? (
                   <span className="mobile-measurement-card-date">Ersteller: {batch.created_by_name}</span>

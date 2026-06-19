@@ -15352,6 +15352,26 @@ button.person-chip:focus-visible {
   color: #65738a;
 }
 
+.mobile-measurement-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mobile-measurement-card-head .measurement-status {
+  max-width: 56%;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.mobile-measurement-card-head .mobile-measurement-card-date {
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .mobile-measurement-card .mobile-customer-email-status,
 .mobile-measurement-summary-card .mobile-customer-email-status {
   color: #64748b;
