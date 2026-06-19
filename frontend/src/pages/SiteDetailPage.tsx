@@ -2417,6 +2417,7 @@ function MeasurementTimesheetPanel({
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const tableScrollFrameRef = useRef<number | null>(null);
   const tableRenderStartedAtRef = useRef<number | null>(null);
+  const tableResetKeyRef = useRef<string | null>(null);
 
   const updateTableViewport = useCallback(() => {
     const element = tableWrapRef.current;
@@ -2539,17 +2540,27 @@ function MeasurementTimesheetPanel({
     return rows;
   }, [activeFilter, deferredSearchTerm, projectPositionRows]);
 
+  const tableResetKey = useMemo(
+    () => `${activeFilter}\u0000${deferredSearchTerm.trim().toLocaleLowerCase("de-DE")}`,
+    [activeFilter, deferredSearchTerm],
+  );
+
   useEffect(() => {
     const rowCount = filteredProjectPositionRows.length;
+    const shouldResetScroll = tableResetKeyRef.current !== tableResetKey;
+    tableResetKeyRef.current = tableResetKey;
     tableRenderStartedAtRef.current = startMeasurementTimesheetPerformanceTiming();
-    setIsTableRenderReady(false);
-    if (tableWrapRef.current) {
-      tableWrapRef.current.scrollTop = 0;
+
+    if (shouldResetScroll) {
+      setIsTableRenderReady(false);
+      if (tableWrapRef.current) {
+        tableWrapRef.current.scrollTop = 0;
+      }
+      setTableViewport((currentViewport) => ({
+        firstVisibleRow: 0,
+        height: currentViewport.height || MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT,
+      }));
     }
-    setTableViewport((currentViewport) => ({
-      firstVisibleRow: 0,
-      height: currentViewport.height || MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT,
-    }));
 
     if (rowCount === 0) {
       setIsTableRenderReady(true);
@@ -2557,13 +2568,21 @@ function MeasurementTimesheetPanel({
     }
 
     const frameId = window.requestAnimationFrame(() => {
+      if (!shouldResetScroll) {
+        const element = tableWrapRef.current;
+        if (element) {
+          const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+          element.scrollTop = Math.min(element.scrollTop, maxScrollTop);
+        }
+        updateTableViewport();
+      }
       setIsTableRenderReady(true);
     });
 
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [filteredProjectPositionRows]);
+  }, [filteredProjectPositionRows, tableResetKey, updateTableViewport]);
 
   useEffect(() => {
     const element = tableWrapRef.current;
