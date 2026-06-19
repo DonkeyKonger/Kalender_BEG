@@ -1406,9 +1406,14 @@ export function MatrixPage() {
       const updated = await api.updateSite(siteId, { status });
       setError(null);
       updateMatrixSiteStatus(updated.id, updated.status);
-      if (updated.status === "completed" || updated.status === "deleted") {
-        void loadMatrix();
-      }
+      setSiteInfoDrafts((current) => {
+        if (isMatrixVisibleSiteStatus(updated.status)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[updated.id];
+        return next;
+      });
     } catch (requestError) {
       setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
     } finally {
@@ -1434,6 +1439,12 @@ export function MatrixPage() {
     setMatrix((current) => {
       if (!current) {
         return current;
+      }
+      if (!isMatrixVisibleSiteStatus(status)) {
+        return {
+          ...current,
+          rows: current.rows.filter((row) => row.site.id !== siteId),
+        };
       }
       return {
         ...current,
@@ -2657,6 +2668,11 @@ const FIXED_MATRIX_COLUMNS_WIDTH = 614;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "planned", "completed", "deleted"];
+
+function isMatrixVisibleSiteStatus(status: SiteStatus): boolean {
+  return status !== "completed" && status !== "deleted";
+}
+
 type ProjectManagerOption = {
   id: number;
   name: string;
