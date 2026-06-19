@@ -1047,7 +1047,7 @@ button:disabled {
 .matrix-site-missing-address,
 .matrix-site-compact-meta.is-missing-address {
   color: #b42318;
-  font-weight: 800;
+  font-weight: 400;
 }
 
 .matrix-site-location,
