@@ -3070,6 +3070,7 @@ function MobileMeasurementTab({
     return (
       <MeasurementDetail
         batch={selectedBatch}
+        siteNumber={assignment.site.site_number}
         item={selectedItem}
         allItems={items}
         isSaving={isSaving}
@@ -3141,6 +3142,7 @@ function MobileMeasurementTab({
           <MeasurementPhotoGallery
             assignmentId={assignment.id}
             batch={photoGalleryBatch}
+            siteNumber={assignment.site.site_number}
             isUploadingPhoto={isUploadingPhoto}
             refreshKey={photoGalleryVersion}
             onBack={() => setPhotoGalleryBatch(null)}
@@ -3164,6 +3166,7 @@ function MobileMeasurementTab({
         <MeasurementBatchOverview
           assignmentId={assignment.id}
           batch={selectedBatch}
+          siteNumber={assignment.site.site_number}
           error={error}
           isSaving={isSaving}
           isOpeningPdf={isOpeningPdf}
@@ -3205,6 +3208,7 @@ function MobileMeasurementTab({
           <CustomerSignatureOverlay
             assignmentId={assignment.id}
             batch={signatureBatch}
+            siteNumber={assignment.site.site_number}
             signaturePlace={formatMobileSignatureLocation(assignment.site)}
             onClose={() => setSignatureBatch(null)}
             onSigned={mergeUpdatedBatch}
@@ -3214,6 +3218,7 @@ function MobileMeasurementTab({
           <WorkerSignatureOverlay
             assignmentId={assignment.id}
             batch={workerSignatureBatch}
+            siteNumber={assignment.site.site_number}
             workerName={assignment.person.display_name}
             onClose={() => setWorkerSignatureBatch(null)}
             onSigned={(updatedBatch) => {
@@ -3387,7 +3392,7 @@ function MobileMeasurementTab({
                 }}
               >
                 <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-                <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
+                <strong>{formatMobileMeasurementBatchTitle(batch, assignment.site.site_number)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
                 <MobileCustomerEmailStatus item={batch} />
                 {batch.created_by_name ? (
@@ -3409,6 +3414,7 @@ function MobileMeasurementTab({
 function MeasurementBatchOverview({
   assignmentId,
   batch,
+  siteNumber,
   error,
   isSaving,
   isOpeningPdf,
@@ -3430,6 +3436,7 @@ function MeasurementBatchOverview({
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
+  siteNumber: string | null;
   error: string | null;
   isSaving: boolean;
   isOpeningPdf: boolean;
@@ -3541,7 +3548,7 @@ function MeasurementBatchOverview({
 
       <div className="mobile-measurement-summary-card">
         <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-        <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
+        <h2>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</h2>
         <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
         <MobileCustomerEmailStatus item={batch} />
         <span className="mobile-measurement-card-meta">
@@ -3665,6 +3672,7 @@ type MeasurementPhotoPreview = {
 function MeasurementPhotoGallery({
   assignmentId,
   batch,
+  siteNumber,
   refreshKey,
   isUploadingPhoto,
   onBack,
@@ -3674,6 +3682,7 @@ function MeasurementPhotoGallery({
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
+  siteNumber: string | null;
   refreshKey: number;
   isUploadingPhoto: boolean;
   onBack: () => void;
@@ -3775,7 +3784,7 @@ function MeasurementPhotoGallery({
 
       <header className="mobile-measurement-photo-gallery-head">
         <h2>Hinterlegte Fotos</h2>
-        <p>{formatMobileMeasurementBatchTitle(batch)}</p>
+        <p>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</p>
       </header>
 
       {photoError ? <div className="form-error">{photoError}</div> : null}
@@ -4769,6 +4778,7 @@ function MeasurementTableFixedKeypad({
 
 function MeasurementDetail({
   batch,
+  siteNumber,
   item,
   allItems,
   isSaving,
@@ -4783,6 +4793,7 @@ function MeasurementDetail({
   onSave,
 }: {
   batch: MobileMeasurementBatch;
+  siteNumber: string | null;
   item: MobileMeasurementItem;
   allItems: MobileMeasurementItem[];
   isSaving: boolean;
@@ -4914,7 +4925,7 @@ function MeasurementDetail({
       <details className="mobile-measurement-secondary-details">
         <summary>Details anzeigen</summary>
         <div className="mobile-measurement-detail-grid">
-          <span>Aufmaßnummer <strong>Aufmaß {batch.number}</strong></span>
+          <span>Aufmaßnummer <strong>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</strong></span>
           <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
           <span>Menge laut Angebot <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
           <span>Menge nach Aufmaß <strong>{formatMeasurementNumber(measuredQuantity)}</strong></span>
@@ -5246,12 +5257,14 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
 function CustomerSignatureOverlay({
   assignmentId,
   batch,
+  siteNumber,
   signaturePlace,
   onClose,
   onSigned,
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
+  siteNumber: string | null;
   signaturePlace: string;
   onClose: () => void;
   onSigned: (batch: MobileMeasurementBatch) => void;
@@ -5369,7 +5382,7 @@ function CustomerSignatureOverlay({
           <span>Zurück</span>
         </button>
         <div className="mobile-customer-signature-title">
-          <strong>{formatMobileMeasurementBatchTitle(activeBatch)}</strong>
+          <strong>{formatMobileMeasurementBatchTitle(activeBatch, siteNumber)}</strong>
           <span>{isSigned ? "Kundenunterschrift gespeichert" : "PDF prüfen und unterschreiben"}</span>
         </div>
         <button
@@ -5465,12 +5478,14 @@ function CustomerSignatureOverlay({
 function WorkerSignatureOverlay({
   assignmentId,
   batch,
+  siteNumber,
   workerName,
   onClose,
   onSigned,
 }: {
   assignmentId: number;
   batch: MobileMeasurementBatch;
+  siteNumber: string | null;
   workerName: string;
   onClose: () => void;
   onSigned: (batch: MobileMeasurementBatch) => void;
@@ -5538,7 +5553,7 @@ function WorkerSignatureOverlay({
       >
         <div className="mobile-project-email-dialog-head">
           <h2 id="mobile-measurement-worker-signature-dialog-title">Monteursunterschrift</h2>
-          <p>{formatMobileMeasurementBatchTitle(batch)}</p>
+          <p>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</p>
         </div>
         <section className="mobile-worker-signature-card" aria-label="Monteursunterschrift erfassen">
           <label>
@@ -6274,10 +6289,12 @@ function sortMobileMeasurementBatches(batches: MobileMeasurementBatch[]): Mobile
   });
 }
 
-function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch): string {
-  const title = batch.title?.trim() || `Aufmaß ${batch.number}`;
-  const offerName = batch.offer_name?.trim() || batch.measurement_base_name?.trim() || "Angebot ohne Namen";
-  return `${title} - ${offerName}`;
+function formatMobileMeasurementBatchTitle(batch: MobileMeasurementBatch, siteNumber?: string | null): string {
+  const cleanSiteNumber = siteNumber?.trim();
+  if (cleanSiteNumber) {
+    return `Aufmaß ${cleanSiteNumber}.${String(batch.number).padStart(2, "0")}`;
+  }
+  return batch.title?.trim() || `Aufmaß ${String(batch.number).padStart(2, "0")}`;
 }
 
 function formatMobileSignatureLocation(site: MobileAssignment["site"]): string {
