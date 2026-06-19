@@ -15509,6 +15509,18 @@ button.person-chip:focus-visible {
   font-weight: 760;
 }
 
+.mobile-project-email-warning {
+  margin: 0;
+  border: 1px solid #f3c46f;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #92400e;
+  font-size: 0.82rem;
+  font-weight: 780;
+  line-height: 1.35;
+  padding: 10px 11px;
+}
+
 .mobile-project-email-list {
   display: grid;
   gap: 8px;
@@ -15809,6 +15821,17 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-overview-action.is-complete:disabled svg {
   color: #2d5d8f;
+}
+
+.mobile-measurement-overview-action.is-warning {
+  border-color: #d98a1f;
+  background: #fffaf0;
+  color: #92400e;
+  box-shadow: inset 0 0 0 1px rgb(217 138 31 / 22%), 0 10px 22px rgb(18 29 52 / 7%);
+}
+
+.mobile-measurement-overview-action.is-warning svg {
+  color: #d98a1f;
 }
 
 .mobile-measurement-overview-action .mobile-action-status-icon {

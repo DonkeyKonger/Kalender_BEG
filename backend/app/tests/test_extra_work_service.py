@@ -24,6 +24,7 @@ from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkSignaturePoint,
@@ -704,6 +705,77 @@ def test_mobile_extra_work_email_send_delivers_pdf_and_records_audit(monkeypatch
     assert audit_log.entity_type == "extra_work_ticket"
     assert audit_log.entity_id == ticket.id
     assert audit_log.new_value_json["recipients"] == ["kunde@example.de"]
+
+
+def test_mobile_measurement_email_send_allows_missing_customer_signature(monkeypatch):
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    measurement_base = SiteMeasurementBase(site_id=site.id, name="Aufmaßblatt Bestand")
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 6, 11), end_date=date(2026, 6, 11))
+    batch = SiteMeasurementBatch(
+        site_id=site.id,
+        measurement_base=measurement_base,
+        number=1,
+        title="Aufmaß 8007.01",
+        status="reviewed",
+        worker_signature_name="Max Monteur",
+        worker_signature_strokes=[[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]],
+        worker_signed_at=datetime(2026, 6, 11, tzinfo=UTC),
+    )
+    db.add_all([
+        measurement_base,
+        assignment,
+        batch,
+        SiteEmailRecipient(
+            site_id=site.id,
+            email="kunde@example.de",
+            label="Kunde",
+            source="manual",
+            is_selected=True,
+        ),
+    ])
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    deliveries = []
+
+    class FakePdfService:
+        def __init__(self, db):
+            self.db = db
+
+        def build_batch_pdf(self, *, site_id, batch_id, mode):
+            return b"%PDF-measurement", "Aufmass_geprueft_8007.01.pdf"
+
+    class FakeEmailDeliveryService:
+        def send_document_email(self, *, recipients, subject, body, attachment):
+            deliveries.append({
+                "recipients": recipients,
+                "subject": subject,
+                "filename": attachment.filename,
+                "content": attachment.content,
+                "content_type": attachment.content_type,
+            })
+
+    monkeypatch.setattr(extra_work_email_module, "MeasurementPdfService", FakePdfService)
+    monkeypatch.setattr(extra_work_email_module, "EmailDeliveryService", FakeEmailDeliveryService)
+
+    result = ExtraWorkEmailService(db).send_mobile_measurement_batch_email(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=current_user,
+    )
+
+    db.refresh(batch)
+    audit_log = db.query(AuditLog).filter_by(action="measurement.email_sent").one()
+    assert batch.customer_signed_at is None
+    assert result.recipients == ["kunde@example.de"]
+    assert result.filename == "Aufmass_geprueft_8007.01.pdf"
+    assert deliveries[0]["recipients"] == ["kunde@example.de"]
+    assert deliveries[0]["content"] == b"%PDF-measurement"
+    assert deliveries[0]["content_type"] == "application/pdf"
+    assert audit_log.new_value_json["customer_signature_present"] is False
 
 
 def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():

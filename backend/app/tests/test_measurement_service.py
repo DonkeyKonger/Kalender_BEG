@@ -1499,3 +1499,54 @@ def test_measurement_pdf_matrix_separates_original_and_checked_values():
     assert signed_checked_cell.original_quantity == Decimal("10.00")
     assert signed_checked_cell.is_corrected is True
     assert signed_checked_totals[item.id] == Decimal("12.00")
+
+
+def test_measurement_pdf_marks_empty_customer_signature_field():
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="reviewed",
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("12.00"),
+        area_or_comment="EG",
+        status="submitted",
+    )
+    db.add_all([item, batch, entry])
+    db.commit()
+
+    pdf_content, _filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=site.id,
+        batch_id=batch.id,
+        mode="checked",
+    )
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_content)).pages)
+
+    assert "Unterschrift Kunde / Auftraggeber" in pdf_text
+    assert "Ort / Datum" in pdf_text

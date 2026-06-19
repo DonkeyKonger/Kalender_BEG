@@ -1083,6 +1083,7 @@ function DocumentEmailSendDialog({
   filename,
   isSending,
   error,
+  warning,
   onClose,
   onConfirm,
 }: {
@@ -1092,6 +1093,7 @@ function DocumentEmailSendDialog({
   filename: string;
   isSending: boolean;
   error: string | null;
+  warning?: string | null;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -1108,6 +1110,8 @@ function DocumentEmailSendDialog({
           <h2 id="mobile-extra-work-email-send-title">{title}</h2>
           <p>{description}</p>
         </div>
+
+        {warning ? <p className="mobile-project-email-warning">{warning}</p> : null}
 
         <div className="mobile-project-email-list">
           <div className="mobile-project-email-option is-static">
@@ -3454,12 +3458,14 @@ function MeasurementBatchOverview({
   const hasCustomerSignature = Boolean(batch.customer_signed_at);
   const hasWorkerSignature = Boolean(batch.worker_signed_at);
   const emailPdfFilename = getMobileMeasurementPdfFilename(batch);
-  const emailSendPrerequisitesMet = emailRecipients.length > 0 && hasCustomerSignature && hasWorkerSignature;
+  const emailSendPrerequisitesMet = emailRecipients.length > 0;
+  const shouldWarnMissingCustomerSignatureForEmail = emailRecipients.length > 0 && !hasCustomerSignature;
   const emailSendHint = getDocumentEmailSendHint({
     hasRecipients: emailRecipients.length > 0,
     hasCustomerSignature,
     hasWorkerSignature,
     isLoadingRecipients: isLoadingEmailRecipients,
+    allowMissingCustomerSignature: true,
   });
 
   useEffect(() => {
@@ -3572,7 +3578,7 @@ function MeasurementBatchOverview({
           {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
         </button>
         <button
-          className="mobile-measurement-overview-action"
+          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
           type="button"
           onClick={() => {
             setEmailSendError(null);
@@ -3633,6 +3639,7 @@ function MeasurementBatchOverview({
           isSending={isSendingEmail}
           recipients={emailRecipients}
           error={emailSendError}
+          warning={shouldWarnMissingCustomerSignatureForEmail ? "Für dieses Aufmaß liegt noch keine Kundenunterschrift vor. Das PDF wird mit leerem Unterschriftenfeld versendet. Die Unterschrift muss anschließend vom Kunden eingeholt werden." : null}
           title="Aufmaß senden?"
           onClose={() => setIsConfirmingEmailSend(false)}
           onConfirm={() => void sendMeasurementEmail()}
@@ -5986,14 +5993,22 @@ function getDocumentEmailSendHint({
   hasCustomerSignature,
   hasWorkerSignature,
   isLoadingRecipients,
+  allowMissingCustomerSignature = false,
 }: {
   hasRecipients: boolean;
   hasCustomerSignature: boolean;
   hasWorkerSignature: boolean;
   isLoadingRecipients: boolean;
+  allowMissingCustomerSignature?: boolean;
 }): string | null {
   if (isLoadingRecipients) {
     return "E-Mail-Empfänger werden geprüft.";
+  }
+  if (allowMissingCustomerSignature && !hasRecipients) {
+    return "E-Mail-Versand möglich, sobald ein Empfänger hinterlegt ist.";
+  }
+  if (allowMissingCustomerSignature && !hasCustomerSignature) {
+    return "Kundenunterschrift fehlt. Versand zur Unterschrift möglich.";
   }
   if (hasRecipients && hasCustomerSignature && hasWorkerSignature) {
     return null;

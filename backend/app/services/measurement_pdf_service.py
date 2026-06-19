@@ -911,7 +911,13 @@ def _signature_block(
     if customer_name:
         _text_fitted(commands, 396, 19.8, customer_name, 8, max_width=158)
     _line(commands, 394.9, 14.6, 566.6, 14.6, 0.8)
-    _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
+    if customer_signed_at is None and not customer_signature_strokes:
+        _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
+        _rect(commands, 661, 14.6, 103, 26.4)
+        _text(commands, 666, 33.4, "Unterschrift Kunde / Auftraggeber", 5.2, "F2")
+        _text(commands, 666, 19.2, "Ort / Datum", 5.6)
+    else:
+        _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
     _draw_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
     _line(commands, 661, 14.6, 764, 14.6, 0.8)
 
