@@ -1318,7 +1318,6 @@ function ExtraWorkCustomerSignatureOverlay({
     : "Stundenabrechnung unterschreiben";
   const kindLabel = formatMobileExtraWorkKindLabel(activeOrder.kind);
   const [customerName, setCustomerName] = useState(activeOrder.customer_signature_name ?? "");
-  const [customerPlace, setCustomerPlace] = useState(activeOrder.customer_signature_place ?? "");
   const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const [isSavingSignature, setIsSavingSignature] = useState(false);
@@ -1330,7 +1329,6 @@ function ExtraWorkCustomerSignatureOverlay({
   useEffect(() => {
     setActiveOrder(order);
     setCustomerName(order.customer_signature_name ?? "");
-    setCustomerPlace(order.customer_signature_place ?? "");
   }, [order]);
 
   useEffect(() => {
@@ -1402,7 +1400,6 @@ function ExtraWorkCustomerSignatureOverlay({
     try {
       const updatedOrder = await api.signMobileExtraWorkTicketCustomer(assignmentId, activeOrder.id, {
         customer_name: normalizedName,
-        customer_place: customerPlace.trim() || null,
         signature_strokes: validStrokes,
       });
       setActiveOrder(updatedOrder);
@@ -1456,14 +1453,6 @@ function ExtraWorkCustomerSignatureOverlay({
               value={customerName}
               onChange={(event) => setCustomerName(event.target.value)}
               placeholder="Name des Unterzeichners"
-            />
-          </label>
-          <label>
-            <span>Ort</span>
-            <input
-              value={customerPlace}
-              onChange={(event) => setCustomerPlace(event.target.value)}
-              placeholder="Ort der Unterschrift"
             />
           </label>
           <div className="mobile-signature-canvas-wrap">

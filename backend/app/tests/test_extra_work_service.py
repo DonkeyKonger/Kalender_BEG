@@ -736,6 +736,10 @@ def test_mobile_extra_work_approval_customer_signature_uses_approval_signature_t
         site_number="8007",
         name="Schüchtermann Klinik",
         requires_extra_work_approval=True,
+        street="Klinikweg",
+        house_number="8",
+        postal_code="77815",
+        city="Bühl",
     )
     db.add_all([person, site])
     db.commit()
@@ -762,6 +766,7 @@ def test_mobile_extra_work_approval_customer_signature_uses_approval_signature_t
     assert signed.kind == "approval"
     assert signed.status == "signed"
     assert signed.customer_signature_type == "approval_customer"
+    assert signed.customer_signature_place == "Klinikweg 8, 77815 Bühl"
 
 
 def test_mobile_extra_work_worker_signature_persists_without_status_change():

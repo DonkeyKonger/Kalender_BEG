@@ -29,6 +29,7 @@ from app.services.photo_filename import (
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
+from app.services.measurement_service import format_site_signature_location
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
 EXTRA_WORK_KINDS = {"billing", "approval"}
@@ -305,8 +306,9 @@ class ExtraWorkService:
         ticket.customer_signature_type = EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES.get(
             ticket.kind, "billing_customer"
         )
+        customer_place = self._clean_optional_text(payload.customer_place)
         ticket.customer_signature_name = customer_name
-        ticket.customer_signature_place = self._clean_optional_text(payload.customer_place)
+        ticket.customer_signature_place = customer_place or format_site_signature_location(ticket.site)
         ticket.customer_signature_strokes = [
             [point.model_dump() for point in stroke]
             for stroke in valid_strokes
@@ -527,6 +529,7 @@ class ExtraWorkService:
         ticket = self.db.scalar(
             select(ExtraWorkTicket)
             .options(
+                selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.photos),
             )
