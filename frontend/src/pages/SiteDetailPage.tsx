@@ -185,7 +185,11 @@ export function SiteDetailPage() {
   }, [canEditSite]);
 
   useEffect(() => {
-    setActiveTab(requestedProjectTab === "measurement" ? "measurement" : "overview");
+    setActiveTab(
+      projectRecordTabs.some((tab) => tab.key === requestedProjectTab)
+        ? requestedProjectTab as ProjectRecordTab
+        : "overview",
+    );
     setMeasurementSubtab(
       measurementSubtabs.some((tab) => tab.key === requestedMeasurementSubtab)
         ? requestedMeasurementSubtab as MeasurementSubtab

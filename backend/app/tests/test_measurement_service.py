@@ -1185,6 +1185,60 @@ def test_dashboard_submissions_for_project_manager_are_scoped_to_assigned_sites(
     assert {message.batch_id for message in admin_messages} == {own_batch.id, other_batch.id}
 
 
+def test_dashboard_submissions_include_submitted_extra_work_tickets():
+    from app.models.enums import PersonType, UserRole
+    from app.models.extra_work_ticket import ExtraWorkTicket
+    from app.models.person import Person
+    from app.models.user import User
+
+    db = db_session()
+    site = create_site(db)
+    site.name = "Schüchtermann Klinik"
+    site.site_number = "8007"
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="8007.SZ01",
+        status="submitted",
+        submitted_by=user,
+        submitted_at=datetime(2026, 6, 19, 7, 30, tzinfo=timezone.utc),
+    )
+    db.add_all([person, user, ticket])
+    db.commit()
+
+    service = MeasurementService(db)
+    dashboard_messages = service.list_dashboard_submissions(limit=5)
+
+    assert len(dashboard_messages) == 1
+    assert dashboard_messages[0].message_key == f"extra_work_submitted:{ticket.id}"
+    assert dashboard_messages[0].message_type == "extra_work_submitted"
+    assert dashboard_messages[0].batch_id is None
+    assert dashboard_messages[0].extra_work_ticket_id == ticket.id
+    assert dashboard_messages[0].title == "Stundenzettel 8007.SZ01"
+    assert dashboard_messages[0].site_name == "Schüchtermann Klinik"
+    assert dashboard_messages[0].site_number == "8007"
+    assert dashboard_messages[0].submitted_by_name == "Max Monteur"
+    assert dashboard_messages[0].event_at == ticket.submitted_at
+
+    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
+    assert service.list_dashboard_submissions(limit=5, current_user=user) == []
+    assert service.list_dashboard_submissions(limit=5)[0].extra_work_ticket_id == ticket.id
+
+
 def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     from datetime import date
 

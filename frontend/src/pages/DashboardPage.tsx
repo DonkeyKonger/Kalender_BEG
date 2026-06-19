@@ -313,7 +313,7 @@ export function DashboardPage() {
                     <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
                       <Link
                         className="dashboard-message-link"
-                        to={`/sites/${message.site_id}?tab=measurement&measurementSubtab=review`}
+                        to={getDashboardMessageLink(message)}
                       >
                         <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
                         <div>
@@ -483,6 +483,13 @@ function formatMeasurementDashboardMessageTitle(message: MeasurementDashboardSub
     return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Bitte prüfen.`;
   }
   return `${message.title} für ${message.site_name} wurde zur Prüfung eingereicht.`;
+}
+
+function getDashboardMessageLink(message: MeasurementDashboardSubmission): string {
+  if (message.message_type === "extra_work_submitted") {
+    return `/sites/${message.site_id}?tab=extra-work`;
+  }
+  return `/sites/${message.site_id}?tab=measurement&measurementSubtab=review`;
 }
 
 function formatMeasurementDashboardMessageMeta(message: MeasurementDashboardSubmission): string {

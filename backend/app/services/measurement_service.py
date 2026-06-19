@@ -1317,7 +1317,7 @@ class MeasurementService:
                     select(DashboardMessageDismissal.message_key).where(
                         DashboardMessageDismissal.user_id == current_user.id,
                         DashboardMessageDismissal.message_type.in_(
-                            ("measurement_submitted", "measurement_customer_signed")
+                            ("measurement_submitted", "measurement_customer_signed", "extra_work_submitted")
                         ),
                     )
                 ).all()
@@ -1354,15 +1354,48 @@ class MeasurementService:
                 ).limit(limit + len(dismissed_keys))
             ).all()
         )
+        extra_work_statement = (
+            select(ExtraWorkTicket)
+            .join(ExtraWorkTicket.site)
+            .options(
+                selectinload(ExtraWorkTicket.site),
+                selectinload(ExtraWorkTicket.entries),
+                selectinload(ExtraWorkTicket.submitted_by).selectinload(User.person),
+            )
+            .where(
+                ExtraWorkTicket.status == "submitted",
+                ExtraWorkTicket.submitted_at.is_not(None),
+            )
+        )
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            extra_work_statement = extra_work_statement.where(
+                Site.project_manager_person_id == current_user.person_id
+            )
+
+        extra_work_tickets = list(
+            self.db.scalars(
+                extra_work_statement.order_by(
+                    ExtraWorkTicket.submitted_at.desc(),
+                    ExtraWorkTicket.updated_at.desc(),
+                ).limit(limit + len(dismissed_keys))
+            ).all()
+        )
         messages: list[MeasurementDashboardSubmissionRead] = []
         for batch in batches:
             message = self._build_dashboard_submission(batch)
             if message.message_key in dismissed_keys:
                 continue
             messages.append(message)
-            if len(messages) >= limit:
-                break
-        return messages
+        for ticket in extra_work_tickets:
+            message = self._build_extra_work_dashboard_submission(ticket)
+            if message.message_key in dismissed_keys:
+                continue
+            messages.append(message)
+        return sorted(
+            messages,
+            key=lambda message: message.event_at or message.submitted_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )[:limit]
 
     def dismiss_dashboard_message(self, *, message_key: str, current_user: User) -> None:
         message_type = message_key.split(":", 1)[0].strip()
@@ -1874,6 +1907,26 @@ class MeasurementService:
             customer_signed_at=batch.customer_signed_at,
             entry_count=len(batch.entries),
             position_count=len(position_ids),
+        )
+
+    def _build_extra_work_dashboard_submission(
+        self, ticket: ExtraWorkTicket
+    ) -> MeasurementDashboardSubmissionRead:
+        return MeasurementDashboardSubmissionRead(
+            message_key=f"extra_work_submitted:{ticket.id}",
+            batch_id=None,
+            extra_work_ticket_id=ticket.id,
+            site_id=ticket.site_id,
+            site_name=ticket.site.name if ticket.site else "Baustelle",
+            site_number=ticket.site.site_number if ticket.site else None,
+            title=f"Stundenzettel {ticket.display_number}",
+            status=ticket.status,
+            message_type="extra_work_submitted",
+            event_at=ticket.submitted_at,
+            submitted_by_name=self._format_user_display_name(ticket.submitted_by),
+            submitted_at=ticket.submitted_at,
+            entry_count=len(ticket.entries),
+            position_count=0,
         )
 
     def _build_mobile_item(

@@ -256,7 +256,8 @@ class WorkerSignatureCreate(BaseModel):
 
 class MeasurementDashboardSubmissionRead(BaseModel):
     message_key: str
-    batch_id: int
+    batch_id: int | None
+    extra_work_ticket_id: int | None = None
     site_id: int
     site_name: str
     site_number: str | None

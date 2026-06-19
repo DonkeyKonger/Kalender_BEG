@@ -523,13 +523,14 @@ export type MeasurementImportResponse = {
 
 export type MeasurementDashboardSubmission = {
   message_key: string;
-  batch_id: number;
+  batch_id: number | null;
+  extra_work_ticket_id: number | null;
   site_id: number;
   site_name: string;
   site_number: string | null;
   title: string;
   status: string;
-  message_type: "measurement_submitted" | "measurement_customer_signed" | string;
+  message_type: "measurement_submitted" | "measurement_customer_signed" | "extra_work_submitted" | string;
   event_at: string | null;
   submitted_by_name: string | null;
   submitted_at: string | null;
