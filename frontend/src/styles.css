@@ -7877,11 +7877,13 @@ button.person-chip:focus-visible {
 .measurement-review-status-badge::before {
   content: "";
   position: absolute;
+  z-index: 2;
   top: 0;
   bottom: 0;
   left: 0;
   width: 6px;
   background: #64748b;
+  pointer-events: none;
 }
 
 .measurement-status.is-draft {
@@ -8410,7 +8412,7 @@ button.person-chip:focus-visible {
 .measurement-review-card-controls {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 0;
   min-width: 0;
   padding-left: 12px;
 }
@@ -8432,12 +8434,50 @@ button.person-chip:focus-visible {
   padding: 0;
 }
 
+.measurement-review-status-badge.has-delete-control {
+  display: inline-grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  width: 194px;
+  min-width: 194px;
+  padding: 0;
+}
+
+.measurement-review-status-badge.has-delete-control .measurement-review-delete-action {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 26px;
+  border: 0;
+  border-right: 1px solid #d8e1ec;
+  padding-left: 6px;
+  color: #aeb8c6;
+}
+
+.measurement-review-status-badge.has-delete-control .measurement-review-status-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .measurement-review-delete-action:hover,
 .measurement-review-delete-action:focus-visible {
   border-color: transparent;
   background: transparent;
   color: #94a3b8;
   outline: none;
+}
+
+.measurement-review-status-badge.has-delete-control .measurement-review-delete-action:hover,
+.measurement-review-status-badge.has-delete-control .measurement-review-delete-action:focus-visible {
+  border-right-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .measurement-review-delete-action:disabled {
@@ -17615,9 +17655,9 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-billed,
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-approved,
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-closed {
-  border-color: #d8e1ec;
-  background: #f8fafc;
-  color: #334155;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #14532d;
 }
 
 .site-detail-page.is-project-file-workspace .measurement-review-status-badge.is-billed::before,

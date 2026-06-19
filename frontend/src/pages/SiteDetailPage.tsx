@@ -3529,18 +3529,18 @@ function MeasurementReviewPanel({
                 className={`measurement-review-card has-delete-action${batch.status === "submitted" ? " is-submitted" : ""}${isOldOffer ? " is-old-offer" : ""}`}
               >
                 <div className="measurement-review-card-controls">
-                  <button
-                    type="button"
-                    className="measurement-review-delete-action"
-                    disabled={reviewActionLoading || deletingBatchId !== null}
-                    title="Aufmaß löschen"
-                    aria-label={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)} löschen`}
-                    onClick={(event) => void deleteBatch(event, batch)}
-                  >
-                    {deletingBatchId === batch.id ? "..." : "×"}
-                  </button>
-                  <span className={statusBadge.className}>
-                    {statusBadge.label}
+                  <span className={`${statusBadge.className} has-delete-control`}>
+                    <button
+                      type="button"
+                      className="measurement-review-delete-action"
+                      disabled={reviewActionLoading || deletingBatchId !== null}
+                      title="Aufmaß löschen"
+                      aria-label={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)} löschen`}
+                      onClick={(event) => void deleteBatch(event, batch)}
+                    >
+                      {deletingBatchId === batch.id ? "..." : "×"}
+                    </button>
+                    <span className="measurement-review-status-label">{statusBadge.label}</span>
                   </span>
                 </div>
                 <button
