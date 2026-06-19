@@ -5128,7 +5128,7 @@ function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string;
   }
   const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
     || item.customer_email_signature_present === true;
-  const sentAt = formatDateTime(item.customer_email_sent_at);
+  const sentAt = formatCustomerEmailSentDate(item.customer_email_sent_at);
   if (signaturePresent) {
     return {
       label: `📧 An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
@@ -5139,6 +5139,18 @@ function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string;
     label: `📧 An Kunden gesendet · Unterschrift fehlt · ${sentAt}`,
     className: "is-signature-open",
   };
+}
+
+function formatCustomerEmailSentDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(parsed);
 }
 
 function formatExtraWorkTicketTitle(ticket: MobileExtraWorkTicket): string {
