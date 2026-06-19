@@ -666,6 +666,7 @@ function MobileExtraWorkTab({
                 <span className="mobile-measurement-card-date">{formatMobileExtraWorkKindLabel(order.kind)}</span>
                 <strong>{formatMobileExtraWorkOrderTitle(order)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
+                <MobileCustomerEmailStatus item={order} />
                 {order.created_by_name ? (
                   <span className="mobile-measurement-card-date">Ersteller: {order.created_by_name}</span>
                 ) : null}
@@ -859,6 +860,7 @@ function ExtraWorkOrderOverview({
           {canRename ? <Pencil aria-hidden="true" size={15} /> : null}
         </span>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
+        <MobileCustomerEmailStatus item={order} />
         <span className="mobile-measurement-card-meta">
           <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
           {isApproval && order.estimated_hours !== null && order.estimated_hours !== undefined ? (
@@ -3387,6 +3389,7 @@ function MobileMeasurementTab({
                 <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
                 <strong>{formatMobileMeasurementBatchTitle(batch)}</strong>
                 <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
+                <MobileCustomerEmailStatus item={batch} />
                 {batch.created_by_name ? (
                   <span className="mobile-measurement-card-date">Ersteller: {batch.created_by_name}</span>
                 ) : null}
@@ -3540,6 +3543,7 @@ function MeasurementBatchOverview({
         <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
         <h2>{formatMobileMeasurementBatchTitle(batch)}</h2>
         <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
+        <MobileCustomerEmailStatus item={batch} />
         <span className="mobile-measurement-card-meta">
           <span>Positionen: {batch.position_count}</span>
           <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
@@ -5989,6 +5993,58 @@ function formatMobileExtraWorkKindLabel(kind: string): string {
 function getMobileExtraWorkPdfFilename(order: MobileExtraWorkTicket): string {
   const number = order.display_number || String(order.id);
   return `Zusatzauftrag_${number.replace(/[\\/:*?"<>|\s]+/g, "_")}.pdf`;
+}
+
+type MobileCustomerEmailStatusItem = {
+  customer_email_sent_at: string | null;
+  customer_email_signature_present: boolean | null;
+  customer_signed_at: string | null;
+  customer_signature_name?: string | null;
+  is_locked_for_worker?: boolean;
+};
+
+function MobileCustomerEmailStatus({ item }: { item: MobileCustomerEmailStatusItem }) {
+  const status = getMobileCustomerEmailStatus(item);
+  return <span className={`mobile-customer-email-status ${status.className}`}>{status.label}</span>;
+}
+
+function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { label: string; className: string } {
+  if (!item.customer_email_sent_at) {
+    return {
+      label: "📧 Nicht an Kunden gesendet",
+      className: "is-not-sent",
+    };
+  }
+  const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
+    || item.customer_email_signature_present === true;
+  const sentAt = formatCompactDateTimeLabel(item.customer_email_sent_at);
+  if (signaturePresent) {
+    return {
+      label: `📧 An Kunde gesendet · vollständig · ${sentAt}`,
+      className: "is-complete",
+    };
+  }
+  return {
+    label: `📧 An Kunde gesendet · Unterschrift offen · ${sentAt}`,
+    className: "is-signature-open",
+  };
+}
+
+function formatCompactDateTimeLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed).replace(",", " ·");
 }
 
 function getDocumentEmailSendHint({
