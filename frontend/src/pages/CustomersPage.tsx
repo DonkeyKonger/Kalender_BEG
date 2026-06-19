@@ -16,6 +16,7 @@ const customerContactTypeLabels: Record<string, string> = {
   bauleiter: "Bauleiter Kunde",
   einkauf: "Einkauf",
   rechnung: "Rechnung",
+  mobile_email: "Mobile E-Mail",
 };
 
 const emptyCustomer: CustomerCreate = {
@@ -366,6 +367,8 @@ export function CustomersPage() {
 }
 
 function CustomerReadView({ customer }: { customer: Customer }) {
+  const emailItems = customerEmailItems(customer);
+
   return (
     <div className="detail-read-view">
       <section className="detail-read-section">
@@ -395,6 +398,19 @@ function CustomerReadView({ customer }: { customer: Customer }) {
           <ReadItem label="Telefon" value={customer.project_lead_phone || "-"} />
           <ReadItem label="Mail" value={customer.project_lead_email || "-"} />
         </div>
+      </section>
+
+      <section className="detail-read-section">
+        <h3>E-Mail-Adressen</h3>
+        {emailItems.length ? (
+          <div className="detail-read-grid">
+            {emailItems.map((item) => (
+              <ReadItem key={item.email} label={item.label} value={item.email} />
+            ))}
+          </div>
+        ) : (
+          <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>
+        )}
       </section>
 
       <section className="detail-read-section">
@@ -708,6 +724,26 @@ function formatCustomerAddress(customer: Pick<Customer, "address_street" | "addr
   const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
   const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
   return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
+}
+
+function customerEmailItems(customer: Customer): Array<{ email: string; label: string }> {
+  const items = new Map<string, { email: string; label: string }>();
+  const addEmail = (email: string | null, label: string) => {
+    const cleanedEmail = email?.trim();
+    if (!cleanedEmail) {
+      return;
+    }
+    const key = cleanedEmail.toLowerCase();
+    if (!items.has(key)) {
+      items.set(key, { email: cleanedEmail, label });
+    }
+  };
+
+  addEmail(customer.project_lead_email, customer.project_lead_name || "Projektleiter Kunde");
+  for (const contact of customer.contacts) {
+    addEmail(contact.email, contact.name || customerContactTypeLabels[contact.contact_type] || "Kontakt");
+  }
+  return [...items.values()];
 }
 
 function customerCardMeta(customer: Customer): string[] {

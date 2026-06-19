@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerContact
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.models.user import User
@@ -57,6 +57,7 @@ class SiteEmailRecipientService:
                 self.db.add(recipient)
             recipient.label = recipient_payload.label
             recipient.is_selected = True
+            self._ensure_customer_contact(site, recipient_payload)
 
         self.db.commit()
         return self._build_response(site)
@@ -92,20 +93,8 @@ class SiteEmailRecipientService:
         )
 
     def _customer_suggestions(self, site: Site) -> list[SiteEmailRecipientRead]:
-        customer_name = _normalize_match_text(site.customer)
-        if not customer_name:
-            return []
-        customers = list(
-            self.db.scalars(
-                select(Customer)
-                .options(selectinload(Customer.contacts))
-                .where(Customer.is_active.is_(True))
-            ).all()
-        )
         suggestions: dict[str, SiteEmailRecipientRead] = {}
-        for customer in customers:
-            if _normalize_match_text(customer.company_name) != customer_name:
-                continue
+        for customer in self._matching_customers(site):
             if customer.project_lead_email:
                 try:
                     email = normalize_email(customer.project_lead_email)
@@ -132,6 +121,51 @@ class SiteEmailRecipientService:
                 except HTTPException:
                     continue
         return list(suggestions.values())
+
+    def _ensure_customer_contact(self, site: Site, recipient: SiteEmailRecipientPayload) -> None:
+        matching_customers = self._matching_customers(site)
+        if len(matching_customers) != 1:
+            return
+        customer = matching_customers[0]
+        known_emails = set()
+        if customer.project_lead_email:
+            try:
+                known_emails.add(normalize_email(customer.project_lead_email))
+            except HTTPException:
+                pass
+        for contact in customer.contacts:
+            if contact.email:
+                try:
+                    known_emails.add(normalize_email(contact.email))
+                except HTTPException:
+                    continue
+        if recipient.email in known_emails:
+            return
+        self.db.add(
+            CustomerContact(
+                customer=customer,
+                contact_type="mobile_email",
+                name=recipient.label or "Mobile E-Mail",
+                email=recipient.email,
+            )
+        )
+
+    def _matching_customers(self, site: Site) -> list[Customer]:
+        customer_name = _normalize_match_text(site.customer)
+        if not customer_name:
+            return []
+        customers = list(
+            self.db.scalars(
+                select(Customer)
+                .options(selectinload(Customer.contacts))
+                .where(Customer.is_active.is_(True))
+            ).all()
+        )
+        return [
+            customer
+            for customer in customers
+            if _normalize_match_text(customer.company_name) == customer_name
+        ]
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:

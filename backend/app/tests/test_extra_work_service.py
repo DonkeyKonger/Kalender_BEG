@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 from pypdf import PdfReader
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -95,11 +95,29 @@ def test_mobile_assignment_email_recipients_use_customer_suggestions_and_persist
         ),
     )
     reloaded = service.get_for_assignment(assignment_id=assignment.id, current_user=current_user)
+    customer_contacts = db.scalars(
+        select(CustomerContact).where(CustomerContact.customer_id == customer.id)
+    ).all()
 
     assert suggestion_emails == {"leitung@klinik.example", "kontakt@klinik.example"}
     assert {recipient.email for recipient in updated.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
     assert {recipient.email for recipient in reloaded.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
     assert "neu@kunde.example" in {recipient.email for recipient in reloaded.suggestions}
+    assert sum(contact.email == "neu@kunde.example" for contact in customer_contacts) == 1
+
+    service.update_for_assignment(
+        assignment_id=assignment.id,
+        current_user=current_user,
+        payload=SiteEmailRecipientsUpdate(
+            recipients=[
+                SiteEmailRecipientPayload(email="NEU@kunde.example", label="Neue Adresse doppelt"),
+            ]
+        ),
+    )
+    customer_contacts = db.scalars(
+        select(CustomerContact).where(CustomerContact.customer_id == customer.id)
+    ).all()
+    assert sum(contact.email == "neu@kunde.example" for contact in customer_contacts) == 1
 
 
 def test_mobile_assignment_email_recipients_replace_selection_without_duplicates():
