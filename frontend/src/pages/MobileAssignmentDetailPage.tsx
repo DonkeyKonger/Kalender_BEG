@@ -3132,8 +3132,7 @@ function MobileMeasurementTab({
   }
 
   if (selectedBatch && !isBatchPositionOverviewOpen) {
-    const canSignImmediately = Boolean(assignment.person.can_sign_measurements_immediately);
-    const customerSignatureAction = getCustomerSignatureActionState(selectedBatch, canSignImmediately);
+    const customerSignatureAction = getCustomerSignatureActionState(selectedBatch);
     const customerSignatureHint = getCompactCustomerSignatureHint(customerSignatureAction.hint);
     if (photoGalleryBatch) {
       return (
@@ -6343,10 +6342,13 @@ function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { 
   return { label: "Entwurf", className: "mobile-batch-status-draft" };
 }
 
-function getCustomerSignatureActionState(
-  batch: MobileMeasurementBatch,
-  canSignImmediately: boolean,
-): { disabled: boolean; hint: string | null } {
+function getCustomerSignatureActionState(batch: MobileMeasurementBatch): { disabled: boolean; hint: string | null } {
+  if (batch.available_actions) {
+    return {
+      disabled: !batch.available_actions.can_customer_sign,
+      hint: batch.block_reasons?.customer_sign ?? null,
+    };
+  }
   if (isCustomerSignedMobileMeasurementBatch(batch)) {
     return { disabled: false, hint: null };
   }
@@ -6363,9 +6365,6 @@ function getCustomerSignatureActionState(
       disabled: true,
       hint: "Dieses Aufmaß ist bereits intern erledigt.",
     };
-  }
-  if (canSignImmediately && ["draft", "submitted", "reviewed", "rejected"].includes(status)) {
-    return { disabled: false, hint: null };
   }
   if (status === "reviewed") {
     return { disabled: false, hint: null };

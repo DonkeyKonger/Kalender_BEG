@@ -113,6 +113,14 @@ class MobileMeasurementBatchPhotoRead(BaseModel):
     updated_at: datetime
 
 
+class MobileMeasurementBatchAvailableActionsRead(BaseModel):
+    can_customer_sign: bool
+
+
+class MobileMeasurementBatchBlockReasonsRead(BaseModel):
+    customer_sign: str | None = None
+
+
 class MobileMeasurementBatchRead(BaseModel):
     id: int
     site_id: int
@@ -144,6 +152,8 @@ class MobileMeasurementBatchRead(BaseModel):
     reported_minutes: Decimal | None
     reported_hours: Decimal | None
     photo_count: int = 0
+    available_actions: MobileMeasurementBatchAvailableActionsRead
+    block_reasons: MobileMeasurementBatchBlockReasonsRead
 
 
 class MeasurementTimesheetKpiRead(BaseModel):

@@ -32,6 +32,8 @@ from app.schemas.measurement import (
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
     MeasurementItemRead,
+    MobileMeasurementBatchAvailableActionsRead,
+    MobileMeasurementBatchBlockReasonsRead,
     MobileMeasurementFreeItemCreate,
     MeasurementTimeAnalysisExtraWorkTicketRead,
     MeasurementTimeAnalysisRead,
@@ -208,6 +210,7 @@ class MeasurementService:
                 batch,
                 active_base_id=active_base_id,
                 customer_email_status=customer_email_statuses.get(batch.id),
+                current_user=current_user,
             )
             for batch in batches
         ]
@@ -236,7 +239,7 @@ class MeasurementService:
         self.db.add(batch)
         self.db.commit()
         self.db.refresh(batch)
-        return self._build_mobile_batch(batch, active_base_id=measurement_base.id)
+        return self._build_mobile_batch(batch, active_base_id=measurement_base.id, current_user=current_user)
 
     def list_mobile_batch_items(
         self, *, assignment_id: int, batch_id: int, current_user: User
@@ -507,7 +510,7 @@ class MeasurementService:
             )
         self.db.commit()
         self.db.refresh(batch)
-        return self._build_mobile_batch(batch)
+        return self._build_mobile_batch(batch, current_user=current_user)
 
     def sign_mobile_batch(
         self,
@@ -573,7 +576,7 @@ class MeasurementService:
         batch.status = "customer_signed"
         self.db.commit()
         self.db.refresh(batch)
-        return self._build_mobile_batch(batch)
+        return self._build_mobile_batch(batch, current_user=current_user)
 
     def sign_mobile_batch_worker(
         self,
@@ -609,7 +612,7 @@ class MeasurementService:
         batch.worker_signed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(batch)
-        return self._build_mobile_batch(batch)
+        return self._build_mobile_batch(batch, current_user=current_user)
 
     def list_mobile_batch_photos(
         self,
@@ -1806,6 +1809,7 @@ class MeasurementService:
         batch: SiteMeasurementBatch,
         active_base_id: int | None = None,
         customer_email_status: CustomerEmailStatus | None = None,
+        current_user: User | None = None,
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
@@ -1815,6 +1819,11 @@ class MeasurementService:
         position_ids = {entry.measurement_item_id for entry in visible_entries}
         reported_minutes = self._sum_reported_minutes(visible_entries)
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
+        workflow_state = self._mobile_batch_workflow_state(
+            batch,
+            entry_count=len(visible_entries),
+            can_sign_immediately=_can_sign_measurements_immediately(current_user),
+        )
         is_current_offer = (
             batch.measurement_base_id == active_base_id
             if active_base_id is not None
@@ -1863,6 +1872,12 @@ class MeasurementService:
                     SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
                 )
             ) or 0,
+            available_actions=MobileMeasurementBatchAvailableActionsRead(
+                can_customer_sign=workflow_state["can_customer_sign"],
+            ),
+            block_reasons=MobileMeasurementBatchBlockReasonsRead(
+                customer_sign=workflow_state["customer_sign_reason"],
+            ),
         )
 
     def _latest_customer_email_statuses(
@@ -1945,6 +1960,34 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.",
             )
+
+    def _mobile_batch_workflow_state(
+        self,
+        batch: SiteMeasurementBatch,
+        *,
+        entry_count: int,
+        can_sign_immediately: bool = False,
+    ) -> dict[str, object]:
+        if batch.customer_signed_at is not None or batch.customer_signature_name:
+            return {"can_customer_sign": True, "customer_sign_reason": None}
+        if entry_count == 0:
+            return {
+                "can_customer_sign": False,
+                "customer_sign_reason": "Für die Kundenunterschrift muss mindestens eine Aufmaßzeile erfasst sein.",
+            }
+        if batch.status in {"approved", "billed", "checked", "closed"}:
+            return {
+                "can_customer_sign": False,
+                "customer_sign_reason": "Dieses Aufmaß ist bereits intern erledigt.",
+            }
+        if can_sign_immediately and batch.status in {"draft", "submitted", "reviewed", "rejected"}:
+            return {"can_customer_sign": True, "customer_sign_reason": None}
+        if batch.status == "reviewed":
+            return {"can_customer_sign": True, "customer_sign_reason": None}
+        return {
+            "can_customer_sign": False,
+            "customer_sign_reason": "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
+        }
 
     def _build_original_submitted_snapshot(
         self,
@@ -2294,8 +2337,8 @@ def _datetime_as_string(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _can_sign_measurements_immediately(user: User) -> bool:
-    return bool(user.person and user.person.can_sign_measurements_immediately)
+def _can_sign_measurements_immediately(user: User | None) -> bool:
+    return bool(user and user.person and user.person.can_sign_measurements_immediately)
 
 
 def format_site_signature_location(site: Site | None) -> str:

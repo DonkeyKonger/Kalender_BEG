@@ -286,6 +286,12 @@ export type MobileMeasurementBatch = {
   reported_minutes: MeasurementNumericValue;
   reported_hours: MeasurementNumericValue;
   photo_count: number;
+  available_actions?: {
+    can_customer_sign: boolean;
+  };
+  block_reasons?: {
+    customer_sign?: string | null;
+  };
 };
 
 export type MobileMeasurementBatchPhoto = {
