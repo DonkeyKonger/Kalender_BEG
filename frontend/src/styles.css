@@ -638,6 +638,10 @@ button:disabled {
   box-shadow: 0 12px 32px rgb(18 29 52 / 8%);
 }
 
+.matrix-scroll:focus {
+  outline: none;
+}
+
 .matrix-table {
   table-layout: fixed;
   border-collapse: separate;
