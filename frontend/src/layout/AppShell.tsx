@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { navigationItems } from "../config/navigation";
 import { api } from "../lib/api";
 import type { UserRole } from "../types/auth";
+import type { MeasurementDashboardSubmission } from "../types/site";
 
 const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
 const DASHBOARD_MESSAGES_BADGE_LIMIT = 20;
@@ -20,13 +21,17 @@ export function AppShell() {
   const [sidebarMode, setSidebarMode] = useState<"collapsed" | "pointer" | "keyboard">("collapsed");
   const [dashboardMessageCount, setDashboardMessageCount] = useState(0);
   const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
+  const lastDashboardMessageCountRef = useRef<number | null>(null);
+  const lastDashboardMessageSignatureRef = useRef<string | null>(null);
   const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
   const showUserTopbar = location.pathname === "/";
   const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
 
   useEffect(() => {
     if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role)) {
-      setDashboardMessageCount(0);
+      lastDashboardMessageCountRef.current = null;
+      lastDashboardMessageSignatureRef.current = null;
+      setDashboardMessageCount((current) => (current === 0 ? current : 0));
       return undefined;
     }
 
@@ -43,12 +48,20 @@ export function AppShell() {
           limit: DASHBOARD_MESSAGES_BADGE_LIMIT,
         });
         if (active) {
-          setDashboardMessageCount(messages.length);
-          window.dispatchEvent(
-            new CustomEvent(DASHBOARD_MESSAGES_UPDATED_EVENT, {
-              detail: messages.slice(0, DASHBOARD_MESSAGES_EVENT_LIMIT),
-            }),
-          );
+          const previewMessages = messages.slice(0, DASHBOARD_MESSAGES_EVENT_LIMIT);
+          const previewSignature = dashboardMessagesSignature(previewMessages);
+          if (lastDashboardMessageCountRef.current !== messages.length) {
+            lastDashboardMessageCountRef.current = messages.length;
+            setDashboardMessageCount(messages.length);
+          }
+          if (lastDashboardMessageSignatureRef.current !== previewSignature) {
+            lastDashboardMessageSignatureRef.current = previewSignature;
+            window.dispatchEvent(
+              new CustomEvent(DASHBOARD_MESSAGES_UPDATED_EVENT, {
+                detail: previewMessages,
+              }),
+            );
+          }
         }
       } catch (pollError) {
         if (active) {
@@ -203,4 +216,22 @@ export function AppShell() {
       </div>
     </div>
   );
+}
+
+function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]): string {
+  return messages
+    .map((message) => [
+      message.message_key,
+      message.message_type,
+      message.event_at,
+      message.submitted_at,
+      message.customer_signed_at,
+      message.status,
+      message.title,
+      message.site_name,
+      message.site_number,
+      message.submitted_by_name,
+      message.customer_signature_name,
+    ].join("|"))
+    .join(";");
 }

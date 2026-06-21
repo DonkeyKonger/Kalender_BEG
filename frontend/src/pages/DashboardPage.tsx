@@ -146,7 +146,11 @@ export function DashboardPage() {
     function handleDashboardMessagesUpdated(event: Event) {
       const messages = (event as CustomEvent<MeasurementDashboardSubmission[]>).detail;
       if (Array.isArray(messages)) {
-        setMeasurementMessages(messages);
+        setMeasurementMessages((current) => (
+          dashboardMessagesSignature(current) === dashboardMessagesSignature(messages)
+            ? current
+            : messages
+        ));
       }
     }
 
@@ -476,6 +480,24 @@ function DashboardNeedSection({ title, needs }: { title: string; needs: Staffing
 
 function EmptyDashboardText({ text }: { text: string }) {
   return <p className="dashboard-empty-text">{text}</p>;
+}
+
+function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]): string {
+  return messages
+    .map((message) => [
+      message.message_key,
+      message.message_type,
+      message.event_at,
+      message.submitted_at,
+      message.customer_signed_at,
+      message.status,
+      message.title,
+      message.site_name,
+      message.site_number,
+      message.submitted_by_name,
+      message.customer_signature_name,
+    ].join("|"))
+    .join(";");
 }
 
 function formatMeasurementDashboardMessageTitle(message: MeasurementDashboardSubmission): string {
