@@ -42,6 +42,9 @@ class MatrixCell(BaseModel):
     assignments: list[MatrixAssignment]
     absences: list[MatrixAbsence]
     mark: MatrixCellMark | None = None
+    conflict_level: str = "none"
+    conflict_reason: str | None = None
+    conflict_codes: list[str] = Field(default_factory=list)
 
 
 class MatrixSite(BaseModel):

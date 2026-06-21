@@ -3142,6 +3142,9 @@ function resizeStateForTarget(resize: AssignmentResizeState, target: AssignmentD
 }
 
 function assignmentAbsenceConflict(cell: MatrixCell, assignment: MatrixAssignment): MatrixCell["absences"][number] | null {
+  if (cell.conflict_level === "none") {
+    return null;
+  }
   const matchingAbsences = cell.absences
     .filter((absence) => absence.person.id === assignment.person.id)
     .sort((left, right) => matrixAbsenceTypePriority(left.absence_type) - matrixAbsenceTypePriority(right.absence_type));

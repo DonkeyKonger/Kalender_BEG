@@ -12,6 +12,7 @@ from app.models.site import Site
 from app.repositories.absence_repository import AbsenceRepository
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.site_repository import SiteRepository
+from app.services.conflict_service import HARD_ABSENCE_TYPES, WARNING_ABSENCE_TYPES
 from app.services.person_display import calendar_short_code
 from app.schemas.matrix import (
     MatrixAbsence,
@@ -173,6 +174,7 @@ class MatrixService:
                     assignments=[self._build_assignment(item) for item in day_assignments],
                     absences=[self._build_absence(item) for item in day_absences],
                     mark=marks.get((site_id, day)),
+                    **self._cell_conflict_flags(day_absences),
                 )
             )
         return cells
@@ -215,6 +217,45 @@ class MatrixService:
             end_date=absence.end_date,
             note=absence.note,
         )
+
+    def _cell_conflict_flags(self, absences) -> dict:
+        if not absences:
+            return {
+                "conflict_level": "none",
+                "conflict_reason": None,
+                "conflict_codes": [],
+            }
+        hard_absences = [absence for absence in absences if absence.absence_type in HARD_ABSENCE_TYPES]
+        warning_absences = [absence for absence in absences if absence.absence_type in WARNING_ABSENCE_TYPES]
+        if hard_absences:
+            labels = sorted({self._absence_label(absence.absence_type) for absence in hard_absences})
+            return {
+                "conflict_level": "hard",
+                "conflict_reason": " + ".join(labels) + " am Einsatztag",
+                "conflict_codes": sorted({f"absence_{absence.absence_type.value}" for absence in hard_absences}),
+            }
+        if warning_absences:
+            labels = sorted({self._absence_label(absence.absence_type) for absence in warning_absences})
+            return {
+                "conflict_level": "warning",
+                "conflict_reason": " + ".join(labels) + " am Einsatztag",
+                "conflict_codes": sorted({f"absence_{absence.absence_type.value}" for absence in warning_absences}),
+            }
+        return {
+            "conflict_level": "none",
+            "conflict_reason": None,
+            "conflict_codes": [],
+        }
+
+    def _absence_label(self, absence_type) -> str:
+        labels = {
+            "vacation": "Urlaub",
+            "sick": "Krankheit",
+            "school": "Schule",
+            "free": "Frei",
+            "other": "Abwesenheit",
+        }
+        return labels.get(absence_type.value, "Abwesenheit")
 
     def _build_person(self, person: Person) -> MatrixPerson:
         return MatrixPerson(

@@ -52,6 +52,9 @@ export type MatrixCell = {
   assignments: MatrixAssignment[];
   absences: MatrixAbsence[];
   mark: MatrixCellMark | null;
+  conflict_level: "none" | "warning" | "hard" | string;
+  conflict_reason: string | null;
+  conflict_codes: string[];
 };
 
 export type MatrixSite = {
