@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { ApiError, api, type DashboardOverview } from "../lib/api";
+import { api, type DashboardOverview } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementDashboardSubmission } from "../types/site";
@@ -85,8 +85,6 @@ const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
-  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workerSearch, setWorkerSearch] = useState("");
@@ -110,9 +108,7 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [matrixData, personData, overviewData, measurementData] = await Promise.all([
-          api.matrix({ start: range.historyStart, end: range.nextWeekEnd, includeWeekends: true }),
-          api.persons({ isActive: true }),
+        const [overviewData, measurementData] = await Promise.all([
           api.dashboardOverview({
             historyStart: range.historyStart,
             today: range.today,
@@ -120,24 +116,19 @@ export function DashboardPage() {
             weekEnd: range.weekEnd,
             nextWeekStart: range.nextWeekStart,
             nextWeekEnd: range.nextWeekEnd,
-          }).catch(() => null as DashboardOverview | null),
+          }),
           api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as MeasurementDashboardSubmission[]),
         ]);
         if (!active) {
           return;
         }
-        setMatrix(matrixData);
-        setPeople(personData);
         setDashboardOverview(overviewData);
         setMeasurementMessages(measurementData);
-      } catch (loadError) {
+      } catch {
         if (!active) {
           return;
         }
-        const message = loadError instanceof ApiError
-          ? "Dashboarddaten konnten nicht geladen werden."
-          : "Dashboarddaten konnten nicht geladen werden.";
-        setError(message);
+        setError("Dashboarddaten konnten nicht geladen werden.");
       } finally {
         if (active) {
           setLoading(false);
@@ -211,12 +202,7 @@ export function DashboardPage() {
     };
   }, [user?.role]);
 
-  const dashboard = useMemo(() => {
-    if (!matrix) {
-      return null;
-    }
-    return buildDashboardData(matrix, people, range, dashboardOverview);
-  }, [matrix, people, range, dashboardOverview]);
+  const dashboard = dashboardOverview;
 
   async function dismissMeasurementMessage(message: MeasurementDashboardSubmission): Promise<void> {
     if (dismissingMessageKey) {

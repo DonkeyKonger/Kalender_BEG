@@ -105,6 +105,14 @@ export type DashboardOverviewConflict = {
   date: string;
 };
 
+export type DashboardOverviewPerson = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  display_name: string;
+  short_code: string;
+};
+
 export type DashboardOverview = {
   todayAssignedSites: DashboardOverviewAssignedSite[];
   todayAssignedSiteGroups: Array<{
@@ -115,6 +123,15 @@ export type DashboardOverview = {
     };
     sites: DashboardOverviewAssignedSite[];
   }>;
+  freeWorkerGroups: Array<{
+    manager: {
+      key: string;
+      label: string;
+      name: string;
+    };
+    people: DashboardOverviewPerson[];
+  }>;
+  totalFreeWorkers: number;
   openStaffingNeeds: DashboardOverviewStaffingNeed[];
   conflicts: DashboardOverviewConflict[];
   tomorrowAssignedCount: number;
@@ -122,6 +139,12 @@ export type DashboardOverview = {
   tomorrowConflicts: DashboardOverviewConflict[];
   currentWeekNeeds: DashboardOverviewStaffingNeed[];
   nextWeekNeeds: DashboardOverviewStaffingNeed[];
+  workerLookup: Array<{
+    person: DashboardOverviewPerson;
+    status: string;
+    detail: string;
+    managerLabel: string;
+  }>;
 };
 
 export class ApiError extends Error {
