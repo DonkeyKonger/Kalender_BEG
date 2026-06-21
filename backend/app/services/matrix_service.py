@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus
 from app.models.person import Person
@@ -88,9 +89,11 @@ class MatrixService:
             for absence in self.absences.list(start=start, end=end)
             if absence.status == AbsenceStatus.ACTIVE and absence.person_id in person_ids
         ]
+        assignments_by_site_date = self._index_assignments_by_site_date(assignments, visible_days)
+        absences_by_date = self._index_absences_by_date(absences, visible_days)
 
         rows = [
-            self._build_row(site, visible_days, assignments, absences, marks)
+            self._build_row(site, visible_days, assignments_by_site_date, absences_by_date, marks)
             for site in visible_sites
         ]
         return MatrixResponse(
@@ -114,20 +117,31 @@ class MatrixService:
             if absence.status == AbsenceStatus.ACTIVE and absence.person_id in person_ids
         ]
         marks = self._list_marks(site_ids={site_id}, start=start, end=end)
-        return self._build_cells(days=days, site_id=site_id, assignments=assignments, absences=absences, marks=marks)
+        assignments_by_site_date = self._index_assignments_by_site_date(assignments, days)
+        absences_by_date = self._index_absences_by_date(absences, days)
+        return self._build_cells(
+            days=days,
+            site_id=site_id,
+            assignments_by_site_date=assignments_by_site_date,
+            absences_by_date=absences_by_date,
+            marks=marks,
+        )
 
     def _build_row(
         self,
         site: Site,
         days: list[date],
-        assignments: list[Assignment],
-        absences,
+        assignments_by_site_date: dict[tuple[int, date], list[Assignment]],
+        absences_by_date: dict[date, list[Absence]],
         marks,
     ) -> MatrixRow:
-        site_assignments = [
-            assignment for assignment in assignments if assignment.site_id == site.id
-        ]
-        cells = self._build_cells(days=days, site_id=site.id, assignments=site_assignments, absences=absences, marks=marks)
+        cells = self._build_cells(
+            days=days,
+            site_id=site.id,
+            assignments_by_site_date=assignments_by_site_date,
+            absences_by_date=absences_by_date,
+            marks=marks,
+        )
 
         return MatrixRow(
             site=MatrixSite(
@@ -152,21 +166,17 @@ class MatrixService:
         *,
         days: list[date],
         site_id: int,
-        assignments: list[Assignment],
-        absences,
+        assignments_by_site_date: dict[tuple[int, date], list[Assignment]],
+        absences_by_date: dict[date, list[Absence]],
         marks,
     ) -> list[MatrixCell]:
         cells = []
         for day in days:
-            day_assignments = [
-                assignment for assignment in assignments
-                if assignment.start_date <= day <= assignment.end_date
-            ]
+            day_assignments = assignments_by_site_date.get((site_id, day), [])
             assigned_person_ids = {assignment.person_id for assignment in day_assignments}
             day_absences = [
-                absence for absence in absences
+                absence for absence in absences_by_date.get(day, [])
                 if absence.person_id in assigned_person_ids
-                and absence.start_date <= day <= absence.end_date
             ]
             cells.append(
                 MatrixCell(
@@ -178,6 +188,46 @@ class MatrixService:
                 )
             )
         return cells
+
+    def _index_assignments_by_site_date(
+        self,
+        assignments: list[Assignment],
+        days: list[date],
+    ) -> dict[tuple[int, date], list[Assignment]]:
+        if not days:
+            return {}
+        visible_days = set(days)
+        start = days[0]
+        end = days[-1]
+        indexed: dict[tuple[int, date], list[Assignment]] = {}
+        for assignment in assignments:
+            for day in self._date_range(
+                max(assignment.start_date, start),
+                min(assignment.end_date, end),
+            ):
+                if day in visible_days:
+                    indexed.setdefault((assignment.site_id, day), []).append(assignment)
+        return indexed
+
+    def _index_absences_by_date(
+        self,
+        absences: list[Absence],
+        days: list[date],
+    ) -> dict[date, list[Absence]]:
+        if not days:
+            return {}
+        visible_days = set(days)
+        start = days[0]
+        end = days[-1]
+        indexed: dict[date, list[Absence]] = {}
+        for absence in absences:
+            for day in self._date_range(
+                max(absence.start_date, start),
+                min(absence.end_date, end),
+            ):
+                if day in visible_days:
+                    indexed.setdefault(day, []).append(absence)
+        return indexed
 
 
     def _list_marks(
