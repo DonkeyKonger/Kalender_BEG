@@ -57,6 +57,10 @@ export type TimeEntry = {
   gps_not_checkable: boolean;
   mismatch_notice: string | null;
   review_notices: string[];
+  payroll_review_state?: {
+    state: "open" | "auto_plausible" | "checked" | string;
+    is_auto_plausible: boolean;
+  };
 };
 
 export type TimeEntryCreate = {

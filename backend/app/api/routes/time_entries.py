@@ -323,6 +323,11 @@ def time_entry_read(
         gps_not_checkable=gps_not_checkable,
         mismatch_notice=mismatch_notice,
         review_notices=review_notices,
+        payroll_review_state=TimeEntryService.payroll_review_state(
+            entry,
+            gps_work_minutes=gps_work_minutes,
+            review_notices=review_notices,
+        ),
     )
 
 
@@ -379,4 +384,8 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         gps_not_checkable=False,
         mismatch_notice=stay.mismatch_notice,
         review_notices=list(stay.review_notices),
+        payroll_review_state={
+            "state": "open",
+            "is_auto_plausible": False,
+        },
     )

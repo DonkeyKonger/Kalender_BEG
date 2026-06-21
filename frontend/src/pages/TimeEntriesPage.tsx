@@ -3159,6 +3159,9 @@ function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: 
 }
 
 function isAutoPlausibleEntry(entry: TimeEntry): boolean {
+  if (entry.payroll_review_state) {
+    return entry.payroll_review_state.is_auto_plausible;
+  }
   return (
     entry.time_review_status === "open"
     && !entry.is_gps_suggestion
@@ -3178,7 +3181,7 @@ function timeReviewIssue(entry: TimeEntry): TimeReviewIssue | null {
     return null;
   }
   const deviationMinutes = manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null;
-  if (!hasBackendReviewNotice(entry) && deviationMinutes !== null && Math.abs(deviationMinutes) <= GPS_TIME_TOLERANCE_MINUTES) {
+  if (isAutoPlausibleEntry(entry)) {
     return null;
   }
 
@@ -3346,11 +3349,7 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
       verified += 1;
       continue;
     }
-    if (
-      entry.gps_work_minutes !== null
-      && !hasBackendReviewNotice(entry)
-      && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
-    ) {
+    if (isAutoPlausibleEntry(entry)) {
       autoPlausible += 1;
     }
   }
@@ -3574,11 +3573,7 @@ function mapTotalsToRows(totals: Map<string, number>): { label: string; minutes:
 
 function finalStatusLabel(entry: TimeEntry): string {
   if (entry.time_review_status === "open") {
-    if (
-      entry.gps_work_minutes !== null
-      && !hasBackendReviewNotice(entry)
-      && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
-    ) {
+    if (isAutoPlausibleEntry(entry)) {
       return "automatisch plausibel";
     }
     return "offen";
@@ -3623,11 +3618,7 @@ function finalBasisLabel(entry: TimeEntry): string {
   if (entry.time_review_method === "deadline") {
     return "Monatsfrist";
   }
-  if (
-    entry.gps_work_minutes !== null
-    && !hasBackendReviewNotice(entry)
-    && Math.abs(entry.gps_work_minutes - entry.work_minutes) <= GPS_TIME_TOLERANCE_MINUTES
-  ) {
+  if (isAutoPlausibleEntry(entry)) {
     return "automatisch plausibel";
   }
   return "offen";

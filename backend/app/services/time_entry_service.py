@@ -470,6 +470,27 @@ class TimeEntryService:
         entry.corrected_work_minutes = final_work_minutes
         entry.work_minutes = final_work_minutes
 
+    @staticmethod
+    def payroll_review_state(entry: WorkTimeEntry, *, gps_work_minutes: int | None, review_notices: list[str]) -> dict:
+        review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
+        is_auto_plausible = (
+            review_status == OPEN_TIME_REVIEW_STATUS
+            and getattr(entry, "source", "manual") != "gps_suggestion"
+            and not review_notices
+            and gps_work_minutes is not None
+            and abs(gps_work_minutes - entry.work_minutes) <= GPS_TIME_REVIEW_TOLERANCE_MINUTES
+        )
+        if is_auto_plausible:
+            state = "auto_plausible"
+        elif review_status != OPEN_TIME_REVIEW_STATUS:
+            state = "checked"
+        else:
+            state = "open"
+        return {
+            "state": state,
+            "is_auto_plausible": is_auto_plausible,
+        }
+
     def _ensure_person_exists(self, person_id: int) -> None:
         if self.db.get(Person, person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")

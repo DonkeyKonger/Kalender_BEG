@@ -168,6 +168,11 @@ class TimeEntryWeeklyReviewRead(BaseModel):
     updated_at: datetime
 
 
+class TimeEntryPayrollReviewStateRead(BaseModel):
+    state: str
+    is_auto_plausible: bool = False
+
+
 class TimeEntryRead(BaseModel):
     id: int
     person_id: int
@@ -220,3 +225,4 @@ class TimeEntryRead(BaseModel):
     gps_not_checkable: bool = False
     mismatch_notice: str | None = None
     review_notices: list[str] = Field(default_factory=list)
+    payroll_review_state: TimeEntryPayrollReviewStateRead
