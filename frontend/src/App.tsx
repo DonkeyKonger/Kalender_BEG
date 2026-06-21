@@ -10,7 +10,6 @@ import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage, PasswordChangePage } from "./pages/LoginPage";
-import { MobileAssignmentDetailPage } from "./pages/MobileAssignmentDetailPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
@@ -27,6 +26,9 @@ const SiteDetailPage = lazy(() =>
 );
 const TimeEntriesPage = lazy(() =>
   import("./pages/TimeEntriesPage").then((module) => ({ default: module.TimeEntriesPage })),
+);
+const MobileAssignmentDetailPage = lazy(() =>
+  import("./pages/MobileAssignmentDetailPage").then((module) => ({ default: module.MobileAssignmentDetailPage })),
 );
 
 export function App() {
@@ -87,7 +89,14 @@ export function App() {
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
             <Route path="me/assignments" element={<MyAssignmentsPage />} />
-            <Route path="me/assignments/:assignmentId" element={<MobileAssignmentDetailPage />} />
+            <Route
+              path="me/assignments/:assignmentId"
+              element={
+                <Suspense fallback={<div className="empty-state">Einsatzdetails werden geladen...</div>}>
+                  <MobileAssignmentDetailPage />
+                </Suspense>
+              }
+            />
             <Route path="me/time-entry" element={<MobileTimeEntryPage />} />
           </Route>
         </Route>
