@@ -10,7 +10,6 @@ import type { UserRole } from "../types/auth";
 import type { MeasurementDashboardSubmission } from "../types/site";
 
 const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
-const DASHBOARD_MESSAGES_BADGE_LIMIT = 20;
 const DASHBOARD_MESSAGES_EVENT_LIMIT = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
 const DASHBOARD_MESSAGE_ROLES: UserRole[] = ["admin", "project_manager", "office"];
@@ -44,15 +43,15 @@ export function AppShell() {
       }
       requestInFlight = true;
       try {
-        const messages = await api.dashboardMeasurementSubmissions({
-          limit: DASHBOARD_MESSAGES_BADGE_LIMIT,
+        const summary = await api.dashboardMessagesSummary({
+          limit: DASHBOARD_MESSAGES_EVENT_LIMIT,
         });
         if (active) {
-          const previewMessages = messages.slice(0, DASHBOARD_MESSAGES_EVENT_LIMIT);
+          const previewMessages = summary.latest_messages;
           const previewSignature = dashboardMessagesSignature(previewMessages);
-          if (lastDashboardMessageCountRef.current !== messages.length) {
-            lastDashboardMessageCountRef.current = messages.length;
-            setDashboardMessageCount(messages.length);
+          if (lastDashboardMessageCountRef.current !== summary.open_count) {
+            lastDashboardMessageCountRef.current = summary.open_count;
+            setDashboardMessageCount(summary.open_count);
           }
           if (lastDashboardMessageSignatureRef.current !== previewSignature) {
             lastDashboardMessageSignatureRef.current = previewSignature;

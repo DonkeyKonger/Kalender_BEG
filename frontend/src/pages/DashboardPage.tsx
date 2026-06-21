@@ -112,7 +112,7 @@ export function DashboardPage() {
         const [matrixData, personData, measurementData] = await Promise.all([
           api.matrix({ start: range.historyStart, end: range.nextWeekEnd, includeWeekends: true }),
           api.persons({ isActive: true }),
-          api.dashboardMeasurementSubmissions().catch(() => [] as MeasurementDashboardSubmission[]),
+          api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as MeasurementDashboardSubmission[]),
         ]);
         if (!active) {
           return;

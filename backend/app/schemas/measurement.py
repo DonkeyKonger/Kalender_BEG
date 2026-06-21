@@ -275,6 +275,11 @@ class MeasurementDashboardSubmissionRead(BaseModel):
     position_count: int
 
 
+class DashboardMessagesSummaryRead(BaseModel):
+    open_count: int
+    latest_messages: list[MeasurementDashboardSubmissionRead]
+
+
 class MeasurementImportResponse(BaseModel):
     imported_count: int
     measurement_base: MeasurementBaseRead

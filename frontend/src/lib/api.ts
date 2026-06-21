@@ -77,6 +77,11 @@ export type VehicleLatestPositionItem = {
   };
 };
 
+export type DashboardMessagesSummary = {
+  open_count: number;
+  latest_messages: MeasurementDashboardSubmission[];
+};
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -301,6 +306,15 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<MeasurementDashboardSubmission[]>(`/dashboard/measurement-submissions${suffix}`);
+  },
+
+  async dashboardMessagesSummary(params: { limit?: number } = {}): Promise<DashboardMessagesSummary> {
+    const search = new URLSearchParams();
+    if (params.limit !== undefined) {
+      search.set("limit", String(params.limit));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<DashboardMessagesSummary>(`/dashboard/messages/summary${suffix}`);
   },
 
   async dismissDashboardMessage(messageKey: string): Promise<void> {

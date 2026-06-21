@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
-from app.schemas.measurement import MeasurementDashboardSubmissionRead
+from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
 from app.schemas.weather import WeatherSummary
 from app.services.measurement_service import MeasurementService
 from app.services.weather_service import WeatherService
@@ -24,6 +24,15 @@ def get_measurement_submissions(
     db: Session = Depends(get_db),
 ) -> list[MeasurementDashboardSubmissionRead]:
     return MeasurementService(db).list_dashboard_submissions(limit=limit, current_user=user)
+
+
+@router.get("/messages/summary", response_model=DashboardMessagesSummaryRead)
+def get_dashboard_messages_summary(
+    limit: int = Query(default=6, ge=1, le=20),
+    user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> DashboardMessagesSummaryRead:
+    return MeasurementService(db).get_dashboard_messages_summary(limit=limit, current_user=user)
 
 
 @router.post("/messages/{message_key}/dismiss", status_code=status.HTTP_204_NO_CONTENT)

@@ -1223,8 +1223,11 @@ def test_dashboard_submissions_include_submitted_extra_work_tickets():
 
     service = MeasurementService(db)
     dashboard_messages = service.list_dashboard_submissions(limit=5)
+    dashboard_summary = service.get_dashboard_messages_summary(limit=5)
 
     assert len(dashboard_messages) == 1
+    assert dashboard_summary.open_count == 1
+    assert dashboard_summary.latest_messages[0].message_key == dashboard_messages[0].message_key
     assert dashboard_messages[0].message_key == f"extra_work_submitted:{ticket.id}"
     assert dashboard_messages[0].message_type == "extra_work_submitted"
     assert dashboard_messages[0].batch_id is None
@@ -1236,6 +1239,9 @@ def test_dashboard_submissions_include_submitted_extra_work_tickets():
     assert dashboard_messages[0].event_at == ticket.submitted_at
 
     service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
+    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=user)
+    assert dismissed_summary.open_count == 0
+    assert dismissed_summary.latest_messages == []
     assert service.list_dashboard_submissions(limit=5, current_user=user) == []
     assert service.list_dashboard_submissions(limit=5)[0].extra_work_ticket_id == ticket.id
 
@@ -1329,7 +1335,10 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     )
 
     dashboard_messages = service.list_dashboard_submissions(limit=5)
+    dashboard_summary = service.get_dashboard_messages_summary(limit=5)
 
+    assert dashboard_summary.open_count == 1
+    assert dashboard_summary.latest_messages[0].message_key == dashboard_messages[0].message_key
     assert dashboard_messages[0].batch_id == batch.id
     assert dashboard_messages[0].message_type == "measurement_customer_signed"
     assert dashboard_messages[0].event_at == signed.customer_signed_at
@@ -1339,6 +1348,9 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert signed.customer_signature_place == "Klinikweg 8, 77815 Buehl"
 
     service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
+    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=user)
+    assert dismissed_summary.open_count == 0
+    assert dismissed_summary.latest_messages == []
     assert service.list_dashboard_submissions(limit=5, current_user=user) == []
     assert service.list_dashboard_submissions(limit=5)[0].batch_id == batch.id
 

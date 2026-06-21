@@ -25,6 +25,7 @@ from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.measurement import (
     CustomerSignatureCreate,
+    DashboardMessagesSummaryRead,
     MeasurementBaseRead,
     MeasurementBaseUpdate,
     MeasurementEntryCreate,
@@ -1337,18 +1338,7 @@ class MeasurementService:
     def list_dashboard_submissions(
         self, *, limit: int = 6, current_user: User | None = None
     ) -> list[MeasurementDashboardSubmissionRead]:
-        dismissed_keys: set[str] = set()
-        if current_user is not None:
-            dismissed_keys = set(
-                self.db.scalars(
-                    select(DashboardMessageDismissal.message_key).where(
-                        DashboardMessageDismissal.user_id == current_user.id,
-                        DashboardMessageDismissal.message_type.in_(
-                            ("measurement_submitted", "measurement_customer_signed", "extra_work_submitted")
-                        ),
-                    )
-                ).all()
-            )
+        dismissed_keys = self._dashboard_dismissed_keys(current_user)
 
         statement = (
             select(SiteMeasurementBatch)
@@ -1424,6 +1414,66 @@ class MeasurementService:
             reverse=True,
         )[:limit]
 
+    def get_dashboard_messages_summary(
+        self, *, limit: int = 6, current_user: User | None = None
+    ) -> DashboardMessagesSummaryRead:
+        return DashboardMessagesSummaryRead(
+            open_count=self.count_dashboard_submissions(current_user=current_user),
+            latest_messages=self.list_dashboard_submissions(limit=limit, current_user=current_user),
+        )
+
+    def count_dashboard_submissions(self, *, current_user: User | None = None) -> int:
+        dismissed_ids = self._dashboard_dismissed_ids_by_type(current_user)
+        batch_base_filters = [
+            SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
+        ]
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            batch_base_filters.append(Site.project_manager_person_id == current_user.person_id)
+
+        submitted_batch_filters = [
+            *batch_base_filters,
+            SiteMeasurementBatch.customer_signed_at.is_(None),
+            SiteMeasurementBatch.status.in_(("submitted", "rejected")),
+        ]
+        submitted_batch_dismissed_ids = dismissed_ids.get("measurement_submitted", set())
+        if submitted_batch_dismissed_ids:
+            submitted_batch_filters.append(SiteMeasurementBatch.id.notin_(submitted_batch_dismissed_ids))
+        submitted_batch_count = self.db.scalar(
+            select(func.count(SiteMeasurementBatch.id))
+            .join(SiteMeasurementBatch.site)
+            .where(*submitted_batch_filters)
+        ) or 0
+
+        signed_batch_filters = [
+            *batch_base_filters,
+            SiteMeasurementBatch.customer_signed_at.is_not(None),
+        ]
+        signed_batch_dismissed_ids = dismissed_ids.get("measurement_customer_signed", set())
+        if signed_batch_dismissed_ids:
+            signed_batch_filters.append(SiteMeasurementBatch.id.notin_(signed_batch_dismissed_ids))
+        signed_batch_count = self.db.scalar(
+            select(func.count(SiteMeasurementBatch.id))
+            .join(SiteMeasurementBatch.site)
+            .where(*signed_batch_filters)
+        ) or 0
+
+        extra_work_filters = [
+            ExtraWorkTicket.status == "submitted",
+            ExtraWorkTicket.submitted_at.is_not(None),
+        ]
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            extra_work_filters.append(Site.project_manager_person_id == current_user.person_id)
+        extra_work_dismissed_ids = dismissed_ids.get("extra_work_submitted", set())
+        if extra_work_dismissed_ids:
+            extra_work_filters.append(ExtraWorkTicket.id.notin_(extra_work_dismissed_ids))
+        extra_work_count = self.db.scalar(
+            select(func.count(ExtraWorkTicket.id))
+            .join(ExtraWorkTicket.site)
+            .where(*extra_work_filters)
+        ) or 0
+
+        return submitted_batch_count + signed_batch_count + extra_work_count
+
     def dismiss_dashboard_message(self, *, message_key: str, current_user: User) -> None:
         message_type = message_key.split(":", 1)[0].strip()
         if not message_type or not message_key.strip():
@@ -1444,6 +1494,32 @@ class MeasurementService:
             )
         )
         self.db.commit()
+
+    def _dashboard_dismissed_keys(self, current_user: User | None) -> set[str]:
+        if current_user is None:
+            return set()
+        return set(
+            self.db.scalars(
+                select(DashboardMessageDismissal.message_key).where(
+                    DashboardMessageDismissal.user_id == current_user.id,
+                    DashboardMessageDismissal.message_type.in_(
+                        ("measurement_submitted", "measurement_customer_signed", "extra_work_submitted")
+                    ),
+                )
+            ).all()
+        )
+
+    def _dashboard_dismissed_ids_by_type(self, current_user: User | None) -> dict[str, set[int]]:
+        dismissed_ids: dict[str, set[int]] = {
+            "measurement_submitted": set(),
+            "measurement_customer_signed": set(),
+            "extra_work_submitted": set(),
+        }
+        for message_key in self._dashboard_dismissed_keys(current_user):
+            message_type, _, raw_id = message_key.partition(":")
+            if message_type in dismissed_ids and raw_id.isdigit():
+                dismissed_ids[message_type].add(int(raw_id))
+        return dismissed_ids
 
     def import_timesheet(
         self,
