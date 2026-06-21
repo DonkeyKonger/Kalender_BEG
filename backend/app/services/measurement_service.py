@@ -205,12 +205,14 @@ class MeasurementService:
             action="measurement.email_sent",
             entity_ids=[batch.id for batch in batches],
         )
+        photo_counts = self._photo_counts_by_batch_id(batch_ids=[batch.id for batch in batches])
         return [
             self._build_mobile_batch(
                 batch,
                 active_base_id=active_base_id,
                 customer_email_status=customer_email_statuses.get(batch.id),
                 current_user=current_user,
+                photo_count=photo_counts.get(batch.id, 0),
             )
             for batch in batches
         ]
@@ -797,11 +799,13 @@ class MeasurementService:
             action="measurement.email_sent",
             entity_ids=[batch.id for batch in batches],
         )
+        photo_counts = self._photo_counts_by_batch_id(batch_ids=[batch.id for batch in batches])
         return [
             self._build_mobile_batch(
                 batch,
                 active_base_id=active_base_id,
                 customer_email_status=customer_email_statuses.get(batch.id),
+                photo_count=photo_counts.get(batch.id, 0),
             )
             for batch in batches
         ]
@@ -1810,6 +1814,7 @@ class MeasurementService:
         active_base_id: int | None = None,
         customer_email_status: CustomerEmailStatus | None = None,
         current_user: User | None = None,
+        photo_count: int | None = None,
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
@@ -1867,11 +1872,7 @@ class MeasurementService:
             entry_count=len(visible_entries),
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
-            photo_count=self.db.scalar(
-                select(func.count(SiteMeasurementBatchPhoto.id)).where(
-                    SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
-                )
-            ) or 0,
+            photo_count=photo_count if photo_count is not None else self._photo_count_for_batch(batch.id),
             available_actions=MobileMeasurementBatchAvailableActionsRead(
                 can_customer_sign=workflow_state["can_customer_sign"],
             ),
@@ -1879,6 +1880,28 @@ class MeasurementService:
                 customer_sign=workflow_state["customer_sign_reason"],
             ),
         )
+
+    def _photo_counts_by_batch_id(self, *, batch_ids: list[int]) -> dict[int, int]:
+        if not batch_ids:
+            return {}
+        return {
+            batch_id: count
+            for batch_id, count in self.db.execute(
+                select(
+                    SiteMeasurementBatchPhoto.measurement_batch_id,
+                    func.count(SiteMeasurementBatchPhoto.id),
+                )
+                .where(SiteMeasurementBatchPhoto.measurement_batch_id.in_(batch_ids))
+                .group_by(SiteMeasurementBatchPhoto.measurement_batch_id)
+            )
+        }
+
+    def _photo_count_for_batch(self, batch_id: int) -> int:
+        return self.db.scalar(
+            select(func.count(SiteMeasurementBatchPhoto.id)).where(
+                SiteMeasurementBatchPhoto.measurement_batch_id == batch_id
+            )
+        ) or 0
 
     def _latest_customer_email_statuses(
         self,
