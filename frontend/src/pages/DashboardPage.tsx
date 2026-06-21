@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, type DashboardOverview } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementDashboardSubmission } from "../types/site";
@@ -93,6 +93,7 @@ export function DashboardPage() {
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
+  const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
@@ -109,9 +110,17 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [matrixData, personData, measurementData] = await Promise.all([
+        const [matrixData, personData, overviewData, measurementData] = await Promise.all([
           api.matrix({ start: range.historyStart, end: range.nextWeekEnd, includeWeekends: true }),
           api.persons({ isActive: true }),
+          api.dashboardOverview({
+            historyStart: range.historyStart,
+            today: range.today,
+            tomorrow: range.tomorrow,
+            weekEnd: range.weekEnd,
+            nextWeekStart: range.nextWeekStart,
+            nextWeekEnd: range.nextWeekEnd,
+          }).catch(() => null as DashboardOverview | null),
           api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as MeasurementDashboardSubmission[]),
         ]);
         if (!active) {
@@ -119,6 +128,7 @@ export function DashboardPage() {
         }
         setMatrix(matrixData);
         setPeople(personData);
+        setDashboardOverview(overviewData);
         setMeasurementMessages(measurementData);
       } catch (loadError) {
         if (!active) {
@@ -140,7 +150,15 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [range.historyStart, range.nextWeekEnd, user?.role]);
+  }, [
+    range.historyStart,
+    range.nextWeekEnd,
+    range.nextWeekStart,
+    range.today,
+    range.tomorrow,
+    range.weekEnd,
+    user?.role,
+  ]);
 
   useEffect(() => {
     function handleDashboardMessagesUpdated(event: Event) {
@@ -197,8 +215,8 @@ export function DashboardPage() {
     if (!matrix) {
       return null;
     }
-    return buildDashboardData(matrix, people, range);
-  }, [matrix, people, range]);
+    return buildDashboardData(matrix, people, range, dashboardOverview);
+  }, [matrix, people, range, dashboardOverview]);
 
   async function dismissMeasurementMessage(message: MeasurementDashboardSubmission): Promise<void> {
     if (dismissingMessageKey) {
@@ -532,7 +550,12 @@ function formatDashboardDateTime(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
-function buildDashboardData(matrix: MatrixResponse, people: Person[], range: DateRange): DashboardData {
+function buildDashboardData(
+  matrix: MatrixResponse,
+  people: Person[],
+  range: DateRange,
+  overview: DashboardOverview | null,
+): DashboardData {
   const peopleById = new Map(people.map((person) => [person.id, person]));
   const projectManagerIds = new Set<number>();
   matrix.rows.forEach((row) => {
@@ -553,24 +576,24 @@ function buildDashboardData(matrix: MatrixResponse, people: Person[], range: Dat
 
   const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
   const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
-  const openStaffingNeeds = getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
-  const conflicts = getDashboardConflicts(matrix.rows, range.today, range.nextWeekEnd);
-  const tomorrowAssignedSites = getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById);
   const workerLookup = buildWorkerLookup(matrix.rows, activeWorkers, range.today, lastManagerByPersonId);
-
-  const todayAssignedSites = getAssignedSitesForDay(matrix.rows, range.today, peopleById);
+  const todayAssignedSites = overview?.todayAssignedSites ?? getAssignedSitesForDay(matrix.rows, range.today, peopleById);
+  const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites);
+  const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
+  const conflicts = overview?.conflicts ?? getDashboardConflicts(matrix.rows, range.today, range.nextWeekEnd);
+  const tomorrowAssignedCount = overview?.tomorrowAssignedCount ?? getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById).length;
   return {
     todayAssignedSites,
-    todayAssignedSiteGroups: groupAssignedSitesByManager(todayAssignedSites),
+    todayAssignedSiteGroups,
     freeWorkerGroups,
     totalFreeWorkers: freeWorkers.length,
     openStaffingNeeds,
     conflicts,
-    tomorrowAssignedCount: tomorrowAssignedSites.length,
-    tomorrowOpenNeeds: openStaffingNeeds.filter((need) => need.date === range.tomorrow),
-    tomorrowConflicts: conflicts.filter((conflict) => conflict.date === range.tomorrow),
-    currentWeekNeeds: openStaffingNeeds.filter((need) => need.date >= range.today && need.date <= range.weekEnd),
-    nextWeekNeeds: openStaffingNeeds.filter((need) => need.date >= range.nextWeekStart && need.date <= range.nextWeekEnd),
+    tomorrowAssignedCount,
+    tomorrowOpenNeeds: overview?.tomorrowOpenNeeds ?? openStaffingNeeds.filter((need) => need.date === range.tomorrow),
+    tomorrowConflicts: overview?.tomorrowConflicts ?? conflicts.filter((conflict) => conflict.date === range.tomorrow),
+    currentWeekNeeds: overview?.currentWeekNeeds ?? openStaffingNeeds.filter((need) => need.date >= range.today && need.date <= range.weekEnd),
+    nextWeekNeeds: overview?.nextWeekNeeds ?? openStaffingNeeds.filter((need) => need.date >= range.nextWeekStart && need.date <= range.nextWeekEnd),
     workerLookup,
   };
 }

@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse } from "../types/matrix";
+import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
@@ -80,6 +80,48 @@ export type VehicleLatestPositionItem = {
 export type DashboardMessagesSummary = {
   open_count: number;
   latest_messages: MeasurementDashboardSubmission[];
+};
+
+export type DashboardOverviewAssignedSite = {
+  site: MatrixSite;
+  managerLabel: string;
+  internalCount: number;
+  externalCount: number;
+  hasWarnings: boolean;
+};
+
+export type DashboardOverviewStaffingNeed = {
+  date: string;
+  siteName: string;
+  siteNumber: string | null;
+  managerLabel: string;
+};
+
+export type DashboardOverviewConflict = {
+  key: string;
+  title: string;
+  detail: string;
+  severity: "hard" | "warning";
+  date: string;
+};
+
+export type DashboardOverview = {
+  todayAssignedSites: DashboardOverviewAssignedSite[];
+  todayAssignedSiteGroups: Array<{
+    manager: {
+      key: string;
+      label: string;
+      name: string;
+    };
+    sites: DashboardOverviewAssignedSite[];
+  }>;
+  openStaffingNeeds: DashboardOverviewStaffingNeed[];
+  conflicts: DashboardOverviewConflict[];
+  tomorrowAssignedCount: number;
+  tomorrowOpenNeeds: DashboardOverviewStaffingNeed[];
+  tomorrowConflicts: DashboardOverviewConflict[];
+  currentWeekNeeds: DashboardOverviewStaffingNeed[];
+  nextWeekNeeds: DashboardOverviewStaffingNeed[];
 };
 
 export class ApiError extends Error {
@@ -297,6 +339,25 @@ export const api = {
 
   async dashboardWeather(): Promise<WeatherSummary> {
     return request<WeatherSummary>("/dashboard/weather");
+  },
+
+  async dashboardOverview(params: {
+    historyStart: string;
+    today: string;
+    tomorrow: string;
+    weekEnd: string;
+    nextWeekStart: string;
+    nextWeekEnd: string;
+  }): Promise<DashboardOverview> {
+    const search = new URLSearchParams({
+      history_start: params.historyStart,
+      today: params.today,
+      tomorrow: params.tomorrow,
+      week_end: params.weekEnd,
+      next_week_start: params.nextWeekStart,
+      next_week_end: params.nextWeekEnd,
+    });
+    return request<DashboardOverview>(`/dashboard/overview?${search.toString()}`);
   },
 
   async dashboardMeasurementSubmissions(params: { limit?: number } = {}): Promise<MeasurementDashboardSubmission[]> {

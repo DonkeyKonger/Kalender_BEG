@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
@@ -6,6 +8,7 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
 from app.schemas.weather import WeatherSummary
+from app.services.dashboard_service import DashboardService
 from app.services.measurement_service import MeasurementService
 from app.services.weather_service import WeatherService
 
@@ -24,6 +27,27 @@ def get_measurement_submissions(
     db: Session = Depends(get_db),
 ) -> list[MeasurementDashboardSubmissionRead]:
     return MeasurementService(db).list_dashboard_submissions(limit=limit, current_user=user)
+
+
+@router.get("/overview")
+def get_dashboard_overview(
+    history_start: date,
+    today: date,
+    tomorrow: date,
+    week_end: date,
+    next_week_start: date,
+    next_week_end: date,
+    _user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> dict:
+    return DashboardService(db).get_overview(
+        history_start=history_start,
+        today=today,
+        tomorrow=tomorrow,
+        week_end=week_end,
+        next_week_start=next_week_start,
+        next_week_end=next_week_end,
+    )
 
 
 @router.get("/messages/summary", response_model=DashboardMessagesSummaryRead)
