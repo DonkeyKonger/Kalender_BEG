@@ -12,6 +12,7 @@ import type {
   MatrixAssignment,
   MatrixCell,
   MatrixCellMark,
+  MatrixDay,
   MatrixEntryInput,
   MatrixPerson,
   MatrixResponse,
@@ -2099,9 +2100,7 @@ type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<str
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
   const absencePlanning = useMemo(() => {
-    const itemsByDate = new Map(
-      props.matrix.days.map((day) => [day.date, absencePlanningItemsForDay(props.absences, day.date)]),
-    );
+    const itemsByDate = buildAbsencePlanningItemsByDate(props.absences, props.matrix.days);
     const rowCount = Math.max(
       1,
       ...Array.from(itemsByDate.values()).map((items) => {
@@ -3275,17 +3274,35 @@ function activeAbsencesForPersonOnDay(absences: Absence[], personId: number, dat
   return activeAbsencesForDay(absences, date).filter((absence) => absence.person_id === personId);
 }
 
-function absencePlanningItemsForDay(absences: Absence[], date: string): PlanningAbsenceItem[] {
-  const bestAbsenceByPerson = new Map<number, Absence>();
-  activeAbsencesForDay(absences, date).forEach((absence) => {
-    const current = bestAbsenceByPerson.get(absence.person_id);
-    if (!current || absenceTypeSortPriority(absence) < absenceTypeSortPriority(current)) {
-      bestAbsenceByPerson.set(absence.person_id, absence);
+function buildAbsencePlanningItemsByDate(absences: Absence[], days: MatrixDay[]): Map<string, PlanningAbsenceItem[]> {
+  const bestAbsencesByDate = new Map<string, Map<number, Absence>>();
+  days.forEach((day) => bestAbsencesByDate.set(day.date, new Map()));
+
+  absences.forEach((absence) => {
+    if (absence.status !== "active") {
+      return;
     }
+    days.forEach((day) => {
+      if (absence.start_date > day.date || absence.end_date < day.date) {
+        return;
+      }
+      const bestAbsenceByPerson = bestAbsencesByDate.get(day.date);
+      if (!bestAbsenceByPerson) {
+        return;
+      }
+      const current = bestAbsenceByPerson.get(absence.person_id);
+      if (!current || absenceTypeSortPriority(absence) < absenceTypeSortPriority(current)) {
+        bestAbsenceByPerson.set(absence.person_id, absence);
+      }
+    });
   });
-  return Array.from(bestAbsenceByPerson.values())
-    .map((absence) => ({ absence }))
-    .sort((left, right) => comparePlanningAbsences(left.absence, right.absence));
+
+  return new Map(days.map((day) => {
+    const items = Array.from(bestAbsencesByDate.get(day.date)?.values() ?? [])
+      .map((absence) => ({ absence }))
+      .sort((left, right) => comparePlanningAbsences(left.absence, right.absence));
+    return [day.date, items];
+  }));
 }
 
 function absenceTypeSortPriority(absence: Absence): number {
