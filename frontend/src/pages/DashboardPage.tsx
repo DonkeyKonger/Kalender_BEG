@@ -255,7 +255,7 @@ export function DashboardPage() {
         <div className="dashboard-hero-main">
           <p className="eyebrow">Tagesstart</p>
           <h1>{formatFullDate(range.today)}</h1>
-          <p>Heute, morgen und die naechsten beiden Wochen auf einen Blick.</p>
+          <p>Heute, morgen und die nächsten beiden Wochen auf einen Blick.</p>
         </div>
         <div className="dashboard-weather" aria-label="Wetter Firmenzentrale">
           <CloudSun aria-hidden="true" size={24} />
