@@ -91,6 +91,8 @@ type MeasurementPositionGroup = {
   itemIds: Set<number>;
   sourceItemCount?: number;
 };
+const MEASUREMENT_TITLE_GROUP_MISC_THRESHOLD = 13;
+const MEASUREMENT_TITLE_GROUP_MIN_OWN_BADGE_COUNT = 3;
 type MeasurementFreePositionDraft = {
   position: string;
   description: string;
@@ -6108,7 +6110,7 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
   }
   const capturedItems = items.filter(isMobileMeasurementItemCaptured);
   const freeItems = items.filter((item) => item.is_free_position);
-  const sourceSectionGroups = compactSmallMeasurementPositionGroups(buildMeasurementSourceSectionGroups(offerItems));
+  const sourceSectionGroups = buildMeasurementSourceSectionGroups(offerItems);
   const root = createMeasurementPositionTreeNode([]);
   const miscellaneousItems: MobileMeasurementItem[] = [];
 
@@ -6178,83 +6180,31 @@ function buildMeasurementSourceSectionGroups(items: MobileMeasurementItem[]): Me
     grouped.set(signature, group);
   });
 
-  const groups = [...grouped.values()]
-    .sort((left, right) => left.sortIndex - right.sortIndex)
-    .flatMap((group, index) => buildMeasurementSourceSectionBadgeGroups(group, index));
-  if (groups.length > 0 && ungroupedItems.length > 0) {
-    groups.push(createMeasurementPositionGroup("Sonstige", ungroupedItems, "misc"));
+  const titleGroups = [...grouped.values()].sort((left, right) => left.sortIndex - right.sortIndex);
+  const shouldCollectSmallTitleGroups = titleGroups.length >= MEASUREMENT_TITLE_GROUP_MISC_THRESHOLD;
+  const groups: MeasurementPositionGroup[] = [];
+  const miscellaneousItems: MobileMeasurementItem[] = [];
+
+  titleGroups.forEach((group, index) => {
+    if (shouldCollectSmallTitleGroups && group.items.length < MEASUREMENT_TITLE_GROUP_MIN_OWN_BADGE_COUNT) {
+      miscellaneousItems.push(...group.items);
+      return;
+    }
+    groups.push(createMeasurementPositionGroup(
+      `${group.sectionKey} – ${group.sectionTitle}`,
+      group.items,
+      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
+      group.items.length,
+    ));
+  });
+
+  if (titleGroups.length > 0 && ungroupedItems.length > 0) {
+    miscellaneousItems.push(...ungroupedItems);
+  }
+  if (titleGroups.length > 0 && miscellaneousItems.length > 0) {
+    groups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "source-misc"));
   }
   return groups;
-}
-
-function buildMeasurementSourceSectionBadgeGroups(
-  group: { sectionKey: string; sectionTitle: string; items: MobileMeasurementItem[]; sortIndex: number },
-  index: number,
-): MeasurementPositionGroup[] {
-  if (group.items.length <= 50) {
-    return [createMeasurementPositionGroup(
-      `${group.sectionKey} – ${group.sectionTitle}`,
-      group.items,
-      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
-      group.items.length,
-    )];
-  }
-
-  const sectionSegments = parseMeasurementPositionSegments(group.sectionKey);
-  const root = createMeasurementPositionTreeNode(sectionSegments);
-  group.items.forEach((item) => {
-    appendMeasurementPositionTreeItem(root, parseMeasurementPositionSegments(item.position), item, sectionSegments.length);
-  });
-  const subgroupNodes = chooseMeasurementPositionGroupNodes(root);
-  if (subgroupNodes.length === 1 && subgroupNodes[0] === root) {
-    return [createMeasurementPositionGroup(
-      `${group.sectionKey} – ${group.sectionTitle}`,
-      group.items,
-      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
-      group.items.length,
-    )];
-  }
-
-  return subgroupNodes.map((node, subgroupIndex) => {
-    const prefix = node.prefixSegments.join(".");
-    return createMeasurementPositionGroup(
-      getMeasurementPositionGroupLabel(prefix, node.items),
-      node.items,
-      `section:${index}:${subgroupIndex}:${prefix}`,
-      group.items.length,
-    );
-  });
-}
-
-function compactSmallMeasurementPositionGroups(groups: MeasurementPositionGroup[]): MeasurementPositionGroup[] {
-  const compactedGroups: MeasurementPositionGroup[] = [];
-  let index = 0;
-
-  while (index < groups.length) {
-    const firstGroup = groups[index];
-    const mergedItemIds = new Set(firstGroup.itemIds);
-    let mergedCount = firstGroup.count;
-    let lastMergedGroup = firstGroup;
-
-    while ((firstGroup.sourceItemCount ?? firstGroup.count) < 20 && mergedCount < 20 && index + 1 < groups.length) {
-      index += 1;
-      lastMergedGroup = groups[index];
-      lastMergedGroup.itemIds.forEach((itemId) => mergedItemIds.add(itemId));
-      mergedCount += lastMergedGroup.count;
-    }
-
-    compactedGroups.push({
-      ...firstGroup,
-      key: lastMergedGroup === firstGroup
-        ? firstGroup.key
-        : `${firstGroup.key}:merged:${lastMergedGroup.key}`,
-      count: mergedCount,
-      itemIds: mergedItemIds,
-    });
-    index += 1;
-  }
-
-  return compactedGroups;
 }
 
 function filterMeasurementItemsByPositionGroup(items: MobileMeasurementItem[], group: MeasurementPositionGroup | null): MobileMeasurementItem[] {
