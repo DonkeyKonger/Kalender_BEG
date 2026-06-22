@@ -4281,6 +4281,7 @@ function MeasurementBatchDetail({
             <MobileMeasurementTable
               batch={batch}
               items={tableItems}
+              allItems={allItems}
               inlineCell={inlineCell}
               inlineQuantity={inlineQuantity}
               inlineError={inlineError}
@@ -4453,6 +4454,7 @@ function MeasurementViewToggle({
 function MobileMeasurementTable({
   batch,
   items,
+  allItems,
   inlineCell,
   inlineQuantity,
   inlineError,
@@ -4468,6 +4470,7 @@ function MobileMeasurementTable({
 }: {
   batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
+  allItems: MobileMeasurementItem[];
   inlineCell: InlineMeasurementCell | null;
   inlineQuantity: string;
   inlineError: string | null;
@@ -4482,7 +4485,7 @@ function MobileMeasurementTable({
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const displayItems = useMemo(() => buildMeasurementTableDisplayItems(items, batch), [batch, items]);
-  const measuredAreaRows = useMemo(() => collectMeasurementAreaTags(items), [items]);
+  const measuredAreaRows = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
   const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
   const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
   const canAddFromTable = isInlineEditingEnabled && displayItems.length > 0;
