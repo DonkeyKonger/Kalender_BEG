@@ -5247,14 +5247,14 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view {
-    width: calc(100vw - clamp(36px, 6vw, 64px));
-    max-width: none;
+    width: 100%;
+    max-width: 100%;
     border: 0;
     border-radius: 0;
     background: transparent;
-    margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
-    margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
-    overflow: visible;
+    margin-right: 0;
+    margin-left: 0;
+    overflow: hidden;
     padding: 0 0 152px;
     overscroll-behavior: none;
     box-shadow: none;
@@ -5356,23 +5356,24 @@ button.person-chip:focus-visible {
     position: relative;
     width: 100%;
     max-width: 100%;
-    overflow-x: clip;
-    overflow-y: visible;
-  }
-
-  .app-shell.is-mobile-workspace .mobile-measurement-table-wrap {
-    display: block;
-    width: 100%;
-    max-width: 100%;
     min-width: 0;
-    overflow-x: scroll;
-    overflow-y: hidden;
+    overflow-x: auto;
+    overflow-y: clip;
     overscroll-behavior-x: contain;
     overscroll-behavior-y: auto;
     scroll-padding-left: 170px;
     -webkit-overflow-scrolling: touch;
     overflow-anchor: none;
     touch-action: pan-x pan-y;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table-wrap {
+    display: block;
+    width: max-content;
+    min-width: max-content;
+    max-width: none;
+    overflow-x: visible;
+    overflow-y: hidden;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-table-wrap {
