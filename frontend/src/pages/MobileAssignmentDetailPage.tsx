@@ -4208,7 +4208,7 @@ function MeasurementBatchDetail({
         <div className="mobile-measurement-search">
           <Search aria-hidden="true" size={17} />
           <input
-            type="search"
+            type="text"
             placeholder="Position oder Leistung suchen..."
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
