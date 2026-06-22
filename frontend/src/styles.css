@@ -5289,8 +5289,8 @@ button.person-chip:focus-visible {
     display: grid;
     flex: 0 0 auto;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    max-height: calc(3 * 38px + 2 * 8px);
+    gap: 7px 8px;
+    max-height: calc(3 * 38px + 2 * 7px);
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -5310,16 +5310,16 @@ button.person-chip:focus-visible {
     align-items: center;
     width: 100%;
     min-width: 0;
-    height: 32px;
-    border: 1px solid #cbd7e6;
-    border-radius: 6px;
-    background: #ffffff;
-    color: #243348;
+    height: 31px;
+    border: 1px solid #d9e2ec;
+    border-radius: 5px;
+    background: #fbfcfe;
+    color: #334155;
     font: inherit;
-    font-size: 0.78rem;
-    font-weight: 750;
+    font-size: 0.75rem;
+    font-weight: 650;
     overflow: hidden;
-    padding: 7px 10px 9px;
+    padding: 6px 10px 8px;
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -5335,31 +5335,34 @@ button.person-chip:focus-visible {
   .app-shell.is-mobile-workspace .mobile-measurement-position-group-count {
     position: absolute;
     left: 50%;
-    bottom: 0;
+    bottom: 1px;
     transform: translateX(-50%);
     max-width: calc(100% - 12px);
-    border-radius: 4px;
-    background: #f6f8fb;
-    color: #7a8797;
-    font-size: 0.6rem;
+    min-width: 16px;
+    border-radius: 3px;
+    background: #f8fafc;
+    color: #8a95a5;
+    font-size: 0.56rem;
     font-weight: 700;
     line-height: 1;
     overflow: hidden;
-    padding: 1px 5px 2px;
+    padding: 1px 4px 2px;
     pointer-events: none;
+    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active {
-    border-color: #2563eb;
-    background: #eaf2ff;
-    color: #1d4ed8;
+    border-color: #9db7da;
+    background: #f7fbff;
+    color: #1f3f66;
+    font-weight: 700;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active + .mobile-measurement-position-group-count {
-    background: #f3f7fc;
-    color: #64748b;
+    background: #f8fafc;
+    color: #7a8797;
   }
 
   .app-shell.is-mobile-workspace .mobile-detail-actions,
