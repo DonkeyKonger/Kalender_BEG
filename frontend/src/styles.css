@@ -5261,7 +5261,7 @@ button.person-chip:focus-visible {
     margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
     margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
     padding: 0 0 152px;
     overscroll-behavior: none;
     box-shadow: none;
@@ -5363,7 +5363,8 @@ button.person-chip:focus-visible {
     overflow-y: auto;
     overscroll-behavior: contain;
     scroll-padding-left: 170px;
-    -webkit-overflow-scrolling: touch;
+    -webkit-overflow-scrolling: auto;
+    overflow-anchor: none;
     touch-action: pan-x pan-y;
   }
 
@@ -8333,6 +8334,43 @@ button.person-chip:focus-visible {
 .measurement-matrix-draft-field:focus {
   border-color: #2563eb;
   outline: 2px solid rgb(37 99 235 / 16%);
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-draft-field {
+  min-height: 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 450;
+  line-height: 1.15;
+  padding: 0;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table select.measurement-matrix-draft-field {
+  appearance: none;
+  text-align: center;
+  text-align-last: center;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-heading .measurement-matrix-draft-field {
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-draft-field-description {
+  min-height: 56px;
+  padding: 0;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-draft-field:focus {
+  background: rgb(234 242 255 / 45%);
+  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 45%);
+  outline: none;
 }
 
 .mobile-measurement-table.is-inline-editing-enabled .measurement-matrix-empty-cell.is-tablet-editable,
