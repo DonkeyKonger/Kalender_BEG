@@ -4712,6 +4712,36 @@ function MobileMeasurementTable({
     );
   }
 
+  function renderAreaDraftInput(): ReactElement {
+    return (
+      <input
+        ref={draftAreaInputRef}
+        className="measurement-matrix-area-draft-input"
+        type="text"
+        value={draftAreaRow?.value ?? ""}
+        placeholder="Bauteil / Ort"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        onChange={(event) => {
+          const nextValue = normalizeMeasurementAreaInput(event.target.value);
+          setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
+        }}
+        onBlur={commitDraftAreaRow}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitDraftAreaRow();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setDraftAreaRow(null);
+          }
+        }}
+      />
+    );
+  }
+
   function renderDraftAreaAddRow(anchor: string): ReactElement | null {
     const isDraftActive = draftAreaRow?.anchor === anchor;
     const committedArea = isDraftActive ? draftAreaRow.area : null;
@@ -4724,31 +4754,7 @@ function MobileMeasurementTable({
           ) : committedArea ? (
             <span className="measurement-matrix-area-draft-label">{committedArea}</span>
           ) : (
-            <input
-              ref={draftAreaInputRef}
-              className="measurement-matrix-area-draft-input"
-              type="text"
-              value={draftAreaRow.value}
-              placeholder="Bauteil / Ort"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={(event) => {
-                const nextValue = normalizeMeasurementAreaInput(event.target.value);
-                setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
-              }}
-              onBlur={commitDraftAreaRow}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitDraftAreaRow();
-                }
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  setDraftAreaRow(null);
-                }
-              }}
-            />
+            renderAreaDraftInput()
           )}
         </th>
         {displayItems.map((item) => {
@@ -4765,9 +4771,20 @@ function MobileMeasurementTable({
   }
 
   function renderEmptyAreaSpacerRow(anchor: string): ReactElement {
+    const isDraftActive = draftAreaRow?.anchor === anchor;
     return (
-      <tr className="measurement-matrix-empty-area-row" aria-hidden="true">
-        <th className="measurement-matrix-axis" />
+      <tr className={isDraftActive ? "measurement-matrix-empty-area-row is-area-editing" : "measurement-matrix-empty-area-row"}>
+        <th className="measurement-matrix-axis">
+          {isDraftActive ? renderAreaDraftInput() : canAddFromTable ? (
+            <button
+              className="measurement-matrix-empty-area-button"
+              type="button"
+              onClick={() => void startDraftAreaRow(anchor)}
+              aria-label="Bauteil / Ort eintragen"
+              title="Bauteil / Ort eintragen"
+            />
+          ) : null}
+        </th>
         {displayItems.map((item) => (
           <td className={getMeasurementMatrixCellClassName(item, "measurement-matrix-empty-cell")} key={`${anchor}:${item.id}`} />
         ))}

@@ -5572,6 +5572,26 @@ button.person-chip:focus-visible {
     background: #fbfdff;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-empty-area-button {
+    display: block;
+    width: 100%;
+    min-height: 26px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: text;
+    padding: 0;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-empty-area-button:hover,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-empty-area-button:focus-visible {
+    background: rgb(234 242 255 / 35%);
+    box-shadow: none;
+    outline: 1px solid rgb(37 99 235 / 30%);
+    outline-offset: -1px;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row-button {
     min-height: 26px;
   }
@@ -8373,7 +8393,9 @@ button.person-chip:focus-visible {
 .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row-button:hover,
 .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row-button:focus-visible {
   background: rgb(234 242 255 / 45%);
-  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 35%);
+  box-shadow: none;
+  outline: 1px solid rgb(37 99 235 / 35%);
+  outline-offset: -1px;
 }
 
 .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-draft-input {
@@ -8391,8 +8413,9 @@ button.person-chip:focus-visible {
 
 .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-draft-input:focus {
   background: rgb(234 242 255 / 45%);
-  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 45%);
-  outline: none;
+  box-shadow: none;
+  outline: 1px solid rgb(37 99 235 / 45%);
+  outline-offset: -1px;
 }
 
 .measurement-matrix-area-draft-label {
