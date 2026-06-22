@@ -129,3 +129,61 @@ def test_parse_measurement_timesheet_lines_keeps_group_headings_as_section_metad
         ("2", "Mittelschwere Steigeleiter"),
         ("3", "Verteilereinspeisung"),
     ]
+
+
+def test_parse_measurement_timesheet_lines_recognizes_extended_group_heading_formats():
+    result = parse_measurement_timesheet_lines(
+        [
+            "Zeit-Vorgabeliste",
+            "Projekt = 8007 / P250092",
+            "Rechnung = 1260255",
+            "Name1 = Badener Elektro GmbH",
+            "Position Bezeichnung Menge Minuten / Einheit Minuten gesamt",
+            "4.4.02 Verlegesysteme mittelschwer 252.715,79",
+            "4.4.02. 10 Kabelrinne 100/60 mm 3530,10m 21,50 75.897,15",
+            "4.4.02. 71 Abzug Rinne pro ldm. Mittelwert -41,70m 10,00 -417,00",
+            "N.10 Zusatzaufträge 71.070,00",
+            "N.10. 1 Monteurstunden zum Nachweis 975,00Std 60,00 58.500,00",
+            "N01 Kabelleiter UG2 im Doppelboden AV Trasse 31.499,40",
+            "N01. 1 I-Stiel bis 600 mm liefern und auf dem Rohfußboden 136,00ST 19,00 2.584,00",
+            "N01.1 Kabelleiter UG2 im Doppelboden SV Trasse 21.749,70",
+            "N01.1. 1 3-fach Konstruktion nach OBO Heißbemessung 4,00ST 95,00 380,00",
+            "N01.1. Ertüchtigung Brandschutz DB UG2 gemäß PVO 11.760,00",
+            "N01.1.. 1 N6.1331 82,00ST 95,00 7.790,00",
+            "N02.2 zusätzliche Formteile 0,00",
+            "N02.2. 8 90° Rinnenbogen 592,00ST 17,00 10.064,00",
+            "N36/N104 Kennzeichnungsschilder OBO + Wichmann 0,00",
+            "N36/N104. 1 Kennzeichnungsschild liefern und montieren 2,00ST 15,00 30,00",
+            "N39.1. Leistungen 4. OG",
+            "N39.1. 12a Wiedermontage Brüstungskanal 2,80m 60,00 168,00",
+            "N39.1. Leistungen 3. OG",
+            "N39.1. 13 Wiedermontage Brüstungskanal 3,00m 60,00 180,00",
+        ]
+    )
+
+    assert [item.position for item in result.items] == [
+        "4.4.02.10",
+        "4.4.02.71",
+        "N.10.1",
+        "N01.1",
+        "N01.1.1",
+        "N01.1.1",
+        "N02.2.8",
+        "N36/N104.1",
+        "N39.1.12a",
+        "N39.1.13",
+    ]
+    assert result.items[1].list_quantity == Decimal("-41.70")
+    assert result.items[1].list_minutes_total == Decimal("-417.00")
+    assert [(item.source_section_key, item.source_section_title) for item in result.items] == [
+        ("4.4.02", "Verlegesysteme mittelschwer"),
+        ("4.4.02", "Verlegesysteme mittelschwer"),
+        ("N.10", "Zusatzaufträge"),
+        ("N01", "Kabelleiter UG2 im Doppelboden AV Trasse"),
+        ("N01.1", "Kabelleiter UG2 im Doppelboden SV Trasse"),
+        ("N01.1", "Ertüchtigung Brandschutz DB UG2 gemäß PVO"),
+        ("N02.2", "zusätzliche Formteile"),
+        ("N36/N104", "Kennzeichnungsschilder OBO + Wichmann"),
+        ("N39.1", "Leistungen 4. OG"),
+        ("N39.1", "Leistungen 3. OG"),
+    ]

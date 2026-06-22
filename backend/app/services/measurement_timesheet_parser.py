@@ -34,21 +34,22 @@ class MeasurementTimesheetParseResult:
     items: list[ParsedMeasurementItem]
 
 
-_NUMBER_RE = r"\d+(?:\.\d{3})*,\d{2}"
+_NUMBER_RE = r"-?\d+(?:\.\d{3})*,\d{2}"
+_SECTION_KEY_RE = r"(?:N(?:\.?\d+)(?:/N?\d+)*(?:\.\d+)*|\d+(?:\.\d+)*)"
 _ROW_RE = re.compile(
     rf"^(?P<left>.+?)\s+(?P<quantity>{_NUMBER_RE})\s*(?P<unit>[A-Za-zÄÖÜäöüß/]+)\s+"
     rf"(?P<minutes_per_unit>{_NUMBER_RE})\s+(?P<minutes_total>NEP|{_NUMBER_RE})$"
 )
 _BASE_WITH_ITEM_RE = re.compile(
-    r"^(?P<base>N?\d+(?:\.\d+)*\.)\s+(?P<item>\d+[a-z]?)\s+(?P<description>.+)$"
+    rf"^(?P<base>{_SECTION_KEY_RE}\.+)\s+(?P<item>\d+[a-z]?)\s+(?P<description>.+)$"
 )
 _FULL_POSITION_RE = re.compile(
-    r"^(?P<position>N?\d+(?:\.\d+)+(?:[a-z])?)\s+(?P<description>.+)$"
+    rf"^(?P<position>{_SECTION_KEY_RE}\.\d+[a-z]?)\s+(?P<description>.+)$"
 )
-_PENDING_BASE_RE = re.compile(r"^(?P<base>N?\d+(?:\.\d+)*\.)\s+(?P<description>.+)$")
+_PENDING_BASE_RE = re.compile(rf"^(?P<base>{_SECTION_KEY_RE}\.+)\s+(?P<description>.+)$")
 _SUFFIX_LINE_RE = re.compile(r"^(?P<item>\d+[a-z]?)\b\s*(?P<description>.*)$")
 _GROUP_HEADING_RE = re.compile(
-    rf"^(?P<section>N?\d+(?:\.\d+)*)\s+(?P<title>.+?)\s+{_NUMBER_RE}$"
+    rf"^(?P<section>{_SECTION_KEY_RE}\.?)\s+(?P<title>.+?)(?:\s+{_NUMBER_RE})?$"
 )
 _SKIP_LINE_PREFIXES = (
     "Zeit-Vorgabeliste",
@@ -94,18 +95,22 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
         if line.startswith("Name1 ="):
             continue
 
-        group_heading = _parse_group_heading(line)
-        if group_heading is not None:
-            section_key, section_title = group_heading
-            section_headings[section_key] = section_title
-            continue
-
         row_match = _ROW_RE.match(line)
         if row_match:
             finalized = _finalize_current_item(current, len(items) + 1, section_headings)
             if finalized is not None:
                 items.append(finalized)
             current = _start_item(row_match, synthetic_position_counters)
+            continue
+
+        group_heading = _parse_group_heading(line)
+        if group_heading is not None:
+            finalized = _finalize_current_item(current, len(items) + 1, section_headings)
+            if finalized is not None:
+                items.append(finalized)
+            current = None
+            section_key, section_title = group_heading
+            section_headings[section_key] = section_title
             continue
 
         if current is not None and not _is_non_position_table_line(line):
@@ -168,6 +173,8 @@ def _split_position_and_description(left: str) -> tuple[str | None, str, str | N
 
 
 def _parse_group_heading(line: str) -> tuple[str, str] | None:
+    if _ROW_RE.match(line):
+        return None
     match = _GROUP_HEADING_RE.match(line)
     if not match:
         return None
@@ -275,7 +282,11 @@ def _normalize_whitespace(value: str) -> str:
 
 
 def _normalize_section_key(value: str) -> str:
-    return re.sub(r"\s*\.\s*", ".", _normalize_whitespace(value)).rstrip(".")
+    normalized = _normalize_whitespace(value)
+    normalized = re.sub(r"\s*\.\s*", ".", normalized)
+    normalized = re.sub(r"\s*/\s*", "/", normalized)
+    normalized = re.sub(r"\.{2,}", ".", normalized)
+    return normalized.rstrip(".").upper()
 
 
 def _normalize_description(value: str) -> str:

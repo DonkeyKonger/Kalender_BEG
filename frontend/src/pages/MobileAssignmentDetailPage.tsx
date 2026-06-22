@@ -6105,6 +6105,7 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
   }
   const capturedItems = items.filter(isMobileMeasurementItemCaptured);
   const freeItems = items.filter((item) => item.is_free_position);
+  const sourceSectionGroups = buildMeasurementSourceSectionGroups(offerItems);
   const root = createMeasurementPositionTreeNode([]);
   const miscellaneousItems: MobileMeasurementItem[] = [];
 
@@ -6117,15 +6118,17 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
     appendMeasurementPositionTreeItem(root, segments, item);
   });
 
-  const prefixGroups = [...root.children.values()]
-    .sort(compareMeasurementPositionTreeNodes)
-    .flatMap((node) => chooseMeasurementPositionGroupNodes(node))
-    .map((node) => {
-      const prefix = node.prefixSegments.join(".");
-      return createMeasurementPositionGroup(getMeasurementPositionGroupLabel(prefix, node.items), node.items, prefix);
-    });
+  const prefixGroups = sourceSectionGroups.length > 0
+    ? sourceSectionGroups
+    : [...root.children.values()]
+      .sort(compareMeasurementPositionTreeNodes)
+      .flatMap((node) => chooseMeasurementPositionGroupNodes(node))
+      .map((node) => {
+        const prefix = node.prefixSegments.join(".");
+        return createMeasurementPositionGroup(getMeasurementPositionGroupLabel(prefix, node.items), node.items, prefix);
+      });
 
-  if (miscellaneousItems.length > 0) {
+  if (sourceSectionGroups.length === 0 && miscellaneousItems.length > 0) {
     prefixGroups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "misc"));
   }
 
@@ -6149,6 +6152,40 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
       itemIds: new Set(freeItems.map((item) => item.id)),
     }] : []),
   ];
+}
+
+function buildMeasurementSourceSectionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
+  const grouped = new Map<string, { sectionKey: string; sectionTitle: string; items: MobileMeasurementItem[]; sortIndex: number }>();
+  const ungroupedItems: MobileMeasurementItem[] = [];
+  items.forEach((item, index) => {
+    const sectionKey = normalizeMeasurementSectionKey(item.source_section_key);
+    const sectionTitle = item.source_section_title?.trim();
+    if (!sectionKey || !sectionTitle) {
+      ungroupedItems.push(item);
+      return;
+    }
+    const signature = `${sectionKey}\u0000${sectionTitle.toLocaleUpperCase("de-DE")}`;
+    const group = grouped.get(signature) ?? {
+      sectionKey,
+      sectionTitle,
+      items: [],
+      sortIndex: index,
+    };
+    group.items.push(item);
+    grouped.set(signature, group);
+  });
+
+  const groups = [...grouped.values()]
+    .sort((left, right) => left.sortIndex - right.sortIndex)
+    .map((group, index) => createMeasurementPositionGroup(
+      `${group.sectionKey} – ${group.sectionTitle}`,
+      group.items,
+      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
+    ));
+  if (groups.length > 0 && ungroupedItems.length > 0) {
+    groups.push(createMeasurementPositionGroup("Sonstige", ungroupedItems, "misc"));
+  }
+  return groups;
 }
 
 function filterMeasurementItemsByPositionGroup(items: MobileMeasurementItem[], group: MeasurementPositionGroup | null): MobileMeasurementItem[] {
