@@ -2778,6 +2778,19 @@ function MobileMeasurementTab({
     setPhotoGalleryBatch((currentBatch) => (currentBatch ? applyCount(currentBatch) : currentBatch));
   }
 
+  function updateBatchPositionCount(batchId: number, delta: number): void {
+    const applyPositionCount = (batch: MobileMeasurementBatch) => (
+      batch.id === batchId
+        ? { ...batch, position_count: Math.max(0, batch.position_count + delta) }
+        : batch
+    );
+    setBatches((currentBatches) => currentBatches.map(applyPositionCount));
+    setSelectedBatch((currentBatch) => (currentBatch ? applyPositionCount(currentBatch) : currentBatch));
+    setSignatureBatch((currentBatch) => (currentBatch ? applyPositionCount(currentBatch) : currentBatch));
+    setWorkerSignatureBatch((currentBatch) => (currentBatch ? applyPositionCount(currentBatch) : currentBatch));
+    setPhotoGalleryBatch((currentBatch) => (currentBatch ? applyPositionCount(currentBatch) : currentBatch));
+  }
+
   function updateBatchAreaRows(batchId: number, areaRow: MeasurementAreaRow): void {
     const applyAreaRow = (batch: MobileMeasurementBatch) => (
       batch.id === batchId ? mergeMobileMeasurementBatchAreaRow(batch, areaRow) : batch
@@ -3104,6 +3117,7 @@ function MobileMeasurementTab({
         setInlineQuantity("");
         setItems((currentItems) => currentItems.map((currentItem) => (currentItem.id === item.id ? createdItem : currentItem)));
         setSelectedItem((currentItem) => (currentItem?.id === item.id ? createdItem : currentItem));
+        updateBatchPositionCount(selectedBatch.id, 1);
         return true;
       }
       if (existingEntries.length > 0) {

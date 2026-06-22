@@ -191,6 +191,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries).selectinload(
                         SiteMeasurementEntry.measurement_item
                     ),
+                    selectinload(SiteMeasurementBatch.free_items),
                     selectinload(SiteMeasurementBatch.area_rows).selectinload(
                         SiteMeasurementAreaRow.created_by
                     ),
@@ -317,6 +318,11 @@ class MeasurementService:
                     SiteMeasurementItem.site_id == batch.site_id,
                     SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
                     SiteMeasurementItem.is_hidden.is_(False),
+                    or_(
+                        SiteMeasurementItem.is_free_position.is_(False),
+                        SiteMeasurementItem.measurement_batch_id.is_(None),
+                        SiteMeasurementItem.measurement_batch_id == batch.id,
+                    ),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
@@ -484,6 +490,7 @@ class MeasurementService:
         item = SiteMeasurementItem(
             site_id=batch.site_id,
             measurement_base_id=batch.measurement_base_id,
+            measurement_batch_id=batch.id,
             source_file_name=None,
             source_project_number=None,
             source_invoice_number=None,
@@ -839,6 +846,7 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.free_items),
                 selectinload(SiteMeasurementBatch.measurement_base),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
             )
@@ -889,6 +897,11 @@ class MeasurementService:
                     SiteMeasurementItem.site_id == batch.site_id,
                     SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
                     SiteMeasurementItem.is_hidden.is_(False),
+                    or_(
+                        SiteMeasurementItem.is_free_position.is_(False),
+                        SiteMeasurementItem.measurement_batch_id.is_(None),
+                        SiteMeasurementItem.measurement_batch_id == batch.id,
+                    ),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
@@ -1843,6 +1856,7 @@ class MeasurementService:
                     SiteMeasurementEntry.measurement_item
                 ),
                 selectinload(SiteMeasurementBatch.area_rows),
+                selectinload(SiteMeasurementBatch.free_items),
                 selectinload(SiteMeasurementBatch.photos),
                 selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
@@ -1887,6 +1901,11 @@ class MeasurementService:
             if not (entry.measurement_item and entry.measurement_item.is_hidden)
         ]
         position_ids = {entry.measurement_item_id for entry in visible_entries}
+        position_ids.update(
+            item.id
+            for item in batch.free_items
+            if item.is_free_position and not item.is_hidden
+        )
         reported_minutes = self._sum_reported_minutes(visible_entries)
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
         workflow_state = self._mobile_batch_workflow_state(

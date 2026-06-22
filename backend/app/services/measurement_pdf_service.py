@@ -261,6 +261,7 @@ class MeasurementPdfService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.free_items),
                 selectinload(SiteMeasurementBatch.area_rows),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.photos).selectinload(
@@ -383,6 +384,18 @@ class MeasurementPdfService:
                     "updated_at": row.updated_at,
                 }
                 for row in sorted(batch.area_rows or [], key=lambda row: (row.sort_order, row.id))
+            ],
+            "free_items": [
+                {
+                    "id": item.id,
+                    "position": item.position,
+                    "description": item.description,
+                    "unit": item.unit,
+                    "sort_order": item.sort_order,
+                    "updated_at": item.updated_at,
+                }
+                for item in sorted(batch.free_items or [], key=lambda item: (item.sort_order, item.id))
+                if item.is_free_position and not item.is_hidden
             ],
             "photos": [
                 {
@@ -568,6 +581,19 @@ class MeasurementPdfService:
                 continue
             area_key = area_label.casefold()
             area_by_key.setdefault(area_key, MatrixArea(key=area_key, label=area_label))
+        for item in sorted(batch.free_items or [], key=lambda row: (row.sort_order, row.id)):
+            if not item.is_free_position or item.is_hidden:
+                continue
+            positions_by_id.setdefault(
+                item.id,
+                MatrixPosition(
+                    item_id=item.id,
+                    position=item.position,
+                    description=item.description,
+                    unit=item.unit or "",
+                    sort_order=item.sort_order,
+                ),
+            )
         for entry in entries:
             item = entry.measurement_item
             if item is None:

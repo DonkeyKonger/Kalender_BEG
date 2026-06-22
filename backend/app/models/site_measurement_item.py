@@ -43,6 +43,9 @@ class SiteMeasurementItem(TimestampMixin, Base):
     measurement_base_id: Mapped[int] = mapped_column(
         ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    measurement_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), index=True
+    )
     source_file_name: Mapped[str | None] = mapped_column(String(255))
     source_project_number: Mapped[str | None] = mapped_column(String(120))
     source_invoice_number: Mapped[str | None] = mapped_column(String(120), index=True)
@@ -62,6 +65,11 @@ class SiteMeasurementItem(TimestampMixin, Base):
 
     site = relationship("Site", back_populates="measurement_items")
     measurement_base = relationship("SiteMeasurementBase", back_populates="items")
+    measurement_batch = relationship(
+        "SiteMeasurementBatch",
+        back_populates="free_items",
+        foreign_keys=[measurement_batch_id],
+    )
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_item", cascade="all, delete-orphan"
     )
@@ -101,6 +109,13 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     measurement_base = relationship("SiteMeasurementBase", back_populates="batches")
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_batch", cascade="all, delete-orphan"
+    )
+    free_items = relationship(
+        "SiteMeasurementItem",
+        back_populates="measurement_batch",
+        cascade="all, delete-orphan",
+        foreign_keys="SiteMeasurementItem.measurement_batch_id",
+        order_by="SiteMeasurementItem.sort_order",
     )
     photos = relationship(
         "SiteMeasurementBatchPhoto", back_populates="measurement_batch", cascade="all, delete-orphan"
