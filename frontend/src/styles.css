@@ -5260,6 +5260,11 @@ button.person-chip:focus-visible {
     box-shadow: none;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-back-button,
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-create-position-button {
+    border-radius: 2px;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-toolbar {
     display: flex;
     flex-direction: row-reverse;
@@ -5271,6 +5276,8 @@ button.person-chip:focus-visible {
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-search {
     flex: 0 1 min(360px, 44vw);
     min-height: 32px;
+    border-color: #cbd5e1;
+    border-radius: 2px;
     padding-right: 8px;
     padding-left: 8px;
     box-shadow: none;
@@ -5283,6 +5290,34 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-view-actions {
     flex: 0 0 auto;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid #cbd5e1;
+    border-radius: 2px;
+    background: #f8fafc;
+    padding: 2px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle button {
+    min-height: 28px;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: #475569;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 750;
+    padding: 4px 10px;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle button.is-active {
+    border-color: #9db7da;
+    background: #eef5ff;
+    color: #1f3f66;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
@@ -5299,7 +5334,7 @@ button.person-chip:focus-visible {
       2 * var(--measurement-position-group-padding)
     );
     border: 1px solid #cbd5e1;
-    border-radius: 3px;
+    border-radius: 2px;
     background: #f8fafc;
     overflow-x: hidden;
     overflow-y: auto;
@@ -5329,7 +5364,7 @@ button.person-chip:focus-visible {
     min-width: 0;
     height: var(--measurement-position-group-row-height);
     border: 1px solid #c7d2df;
-    border-radius: 2px;
+    border-radius: 0;
     background: #fbfcfe;
     color: #334155;
     font: inherit;
@@ -5421,7 +5456,7 @@ button.person-chip:focus-visible {
     max-width: 100%;
     min-width: 0;
     border: 1px solid #dce3ec;
-    border-radius: 6px;
+    border-radius: 2px;
     background: #ffffff;
     overflow-x: auto;
     overflow-y: clip;
@@ -5548,10 +5583,20 @@ button.person-chip:focus-visible {
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-header-button,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-cell-button {
     min-height: 24px;
+    border-radius: 0;
     font-weight: 450;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-cell-button:focus-visible,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-header-button:focus-visible,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-active-cell:focus-visible,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-row-button:focus-visible,
+  .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-button:focus-visible {
+    border-radius: 0;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-active-cell {
+    border-radius: 0;
     min-height: 26px;
     padding: 2px 5px;
     font-weight: 650;
@@ -5604,6 +5649,7 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-button {
+    border-radius: 0;
     min-height: 30px;
   }
 
@@ -5622,6 +5668,7 @@ button.person-chip:focus-visible {
     right: max(12px, env(safe-area-inset-right));
     bottom: max(12px, env(safe-area-inset-bottom));
     width: 248px;
+    border-radius: 2px;
     padding: 7px;
   }
 
@@ -5630,6 +5677,7 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-fixed-key {
+    border-radius: 2px;
     min-height: 34px;
   }
 
