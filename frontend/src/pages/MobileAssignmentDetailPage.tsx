@@ -4233,18 +4233,20 @@ function MeasurementBatchDetail({
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
         <>
-          <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
-            {positionGroups.map((group) => (
-              <button
-                className={group.key === effectivePositionGroupKey ? "is-active" : ""}
-                key={group.key}
-                type="button"
-                onClick={() => setActivePositionGroupKey(group.key)}
-              >
-                {group.label} · {group.count} Pos.
-              </button>
-            ))}
-          </div>
+          {positionGroups.length > 0 ? (
+            <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
+              {positionGroups.map((group) => (
+                <button
+                  className={group.key === effectivePositionGroupKey ? "is-active" : ""}
+                  key={group.key}
+                  type="button"
+                  onClick={() => setActivePositionGroupKey(group.key)}
+                >
+                  {group.label} · {group.count} Pos.
+                </button>
+              ))}
+            </div>
+          ) : null}
           {tableItems.length > 0 ? (
             <MobileMeasurementTable
               items={tableItems}
@@ -6030,6 +6032,9 @@ function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
 
 function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
   const offerItems = items.filter((item) => !item.is_free_position && !isInlineFreePositionDraftItem(item));
+  if (offerItems.length < 30) {
+    return [];
+  }
   const capturedItems = items.filter(isMobileMeasurementItemCaptured);
   const freeItems = items.filter((item) => item.is_free_position);
   const root = createMeasurementPositionTreeNode([]);
