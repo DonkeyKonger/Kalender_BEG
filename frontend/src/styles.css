@@ -5299,7 +5299,7 @@ button.person-chip:focus-visible {
       2 * var(--measurement-position-group-padding)
     );
     border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    border-radius: 3px;
     background: #f8fafc;
     overflow-x: hidden;
     overflow-y: auto;
@@ -5329,7 +5329,7 @@ button.person-chip:focus-visible {
     min-width: 0;
     height: var(--measurement-position-group-row-height);
     border: 1px solid #c7d2df;
-    border-radius: 5px;
+    border-radius: 2px;
     background: #fbfcfe;
     color: #334155;
     font: inherit;
