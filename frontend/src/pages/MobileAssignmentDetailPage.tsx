@@ -4713,7 +4713,7 @@ function MobileMeasurementTable({
         {items.map((item) => {
           const isActive = Boolean(committedArea && isInlineCellActive(item, committedArea, "add-row"));
           return (
-            <td className={isActive ? "measurement-matrix-empty-cell is-tablet-editable is-inline-editing" : "measurement-matrix-empty-cell is-tablet-editable"} key={item.id}>
+            <td className={getMeasurementMatrixCellClassName(item, isActive ? "measurement-matrix-empty-cell is-tablet-editable is-inline-editing" : "measurement-matrix-empty-cell is-tablet-editable")} key={item.id}>
               {isActive && committedArea ? renderActiveCell(item, committedArea, "add-row") : null}
             </td>
           );
@@ -4731,7 +4731,7 @@ function MobileMeasurementTable({
             <tr>
               <th className="measurement-matrix-axis">Pos.-Nr.</th>
               {items.map((item) => (
-                <th className="measurement-matrix-position-heading" key={item.id}>
+                <th className={getMeasurementMatrixCellClassName(item, "measurement-matrix-position-heading")} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
                     <input
                       className="measurement-matrix-draft-field"
@@ -4760,16 +4760,16 @@ function MobileMeasurementTable({
             <tr>
               <th className="measurement-matrix-axis">Beschreibung</th>
               {items.map((item) => (
-                <th className="measurement-matrix-description-heading" key={item.id}>
+                <th className={getMeasurementMatrixCellClassName(item, "measurement-matrix-description-heading")} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
-                    <input
+                    <textarea
                       autoFocus={!item.description.trim()}
-                      className="measurement-matrix-draft-field"
-                      type="text"
+                      className="measurement-matrix-draft-field measurement-matrix-draft-field-description"
                       value={item.description}
                       placeholder="Leistung"
                       aria-label="Leistungsbeschreibung der freien Position"
                       onChange={(event) => onInlineFreePositionDraftChange(item.id, { description: event.target.value })}
+                      rows={3}
                     />
                   ) : (
                     <span className="measurement-matrix-description-text">{item.description}</span>
@@ -4781,7 +4781,7 @@ function MobileMeasurementTable({
             <tr>
               <th className="measurement-matrix-axis">Einheit</th>
               {items.map((item) => (
-                <th key={item.id}>
+                <th className={getMeasurementMatrixCellClassName(item)} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
                     <select
                       className="measurement-matrix-draft-field"
@@ -4802,7 +4802,7 @@ function MobileMeasurementTable({
           <tbody>
             <tr className="measurement-matrix-section-row">
               <th className="measurement-matrix-axis">Bauteil / Ort</th>
-              {items.map((item) => <td key={item.id} />)}
+              {items.map((item) => <td className={getMeasurementMatrixCellClassName(item)} key={item.id} />)}
               {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
             {canAddFromTable && areaRows.length === 0 ? (
@@ -4823,7 +4823,7 @@ function MobileMeasurementTable({
                       isActive ? "is-inline-editing" : "",
                     ].filter(Boolean).join(" ");
                     return (
-                      <td className={cellClassName} key={item.id}>
+                      <td className={getMeasurementMatrixCellClassName(item, cellClassName)} key={item.id}>
                         {isActive ? renderActiveCell(item, area, "cell") : (
                           <button
                             className="measurement-matrix-cell-button"
@@ -4850,7 +4850,7 @@ function MobileMeasurementTable({
             <tr className="measurement-matrix-total-row">
               <th className="measurement-matrix-axis">Gesamt</th>
               {items.map((item) => (
-                <td className="measurement-matrix-quantity-cell" key={item.id}>
+                <td className={getMeasurementMatrixCellClassName(item, "measurement-matrix-quantity-cell")} key={item.id}>
                   <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
                     <strong>{formatMeasurementNumber(item.reported_quantity)}</strong>
                   </button>
@@ -6017,6 +6017,12 @@ function groupMeasurementEntriesByArea(entries: MeasurementEntry[]): Measurement
 
 function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
   return entries.reduce((sum, entry) => sum + getMeasurementEntryQuantity(entry), 0);
+}
+
+function getMeasurementMatrixCellClassName(item: MobileMeasurementItem, baseClassName = ""): string {
+  return [baseClassName, item.is_free_position ? "measurement-matrix-free-column" : ""]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
