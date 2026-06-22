@@ -5372,8 +5372,7 @@ button.person-chip:focus-visible {
     width: max-content;
     min-width: max-content;
     max-width: none;
-    overflow-x: visible;
-    overflow-y: hidden;
+    overflow: visible;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-table-wrap {
@@ -5396,12 +5395,22 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis {
+    position: sticky;
+    left: 0;
+    z-index: 6;
     width: 116px;
     min-width: 116px;
     max-width: 116px;
+    background: #f8fafc;
+    background-clip: padding-box;
     white-space: normal;
     overflow-wrap: anywhere;
-    box-shadow: 8px 0 14px rgb(15 23 42 / 7%);
+    box-shadow: 8px 0 14px rgb(15 23 42 / 10%);
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-table thead .measurement-matrix-axis {
+    z-index: 9;
+    background: #eef4fb;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-heading {
