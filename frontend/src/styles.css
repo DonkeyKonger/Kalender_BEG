@@ -5295,6 +5295,7 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
     display: grid;
+    flex: 0 0 auto;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     overflow-x: visible;
