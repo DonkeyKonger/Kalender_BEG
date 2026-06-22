@@ -2733,6 +2733,7 @@ function MobileMeasurementTab({
   const [inlineQuantity, setInlineQuantity] = useState("");
   const [inlineError, setInlineError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const inlineFreePositionDraftIdRef = useRef(-1);
   const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
@@ -2950,6 +2951,38 @@ function MobileMeasurementTab({
     setInlineError(null);
   }
 
+  function addInlineFreePositionColumn(): void {
+    if (!selectedBatch) {
+      return;
+    }
+    cancelInlineMeasurementEdit();
+    setSearchTerm("");
+    setItems((currentItems) => {
+      if (currentItems.some(isEmptyInlineFreePositionDraftItem)) {
+        return currentItems;
+      }
+      const draftId = inlineFreePositionDraftIdRef.current;
+      inlineFreePositionDraftIdRef.current -= 1;
+      return [
+        ...currentItems,
+        createInlineFreePositionDraftItem(selectedBatch, draftId, getNextInlineFreePositionDraftLabel(currentItems)),
+      ];
+    });
+  }
+
+  function updateInlineFreePositionDraft(itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>): void {
+    setItems((currentItems) => currentItems.map((item) => {
+      if (item.id !== itemId || !isInlineFreePositionDraftItem(item)) {
+        return item;
+      }
+      return {
+        ...item,
+        ...patch,
+        updated_at: new Date().toISOString(),
+      };
+    }));
+  }
+
   function cancelInlineMeasurementEdit(): void {
     setInlineCell(null);
     setInlineQuantity("");
@@ -2972,6 +3005,7 @@ function MobileMeasurementTab({
     const existingQuantity = isAddRow ? 0 : getMobileMeasurementAreaQuantity(item, inlineCell.area);
     const quantity = parseOptionalMeasurementQuantity(inlineQuantity);
     const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(inlineCell.area));
+    const isDraftFreePosition = isInlineFreePositionDraftItem(item);
     if (quantity === null || quantity < 0) {
       setInlineError("Bitte eine gültige Menge ab 0,00 eingeben.");
       return false;
@@ -2988,10 +3022,32 @@ function MobileMeasurementTab({
       cancelInlineMeasurementEdit();
       return true;
     }
+    if (isDraftFreePosition && !item.description.trim()) {
+      setInlineError("Bitte Leistung beschreiben.");
+      return false;
+    }
+    if (isDraftFreePosition && !(item.unit ?? "").trim()) {
+      setInlineError("Bitte Einheit angeben.");
+      return false;
+    }
 
     setIsSaving(true);
     setInlineError(null);
     try {
+      if (isDraftFreePosition) {
+        const createdItem = await api.createMobileMeasurementFreeItem(assignment.id, selectedBatch.id, {
+          position: item.position.trim() || null,
+          description: item.description.trim(),
+          unit: item.unit?.trim() || "st",
+          quantity,
+          area_or_comment: normalizedArea,
+        });
+        setInlineCell(null);
+        setInlineQuantity("");
+        setItems((currentItems) => currentItems.map((currentItem) => (currentItem.id === item.id ? createdItem : currentItem)));
+        setSelectedItem((currentItem) => (currentItem?.id === item.id ? createdItem : currentItem));
+        return true;
+      }
       if (existingEntries.length > 0) {
         await Promise.all(existingEntries.map((entry) => api.deleteMobileMeasurementEntry(assignment.id, selectedBatch.id, entry.id)));
       }
@@ -3273,6 +3329,9 @@ function MobileMeasurementTab({
             setSearchTerm(value);
           }}
           onSelectItem={(item) => {
+            if (isInlineFreePositionDraftItem(item)) {
+              return;
+            }
             setSelectedItem(item);
             setFormComment("");
             setFormQuantity("");
@@ -3291,6 +3350,8 @@ function MobileMeasurementTab({
           }}
           onInlineSave={saveInlineMeasurementEdit}
           onInlineCancel={cancelInlineMeasurementEdit}
+          onInlineCreatePosition={addInlineFreePositionColumn}
+          onInlineFreePositionDraftChange={updateInlineFreePositionDraft}
         />
         {isFreePositionFormOpen ? (
           <div
@@ -4049,6 +4110,8 @@ function MeasurementBatchDetail({
   onInlineQuantityChange,
   onInlineSave,
   onInlineCancel,
+  onInlineCreatePosition,
+  onInlineFreePositionDraftChange,
 }: {
   batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
@@ -4071,6 +4134,8 @@ function MeasurementBatchDetail({
   onInlineQuantityChange: (value: string) => void;
   onInlineSave: () => Promise<boolean>;
   onInlineCancel: () => void;
+  onInlineCreatePosition: () => void;
+  onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
 }) {
   return (
     <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page${viewMode === "table" ? " is-table-view" : ""}`}>
@@ -4114,7 +4179,7 @@ function MeasurementBatchDetail({
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "list" ? (
         <div className="mobile-measurement-list">
-          {items.map((item) => {
+          {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
             const isCaptured = isMobileMeasurementItemCaptured(item);
             return (
               <button
@@ -4148,7 +4213,8 @@ function MeasurementBatchDetail({
           onInlineQuantityChange={onInlineQuantityChange}
           onInlineSave={onInlineSave}
           onInlineCancel={onInlineCancel}
-          onCreatePosition={onCreatePosition}
+          onInlineCreatePosition={onInlineCreatePosition}
+          onInlineFreePositionDraftChange={onInlineFreePositionDraftChange}
           onSelectItem={onSelectItem}
         />
       ) : null}
@@ -4314,7 +4380,8 @@ function MobileMeasurementTable({
   onInlineQuantityChange,
   onInlineSave,
   onInlineCancel,
-  onCreatePosition,
+  onInlineCreatePosition,
+  onInlineFreePositionDraftChange,
   onSelectItem,
 }: {
   items: MobileMeasurementItem[];
@@ -4327,7 +4394,8 @@ function MobileMeasurementTable({
   onInlineQuantityChange: (value: string) => void;
   onInlineSave: () => Promise<boolean>;
   onInlineCancel: () => void;
-  onCreatePosition: () => void;
+  onInlineCreatePosition: () => void;
+  onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const areaRows = collectMeasurementAreaTags(items);
@@ -4424,7 +4492,7 @@ function MobileMeasurementTable({
         return;
       }
     }
-    onCreatePosition();
+    onInlineCreatePosition();
   }
 
   async function startDraftAreaRow(anchor: string): Promise<void> {
@@ -4610,10 +4678,21 @@ function MobileMeasurementTable({
               <th className="measurement-matrix-axis">Pos.-Nr.</th>
               {items.map((item) => (
                 <th className="measurement-matrix-position-heading" key={item.id}>
-                  <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
-                    <span className="measurement-matrix-position-text">{item.position}</span>
-                    {item.is_free_position ? <span className="mobile-measurement-free-badge">frei</span> : null}
-                  </button>
+                  {isInlineFreePositionDraftItem(item) ? (
+                    <input
+                      className="measurement-matrix-draft-field"
+                      type="text"
+                      value={item.position}
+                      placeholder="FREI"
+                      aria-label="Positionsnummer der freien Position"
+                      onChange={(event) => onInlineFreePositionDraftChange(item.id, { position: event.target.value })}
+                    />
+                  ) : (
+                    <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
+                      <span className="measurement-matrix-position-text">{item.position}</span>
+                      {item.is_free_position ? <span className="mobile-measurement-free-badge">frei</span> : null}
+                    </button>
+                  )}
                 </th>
               ))}
               {canAddFromTable ? (
@@ -4628,7 +4707,19 @@ function MobileMeasurementTable({
               <th className="measurement-matrix-axis">Beschreibung</th>
               {items.map((item) => (
                 <th className="measurement-matrix-description-heading" key={item.id}>
-                  <span className="measurement-matrix-description-text">{item.description}</span>
+                  {isInlineFreePositionDraftItem(item) ? (
+                    <input
+                      autoFocus={!item.description.trim()}
+                      className="measurement-matrix-draft-field"
+                      type="text"
+                      value={item.description}
+                      placeholder="Leistung"
+                      aria-label="Leistungsbeschreibung der freien Position"
+                      onChange={(event) => onInlineFreePositionDraftChange(item.id, { description: event.target.value })}
+                    />
+                  ) : (
+                    <span className="measurement-matrix-description-text">{item.description}</span>
+                  )}
                 </th>
               ))}
               {canAddFromTable ? <th className="measurement-matrix-add-column-heading is-spacer" aria-hidden="true" /> : null}
@@ -4636,7 +4727,20 @@ function MobileMeasurementTable({
             <tr>
               <th className="measurement-matrix-axis">Einheit</th>
               {items.map((item) => (
-                <th key={item.id}>{item.unit ?? "-"}</th>
+                <th key={item.id}>
+                  {isInlineFreePositionDraftItem(item) ? (
+                    <select
+                      className="measurement-matrix-draft-field"
+                      value={item.unit ?? "st"}
+                      aria-label="Einheit der freien Position"
+                      onChange={(event) => onInlineFreePositionDraftChange(item.id, { unit: event.target.value })}
+                    >
+                      {MOBILE_MEASUREMENT_FREE_UNITS.map((unit) => (
+                        <option key={unit} value={unit}>{unit}</option>
+                      ))}
+                    </select>
+                  ) : item.unit ?? "-"}
+                </th>
               ))}
               {canAddFromTable ? <th className="measurement-matrix-add-column-heading is-spacer" aria-hidden="true" /> : null}
             </tr>
@@ -5865,6 +5969,50 @@ function groupMeasurementEntriesByArea(entries: MeasurementEntry[]): Measurement
 
 function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
   return entries.reduce((sum, entry) => sum + getMeasurementEntryQuantity(entry), 0);
+}
+
+function isInlineFreePositionDraftItem(item: MobileMeasurementItem): boolean {
+  return item.id < 0 && item.is_free_position;
+}
+
+function isEmptyInlineFreePositionDraftItem(item: MobileMeasurementItem): boolean {
+  return isInlineFreePositionDraftItem(item) && item.entries.length === 0 && !item.description.trim();
+}
+
+function getNextInlineFreePositionDraftLabel(items: MobileMeasurementItem[]): string {
+  const nextNumber = items.filter((item) => item.is_free_position).length + 1;
+  return `FREI-${nextNumber}`;
+}
+
+function createInlineFreePositionDraftItem(batch: MobileMeasurementBatch, id: number, position: string): MobileMeasurementItem {
+  const timestamp = new Date().toISOString();
+  return {
+    id,
+    site_id: batch.site_id,
+    measurement_base_id: batch.measurement_base_id,
+    source_file_name: null,
+    source_project_number: null,
+    source_invoice_number: null,
+    source_customer_name: null,
+    position,
+    description: "",
+    list_quantity: null,
+    unit: "st",
+    minutes_per_unit: null,
+    list_minutes_total: null,
+    is_nep: false,
+    is_free_position: true,
+    is_hidden: false,
+    sort_order: Number.MAX_SAFE_INTEGER - Math.abs(id),
+    measurement_base: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+    entries: [],
+    reported_quantity: 0,
+    reported_minutes: 0,
+    reported_hours: 0,
+    mobile_status: "open",
+  };
 }
 
 function recalculateMobileMeasurementItemTotals(item: MobileMeasurementItem, entries: MeasurementEntry[]): MobileMeasurementItem {

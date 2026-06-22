@@ -8237,6 +8237,24 @@ button.person-chip:focus-visible {
   min-height: 34px;
 }
 
+.measurement-matrix-draft-field {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b9cbe0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 5px 6px;
+}
+
+.measurement-matrix-draft-field:focus {
+  border-color: #2563eb;
+  outline: 2px solid rgb(37 99 235 / 16%);
+}
+
 .mobile-measurement-table.is-inline-editing-enabled .measurement-matrix-empty-cell.is-tablet-editable,
 .mobile-measurement-table.is-inline-editing-enabled .measurement-matrix-quantity-cell.is-tablet-editable {
   cursor: text;
