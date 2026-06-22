@@ -4655,53 +4655,58 @@ function MobileMeasurementTable({
     void moveInlineCell(activeCell.item, activeCell.area, activeCell.mode, 1);
   }
 
-  function renderDraftAreaAddRow(anchor: string, isEmptyTable = false): ReactElement {
+  function renderAddAreaButton(anchor: string, isEmptyTable = false): ReactElement {
+    return (
+      <button
+        className="measurement-matrix-add-row-button"
+        type="button"
+        onClick={() => void startDraftAreaRow(anchor)}
+        aria-label={isEmptyTable ? "Erste Eingabezeile anlegen" : "Neue Eingabezeile anlegen"}
+        title={isEmptyTable ? "Erste Eingabezeile anlegen" : "Neue Eingabezeile anlegen"}
+      >
+        <Plus aria-hidden="true" size={15} />
+      </button>
+    );
+  }
+
+  function renderDraftAreaAddRow(anchor: string): ReactElement | null {
     const isDraftActive = draftAreaRow?.anchor === anchor;
+    if (!isDraftActive) {
+      return null;
+    }
     const committedArea = isDraftActive ? draftAreaRow.area : null;
 
     return (
       <tr className={isDraftActive ? "measurement-matrix-add-row is-area-editing" : "measurement-matrix-add-row"}>
         <th className="measurement-matrix-axis measurement-matrix-add-row-axis">
-          {isDraftActive ? (
-            committedArea ? (
-              <span className="measurement-matrix-area-draft-label">{committedArea}</span>
-            ) : (
-              <input
-                ref={draftAreaInputRef}
-                className="measurement-matrix-area-draft-input"
-                type="text"
-                value={draftAreaRow.value}
-                placeholder="Bauteil / Ort"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                onChange={(event) => {
-                  const nextValue = normalizeMeasurementAreaInput(event.target.value);
-                  setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
-                }}
-                onBlur={commitDraftAreaRow}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitDraftAreaRow();
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setDraftAreaRow(null);
-                  }
-                }}
-              />
-            )
+          {committedArea ? (
+            <span className="measurement-matrix-area-draft-label">{committedArea}</span>
           ) : (
-            <button
-              className="measurement-matrix-add-row-button"
-              type="button"
-              onClick={() => void startDraftAreaRow(anchor)}
-              aria-label={isEmptyTable ? "Erste Eingabezeile anlegen" : "Neue Eingabezeile anlegen"}
-              title={isEmptyTable ? "Erste Eingabezeile anlegen" : "Neue Eingabezeile anlegen"}
-            >
-              <Plus aria-hidden="true" size={15} />
-            </button>
+            <input
+              ref={draftAreaInputRef}
+              className="measurement-matrix-area-draft-input"
+              type="text"
+              value={draftAreaRow.value}
+              placeholder="Bauteil / Ort"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(event) => {
+                const nextValue = normalizeMeasurementAreaInput(event.target.value);
+                setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
+              }}
+              onBlur={commitDraftAreaRow}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitDraftAreaRow();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setDraftAreaRow(null);
+                }
+              }}
+            />
           )}
         </th>
         {items.map((item) => {
@@ -4712,7 +4717,9 @@ function MobileMeasurementTable({
             </td>
           );
         })}
-        <td className="measurement-matrix-add-column-cell" />
+        <td className="measurement-matrix-add-column-cell">
+          {committedArea ? renderAddAreaButton(`${anchor}__draft`) : null}
+        </td>
       </tr>
     );
   }
@@ -4797,12 +4804,15 @@ function MobileMeasurementTable({
             <tr className="measurement-matrix-section-row">
               <th className="measurement-matrix-axis">Bauteil / Ort</th>
               {items.map((item) => <td key={item.id} />)}
-              {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
+              {canAddFromTable ? (
+                <td className="measurement-matrix-add-column-cell">
+                  {areaRows.length === 0 && !draftAreaRow ? renderAddAreaButton("__empty__", true) : null}
+                </td>
+              ) : null}
             </tr>
             {canAddFromTable && areaRows.length === 0 ? (
               <>
-                {renderDraftAreaAddRow("__empty__", true)}
-                {draftAreaRow?.anchor === "__empty__" && draftAreaRow.area ? renderDraftAreaAddRow("__empty__followup", true) : null}
+                {renderDraftAreaAddRow("__empty__")}
               </>
             ) : null}
             {areaRows.map((area) => (
@@ -4837,14 +4847,13 @@ function MobileMeasurementTable({
                       </td>
                     );
                   })}
-                  {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
+                  {canAddFromTable ? (
+                    <td className="measurement-matrix-add-column-cell">
+                      {renderAddAreaButton(area)}
+                    </td>
+                  ) : null}
                 </tr>
-                {canAddFromTable ? (
-                  <>
-                    {renderDraftAreaAddRow(area)}
-                    {draftAreaRow?.anchor === area && draftAreaRow.area ? renderDraftAreaAddRow(`__followup__${area}`) : null}
-                  </>
-                ) : null}
+                {canAddFromTable ? renderDraftAreaAddRow(area) : null}
               </Fragment>
             ))}
             <tr className="measurement-matrix-total-row">
