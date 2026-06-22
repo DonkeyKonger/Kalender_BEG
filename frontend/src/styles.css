@@ -5286,26 +5286,38 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
+    --measurement-position-group-row-gap: 7px;
+    --measurement-position-group-row-height: 38px;
+    --measurement-position-group-padding: 6px;
     display: grid;
     flex: 0 0 auto;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 7px 8px;
-    max-height: calc(3 * 38px + 2 * 7px);
+    gap: var(--measurement-position-group-row-gap) 8px;
+    max-height: calc(
+      3 * var(--measurement-position-group-row-height) +
+      2 * var(--measurement-position-group-row-gap) +
+      2 * var(--measurement-position-group-padding)
+    );
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     background: #f8fafc;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 6px;
+    padding: var(--measurement-position-group-padding);
+    scroll-padding-block: var(--measurement-position-group-padding);
+    scroll-snap-type: y mandatory;
     scrollbar-width: thin;
     white-space: normal;
+    -webkit-overflow-scrolling: touch;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-group {
     position: relative;
     min-width: 0;
-    height: 38px;
+    height: var(--measurement-position-group-row-height);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button {
