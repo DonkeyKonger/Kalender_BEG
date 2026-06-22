@@ -5251,6 +5251,8 @@ button.person-chip:focus-visible {
     flex-direction: column;
     width: calc(100vw - clamp(36px, 6vw, 64px));
     max-width: none;
+    height: calc(100svh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
+    height: calc(100dvh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
     min-height: calc(100svh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
     min-height: calc(100dvh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
     border: 0;
@@ -5258,8 +5260,11 @@ button.person-chip:focus-visible {
     background: transparent;
     margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
     margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
+    overflow: hidden;
     padding: 0 0 152px;
+    overscroll-behavior: none;
     box-shadow: none;
+    touch-action: pan-x pan-y;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-toolbar {
@@ -5367,6 +5372,7 @@ button.person-chip:focus-visible {
     border: 0;
     border-radius: 0;
     background: transparent;
+    overscroll-behavior: none;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table {
