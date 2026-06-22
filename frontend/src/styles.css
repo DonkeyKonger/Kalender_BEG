@@ -5300,6 +5300,10 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     width: 100%;
     min-width: 0;
     height: 38px;
@@ -5316,9 +5320,26 @@ button.person-chip:focus-visible {
     white-space: nowrap;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-position-group-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-group-count {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active {
     border-color: #2563eb;
     background: #eaf2ff;
+    color: #1d4ed8;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active .mobile-measurement-position-group-count {
     color: #1d4ed8;
   }
 

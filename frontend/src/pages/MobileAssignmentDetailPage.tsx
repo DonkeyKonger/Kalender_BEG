@@ -4264,7 +4264,8 @@ function MeasurementBatchDetail({
                   type="button"
                   onClick={() => setActivePositionGroupKey(group.key)}
                 >
-                  {group.label} · {group.count} Pos.
+                  <span className="mobile-measurement-position-group-label">{group.label}</span>
+                  <span className="mobile-measurement-position-group-count">{group.count} Pos.</span>
                 </button>
               ))}
             </div>
