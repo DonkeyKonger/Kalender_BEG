@@ -4817,7 +4817,7 @@ function MobileMeasurementTable({
                     />
                   ) : (
                     <button className="measurement-matrix-header-button" type="button" onClick={() => onSelectItem(item)}>
-                      <span className="measurement-matrix-position-text">{item.position}</span>
+                      <span className="measurement-matrix-position-text">{getMeasurementPositionDisplayLabel(item)}</span>
                       {item.is_free_position ? <span className="mobile-measurement-free-badge">frei</span> : null}
                     </button>
                   )}
@@ -6389,6 +6389,14 @@ function isInlineFreePositionDraftItem(item: MobileMeasurementItem): boolean {
 
 function isEmptyInlineFreePositionDraftItem(item: MobileMeasurementItem): boolean {
   return isInlineFreePositionDraftItem(item) && item.entries.length === 0 && !item.description.trim();
+}
+
+function getMeasurementPositionDisplayLabel(item: MobileMeasurementItem): string {
+  const position = item.position.trim();
+  if (item.is_free_position && /^FREI-\d+$/i.test(position)) {
+    return "";
+  }
+  return position;
 }
 
 function getNextInlineFreePositionDraftLabel(items: MobileMeasurementItem[]): string {
