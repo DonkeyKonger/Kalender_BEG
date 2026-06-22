@@ -3011,12 +3011,17 @@ function MobileMeasurementTab({
     const isAddRow = inlineCell.mode === "add-row";
     const existingEntries = isAddRow ? [] : item.entries.filter((entry) => getMeasurementAreaKey(entry.area_or_comment) === areaKey);
     const existingQuantity = isAddRow ? 0 : getMobileMeasurementAreaQuantity(item, inlineCell.area);
+    const hasInlineQuantityInput = inlineQuantity.trim().length > 0;
     const quantity = parseOptionalMeasurementQuantity(inlineQuantity);
     const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(inlineCell.area));
     const isDraftFreePosition = isInlineFreePositionDraftItem(item);
     if (quantity === null || quantity < 0) {
       setInlineError("Bitte eine gültige Menge ab 0,00 eingeben.");
       return false;
+    }
+    if (isAddRow && !hasInlineQuantityInput) {
+      cancelInlineMeasurementEdit();
+      return true;
     }
     if (isAddRow && quantity <= 0) {
       setInlineError("Bitte eine Menge größer 0 eingeben.");
@@ -4448,7 +4453,9 @@ function MobileMeasurementTable({
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
-  const areaRows = collectMeasurementAreaTags(items);
+  const measuredAreaRows = useMemo(() => collectMeasurementAreaTags(items), [items]);
+  const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
+  const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
   const canAddFromTable = isInlineEditingEnabled && items.length > 0;
   const [draftAreaRow, setDraftAreaRow] = useState<{ anchor: string; value: string; area: string | null } | null>(null);
   const draftAreaInputRef = useRef<HTMLInputElement | null>(null);
@@ -4567,8 +4574,12 @@ function MobileMeasurementTable({
       setDraftAreaRow(null);
       return;
     }
-    setDraftAreaRow({ ...draftAreaRow, value: normalizedArea, area: normalizedArea });
-    onInlineEditStart(items[0], normalizedArea, "add-row");
+    setPendingAreaRows((currentRows) => (
+      currentRows.some((area) => getMeasurementAreaKey(area) === getMeasurementAreaKey(normalizedArea))
+        ? currentRows
+        : [...currentRows, normalizedArea]
+    ));
+    setDraftAreaRow(null);
   }
 
   function handleQuantityKey(key: MeasurementQuantityKey): void {
@@ -5961,6 +5972,21 @@ function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
   });
 
   return sortMeasurementAreaLabels(tags);
+}
+
+function mergeMeasurementAreaRows(measuredRows: string[], pendingRows: string[]): string[] {
+  const mergedRows = [...measuredRows];
+  const seen = new Set(measuredRows.map(getMeasurementAreaKey));
+  pendingRows.forEach((area) => {
+    const normalized = normalizeMeasurementAreaInput(normalizeMeasurementArea(area));
+    const key = getMeasurementAreaKey(normalized);
+    if (!normalized || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    mergedRows.push(normalized);
+  });
+  return mergedRows;
 }
 
 function sortMeasurementAreaLabels(labels: string[]): string[] {
