@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
@@ -254,7 +254,12 @@ class MeasurementService:
                 .options(
                     selectinload(SiteMeasurementItem.entries).selectinload(
                         SiteMeasurementEntry.created_by
-                    )
+                    ),
+                    with_loader_criteria(
+                        SiteMeasurementEntry,
+                        SiteMeasurementEntry.measurement_batch_id == batch.id,
+                        include_aliases=True,
+                    ),
                 )
                 .where(
                     SiteMeasurementItem.site_id == batch.site_id,
@@ -821,7 +826,12 @@ class MeasurementService:
                 .options(
                     selectinload(SiteMeasurementItem.entries).selectinload(
                         SiteMeasurementEntry.created_by
-                    )
+                    ),
+                    with_loader_criteria(
+                        SiteMeasurementEntry,
+                        SiteMeasurementEntry.measurement_batch_id == batch.id,
+                        include_aliases=True,
+                    ),
                 )
                 .where(
                     SiteMeasurementItem.site_id == batch.site_id,
