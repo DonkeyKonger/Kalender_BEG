@@ -4258,15 +4258,16 @@ function MeasurementBatchDetail({
           {positionGroups.length > 0 ? (
             <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
               {positionGroups.map((group) => (
-                <button
-                  className={group.key === effectivePositionGroupKey ? "is-active" : ""}
-                  key={group.key}
-                  type="button"
-                  onClick={() => setActivePositionGroupKey(group.key)}
-                >
-                  <span className="mobile-measurement-position-group-label">{group.label}</span>
+                <div className="mobile-measurement-position-group" key={group.key}>
+                  <button
+                    className={group.key === effectivePositionGroupKey ? "is-active" : ""}
+                    type="button"
+                    onClick={() => setActivePositionGroupKey(group.key)}
+                  >
+                    <span className="mobile-measurement-position-group-label">{group.label}</span>
+                  </button>
                   <span className="mobile-measurement-position-group-count">{group.count} Pos.</span>
-                </button>
+                </div>
               ))}
             </div>
           ) : null}
