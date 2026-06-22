@@ -4761,8 +4761,9 @@ function MobileMeasurementTable({
 
   return (
     <>
-      <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-        <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
+      <div className="mobile-measurement-table-shell">
+        <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
+          <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
           <thead>
             <tr>
               <th className="measurement-matrix-axis">Pos.-Nr.</th>
@@ -4893,7 +4894,8 @@ function MobileMeasurementTable({
               {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
       {isInlineEditingEnabled && inlineCell ? (
         <MeasurementTableFixedKeypad
