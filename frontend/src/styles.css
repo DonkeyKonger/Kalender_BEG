@@ -5294,19 +5294,16 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .app-shell.is-mobile-workspace .mobile-measurement-position-groups::-webkit-scrollbar {
-    display: none;
+    overflow-x: visible;
+    padding-bottom: 0;
+    white-space: normal;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    max-width: min(260px, 100%);
     min-height: 38px;
     border: 1px solid #cbd7e6;
     border-radius: 6px;
@@ -5315,7 +5312,9 @@ button.person-chip:focus-visible {
     font: inherit;
     font-size: 0.78rem;
     font-weight: 750;
+    overflow: hidden;
     padding: 8px 12px;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
