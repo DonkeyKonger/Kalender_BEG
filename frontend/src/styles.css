@@ -5260,7 +5260,8 @@ button.person-chip:focus-visible {
     background: transparent;
     margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
     margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 0 0 152px;
     overscroll-behavior: none;
     box-shadow: none;
@@ -5293,8 +5294,8 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     overflow-x: visible;
     padding-bottom: 0;
@@ -5302,8 +5303,8 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button {
-    flex: 0 1 auto;
-    max-width: min(260px, 100%);
+    width: 100%;
+    min-width: 0;
     min-height: 38px;
     border: 1px solid #cbd7e6;
     border-radius: 6px;
@@ -5366,8 +5367,8 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-table-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 1 0 min(320px, 48svh);
+    min-height: min(320px, 48svh);
     border: 0;
     border-radius: 0;
     background: transparent;
