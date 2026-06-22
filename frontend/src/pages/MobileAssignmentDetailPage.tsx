@@ -89,6 +89,7 @@ type MeasurementPositionGroup = {
   count: number;
   kind: MeasurementPositionGroupKind;
   itemIds: Set<number>;
+  sourceItemCount?: number;
 };
 type MeasurementFreePositionDraft = {
   position: string;
@@ -6105,7 +6106,7 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
   }
   const capturedItems = items.filter(isMobileMeasurementItemCaptured);
   const freeItems = items.filter((item) => item.is_free_position);
-  const sourceSectionGroups = buildMeasurementSourceSectionGroups(offerItems);
+  const sourceSectionGroups = compactSmallMeasurementPositionGroups(buildMeasurementSourceSectionGroups(offerItems));
   const root = createMeasurementPositionTreeNode([]);
   const miscellaneousItems: MobileMeasurementItem[] = [];
 
@@ -6177,15 +6178,81 @@ function buildMeasurementSourceSectionGroups(items: MobileMeasurementItem[]): Me
 
   const groups = [...grouped.values()]
     .sort((left, right) => left.sortIndex - right.sortIndex)
-    .map((group, index) => createMeasurementPositionGroup(
-      `${group.sectionKey} – ${group.sectionTitle}`,
-      group.items,
-      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
-    ));
+    .flatMap((group, index) => buildMeasurementSourceSectionBadgeGroups(group, index));
   if (groups.length > 0 && ungroupedItems.length > 0) {
     groups.push(createMeasurementPositionGroup("Sonstige", ungroupedItems, "misc"));
   }
   return groups;
+}
+
+function buildMeasurementSourceSectionBadgeGroups(
+  group: { sectionKey: string; sectionTitle: string; items: MobileMeasurementItem[]; sortIndex: number },
+  index: number,
+): MeasurementPositionGroup[] {
+  if (group.items.length <= 50) {
+    return [createMeasurementPositionGroup(
+      `${group.sectionKey} – ${group.sectionTitle}`,
+      group.items,
+      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
+      group.items.length,
+    )];
+  }
+
+  const sectionSegments = parseMeasurementPositionSegments(group.sectionKey);
+  const root = createMeasurementPositionTreeNode(sectionSegments);
+  group.items.forEach((item) => {
+    appendMeasurementPositionTreeItem(root, parseMeasurementPositionSegments(item.position), item, sectionSegments.length);
+  });
+  const subgroupNodes = chooseMeasurementPositionGroupNodes(root);
+  if (subgroupNodes.length === 1 && subgroupNodes[0] === root) {
+    return [createMeasurementPositionGroup(
+      `${group.sectionKey} – ${group.sectionTitle}`,
+      group.items,
+      `section:${index}:${group.sectionKey}:${group.sectionTitle}`,
+      group.items.length,
+    )];
+  }
+
+  return subgroupNodes.map((node, subgroupIndex) => {
+    const prefix = node.prefixSegments.join(".");
+    return createMeasurementPositionGroup(
+      getMeasurementPositionGroupLabel(prefix, node.items),
+      node.items,
+      `section:${index}:${subgroupIndex}:${prefix}`,
+      group.items.length,
+    );
+  });
+}
+
+function compactSmallMeasurementPositionGroups(groups: MeasurementPositionGroup[]): MeasurementPositionGroup[] {
+  const compactedGroups: MeasurementPositionGroup[] = [];
+  let index = 0;
+
+  while (index < groups.length) {
+    const firstGroup = groups[index];
+    const mergedItemIds = new Set(firstGroup.itemIds);
+    let mergedCount = firstGroup.count;
+    let lastMergedGroup = firstGroup;
+
+    while ((firstGroup.sourceItemCount ?? firstGroup.count) < 20 && mergedCount < 20 && index + 1 < groups.length) {
+      index += 1;
+      lastMergedGroup = groups[index];
+      lastMergedGroup.itemIds.forEach((itemId) => mergedItemIds.add(itemId));
+      mergedCount += lastMergedGroup.count;
+    }
+
+    compactedGroups.push({
+      ...firstGroup,
+      key: lastMergedGroup === firstGroup
+        ? firstGroup.key
+        : `${firstGroup.key}:merged:${lastMergedGroup.key}`,
+      count: mergedCount,
+      itemIds: mergedItemIds,
+    });
+    index += 1;
+  }
+
+  return compactedGroups;
 }
 
 function filterMeasurementItemsByPositionGroup(items: MobileMeasurementItem[], group: MeasurementPositionGroup | null): MobileMeasurementItem[] {
@@ -6234,15 +6301,16 @@ function createMeasurementPositionTreeNode(prefixSegments: string[]): Measuremen
   };
 }
 
-function appendMeasurementPositionTreeItem(root: MeasurementPositionTreeNode, segments: string[], item: MobileMeasurementItem): void {
+function appendMeasurementPositionTreeItem(root: MeasurementPositionTreeNode, segments: string[], item: MobileMeasurementItem, startIndex = 0): void {
   let currentNode = root;
   currentNode.items.push(item);
-  segments.forEach((segment, index) => {
+  for (let index = startIndex; index < segments.length; index += 1) {
+    const segment = segments[index];
     const childNode = currentNode.children.get(segment) ?? createMeasurementPositionTreeNode(segments.slice(0, index + 1));
     childNode.items.push(item);
     currentNode.children.set(segment, childNode);
     currentNode = childNode;
-  });
+  }
 }
 
 function chooseMeasurementPositionGroupNodes(node: MeasurementPositionTreeNode): MeasurementPositionTreeNode[] {
@@ -6256,13 +6324,14 @@ function chooseMeasurementPositionGroupNodes(node: MeasurementPositionTreeNode):
   return children.flatMap((child) => chooseMeasurementPositionGroupNodes(child));
 }
 
-function createMeasurementPositionGroup(label: string, items: MobileMeasurementItem[], keySuffix = label): MeasurementPositionGroup {
+function createMeasurementPositionGroup(label: string, items: MobileMeasurementItem[], keySuffix = label, sourceItemCount = items.length): MeasurementPositionGroup {
   return {
     key: `prefix:${keySuffix.toLocaleUpperCase("de-DE")}`,
     label,
     count: items.length,
     kind: label === "Alle Positionen" ? "all" : "prefix",
     itemIds: new Set(items.map((item) => item.id)),
+    sourceItemCount,
   };
 }
 
