@@ -98,6 +98,9 @@ type MeasurementFreePositionDraft = {
   areaOrComment: string;
 };
 const MOBILE_MEASUREMENT_FREE_UNITS = ["st", "m", "psch", "std"] as const;
+const MOBILE_MEASUREMENT_TABLE_MIN_COLUMNS = 13;
+const MOBILE_MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
+const MOBILE_MEASUREMENT_TABLE_PLACEHOLDER_ITEM_ID_BASE = -1_000_000;
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
 const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
@@ -2953,6 +2956,11 @@ function MobileMeasurementTab({
   }
 
   function startInlineMeasurementEdit(item: MobileMeasurementItem, area: string, mode: InlineMeasurementEditMode = "cell"): void {
+    if (isInlineFreePositionDraftItem(item)) {
+      setItems((currentItems) => (
+        currentItems.some((currentItem) => currentItem.id === item.id) ? currentItems : [...currentItems, item]
+      ));
+    }
     const quantity = getMobileMeasurementAreaQuantity(item, area);
     setInlineCell({ itemId: item.id, area, mode });
     setInlineQuantity(mode === "add-row" ? "" : quantity > 0 ? formatMeasurementNumber(quantity) : "");
@@ -2988,7 +2996,15 @@ function MobileMeasurementTab({
         ...patch,
         updated_at: new Date().toISOString(),
       };
-    }));
+    }).concat(
+      selectedBatch && itemId < 0 && !currentItems.some((item) => item.id === itemId)
+        ? [{
+          ...createInlineFreePositionDraftItem(selectedBatch, itemId, getNextInlineFreePositionDraftLabel(currentItems)),
+          ...patch,
+          updated_at: new Date().toISOString(),
+        }]
+        : [],
+    ));
   }
 
   function cancelInlineMeasurementEdit(): void {
@@ -4254,6 +4270,7 @@ function MeasurementBatchDetail({
           ) : null}
           {tableItems.length > 0 ? (
             <MobileMeasurementTable
+              batch={batch}
               items={tableItems}
               inlineCell={inlineCell}
               inlineQuantity={inlineQuantity}
@@ -4425,6 +4442,7 @@ function MeasurementViewToggle({
 }
 
 function MobileMeasurementTable({
+  batch,
   items,
   inlineCell,
   inlineQuantity,
@@ -4439,6 +4457,7 @@ function MobileMeasurementTable({
   onInlineFreePositionDraftChange,
   onSelectItem,
 }: {
+  batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
   inlineCell: InlineMeasurementCell | null;
   inlineQuantity: string;
@@ -4453,25 +4472,31 @@ function MobileMeasurementTable({
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
+  const displayItems = useMemo(() => buildMeasurementTableDisplayItems(items, batch), [batch, items]);
   const measuredAreaRows = useMemo(() => collectMeasurementAreaTags(items), [items]);
   const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
   const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
-  const canAddFromTable = isInlineEditingEnabled && items.length > 0;
+  const canAddFromTable = isInlineEditingEnabled && displayItems.length > 0;
+  const extraAreaRowAnchors = useMemo(() => {
+    const visibleStructureRows = areaRows.length === 0 ? 0 : areaRows.length * 2;
+    const missingRows = Math.max(0, MOBILE_MEASUREMENT_TABLE_MIN_AREA_ROWS - visibleStructureRows);
+    return Array.from({ length: missingRows }, (_, index) => `__placeholder_area_${index}__`);
+  }, [areaRows.length]);
   const [draftAreaRow, setDraftAreaRow] = useState<{ anchor: string; value: string; area: string | null } | null>(null);
   const draftAreaInputRef = useRef<HTMLInputElement | null>(null);
   const editableCells = useMemo(() => {
     const cells: Array<{ item: MobileMeasurementItem; area: string; mode: InlineMeasurementEditMode }> = [];
     areaRows.forEach((area) => {
-      items.forEach((item) => cells.push({ item, area, mode: "cell" }));
+      displayItems.forEach((item) => cells.push({ item, area, mode: "cell" }));
       if (canAddFromTable) {
-        items.forEach((item) => cells.push({ item, area, mode: "add-row" }));
+        displayItems.forEach((item) => cells.push({ item, area, mode: "add-row" }));
       }
     });
     if (canAddFromTable && draftAreaRow?.area) {
-      items.forEach((item) => cells.push({ item, area: draftAreaRow.area ?? "", mode: "add-row" }));
+      displayItems.forEach((item) => cells.push({ item, area: draftAreaRow.area ?? "", mode: "add-row" }));
     }
     return cells;
-  }, [areaRows, canAddFromTable, draftAreaRow?.area, items]);
+  }, [areaRows, canAddFromTable, displayItems, draftAreaRow?.area]);
 
   useEffect(() => {
     if (!draftAreaRow || draftAreaRow.area) {
@@ -4721,7 +4746,7 @@ function MobileMeasurementTable({
             />
           )}
         </th>
-        {items.map((item) => {
+        {displayItems.map((item) => {
           const isActive = Boolean(committedArea && isInlineCellActive(item, committedArea, "add-row"));
           return (
             <td className={getMeasurementMatrixCellClassName(item, isActive ? "measurement-matrix-empty-cell is-tablet-editable is-inline-editing" : "measurement-matrix-empty-cell is-tablet-editable")} key={item.id}>
@@ -4741,7 +4766,7 @@ function MobileMeasurementTable({
           <thead>
             <tr>
               <th className="measurement-matrix-axis">Pos.-Nr.</th>
-              {items.map((item) => (
+              {displayItems.map((item) => (
                 <th className={getMeasurementMatrixCellClassName(item, "measurement-matrix-position-heading")} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
                     <input
@@ -4770,11 +4795,11 @@ function MobileMeasurementTable({
             </tr>
             <tr>
               <th className="measurement-matrix-axis">Beschreibung</th>
-              {items.map((item) => (
+              {displayItems.map((item) => (
                 <th className={getMeasurementMatrixCellClassName(item, "measurement-matrix-description-heading")} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
                     <textarea
-                      autoFocus={!item.description.trim()}
+                      autoFocus={items.some((currentItem) => currentItem.id === item.id) && !item.description.trim()}
                       className="measurement-matrix-draft-field measurement-matrix-draft-field-description"
                       value={item.description}
                       placeholder="Leistung"
@@ -4791,7 +4816,7 @@ function MobileMeasurementTable({
             </tr>
             <tr>
               <th className="measurement-matrix-axis">Einheit</th>
-              {items.map((item) => (
+              {displayItems.map((item) => (
                 <th className={getMeasurementMatrixCellClassName(item)} key={item.id}>
                   {isInlineFreePositionDraftItem(item) ? (
                     <select
@@ -4813,19 +4838,14 @@ function MobileMeasurementTable({
           <tbody>
             <tr className="measurement-matrix-section-row">
               <th className="measurement-matrix-axis">Bauteil / Ort</th>
-              {items.map((item) => <td className={getMeasurementMatrixCellClassName(item)} key={item.id} />)}
+              {displayItems.map((item) => <td className={getMeasurementMatrixCellClassName(item)} key={item.id} />)}
               {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
-            {canAddFromTable && areaRows.length === 0 ? (
-              <>
-                {renderDraftAreaAddRow("__empty__")}
-              </>
-            ) : null}
             {areaRows.map((area) => (
               <Fragment key={area}>
                 <tr>
                   <th className="measurement-matrix-axis">{area}</th>
-                  {items.map((item) => {
+                  {displayItems.map((item) => {
                     const quantity = getMobileMeasurementAreaQuantity(item, area);
                     const isActive = isInlineCellActive(item, area, "cell");
                     const cellClassName = [
@@ -4858,9 +4878,12 @@ function MobileMeasurementTable({
                 {canAddFromTable ? renderDraftAreaAddRow(area) : null}
               </Fragment>
             ))}
+            {canAddFromTable ? extraAreaRowAnchors.map((anchor) => (
+              <Fragment key={anchor}>{renderDraftAreaAddRow(anchor)}</Fragment>
+            )) : null}
             <tr className="measurement-matrix-total-row">
               <th className="measurement-matrix-axis">Gesamt</th>
-              {items.map((item) => (
+              {displayItems.map((item) => (
                 <td className={getMeasurementMatrixCellClassName(item, "measurement-matrix-quantity-cell")} key={item.id}>
                   <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
                     <strong>{formatMeasurementNumber(item.reported_quantity)}</strong>
@@ -6049,6 +6072,27 @@ function getMeasurementMatrixCellClassName(item: MobileMeasurementItem, baseClas
   return [baseClassName, item.is_free_position ? "measurement-matrix-free-column" : ""]
     .filter(Boolean)
     .join(" ");
+}
+
+function buildMeasurementTableDisplayItems(items: MobileMeasurementItem[], batch: MobileMeasurementBatch): MobileMeasurementItem[] {
+  if (items.length >= MOBILE_MEASUREMENT_TABLE_MIN_COLUMNS) {
+    return items;
+  }
+  const existingIds = new Set(items.map((item) => item.id));
+  const placeholderItems: MobileMeasurementItem[] = [];
+  const freePositionCount = items.filter((item) => item.is_free_position).length;
+  for (let index = 0; items.length + placeholderItems.length < MOBILE_MEASUREMENT_TABLE_MIN_COLUMNS; index += 1) {
+    const placeholderId = MOBILE_MEASUREMENT_TABLE_PLACEHOLDER_ITEM_ID_BASE - index;
+    if (existingIds.has(placeholderId)) {
+      continue;
+    }
+    placeholderItems.push(createInlineFreePositionDraftItem(
+      batch,
+      placeholderId,
+      `FREI-${freePositionCount + placeholderItems.length + 1}`,
+    ));
+  }
+  return [...items, ...placeholderItems];
 }
 
 function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
