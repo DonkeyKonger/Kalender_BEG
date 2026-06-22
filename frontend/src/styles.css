@@ -5246,6 +5246,22 @@ button.person-chip:focus-visible {
     padding-left: clamp(12px, 1.6vw, 18px);
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view {
+    display: flex;
+    flex-direction: column;
+    width: calc(100vw - clamp(36px, 6vw, 64px));
+    max-width: none;
+    min-height: calc(100svh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
+    min-height: calc(100dvh - max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) - max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)));
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
+    margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
+    padding: 0 0 152px;
+    box-shadow: none;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-toolbar {
     display: flex;
     flex-direction: row-reverse;
@@ -5310,6 +5326,14 @@ button.person-chip:focus-visible {
     scroll-padding-left: 170px;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table {

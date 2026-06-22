@@ -4073,7 +4073,7 @@ function MeasurementBatchDetail({
   onInlineCancel: () => void;
 }) {
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page">
+    <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page${viewMode === "table" ? " is-table-view" : ""}`}>
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
