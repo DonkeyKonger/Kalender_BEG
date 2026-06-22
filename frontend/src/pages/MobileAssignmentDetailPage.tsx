@@ -6031,6 +6031,7 @@ function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
 }
 
 function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
+  const allMeasurementItems = items.filter((item) => !isInlineFreePositionDraftItem(item));
   const offerItems = items.filter((item) => !item.is_free_position && !isInlineFreePositionDraftItem(item));
   if (offerItems.length < 30) {
     return [];
@@ -6061,9 +6062,8 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
     prefixGroups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "misc"));
   }
 
-  const baseGroups = prefixGroups.length > 0
-    ? prefixGroups
-    : [createMeasurementPositionGroup("Alle Positionen", offerItems, "all")];
+  const allPositionsGroup = createMeasurementPositionGroup("Alle Positionen", allMeasurementItems, "all");
+  const baseGroups = prefixGroups.length > 0 ? [allPositionsGroup, ...prefixGroups] : [allPositionsGroup];
 
   return [
     ...baseGroups,
@@ -6090,6 +6090,9 @@ function filterMeasurementItemsByPositionGroup(items: MobileMeasurementItem[], g
   }
   return items.filter((item) => {
     if (isInlineFreePositionDraftItem(item)) {
+      return true;
+    }
+    if (group.kind === "all") {
       return true;
     }
     if (group.kind === "captured") {
