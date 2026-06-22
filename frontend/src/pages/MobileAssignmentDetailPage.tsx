@@ -102,7 +102,9 @@ type MeasurementFreePositionDraft = {
 };
 const MOBILE_MEASUREMENT_FREE_UNITS = ["st", "m", "psch", "std"] as const;
 const MOBILE_MEASUREMENT_TABLE_MIN_COLUMNS = 13;
-const MOBILE_MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
+const MOBILE_MEASUREMENT_TABLE_DEFAULT_AREA_ROWS = 6;
+const MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_COUNT = 1;
+const MOBILE_MEASUREMENT_TABLE_MIN_STRUCTURE_ROWS = MOBILE_MEASUREMENT_TABLE_DEFAULT_AREA_ROWS + MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_COUNT;
 const MOBILE_MEASUREMENT_TABLE_PLACEHOLDER_ITEM_ID_BASE = -1_000_000;
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
@@ -4487,7 +4489,7 @@ function MobileMeasurementTable({
   const canAddFromTable = isInlineEditingEnabled && displayItems.length > 0;
   const extraAreaRowAnchors = useMemo(() => {
     const visibleStructureRows = areaRows.length === 0 ? 0 : areaRows.length * 2;
-    const missingRows = Math.max(0, MOBILE_MEASUREMENT_TABLE_MIN_AREA_ROWS - visibleStructureRows);
+    const missingRows = Math.max(0, MOBILE_MEASUREMENT_TABLE_MIN_STRUCTURE_ROWS - visibleStructureRows);
     return Array.from({ length: missingRows }, (_, index) => `__placeholder_area_${index}__`);
   }, [areaRows.length]);
   const [draftAreaRow, setDraftAreaRow] = useState<{ anchor: string; value: string; area: string | null } | null>(null);
