@@ -15900,7 +15900,7 @@ button.person-chip:focus-visible {
   gap: 6px;
   min-height: 36px;
   border: 1px solid #cbd7e6;
-  border-radius: 14px;
+  border-radius: 6px;
   background: #ffffff;
   color: #143c6d;
   font: inherit;
