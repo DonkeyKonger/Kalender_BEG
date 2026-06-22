@@ -2995,16 +2995,19 @@ function MobileMeasurementTab({
       if (existingEntries.length > 0) {
         await Promise.all(existingEntries.map((entry) => api.deleteMobileMeasurementEntry(assignment.id, selectedBatch.id, entry.id)));
       }
+      let createdEntry: MeasurementEntry | null = null;
       if (quantity > 0) {
-        await api.createMobileMeasurementEntry(assignment.id, selectedBatch.id, item.id, {
+        createdEntry = await api.createMobileMeasurementEntry(assignment.id, selectedBatch.id, item.id, {
           area_or_comment: normalizedArea,
           quantity,
         });
       }
       setInlineCell(null);
       setInlineQuantity("");
-      await loadBatches(selectedBatch.id);
-      await loadBatchItems(selectedBatch);
+      const deletedEntryIds = new Set(existingEntries.map((entry) => entry.id));
+      const updateItems = (currentItems: MobileMeasurementItem[]) => updateMobileMeasurementItemsAfterInlineSave(currentItems, item.id, deletedEntryIds, createdEntry);
+      setItems(updateItems);
+      setSelectedItem((currentItem) => (currentItem ? updateItems([currentItem])[0] ?? currentItem : currentItem));
       return true;
     } catch (requestError) {
       const message = readApiError(requestError, "Aufmaßzeile konnte nicht gespeichert werden.");
@@ -4499,7 +4502,7 @@ function MobileMeasurementTable({
     return (
       <button
         autoFocus
-        className={isInlineSaving ? "measurement-matrix-active-cell is-saving" : "measurement-matrix-active-cell"}
+        className="measurement-matrix-active-cell"
         type="button"
         aria-label={`Aktive Menge ${item.position} ${area}`}
         onKeyDown={(event) => handleActiveCellKeyDown(event, item, area, mode)}
@@ -4512,7 +4515,6 @@ function MobileMeasurementTable({
         }}
       >
         <span>{displayValue}</span>
-        {isInlineSaving ? <small>Speichert...</small> : null}
         {inlineError ? <span className="mobile-measurement-inline-error">{inlineError}</span> : null}
       </button>
     );
@@ -5863,6 +5865,39 @@ function groupMeasurementEntriesByArea(entries: MeasurementEntry[]): Measurement
 
 function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
   return entries.reduce((sum, entry) => sum + getMeasurementEntryQuantity(entry), 0);
+}
+
+function recalculateMobileMeasurementItemTotals(item: MobileMeasurementItem, entries: MeasurementEntry[]): MobileMeasurementItem {
+  const reportedQuantity = sumMeasurementEntryQuantities(entries);
+  const minutesPerUnit = typeof item.minutes_per_unit === "number" ? item.minutes_per_unit : Number(item.minutes_per_unit);
+  const reportedMinutes = Number.isFinite(minutesPerUnit) ? reportedQuantity * minutesPerUnit : item.reported_minutes;
+  const reportedHours = typeof reportedMinutes === "number" && Number.isFinite(reportedMinutes) ? reportedMinutes / 60 : item.reported_hours;
+  return {
+    ...item,
+    entries,
+    reported_quantity: reportedQuantity,
+    reported_minutes: reportedMinutes,
+    reported_hours: reportedHours,
+    mobile_status: reportedQuantity > 0 ? "edited" : "open",
+  };
+}
+
+function updateMobileMeasurementItemsAfterInlineSave(
+  items: MobileMeasurementItem[],
+  itemId: number,
+  deletedEntryIds: Set<number>,
+  createdEntry: MeasurementEntry | null,
+): MobileMeasurementItem[] {
+  return items.map((item) => {
+    if (item.id !== itemId) {
+      return item;
+    }
+    const entries = item.entries.filter((entry) => !deletedEntryIds.has(entry.id));
+    if (createdEntry && !entries.some((entry) => entry.id === createdEntry.id)) {
+      entries.push(createdEntry);
+    }
+    return recalculateMobileMeasurementItemTotals(item, entries);
+  });
 }
 
 function getMeasurementEntryQuantity(entry: MeasurementEntry): number {
