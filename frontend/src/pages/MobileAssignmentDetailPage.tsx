@@ -4517,7 +4517,7 @@ function MobileMeasurementTable({
 }) {
   const displayItems = useMemo(() => buildMeasurementTableDisplayItems(items, batch), [batch, items]);
   const measuredAreaRows = useMemo(() => (
-    mergeMeasurementAreaRows(collectMeasurementBatchAreaRows(batch), collectMeasurementAreaTags(allItems))
+    mergeMeasurementAreaRows(collectMeasurementBatchAreaRows(batch), collectMeasurementAreaTags(allItems, { sort: false }))
   ), [allItems, batch]);
   const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
   const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
@@ -6057,7 +6057,10 @@ function persistMeasurementViewMode(mode: MeasurementViewMode): void {
   window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
-function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
+function collectMeasurementAreaTags(
+  items: MobileMeasurementItem[],
+  options: { sort?: boolean } = {},
+): string[] {
   const tags: string[] = [];
   const seen = new Set<string>();
 
@@ -6073,7 +6076,7 @@ function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
     });
   });
 
-  return sortMeasurementAreaLabels(tags);
+  return options.sort === false ? tags : sortMeasurementAreaLabels(tags);
 }
 
 function collectMeasurementBatchAreaRows(batch: MobileMeasurementBatch): string[] {
