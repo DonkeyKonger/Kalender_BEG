@@ -103,8 +103,7 @@ type MeasurementFreePositionDraft = {
 const MOBILE_MEASUREMENT_FREE_UNITS = ["st", "m", "psch", "std"] as const;
 const MOBILE_MEASUREMENT_TABLE_MIN_COLUMNS = 13;
 const MOBILE_MEASUREMENT_TABLE_DEFAULT_AREA_ROWS = 6;
-const MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_COUNT = 1;
-const MOBILE_MEASUREMENT_TABLE_MIN_STRUCTURE_ROWS = MOBILE_MEASUREMENT_TABLE_DEFAULT_AREA_ROWS + MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_COUNT;
+const MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_ANCHOR = "__trailing_area_add__";
 const MOBILE_MEASUREMENT_TABLE_PLACEHOLDER_ITEM_ID_BASE = -1_000_000;
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
@@ -4487,10 +4486,9 @@ function MobileMeasurementTable({
   const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
   const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
   const canAddFromTable = isInlineEditingEnabled && displayItems.length > 0;
-  const extraAreaRowAnchors = useMemo(() => {
-    const visibleStructureRows = areaRows.length === 0 ? 0 : areaRows.length * 2;
-    const missingRows = Math.max(0, MOBILE_MEASUREMENT_TABLE_MIN_STRUCTURE_ROWS - visibleStructureRows);
-    return Array.from({ length: missingRows }, (_, index) => `__placeholder_area_${index}__`);
+  const emptyAreaRowAnchors = useMemo(() => {
+    const missingRows = Math.max(0, MOBILE_MEASUREMENT_TABLE_DEFAULT_AREA_ROWS - areaRows.length);
+    return Array.from({ length: missingRows }, (_, index) => `__empty_area_${index}__`);
   }, [areaRows.length]);
   const [draftAreaRow, setDraftAreaRow] = useState<{ anchor: string; value: string; area: string | null } | null>(null);
   const draftAreaInputRef = useRef<HTMLInputElement | null>(null);
@@ -4498,9 +4496,6 @@ function MobileMeasurementTable({
     const cells: Array<{ item: MobileMeasurementItem; area: string; mode: InlineMeasurementEditMode }> = [];
     areaRows.forEach((area) => {
       displayItems.forEach((item) => cells.push({ item, area, mode: "cell" }));
-      if (canAddFromTable) {
-        displayItems.forEach((item) => cells.push({ item, area, mode: "add-row" }));
-      }
     });
     if (canAddFromTable && draftAreaRow?.area) {
       displayItems.forEach((item) => cells.push({ item, area: draftAreaRow.area ?? "", mode: "add-row" }));
@@ -4769,6 +4764,18 @@ function MobileMeasurementTable({
     );
   }
 
+  function renderEmptyAreaSpacerRow(anchor: string): ReactElement {
+    return (
+      <tr className="measurement-matrix-empty-area-row" aria-hidden="true">
+        <th className="measurement-matrix-axis" />
+        {displayItems.map((item) => (
+          <td className={getMeasurementMatrixCellClassName(item, "measurement-matrix-empty-cell")} key={`${anchor}:${item.id}`} />
+        ))}
+        {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
+      </tr>
+    );
+  }
+
   return (
     <>
       <div className="mobile-measurement-table-shell">
@@ -4886,12 +4893,16 @@ function MobileMeasurementTable({
                   })}
                   {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
                 </tr>
-                {canAddFromTable ? renderDraftAreaAddRow(area) : null}
               </Fragment>
             ))}
-            {canAddFromTable ? extraAreaRowAnchors.map((anchor) => (
-              <Fragment key={anchor}>{renderDraftAreaAddRow(anchor)}</Fragment>
-            )) : null}
+            {emptyAreaRowAnchors.map((anchor) => (
+              <Fragment key={anchor}>{renderEmptyAreaSpacerRow(anchor)}</Fragment>
+            ))}
+            {canAddFromTable ? (
+              <Fragment key={MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_ANCHOR}>
+                {renderDraftAreaAddRow(MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_ANCHOR)}
+              </Fragment>
+            ) : null}
             <tr className="measurement-matrix-total-row">
               <th className="measurement-matrix-axis">Gesamt</th>
               {displayItems.map((item) => (
