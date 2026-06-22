@@ -4673,15 +4673,14 @@ function MobileMeasurementTable({
 
   function renderDraftAreaAddRow(anchor: string): ReactElement | null {
     const isDraftActive = draftAreaRow?.anchor === anchor;
-    if (!isDraftActive) {
-      return null;
-    }
     const committedArea = isDraftActive ? draftAreaRow.area : null;
 
     return (
       <tr className={isDraftActive ? "measurement-matrix-add-row is-area-editing" : "measurement-matrix-add-row"}>
         <th className="measurement-matrix-axis measurement-matrix-add-row-axis">
-          {committedArea ? (
+          {!isDraftActive ? (
+            renderAddAreaButton(anchor, areaRows.length === 0)
+          ) : committedArea ? (
             <span className="measurement-matrix-area-draft-label">{committedArea}</span>
           ) : (
             <input
@@ -4719,9 +4718,7 @@ function MobileMeasurementTable({
             </td>
           );
         })}
-        <td className="measurement-matrix-add-column-cell">
-          {committedArea ? renderAddAreaButton(`${anchor}__draft`) : null}
-        </td>
+        {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
       </tr>
     );
   }
@@ -4806,11 +4803,7 @@ function MobileMeasurementTable({
             <tr className="measurement-matrix-section-row">
               <th className="measurement-matrix-axis">Bauteil / Ort</th>
               {items.map((item) => <td key={item.id} />)}
-              {canAddFromTable ? (
-                <td className="measurement-matrix-add-column-cell">
-                  {areaRows.length === 0 && !draftAreaRow ? renderAddAreaButton("__empty__", true) : null}
-                </td>
-              ) : null}
+              {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
             {canAddFromTable && areaRows.length === 0 ? (
               <>
@@ -4849,11 +4842,7 @@ function MobileMeasurementTable({
                       </td>
                     );
                   })}
-                  {canAddFromTable ? (
-                    <td className="measurement-matrix-add-column-cell">
-                      {renderAddAreaButton(area)}
-                    </td>
-                  ) : null}
+                  {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
                 </tr>
                 {canAddFromTable ? renderDraftAreaAddRow(area) : null}
               </Fragment>
