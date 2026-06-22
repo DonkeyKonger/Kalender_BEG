@@ -5356,18 +5356,21 @@ button.person-chip:focus-visible {
     position: relative;
     width: 100%;
     max-width: 100%;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table-wrap {
+    display: block;
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: clip;
+    min-width: 0;
+    overflow-x: scroll;
+    overflow-y: hidden;
     overscroll-behavior-x: contain;
     overscroll-behavior-y: auto;
     scroll-padding-left: 170px;
-    -webkit-overflow-scrolling: auto;
+    -webkit-overflow-scrolling: touch;
     overflow-anchor: none;
     touch-action: pan-x pan-y;
   }
