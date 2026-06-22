@@ -5287,6 +5287,39 @@ button.person-chip:focus-visible {
     flex: 0 0 auto;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    border: 1px solid #cbd7e6;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #243348;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 750;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active {
+    border-color: #2563eb;
+    background: #eaf2ff;
+    color: #1d4ed8;
+  }
+
   .app-shell.is-mobile-workspace .mobile-detail-actions,
   .app-shell.is-mobile-workspace .mobile-measurement-form-grid,
   .app-shell.is-mobile-workspace .mobile-extra-work-week-grid,

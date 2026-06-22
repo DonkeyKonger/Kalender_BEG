@@ -82,6 +82,14 @@ type InlineMeasurementCell = {
   area: string;
   mode: InlineMeasurementEditMode;
 };
+type MeasurementPositionGroupKind = "prefix" | "all" | "captured" | "free";
+type MeasurementPositionGroup = {
+  key: string;
+  label: string;
+  count: number;
+  kind: MeasurementPositionGroupKind;
+  itemIds: Set<number>;
+};
 type MeasurementFreePositionDraft = {
   position: string;
   description: string;
@@ -4137,6 +4145,28 @@ function MeasurementBatchDetail({
   onInlineCreatePosition: () => void;
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
 }) {
+  const positionGroups = useMemo(() => buildMeasurementPositionGroups(allItems), [allItems]);
+  const [activePositionGroupKey, setActivePositionGroupKey] = useState<string | null>(null);
+  const effectivePositionGroupKey = useMemo(
+    () => getActiveMeasurementPositionGroupKey(positionGroups, activePositionGroupKey),
+    [activePositionGroupKey, positionGroups],
+  );
+  const activePositionGroup = positionGroups.find((group) => group.key === effectivePositionGroupKey) ?? positionGroups[0] ?? null;
+  const tableItems = useMemo(
+    () => filterMeasurementItemsByPositionGroup(items, activePositionGroup),
+    [activePositionGroup, items],
+  );
+
+  useEffect(() => {
+    if (viewMode !== "table") {
+      return;
+    }
+    const nextKey = getActiveMeasurementPositionGroupKey(positionGroups, activePositionGroupKey);
+    if (nextKey !== activePositionGroupKey) {
+      setActivePositionGroupKey(nextKey);
+    }
+  }, [activePositionGroupKey, positionGroups, viewMode]);
+
   return (
     <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page${viewMode === "table" ? " is-table-view" : ""}`}>
       <div className="mobile-measurement-detail-topbar">
@@ -4202,21 +4232,39 @@ function MeasurementBatchDetail({
         </div>
       ) : null}
       {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
-        <MobileMeasurementTable
-          items={items}
-          inlineCell={inlineCell}
-          inlineQuantity={inlineQuantity}
-          inlineError={inlineError}
-          isInlineSaving={isInlineSaving}
-          isInlineEditingEnabled={isInlineEditingEnabled && !batch.is_locked_for_worker}
-          onInlineEditStart={onInlineEditStart}
-          onInlineQuantityChange={onInlineQuantityChange}
-          onInlineSave={onInlineSave}
-          onInlineCancel={onInlineCancel}
-          onInlineCreatePosition={onInlineCreatePosition}
-          onInlineFreePositionDraftChange={onInlineFreePositionDraftChange}
-          onSelectItem={onSelectItem}
-        />
+        <>
+          <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
+            {positionGroups.map((group) => (
+              <button
+                className={group.key === effectivePositionGroupKey ? "is-active" : ""}
+                key={group.key}
+                type="button"
+                onClick={() => setActivePositionGroupKey(group.key)}
+              >
+                {group.label} · {group.count} Pos.
+              </button>
+            ))}
+          </div>
+          {tableItems.length > 0 ? (
+            <MobileMeasurementTable
+              items={tableItems}
+              inlineCell={inlineCell}
+              inlineQuantity={inlineQuantity}
+              inlineError={inlineError}
+              isInlineSaving={isInlineSaving}
+              isInlineEditingEnabled={isInlineEditingEnabled && !batch.is_locked_for_worker}
+              onInlineEditStart={onInlineEditStart}
+              onInlineQuantityChange={onInlineQuantityChange}
+              onInlineSave={onInlineSave}
+              onInlineCancel={onInlineCancel}
+              onInlineCreatePosition={onInlineCreatePosition}
+              onInlineFreePositionDraftChange={onInlineFreePositionDraftChange}
+              onSelectItem={onSelectItem}
+            />
+          ) : (
+            <div className="empty-panel">Keine Position in diesem Bereich gefunden.</div>
+          )}
+        </>
       ) : null}
     </div>
   );
@@ -5969,6 +6017,167 @@ function groupMeasurementEntriesByArea(entries: MeasurementEntry[]): Measurement
 
 function sumMeasurementEntryQuantities(entries: MeasurementEntry[]): number {
   return entries.reduce((sum, entry) => sum + getMeasurementEntryQuantity(entry), 0);
+}
+
+function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
+  const offerItems = items.filter((item) => !item.is_free_position && !isInlineFreePositionDraftItem(item));
+  const capturedItems = items.filter(isMobileMeasurementItemCaptured);
+  const freeItems = items.filter((item) => item.is_free_position);
+  const root = createMeasurementPositionTreeNode([]);
+  const miscellaneousItems: MobileMeasurementItem[] = [];
+
+  offerItems.forEach((item) => {
+    const segments = parseMeasurementPositionSegments(item.position);
+    if (segments.length === 0) {
+      miscellaneousItems.push(item);
+      return;
+    }
+    appendMeasurementPositionTreeItem(root, segments, item);
+  });
+
+  const prefixGroups = [...root.children.values()]
+    .sort(compareMeasurementPositionTreeNodes)
+    .flatMap((node) => chooseMeasurementPositionGroupNodes(node))
+    .map((node) => createMeasurementPositionGroup(node.prefixSegments.join("."), node.items));
+
+  if (miscellaneousItems.length > 0) {
+    prefixGroups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "misc"));
+  }
+
+  const baseGroups = prefixGroups.length > 0
+    ? prefixGroups
+    : [createMeasurementPositionGroup("Alle Positionen", offerItems, "all")];
+
+  return [
+    ...baseGroups,
+    {
+      key: "captured",
+      label: "Mit Menge",
+      count: capturedItems.length,
+      kind: "captured",
+      itemIds: new Set(capturedItems.map((item) => item.id)),
+    },
+    ...(freeItems.length > 0 ? [{
+      key: "free",
+      label: "Freie Positionen",
+      count: freeItems.length,
+      kind: "free" as const,
+      itemIds: new Set(freeItems.map((item) => item.id)),
+    }] : []),
+  ];
+}
+
+function filterMeasurementItemsByPositionGroup(items: MobileMeasurementItem[], group: MeasurementPositionGroup | null): MobileMeasurementItem[] {
+  if (!group) {
+    return items;
+  }
+  return items.filter((item) => {
+    if (isInlineFreePositionDraftItem(item)) {
+      return true;
+    }
+    if (group.kind === "captured") {
+      return isMobileMeasurementItemCaptured(item);
+    }
+    if (group.kind === "free") {
+      return item.is_free_position;
+    }
+    return group.itemIds.has(item.id);
+  });
+}
+
+function getActiveMeasurementPositionGroupKey(groups: MeasurementPositionGroup[], currentKey: string | null): string | null {
+  if (currentKey && groups.some((group) => group.key === currentKey)) {
+    return currentKey;
+  }
+  const capturedGroup = groups.find((group) => group.kind === "captured" && group.count > 0);
+  if (capturedGroup) {
+    return capturedGroup.key;
+  }
+  return groups.find((group) => group.kind !== "captured" && group.count > 0)?.key ?? groups[0]?.key ?? null;
+}
+
+type MeasurementPositionTreeNode = {
+  prefixSegments: string[];
+  items: MobileMeasurementItem[];
+  children: Map<string, MeasurementPositionTreeNode>;
+};
+
+function createMeasurementPositionTreeNode(prefixSegments: string[]): MeasurementPositionTreeNode {
+  return {
+    prefixSegments,
+    items: [],
+    children: new Map(),
+  };
+}
+
+function appendMeasurementPositionTreeItem(root: MeasurementPositionTreeNode, segments: string[], item: MobileMeasurementItem): void {
+  let currentNode = root;
+  currentNode.items.push(item);
+  segments.forEach((segment, index) => {
+    const childNode = currentNode.children.get(segment) ?? createMeasurementPositionTreeNode(segments.slice(0, index + 1));
+    childNode.items.push(item);
+    currentNode.children.set(segment, childNode);
+    currentNode = childNode;
+  });
+}
+
+function chooseMeasurementPositionGroupNodes(node: MeasurementPositionTreeNode): MeasurementPositionTreeNode[] {
+  if (node.items.length <= 50 || node.children.size === 0) {
+    return [node];
+  }
+  const children = [...node.children.values()].sort(compareMeasurementPositionTreeNodes);
+  if (children.some((child) => child.items.length < 20)) {
+    return [node];
+  }
+  return children.flatMap((child) => chooseMeasurementPositionGroupNodes(child));
+}
+
+function createMeasurementPositionGroup(label: string, items: MobileMeasurementItem[], keySuffix = label): MeasurementPositionGroup {
+  return {
+    key: `prefix:${keySuffix.toLocaleUpperCase("de-DE")}`,
+    label,
+    count: items.length,
+    kind: label === "Alle Positionen" ? "all" : "prefix",
+    itemIds: new Set(items.map((item) => item.id)),
+  };
+}
+
+function parseMeasurementPositionSegments(position: string): string[] {
+  const normalized = position.trim();
+  if (!/\d/.test(normalized)) {
+    return [];
+  }
+  return normalized
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => segment.toLocaleUpperCase("de-DE"));
+}
+
+function compareMeasurementPositionTreeNodes(left: MeasurementPositionTreeNode, right: MeasurementPositionTreeNode): number {
+  return compareMeasurementPositionSegments(left.prefixSegments, right.prefixSegments);
+}
+
+function compareMeasurementPositionSegments(left: string[], right: string[]): number {
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftSegment = left[index];
+    const rightSegment = right[index];
+    if (leftSegment === undefined) {
+      return -1;
+    }
+    if (rightSegment === undefined) {
+      return 1;
+    }
+    const comparison = leftSegment.localeCompare(rightSegment, "de-DE", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (comparison !== 0) {
+      return comparison;
+    }
+  }
+  return 0;
 }
 
 function isInlineFreePositionDraftItem(item: MobileMeasurementItem): boolean {
