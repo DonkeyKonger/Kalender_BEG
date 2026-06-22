@@ -5291,10 +5291,13 @@ button.person-chip:focus-visible {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 7px 8px;
     max-height: calc(3 * 38px + 2 * 7px);
+    border: 1px solid #dce3ec;
+    border-radius: 6px;
+    background: #fcfdff;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-bottom: 0;
+    padding: 6px;
     scrollbar-width: thin;
     white-space: normal;
   }
@@ -5400,6 +5403,9 @@ button.person-chip:focus-visible {
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    border: 1px solid #dce3ec;
+    border-radius: 6px;
+    background: #ffffff;
     overflow-x: auto;
     overflow-y: clip;
     overscroll-behavior-x: contain;
