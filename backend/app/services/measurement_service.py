@@ -607,7 +607,7 @@ class MeasurementService:
                 status.HTTP_403_FORBIDDEN,
                 "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
             )
-        if not batch.entries:
+        if not self._batch_has_measurement_content(batch):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Ein Aufmaß ohne Aufmaßzeilen kann nicht unterschrieben werden.",
@@ -1842,6 +1842,7 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.area_rows),
                 selectinload(SiteMeasurementBatch.photos),
                 selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
@@ -1890,7 +1891,7 @@ class MeasurementService:
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
         workflow_state = self._mobile_batch_workflow_state(
             batch,
-            entry_count=len(visible_entries),
+            has_measurement_content=bool(visible_entries) or bool(batch.area_rows),
             can_sign_immediately=_can_sign_measurements_immediately(current_user),
         )
         is_current_offer = (
@@ -2056,12 +2057,12 @@ class MeasurementService:
         self,
         batch: SiteMeasurementBatch,
         *,
-        entry_count: int,
+        has_measurement_content: bool,
         can_sign_immediately: bool = False,
     ) -> dict[str, object]:
         if batch.customer_signed_at is not None or batch.customer_signature_name:
             return {"can_customer_sign": True, "customer_sign_reason": None}
-        if entry_count == 0:
+        if not has_measurement_content:
             return {
                 "can_customer_sign": False,
                 "customer_sign_reason": "Für die Kundenunterschrift muss mindestens eine Aufmaßzeile erfasst sein.",
@@ -2100,6 +2101,10 @@ class MeasurementService:
             }
         )
         return snapshot
+
+    @staticmethod
+    def _batch_has_measurement_content(batch: SiteMeasurementBatch) -> bool:
+        return bool(batch.entries) or bool(batch.area_rows)
 
     def _next_free_measurement_position(self, batch: SiteMeasurementBatch) -> str:
         existing_positions = set(

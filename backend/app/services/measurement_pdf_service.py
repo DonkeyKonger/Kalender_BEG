@@ -261,6 +261,7 @@ class MeasurementPdfService:
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
+                selectinload(SiteMeasurementBatch.area_rows),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.photos).selectinload(
                     SiteMeasurementBatchPhoto.uploaded_by
@@ -373,6 +374,15 @@ class MeasurementPdfService:
                     "item_updated_at": entry.measurement_item.updated_at if entry.measurement_item else None,
                 }
                 for entry in sorted(batch.entries or [], key=lambda entry: entry.id)
+            ],
+            "area_rows": [
+                {
+                    "id": row.id,
+                    "area_or_comment": row.area_or_comment,
+                    "sort_order": row.sort_order,
+                    "updated_at": row.updated_at,
+                }
+                for row in sorted(batch.area_rows or [], key=lambda row: (row.sort_order, row.id))
             ],
             "photos": [
                 {
@@ -552,6 +562,12 @@ class MeasurementPdfService:
         area_by_key: dict[str, MatrixArea] = {}
         current_quantities: dict[tuple[str, int], Decimal] = {}
         totals_by_position: dict[int, Decimal] = {}
+        for area_row in sorted(batch.area_rows or [], key=lambda row: (row.sort_order, row.id)):
+            area_label = " ".join(area_row.area_or_comment.split())
+            if not area_label:
+                continue
+            area_key = area_label.casefold()
+            area_by_key.setdefault(area_key, MatrixArea(key=area_key, label=area_label))
         for entry in entries:
             item = entry.measurement_item
             if item is None:

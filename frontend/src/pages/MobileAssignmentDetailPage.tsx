@@ -7038,7 +7038,7 @@ function getCustomerSignatureActionState(batch: MobileMeasurementBatch): { disab
   if (isCustomerSignedMobileMeasurementBatch(batch)) {
     return { disabled: false, hint: null };
   }
-  if (batch.entry_count === 0) {
+  if (!hasMobileMeasurementBatchContent(batch)) {
     return {
       disabled: true,
       hint: "Für die Kundenunterschrift muss mindestens eine Aufmaßzeile erfasst sein.",
@@ -7059,6 +7059,10 @@ function getCustomerSignatureActionState(batch: MobileMeasurementBatch): { disab
     disabled: true,
     hint: "Kundenunterschrift ist erst nach Projektleiterprüfung möglich.",
   };
+}
+
+function hasMobileMeasurementBatchContent(batch: MobileMeasurementBatch): boolean {
+  return batch.entry_count > 0 || (batch.area_rows?.length ?? 0) > 0;
 }
 
 function getCompactCustomerSignatureHint(hint: string | null): string | null {
