@@ -5247,13 +5247,13 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view {
-    width: 100%;
-    max-width: 100%;
+    width: calc(100vw - clamp(36px, 6vw, 64px));
+    max-width: none;
     border: 0;
     border-radius: 0;
     background: transparent;
-    margin-right: 0;
-    margin-left: 0;
+    margin-right: calc(50% - 50vw + clamp(18px, 3vw, 32px));
+    margin-left: calc(50% - 50vw + clamp(18px, 3vw, 32px));
     overflow: hidden;
     padding: 0 0 152px;
     overscroll-behavior: none;
