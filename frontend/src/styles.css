@@ -5435,11 +5435,9 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-heading,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-cell {
-    width: 44px;
-    min-width: 44px !important;
-    max-width: 44px;
-    padding-right: 4px;
-    padding-left: 4px;
+    width: 72px;
+    min-width: 72px !important;
+    max-width: 72px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-button {
