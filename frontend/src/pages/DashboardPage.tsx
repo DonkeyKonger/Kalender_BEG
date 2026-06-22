@@ -1,4 +1,4 @@
-import { AlertTriangle, BriefcaseBusiness, CalendarClock, CloudSun, Inbox, Plus, Search } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, CalendarClock, CloudSun, Inbox } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -58,13 +58,6 @@ type DashboardConflict = {
   date: string;
 };
 
-type WorkerLookup = {
-  person: Person;
-  status: string;
-  detail: string;
-  managerLabel: string;
-};
-
 type DashboardData = {
   todayAssignedSites: AssignedSiteSummary[];
   todayAssignedSiteGroups: AssignedSiteGroup[];
@@ -77,7 +70,6 @@ type DashboardData = {
   tomorrowConflicts: DashboardConflict[];
   currentWeekNeeds: StaffingNeed[];
   nextWeekNeeds: StaffingNeed[];
-  workerLookup: WorkerLookup[];
 };
 
 const MAX_PREVIEW_ITEMS = 6;
@@ -87,7 +79,6 @@ export function DashboardPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [workerSearch, setWorkerSearch] = useState("");
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
@@ -219,20 +210,6 @@ export function DashboardPage() {
       setDismissingMessageKey(null);
     }
   }
-
-  const filteredWorkers = useMemo(() => {
-    if (!dashboard || !workerSearch.trim()) {
-      return [];
-    }
-    const query = workerSearch.trim().toLowerCase();
-    return dashboard.workerLookup
-      .filter((entry) => {
-        const person = entry.person;
-        return [person.display_name, person.first_name, person.last_name, person.short_code]
-          .some((value) => value.toLowerCase().includes(query));
-      })
-      .slice(0, 5);
-  }, [dashboard, workerSearch]);
 
   if (user?.role === "monteur") {
     return (
@@ -376,33 +353,6 @@ export function DashboardPage() {
               <DashboardNeedSection title="Diese Woche" needs={dashboard.currentWeekNeeds} />
               <DashboardNeedSection title="Folgewoche" needs={dashboard.nextWeekNeeds} />
             </DashboardCard>
-          </div>
-
-          <div className="dashboard-quick-bar">
-            <div className="dashboard-search-box">
-              <Search aria-hidden="true" size={18} />
-              <input
-                type="search"
-                value={workerSearch}
-                onChange={(event) => setWorkerSearch(event.target.value)}
-                placeholder="Monteur suchen..."
-              />
-              {filteredWorkers.length > 0 && (
-                <div className="dashboard-search-results">
-                  {filteredWorkers.map((entry) => (
-                    <div key={entry.person.id}>
-                      <strong>{entry.person.display_name}</strong>
-                      <span>{entry.status} · {entry.detail} · {entry.managerLabel}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="dashboard-actions">
-              <Link to="/sites"><Plus aria-hidden="true" size={16} /> Baustelle</Link>
-              <Link to="/absences"><Plus aria-hidden="true" size={16} /> Abwesenheit</Link>
-              <Link to="/matrix">Zur heutigen Kalenderwoche</Link>
-            </div>
           </div>
         </>
       )}
@@ -562,7 +512,6 @@ function buildDashboardData(
 
   const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
   const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
-  const workerLookup = buildWorkerLookup(matrix.rows, activeWorkers, range.today, lastManagerByPersonId);
   const todayAssignedSites = overview?.todayAssignedSites ?? getAssignedSitesForDay(matrix.rows, range.today, peopleById);
   const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites);
   const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
@@ -580,7 +529,6 @@ function buildDashboardData(
     tomorrowConflicts: overview?.tomorrowConflicts ?? conflicts.filter((conflict) => conflict.date === range.tomorrow),
     currentWeekNeeds: overview?.currentWeekNeeds ?? openStaffingNeeds.filter((need) => need.date >= range.today && need.date <= range.weekEnd),
     nextWeekNeeds: overview?.nextWeekNeeds ?? openStaffingNeeds.filter((need) => need.date >= range.nextWeekStart && need.date <= range.nextWeekEnd),
-    workerLookup,
   };
 }
 
@@ -808,59 +756,6 @@ function getDashboardConflicts(rows: MatrixRow[], start: string, end: string): D
   });
 
   return Array.from(conflicts.values()).sort((first, second) => first.date.localeCompare(second.date));
-}
-
-function buildWorkerLookup(
-  rows: MatrixRow[],
-  workers: Person[],
-  date: string,
-  lastManagerByPersonId: Map<number, ManagerSummary>,
-): WorkerLookup[] {
-  const assignedToday = new Map<number, { siteName: string; managerLabel: string }>();
-  const absentToday = new Map<number, string>();
-
-  rows.forEach((row) => {
-    const cell = row.cells.find((entry) => entry.date === date);
-    if (!cell) {
-      return;
-    }
-    cell.assignments.forEach((assignment) => {
-      assignedToday.set(assignment.person.id, {
-        siteName: row.site.name,
-        managerLabel: getManagerLabel(row.site.project_manager),
-      });
-    });
-    cell.absences.forEach((absence) => {
-      absentToday.set(absence.person.id, absence.absence_type);
-    });
-  });
-
-  return workers.map((person) => {
-    const assignment = assignedToday.get(person.id);
-    if (assignment) {
-      return {
-        person,
-        status: "Eingesetzt",
-        detail: assignment.siteName,
-        managerLabel: assignment.managerLabel,
-      };
-    }
-    const absence = absentToday.get(person.id);
-    if (absence) {
-      return {
-        person,
-        status: "Abwesend",
-        detail: getAbsenceLabel(absence),
-        managerLabel: lastManagerByPersonId.get(person.id)?.label ?? "Ohne Zuordnung",
-      };
-    }
-    return {
-      person,
-      status: "Frei",
-      detail: "kein Einsatz heute",
-      managerLabel: lastManagerByPersonId.get(person.id)?.label ?? "Ohne Zuordnung",
-    };
-  }).sort((first, second) => first.person.display_name.localeCompare(second.person.display_name, "de"));
 }
 
 function getAssignedPersonIdsForDate(rows: MatrixRow[], date: string): Set<number> {
