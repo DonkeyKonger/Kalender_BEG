@@ -4354,7 +4354,7 @@ function MobileMeasurementTable({
       draftAreaInputRef.current?.select();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [draftAreaRow]);
+  }, [draftAreaRow?.anchor, draftAreaRow?.area]);
 
   useEffect(() => {
     if (!draftAreaRow?.area) {
@@ -4557,7 +4557,10 @@ function MobileMeasurementTable({
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                onChange={(event) => setDraftAreaRow({ ...draftAreaRow, value: normalizeMeasurementAreaInput(event.target.value) })}
+                onChange={(event) => {
+                  const nextValue = normalizeMeasurementAreaInput(event.target.value);
+                  setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
+                }}
                 onBlur={commitDraftAreaRow}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -4642,7 +4645,12 @@ function MobileMeasurementTable({
               {items.map((item) => <td key={item.id} />)}
               {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
             </tr>
-            {canAddFromTable && areaRows.length === 0 ? renderDraftAreaAddRow("__empty__", true) : null}
+            {canAddFromTable && areaRows.length === 0 ? (
+              <>
+                {renderDraftAreaAddRow("__empty__", true)}
+                {draftAreaRow?.anchor === "__empty__" && draftAreaRow.area ? renderDraftAreaAddRow("__empty__followup", true) : null}
+              </>
+            ) : null}
             {areaRows.map((area) => (
               <Fragment key={area}>
                 <tr>
@@ -4677,7 +4685,12 @@ function MobileMeasurementTable({
                   })}
                   {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
                 </tr>
-                {canAddFromTable ? renderDraftAreaAddRow(area) : null}
+                {canAddFromTable ? (
+                  <>
+                    {renderDraftAreaAddRow(area)}
+                    {draftAreaRow?.anchor === area && draftAreaRow.area ? renderDraftAreaAddRow(`__followup__${area}`) : null}
+                  </>
+                ) : null}
               </Fragment>
             ))}
             <tr className="measurement-matrix-total-row">
