@@ -91,6 +91,29 @@ class MeasurementEntryRead(BaseModel):
     updated_at: datetime
 
 
+class MeasurementAreaRowCreate(BaseModel):
+    area_or_comment: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("area_or_comment", mode="before")
+    @classmethod
+    def strip_area_or_comment(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class MeasurementAreaRowRead(BaseModel):
+    id: int
+    measurement_batch_id: int
+    site_id: int
+    area_or_comment: str
+    sort_order: int
+    created_by_user_id: int | None
+    created_by_name: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class MobileMeasurementItemRead(MeasurementItemRead):
     entries: list[MeasurementEntryRead]
     reported_quantity: Decimal
@@ -156,6 +179,7 @@ class MobileMeasurementBatchRead(BaseModel):
     photo_count: int = 0
     available_actions: MobileMeasurementBatchAvailableActionsRead
     block_reasons: MobileMeasurementBatchBlockReasonsRead
+    area_rows: list[MeasurementAreaRowRead] = Field(default_factory=list)
 
 
 class MeasurementTimesheetKpiRead(BaseModel):

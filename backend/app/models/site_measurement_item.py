@@ -105,8 +105,35 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     photos = relationship(
         "SiteMeasurementBatchPhoto", back_populates="measurement_batch", cascade="all, delete-orphan"
     )
+    area_rows = relationship(
+        "SiteMeasurementAreaRow",
+        back_populates="measurement_batch",
+        cascade="all, delete-orphan",
+        order_by="SiteMeasurementAreaRow.sort_order",
+    )
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
+
+
+class SiteMeasurementAreaRow(TimestampMixin, Base):
+    __tablename__ = "site_measurement_area_rows"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    measurement_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    area_or_comment: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+    measurement_batch = relationship("SiteMeasurementBatch", back_populates="area_rows")
+    site = relationship("Site")
+    created_by = relationship("User")
 
 
 class SiteMeasurementEntry(TimestampMixin, Base):

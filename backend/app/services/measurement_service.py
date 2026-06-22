@@ -16,6 +16,7 @@ from app.models.enums import UserRole
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
+    SiteMeasurementAreaRow,
     SiteMeasurementBatch,
     SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
@@ -28,6 +29,8 @@ from app.schemas.measurement import (
     DashboardMessagesSummaryRead,
     MeasurementBaseRead,
     MeasurementBaseUpdate,
+    MeasurementAreaRowCreate,
+    MeasurementAreaRowRead,
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
@@ -188,6 +191,9 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.entries).selectinload(
                         SiteMeasurementEntry.measurement_item
                     ),
+                    selectinload(SiteMeasurementBatch.area_rows).selectinload(
+                        SiteMeasurementAreaRow.created_by
+                    ),
                     selectinload(SiteMeasurementBatch.measurement_base),
                     selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
@@ -242,6 +248,52 @@ class MeasurementService:
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch, active_base_id=measurement_base.id, current_user=current_user)
+
+    def create_mobile_area_row(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        current_user: User,
+        payload: MeasurementAreaRowCreate,
+    ) -> MeasurementAreaRowRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        if batch.status != "draft":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Aufmaß wurde bereits zur Prüfung gesendet.",
+            )
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
+
+        area_or_comment = " ".join(payload.area_or_comment.split())
+        if not area_or_comment:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
+
+        existing_rows = list(
+            self.db.scalars(
+                select(SiteMeasurementAreaRow)
+                .where(SiteMeasurementAreaRow.measurement_batch_id == batch.id)
+                .order_by(SiteMeasurementAreaRow.sort_order, SiteMeasurementAreaRow.id)
+            ).all()
+        )
+        area_key = self._measurement_area_key(area_or_comment)
+        for row in existing_rows:
+            if self._measurement_area_key(row.area_or_comment) == area_key:
+                return self._build_area_row(row)
+
+        next_sort_order = (max((row.sort_order for row in existing_rows), default=-1) + 1)
+        row = SiteMeasurementAreaRow(
+            measurement_batch_id=batch.id,
+            site_id=batch.site_id,
+            area_or_comment=area_or_comment,
+            sort_order=next_sort_order,
+            created_by_user_id=current_user.id,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return self._build_area_row(row)
 
     def list_mobile_batch_items(
         self, *, assignment_id: int, batch_id: int, current_user: User
@@ -1891,6 +1943,10 @@ class MeasurementService:
             block_reasons=MobileMeasurementBatchBlockReasonsRead(
                 customer_sign=workflow_state["customer_sign_reason"],
             ),
+            area_rows=[
+                self._build_area_row(row)
+                for row in sorted(batch.area_rows, key=lambda area_row: (area_row.sort_order, area_row.id))
+            ],
         )
 
     def _photo_counts_by_batch_id(self, *, batch_ids: list[int]) -> dict[int, int]:
@@ -2318,6 +2374,23 @@ class MeasurementService:
             created_by_name=entry.created_by.display_name if entry.created_by else None,
             created_at=entry.created_at,
             updated_at=entry.updated_at,
+        )
+
+    @staticmethod
+    def _measurement_area_key(value: str) -> str:
+        return " ".join(value.split()).casefold()
+
+    def _build_area_row(self, row: SiteMeasurementAreaRow) -> MeasurementAreaRowRead:
+        return MeasurementAreaRowRead(
+            id=row.id,
+            measurement_batch_id=row.measurement_batch_id,
+            site_id=row.site_id,
+            area_or_comment=row.area_or_comment,
+            sort_order=row.sort_order,
+            created_by_user_id=row.created_by_user_id,
+            created_by_name=self._format_user_display_name(row.created_by),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
         )
 
     def _archive_billed_batch_pdf(self, *, batch: SiteMeasurementBatch, current_user: User) -> None:

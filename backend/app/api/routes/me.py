@@ -23,6 +23,8 @@ from app.schemas.extra_work import (
 )
 from app.schemas.measurement import (
     CustomerSignatureCreate,
+    MeasurementAreaRowCreate,
+    MeasurementAreaRowRead,
     MeasurementEntryCreate,
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
@@ -691,6 +693,25 @@ def create_my_assignment_measurement_free_item(
     db: Session = Depends(get_db),
 ) -> MobileMeasurementItemRead:
     return MeasurementService(db).create_mobile_free_item(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/area-rows",
+    response_model=MeasurementAreaRowRead,
+)
+def create_my_assignment_measurement_area_row(
+    assignment_id: int,
+    batch_id: int,
+    payload: MeasurementAreaRowCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MeasurementAreaRowRead:
+    return MeasurementService(db).create_mobile_area_row(
         assignment_id=assignment_id,
         batch_id=batch_id,
         current_user=current_user,

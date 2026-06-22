@@ -249,6 +249,22 @@ export type MeasurementEntryPayload = {
   quantity: number;
 };
 
+export type MeasurementAreaRow = {
+  id: number;
+  measurement_batch_id: number;
+  site_id: number;
+  area_or_comment: string;
+  sort_order: number;
+  created_by_user_id: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeasurementAreaRowPayload = {
+  area_or_comment: string;
+};
+
 export type MobileMeasurementFreeItemPayload = {
   position?: string | null;
   description: string;
@@ -294,6 +310,7 @@ export type MobileMeasurementBatch = {
   block_reasons?: {
     customer_sign?: string | null;
   };
+  area_rows?: MeasurementAreaRow[];
 };
 
 export type MobileMeasurementBatchPhoto = {

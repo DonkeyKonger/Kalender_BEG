@@ -14,6 +14,7 @@ from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
+    SiteMeasurementAreaRow,
     SiteMeasurementBatch,
     SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
@@ -49,6 +50,7 @@ __all__ = [
     "Site",
     "SiteEmailRecipient",
     "SiteMeasurementBase",
+    "SiteMeasurementAreaRow",
     "SiteMeasurementBatch",
     "SiteMeasurementBatchPhoto",
     "SiteMeasurementEntry",

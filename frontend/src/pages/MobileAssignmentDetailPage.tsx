@@ -36,7 +36,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
+import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -2778,6 +2778,31 @@ function MobileMeasurementTab({
     setPhotoGalleryBatch((currentBatch) => (currentBatch ? applyCount(currentBatch) : currentBatch));
   }
 
+  function updateBatchAreaRows(batchId: number, areaRow: MeasurementAreaRow): void {
+    const applyAreaRow = (batch: MobileMeasurementBatch) => (
+      batch.id === batchId ? mergeMobileMeasurementBatchAreaRow(batch, areaRow) : batch
+    );
+    setBatches((currentBatches) => currentBatches.map(applyAreaRow));
+    setSelectedBatch((currentBatch) => (currentBatch ? applyAreaRow(currentBatch) : currentBatch));
+    setSignatureBatch((currentBatch) => (currentBatch ? applyAreaRow(currentBatch) : currentBatch));
+    setWorkerSignatureBatch((currentBatch) => (currentBatch ? applyAreaRow(currentBatch) : currentBatch));
+    setPhotoGalleryBatch((currentBatch) => (currentBatch ? applyAreaRow(currentBatch) : currentBatch));
+  }
+
+  async function createMeasurementAreaRow(areaOrComment: string): Promise<void> {
+    if (!selectedBatch) {
+      return;
+    }
+    try {
+      const areaRow = await api.createMobileMeasurementAreaRow(assignment.id, selectedBatch.id, {
+        area_or_comment: areaOrComment,
+      });
+      updateBatchAreaRows(selectedBatch.id, areaRow);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Bereich / Ort konnte nicht gespeichert werden."));
+    }
+  }
+
   async function loadBatches(selectBatchId?: number): Promise<void> {
     setIsLoading(true);
     setError(null);
@@ -3385,6 +3410,7 @@ function MobileMeasurementTab({
           onInlineCancel={cancelInlineMeasurementEdit}
           onInlineCreatePosition={addInlineFreePositionColumn}
           onInlineFreePositionDraftChange={updateInlineFreePositionDraft}
+          onAreaRowCreate={createMeasurementAreaRow}
         />
         {isFreePositionFormOpen ? (
           <div
@@ -4145,6 +4171,7 @@ function MeasurementBatchDetail({
   onInlineCancel,
   onInlineCreatePosition,
   onInlineFreePositionDraftChange,
+  onAreaRowCreate,
 }: {
   batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
@@ -4169,6 +4196,7 @@ function MeasurementBatchDetail({
   onInlineCancel: () => void;
   onInlineCreatePosition: () => void;
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
+  onAreaRowCreate: (areaOrComment: string) => Promise<void>;
 }) {
   const positionGroups = useMemo(() => buildMeasurementPositionGroups(allItems), [allItems]);
   const [activePositionGroupKey, setActivePositionGroupKey] = useState<string | null>(null);
@@ -4293,6 +4321,7 @@ function MeasurementBatchDetail({
               onInlineCancel={onInlineCancel}
               onInlineCreatePosition={onInlineCreatePosition}
               onInlineFreePositionDraftChange={onInlineFreePositionDraftChange}
+              onAreaRowCreate={onAreaRowCreate}
               onSelectItem={onSelectItem}
             />
           ) : (
@@ -4466,6 +4495,7 @@ function MobileMeasurementTable({
   onInlineCancel,
   onInlineCreatePosition,
   onInlineFreePositionDraftChange,
+  onAreaRowCreate,
   onSelectItem,
 }: {
   batch: MobileMeasurementBatch;
@@ -4482,10 +4512,13 @@ function MobileMeasurementTable({
   onInlineCancel: () => void;
   onInlineCreatePosition: () => void;
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
+  onAreaRowCreate: (areaOrComment: string) => Promise<void>;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const displayItems = useMemo(() => buildMeasurementTableDisplayItems(items, batch), [batch, items]);
-  const measuredAreaRows = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
+  const measuredAreaRows = useMemo(() => (
+    mergeMeasurementAreaRows(collectMeasurementBatchAreaRows(batch), collectMeasurementAreaTags(allItems))
+  ), [allItems, batch]);
   const [pendingAreaRows, setPendingAreaRows] = useState<string[]>([]);
   const areaRows = useMemo(() => mergeMeasurementAreaRows(measuredAreaRows, pendingAreaRows), [measuredAreaRows, pendingAreaRows]);
   const canAddFromTable = isInlineEditingEnabled && displayItems.length > 0;
@@ -4613,6 +4646,9 @@ function MobileMeasurementTable({
         : [...currentRows, normalizedArea]
     ));
     setDraftAreaRow(null);
+    if (!areaRows.some((area) => getMeasurementAreaKey(area) === getMeasurementAreaKey(normalizedArea))) {
+      void onAreaRowCreate(normalizedArea);
+    }
   }
 
   function handleQuantityKey(key: MeasurementQuantityKey): void {
@@ -6040,6 +6076,23 @@ function collectMeasurementAreaTags(items: MobileMeasurementItem[]): string[] {
   return sortMeasurementAreaLabels(tags);
 }
 
+function collectMeasurementBatchAreaRows(batch: MobileMeasurementBatch): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  [...(batch.area_rows ?? [])]
+    .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id)
+    .forEach((row) => {
+      const normalized = normalizeMeasurementAreaInput(normalizeMeasurementArea(row.area_or_comment));
+      const key = getMeasurementAreaKey(normalized);
+      if (!normalized || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      tags.push(normalized);
+    });
+  return tags;
+}
+
 function mergeMeasurementAreaRows(measuredRows: string[], pendingRows: string[]): string[] {
   const mergedRows = [...measuredRows];
   const seen = new Set(measuredRows.map(getMeasurementAreaKey));
@@ -6892,6 +6945,18 @@ function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkTicket): { lab
 function hasMobileExtraWorkOrderContent(order: MobileExtraWorkTicket): boolean {
   const totalHours = Number(order.total_hours ?? 0);
   return (Number.isFinite(totalHours) && totalHours > 0) || order.entry_count > 0;
+}
+
+function mergeMobileMeasurementBatchAreaRow(batch: MobileMeasurementBatch, areaRow: MeasurementAreaRow): MobileMeasurementBatch {
+  const currentRows = batch.area_rows ?? [];
+  const areaKey = getMeasurementAreaKey(areaRow.area_or_comment);
+  const nextRows = currentRows.some((row) => getMeasurementAreaKey(row.area_or_comment) === areaKey)
+    ? currentRows.map((row) => (getMeasurementAreaKey(row.area_or_comment) === areaKey ? areaRow : row))
+    : [...currentRows, areaRow];
+  return {
+    ...batch,
+    area_rows: [...nextRows].sort((left, right) => left.sort_order - right.sort_order || left.id - right.id),
+  };
 }
 
 function sortMobileMeasurementBatches(batches: MobileMeasurementBatch[]): MobileMeasurementBatch[] {
