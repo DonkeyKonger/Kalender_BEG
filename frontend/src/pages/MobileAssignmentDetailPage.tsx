@@ -4262,7 +4262,10 @@ function MeasurementBatchDetail({
               {positionGroups.map((group) => (
                 <div className="mobile-measurement-position-group" key={group.key}>
                   <button
-                    className={group.key === effectivePositionGroupKey ? "is-active" : ""}
+                    className={[
+                      group.key === effectivePositionGroupKey ? "is-active" : "",
+                      `is-${group.kind}`,
+                    ].filter(Boolean).join(" ")}
                     type="button"
                     onClick={() => setActivePositionGroupKey(group.key)}
                   >

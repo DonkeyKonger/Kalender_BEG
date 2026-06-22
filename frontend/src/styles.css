@@ -5291,9 +5291,9 @@ button.person-chip:focus-visible {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 7px 8px;
     max-height: calc(3 * 38px + 2 * 7px);
-    border: 1px solid #dce3ec;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
-    background: #fcfdff;
+    background: #f8fafc;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -5314,13 +5314,13 @@ button.person-chip:focus-visible {
     width: 100%;
     min-width: 0;
     height: 31px;
-    border: 1px solid #d9e2ec;
+    border: 1px solid #c7d2df;
     border-radius: 5px;
     background: #fbfcfe;
     color: #334155;
     font: inherit;
     font-size: 0.75rem;
-    font-weight: 650;
+    font-weight: 675;
     overflow: hidden;
     padding: 6px 10px 8px;
     text-align: center;
@@ -5343,8 +5343,8 @@ button.person-chip:focus-visible {
     max-width: calc(100% - 12px);
     min-width: 16px;
     border-radius: 3px;
-    background: #f8fafc;
-    color: #8a95a5;
+    background: #f1f5f9;
+    color: #8b95a4;
     font-size: 0.56rem;
     font-weight: 700;
     line-height: 1;
@@ -5357,15 +5357,32 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active {
-    border-color: #9db7da;
-    background: #f7fbff;
+    border-color: #7d9fca;
+    background: #f2f7fd;
     color: #1f3f66;
-    font-weight: 700;
+    font-weight: 735;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active + .mobile-measurement-position-group-count {
-    background: #f8fafc;
-    color: #7a8797;
+    background: #eef3f8;
+    color: #707d8d;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-captured {
+    border-color: #d5c8aa;
+    background: #fffdf7;
+    color: #4f4635;
+    font-weight: 700;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-captured.is-active {
+    border-color: #b99b5f;
+    background: #fff8e8;
+    color: #453716;
+  }
+
+  .app-shell.is-mobile-workspace .mobile-measurement-position-groups + .mobile-measurement-table-shell {
+    margin-top: 10px;
   }
 
   .app-shell.is-mobile-workspace .mobile-detail-actions,
