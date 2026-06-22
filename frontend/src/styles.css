@@ -5338,15 +5338,14 @@ button.person-chip:focus-visible {
     bottom: 0;
     transform: translateX(-50%);
     max-width: calc(100% - 12px);
-    border: 1px solid #d8e1ec;
-    border-radius: 999px;
-    background: #f3f6fa;
-    color: #64748b;
-    font-size: 0.68rem;
-    font-weight: 800;
-    line-height: 1.1;
+    border-radius: 4px;
+    background: #f6f8fb;
+    color: #7a8797;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
     overflow: hidden;
-    padding: 1px 7px;
+    padding: 1px 5px 2px;
     pointer-events: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -5359,9 +5358,8 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active + .mobile-measurement-position-group-count {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: #f3f7fc;
+    color: #64748b;
   }
 
   .app-shell.is-mobile-workspace .mobile-detail-actions,

@@ -4266,7 +4266,7 @@ function MeasurementBatchDetail({
                   >
                     <span className="mobile-measurement-position-group-label">{group.label}</span>
                   </button>
-                  <span className="mobile-measurement-position-group-count">{group.count} Pos.</span>
+                  <span className="mobile-measurement-position-group-count">{group.count}</span>
                 </div>
               ))}
             </div>
