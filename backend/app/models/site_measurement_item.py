@@ -47,6 +47,8 @@ class SiteMeasurementItem(TimestampMixin, Base):
     source_project_number: Mapped[str | None] = mapped_column(String(120))
     source_invoice_number: Mapped[str | None] = mapped_column(String(120), index=True)
     source_customer_name: Mapped[str | None] = mapped_column(String(255))
+    source_section_key: Mapped[str | None] = mapped_column(String(80))
+    source_section_title: Mapped[str | None] = mapped_column(String(255))
     position: Mapped[str] = mapped_column(String(80), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     list_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))

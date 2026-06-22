@@ -6052,7 +6052,10 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
   const prefixGroups = [...root.children.values()]
     .sort(compareMeasurementPositionTreeNodes)
     .flatMap((node) => chooseMeasurementPositionGroupNodes(node))
-    .map((node) => createMeasurementPositionGroup(node.prefixSegments.join("."), node.items));
+    .map((node) => {
+      const prefix = node.prefixSegments.join(".");
+      return createMeasurementPositionGroup(getMeasurementPositionGroupLabel(prefix, node.items), node.items, prefix);
+    });
 
   if (miscellaneousItems.length > 0) {
     prefixGroups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "misc"));
@@ -6156,6 +6159,28 @@ function createMeasurementPositionGroup(label: string, items: MobileMeasurementI
   };
 }
 
+function getMeasurementPositionGroupLabel(prefix: string, items: MobileMeasurementItem[]): string {
+  const normalizedPrefix = normalizeMeasurementSectionKey(prefix);
+  const firstMatchingItem = items.find((item) => {
+    return normalizeMeasurementSectionKey(item.source_section_key) === normalizedPrefix && Boolean(item.source_section_title?.trim());
+  });
+  if (
+    firstMatchingItem?.source_section_title &&
+    items.every((item) => normalizeMeasurementSectionKey(item.source_section_key) === normalizedPrefix)
+  ) {
+    return `${prefix} – ${firstMatchingItem.source_section_title.trim()}`;
+  }
+  return prefix;
+}
+
+function normalizeMeasurementSectionKey(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .replace(/\s*\.\s*/g, ".")
+    .replace(/\.+$/g, "")
+    .toLocaleUpperCase("de-DE");
+}
+
 function parseMeasurementPositionSegments(position: string): string[] {
   const normalized = position.trim();
   if (!/\d/.test(normalized)) {
@@ -6217,6 +6242,8 @@ function createInlineFreePositionDraftItem(batch: MobileMeasurementBatch, id: nu
     source_project_number: null,
     source_invoice_number: null,
     source_customer_name: null,
+    source_section_key: null,
+    source_section_title: null,
     position,
     description: "",
     list_quantity: null,

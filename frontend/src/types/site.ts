@@ -211,6 +211,8 @@ export type MeasurementItem = {
   source_project_number: string | null;
   source_invoice_number: string | null;
   source_customer_name: string | null;
+  source_section_key: string | null;
+  source_section_title: string | null;
   position: string;
   description: string;
   list_quantity: MeasurementNumericValue;

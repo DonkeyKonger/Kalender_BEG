@@ -40,6 +40,8 @@ class MeasurementItemRead(BaseModel):
     source_project_number: str | None
     source_invoice_number: str | None
     source_customer_name: str | None
+    source_section_key: str | None = None
+    source_section_title: str | None = None
     position: str
     description: str
     list_quantity: Decimal | None

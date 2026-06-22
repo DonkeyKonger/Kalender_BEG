@@ -22,6 +22,8 @@ class ParsedMeasurementItem:
     list_minutes_total: Decimal | None
     is_nep: bool
     sort_order: int
+    source_section_key: str | None = None
+    source_section_title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -45,7 +47,9 @@ _FULL_POSITION_RE = re.compile(
 )
 _PENDING_BASE_RE = re.compile(r"^(?P<base>N?\d+(?:\.\d+)*\.)\s+(?P<description>.+)$")
 _SUFFIX_LINE_RE = re.compile(r"^(?P<item>\d+[a-z]?)\b\s*(?P<description>.*)$")
-_GROUP_HEADING_RE = re.compile(rf"^N?\d+(?:\.\d+)*\s+.+\s+{_NUMBER_RE}$")
+_GROUP_HEADING_RE = re.compile(
+    rf"^(?P<section>N?\d+(?:\.\d+)*)\s+(?P<title>.+?)\s+{_NUMBER_RE}$"
+)
 _SKIP_LINE_PREFIXES = (
     "Zeit-Vorgabeliste",
     "Position Bezeichnung",
@@ -75,6 +79,7 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
     items: list[ParsedMeasurementItem] = []
     current: dict | None = None
     synthetic_position_counters: dict[str, int] = {}
+    section_headings: dict[str, str] = {}
 
     for raw_line in lines:
         line = _normalize_whitespace(raw_line)
@@ -89,9 +94,15 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
         if line.startswith("Name1 ="):
             continue
 
+        group_heading = _parse_group_heading(line)
+        if group_heading is not None:
+            section_key, section_title = group_heading
+            section_headings[section_key] = section_title
+            continue
+
         row_match = _ROW_RE.match(line)
         if row_match:
-            finalized = _finalize_current_item(current, len(items) + 1)
+            finalized = _finalize_current_item(current, len(items) + 1, section_headings)
             if finalized is not None:
                 items.append(finalized)
             current = _start_item(row_match, synthetic_position_counters)
@@ -100,7 +111,7 @@ def parse_measurement_timesheet_lines(lines: list[str]) -> MeasurementTimesheetP
         if current is not None and not _is_non_position_table_line(line):
             _append_description_line(current, line)
 
-    finalized = _finalize_current_item(current, len(items) + 1)
+    finalized = _finalize_current_item(current, len(items) + 1, section_headings)
     if finalized is not None:
         items.append(finalized)
 
@@ -156,8 +167,19 @@ def _split_position_and_description(left: str) -> tuple[str | None, str, str | N
     return None, left, None
 
 
+def _parse_group_heading(line: str) -> tuple[str, str] | None:
+    match = _GROUP_HEADING_RE.match(line)
+    if not match:
+        return None
+    section_key = _normalize_section_key(match.group("section"))
+    section_title = _normalize_description(match.group("title"))
+    if not section_key or not section_title:
+        return None
+    return section_key, section_title
+
+
 def _is_non_position_table_line(line: str) -> bool:
-    return line.lower().startswith("gesamt:") or bool(_GROUP_HEADING_RE.match(line))
+    return line.lower().startswith("gesamt:") or _parse_group_heading(line) is not None
 
 
 def _can_synthesize_position(base: str) -> bool:
@@ -176,13 +198,19 @@ def _append_description_line(current: dict, line: str) -> None:
     current["description_parts"].append(line)
 
 
-def _finalize_current_item(current: dict | None, sort_order: int) -> ParsedMeasurementItem | None:
+def _finalize_current_item(
+    current: dict | None, sort_order: int, section_headings: dict[str, str]
+) -> ParsedMeasurementItem | None:
     if current is None or not current.get("position"):
         return None
 
     description = _normalize_description(" ".join(current["description_parts"]))
     if not description:
         return None
+
+    source_section_key, source_section_title = _find_section_heading_for_position(
+        current["position"], section_headings
+    )
 
     return ParsedMeasurementItem(
         position=current["position"],
@@ -193,7 +221,24 @@ def _finalize_current_item(current: dict | None, sort_order: int) -> ParsedMeasu
         list_minutes_total=current["list_minutes_total"],
         is_nep=current["is_nep"],
         sort_order=sort_order,
+        source_section_key=source_section_key,
+        source_section_title=source_section_title,
     )
+
+
+def _find_section_heading_for_position(
+    position: str, section_headings: dict[str, str]
+) -> tuple[str | None, str | None]:
+    position_key = _normalize_section_key(position)
+    matching_keys = [
+        key
+        for key in section_headings
+        if position_key == key or position_key.startswith(f"{key}.")
+    ]
+    if not matching_keys:
+        return None, None
+    best_key = max(matching_keys, key=lambda key: (key.count("."), len(key)))
+    return best_key, section_headings[best_key]
 
 
 def _extract_source_customer_name(lines: list[str]) -> str | None:
@@ -227,6 +272,10 @@ def _extract_source_customer_name(lines: list[str]) -> str | None:
 
 def _normalize_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _normalize_section_key(value: str) -> str:
+    return re.sub(r"\s*\.\s*", ".", _normalize_whitespace(value)).rstrip(".")
 
 
 def _normalize_description(value: str) -> str:

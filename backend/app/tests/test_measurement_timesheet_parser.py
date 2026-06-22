@@ -36,6 +36,8 @@ def test_parse_measurement_timesheet_lines_keeps_zero_quantities_and_split_posit
         "N4.2.20",
     ]
     assert result.items[0].list_quantity == Decimal("199.00")
+    assert result.items[0].source_section_key == "1.01.05"
+    assert result.items[0].source_section_title == "Kabelrinnen"
     assert result.items[0].list_minutes_total == Decimal("2238.75")
     assert result.items[1].list_quantity == Decimal("0.00")
     assert result.items[1].is_nep is True
@@ -61,6 +63,13 @@ def test_parse_measurement_timesheet_lines_synthesizes_repeated_simple_positions
     )
 
     assert [item.position for item in result.items] == ["1.1", "1.2", "1.3", "1.4"]
+    assert [item.source_section_key for item in result.items] == ["1", "1", "1", "1"]
+    assert [item.source_section_title for item in result.items] == [
+        "Nidax Verlegesysteme",
+        "Nidax Verlegesysteme",
+        "Nidax Verlegesysteme",
+        "Nidax Verlegesysteme",
+    ]
     assert [item.description for item in result.items] == [
         "U-Stiel bis 400 mm liefern und montieren",
         "Stielausleger 100 mm liefern und montieren",
@@ -85,4 +94,38 @@ def test_parse_measurement_timesheet_lines_synthesizes_repeated_simple_positions
         Decimal("168.00"),
         Decimal("480.00"),
         Decimal("75.00"),
+    ]
+
+
+def test_parse_measurement_timesheet_lines_keeps_group_headings_as_section_metadata():
+    result = parse_measurement_timesheet_lines(
+        [
+            "Zeit-Vorgabeliste",
+            "Projekt = 8005 / P240197",
+            "Rechnung = 3240527",
+            "Name1 = Siegfried Nass GmbH",
+            "Position Bezeichnung Menge Minuten / Einheit Minuten gesamt",
+            "1 Verlegesysteme 2.935,00",
+            "1. 1 Weitspannkabelleiter liefern und montieren 84,00 m 25,00 2.100,00",
+            "1. 2 Adapterplatte zum Anflanschen liefern und montieren 10,00 ST 22,50 225,00",
+            "2 Mittelschwere Steigeleiter 210,00",
+            "2. 1 Mittelschwere Steigeleiter SLM50 liefern und montieren 1,00 Stck 210,00 210,00",
+            "3 Verteilereinspeisung 90,00",
+            "3. 1 Sonderkonstruktion zur Einspeisung liefern 1,00 Stck 90,00 90,00",
+            "gesamt: 3.235,00",
+        ]
+    )
+
+    assert [item.position for item in result.items] == ["1.1", "1.2", "2.1", "3.1"]
+    assert [item.description for item in result.items] == [
+        "Weitspannkabelleiter liefern und montieren",
+        "Adapterplatte zum Anflanschen liefern und montieren",
+        "Mittelschwere Steigeleiter SLM50 liefern und montieren",
+        "Sonderkonstruktion zur Einspeisung liefern",
+    ]
+    assert [(item.source_section_key, item.source_section_title) for item in result.items] == [
+        ("1", "Verlegesysteme"),
+        ("1", "Verlegesysteme"),
+        ("2", "Mittelschwere Steigeleiter"),
+        ("3", "Verteilereinspeisung"),
     ]
