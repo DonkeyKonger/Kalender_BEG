@@ -5409,9 +5409,9 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-table th,
   .app-shell.is-mobile-workspace .mobile-measurement-table td {
-    width: 72px;
-    min-width: 72px;
-    max-width: 72px;
+    width: 86px;
+    min-width: 86px;
+    max-width: 86px;
     padding: 4px 6px;
   }
 
@@ -5435,15 +5435,15 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-position-heading {
-    width: 74px;
-    min-width: 74px;
-    max-width: 74px;
+    width: 89px;
+    min-width: 89px;
+    max-width: 89px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-description-heading {
-    width: 86px;
-    min-width: 86px;
-    max-width: 86px;
+    width: 103px;
+    min-width: 103px;
+    max-width: 103px;
     font-weight: 450;
     line-height: 1.15;
   }
@@ -5525,9 +5525,9 @@ button.person-chip:focus-visible {
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-heading,
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-cell {
-    width: 72px;
-    min-width: 72px !important;
-    max-width: 72px;
+    width: 86px;
+    min-width: 86px !important;
+    max-width: 86px;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-add-column-button {
