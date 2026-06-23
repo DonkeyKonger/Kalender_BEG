@@ -16334,18 +16334,28 @@ button.person-chip:focus-visible {
   color: #143c6d;
 }
 
-.mobile-measurement-overview-action:hover:not(:disabled),
 .mobile-measurement-overview-action:focus-visible:not(:disabled) {
   border-color: #9db7d6;
   box-shadow: 0 14px 28px rgb(18 29 52 / 10%);
   outline: none;
-  transform: translateY(-1px);
 }
 
-.mobile-measurement-overview-action.is-primary:hover:not(:disabled),
 .mobile-measurement-overview-action.is-primary:focus-visible:not(:disabled) {
   border-color: #7fa1ca;
   background: #e5f0fb;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mobile-measurement-overview-action:hover:not(:disabled) {
+    border-color: #9db7d6;
+    box-shadow: 0 14px 28px rgb(18 29 52 / 10%);
+    transform: translateY(-1px);
+  }
+
+  .mobile-measurement-overview-action.is-primary:hover:not(:disabled) {
+    border-color: #7fa1ca;
+    background: #e5f0fb;
+  }
 }
 
 .mobile-measurement-overview-action:disabled {
@@ -16430,7 +16440,6 @@ button.person-chip:focus-visible {
   border-bottom-right-radius: 0;
 }
 
-.mobile-measurement-photo-action-row .mobile-measurement-photo-main-action:hover:not(:disabled),
 .mobile-measurement-photo-action-row .mobile-measurement-photo-main-action:focus-visible:not(:disabled) {
   transform: none;
 }
@@ -16447,11 +16456,22 @@ button.person-chip:focus-visible {
   box-shadow: 0 10px 22px rgb(18 29 52 / 11%);
 }
 
-.mobile-camera-button.mobile-measurement-inline-camera-button:hover:not(:disabled),
 .mobile-camera-button.mobile-measurement-inline-camera-button:focus-visible:not(:disabled) {
   border-color: #244d78;
   background: #244d78;
   outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mobile-measurement-photo-action-row .mobile-measurement-photo-main-action:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .mobile-camera-button.mobile-measurement-inline-camera-button:hover:not(:disabled) {
+    border-color: #244d78;
+    background: #244d78;
+    outline: none;
+  }
 }
 
 .mobile-measurement-action-hint {
