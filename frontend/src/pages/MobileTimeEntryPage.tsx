@@ -615,9 +615,10 @@ export function MobileTimeEntryPage() {
                   <div className="mobile-time-site-grid">
                     {plannedSiteOptions.map((site) => (
                       <article className="mobile-time-site-card is-planned" key={site.id}>
-                        <div>
-                          <strong>{site.name}</strong>
-                          {formatSiteMeta(site) ? <span>{formatSiteMeta(site)}</span> : null}
+                        <div className="mobile-time-site-copy">
+                          <strong>{site.site_number || site.name}</strong>
+                          <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                          {site.site_number && site.location ? <small>{site.location}</small> : null}
                         </div>
                         <button className="mobile-time-site-action" type="button" onClick={() => openSiteEntry(site.id)}>
                           Zeit erfassen
@@ -654,6 +655,7 @@ export function MobileTimeEntryPage() {
                           key={entry.id}
                         >
                           <button className="mobile-time-entry-bubble-open" type="button" onClick={() => editEntry(entry)}>
+                            <span className="mobile-time-entry-kind">{formatEntryKindLabel(entry)}</span>
                             <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
                             <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
                           </button>
@@ -680,7 +682,7 @@ export function MobileTimeEntryPage() {
                   <small>Aus den letzten 6 Monaten</small>
                 </div>
                 {recentSiteOptions.length ? (
-                  <div className="mobile-time-site-grid">
+                  <div className="mobile-time-recent-strip">
                     {recentSiteOptions.map((site) => (
                       <button className="mobile-time-site-card" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
                         <strong>{site.name}</strong>
@@ -1387,6 +1389,10 @@ function formatEntryBubbleTitle(entry: TimeEntry, siteById: Map<number, MobileTi
     return extractManualSiteText(entry.note) || "Manuelle Baustelle";
   }
   return formatSiteLabel(entry.site_id, siteById);
+}
+
+function formatEntryKindLabel(entry: TimeEntry): string {
+  return entry.site_id === null ? "Manuell" : "Baustelle";
 }
 
 function formatTimeRange(startTime: string | null | undefined, endTime: string | null | undefined): string {
