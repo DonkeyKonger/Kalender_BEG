@@ -6725,6 +6725,14 @@ function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { la
       className: "is-not-sent",
     };
   }
+  const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
+    || item.customer_email_signature_present === true;
+  if (signaturePresent) {
+    return {
+      label: "Mail an Kunden gesendet",
+      className: "is-complete",
+    };
+  }
   return {
     label: "Mail an Kunden gesendet",
     className: "is-signature-open",
