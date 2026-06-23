@@ -1,4 +1,4 @@
-import { Building2, ChevronDown, Plus, Save, Search, Trash2, UserPlus } from "lucide-react";
+import { ArrowLeft, Building2, ChevronDown, ChevronRight, Plus, Save, Search, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -9,6 +9,7 @@ import type { Customer, CustomerContactInput, CustomerCreate } from "../types/cu
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
+type CustomerDetailSubview = "emails" | "contacts" | "projects";
 
 const customerContactTypeLabels: Record<string, string> = {
   monteur: "Ansprechpartner vor Ort",
@@ -51,6 +52,7 @@ export function CustomersPage() {
   const [createForm, setCreateForm] = useState<CustomerCreate>(emptyCustomer);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [customerDetailSubview, setCustomerDetailSubview] = useState<CustomerDetailSubview | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingCustomerId, setSavingCustomerId] = useState<number | null>(null);
@@ -182,11 +184,13 @@ export function CustomersPage() {
   function openNewCustomerDrawer() {
     setCreateForm(emptyCustomer);
     setIsEditingCustomer(false);
+    setCustomerDetailSubview(null);
     setDrawer({ mode: "new" });
   }
 
   function openCustomerDrawer(customerId: number) {
     setIsEditingCustomer(false);
+    setCustomerDetailSubview(null);
     setDrawer({ mode: "edit", customerId });
   }
 
@@ -206,6 +210,7 @@ export function CustomersPage() {
       setCreateForm(emptyCustomer);
     }
     setIsEditingCustomer(false);
+    setCustomerDetailSubview(null);
     setDrawer(null);
   }
 
@@ -305,7 +310,14 @@ export function CustomersPage() {
         subtitle={selectedCustomer ? selectedCustomer.company_name : undefined}
         onClose={closeDrawer}
         actions={selectedCustomer && canEdit && !isEditingCustomer ? (
-          <button className="icon-button secondary" type="button" onClick={() => setIsEditingCustomer(true)}>
+          <button
+            className="icon-button secondary"
+            type="button"
+            onClick={() => {
+              setCustomerDetailSubview(null);
+              setIsEditingCustomer(true);
+            }}
+          >
             <span>Bearbeiten</span>
           </button>
         ) : undefined}
@@ -356,7 +368,15 @@ export function CustomersPage() {
               onChange={(values) => updateDraft(selectedCustomer.id, values)}
             />
           ) : (
-            <CustomerReadView customer={selectedCustomer} />
+            customerDetailSubview ? (
+              <CustomerDetailSubviewView
+                customer={selectedCustomer}
+                view={customerDetailSubview}
+                onBack={() => setCustomerDetailSubview(null)}
+              />
+            ) : (
+              <CustomerReadView customer={selectedCustomer} onOpenSubview={setCustomerDetailSubview} />
+            )
           )
         )}
       </EntityDetailDrawer>
@@ -364,7 +384,13 @@ export function CustomersPage() {
   );
 }
 
-function CustomerReadView({ customer }: { customer: Customer }) {
+function CustomerReadView({
+  customer,
+  onOpenSubview,
+}: {
+  customer: Customer;
+  onOpenSubview: (view: CustomerDetailSubview) => void;
+}) {
   const emailItems = customerEmailItems(customer);
 
   return (
@@ -385,40 +411,110 @@ function CustomerReadView({ customer }: { customer: Customer }) {
         </div>
       </section>
 
-      <section className="detail-read-section">
-        <h3>E-Mail-Adressen</h3>
-        {emailItems.length ? (
-          <div className="detail-read-grid">
-            {emailItems.map((item) => (
-              <ReadItem key={item.email} label={item.label} value={item.email} />
-            ))}
-          </div>
-        ) : (
-          <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>
-        )}
-      </section>
+      <CustomerDetailNavSection
+        title="E-Mail-Adressen"
+        preview={emailItems.length
+          ? `${emailItems.length} E-Mail-Adresse${emailItems.length === 1 ? "" : "n"} hinterlegt`
+          : "Keine E-Mail-Adressen hinterlegt."}
+        onClick={() => onOpenSubview("emails")}
+      />
+
+      <CustomerDetailNavSection
+        title="Ansprechpartner"
+        preview={customer.contacts.length
+          ? `${customer.contacts.length} Ansprechpartner hinterlegt`
+          : "Keine Ansprechpartner hinterlegt."}
+        onClick={() => onOpenSubview("contacts")}
+      />
+
+      <CustomerDetailNavSection
+        title="Projekte"
+        preview="Projektübersicht wird vorbereitet."
+        onClick={() => onOpenSubview("projects")}
+      />
+    </div>
+  );
+}
+
+function CustomerDetailNavSection({
+  title,
+  preview,
+  onClick,
+}: {
+  title: string;
+  preview: string;
+  onClick: () => void;
+}) {
+  return (
+    <section className="detail-read-section customer-detail-nav-section">
+      <button className="customer-detail-nav-button" type="button" onClick={onClick}>
+        <span className="customer-detail-nav-copy">
+          <span className="customer-detail-nav-title">{title}</span>
+          <span className="customer-detail-nav-preview">{preview}</span>
+        </span>
+        <ChevronRight aria-hidden="true" size={17} />
+      </button>
+    </section>
+  );
+}
+
+function CustomerDetailSubviewView({
+  customer,
+  view,
+  onBack,
+}: {
+  customer: Customer;
+  view: CustomerDetailSubview;
+  onBack: () => void;
+}) {
+  const emailItems = customerEmailItems(customer);
+  const title = view === "emails" ? "E-Mail-Adressen" : view === "contacts" ? "Ansprechpartner" : "Projekte";
+
+  return (
+    <div className="detail-read-view customer-detail-subview">
+      <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" size={16} />
+        <span>Zurück</span>
+      </button>
 
       <section className="detail-read-section">
-        <h3>Ansprechpartner</h3>
-        {customer.contacts.length ? (
-          <div className="customer-contact-card-list">
-            {customer.contacts.map((contact) => (
-              <div className="customer-contact-card" key={contact.id}>
-                <strong>{contact.name}</strong>
-                <span>{customerContactTypeLabels[contact.contact_type] ?? contact.contact_type}</span>
-                <small>{[contact.phone, contact.email].filter(Boolean).join(" · ") || "Keine Kontaktdaten"}</small>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="detail-empty">Keine Ansprechpartner hinterlegt.</p>
+        <h3>{title}</h3>
+        {view === "emails" && (
+          emailItems.length ? (
+            <div className="detail-read-grid">
+              {emailItems.map((item) => (
+                <ReadItem key={item.email} label={item.label} value={item.email} />
+              ))}
+            </div>
+          ) : (
+            <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>
+          )
+        )}
+        {view === "contacts" && (
+          customer.contacts.length ? (
+            <CustomerContactCardList contacts={customer.contacts} />
+          ) : (
+            <p className="detail-empty">Keine Ansprechpartner hinterlegt.</p>
+          )
+        )}
+        {view === "projects" && (
+          <p className="detail-empty">Projektübersicht wird vorbereitet.</p>
         )}
       </section>
+    </div>
+  );
+}
 
-      <section className="detail-read-section">
-        <h3>Projekte</h3>
-        <p className="detail-empty">Noch keine Projekte hinterlegt.</p>
-      </section>
+function CustomerContactCardList({ contacts }: { contacts: Customer["contacts"] }) {
+  return (
+    <div className="customer-contact-card-list">
+      {contacts.map((contact) => (
+        <div className="customer-contact-card" key={contact.id}>
+          <strong>{contact.name}</strong>
+          <span>{customerContactTypeLabels[contact.contact_type] ?? contact.contact_type}</span>
+          <small>{[contact.phone, contact.email].filter(Boolean).join(" · ") || "Keine Kontaktdaten"}</small>
+        </div>
+      ))}
     </div>
   );
 }

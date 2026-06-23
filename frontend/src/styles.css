@@ -1563,6 +1563,73 @@ button.entity-card:focus-visible,
   letter-spacing: 0;
 }
 
+.customer-detail-nav-section {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.customer-detail-nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 14px;
+  text-align: left;
+}
+
+.customer-detail-nav-button:hover,
+.customer-detail-nav-button:focus-visible {
+  background: #f8fafc;
+  outline: none;
+}
+
+.customer-detail-nav-button:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(29 92 153 / 28%);
+}
+
+.customer-detail-nav-button svg {
+  flex: 0 0 auto;
+  color: #64748b;
+}
+
+.customer-detail-nav-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.customer-detail-nav-title {
+  color: #172033;
+  font-size: 0.96rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.customer-detail-nav-preview {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-detail-subview {
+  align-content: start;
+}
+
+.customer-detail-back-button {
+  justify-self: start;
+}
+
 .detail-read-grid {
   display: grid;
   gap: 10px;
