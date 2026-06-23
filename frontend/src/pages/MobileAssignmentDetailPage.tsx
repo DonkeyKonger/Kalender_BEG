@@ -6215,7 +6215,7 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
     ...baseGroups,
     {
       key: "captured",
-      label: "Mit Menge",
+      label: "Erfasste Positionen",
       count: capturedItems.length,
       kind: "captured",
       itemIds: new Set(capturedItems.map((item) => item.id)),
