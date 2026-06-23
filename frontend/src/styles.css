@@ -4614,12 +4614,13 @@ button.person-chip:focus-visible {
 .mobile-time-summary-card {
   display: grid;
   gap: 4px;
+  min-height: 58px;
   width: 100%;
   border: 0;
   border-radius: 14px;
   background: #f5f7fa;
   color: inherit;
-  padding: 10px;
+  padding: 12px 10px;
   text-align: left;
 }
 
