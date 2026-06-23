@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { StatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import type { Customer, CustomerContactInput, CustomerCreate } from "../types/customer";
 
@@ -266,7 +265,6 @@ export function CustomersPage() {
                         subtitle={formatCustomerAddress(customer) || "Keine Adresse hinterlegt"}
                         meta={customerCardMeta(customer)}
                         icon={<Building2 aria-hidden="true" size={17} />}
-                        status={<StatusBadge tone={customer.is_active ? "active" : "inactive"}>{customer.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
                         isInactive={!customer.is_active}
                         onClick={() => openCustomerDrawer(customer.id)}
                       />
@@ -376,10 +374,6 @@ function CustomerReadView({ customer }: { customer: Customer }) {
         <div className="detail-read-grid">
           <ReadItem label="Firmenname" value={customer.company_name} />
           <ReadItem label="Firmentelefon" value={customer.company_phone || "-"} />
-          <div className="detail-read-item">
-            <span>Status</span>
-            <strong><StatusBadge tone={customer.is_active ? "active" : "inactive"}>{customer.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
-          </div>
         </div>
       </section>
 
