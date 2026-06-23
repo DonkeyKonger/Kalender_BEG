@@ -12,6 +12,13 @@ export type CustomerContact = CustomerContactInput & {
   updated_at: string;
 };
 
+export type CustomerEmailAddress = {
+  email: string;
+  label: string | null;
+  source: string | null;
+  created_at: string | null;
+};
+
 export type Customer = {
   id: number;
   company_name: string;
@@ -26,6 +33,7 @@ export type Customer = {
   project_lead_email: string | null;
   is_active: boolean;
   contacts: CustomerContact[];
+  email_addresses: CustomerEmailAddress[];
   created_at: string;
   updated_at: string;
 };

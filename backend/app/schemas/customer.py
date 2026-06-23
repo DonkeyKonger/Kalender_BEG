@@ -24,6 +24,13 @@ class CustomerContactRead(CustomerContactBase):
     model_config = {"from_attributes": True}
 
 
+class CustomerEmailAddressRead(BaseModel):
+    email: str
+    label: str | None = None
+    source: str | None = None
+    created_at: datetime | None = None
+
+
 class CustomerBase(BaseModel):
     company_name: str = Field(min_length=1, max_length=200)
     address_street: str | None = Field(default=None, max_length=200)
@@ -72,6 +79,7 @@ class CustomerRead(BaseModel):
     project_lead_email: str | None = None
     is_active: bool
     contacts: list[CustomerContactRead] = Field(default_factory=list)
+    email_addresses: list[CustomerEmailAddressRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

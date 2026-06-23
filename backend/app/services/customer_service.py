@@ -1,9 +1,12 @@
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer, CustomerContact
+from app.models.site import Site
+from app.models.site_email_recipient import SiteEmailRecipient
 from app.repositories.customer_repository import CustomerRepository
-from app.schemas.customer import CustomerCreate, CustomerUpdate
+from app.schemas.customer import CustomerCreate, CustomerEmailAddressRead, CustomerRead, CustomerUpdate
 from app.services.audit_service import AuditService
 
 
@@ -30,6 +33,11 @@ class CustomerService:
 
     def list_customers(self, is_active: bool | None = None) -> list[Customer]:
         return self.customers.list(is_active=is_active)
+
+    def read_customer(self, customer: Customer) -> CustomerRead:
+        return CustomerRead.model_validate(customer).model_copy(
+            update={"email_addresses": customer_email_addresses(customer, self.db)}
+        )
 
     def create_customer(self, payload: CustomerCreate, user_id: int) -> Customer:
         values = clean_customer_values(payload.model_dump())
@@ -142,6 +150,59 @@ def clean_customer_contacts(contacts: list[dict]) -> list[dict]:
 def validate_email(value: str | None, label: str) -> None:
     if value and "@" not in value:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{label} ist nicht gueltig.")
+
+
+def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEmailAddressRead]:
+    items: dict[str, CustomerEmailAddressRead] = {}
+
+    def add_email(
+        email: str | None,
+        label: str | None,
+        source: str,
+        created_at=None,
+    ) -> None:
+        cleaned_email = email.strip() if isinstance(email, str) else ""
+        if not cleaned_email:
+            return
+        normalized_email = cleaned_email.casefold()
+        if "@" not in normalized_email:
+            return
+        items.setdefault(
+            normalized_email,
+            CustomerEmailAddressRead(
+                email=cleaned_email,
+                label=label,
+                source=source,
+                created_at=created_at,
+            ),
+        )
+
+    add_email(customer.project_lead_email, customer.project_lead_name or "Projektleiter Kunde", "customer_project_lead")
+    for contact in customer.contacts:
+        add_email(contact.email, contact.name, f"customer_contact:{contact.contact_type}")
+
+    customer_key = normalize_customer_match_text(customer.company_name)
+    if customer_key:
+        site_recipients = db.execute(
+            select(SiteEmailRecipient, Site)
+            .join(Site, SiteEmailRecipient.site_id == Site.id)
+            .where(SiteEmailRecipient.email.is_not(None))
+        ).all()
+        for recipient, site in site_recipients:
+            if normalize_customer_match_text(site.customer) != customer_key:
+                continue
+            add_email(
+                recipient.email,
+                recipient.label or "Mobile E-Mail",
+                recipient.source or "mobile_email",
+                recipient.created_at,
+            )
+
+    return sorted(items.values(), key=lambda item: item.email.casefold())
+
+
+def normalize_customer_match_text(value: str | None) -> str:
+    return " ".join((value or "").casefold().split())
 
 
 def customer_snapshot(customer: Customer) -> dict:

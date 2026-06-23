@@ -743,6 +743,9 @@ function customerEmailItems(customer: Customer): Array<{ email: string; label: s
   for (const contact of customer.contacts) {
     addEmail(contact.email, contact.name || customerContactTypeLabels[contact.contact_type] || "Kontakt");
   }
+  for (const emailAddress of customer.email_addresses) {
+    addEmail(emailAddress.email, emailAddress.label || "Mobile E-Mail");
+  }
   return [...items.values()];
 }
 
