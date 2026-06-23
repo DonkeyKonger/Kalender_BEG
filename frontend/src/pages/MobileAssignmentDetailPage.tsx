@@ -74,7 +74,7 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools";
+type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools" | "photos";
 type MobileDetailActionKey = MobileDetailTab | "timesheet";
 type MeasurementViewMode = "list" | "table";
 type InlineMeasurementEditMode = "cell" | "add-row";
@@ -217,6 +217,7 @@ export function MobileAssignmentDetailPage() {
   const isFoldersFlow = activeTab === "folders";
   const isMeasurementFlow = activeTab === "measurement";
   const isExtraWorkFlow = activeTab === "extra-work";
+  const isProjectPhotosFlow = activeTab === "photos";
   const isFocusedEntry = isMeasurementFlow && isMeasurementEntryMode;
 
   function openOverview(): void {
@@ -272,7 +273,7 @@ export function MobileAssignmentDetailPage() {
         </>
       ) : isFoldersFlow ? (
         <MobileProjectFoldersHeader assignment={assignment} onBack={() => setActiveTab(null)} />
-      ) : !isMeasurementFlow && !isExtraWorkFlow ? (
+      ) : !isMeasurementFlow && !isExtraWorkFlow && !isProjectPhotosFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
             <ArrowLeft aria-hidden="true" size={17} />
@@ -332,7 +333,7 @@ export function MobileAssignmentDetailPage() {
               </p>
             ) : null}
           </div>
-          {activeTab === null ? <MobileProjectPhotoCapture assignment={assignment} /> : null}
+          {activeTab === null ? <MobileProjectPhotoCapture assignment={assignment} onOpenPhotos={() => setActiveTab("photos")} /> : null}
         </>
       ) : null}
 
@@ -350,6 +351,12 @@ export function MobileAssignmentDetailPage() {
       )}
       {activeTab === "extra-work" && (
         <MobileExtraWorkTab
+          assignment={assignment}
+          onBack={() => setActiveTab(null)}
+        />
+      )}
+      {activeTab === "photos" && (
+        <MobileProjectPhotosPanel
           assignment={assignment}
           onBack={() => setActiveTab(null)}
         />
@@ -2008,9 +2015,83 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
   );
 }
 
-function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignment }) {
+function MobileProjectPhotoCapture({ assignment, onOpenPhotos }: { assignment: MobileAssignment; onOpenPhotos: () => void }) {
   const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
-  const [isProjectPhotoGalleryOpen, setIsProjectPhotoGalleryOpen] = useState(false);
+  const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
+  const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
+  const projectPhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  function openProjectPhotoCapture(): void {
+    setProjectPhotoMessage(null);
+    setProjectPhotoMessageTone("info");
+    projectPhotoInputRef.current?.click();
+  }
+
+  async function handleProjectPhotoChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file || isUploadingProjectPhoto) {
+      return;
+    }
+    setIsUploadingProjectPhoto(true);
+    setProjectPhotoMessage("Foto wird gespeichert...");
+    setProjectPhotoMessageTone("info");
+    try {
+      const folders = await api.projectFolders(assignment.site.id);
+      const hasConnectedProjectFolder = folders.some((folder) => folder.external_drive_id && folder.external_item_id);
+      if (!hasConnectedProjectFolder) {
+        throw new Error("Für diese Baustelle ist noch kein Projektordner vorhanden.");
+      }
+      const photoFolder = folders.find((folder) => folder.folder_key === "fotos");
+      if (!photoFolder) {
+        throw new Error("Projektordner Fotos wurde nicht gefunden.");
+      }
+      if (!photoFolder.external_drive_id || !photoFolder.external_item_id) {
+        throw new Error("Für diese Baustelle ist noch kein Projektordner vorhanden.");
+      }
+      const uploadFile = await prepareMeasurementPhotoFile(file);
+      await api.uploadProjectFolderDocument(assignment.site.id, "fotos", uploadFile);
+      setProjectPhotoMessage("Foto gespeichert.");
+      setProjectPhotoMessageTone("info");
+    } catch (requestError) {
+      setProjectPhotoMessage(
+        requestError instanceof Error && !(requestError instanceof ApiError)
+          ? requestError.message
+          : readApiError(requestError, "Foto konnte nicht gespeichert werden."),
+      );
+      setProjectPhotoMessageTone("error");
+    } finally {
+      setIsUploadingProjectPhoto(false);
+    }
+  }
+
+  return (
+    <div className="mobile-project-photo-action">
+      {projectPhotoMessage ? (
+        <p className={projectPhotoMessageTone === "error" ? "form-error mobile-project-photo-message" : "form-info mobile-project-photo-message"}>
+          {projectPhotoMessage}
+        </p>
+      ) : null}
+      <MobileOverviewPhotoAction
+        disabled={isUploadingProjectPhoto}
+        description="Projektfotos anzeigen"
+        onOpenPhotos={onOpenPhotos}
+        onTakePhoto={openProjectPhotoCapture}
+      />
+      <input
+        ref={projectPhotoInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(event) => void handleProjectPhotoChange(event)}
+      />
+    </div>
+  );
+}
+
+function MobileProjectPhotosPanel({ assignment, onBack }: { assignment: MobileAssignment; onBack: () => void }) {
+  const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
   const [projectPhotoGalleryVersion, setProjectPhotoGalleryVersion] = useState(0);
   const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
   const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
@@ -2061,41 +2142,15 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
     }
   }
 
-  if (isProjectPhotoGalleryOpen) {
-    return (
-      <>
-        <MobileProjectPhotoGallery
-          assignment={assignment}
-          refreshKey={projectPhotoGalleryVersion}
-          isUploadingPhoto={isUploadingProjectPhoto}
-          message={projectPhotoMessage}
-          messageTone={projectPhotoMessageTone}
-          onBack={() => setIsProjectPhotoGalleryOpen(false)}
-          onTakePhoto={openProjectPhotoCapture}
-        />
-        <input
-          ref={projectPhotoInputRef}
-          className="visually-hidden"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => void handleProjectPhotoChange(event)}
-        />
-      </>
-    );
-  }
-
   return (
-    <div className="mobile-project-photo-action">
-      {projectPhotoMessage ? (
-        <p className={projectPhotoMessageTone === "error" ? "form-error mobile-project-photo-message" : "form-info mobile-project-photo-message"}>
-          {projectPhotoMessage}
-        </p>
-      ) : null}
-      <MobileOverviewPhotoAction
-        disabled={isUploadingProjectPhoto}
-        description="Projektfotos anzeigen"
-        onOpenPhotos={() => setIsProjectPhotoGalleryOpen(true)}
+    <>
+      <MobileProjectPhotoGallery
+        assignment={assignment}
+        refreshKey={projectPhotoGalleryVersion}
+        isUploadingPhoto={isUploadingProjectPhoto}
+        message={projectPhotoMessage}
+        messageTone={projectPhotoMessageTone}
+        onBack={onBack}
         onTakePhoto={openProjectPhotoCapture}
       />
       <input
@@ -2106,7 +2161,7 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
         capture="environment"
         onChange={(event) => void handleProjectPhotoChange(event)}
       />
-    </div>
+    </>
   );
 }
 
@@ -2176,7 +2231,7 @@ function MobileProjectPhotoGallery({
       </div>
 
       <header className="mobile-measurement-photo-gallery-head">
-        <h2>Hinterlegte Fotos</h2>
+        <h2>Projektfotos</h2>
         <p>{assignment.site.name}</p>
       </header>
 
