@@ -11935,16 +11935,23 @@ button.person-chip:focus-visible {
   padding: 8px 10px;
 }
 
-.time-review-location-decision-head {
+.time-review-location-summary {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px 12px;
-  margin-bottom: 7px;
+  gap: 8px 12px;
 }
 
-.time-review-location-decision-head span,
+.time-review-location-summary div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 8px;
+  min-width: 0;
+}
+
+.time-review-location-summary span,
 .time-review-location-search span,
 .time-review-location-list-head span {
   color: #42526a;
@@ -11952,16 +11959,43 @@ button.person-chip:focus-visible {
   font-weight: 850;
 }
 
-.time-review-location-decision-head strong {
+.time-review-location-summary strong {
   color: #172033;
   font-size: 0.76rem;
   font-weight: 850;
+}
+
+.time-review-location-change {
+  min-height: 26px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #1d5c99;
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.time-review-location-change:hover,
+.time-review-location-change:focus-visible {
+  border-color: #9bbce0;
+  background: #f8fbff;
+  outline: none;
+}
+
+.time-review-location-change:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .time-review-location-picker {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   gap: 8px;
+  margin-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
 }
 
 .time-review-location-picker-panel {

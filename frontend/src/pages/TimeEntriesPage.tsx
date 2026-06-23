@@ -258,6 +258,7 @@ export function TimeEntriesPage() {
   const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
   const [locationReviewSiteSearch, setLocationReviewSiteSearch] = useState("");
+  const [isLocationReviewPickerOpen, setIsLocationReviewPickerOpen] = useState(false);
   const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
   const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
@@ -484,12 +485,14 @@ export function TimeEntriesPage() {
     if (!locationReviewDiagnosticEntry) {
       setLocationReviewSiteId("");
       setLocationReviewSiteSearch("");
+      setIsLocationReviewPickerOpen(false);
       setLocationReviewError(null);
       setIsSavingLocationReview(false);
       return;
     }
     setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
     setLocationReviewSiteSearch("");
+    setIsLocationReviewPickerOpen(false);
     setLocationReviewError(null);
   }, [locationReviewDiagnosticEntry]);
 
@@ -1891,72 +1894,85 @@ export function TimeEntriesPage() {
               ))}
             </div>
             <div className="time-review-location-decision">
-              <div className="time-review-location-decision-head">
-                <span>Endgültige Baustelle</span>
-                <strong>{selectedLocationReviewSite ? siteOptionLabel(selectedLocationReviewSite) : "Noch nicht festgelegt"}</strong>
+              <div className="time-review-location-summary">
+                <div>
+                  <span>Endgültige Baustelle</span>
+                  <strong>{selectedLocationReviewSite ? siteOptionLabel(selectedLocationReviewSite) : "Noch nicht festgelegt"}</strong>
+                </div>
+                <button
+                  className="time-review-location-change"
+                  type="button"
+                  aria-expanded={isLocationReviewPickerOpen}
+                  disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                  onClick={() => setIsLocationReviewPickerOpen((current) => !current)}
+                >
+                  {isLocationReviewPickerOpen ? "Auswahl schliessen" : "Endgültige Baustelle ändern"}
+                </button>
               </div>
-              <div className="time-review-location-picker">
-                <section className="time-review-location-picker-panel">
-                  <label className="time-review-location-search">
-                    <span>Baustelle suchen</span>
-                    <input
-                      type="search"
-                      placeholder="Kommission oder Baustellenname"
-                      value={locationReviewSiteSearch}
-                      onChange={(event) => setLocationReviewSiteSearch(event.target.value)}
-                      disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
-                    />
-                  </label>
-                  {locationReviewSiteSearch.trim() && (
-                    <div className="time-review-location-suggestions" role="listbox" aria-label="Baustellenvorschläge">
-                      {locationReviewSiteSearchResults.length ? (
-                        locationReviewSiteSearchResults.map((site) => (
-                          <button
-                            className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
-                            key={site.id}
-                            type="button"
-                            role="option"
-                            aria-selected={String(site.id) === locationReviewSiteId}
-                            disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
-                            onClick={() => {
-                              setLocationReviewSiteId(String(site.id));
-                              setLocationReviewSiteSearch("");
-                            }}
-                          >
-                            <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
-                            <span>{site.name}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p>Keine passende Baustelle gefunden.</p>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                <section className="time-review-location-picker-panel">
-                  <div className="time-review-location-list-head">
-                    <span>Alle auswählbaren Baustellen</span>
-                    <small>{locationReviewSiteOptions.length}</small>
-                  </div>
-                  <div className="time-review-location-site-list" role="listbox" aria-label="Alle auswählbaren Baustellen">
-                    {locationReviewSiteOptions.map((site) => (
-                      <button
-                        className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
-                        key={site.id}
-                        type="button"
-                        role="option"
-                        aria-selected={String(site.id) === locationReviewSiteId}
+              {isLocationReviewPickerOpen && (
+                <div className="time-review-location-picker" aria-label="Endgültige Baustelle auswählen">
+                  <section className="time-review-location-picker-panel">
+                    <label className="time-review-location-search">
+                      <span>Baustelle suchen</span>
+                      <input
+                        type="search"
+                        placeholder="Kommission oder Baustellenname"
+                        value={locationReviewSiteSearch}
+                        onChange={(event) => setLocationReviewSiteSearch(event.target.value)}
                         disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
-                        onClick={() => setLocationReviewSiteId(String(site.id))}
-                      >
-                        <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
-                        <span>{site.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              </div>
+                      />
+                    </label>
+                    {locationReviewSiteSearch.trim() && (
+                      <div className="time-review-location-suggestions" role="listbox" aria-label="Baustellenvorschläge">
+                        {locationReviewSiteSearchResults.length ? (
+                          locationReviewSiteSearchResults.map((site) => (
+                            <button
+                              className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                              key={site.id}
+                              type="button"
+                              role="option"
+                              aria-selected={String(site.id) === locationReviewSiteId}
+                              disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                              onClick={() => {
+                                setLocationReviewSiteId(String(site.id));
+                                setLocationReviewSiteSearch("");
+                              }}
+                            >
+                              <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
+                              <span>{site.name}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <p>Keine passende Baustelle gefunden.</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="time-review-location-picker-panel">
+                    <div className="time-review-location-list-head">
+                      <span>Alle auswählbaren Baustellen</span>
+                      <small>{locationReviewSiteOptions.length}</small>
+                    </div>
+                    <div className="time-review-location-site-list" role="listbox" aria-label="Alle auswählbaren Baustellen">
+                      {locationReviewSiteOptions.map((site) => (
+                        <button
+                          className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                          key={site.id}
+                          type="button"
+                          role="option"
+                          aria-selected={String(site.id) === locationReviewSiteId}
+                          disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                          onClick={() => setLocationReviewSiteId(String(site.id))}
+                        >
+                          <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
+                          <span>{site.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              )}
             </div>
             <div className="time-review-diagnostic-actions">
               {locationReviewError && <p className="time-review-diagnostic-error">{locationReviewError}</p>}
