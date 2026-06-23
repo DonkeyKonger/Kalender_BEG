@@ -5338,10 +5338,10 @@ button.person-chip:focus-visible {
     width: 100%;
     min-width: 0;
     height: var(--measurement-position-group-row-height);
-    border: 1px solid #c7d2df;
+    border: 1px solid #d7dee8;
     border-radius: 0;
-    background: #fbfcfe;
-    color: #334155;
+    background: #ffffff;
+    color: #344154;
     font: inherit;
     font-size: 0.75rem;
     font-weight: 675;
@@ -5359,7 +5359,7 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-group-count {
-    color: #7b8796;
+    color: #8894a3;
     font-size: 0.62rem;
     font-weight: 700;
     line-height: 1;
@@ -5368,27 +5368,27 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active {
-    border-color: #7d9fca;
-    background: #f2f7fd;
-    color: #1f3f66;
+    border-color: #9bb4d4;
+    background: #f7fbff;
+    color: #243f5f;
     font-weight: 735;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-active .mobile-measurement-position-group-count {
-    color: #5f6f82;
+    color: #68798d;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-captured {
-    border-color: #d5c8aa;
-    background: #fffdf7;
-    color: #4f4635;
+    border-color: #ddd4bf;
+    background: #fffdf9;
+    color: #51493b;
     font-weight: 700;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups button.is-captured.is-active {
-    border-color: #b99b5f;
-    background: #fff8e8;
-    color: #453716;
+    border-color: #c7b17f;
+    background: #fff9ed;
+    color: #493d24;
   }
 
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups + .mobile-measurement-table-shell {
