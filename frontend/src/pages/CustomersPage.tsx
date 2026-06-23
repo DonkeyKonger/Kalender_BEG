@@ -392,15 +392,6 @@ function CustomerReadView({ customer }: { customer: Customer }) {
       </section>
 
       <section className="detail-read-section">
-        <h3>Projektleiter Kunde</h3>
-        <div className="detail-read-grid">
-          <ReadItem label="Name" value={customer.project_lead_name || "-"} />
-          <ReadItem label="Telefon" value={customer.project_lead_phone || "-"} />
-          <ReadItem label="Mail" value={customer.project_lead_email || "-"} />
-        </div>
-      </section>
-
-      <section className="detail-read-section">
         <h3>E-Mail-Adressen</h3>
         {emailItems.length ? (
           <div className="detail-read-grid">
@@ -414,7 +405,7 @@ function CustomerReadView({ customer }: { customer: Customer }) {
       </section>
 
       <section className="detail-read-section">
-        <h3>Ansprechpartner vor Ort</h3>
+        <h3>Ansprechpartner</h3>
         {customer.contacts.length ? (
           <div className="customer-contact-card-list">
             {customer.contacts.map((contact) => (
