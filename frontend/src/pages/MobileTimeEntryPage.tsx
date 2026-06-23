@@ -655,7 +655,6 @@ export function MobileTimeEntryPage() {
                           key={entry.id}
                         >
                           <button className="mobile-time-entry-bubble-open" type="button" onClick={() => editEntry(entry)}>
-                            <span className="mobile-time-entry-kind">{formatEntryKindLabel(entry)}</span>
                             <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
                             <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
                           </button>
@@ -1389,10 +1388,6 @@ function formatEntryBubbleTitle(entry: TimeEntry, siteById: Map<number, MobileTi
     return extractManualSiteText(entry.note) || "Manuelle Baustelle";
   }
   return formatSiteLabel(entry.site_id, siteById);
-}
-
-function formatEntryKindLabel(entry: TimeEntry): string {
-  return entry.site_id === null ? "Manuell" : "Baustelle";
 }
 
 function formatTimeRange(startTime: string | null | undefined, endTime: string | null | undefined): string {

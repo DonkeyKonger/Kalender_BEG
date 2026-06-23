@@ -4932,19 +4932,6 @@ button.person-chip:focus-visible {
   font-weight: 750;
 }
 
-.mobile-time-entry-kind {
-  justify-self: flex-start;
-  width: auto;
-  border-radius: 999px;
-  background: #edf4fb;
-  color: #35506e;
-  padding: 2px 7px;
-  font-size: 0.64rem;
-  font-weight: 850;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
 .mobile-time-entry-delete {
   display: inline-grid;
   align-self: center;
