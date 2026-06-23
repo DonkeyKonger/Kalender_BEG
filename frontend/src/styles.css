@@ -5289,38 +5289,6 @@ button.person-chip:focus-visible {
     height: 14px;
   }
 
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-view-actions {
-    flex: 0 0 auto;
-  }
-
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    border: 1px solid #cbd5e1;
-    border-radius: 2px;
-    background: #f8fafc;
-    padding: 2px;
-  }
-
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle button {
-    min-height: 28px;
-    border: 1px solid transparent;
-    border-radius: 0;
-    background: transparent;
-    color: #475569;
-    font: inherit;
-    font-size: 0.76rem;
-    font-weight: 750;
-    padding: 4px 10px;
-  }
-
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .measurement-view-toggle button.is-active {
-    border-color: #9db7da;
-    background: #eef5ff;
-    color: #1f3f66;
-  }
-
   .app-shell.is-mobile-workspace .mobile-measurement-position-groups {
     --measurement-position-group-row-gap: 7px;
     --measurement-position-group-row-height: 31px;
@@ -15669,14 +15637,6 @@ button.person-chip:focus-visible {
   color: #111827;
   font: inherit;
   outline: none;
-}
-
-.mobile-measurement-view-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 9px;
 }
 
 .mobile-customer-signature-action {

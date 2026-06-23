@@ -138,7 +138,6 @@ type PdfPinchState = {
   latestFocal: PdfFocalPoint | null;
 };
 
-const MEASUREMENT_VIEW_MODE_STORAGE_KEY = "beg_aufmass_view_mode";
 const TABLET_INLINE_MEASUREMENT_QUERY = "(min-width: 700px) and (max-width: 1199px)";
 const EXTRA_WORK_WEEK_DAYS = [
   { key: "monday_hours", label: "Mo" },
@@ -2734,7 +2733,6 @@ function MobileMeasurementTab({
   const [formError, setFormError] = useState<string | null>(null);
   const [freePositionDraft, setFreePositionDraft] = useState<MeasurementFreePositionDraft>(EMPTY_MEASUREMENT_FREE_POSITION_DRAFT);
   const [freePositionError, setFreePositionError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<MeasurementViewMode>(() => readMeasurementViewMode());
   const [signatureBatch, setSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [workerSignatureBatch, setWorkerSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [photoGalleryBatch, setPhotoGalleryBatch] = useState<MobileMeasurementBatch | null>(null);
@@ -2750,6 +2748,7 @@ function MobileMeasurementTab({
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const inlineFreePositionDraftIdRef = useRef(-1);
   const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
+  const viewMode: MeasurementViewMode = canUseInlineMeasurementTable ? "table" : "list";
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
     setBatches((currentBatches) => sortMobileMeasurementBatches(
@@ -2861,11 +2860,6 @@ function MobileMeasurementTab({
       setInlineError(null);
     }
   }, [canUseInlineMeasurementTable]);
-
-  function updateViewMode(mode: MeasurementViewMode): void {
-    setViewMode(mode);
-    persistMeasurementViewMode(mode);
-  }
 
   function closeBatchOverview(): void {
     setSelectedBatch(null);
@@ -3392,10 +3386,6 @@ function MobileMeasurementTab({
             setIsFreePositionFormOpen(true);
           }}
           viewMode={viewMode}
-          onViewModeChange={(mode) => {
-            cancelInlineMeasurementEdit();
-            updateViewMode(mode);
-          }}
           onSearchChange={(value) => {
             cancelInlineMeasurementEdit();
             setSearchTerm(value);
@@ -4171,7 +4161,6 @@ function MeasurementBatchDetail({
   viewMode,
   onBack,
   onCreatePosition,
-  onViewModeChange,
   onSearchChange,
   onSelectItem,
   inlineCell,
@@ -4196,7 +4185,6 @@ function MeasurementBatchDetail({
   viewMode: MeasurementViewMode;
   onBack: () => void;
   onCreatePosition: () => void;
-  onViewModeChange: (mode: MeasurementViewMode) => void;
   onSearchChange: (value: string) => void;
   onSelectItem: (item: MobileMeasurementItem) => void;
   inlineCell: InlineMeasurementCell | null;
@@ -4261,9 +4249,6 @@ function MeasurementBatchDetail({
           />
         </div>
 
-        <div className="mobile-measurement-view-actions">
-          <MeasurementViewToggle viewMode={viewMode} onChange={onViewModeChange} />
-        </div>
       </div>
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
@@ -4476,21 +4461,6 @@ function MeasurementFreePositionForm({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function MeasurementViewToggle({
-  viewMode,
-  onChange,
-}: {
-  viewMode: MeasurementViewMode;
-  onChange: (mode: MeasurementViewMode) => void;
-}) {
-  return (
-    <div className="measurement-view-toggle" role="group" aria-label="Aufmaß Ansicht">
-      <button className={viewMode === "list" ? "is-active" : ""} type="button" onClick={() => onChange("list")}>Liste</button>
-      <button className={viewMode === "table" ? "is-active" : ""} type="button" onClick={() => onChange("table")}>Tabelle</button>
     </div>
   );
 }
@@ -6056,20 +6026,6 @@ function downloadBlobFile(blob: Blob, filename: string): void {
   link.click();
   link.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
-}
-
-function readMeasurementViewMode(): MeasurementViewMode {
-  if (typeof window === "undefined") {
-    return "list";
-  }
-  return window.localStorage.getItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "list";
-}
-
-function persistMeasurementViewMode(mode: MeasurementViewMode): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(MEASUREMENT_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 function collectMeasurementAreaTags(
