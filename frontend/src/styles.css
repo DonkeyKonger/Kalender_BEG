@@ -5419,12 +5419,6 @@ button.person-chip:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .app-shell.is-mobile-workspace .mobile-measurement-camera-button {
-    justify-self: end;
-    margin-top: 24px;
-    margin-right: clamp(0px, 1.5vw, 18px);
-  }
-
   .app-shell.is-mobile-workspace .mobile-measurement-table-shell {
     position: relative;
     width: 100%;
@@ -16416,6 +16410,42 @@ button.person-chip:focus-visible {
   color: #2f8f54;
 }
 
+.mobile-measurement-photo-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  align-items: stretch;
+}
+
+.mobile-measurement-photo-action-row .mobile-measurement-photo-main-action {
+  border-top-right-radius: 0;
+  border-right: 0;
+  border-bottom-right-radius: 0;
+}
+
+.mobile-measurement-photo-action-row .mobile-measurement-photo-main-action:hover:not(:disabled),
+.mobile-measurement-photo-action-row .mobile-measurement-photo-main-action:focus-visible:not(:disabled) {
+  transform: none;
+}
+
+.mobile-camera-button.mobile-measurement-inline-camera-button {
+  width: 52px;
+  height: auto;
+  min-height: 48px;
+  border-color: #cbd7e6;
+  border-left: 1px solid #e0e7f0;
+  border-radius: 0 8px 8px 0;
+  background: #ffffff;
+  color: #2d5d8f;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 7%);
+}
+
+.mobile-camera-button.mobile-measurement-inline-camera-button:hover:not(:disabled),
+.mobile-camera-button.mobile-measurement-inline-camera-button:focus-visible:not(:disabled) {
+  border-color: #9db7d6;
+  background: #f4f8fc;
+  outline: none;
+}
+
 .mobile-measurement-action-hint {
   margin: -4px 0 2px;
   color: #65738a;
@@ -16441,11 +16471,6 @@ button.person-chip:focus-visible {
 .mobile-camera-button:disabled {
   cursor: wait;
   opacity: 0.68;
-}
-
-.mobile-measurement-camera-button {
-  justify-self: end;
-  margin-top: 96px;
 }
 
 .mobile-project-photo-action {

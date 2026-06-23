@@ -944,21 +944,17 @@ function ExtraWorkOrderOverview({
         </button>
         {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
         {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
-        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
-          <Images aria-hidden="true" size={18} />
-          <span>Hinterlegte Fotos{order.photo_count ? ` (${order.photo_count})` : ""}</span>
-        </button>
+        <MobileOverviewPhotoAction
+          count={order.photo_count}
+          disabled={isUploadingPhoto || isPhotoLimitReached}
+          onOpenPhotos={onOpenPhotos}
+          onTakePhoto={onTakePhoto}
+        />
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Stundenzettel erlaubt.</p>
       ) : null}
       {message ? <p className={messageTone === "error" ? "form-error" : "form-info"}>{message}</p> : null}
-      <MobileCameraButton
-        className="mobile-measurement-camera-button"
-        disabled={isUploadingPhoto || isPhotoLimitReached}
-        label="Foto aufnehmen"
-        onClick={onTakePhoto}
-      />
       {isSigningCustomer ? (
         <ExtraWorkCustomerSignatureOverlay
           assignmentId={assignmentId}
@@ -2097,6 +2093,33 @@ function MobileCameraButton({
     >
       <Camera aria-hidden="true" size={24} />
     </button>
+  );
+}
+
+function MobileOverviewPhotoAction({
+  count,
+  disabled,
+  onOpenPhotos,
+  onTakePhoto,
+}: {
+  count?: number | null;
+  disabled?: boolean;
+  onOpenPhotos: () => void;
+  onTakePhoto: () => void;
+}) {
+  return (
+    <div className="mobile-measurement-photo-action-row">
+      <button className="mobile-measurement-overview-action mobile-measurement-photo-main-action" type="button" onClick={onOpenPhotos}>
+        <Images aria-hidden="true" size={18} />
+        <span>Hinterlegte Fotos{count ? ` (${count})` : ""}</span>
+      </button>
+      <MobileCameraButton
+        className="mobile-measurement-inline-camera-button"
+        disabled={disabled}
+        label="Foto aufnehmen"
+        onClick={onTakePhoto}
+      />
+    </div>
   );
 }
 
@@ -3759,22 +3782,18 @@ function MeasurementBatchOverview({
 
         <section className="mobile-measurement-action-section" aria-label="Fotos">
           <h3>Fotos</h3>
-          <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
-            <Images aria-hidden="true" size={18} />
-            <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
-          </button>
+          <MobileOverviewPhotoAction
+            count={batch.photo_count}
+            disabled={isUploadingPhoto || isPhotoLimitReached}
+            onOpenPhotos={onOpenPhotos}
+            onTakePhoto={onTakePhoto}
+          />
         </section>
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p>
       ) : null}
       {photoMessage ? <p className={photoMessageTone === "error" ? "form-error" : "form-info"}>{photoMessage}</p> : null}
-      <MobileCameraButton
-        className="mobile-measurement-camera-button"
-        disabled={isUploadingPhoto || isPhotoLimitReached}
-        label="Foto aufnehmen"
-        onClick={onTakePhoto}
-      />
       {isEditingEmailRecipients ? (
         <ProjectEmailRecipientsModal
           assignmentId={assignmentId}
