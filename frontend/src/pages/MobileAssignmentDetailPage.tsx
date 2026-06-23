@@ -6729,12 +6729,12 @@ function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { la
     || item.customer_email_signature_present === true;
   if (signaturePresent) {
     return {
-      label: "Mail an Kunden gesendet",
+      label: "Mail mit Unterschrift an Kunden gesendet",
       className: "is-complete",
     };
   }
   return {
-    label: "Mail an Kunden gesendet",
+    label: "Mail ohne Unterschrift an Kunden gesendet",
     className: "is-signature-open",
   };
 }

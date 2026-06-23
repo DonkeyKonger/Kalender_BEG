@@ -15811,7 +15811,7 @@ button.person-chip:focus-visible {
   justify-self: end;
   margin-left: auto;
   min-height: 22px;
-  max-width: min(100%, 210px);
+  max-width: min(100%, 260px);
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   background: #f8fafc;
@@ -15821,6 +15821,7 @@ button.person-chip:focus-visible {
   line-height: 1.15;
   padding: 3px 7px;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .mobile-measurement-summary-card .mobile-customer-email-status.is-not-sent {
