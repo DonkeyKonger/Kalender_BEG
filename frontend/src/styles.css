@@ -16292,30 +16292,6 @@ button.person-chip:focus-visible {
   gap: 9px;
 }
 
-.mobile-measurement-overview-actions.is-grouped {
-  gap: 16px;
-}
-
-.mobile-measurement-action-section {
-  display: grid;
-  gap: 7px;
-}
-
-.mobile-measurement-action-section + .mobile-measurement-action-section {
-  border-top: 1px solid #e7edf5;
-  padding-top: 13px;
-}
-
-.mobile-measurement-action-section h3 {
-  margin: 0 0 1px;
-  color: #65738a;
-  font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
 .mobile-measurement-overview-action {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

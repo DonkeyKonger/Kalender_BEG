@@ -766,6 +766,8 @@ function ExtraWorkOrderOverview({
     isLoadingRecipients: isLoadingEmailRecipients,
     allowMissingCustomerSignature: true,
   });
+  const emailSendStatusTitle = emailSendError ?? emailSendHint ?? undefined;
+  const hasEmailSendInlineStatus = shouldWarnMissingCustomerSignatureForEmail || Boolean(emailSendError);
 
   useEffect(() => {
     let isActive = true;
@@ -933,8 +935,9 @@ function ExtraWorkOrderOverview({
           <span>Kunden-E-Mail</span>
         </button>
         <button
-          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
+          className={`mobile-measurement-overview-action${hasEmailSendInlineStatus ? " has-inline-status" : ""}${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
           type="button"
+          title={emailSendStatusTitle}
           onClick={() => {
             setEmailSendError(null);
             setIsConfirmingEmailSend(true);
@@ -943,9 +946,10 @@ function ExtraWorkOrderOverview({
         >
           <Mail aria-hidden="true" size={18} />
           <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
+          {shouldWarnMissingCustomerSignatureForEmail || emailSendError ? (
+            <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} />
+          ) : null}
         </button>
-        {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
-        {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
         <MobileOverviewPhotoAction
           count={order.photo_count}
           disabled={isUploadingPhoto || isPhotoLimitReached}
@@ -3715,9 +3719,7 @@ function MeasurementBatchOverview({
       ) : null}
       {error ? <div className="form-error">{error}</div> : null}
 
-      <div className="mobile-measurement-overview-actions is-grouped">
-        <section className="mobile-measurement-action-section" aria-label="Aufmaß">
-          <h3>Aufmaß</h3>
+      <div className="mobile-measurement-overview-actions">
           <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
             <ClipboardList aria-hidden="true" size={18} />
             <span>{isItemsLoading ? "Positionen laden..." : "Aufmaßpositionen erfassen"}</span>
@@ -3726,10 +3728,7 @@ function MeasurementBatchOverview({
             <FileText aria-hidden="true" size={18} />
             <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
           </button>
-        </section>
 
-        <section className="mobile-measurement-action-section" aria-label="Unterschriften">
-          <h3>Unterschriften</h3>
           <button
             className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
             type="button"
@@ -3751,10 +3750,7 @@ function MeasurementBatchOverview({
             <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
             {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
           </button>
-        </section>
 
-        <section className="mobile-measurement-action-section" aria-label="Versand">
-          <h3>Versand</h3>
           <button
             className="mobile-measurement-overview-action"
             type="button"
@@ -3786,17 +3782,13 @@ function MeasurementBatchOverview({
               <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={18} />
             ) : null}
           </button>
-        </section>
 
-        <section className="mobile-measurement-action-section" aria-label="Fotos">
-          <h3>Fotos</h3>
           <MobileOverviewPhotoAction
             count={batch.photo_count}
             disabled={isUploadingPhoto || isPhotoLimitReached}
             onOpenPhotos={onOpenPhotos}
             onTakePhoto={onTakePhoto}
           />
-        </section>
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p>
