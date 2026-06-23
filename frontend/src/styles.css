@@ -16404,7 +16404,7 @@ button.person-chip:focus-visible {
   color: #2d5d8f;
 }
 
-.mobile-measurement-overview-action .mobile-action-warning-icon {
+.mobile-measurement-overview-action svg.mobile-action-warning-icon {
   justify-self: end;
   color: #d98a1f;
 }
