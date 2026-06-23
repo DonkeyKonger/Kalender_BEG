@@ -3107,7 +3107,7 @@ function MobileMeasurementTab({
     try {
       if (isDraftFreePosition) {
         const createdItem = await api.createMobileMeasurementFreeItem(assignment.id, selectedBatch.id, {
-          position: item.position.trim() || null,
+          position: getMeasurementPositionSaveValue(item),
           description: item.description.trim(),
           unit: item.unit?.trim() || "st",
           quantity,
@@ -4278,6 +4278,7 @@ function MeasurementBatchDetail({
         <div className="mobile-measurement-list">
           {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
             const isCaptured = isMobileMeasurementItemCaptured(item);
+            const positionLabel = getMeasurementPositionDisplayLabel(item);
             return (
               <button
                 className={isCaptured ? "mobile-measurement-card is-captured-position" : "mobile-measurement-card is-empty-position"}
@@ -4287,7 +4288,7 @@ function MeasurementBatchDetail({
               >
                 <div className="mobile-measurement-row-top">
                   <span className="mobile-measurement-row-position-wrap">
-                    <strong className="mobile-measurement-row-position">{item.position}</strong>
+                    {positionLabel ? <strong className="mobile-measurement-row-position">{positionLabel}</strong> : null}
                     {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
                   </span>
                   <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
@@ -4394,7 +4395,7 @@ function MeasurementFreePositionForm({
             type="text"
             value={draft.position}
             onChange={(event) => onChange({ position: event.target.value })}
-            placeholder="optional, z. B. FREI-1"
+            placeholder="optional, z. B. N1.1"
           />
         </label>
 
@@ -4860,8 +4861,7 @@ function MobileMeasurementTable({
                     <input
                       className="measurement-matrix-draft-field"
                       type="text"
-                      value={item.position}
-                      placeholder="FREI"
+                      value={getMeasurementPositionDisplayLabel(item)}
                       aria-label="Positionsnummer der freien Position"
                       onChange={(event) => onInlineFreePositionDraftChange(item.id, { position: event.target.value })}
                     />
@@ -5104,6 +5104,7 @@ function MeasurementDetail({
   const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
   const measuredAreas = useMemo(() => groupMeasurementEntriesByArea(item.entries), [item.entries]);
   const measuredQuantity = useMemo(() => sumMeasurementEntryQuantities(item.entries), [item.entries]);
+  const positionLabel = getMeasurementPositionDisplayLabel(item);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -5122,7 +5123,7 @@ function MeasurementDetail({
       <header className="mobile-entry-head">
         <div>
           <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
-          <h1>Pos. {item.position}</h1>
+          <h1>{positionLabel ? `Pos. ${positionLabel}` : "Freie Position"}</h1>
           <p>{item.description}</p>
         </div>
       </header>
@@ -6463,10 +6464,19 @@ function isEmptyInlineFreePositionDraftItem(item: MobileMeasurementItem): boolea
 
 function getMeasurementPositionDisplayLabel(item: MobileMeasurementItem): string {
   const position = item.position.trim();
-  if (item.is_free_position && /^FREI-\d+$/i.test(position)) {
+  if (isTechnicalFreePositionLabel(position)) {
     return "";
   }
   return position;
+}
+
+function getMeasurementPositionSaveValue(item: MobileMeasurementItem): string | null {
+  const position = item.position.trim();
+  return position && !isTechnicalFreePositionLabel(position) ? position : null;
+}
+
+function isTechnicalFreePositionLabel(position: string): boolean {
+  return /^FREI-\d+$/i.test(position.trim());
 }
 
 function getNextInlineFreePositionDraftLabel(items: MobileMeasurementItem[]): string {
