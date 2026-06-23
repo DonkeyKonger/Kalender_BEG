@@ -249,6 +249,8 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
+  const [payrollDateActionEntryId, setPayrollDateActionEntryId] = useState<number | null>(null);
+  const [payrollDateError, setPayrollDateError] = useState<string | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
@@ -410,6 +412,10 @@ export function TimeEntriesPage() {
     });
     return result;
   }, [reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
+  const selectedReviewWeekDayOptions = useMemo(
+    () => selectedReviewWeekDays.map((day) => ({ date: day.date, label: `${day.weekdayLabel} ${formatDate(day.date)}` })),
+    [selectedReviewWeekDays],
+  );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const exportPreviewRows = useMemo(
@@ -453,6 +459,8 @@ export function TimeEntriesPage() {
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
     setLocationReviewDiagnosticEntry(null);
+    setPayrollDateError(null);
+    setPayrollDateActionEntryId(null);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -1004,6 +1012,22 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
+    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0 || entry.work_date === targetWorkDate) {
+      return;
+    }
+    setPayrollDateActionEntryId(entry.id);
+    setPayrollDateError(null);
+    try {
+      const updatedEntry = await api.setTimeEntryPayrollDateCorrection(entry.id, { work_date: targetWorkDate });
+      applyUpdatedTimeEntry(updatedEntry);
+    } catch (requestError) {
+      setPayrollDateError(readApiError(requestError, "Tag konnte nicht geändert werden."));
+    } finally {
+      setPayrollDateActionEntryId(null);
+    }
+  }
+
   async function savePayrollTimeCorrection(): Promise<void> {
     if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection || timeReviewDiagnosticEntry.id < 0) {
       return;
@@ -1305,6 +1329,7 @@ export function TimeEntriesPage() {
                     {selectedReviewWorker.isReviewed ? <StatusBadge tone="active">Geprüft</StatusBadge> : <StatusBadge tone="warning">Offen</StatusBadge>}
                   </div>
                 </div>
+                {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader">Tag</span>
@@ -1318,14 +1343,22 @@ export function TimeEntriesPage() {
                     <span role="columnheader">Geprüft</span>
                   </div>
                   {selectedReviewWeekDays.map((day) => (
-                    day.entries.length > 0 ? day.entries.map((check, index) => (
+                    day.entries.length > 0 ? day.entries.map((check) => (
                       <div className="time-review-week-check-row" key={`${day.date}-${check.entry.id}`} role="row">
                         <div className="time-review-week-day" role="cell">
-                          {index === 0 && (
-                            <>
-                              <strong>{day.weekdayLabel}</strong>
-                              <span>{formatDate(day.date)}</span>
-                            </>
+                          <select
+                            className="time-review-day-select"
+                            aria-label="Tag ändern"
+                            value={check.entry.work_date}
+                            disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
+                            onChange={(event) => void movePayrollEntryDate(check.entry, event.target.value)}
+                          >
+                            {selectedReviewWeekDayOptions.map((option) => (
+                              <option key={option.date} value={option.date}>{option.label}</option>
+                            ))}
+                          </select>
+                          {check.entry.original_work_date && check.entry.original_work_date !== check.entry.work_date && (
+                            <span className="time-review-day-shift-note">vom {formatWeekday(check.entry.original_work_date)} verschoben</span>
                           )}
                         </div>
                         <div className="time-review-week-site" role="cell">

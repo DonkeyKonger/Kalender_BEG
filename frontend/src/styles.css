@@ -11563,6 +11563,50 @@ button.person-chip:focus-visible {
   min-width: 0;
 }
 
+.time-review-week-error {
+  margin: 0;
+  border: 1px solid #f0c7c1;
+  background: #fff7f6;
+  color: #9f1d14;
+  padding: 7px 9px;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.time-review-day-select {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #172033;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  padding: 3px 4px;
+}
+
+.time-review-day-select:hover,
+.time-review-day-select:focus-visible {
+  border-color: #b8c8dc;
+  background: #f8fbff;
+  outline: none;
+}
+
+.time-review-day-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.time-review-day-shift-note {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
 .time-review-week-day strong,
 .time-review-week-site strong {
   overflow: hidden;

@@ -28,6 +28,7 @@ class WorkTimeEntry(TimestampMixin, Base):
         index=True,
     )
     work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    original_work_date: Mapped[date | None] = mapped_column(Date)
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
     break_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

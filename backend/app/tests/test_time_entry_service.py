@@ -163,6 +163,54 @@ def test_set_payroll_time_correction_stores_office_checked_time():
     assert commits == [True]
 
 
+def test_set_payroll_date_correction_moves_entry_with_original_date():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        work_date=date(2026, 6, 23),
+        original_work_date=None,
+        start_time=time(7, 30),
+        end_time=time(13, 0),
+    )
+    commits: list[bool] = []
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        scalars=lambda statement: [],
+        commit=lambda: commits.append(True),
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+
+    updated = item.set_payroll_date_correction(entry.id, work_date=date(2026, 6, 25), current_user=current_user)
+
+    assert updated.work_date == date(2026, 6, 25)
+    assert updated.original_work_date == date(2026, 6, 23)
+    assert commits == [True]
+
+
+def test_set_payroll_date_correction_rejects_other_week():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        work_date=date(2026, 6, 23),
+        original_work_date=None,
+        start_time=time(7, 30),
+        end_time=time(13, 0),
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: pytest.fail("Other-week move must not be committed."),
+    )
+    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+
+    with pytest.raises(HTTPException) as error:
+        item.set_payroll_date_correction(entry.id, work_date=date(2026, 6, 30), current_user=current_user)
+
+    assert error.value.status_code == 400
+
+
 def test_delete_entry_removes_open_own_time_entry():
     entry = SimpleNamespace(
         id=1,

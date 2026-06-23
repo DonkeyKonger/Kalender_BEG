@@ -155,6 +155,10 @@ class TimeEntryPayrollCorrectionUpdate(BaseModel):
         return self
 
 
+class TimeEntryPayrollDateCorrectionUpdate(BaseModel):
+    work_date: Date
+
+
 class TimeEntryWeeklyReviewRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -182,6 +186,7 @@ class TimeEntryRead(BaseModel):
     site_number: str | None = None
     assignment_id: int | None = None
     work_date: Date
+    original_work_date: Date | None = None
     start_time: Time | None = None
     end_time: Time | None = None
     break_minutes: int

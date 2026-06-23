@@ -14,6 +14,7 @@ export type TimeEntry = {
   site_number: string | null;
   assignment_id: number | null;
   work_date: string;
+  original_work_date: string | null;
   start_time: string | null;
   end_time: string | null;
   break_minutes: number;
@@ -88,6 +89,10 @@ export type TimeEntryPayrollCorrection = {
   payroll_corrected_start_time?: string | null;
   payroll_corrected_end_time?: string | null;
   payroll_corrected_work_minutes?: number | null;
+};
+
+export type TimeEntryPayrollDateCorrection = {
+  work_date: string;
 };
 
 export type TimeEntryReviewDecisionPayload = {

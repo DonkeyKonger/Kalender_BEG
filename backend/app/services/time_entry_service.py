@@ -197,6 +197,35 @@ class TimeEntryService:
         self.db.refresh(entry)
         return entry
 
+    def set_payroll_date_correction(
+        self,
+        entry_id: int,
+        *,
+        work_date: date,
+        current_user: User,
+    ) -> WorkTimeEntry:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        if entry.work_date == work_date:
+            return entry
+        if entry.work_date.isocalendar()[:2] != work_date.isocalendar()[:2]:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Der Eintrag kann nur innerhalb derselben Kalenderwoche verschoben werden.")
+
+        self._ensure_no_time_overlap(
+            person_id=entry.person_id,
+            work_date=work_date,
+            start_time=entry.start_time,
+            end_time=entry.end_time,
+            exclude_entry_id=entry.id,
+        )
+        if entry.original_work_date is None:
+            entry.original_work_date = entry.work_date
+        entry.work_date = work_date
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
     def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)

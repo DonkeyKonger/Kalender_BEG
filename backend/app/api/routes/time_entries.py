@@ -12,6 +12,7 @@ from app.schemas.time_entry import (
     TimeEntryCorrection,
     TimeEntryCreate,
     TimeEntryPayrollCorrectionUpdate,
+    TimeEntryPayrollDateCorrectionUpdate,
     TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
@@ -204,6 +205,21 @@ def set_time_entry_payroll_correction(
     return time_entry_read(entry)
 
 
+@router.post("/{entry_id}/payroll-date-correction", response_model=TimeEntryRead)
+def set_time_entry_payroll_date_correction(
+    entry_id: int,
+    payload: TimeEntryPayrollDateCorrectionUpdate,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryRead:
+    entry = TimeEntryService(db).set_payroll_date_correction(
+        entry_id,
+        work_date=payload.work_date,
+        current_user=current_user,
+    )
+    return time_entry_read(entry)
+
+
 @router.get("/weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
 def list_time_entry_weekly_reviews(
     iso_year: int,
@@ -284,6 +300,7 @@ def time_entry_read(
         site_number=entry.site.site_number if entry.site else None,
         assignment_id=entry.assignment_id,
         work_date=entry.work_date,
+        original_work_date=entry.original_work_date,
         start_time=entry.start_time,
         end_time=entry.end_time,
         break_minutes=entry.break_minutes,
@@ -341,6 +358,7 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         site_number=stay.site_number,
         assignment_id=None,
         work_date=stay.work_date,
+        original_work_date=None,
         start_time=None,
         end_time=None,
         break_minutes=0,
