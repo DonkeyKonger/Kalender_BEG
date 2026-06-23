@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   Camera,
   CalendarClock,
@@ -3685,68 +3686,84 @@ function MeasurementBatchOverview({
       ) : null}
       {error ? <div className="form-error">{error}</div> : null}
 
-      <div className="mobile-measurement-overview-actions">
-        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
-          <ClipboardList aria-hidden="true" size={18} />
-          <span>{isItemsLoading ? "Positionen laden..." : "Aufmaßpositionen erfassen"}</span>
-        </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPdf} disabled={isOpeningPdf}>
-          <FileText aria-hidden="true" size={18} />
-          <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
-        </button>
-        <button
-          className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
-          type="button"
-          onClick={onCustomerSignature}
-          disabled={hasCustomerSignature || customerSignatureDisabled}
-        >
-          <UserRound aria-hidden="true" size={18} />
-          <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
-          {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-        </button>
-        {!hasCustomerSignature && customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
-        <button
-          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
-          type="button"
-          onClick={onWorkerSignature}
-          disabled={hasWorkerSignature}
-        >
-          <UserRound aria-hidden="true" size={18} />
-          <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
-          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-        </button>
-        <button
-          className="mobile-measurement-overview-action"
-          type="button"
-          onClick={() => {
-            setEmailSendError(null);
-            setEmailSendMessage(null);
-            setIsEditingEmailRecipients(true);
-          }}
-        >
-          <Mail aria-hidden="true" size={18} />
-          <span>Kunden-E-Mail</span>
-        </button>
-        <button
-          className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-warning" : ""}`}
-          type="button"
-          onClick={() => {
-            setEmailSendError(null);
-            setEmailSendMessage(null);
-            setIsConfirmingEmailSend(true);
-          }}
-          disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
-        >
-          <Mail aria-hidden="true" size={18} />
-          <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
-        </button>
-        {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
-        {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
-        {emailSendMessage ? <p className="form-info">{emailSendMessage}</p> : null}
-        <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
-          <Images aria-hidden="true" size={18} />
-          <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
-        </button>
+      <div className="mobile-measurement-overview-actions is-grouped">
+        <section className="mobile-measurement-action-section" aria-label="Aufmaß">
+          <h3>Aufmaß</h3>
+          <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
+            <ClipboardList aria-hidden="true" size={18} />
+            <span>{isItemsLoading ? "Positionen laden..." : "Aufmaßpositionen erfassen"}</span>
+          </button>
+          <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPdf} disabled={isOpeningPdf}>
+            <FileText aria-hidden="true" size={18} />
+            <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
+          </button>
+        </section>
+
+        <section className="mobile-measurement-action-section" aria-label="Unterschriften">
+          <h3>Unterschriften</h3>
+          <button
+            className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
+            type="button"
+            onClick={onCustomerSignature}
+            disabled={hasCustomerSignature || customerSignatureDisabled}
+          >
+            <UserRound aria-hidden="true" size={18} />
+            <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+            {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+          </button>
+          {!hasCustomerSignature && customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
+          <button
+            className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
+            type="button"
+            onClick={onWorkerSignature}
+            disabled={hasWorkerSignature}
+          >
+            <UserRound aria-hidden="true" size={18} />
+            <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+            {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+          </button>
+        </section>
+
+        <section className="mobile-measurement-action-section" aria-label="Versand">
+          <h3>Versand</h3>
+          <button
+            className="mobile-measurement-overview-action"
+            type="button"
+            onClick={() => {
+              setEmailSendError(null);
+              setEmailSendMessage(null);
+              setIsEditingEmailRecipients(true);
+            }}
+          >
+            <Mail aria-hidden="true" size={18} />
+            <span>Kunden-E-Mail</span>
+          </button>
+          <button
+            className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
+            type="button"
+            onClick={() => {
+              setEmailSendError(null);
+              setEmailSendMessage(null);
+              setIsConfirmingEmailSend(true);
+            }}
+            disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
+          >
+            <Mail aria-hidden="true" size={18} />
+            <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
+            {shouldWarnMissingCustomerSignatureForEmail ? <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} /> : null}
+          </button>
+          {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
+          {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
+          {emailSendMessage ? <p className="form-info">{emailSendMessage}</p> : null}
+        </section>
+
+        <section className="mobile-measurement-action-section" aria-label="Fotos">
+          <h3>Fotos</h3>
+          <button className="mobile-measurement-overview-action" type="button" onClick={onOpenPhotos}>
+            <Images aria-hidden="true" size={18} />
+            <span>Hinterlegte Fotos{batch.photo_count ? ` (${batch.photo_count})` : ""}</span>
+          </button>
+        </section>
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p>

@@ -16281,6 +16281,30 @@ button.person-chip:focus-visible {
   gap: 9px;
 }
 
+.mobile-measurement-overview-actions.is-grouped {
+  gap: 16px;
+}
+
+.mobile-measurement-action-section {
+  display: grid;
+  gap: 7px;
+}
+
+.mobile-measurement-action-section + .mobile-measurement-action-section {
+  border-top: 1px solid #e7edf5;
+  padding-top: 13px;
+}
+
+.mobile-measurement-action-section h3 {
+  margin: 0 0 1px;
+  color: #65738a;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .mobile-measurement-overview-action {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -16363,6 +16387,23 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-overview-action.is-warning svg {
+  color: #d98a1f;
+}
+
+.mobile-measurement-overview-action.is-email-warning {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-color: #d8e3ef;
+  background: #ffffff;
+  color: #143c6d;
+  box-shadow: 0 10px 22px rgb(18 29 52 / 7%);
+}
+
+.mobile-measurement-overview-action.is-email-warning svg {
+  color: #2d5d8f;
+}
+
+.mobile-measurement-overview-action.is-email-warning .mobile-action-warning-icon {
+  justify-self: end;
   color: #d98a1f;
 }
 
