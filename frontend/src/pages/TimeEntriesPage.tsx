@@ -1914,7 +1914,6 @@ export function TimeEntriesPage() {
                           >
                             <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
                             <span>{site.name}</span>
-                            <small>{siteLocationLabel(site)}</small>
                           </button>
                         ))
                       ) : (
@@ -1942,7 +1941,6 @@ export function TimeEntriesPage() {
                       >
                         <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
                         <span>{site.name}</span>
-                        <small>{siteLocationLabel(site)}</small>
                       </button>
                     ))}
                   </div>

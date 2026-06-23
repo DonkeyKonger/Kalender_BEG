@@ -11919,7 +11919,7 @@ button.person-chip:focus-visible {
 .time-review-location-decision {
   border-top: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 12px 12px 10px;
+  padding: 8px 10px;
 }
 
 .time-review-location-decision-head {
@@ -11927,55 +11927,56 @@ button.person-chip:focus-visible {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px 14px;
-  margin-bottom: 10px;
+  gap: 6px 12px;
+  margin-bottom: 7px;
 }
 
 .time-review-location-decision-head span,
 .time-review-location-search span,
 .time-review-location-list-head span {
   color: #42526a;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 850;
 }
 
 .time-review-location-decision-head strong {
   color: #172033;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 850;
 }
 
 .time-review-location-picker {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .time-review-location-picker-panel {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   border: 1px solid #d7e1ee;
   border-radius: 0;
   background: #f8fafc;
-  padding: 10px;
+  padding: 7px;
 }
 
 .time-review-location-search {
   display: grid;
-  gap: 7px;
+  gap: 5px;
 }
 
 .time-review-location-search input {
   width: 100%;
-  min-height: 34px;
+  min-height: 28px;
   border: 1px solid #d7e1ee;
   border-radius: 0;
   background: #ffffff;
   color: #172033;
-  padding: 6px 8px;
+  padding: 4px 7px;
   font: inherit;
+  font-size: 0.76rem;
 }
 
 .time-review-location-search input:focus {
@@ -11987,20 +11988,20 @@ button.person-chip:focus-visible {
 .time-review-location-suggestions,
 .time-review-location-site-list {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .time-review-location-suggestions {
   border: 1px solid #d7e1ee;
   background: #ffffff;
-  padding: 4px;
+  padding: 3px;
 }
 
 .time-review-location-suggestions p {
   margin: 0;
   color: #64748b;
-  padding: 8px;
-  font-size: 0.76rem;
+  padding: 6px;
+  font-size: 0.74rem;
   font-weight: 750;
 }
 
@@ -12018,7 +12019,7 @@ button.person-chip:focus-visible {
 }
 
 .time-review-location-site-list {
-  max-height: 260px;
+  max-height: 190px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 2px;
@@ -12028,14 +12029,15 @@ button.person-chip:focus-visible {
 .time-review-location-site-list button {
   display: grid;
   grid-template-columns: minmax(74px, 0.45fr) minmax(0, 1fr);
-  gap: 2px 8px;
+  gap: 6px;
   width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 0;
   background: #ffffff;
   color: #172033;
   cursor: pointer;
-  padding: 7px 8px;
+  min-height: 28px;
+  padding: 4px 7px;
   text-align: left;
 }
 
@@ -12063,7 +12065,7 @@ button.person-chip:focus-visible {
 .time-review-location-suggestions button strong,
 .time-review-location-site-list button strong {
   color: #172033;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 850;
 }
 
@@ -12072,19 +12074,8 @@ button.person-chip:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: #172033;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-review-location-suggestions button small,
-.time-review-location-site-list button small {
-  grid-column: 2;
-  overflow: hidden;
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
