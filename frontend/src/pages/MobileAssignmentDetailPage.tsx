@@ -2094,6 +2094,7 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
       ) : null}
       <MobileOverviewPhotoAction
         disabled={isUploadingProjectPhoto}
+        description="Projektfotos anzeigen"
         onOpenPhotos={() => setIsProjectPhotoGalleryOpen(true)}
         onTakePhoto={openProjectPhotoCapture}
       />
@@ -2337,11 +2338,13 @@ function MobileCameraButton({
 
 function MobileOverviewPhotoAction({
   count,
+  description,
   disabled,
   onOpenPhotos,
   onTakePhoto,
 }: {
   count?: number | null;
+  description?: string;
   disabled?: boolean;
   onOpenPhotos: () => void;
   onTakePhoto: () => void;
@@ -2350,7 +2353,10 @@ function MobileOverviewPhotoAction({
     <div className="mobile-measurement-photo-action-row">
       <button className="mobile-measurement-overview-action mobile-measurement-photo-main-action" type="button" onClick={onOpenPhotos}>
         <Images aria-hidden="true" size={18} />
-        <span>Hinterlegte Fotos{count ? ` (${count})` : ""}</span>
+        <span>
+          <strong>Hinterlegte Fotos{count ? ` (${count})` : ""}</strong>
+          {description ? <small>{description}</small> : null}
+        </span>
       </button>
       <MobileCameraButton
         className="mobile-measurement-inline-camera-button"
