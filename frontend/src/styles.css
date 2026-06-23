@@ -16361,6 +16361,10 @@ button.person-chip:focus-visible {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+.mobile-measurement-overview-action.has-inline-status {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .mobile-measurement-overview-action.is-complete:disabled {
   cursor: default;
   border-color: #cbd7e6;
@@ -16396,7 +16400,7 @@ button.person-chip:focus-visible {
   color: #2d5d8f;
 }
 
-.mobile-measurement-overview-action.is-email-warning .mobile-action-warning-icon {
+.mobile-measurement-overview-action .mobile-action-warning-icon {
   justify-self: end;
   color: #d98a1f;
 }

@@ -3628,6 +3628,8 @@ function MeasurementBatchOverview({
     isLoadingRecipients: isLoadingEmailRecipients,
     allowMissingCustomerSignature: true,
   });
+  const emailSendStatusTitle = emailSendError ?? emailSendMessage ?? emailSendHint ?? undefined;
+  const hasEmailSendInlineStatus = shouldWarnMissingCustomerSignatureForEmail || Boolean(emailSendError) || Boolean(emailSendMessage);
 
   useEffect(() => {
     let isActive = true;
@@ -3762,8 +3764,9 @@ function MeasurementBatchOverview({
             <span>Kunden-E-Mail</span>
           </button>
           <button
-            className={`mobile-measurement-overview-action${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
+            className={`mobile-measurement-overview-action${hasEmailSendInlineStatus ? " has-inline-status" : ""}${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
             type="button"
+            title={emailSendStatusTitle}
             onClick={() => {
               setEmailSendError(null);
               setEmailSendMessage(null);
@@ -3773,11 +3776,12 @@ function MeasurementBatchOverview({
           >
             <Mail aria-hidden="true" size={18} />
             <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
-            {shouldWarnMissingCustomerSignatureForEmail ? <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} /> : null}
+            {shouldWarnMissingCustomerSignatureForEmail || emailSendError ? (
+              <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} />
+            ) : emailSendMessage ? (
+              <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={18} />
+            ) : null}
           </button>
-          {emailSendHint ? <p className="mobile-measurement-action-hint">{emailSendHint}</p> : null}
-          {emailSendError ? <p className="form-error">{emailSendError}</p> : null}
-          {emailSendMessage ? <p className="form-info">{emailSendMessage}</p> : null}
         </section>
 
         <section className="mobile-measurement-action-section" aria-label="Fotos">
