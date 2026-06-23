@@ -4229,10 +4229,12 @@ function MeasurementBatchDetail({
           <ArrowLeft aria-hidden="true" size={17} />
           <span>Aufmaß</span>
         </button>
-        <button className="mobile-measurement-create-position-button" type="button" onClick={onCreatePosition}>
-          <Plus aria-hidden="true" size={15} />
-          <span>Position erstellen</span>
-        </button>
+        {viewMode === "list" ? (
+          <button className="mobile-measurement-create-position-button" type="button" onClick={onCreatePosition}>
+            <Plus aria-hidden="true" size={15} />
+            <span>Position erstellen</span>
+          </button>
+        ) : null}
       </div>
       {batch.is_locked_for_worker ? (
         <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>

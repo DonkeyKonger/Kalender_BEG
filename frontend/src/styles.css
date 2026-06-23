@@ -5261,8 +5261,7 @@ button.person-chip:focus-visible {
     box-shadow: none;
   }
 
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-back-button,
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-create-position-button {
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-back-button {
     border-radius: 2px;
   }
 
