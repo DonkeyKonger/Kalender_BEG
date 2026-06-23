@@ -4222,6 +4222,18 @@ function MeasurementBatchDetail({
     }
   }, [activePositionGroupKey, positionGroups, viewMode]);
 
+  const searchControl = (
+    <div className="mobile-measurement-search">
+      <Search aria-hidden="true" size={17} />
+      <input
+        type="text"
+        placeholder="Position oder Leistung suchen..."
+        value={searchTerm}
+        onChange={(event) => onSearchChange(event.target.value)}
+      />
+    </div>
+  );
+
   return (
     <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page${viewMode === "table" ? " is-table-view" : ""}`}>
       <div className="mobile-measurement-detail-topbar">
@@ -4235,23 +4247,17 @@ function MeasurementBatchDetail({
             <span>Position erstellen</span>
           </button>
         ) : null}
+        {viewMode === "table" ? searchControl : null}
       </div>
       {batch.is_locked_for_worker ? (
         <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
 
-      <div className="mobile-measurement-toolbar">
-        <div className="mobile-measurement-search">
-          <Search aria-hidden="true" size={17} />
-          <input
-            type="text"
-            placeholder="Position oder Leistung suchen..."
-            value={searchTerm}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
+      {viewMode === "list" ? (
+        <div className="mobile-measurement-toolbar">
+          {searchControl}
         </div>
-
-      </div>
+      ) : null}
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}

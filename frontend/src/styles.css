@@ -5265,6 +5265,13 @@ button.person-chip:focus-visible {
     border-radius: 2px;
   }
 
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-detail-topbar {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
   .app-shell.is-mobile-workspace .mobile-measurement-positions-page .mobile-measurement-toolbar {
     display: flex;
     flex-direction: row-reverse;
