@@ -2572,10 +2572,7 @@ function formatCount(count: number, singular: string, plural: string): string {
 }
 
 function formatSubmittedHours(minutes: number): string {
-  const hours = minutes / 60;
-  return Number.isInteger(hours)
-    ? String(hours)
-    : hours.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+  return formatDecimalHoursValue(minutes / 60);
 }
 
 function addDaysToDateInput(value: string, days: number): string {
@@ -3638,8 +3635,14 @@ function finalNoteLabel(entry: TimeEntry): string {
 }
 
 function formatDecimalHours(minutes: number): string {
-  const hours = minutes / 60;
-  return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2))).replace(".", ",");
+  return formatDecimalHoursValue(minutes / 60);
+}
+
+function formatDecimalHoursValue(hours: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(hours);
 }
 
 function formatDistance(distanceMeters: number | null, radiusMeters: number | null): string {
