@@ -15720,11 +15720,13 @@ button.person-chip:focus-visible {
 
 .mobile-measurement-card.is-empty-position {
   background: #f1f5f9;
+  padding-left: 12px;
   box-shadow: 0 6px 14px rgb(18 29 52 / 5%);
 }
 
 .mobile-measurement-card.is-captured-position {
   background: #ffffff;
+  padding-left: 12px;
 }
 
 .mobile-measurement-card strong,
