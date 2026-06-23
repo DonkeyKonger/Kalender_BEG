@@ -170,6 +170,11 @@ type MobileDocumentPreviewState = {
   error: string | null;
 };
 
+type MobileProjectPhotoPreviewState = {
+  item: ProjectFolderDocumentItem;
+  url: string;
+};
+
 const detailTabs: Array<{ key: MobileDetailActionKey; label: string; description: string; icon: typeof ClipboardList }> = [
   { key: "folders", label: "Ordner", description: "Projektordner und Dateien", icon: FolderOpen },
   { key: "measurement", label: "Aufmaß", description: "Pakete und Positionen erfassen", icon: ReceiptText },
@@ -2005,6 +2010,8 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
 
 function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignment }) {
   const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
+  const [isProjectPhotoGalleryOpen, setIsProjectPhotoGalleryOpen] = useState(false);
+  const [projectPhotoGalleryVersion, setProjectPhotoGalleryVersion] = useState(0);
   const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
   const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
   const projectPhotoInputRef = useRef<HTMLInputElement | null>(null);
@@ -2041,6 +2048,7 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
       await api.uploadProjectFolderDocument(assignment.site.id, "fotos", uploadFile);
       setProjectPhotoMessage("Foto gespeichert.");
       setProjectPhotoMessageTone("info");
+      setProjectPhotoGalleryVersion((version) => version + 1);
     } catch (requestError) {
       setProjectPhotoMessage(
         requestError instanceof Error && !(requestError instanceof ApiError)
@@ -2053,6 +2061,30 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
     }
   }
 
+  if (isProjectPhotoGalleryOpen) {
+    return (
+      <>
+        <MobileProjectPhotoGallery
+          assignment={assignment}
+          refreshKey={projectPhotoGalleryVersion}
+          isUploadingPhoto={isUploadingProjectPhoto}
+          message={projectPhotoMessage}
+          messageTone={projectPhotoMessageTone}
+          onBack={() => setIsProjectPhotoGalleryOpen(false)}
+          onTakePhoto={openProjectPhotoCapture}
+        />
+        <input
+          ref={projectPhotoInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => void handleProjectPhotoChange(event)}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="mobile-project-photo-action">
       {projectPhotoMessage ? (
@@ -2060,11 +2092,10 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
           {projectPhotoMessage}
         </p>
       ) : null}
-      <MobileCameraButton
-        className="mobile-project-camera-button"
+      <MobileOverviewPhotoAction
         disabled={isUploadingProjectPhoto}
-        label="Projektfoto aufnehmen"
-        onClick={openProjectPhotoCapture}
+        onOpenPhotos={() => setIsProjectPhotoGalleryOpen(true)}
+        onTakePhoto={openProjectPhotoCapture}
       />
       <input
         ref={projectPhotoInputRef}
@@ -2075,6 +2106,208 @@ function MobileProjectPhotoCapture({ assignment }: { assignment: MobileAssignmen
         onChange={(event) => void handleProjectPhotoChange(event)}
       />
     </div>
+  );
+}
+
+function MobileProjectPhotoGallery({
+  assignment,
+  refreshKey,
+  isUploadingPhoto,
+  message,
+  messageTone,
+  onBack,
+  onTakePhoto,
+}: {
+  assignment: MobileAssignment;
+  refreshKey: number;
+  isUploadingPhoto: boolean;
+  message: string | null;
+  messageTone: "info" | "error";
+  onBack: () => void;
+  onTakePhoto: () => void;
+}) {
+  const [photos, setPhotos] = useState<ProjectFolderDocumentItem[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<MobileProjectPhotoPreviewState | null>(null);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadProjectPhotos(): Promise<void> {
+      setIsLoadingPhotos(true);
+      setPhotoError(null);
+      try {
+        const response = await api.projectFolderDocuments(assignment.site.id, "fotos");
+        const imageItems = response.items.filter((item) => !item.is_folder && getProjectDocumentKind(item) === "image");
+        if (isCurrent) {
+          setPhotos(imageItems);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setPhotos([]);
+          setPhotoError(readApiError(requestError, "Projektfotos konnten nicht geladen werden."));
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingPhotos(false);
+        }
+      }
+    }
+
+    void loadProjectPhotos();
+    return () => {
+      isCurrent = false;
+    };
+  }, [assignment.site.id, refreshKey]);
+
+  return (
+    <div className="mobile-detail-panel mobile-measurement-photo-gallery mobile-project-photo-gallery">
+      <div className="mobile-measurement-detail-topbar">
+        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={17} />
+          <span>Projekt</span>
+        </button>
+        <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+          <Camera aria-hidden="true" size={16} />
+          <span>{isUploadingPhoto ? "Speichert..." : "Foto aufnehmen"}</span>
+        </button>
+      </div>
+
+      <header className="mobile-measurement-photo-gallery-head">
+        <h2>Hinterlegte Fotos</h2>
+        <p>{assignment.site.name}</p>
+      </header>
+
+      {message ? (
+        <p className={messageTone === "error" ? "form-error mobile-project-photo-message" : "form-info mobile-project-photo-message"}>
+          {message}
+        </p>
+      ) : null}
+      {photoError ? <div className="form-error">{photoError}</div> : null}
+      {isLoadingPhotos ? <div className="empty-panel">Fotos werden geladen...</div> : null}
+      {!isLoadingPhotos && !photos.length ? (
+        <div className="empty-panel mobile-measurement-photo-empty">
+          <span>Noch keine Fotos hinterlegt.</span>
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
+            Foto aufnehmen
+          </button>
+        </div>
+      ) : null}
+      {!isLoadingPhotos && photos.length ? (
+        <div className="mobile-measurement-photo-grid">
+          {photos.map((photo) => (
+            <MobileProjectPhotoTile
+              item={photo}
+              key={photo.id || photo.name}
+              siteId={assignment.site.id}
+              onOpen={setSelectedPhoto}
+            />
+          ))}
+        </div>
+      ) : null}
+      {selectedPhoto ? (
+        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
+          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+            <img alt={selectedPhoto.item.name} src={selectedPhoto.url} />
+            <figcaption>
+              <strong>{selectedPhoto.item.name}</strong>
+              <span>{formatProjectDocumentMeta(selectedPhoto.item, { includeFallbackType: false })}</span>
+            </figcaption>
+            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
+          </figure>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MobileProjectPhotoTile({
+  item,
+  siteId,
+  onOpen,
+}: {
+  item: ProjectFolderDocumentItem;
+  siteId: number;
+  onOpen: (preview: MobileProjectPhotoPreviewState) => void;
+}) {
+  const tileRef = useRef<HTMLButtonElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+
+  useEffect(() => {
+    const element = tileRef.current;
+    if (!element || isVisible) {
+      return undefined;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setIsVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible || url || error) {
+      return undefined;
+    }
+    let isCurrent = true;
+    let objectUrl: string | null = null;
+
+    async function loadPhoto(): Promise<void> {
+      setIsLoadingImage(true);
+      try {
+        const blob = await api.projectFolderDocumentContent(siteId, "fotos", item.id, "inline");
+        objectUrl = window.URL.createObjectURL(blob);
+        if (isCurrent) {
+          setUrl(objectUrl);
+        } else {
+          window.URL.revokeObjectURL(objectUrl);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setError(readApiError(requestError, "Foto konnte nicht geladen werden."));
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingImage(false);
+        }
+      }
+    }
+
+    void loadPhoto();
+    return () => {
+      isCurrent = false;
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [error, isVisible, item.id, siteId, url]);
+
+  return (
+    <button
+      ref={tileRef}
+      className="mobile-measurement-photo-tile mobile-project-photo-tile"
+      type="button"
+      onClick={() => {
+        if (url) {
+          onOpen({ item, url });
+        }
+      }}
+      disabled={!url}
+    >
+      {url ? <img alt={item.name} src={url} loading="lazy" /> : <span>{error ?? (isLoadingImage ? "Foto wird geladen..." : "Foto")}</span>}
+      <small>{formatProjectDocumentMeta(item, { includeFallbackType: false })}</small>
+    </button>
   );
 }
 
