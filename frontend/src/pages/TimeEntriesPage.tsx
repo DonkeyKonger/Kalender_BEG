@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -413,8 +413,8 @@ export function TimeEntriesPage() {
     return result;
   }, [reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
   const selectedReviewWeekDayOptions = useMemo(
-    () => selectedReviewWeekDays.map((day) => ({ date: day.date, label: `${day.weekdayLabel} ${formatDate(day.date)}` })),
-    [selectedReviewWeekDays],
+    () => buildReviewWeekDayOptions(reviewWeekRange.start),
+    [reviewWeekRange.start],
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
@@ -1332,6 +1332,7 @@ export function TimeEntriesPage() {
                 {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
                   <div className="time-review-week-check-head" role="row">
+                    <span role="columnheader" aria-label="Tag ändern"></span>
                     <span role="columnheader">Tag</span>
                     <span role="columnheader">Baustelle</span>
                     <span role="columnheader">Montagebeginn</span>
@@ -1343,22 +1344,31 @@ export function TimeEntriesPage() {
                     <span role="columnheader">Geprüft</span>
                   </div>
                   {selectedReviewWeekDays.map((day) => (
-                    day.entries.length > 0 ? day.entries.map((check) => (
+                    day.entries.length > 0 ? day.entries.map((check, index) => (
                       <div className="time-review-week-check-row" key={`${day.date}-${check.entry.id}`} role="row">
+                        <div className="time-review-week-move" role="cell">
+                          <label className="time-review-day-move-control" aria-label="Zeiteintrag auf anderen Tag verschieben">
+                            <ChevronsUpDown aria-hidden="true" size={14} />
+                            <select
+                              value={check.entry.work_date}
+                              disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
+                              onChange={(event) => void movePayrollEntryDate(check.entry, event.target.value)}
+                            >
+                              {selectedReviewWeekDayOptions.map((option) => (
+                                <option key={option.date} value={option.date}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
                         <div className="time-review-week-day" role="cell">
-                          <select
-                            className="time-review-day-select"
-                            aria-label="Tag ändern"
-                            value={check.entry.work_date}
-                            disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
-                            onChange={(event) => void movePayrollEntryDate(check.entry, event.target.value)}
-                          >
-                            {selectedReviewWeekDayOptions.map((option) => (
-                              <option key={option.date} value={option.date}>{option.label}</option>
-                            ))}
-                          </select>
+                          {index === 0 && (
+                            <>
+                              <strong>{day.weekdayLabel}</strong>
+                              <span>{formatDate(day.date)}</span>
+                            </>
+                          )}
                           {check.entry.original_work_date && check.entry.original_work_date !== check.entry.work_date && (
-                            <span className="time-review-day-shift-note">vom {formatWeekday(check.entry.original_work_date)} verschoben</span>
+                            <small className="time-review-day-shift-note">vom {formatWeekday(check.entry.original_work_date)} verschoben</small>
                           )}
                         </div>
                         <div className="time-review-week-site" role="cell">
@@ -1396,6 +1406,7 @@ export function TimeEntriesPage() {
                       </div>
                     )) : (
                       <div className="time-review-week-check-row is-empty" key={day.date} role="row">
+                        <div className="time-review-week-move" role="cell"></div>
                         <div className="time-review-week-day" role="cell">
                           <strong>{day.weekdayLabel}</strong>
                           <span>{formatDate(day.date)}</span>
@@ -2900,13 +2911,14 @@ function buildTimeReviewWeekDays(
     entriesByDate.set(entry.work_date, dayEntries);
   }
 
-  return numberRange(0, 4).map((dayOffset) => {
+  return numberRange(0, 6).map((dayOffset) => {
     const date = addDaysToDateInput(weekStart, dayOffset);
     const dayEntries = (entriesByDate.get(date) ?? []).slice().sort(compareTimeReviewWorkerEntries);
+    const absenceType = personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date);
     return {
       date,
       weekdayLabel: formatWeekday(date),
-      absenceType: personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date),
+      absenceType,
       entries: dayEntries
         .map((entry) => ({
           entry,
@@ -2914,6 +2926,13 @@ function buildTimeReviewWeekDays(
           timeCheck: classifyTimeReviewTimeCheck(entry, { hasMultipleEntriesOnDay: dayEntries.length > 1 }),
         })),
     };
+  }).filter((day, index) => index < 5 || day.entries.length > 0 || day.absenceType !== null);
+}
+
+function buildReviewWeekDayOptions(weekStart: string): Array<{ date: string; label: string }> {
+  return numberRange(0, 6).map((dayOffset) => {
+    const date = addDaysToDateInput(weekStart, dayOffset);
+    return { date, label: formatWeekday(date) };
   });
 }
 
