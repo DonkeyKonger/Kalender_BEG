@@ -495,6 +495,10 @@ button:disabled {
     padding: 24px;
   }
 
+  .matrix-page {
+    --matrix-scroll-max-height: max(420px, calc(100dvh - 72px - 48px - 92px));
+  }
+
   .status-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -549,6 +553,7 @@ button:disabled {
   --matrix-week-header-height: 22px;
   --matrix-day-header-height: 34px;
   --matrix-sticky-header-height: calc(var(--matrix-week-header-height) + var(--matrix-day-header-height));
+  --matrix-scroll-max-height: none;
   display: grid;
   gap: 14px;
 }
@@ -633,7 +638,9 @@ button:disabled {
 .matrix-scroll {
   width: 100%;
   max-width: 100%;
+  max-height: var(--matrix-scroll-max-height);
   overflow: auto;
+  overscroll-behavior: contain;
   scroll-padding-left: var(--fixed-columns-width, 552px);
   border: 1px solid #cbd7e6;
   border-radius: 8px;
