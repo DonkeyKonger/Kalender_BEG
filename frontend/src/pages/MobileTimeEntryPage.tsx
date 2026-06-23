@@ -631,8 +631,7 @@ export function MobileTimeEntryPage() {
 
                 <div className="mobile-time-manual-action">
                   <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
-                    <strong>Abweichend eintragen</strong>
-                    <span>Baustelle manuell beschreiben</span>
+                    <strong>Arbeitszeit manuell erfassen</strong>
                   </button>
                 </div>
               </section>
