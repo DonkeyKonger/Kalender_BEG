@@ -13553,6 +13553,9 @@ button.person-chip:focus-visible {
 }
 
 .absences-page {
+  --absence-month-header-height: 22px;
+  --absence-week-header-height: 22px;
+  --absence-day-header-height: 40px;
   display: grid;
   gap: 14px;
 }
@@ -13681,17 +13684,39 @@ button.person-chip:focus-visible {
 
 .absence-matrix thead .absence-person-col {
   z-index: 7;
-  height: 40px;
+  height: var(--absence-day-header-height);
   background: #eef3f9;
   font-size: 0.75rem;
   font-weight: 900;
 }
 
-.absence-matrix thead .absence-week-row th {
+.absence-matrix thead .absence-month-row th {
   position: sticky;
   top: 0;
+  z-index: 7;
+  height: var(--absence-month-header-height);
+  padding: 2px 4px;
+  border-bottom: 1px solid #d7e2f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.absence-matrix thead .absence-month-row .absence-person-col {
+  z-index: 9;
+  background: #f8fafc;
+}
+
+.absence-matrix thead .absence-week-row th {
+  position: sticky;
+  top: var(--absence-month-header-height);
   z-index: 6;
-  height: 22px;
+  height: var(--absence-week-header-height);
   padding: 2px 4px;
   border-bottom: 1px solid #d7e2f0;
   background: #f8fafc;
@@ -13704,15 +13729,16 @@ button.person-chip:focus-visible {
 }
 
 .absence-matrix thead .absence-week-row .absence-person-col {
-  top: 0;
+  top: var(--absence-month-header-height);
   z-index: 8;
   background: #f8fafc;
 }
 
 .absence-matrix thead .absence-day-row .absence-person-col {
-  top: 22px;
+  top: calc(var(--absence-month-header-height) + var(--absence-week-header-height));
 }
 
+.absence-month-fixed,
 .absence-week-fixed {
   color: transparent;
 }
@@ -13768,12 +13794,12 @@ button.person-chip:focus-visible {
 
 .absence-day-col {
   position: sticky;
-  top: 22px;
+  top: calc(var(--absence-month-header-height) + var(--absence-week-header-height));
   z-index: 3;
   width: 42px;
   min-width: 42px;
   max-width: 42px;
-  height: 40px;
+  height: var(--absence-day-header-height);
   background: #eef3f9;
   color: #334155;
   padding: 4px 2px;

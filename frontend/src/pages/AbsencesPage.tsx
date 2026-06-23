@@ -65,6 +65,12 @@ type AbsenceWeekGroup = {
   week: number;
   dayCount: number;
 };
+type AbsenceMonthGroup = {
+  year: number;
+  month: number;
+  label: string;
+  dayCount: number;
+};
 
 function emptyAbsence(personId = 0, date = toDateInputValue(new Date())): AbsenceCreate {
   return {
@@ -636,6 +642,7 @@ function AbsenceMatrix({
   onOpenAbsence: (absenceId: number) => void;
   onStartSelection: (personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) => void;
 }) {
+  const monthGroups = useMemo(() => buildAbsenceMonthGroups(days), [days]);
   const weekGroups = useMemo(() => buildAbsenceWeekGroups(days), [days]);
   const hasRows = personGroups.some((group) => group.rows.length > 0);
 
@@ -657,6 +664,19 @@ function AbsenceMatrix({
     >
       <table className="absence-matrix">
         <thead>
+          <tr className="absence-month-row">
+            <th className="absence-person-col absence-month-fixed" aria-hidden="true" />
+            {monthGroups.map((group) => (
+              <th
+                className="absence-month-cell"
+                colSpan={group.dayCount}
+                key={`${group.year}-${group.month}`}
+                scope="colgroup"
+              >
+                {group.label}
+              </th>
+            ))}
+          </tr>
           <tr className="absence-week-row">
             <th className="absence-person-col absence-week-fixed" aria-hidden="true" />
             {weekGroups.map((group) => (
@@ -1065,6 +1085,25 @@ function buildAbsenceWeekGroups(days: string[]): AbsenceWeekGroup[] {
     groups.push({ isoYear: isoWeek.isoYear, week: isoWeek.week, dayCount: 1 });
     return groups;
   }, []);
+}
+
+function buildAbsenceMonthGroups(days: string[]): AbsenceMonthGroup[] {
+  return days.reduce<AbsenceMonthGroup[]>((groups, day) => {
+    const date = parseLocalDate(day);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.year === year && currentGroup.month === month) {
+      currentGroup.dayCount += 1;
+      return groups;
+    }
+    groups.push({ year, month, label: formatAbsenceMonthLabel(date), dayCount: 1 });
+    return groups;
+  }, []);
+}
+
+function formatAbsenceMonthLabel(date: Date): string {
+  return new Intl.DateTimeFormat("de-DE", { month: "long" }).format(date);
 }
 
 function absenceDayClassName(date: string, today: string): string {
