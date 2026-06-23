@@ -11737,7 +11737,7 @@ button.person-chip:focus-visible {
 }
 
 .time-review-diagnostic-popover.is-location {
-  width: min(820px, calc(100vw - 32px));
+  width: min(980px, calc(100vw - 32px));
 }
 
 .time-review-diagnostic-head {
@@ -11878,15 +11878,52 @@ button.person-chip:focus-visible {
   padding: 12px 12px 10px;
 }
 
-.time-review-location-decision label {
-  display: grid;
-  gap: 7px;
+.time-review-location-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.time-review-location-decision-head span,
+.time-review-location-search span,
+.time-review-location-list-head span {
   color: #42526a;
   font-size: 0.74rem;
   font-weight: 850;
 }
 
-.time-review-location-decision select {
+.time-review-location-decision-head strong {
+  color: #172033;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.time-review-location-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 10px;
+}
+
+.time-review-location-picker-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.time-review-location-search {
+  display: grid;
+  gap: 7px;
+}
+
+.time-review-location-search input {
   width: 100%;
   min-height: 34px;
   border: 1px solid #d7e1ee;
@@ -11897,10 +11934,115 @@ button.person-chip:focus-visible {
   font: inherit;
 }
 
-.time-review-location-decision select:focus {
+.time-review-location-search input:focus {
   border-color: #9bbce0;
   outline: 1px solid #9bbce0;
   outline-offset: 0;
+}
+
+.time-review-location-suggestions,
+.time-review-location-site-list {
+  display: grid;
+  gap: 4px;
+}
+
+.time-review-location-suggestions {
+  border: 1px solid #d7e1ee;
+  background: #ffffff;
+  padding: 4px;
+}
+
+.time-review-location-suggestions p {
+  margin: 0;
+  color: #64748b;
+  padding: 8px;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.time-review-location-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.time-review-location-list-head small {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.time-review-location-site-list {
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.time-review-location-suggestions button,
+.time-review-location-site-list button {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.45fr) minmax(0, 1fr);
+  gap: 2px 8px;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.time-review-location-suggestions button:hover,
+.time-review-location-suggestions button:focus-visible,
+.time-review-location-site-list button:hover,
+.time-review-location-site-list button:focus-visible {
+  border-color: #9bbce0;
+  background: #f4f8fd;
+  outline: none;
+}
+
+.time-review-location-suggestions button.is-selected,
+.time-review-location-site-list button.is-selected {
+  border-color: #1d5c99;
+  background: #edf5ff;
+}
+
+.time-review-location-suggestions button:disabled,
+.time-review-location-site-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.time-review-location-suggestions button strong,
+.time-review-location-site-list button strong {
+  color: #172033;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.time-review-location-suggestions button span,
+.time-review-location-site-list button span {
+  min-width: 0;
+  overflow: hidden;
+  color: #172033;
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-location-suggestions button small,
+.time-review-location-site-list button small {
+  grid-column: 2;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .time-review-diagnostic-save {
@@ -11908,6 +12050,12 @@ button.person-chip:focus-visible {
   border-radius: 0;
   padding: 5px 9px;
   font-size: 0.76rem;
+}
+
+@media (max-width: 760px) {
+  .time-review-location-picker {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {

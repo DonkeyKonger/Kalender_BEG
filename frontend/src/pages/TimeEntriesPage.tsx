@@ -255,6 +255,7 @@ export function TimeEntriesPage() {
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
+  const [locationReviewSiteSearch, setLocationReviewSiteSearch] = useState("");
   const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
   const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
@@ -367,6 +368,18 @@ export function TimeEntriesPage() {
     () => [...sites].sort((left, right) => siteOptionLabel(left).localeCompare(siteOptionLabel(right), "de")),
     [sites],
   );
+  const locationReviewSiteOptions = useMemo(
+    () => siteOptions.filter(isSelectableLocationReviewSite),
+    [siteOptions],
+  );
+  const selectedLocationReviewSite = useMemo(
+    () => siteOptions.find((site) => String(site.id) === locationReviewSiteId) ?? null,
+    [locationReviewSiteId, siteOptions],
+  );
+  const locationReviewSiteSearchResults = useMemo(
+    () => filterLocationReviewSites(locationReviewSiteOptions, locationReviewSiteSearch).slice(0, 8),
+    [locationReviewSiteOptions, locationReviewSiteSearch],
+  );
   const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.map((review) => review.person_id)),
@@ -462,11 +475,13 @@ export function TimeEntriesPage() {
   useEffect(() => {
     if (!locationReviewDiagnosticEntry) {
       setLocationReviewSiteId("");
+      setLocationReviewSiteSearch("");
       setLocationReviewError(null);
       setIsSavingLocationReview(false);
       return;
     }
     setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
+    setLocationReviewSiteSearch("");
     setLocationReviewError(null);
   }, [locationReviewDiagnosticEntry]);
 
@@ -1832,21 +1847,74 @@ export function TimeEntriesPage() {
               ))}
             </div>
             <div className="time-review-location-decision">
-              <label>
+              <div className="time-review-location-decision-head">
                 <span>Endgültige Baustelle</span>
-                <select
-                  value={locationReviewSiteId}
-                  onChange={(event) => setLocationReviewSiteId(event.target.value)}
-                  disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
-                >
-                  <option value="">Baustelle auswählen</option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {siteOptionLabel(site)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <strong>{selectedLocationReviewSite ? siteOptionLabel(selectedLocationReviewSite) : "Noch nicht festgelegt"}</strong>
+              </div>
+              <div className="time-review-location-picker">
+                <section className="time-review-location-picker-panel">
+                  <label className="time-review-location-search">
+                    <span>Baustelle suchen</span>
+                    <input
+                      type="search"
+                      placeholder="Kommission oder Baustellenname"
+                      value={locationReviewSiteSearch}
+                      onChange={(event) => setLocationReviewSiteSearch(event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                    />
+                  </label>
+                  {locationReviewSiteSearch.trim() && (
+                    <div className="time-review-location-suggestions" role="listbox" aria-label="Baustellenvorschläge">
+                      {locationReviewSiteSearchResults.length ? (
+                        locationReviewSiteSearchResults.map((site) => (
+                          <button
+                            className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                            key={site.id}
+                            type="button"
+                            role="option"
+                            aria-selected={String(site.id) === locationReviewSiteId}
+                            disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                            onClick={() => {
+                              setLocationReviewSiteId(String(site.id));
+                              setLocationReviewSiteSearch("");
+                            }}
+                          >
+                            <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
+                            <span>{site.name}</span>
+                            <small>{siteLocationLabel(site)}</small>
+                          </button>
+                        ))
+                      ) : (
+                        <p>Keine passende Baustelle gefunden.</p>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <section className="time-review-location-picker-panel">
+                  <div className="time-review-location-list-head">
+                    <span>Alle auswählbaren Baustellen</span>
+                    <small>{locationReviewSiteOptions.length}</small>
+                  </div>
+                  <div className="time-review-location-site-list" role="listbox" aria-label="Alle auswählbaren Baustellen">
+                    {locationReviewSiteOptions.map((site) => (
+                      <button
+                        className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                        key={site.id}
+                        type="button"
+                        role="option"
+                        aria-selected={String(site.id) === locationReviewSiteId}
+                        disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                        onClick={() => setLocationReviewSiteId(String(site.id))}
+                      >
+                        <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
+                        <span>{site.name}</span>
+                        <small>{siteLocationLabel(site)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
             </div>
             <div className="time-review-diagnostic-actions">
               {locationReviewError && <p className="time-review-diagnostic-error">{locationReviewError}</p>}
@@ -3765,6 +3833,28 @@ function manualTimeEntrySiteText(entry: TimeEntry): string {
 
 function siteOptionLabel(site: SiteSummary): string {
   return [site.site_number, site.name].filter(Boolean).join(" · ") || `Baustelle ${site.id}`;
+}
+
+function isSelectableLocationReviewSite(site: SiteSummary): boolean {
+  return site.status === "active" || site.status === "paused" || site.status === "planned";
+}
+
+function filterLocationReviewSites(sites: SiteSummary[], query: string): SiteSummary[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return [];
+  }
+  return sites.filter((site) => locationReviewSiteSearchText(site).includes(needle));
+}
+
+function locationReviewSiteSearchText(site: SiteSummary): string {
+  return [
+    site.site_number,
+    site.name,
+    site.location,
+    site.city,
+    site.customer,
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function gpsStatusTone(status: TimeEntryGpsStatus): StatusBadgeTone {
