@@ -867,14 +867,16 @@ function ExtraWorkOrderOverview({
         }}
         aria-label={canRename ? "Stundenzettel benennen" : "Stundenzettel-Name gesperrt"}
       >
-        <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+        <span className="mobile-measurement-summary-status-row">
+          <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+          <MobileCustomerEmailStatus item={order} />
+        </span>
         <span className="mobile-measurement-card-date">{kindLabel}</span>
         <span className="mobile-extra-work-title-line">
           <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
           {canRename ? <Pencil aria-hidden="true" size={15} /> : null}
         </span>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
-        <MobileCustomerEmailStatus item={order} />
         <span className="mobile-measurement-card-meta">
           <span>Stunden: {formatExtraWorkHours(order.total_hours)}</span>
           {isApproval && order.estimated_hours !== null && order.estimated_hours !== undefined ? (
@@ -3697,10 +3699,12 @@ function MeasurementBatchOverview({
       </div>
 
       <div className="mobile-measurement-summary-card">
-        <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+        <span className="mobile-measurement-summary-status-row">
+          <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+          <MobileCustomerEmailStatus item={batch} />
+        </span>
         <h2>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</h2>
         <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
-        <MobileCustomerEmailStatus item={batch} />
         <span className="mobile-measurement-card-meta">
           <span>Positionen: {batch.position_count}</span>
           <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
@@ -6725,16 +6729,8 @@ function MobileCustomerEmailStatus({ item }: { item: MobileCustomerEmailStatusIt
 function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { label: string; className: string } {
   if (!item.customer_email_sent_at) {
     return {
-      label: "Nicht gesendet",
+      label: "Mail nicht an Kunden gesendet",
       className: "is-not-sent",
-    };
-  }
-  const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
-    || item.customer_email_signature_present === true;
-  if (signaturePresent) {
-    return {
-      label: "Gesendet · Unterschrift erhalten",
-      className: "is-complete",
     };
   }
   return {

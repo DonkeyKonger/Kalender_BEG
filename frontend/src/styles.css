@@ -15806,14 +15806,23 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-summary-card .mobile-customer-email-status {
-  color: #64748b;
-  font-size: 0.74rem;
-  font-weight: 700;
-  line-height: 1.25;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.15;
+  padding: 3px 7px;
 }
 
 .mobile-measurement-summary-card .mobile-customer-email-status.is-not-sent {
-  color: #94a3b8;
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
 }
 
 .mobile-measurement-card .mobile-customer-email-status.is-not-sent {
@@ -15829,7 +15838,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-measurement-summary-card .mobile-customer-email-status.is-complete {
-  color: #2f6096;
+  color: #b7791f;
 }
 
 .mobile-measurement-card .mobile-customer-email-status.is-complete {
@@ -16268,6 +16277,14 @@ button.person-chip:focus-visible {
   font-size: 1rem;
   line-height: 1.18;
   text-overflow: ellipsis;
+}
+
+.mobile-measurement-summary-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .mobile-measurement-overview-actions {
