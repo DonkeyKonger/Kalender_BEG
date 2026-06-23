@@ -429,6 +429,11 @@ function CustomerReadView({ customer }: { customer: Customer }) {
           <p className="detail-empty">Keine Ansprechpartner hinterlegt.</p>
         )}
       </section>
+
+      <section className="detail-read-section">
+        <h3>Projekte</h3>
+        <p className="detail-empty">Noch keine Projekte hinterlegt.</p>
+      </section>
     </div>
   );
 }
