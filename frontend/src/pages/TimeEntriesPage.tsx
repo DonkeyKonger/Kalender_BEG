@@ -268,6 +268,7 @@ export function TimeEntriesPage() {
   const [isLocationReviewPickerOpen, setIsLocationReviewPickerOpen] = useState(false);
   const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
   const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
+  const [locationReviewPopupTop, setLocationReviewPopupTop] = useState<number | null>(null);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
@@ -287,6 +288,7 @@ export function TimeEntriesPage() {
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
+  const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
@@ -467,6 +469,7 @@ export function TimeEntriesPage() {
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
     setLocationReviewDiagnosticEntry(null);
+    setLocationReviewPopupTop(null);
     setPayrollDateError(null);
     setPayrollDateActionEntryId(null);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
@@ -546,6 +549,7 @@ export function TimeEntriesPage() {
       if (event.key === "Escape") {
         setTimeReviewDiagnosticEntry(null);
         setLocationReviewDiagnosticEntry(null);
+        setLocationReviewPopupTop(null);
       }
     }
     window.addEventListener("keydown", closeOnEscape);
@@ -1057,6 +1061,17 @@ export function TimeEntriesPage() {
     }
   }
 
+  function openLocationReviewDiagnostic(entry: TimeEntry): void {
+    const panelTop = timeReviewWorkerPanelRef.current?.getBoundingClientRect().top;
+    setLocationReviewPopupTop(typeof panelTop === "number" ? Math.max(24, Math.round(panelTop)) : null);
+    setLocationReviewDiagnosticEntry(entry);
+  }
+
+  function closeLocationReviewDiagnostic(): void {
+    setLocationReviewDiagnosticEntry(null);
+    setLocationReviewPopupTop(null);
+  }
+
   function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
     if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
       return;
@@ -1333,7 +1348,7 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
-          <div className="time-review-worker-panel">
+          <div className="time-review-worker-panel" ref={timeReviewWorkerPanelRef}>
             <div className="time-review-worker-head">
               <div>
                 <h2>Lohnprüfung pro Monteur</h2>
@@ -1457,7 +1472,7 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
-                            onClick: () => setLocationReviewDiagnosticEntry(check.entry),
+                            onClick: () => openLocationReviewDiagnostic(check.entry),
                             label: "Ort-Diagnose öffnen",
                           })}
                         </div>
@@ -1943,13 +1958,17 @@ export function TimeEntriesPage() {
         <div
           className="time-review-diagnostic-backdrop is-location"
           role="presentation"
-          onClick={() => setLocationReviewDiagnosticEntry(null)}
+          onClick={closeLocationReviewDiagnostic}
         >
           <div
             className="time-review-diagnostic-popover is-location"
             role="dialog"
             aria-label="Ort-Diagnose"
             aria-modal="true"
+            style={locationReviewPopupTop === null ? undefined : {
+              maxHeight: `calc(100vh - ${locationReviewPopupTop}px - 24px)`,
+              top: `${locationReviewPopupTop}px`,
+            }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="time-review-diagnostic-head">
@@ -1961,7 +1980,7 @@ export function TimeEntriesPage() {
                 className="time-review-diagnostic-close"
                 type="button"
                 aria-label="Diagnose schließen"
-                onClick={() => setLocationReviewDiagnosticEntry(null)}
+                onClick={closeLocationReviewDiagnostic}
               >
                 ×
               </button>
