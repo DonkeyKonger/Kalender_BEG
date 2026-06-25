@@ -12117,6 +12117,9 @@ button.person-chip:focus-visible {
 }
 
 .time-review-location-suggestions {
+  max-height: 165px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid #d7e1ee;
   background: #ffffff;
   padding: 3px;
