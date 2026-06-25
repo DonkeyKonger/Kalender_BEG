@@ -262,6 +262,7 @@ export function TimeEntriesPage() {
   const [isLocationReviewPickerOpen, setIsLocationReviewPickerOpen] = useState(false);
   const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
   const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
+  const [locationReviewPopoverTop, setLocationReviewPopoverTop] = useState<number | null>(null);
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
@@ -281,6 +282,7 @@ export function TimeEntriesPage() {
     : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
+  const locationReviewPopoverRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
@@ -485,13 +487,28 @@ export function TimeEntriesPage() {
       setIsLocationReviewPickerOpen(false);
       setLocationReviewError(null);
       setIsSavingLocationReview(false);
+      setLocationReviewPopoverTop(null);
       return;
     }
     setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
     setLocationReviewSiteSearch("");
     setIsLocationReviewPickerOpen(false);
     setLocationReviewError(null);
+    setLocationReviewPopoverTop(null);
   }, [locationReviewDiagnosticEntry]);
+
+  useLayoutEffect(() => {
+    if (!locationReviewDiagnosticEntry || locationReviewPopoverTop !== null) {
+      return;
+    }
+    const popover = locationReviewPopoverRef.current;
+    if (!popover) {
+      return;
+    }
+    const minimumTop = 24;
+    const centeredTop = Math.round((window.innerHeight - popover.offsetHeight) / 2);
+    setLocationReviewPopoverTop(Math.max(minimumTop, centeredTop));
+  }, [locationReviewDiagnosticEntry, locationReviewPopoverTop]);
 
   useEffect(() => {
     if (!timeReviewDiagnosticEntry && !locationReviewDiagnosticEntry) {
@@ -1849,15 +1866,17 @@ export function TimeEntriesPage() {
 
       {locationReviewDiagnosticEntry && (
         <div
-          className="time-review-diagnostic-backdrop"
+          className="time-review-diagnostic-backdrop is-location"
           role="presentation"
           onClick={() => setLocationReviewDiagnosticEntry(null)}
         >
           <div
             className="time-review-diagnostic-popover is-location"
+            ref={locationReviewPopoverRef}
             role="dialog"
             aria-label="Ort-Diagnose"
             aria-modal="true"
+            style={locationReviewPopoverTop === null ? undefined : { marginTop: `${locationReviewPopoverTop}px` }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="time-review-diagnostic-head">
