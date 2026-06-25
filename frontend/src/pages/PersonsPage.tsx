@@ -71,7 +71,7 @@ export function PersonsPage() {
       setPeople(personData);
       setDrafts(toEditablePeople(personData));
     } catch (requestError) {
-      setError(readApiError(requestError, "Personen konnten nicht geladen werden."));
+      setError(readApiError(requestError, "Mitarbeiter konnten nicht geladen werden."));
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +100,8 @@ export function PersonsPage() {
     ? drafts[selectedPerson.id] ?? toEditablePerson(selectedPerson)
     : null;
   const isExternalScope = personScope === "external";
-  const createButtonLabel = isExternalScope ? "Externe Person anlegen" : "Neue Person";
-  const createDrawerTitle = createForm.person_type === "internal" ? "Neue Person" : "Externe Person anlegen";
+  const createButtonLabel = isExternalScope ? "Externe Person anlegen" : "Neuer Mitarbeiter";
+  const createDrawerTitle = createForm.person_type === "internal" ? "Neuer Mitarbeiter" : "Externe Person anlegen";
   const createDrawerSubtitle = createForm.person_type === "internal" ? "Stammdaten anlegen" : "Leiharbeiter / externe Person anlegen";
 
   async function createPerson() {
@@ -271,7 +271,7 @@ export function PersonsPage() {
       <div className="page-header entity-page-header overview-header">
         <div>
           <p className="eyebrow">Stammdaten</p>
-          <h1>Personen</h1>
+          <h1>Mitarbeiter</h1>
         </div>
         {canEdit && (
           <button
@@ -293,14 +293,14 @@ export function PersonsPage() {
           <label className="overview-search">
             <Search aria-hidden="true" size={17} />
             <input
-              placeholder="Person suchen"
+              placeholder="Mitarbeiter suchen"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </label>
         </div>
         <div className="overview-toolbar-right">
-          <div className="person-scope-tabs overview-filter-tabs" role="tablist" aria-label="Personenbereich">
+          <div className="person-scope-tabs overview-filter-tabs" role="tablist" aria-label="Mitarbeiterbereich">
             <button
               className={personScope === "internal" ? "is-active" : ""}
               role="tab"
@@ -325,7 +325,7 @@ export function PersonsPage() {
         </div>
       </div>
 
-      {isLoading && <div className="matrix-state">Personen werden geladen...</div>}
+      {isLoading && <div className="matrix-state">Mitarbeiter werden geladen...</div>}
 
       {!isLoading && (
         <>
@@ -383,7 +383,7 @@ export function PersonsPage() {
             </div>
           ) : (
             <div className="empty-panel">
-              <p>{people.length ? "Keine Treffer gefunden." : "Noch keine Personen vorhanden."}</p>
+              <p>{people.length ? "Keine Treffer gefunden." : "Noch keine Mitarbeiter vorhanden."}</p>
             </div>
           )}
         </>
@@ -402,7 +402,7 @@ export function PersonsPage() {
             onClick={() => void createPerson()}
           >
             <UserPlus aria-hidden="true" size={17} />
-            <span>{createForm.person_type === "internal" ? "Person anlegen" : "Externe Person anlegen"}</span>
+            <span>{createForm.person_type === "internal" ? "Mitarbeiter anlegen" : "Externe Person anlegen"}</span>
           </button>
         )}
       >

@@ -58,7 +58,7 @@ export const navigationItems: NavigationItem[] = [
     roles: ["admin", "project_manager"],
   },
   {
-    label: "Personen",
+    label: "Mitarbeiter",
     path: "/persons",
     icon: Users,
     roles: ["admin", "project_manager"],
