@@ -11844,21 +11844,20 @@ button.person-chip:focus-visible {
 }
 
 .time-review-diagnostic-popover {
+  position: fixed;
+  top: 40vh;
+  left: 50%;
   width: min(720px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
+  max-height: calc(60vh - 24px);
   overflow: auto;
   border: 1px solid #d7e1ee;
   border-radius: 0;
   background: #ffffff;
   box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
+  transform: translateX(-50%);
 }
 
 .time-review-diagnostic-popover.is-location {
-  position: fixed;
-  top: 40vh;
-  left: 50%;
-  max-height: calc(60vh - 24px);
-  transform: translateX(-50%);
   width: min(980px, calc(100vw - 32px));
 }
 
