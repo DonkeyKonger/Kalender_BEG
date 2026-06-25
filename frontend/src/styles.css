@@ -11904,6 +11904,17 @@ button.person-chip:focus-visible {
   font-weight: 850;
 }
 
+.time-review-diagnostic-row.is-manual-review {
+  border-left: 3px solid #b91c1c;
+  background: #fff5f5;
+  color: #991b1b;
+}
+
+.time-review-diagnostic-row.is-manual-review strong,
+.time-review-diagnostic-row.is-manual-review span {
+  color: #991b1b;
+}
+
 .time-review-diagnostic-row.is-editable {
   background: #fffaf2;
 }
@@ -11967,6 +11978,10 @@ button.person-chip:focus-visible {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px 12px;
+}
+
+.time-review-location-summary.is-actions-only {
+  justify-content: flex-end;
 }
 
 .time-review-location-summary div {

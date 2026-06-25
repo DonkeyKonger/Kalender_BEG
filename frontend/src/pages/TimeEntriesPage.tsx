@@ -119,6 +119,7 @@ type LocationReviewDiagnosticRow = {
   siteName: string;
   siteNumber: string;
   location: string;
+  isManualReview?: boolean;
 };
 type TimeReviewPerfApiCall = {
   name: string;
@@ -374,10 +375,6 @@ export function TimeEntriesPage() {
   const locationReviewSiteOptions = useMemo(
     () => siteOptions.filter(isSelectableLocationReviewSite),
     [siteOptions],
-  );
-  const selectedLocationReviewSite = useMemo(
-    () => siteOptions.find((site) => String(site.id) === locationReviewSiteId) ?? null,
-    [locationReviewSiteId, siteOptions],
   );
   const locationReviewSiteSearchResults = useMemo(
     () => filterLocationReviewSites(locationReviewSiteOptions, locationReviewSiteSearch).slice(0, 8),
@@ -1885,7 +1882,7 @@ export function TimeEntriesPage() {
                 <span role="columnheader">Ort / Adresse</span>
               </div>
               {locationReviewDiagnosticRows(locationReviewDiagnosticEntry, sites).map((row) => (
-                <div className="time-review-diagnostic-row is-location" key={row.source} role="row">
+                <div className={`time-review-diagnostic-row is-location ${row.isManualReview ? "is-manual-review" : ""}`} key={row.source} role="row">
                   <strong role="cell">{row.source}</strong>
                   <span role="cell">{row.siteName}</span>
                   <span role="cell">{row.siteNumber}</span>
@@ -1894,11 +1891,7 @@ export function TimeEntriesPage() {
               ))}
             </div>
             <div className="time-review-location-decision">
-              <div className="time-review-location-summary">
-                <div>
-                  <span>Endgültige Baustelle</span>
-                  <strong>{selectedLocationReviewSite ? siteOptionLabel(selectedLocationReviewSite) : "Noch nicht festgelegt"}</strong>
-                </div>
+              <div className="time-review-location-summary is-actions-only">
                 <button
                   className="time-review-location-change"
                   type="button"
@@ -1906,11 +1899,11 @@ export function TimeEntriesPage() {
                   disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
                   onClick={() => setIsLocationReviewPickerOpen((current) => !current)}
                 >
-                  {isLocationReviewPickerOpen ? "Auswahl schliessen" : "Endgültige Baustelle ändern"}
+                  {isLocationReviewPickerOpen ? "Auswahl schliessen" : "Baustelle manuell anpassen"}
                 </button>
               </div>
               {isLocationReviewPickerOpen && (
-                <div className="time-review-location-picker" aria-label="Endgültige Baustelle auswählen">
+                <div className="time-review-location-picker" aria-label="Baustelle manuell auswählen">
                   <section className="time-review-location-picker-panel">
                     <label className="time-review-location-search">
                       <span>Baustelle suchen</span>
@@ -3094,7 +3087,7 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
 function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
   const manualSite = findSiteSummary(sites, entry.site_id);
   const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
-  return [
+  const rows: LocationReviewDiagnosticRow[] = [
     {
       source: "Eingetragene Monteursbaustelle",
       siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
@@ -3114,6 +3107,20 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
       location: "-",
     },
   ];
+  if (hasManualLocationReview(entry)) {
+    rows.push({
+      source: "manuell geprüfte Baustelle",
+      siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
+      siteNumber: displayDiagnosticValue(entry.site_number),
+      location: siteLocationLabel(manualSite),
+      isManualReview: true,
+    });
+  }
+  return rows;
+}
+
+function hasManualLocationReview(entry: TimeEntry): boolean {
+  return entry.time_review_method === "assign_site";
 }
 
 function hasGpsSiteMatch(entry: TimeEntry): boolean {
