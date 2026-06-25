@@ -99,6 +99,10 @@ export function PersonsPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedPerson
     ? drafts[selectedPerson.id] ?? toEditablePerson(selectedPerson)
     : null;
+  const isExternalScope = personScope === "external";
+  const createButtonLabel = isExternalScope ? "Externe Person anlegen" : "Neue Person";
+  const createDrawerTitle = createForm.person_type === "internal" ? "Neue Person" : "Externe Person anlegen";
+  const createDrawerSubtitle = createForm.person_type === "internal" ? "Stammdaten anlegen" : "Leiharbeiter / externe Person anlegen";
 
   async function createPerson() {
     const validationError = validatePersonPayload(createForm);
@@ -111,7 +115,7 @@ export function PersonsPage() {
     setError(null);
     setMessage(null);
     try {
-      const payload = normalizePersonPayload({ ...createForm, person_type: "internal" });
+      const payload = normalizePersonPayload(createForm);
       const created = await api.createPerson(payload);
       setPeople((current) => [...current, created].sort(comparePeople));
       setDrafts((current) => ({ ...current, [created.id]: toEditablePerson(created) }));
@@ -155,19 +159,21 @@ export function PersonsPage() {
     }
   }
 
-  async function deletePerson(personId: number) {
+  async function deletePerson(person: Person) {
+    const personLabel = calendarPersonCode(person) || person.display_name || `${person.first_name} ${person.last_name}`.trim();
     const confirmed = window.confirm(
-      "Diese Person wird gelöscht. Bestehende Einsätze, Zeiten und Abwesenheiten bleiben historisch erhalten und werden künftig als \"gelöscht\" angezeigt. Wirklich löschen?",
+      `Person ${personLabel} endgültig löschen?\n\nBestehende Einsätze, Zeiten und Abwesenheiten bleiben historisch erhalten und werden künftig als "gelöscht" angezeigt.`,
     );
     if (!confirmed) {
       return;
     }
 
+    const personId = person.id;
     setSavingPersonId(personId);
     setError(null);
     setMessage(null);
     try {
-      await api.removePerson(personId);
+      await api.deletePerson(personId);
       setPeople((current) => current.filter((person) => person.id !== personId));
       setDrafts((current) => {
         const next = { ...current };
@@ -218,7 +224,7 @@ export function PersonsPage() {
   function openNewPersonDrawer() {
     setCreateForm({
       ...emptyPerson,
-      person_type: "internal",
+      person_type: personScopeToCreateType(personScope),
     });
     setIsEditingPerson(false);
     setDrawer({ mode: "new" });
@@ -268,9 +274,13 @@ export function PersonsPage() {
           <h1>Personen</h1>
         </div>
         {canEdit && (
-          <button className="icon-button overview-create" type="button" onClick={openNewPersonDrawer}>
+          <button
+            className={`icon-button overview-create ${isExternalScope ? "is-external-create" : ""}`}
+            type="button"
+            onClick={openNewPersonDrawer}
+          >
             <UserPlus aria-hidden="true" size={17} />
-            <span>Neue Person</span>
+            <span>{createButtonLabel}</span>
           </button>
         )}
       </div>
@@ -381,25 +391,25 @@ export function PersonsPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "new"}
-        title="Neue Person"
-        subtitle="Stammdaten anlegen"
+        title={createDrawerTitle}
+        subtitle={createDrawerSubtitle}
         onClose={closeDrawer}
         footer={(
           <button
-            className="icon-button person-create-submit-button"
+            className={`icon-button person-create-submit-button ${createForm.person_type !== "internal" ? "is-external-create" : ""}`}
             disabled={savingPersonId === 0}
             type="button"
             onClick={() => void createPerson()}
           >
             <UserPlus aria-hidden="true" size={17} />
-            <span>Person anlegen</span>
+            <span>{createForm.person_type === "internal" ? "Person anlegen" : "Externe Person anlegen"}</span>
           </button>
         )}
       >
         <PersonFields
           draft={createForm}
           isCreateForm
-          onChange={(values) => setCreateForm((current) => ({ ...current, ...values, person_type: "internal" }))}
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
 
@@ -421,10 +431,10 @@ export function PersonsPage() {
                   className="icon-button danger danger-action"
                   disabled={savingPersonId === selectedPerson.id}
                   type="button"
-                  onClick={() => void deletePerson(selectedPerson.id)}
+                  onClick={() => void deletePerson(selectedPerson)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
+                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Person endgültig löschen"}</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
@@ -448,17 +458,6 @@ export function PersonsPage() {
             </>
           ) : (
             <>
-              {canRemove && (
-                <button
-                  className="icon-button danger danger-action"
-                  disabled={savingPersonId === selectedPerson.id}
-                  type="button"
-                  onClick={() => void deletePerson(selectedPerson.id)}
-                >
-                  <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
-                </button>
-              )}
               <button className="icon-button secondary" type="button" onClick={closeDrawer}>
                 <span>Schliessen</span>
               </button>
@@ -834,6 +833,10 @@ function personInScope(person: Person, scope: PersonScope): boolean {
     return person.person_type === "internal";
   }
   return person.person_type !== "internal";
+}
+
+function personScopeToCreateType(scope: PersonScope): PersonType {
+  return scope === "external" ? "external" : "internal";
 }
 
 function groupPeopleForOverview(people: Person[], scope: PersonScope): PeopleOverviewGroup[] {

@@ -1496,6 +1496,19 @@ button.entity-card:focus-visible,
   background: #152946;
 }
 
+.entity-drawer-footer .person-create-submit-button.is-external-create {
+  border-color: #c99224;
+  background: #f2b84b;
+  color: #2f260d;
+}
+
+.entity-drawer-footer .person-create-submit-button.is-external-create:hover,
+.entity-drawer-footer .person-create-submit-button.is-external-create:focus-visible {
+  border-color: #a87414;
+  background: #e4a739;
+  color: #241b08;
+}
+
 .persons-page .entity-drawer-close {
   width: 32px;
   height: 32px;
@@ -6199,6 +6212,19 @@ button.person-chip:focus-visible {
 
 .persons-page .overview-create {
   border-radius: 0;
+}
+
+.persons-page .overview-create.is-external-create {
+  border: 1px solid #c99224;
+  background: #f2b84b;
+  color: #2f260d;
+}
+
+.persons-page .overview-create.is-external-create:hover,
+.persons-page .overview-create.is-external-create:focus-visible {
+  border-color: #a87414;
+  background: #e4a739;
+  color: #241b08;
 }
 
 .persons-page .overview-search {
