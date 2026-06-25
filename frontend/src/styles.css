@@ -11839,9 +11839,8 @@ button.person-chip:focus-visible {
 }
 
 .time-review-diagnostic-backdrop.is-location {
-  place-items: start center;
-  overflow-y: auto;
-  padding: 0 24px 24px;
+  display: block;
+  padding: 24px;
 }
 
 .time-review-diagnostic-popover {
@@ -11855,6 +11854,11 @@ button.person-chip:focus-visible {
 }
 
 .time-review-diagnostic-popover.is-location {
+  position: fixed;
+  top: 40vh;
+  left: 50%;
+  max-height: calc(60vh - 24px);
+  transform: translateX(-50%);
   width: min(980px, calc(100vw - 32px));
 }
 
