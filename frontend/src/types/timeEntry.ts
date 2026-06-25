@@ -12,6 +12,9 @@ export type TimeEntry = {
   site_id: number | null;
   site_name: string | null;
   site_number: string | null;
+  original_site_id: number | null;
+  original_site_name: string | null;
+  original_site_number: string | null;
   assignment_id: number | null;
   work_date: string;
   original_work_date: string | null;

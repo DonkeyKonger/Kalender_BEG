@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from app.models.enums import UserRole
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
+from app.models.work_time_entry import WorkTimeEntry
 from app.services.time_entry_service import TimeEntryService
 
 
@@ -397,6 +398,70 @@ def test_review_decision_accept_gps_preserves_original_and_sets_final_minutes():
     assert updated.time_review_method == "accept_gps"
     assert updated.status == "reviewed"
     assert updated.reviewed_by_user_id == 9
+
+
+def test_review_decision_assign_site_preserves_original_site_before_override():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        site_id=10,
+        original_site_id=None,
+        status="draft",
+        time_review_status="open",
+        time_review_method=None,
+        reviewed_by_user_id=None,
+        reviewed_at=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, model_id: entry if model is WorkTimeEntry else SimpleNamespace(id=model_id),
+        commit=lambda: None,
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=9, role=UserRole.OFFICE)
+
+    updated = item.apply_time_review_decision(
+        entry.id,
+        decision="assign_site",
+        reviewed_site_id=20,
+        current_user=current_user,
+    )
+
+    assert updated.original_site_id == 10
+    assert updated.site_id == 20
+    assert updated.time_review_method == "assign_site"
+    assert updated.status == "reviewed"
+
+
+def test_review_decision_assign_site_keeps_existing_original_site():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        site_id=20,
+        original_site_id=10,
+        status="draft",
+        time_review_status="open",
+        time_review_method="assign_site",
+        reviewed_by_user_id=None,
+        reviewed_at=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, model_id: entry if model is WorkTimeEntry else SimpleNamespace(id=model_id),
+        commit=lambda: None,
+        refresh=lambda refreshed: None,
+    )
+    current_user = SimpleNamespace(id=9, role=UserRole.OFFICE)
+
+    updated = item.apply_time_review_decision(
+        entry.id,
+        decision="assign_site",
+        reviewed_site_id=30,
+        current_user=current_user,
+    )
+
+    assert updated.original_site_id == 10
+    assert updated.site_id == 30
 
 
 def test_deadline_auto_closes_previous_month_open_review_case():

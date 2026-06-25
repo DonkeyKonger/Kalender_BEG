@@ -184,6 +184,9 @@ class TimeEntryRead(BaseModel):
     site_id: int | None = None
     site_name: str | None = None
     site_number: str | None = None
+    original_site_id: int | None = None
+    original_site_name: str | None = None
+    original_site_number: str | None = None
     assignment_id: int | None = None
     work_date: Date
     original_work_date: Date | None = None

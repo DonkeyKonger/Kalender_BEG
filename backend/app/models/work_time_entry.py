@@ -23,6 +23,10 @@ class WorkTimeEntry(TimestampMixin, Base):
         ForeignKey("sites.id", ondelete="SET NULL"),
         index=True,
     )
+    original_site_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sites.id", ondelete="SET NULL"),
+        index=True,
+    )
     assignment_id: Mapped[int | None] = mapped_column(
         ForeignKey("assignments.id", ondelete="SET NULL"),
         index=True,
@@ -60,7 +64,8 @@ class WorkTimeEntry(TimestampMixin, Base):
     payroll_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     person = relationship("Person")
-    site = relationship("Site")
+    site = relationship("Site", foreign_keys=[site_id])
+    original_site = relationship("Site", foreign_keys=[original_site_id])
     assignment = relationship("Assignment")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])

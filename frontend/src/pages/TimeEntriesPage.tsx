@@ -2843,6 +2843,9 @@ function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: Time
     gps_first_seen_at: updatedEntry.gps_first_seen_at ?? previousEntry.gps_first_seen_at,
     gps_last_seen_at: updatedEntry.gps_last_seen_at ?? previousEntry.gps_last_seen_at,
     gps_work_minutes: updatedEntry.gps_work_minutes ?? previousEntry.gps_work_minutes,
+    original_site_id: updatedEntry.original_site_id ?? previousEntry.original_site_id,
+    original_site_name: updatedEntry.original_site_name ?? previousEntry.original_site_name,
+    original_site_number: updatedEntry.original_site_number ?? previousEntry.original_site_number,
     planned_site_labels: updatedEntry.planned_site_labels.length ? updatedEntry.planned_site_labels : previousEntry.planned_site_labels,
     gps_detected_site_id: updatedEntry.gps_detected_site_id ?? previousEntry.gps_detected_site_id,
     gps_detected_site_name: updatedEntry.gps_detected_site_name ?? previousEntry.gps_detected_site_name,
@@ -3187,14 +3190,15 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
 }
 
 function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
-  const manualSite = findSiteSummary(sites, entry.site_id);
+  const originalSite = findSiteSummary(sites, entry.original_site_id ?? entry.site_id);
+  const reviewedSite = findSiteSummary(sites, entry.site_id);
   const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
   const rows: LocationReviewDiagnosticRow[] = [
     {
       source: "Eingetragene Monteursbaustelle",
-      siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
-      siteNumber: displayDiagnosticValue(entry.site_number),
-      location: siteLocationLabel(manualSite),
+      siteName: displayDiagnosticValue(originalTimeEntrySiteName(entry)),
+      siteNumber: displayDiagnosticValue(entry.original_site_id !== null ? entry.original_site_number : entry.site_number),
+      location: siteLocationLabel(originalSite),
     },
     {
       source: "Erkannte Handy-GPS-Baustelle",
@@ -3214,7 +3218,7 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
       source: "manuell geprüfte Baustelle",
       siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
       siteNumber: displayDiagnosticValue(entry.site_number),
-      location: siteLocationLabel(manualSite),
+      location: siteLocationLabel(reviewedSite),
       isManualReview: true,
     });
   }
@@ -3997,6 +4001,13 @@ function timeEntrySiteNumber(entry: TimeEntry): string {
 
 function timeEntrySiteName(entry: TimeEntry): string {
   return entry.site_name || manualTimeEntrySiteText(entry) || "-";
+}
+
+function originalTimeEntrySiteName(entry: TimeEntry): string {
+  if (entry.original_site_id !== null) {
+    return entry.original_site_name || "-";
+  }
+  return timeEntrySiteName(entry);
 }
 
 function manualTimeEntrySiteText(entry: TimeEntry): string {

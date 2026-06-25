@@ -53,7 +53,11 @@ class TimeEntryService:
         effective_person_id = self._effective_person_id(current_user, person_id)
         statement = (
             select(WorkTimeEntry)
-            .options(selectinload(WorkTimeEntry.person), selectinload(WorkTimeEntry.site))
+            .options(
+                selectinload(WorkTimeEntry.person),
+                selectinload(WorkTimeEntry.site),
+                selectinload(WorkTimeEntry.original_site),
+            )
             .order_by(WorkTimeEntry.work_date.desc(), WorkTimeEntry.id.desc())
         )
         if effective_person_id is not None:
@@ -87,6 +91,7 @@ class TimeEntryService:
             end_time=values.get("end_time"),
         )
         values["note"] = clean_optional_text(values.get("note"))
+        values["original_site_id"] = values.get("site_id")
         entry = WorkTimeEntry(**values, created_by_user_id=current_user.id)
         self.db.add(entry)
         self.db.commit()
@@ -122,6 +127,8 @@ class TimeEntryService:
             if field == "note":
                 value = clean_optional_text(value)
             setattr(entry, field, value)
+        if "site_id" in values and entry.time_review_method != "assign_site":
+            entry.original_site_id = entry.site_id
 
         entry.break_minutes = entry.break_minutes or 0
         entry.travel_minutes = entry.travel_minutes or 0
@@ -261,6 +268,8 @@ class TimeEntryService:
 
         if reviewed_site_id is not None:
             self._ensure_site_exists(reviewed_site_id)
+            if entry.original_site_id is None:
+                entry.original_site_id = entry.site_id
             entry.site_id = reviewed_site_id
 
         if decision == "accept_manual":
