@@ -11911,14 +11911,13 @@ button.person-chip:focus-visible {
 }
 
 .time-review-diagnostic-row.is-manual-review {
-  border-left: 3px solid #b91c1c;
-  background: #fff5f5;
-  color: #991b1b;
+  border-left: 3px solid #b45309;
+  color: #8a1f16;
 }
 
 .time-review-diagnostic-row.is-manual-review strong,
 .time-review-diagnostic-row.is-manual-review span {
-  color: #991b1b;
+  color: #8a1f16;
 }
 
 .time-review-diagnostic-row.is-editable {
