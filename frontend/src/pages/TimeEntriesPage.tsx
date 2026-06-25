@@ -46,6 +46,11 @@ type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
 };
+type PayrollDatePickerState = {
+  entryId: number;
+  left: number;
+  top: number;
+};
 type PayrollCorrectionFormState = {
   start_time: string;
   end_time: string;
@@ -249,6 +254,7 @@ export function TimeEntriesPage() {
   const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
+  const [payrollDatePicker, setPayrollDatePicker] = useState<PayrollDatePickerState | null>(null);
   const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
   const [payrollDateActionEntryId, setPayrollDateActionEntryId] = useState<number | null>(null);
   const [payrollDateError, setPayrollDateError] = useState<string | null>(null);
@@ -416,6 +422,10 @@ export function TimeEntriesPage() {
     () => buildReviewWeekDayOptions(reviewWeekRange.start),
     [reviewWeekRange.start],
   );
+  const payrollDatePickerEntry = useMemo(
+    () => payrollDatePicker ? findEntryInReviewWeekDays(selectedReviewWeekDays, payrollDatePicker.entryId) : null,
+    [payrollDatePicker, selectedReviewWeekDays],
+  );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   const exportPreviewRows = useMemo(
@@ -509,6 +519,41 @@ export function TimeEntriesPage() {
     const centeredTop = Math.round((window.innerHeight - popover.offsetHeight) / 2);
     setLocationReviewPopoverTop(Math.max(minimumTop, centeredTop));
   }, [locationReviewDiagnosticEntry, locationReviewPopoverTop]);
+
+  useEffect(() => {
+    if (!payrollDatePicker) {
+      return;
+    }
+
+    function closeOnPointerDown(event: PointerEvent): void {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".time-review-day-move-button, .time-review-day-move-popover")) {
+        return;
+      }
+      setPayrollDatePicker(null);
+    }
+
+    function closeOnEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setPayrollDatePicker(null);
+      }
+    }
+
+    function closePicker(): void {
+      setPayrollDatePicker(null);
+    }
+
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", closePicker);
+    window.addEventListener("scroll", closePicker, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closePicker);
+      window.removeEventListener("scroll", closePicker, true);
+    };
+  }, [payrollDatePicker]);
 
   useEffect(() => {
     if (!timeReviewDiagnosticEntry && !locationReviewDiagnosticEntry) {
@@ -1029,10 +1074,37 @@ export function TimeEntriesPage() {
     }
   }
 
-  async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
-    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0 || entry.work_date === targetWorkDate) {
+  function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
+    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
       return;
     }
+    setPayrollDatePicker((current) => {
+      if (current?.entryId === entry.id) {
+        return null;
+      }
+      const rect = button.getBoundingClientRect();
+      const popoverWidth = 96;
+      return {
+        entryId: entry.id,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - popoverWidth - 8)),
+        top: rect.bottom + 4,
+      };
+    });
+  }
+
+  function closePayrollDatePicker(): void {
+    setPayrollDatePicker(null);
+  }
+
+  async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
+    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
+      return;
+    }
+    if (entry.work_date === targetWorkDate) {
+      closePayrollDatePicker();
+      return;
+    }
+    closePayrollDatePicker();
     setPayrollDateActionEntryId(entry.id);
     setPayrollDateError(null);
     try {
@@ -1364,18 +1436,17 @@ export function TimeEntriesPage() {
                     day.entries.length > 0 ? day.entries.map((check, index) => (
                       <div className="time-review-week-check-row" key={`${day.date}-${check.entry.id}`} role="row">
                         <div className="time-review-week-move" role="cell">
-                          <label className="time-review-day-move-control" aria-label="Zeiteintrag auf anderen Tag verschieben">
+                          <button
+                            className="time-review-day-move-button"
+                            type="button"
+                            aria-label="Zeiteintrag auf anderen Tag verschieben"
+                            aria-haspopup="listbox"
+                            aria-expanded={payrollDatePicker?.entryId === check.entry.id}
+                            disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
+                            onClick={(event) => togglePayrollDatePicker(check.entry, event.currentTarget)}
+                          >
                             <ChevronsUpDown aria-hidden="true" size={14} />
-                            <select
-                              value={check.entry.work_date}
-                              disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
-                              onChange={(event) => void movePayrollEntryDate(check.entry, event.target.value)}
-                            >
-                              {selectedReviewWeekDayOptions.map((option) => (
-                                <option key={option.date} value={option.date}>{option.label}</option>
-                              ))}
-                            </select>
-                          </label>
+                          </button>
                         </div>
                         <div className="time-review-week-day" role="cell">
                           {index === 0 && (
@@ -1448,6 +1519,27 @@ export function TimeEntriesPage() {
                     )
                   ))}
                 </div>
+                {payrollDatePicker && payrollDatePickerEntry && (
+                  <div
+                    className="time-review-day-move-popover"
+                    role="listbox"
+                    aria-label="Zieltag auswählen"
+                    style={{ left: `${payrollDatePicker.left}px`, top: `${payrollDatePicker.top}px` }}
+                  >
+                    {selectedReviewWeekDayOptions.map((option) => (
+                      <button
+                        className={option.date === payrollDatePickerEntry.work_date ? "is-selected" : ""}
+                        key={option.date}
+                        type="button"
+                        role="option"
+                        aria-selected={option.date === payrollDatePickerEntry.work_date}
+                        onClick={() => void movePayrollEntryDate(payrollDatePickerEntry, option.date)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="time-review-worker-detail-actions">
                   <div className="time-review-worker-detail-action-stack">
                     <button
@@ -2962,6 +3054,16 @@ function buildReviewWeekDayOptions(weekStart: string): Array<{ date: string; lab
     const date = addDaysToDateInput(weekStart, dayOffset);
     return { date, label: formatWeekday(date) };
   });
+}
+
+function findEntryInReviewWeekDays(days: TimeReviewWeekDay[], entryId: number): TimeEntry | null {
+  for (const day of days) {
+    const match = day.entries.find((check) => check.entry.id === entryId);
+    if (match) {
+      return match.entry;
+    }
+  }
+  return null;
 }
 
 function highestPriorityAbsenceTypeForPersonDate(
