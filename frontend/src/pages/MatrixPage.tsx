@@ -2218,7 +2218,7 @@ function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { grou
     <>
       {group.showHeading && (
         <tr className="matrix-group-row">
-          <th colSpan={4 + props.matrix.days.length}>{group.label}</th>
+          <th colSpan={5 + props.matrix.days.length}>{group.label}</th>
         </tr>
       )}
       {group.rows.map((row) => (
