@@ -2024,6 +2024,86 @@ button.person-chip.is-absence-conflict:focus-visible {
   line-height: 1;
 }
 
+.assignment-collision-notice {
+  position: fixed;
+  z-index: 5200;
+  max-width: calc(100vw - 16px);
+  border: 1px solid #d2a94d;
+  border-radius: 2px;
+  background: #fffaf0;
+  color: #172033;
+  box-shadow: 0 14px 30px rgb(18 29 52 / 16%);
+  padding: 10px 12px 11px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  pointer-events: auto;
+}
+
+.assignment-collision-notice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.assignment-collision-notice-header strong {
+  color: #6d4b00;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.assignment-collision-notice-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.assignment-collision-notice-header button:hover,
+.assignment-collision-notice-header button:focus-visible {
+  border-color: #d2a94d;
+  background: #fff3cf;
+  color: #172033;
+}
+
+.assignment-collision-notice-body {
+  max-height: min(260px, calc(100vh - 160px));
+  overflow-y: auto;
+}
+
+.assignment-collision-notice-day + .assignment-collision-notice-day {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ead7aa;
+}
+
+.assignment-collision-notice-day h3 {
+  margin: 0 0 4px;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.assignment-collision-notice-day ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.assignment-collision-notice-day li {
+  color: #334155;
+}
+
 button.person-chip:hover,
 button.person-chip:focus-visible {
   outline: 2px solid rgb(29 92 153 / 20%);

@@ -90,6 +90,27 @@ type PlanningAbsenceItem = { absence: Absence };
 type CellTypingPreview = { siteId: number; date: string; text: string };
 type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
 type UpdatedMatrixSiteCells = { site_id: number; cells: MatrixCell[] };
+type AssignmentCollisionItem = {
+  assignmentId: number;
+  personName: string;
+  siteId: number;
+  siteLabel: string;
+};
+type AssignmentCollisionDay = {
+  date: string;
+  items: AssignmentCollisionItem[];
+};
+type AssignmentCollisionNotice = {
+  anchor: EditorAnchor | null;
+  days: AssignmentCollisionDay[];
+};
+type AssignmentCollisionCheck = {
+  anchor?: EditorAnchor | null;
+  endDate: string;
+  personIds: number[];
+  startDate: string;
+  targetSiteId: number;
+};
 
 type UndoItem = {
   siteId: number;
@@ -129,6 +150,7 @@ export function MatrixPage() {
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
+  const collisionNoticeTimeoutRef = useRef<number | null>(null);
   const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
   const errorTimeoutRef = useRef<number | null>(null);
   const skipNextDraftAutosaveRef = useRef(false);
@@ -154,6 +176,7 @@ export function MatrixPage() {
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
   const [assignmentDrag, setAssignmentDrag] = useState<AssignmentDragState | null>(null);
   const [assignmentResize, setAssignmentResize] = useState<AssignmentResizeState | null>(null);
+  const [assignmentCollisionNotice, setAssignmentCollisionNotice] = useState<AssignmentCollisionNotice | null>(null);
   const [savingInfoSiteId, setSavingInfoSiteId] = useState<number | null>(null);
   const [savingStatusSiteId, setSavingStatusSiteId] = useState<number | null>(null);
   const [isSavingAbsence, setIsSavingAbsence] = useState(false);
@@ -593,6 +616,14 @@ export function MatrixPage() {
     return () => document.removeEventListener("keydown", handleMatrixKeyboard);
   }, [handleMatrixKeyboard]);
 
+  useEffect(() => {
+    return () => {
+      if (collisionNoticeTimeoutRef.current) {
+        window.clearTimeout(collisionNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
     if (user) {
@@ -817,6 +848,9 @@ export function MatrixPage() {
       return;
     }
     const entries = entriesForSave.map(toMatrixEntryInput);
+    const savedCell = activeCell;
+    const collisionPersonIds = uniqueAddedPersonIds(entriesForSave, initialEntries);
+    const collisionAnchor = editorAnchor ?? selectionAnchorRef.current ?? fallbackEditorAnchor(matrixScrollRef.current);
     clearTemporaryCellFeedback(activeCell.key);
     setSaveStatus((current) => ({ ...current, [activeCell.key]: "saving" }));
     setCellMessage((current) => ({ ...current, [activeCell.key]: "" }));
@@ -854,6 +888,13 @@ export function MatrixPage() {
         showTemporaryCellFeedback(activeCell.key, "Gespeichert");
       }
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
+      void showAssignmentCollisionNoticeForPlan({
+        anchor: collisionAnchor,
+        endDate: savedCell.endDate,
+        personIds: collisionPersonIds,
+        startDate: savedCell.date,
+        targetSiteId: savedCell.siteId,
+      });
       if (options.closeOnSuccess) {
         closeActiveEditor();
       } else {
@@ -1089,6 +1130,123 @@ export function MatrixPage() {
     });
   }
 
+  function dismissAssignmentCollisionNotice() {
+    if (collisionNoticeTimeoutRef.current) {
+      window.clearTimeout(collisionNoticeTimeoutRef.current);
+      collisionNoticeTimeoutRef.current = null;
+    }
+    setAssignmentCollisionNotice(null);
+  }
+
+  function showAssignmentCollisionNotice(notice: AssignmentCollisionNotice) {
+    if (collisionNoticeTimeoutRef.current) {
+      window.clearTimeout(collisionNoticeTimeoutRef.current);
+    }
+    setAssignmentCollisionNotice(notice);
+    collisionNoticeTimeoutRef.current = window.setTimeout(() => {
+      setAssignmentCollisionNotice(null);
+      collisionNoticeTimeoutRef.current = null;
+    }, 12000);
+  }
+
+  async function showAssignmentCollisionNoticeForPlan(check: AssignmentCollisionCheck) {
+    const personIds = Array.from(new Set(check.personIds.filter((personId) => Number.isFinite(personId))));
+    if (!personIds.length) {
+      return;
+    }
+    try {
+      const days = await buildAssignmentCollisionDays({ ...check, personIds });
+      if (days.length) {
+        showAssignmentCollisionNotice({ anchor: check.anchor ?? null, days });
+      }
+    } catch {
+      // Kollisionshinweise duerfen die eigentliche Planung nicht stoeren.
+    }
+  }
+
+  async function buildAssignmentCollisionDays(check: AssignmentCollisionCheck): Promise<AssignmentCollisionDay[]> {
+    const assignmentGroups = await Promise.all(
+      check.personIds.map((personId) => api.assignments({
+        end: check.endDate,
+        personId,
+        start: check.startDate,
+      })),
+    );
+    const assignments = assignmentGroups.flat().filter((assignment) => (
+      assignment.site_id !== check.targetSiteId
+      && assignment.end_date >= check.startDate
+      && assignment.start_date <= check.endDate
+    ));
+    if (!assignments.length) {
+      return [];
+    }
+
+    const siteLabels = await buildCollisionSiteLabels(assignments.map((assignment) => assignment.site_id));
+    const personNames = buildCollisionPersonNames();
+    const itemsByDate = new Map<string, AssignmentCollisionItem[]>();
+    const seen = new Set<string>();
+
+    assignments.forEach((assignment) => {
+      const overlapStart = assignment.start_date > check.startDate ? assignment.start_date : check.startDate;
+      const overlapEnd = assignment.end_date < check.endDate ? assignment.end_date : check.endDate;
+      for (let date = overlapStart; date <= overlapEnd; date = addIsoDays(date, 1)) {
+        const signature = `${date}:${assignment.id}:${assignment.site_id}`;
+        if (seen.has(signature)) {
+          continue;
+        }
+        seen.add(signature);
+        const item: AssignmentCollisionItem = {
+          assignmentId: assignment.id,
+          personName: personNames.get(assignment.person_id) ?? "Monteur",
+          siteId: assignment.site_id,
+          siteLabel: siteLabels.get(assignment.site_id) ?? `Baustelle ${assignment.site_id}`,
+        };
+        const items = itemsByDate.get(date) ?? [];
+        items.push(item);
+        itemsByDate.set(date, items);
+      }
+    });
+
+    return Array.from(itemsByDate.entries())
+      .sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate))
+      .map(([date, items]) => ({
+        date,
+        items: items.sort((left, right) => left.siteLabel.localeCompare(right.siteLabel, "de")),
+      }));
+  }
+
+  async function buildCollisionSiteLabels(siteIds: number[]): Promise<Map<number, string>> {
+    const labels = new Map<number, string>();
+    matrix?.rows.forEach((row) => {
+      labels.set(row.site.id, collisionSiteLabel(row.site.site_number, row.site.name));
+    });
+
+    const missingSiteIds = Array.from(new Set(siteIds.filter((siteId) => !labels.has(siteId))));
+    if (!missingSiteIds.length) {
+      return labels;
+    }
+
+    const summaries = await api.siteSummaries({ includeClosed: true }).catch(() => []);
+    summaries.forEach((site) => {
+      if (missingSiteIds.includes(site.id)) {
+        labels.set(site.id, collisionSiteLabel(site.site_number, site.name));
+      }
+    });
+    return labels;
+  }
+
+  function buildCollisionPersonNames(): Map<number, string> {
+    const names = new Map(people.map((person) => [person.id, person.display_name]));
+    matrix?.rows.forEach((row) => {
+      row.cells.forEach((cell) => {
+        cell.assignments.forEach((assignment) => {
+          names.set(assignment.person.id, assignment.person.display_name);
+        });
+      });
+    });
+    return names;
+  }
+
   async function deleteAssignmentFromCell(row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) {
     if (!matrixIsEditable) {
       return;
@@ -1210,6 +1368,12 @@ export function MatrixPage() {
     }
 
     const key = cellKey(drag.target.siteId, targetStartDate);
+    const collisionAnchor: EditorAnchor = {
+      bottom: drag.top + drag.height,
+      left: drag.left,
+      top: drag.top,
+      width: drag.width,
+    };
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
@@ -1241,6 +1405,13 @@ export function MatrixPage() {
       setError(null);
       showTemporaryCellFeedback(key, drag.mode === "copy" ? "Einsatz kopiert" : "Einsatz verschoben");
       await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
+      void showAssignmentCollisionNoticeForPlan({
+        anchor: collisionAnchor,
+        endDate: targetEndDate,
+        personIds: [drag.assignment.person.id],
+        startDate: targetStartDate,
+        targetSiteId: drag.target.siteId,
+      });
     } catch (requestError) {
       const message = readApiError(requestError, drag.mode === "copy"
         ? "Einsatz konnte nicht kopiert werden."
@@ -1256,6 +1427,12 @@ export function MatrixPage() {
       return;
     }
     const key = cellKey(resize.siteId, resize.previewStartDate);
+    const collisionAnchor: EditorAnchor = {
+      bottom: resize.rowY + 12,
+      left: Math.max(12, window.innerWidth / 2 - 180),
+      top: resize.rowY - 12,
+      width: 360,
+    };
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
@@ -1268,6 +1445,13 @@ export function MatrixPage() {
       setError(null);
       showTemporaryCellFeedback(key, "Einsatz angepasst");
       await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
+      void showAssignmentCollisionNoticeForPlan({
+        anchor: collisionAnchor,
+        endDate: resize.previewEndDate,
+        personIds: [resize.assignment.person.id],
+        startDate: resize.previewStartDate,
+        targetSiteId: resize.siteId,
+      });
     } catch (requestError) {
       setError(readApiError(requestError, "Einsatz konnte nicht angepasst werden."));
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
@@ -1629,9 +1813,58 @@ export function MatrixPage() {
             </div>,
             document.body,
           )}
+
+          {assignmentCollisionNotice && (
+            <AssignmentCollisionNoticePopup
+              notice={assignmentCollisionNotice}
+              onClose={dismissAssignmentCollisionNotice}
+            />
+          )}
         </>
       )}
     </section>
+  );
+}
+
+type AssignmentCollisionNoticePopupProps = {
+  notice: AssignmentCollisionNotice;
+  onClose: () => void;
+};
+
+function AssignmentCollisionNoticePopup({ notice, onClose }: AssignmentCollisionNoticePopupProps) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <aside
+      aria-live="polite"
+      className="assignment-collision-notice"
+      role="status"
+      style={assignmentCollisionNoticePosition(notice.anchor)}
+    >
+      <div className="assignment-collision-notice-header">
+        <strong>Monteur bereits eingeplant</strong>
+        <button aria-label="Hinweis schliessen" type="button" onClick={onClose}>
+          x
+        </button>
+      </div>
+      <div className="assignment-collision-notice-body">
+        {notice.days.map((day) => (
+          <section className="assignment-collision-notice-day" key={day.date}>
+            <h3>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</h3>
+            <ul>
+              {day.items.map((item) => (
+                <li key={`${day.date}-${item.assignmentId}-${item.siteId}`}>
+                  {item.personName} ist bereits auf {item.siteLabel} eingeplant
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </aside>,
+    document.body,
   );
 }
 
@@ -2661,6 +2894,7 @@ const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
 const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
 const ASSIGNMENT_AUTOCOMPLETE_WIDTH = 280;
+const ASSIGNMENT_COLLISION_NOTICE_WIDTH = 380;
 const STATUS_MENU_HEIGHT = 142;
 const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 614;
@@ -2764,6 +2998,40 @@ function statusMenuPosition(anchor: EditorAnchor): CSSProperties {
     : belowTop;
 
   return { left, top };
+}
+
+function assignmentCollisionNoticePosition(anchor: EditorAnchor | null): CSSProperties {
+  const gap = 8;
+  const width = Math.min(ASSIGNMENT_COLLISION_NOTICE_WIDTH, window.innerWidth - 16);
+  if (!anchor) {
+    return {
+      left: Math.max(8, window.innerWidth - width - 16),
+      top: 96,
+      width,
+    };
+  }
+  const preferredLeft = anchor.left + Math.max(0, (anchor.width - width) / 2);
+  const left = Math.max(8, Math.min(preferredLeft, window.innerWidth - width - 8));
+  const top = Math.max(8, Math.min(anchor.bottom + gap, window.innerHeight - 120));
+
+  return { left, top, width };
+}
+
+function uniqueAddedPersonIds(nextEntries: DraftEntry[], previousEntries: DraftEntry[]): number[] {
+  const previousPersonIds = new Set(uniquePersonIds(previousEntries));
+  return uniquePersonIds(nextEntries).filter((personId) => !previousPersonIds.has(personId));
+}
+
+function uniquePersonIds(entries: DraftEntry[]): number[] {
+  return Array.from(new Set(
+    entries
+      .map((entry) => entry.person_id)
+      .filter((personId): personId is number => typeof personId === "number"),
+  ));
+}
+
+function collisionSiteLabel(siteNumber: string | null, siteName: string): string {
+  return siteNumber ? `${siteNumber} - ${siteName}` : siteName;
 }
 
 function matrixDayColumnWidth(isCompactView: boolean): number {
