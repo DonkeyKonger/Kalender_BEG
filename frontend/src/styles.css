@@ -633,7 +633,9 @@ button:disabled {
 .matrix-scroll {
   width: 100%;
   max-width: 100%;
+  max-height: calc(100vh - 178px);
   overflow: auto;
+  scrollbar-gutter: stable;
   scroll-padding-left: var(--fixed-columns-width, 552px);
   border: 1px solid #cbd7e6;
   border-radius: 8px;
