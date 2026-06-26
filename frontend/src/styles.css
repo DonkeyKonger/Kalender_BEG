@@ -6717,9 +6717,10 @@ button.person-chip:focus-visible {
 }
 
 .project-customer-result-list {
+  --project-customer-result-row-height: 44px;
   display: grid;
   gap: 4px;
-  max-height: 288px;
+  max-height: calc((var(--project-customer-result-row-height) * 4) + (4px * 3) + 10px);
   overflow-y: auto;
   border: 1px solid #d7e1ee;
   border-radius: 2px;
@@ -6729,7 +6730,7 @@ button.person-chip:focus-visible {
 
 .project-customer-result-list button,
 .project-customer-empty {
-  min-height: 36px;
+  min-height: var(--project-customer-result-row-height);
   border-radius: 2px;
   padding: 7px 9px;
   font-size: 0.8rem;
@@ -6737,8 +6738,10 @@ button.person-chip:focus-visible {
 
 .project-customer-result-list button {
   display: grid;
+  align-content: center;
   gap: 2px;
   width: 100%;
+  height: var(--project-customer-result-row-height);
   border: 0;
   background: #ffffff;
   color: #172033;
