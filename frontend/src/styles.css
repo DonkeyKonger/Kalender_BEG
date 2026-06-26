@@ -720,6 +720,7 @@ button:disabled {
   bottom: -4px;
   left: 0;
   height: 4px;
+  border-right: 1px solid #dce3ee;
   background: inherit;
   content: "";
   pointer-events: none;
@@ -727,7 +728,6 @@ button:disabled {
 
 .matrix-table thead .matrix-day-row .sticky-col {
   z-index: 14;
-  box-shadow: inset -1px 0 0 #dce3ee;
 }
 
 .matrix-week-fixed {
@@ -2358,6 +2358,7 @@ button.person-chip:focus-visible {
   left: 0;
   height: var(--matrix-absence-separator-height);
   border-top: 1px solid #cbd7e6;
+  border-right: 1px solid #dce3ee;
   border-bottom: 1px solid #dce3ee;
   background: #f8fafc;
   content: "";
@@ -2366,7 +2367,6 @@ button.person-chip:focus-visible {
 
 .matrix-absence-row .sticky-col {
   z-index: 13;
-  box-shadow: inset -1px 0 0 #dce3ee, inset 0 -1px 0 #cbd7e6;
 }
 
 .matrix-absence-row td.is-holiday {
