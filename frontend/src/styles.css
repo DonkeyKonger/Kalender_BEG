@@ -6741,11 +6741,11 @@ button.person-chip:focus-visible {
 
 .project-customer-dialog-backdrop {
   position: fixed;
-  z-index: 90;
+  z-index: 110;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(15 23 42 / 18%);
+  background: rgb(15 23 42 / 24%);
   padding: 24px;
 }
 
@@ -6753,10 +6753,10 @@ button.person-chip:focus-visible {
   display: grid;
   gap: 14px;
   width: min(560px, 100%);
-  border: 1px solid #cbd5e1;
-  border-radius: 2px;
+  border: 1px solid #b9c7d8;
+  border-radius: 0;
   background: #ffffff;
-  box-shadow: 0 18px 42px rgb(15 23 42 / 18%);
+  box-shadow: 0 22px 52px rgb(15 23 42 / 24%), 0 1px 0 rgb(255 255 255 / 78%) inset;
   padding: 16px;
 }
 
@@ -6816,19 +6816,22 @@ button.person-chip:focus-visible {
 .project-customer-result-list {
   --project-customer-result-row-height: 44px;
   display: grid;
+  align-content: start;
   gap: 4px;
-  max-height: calc((var(--project-customer-result-row-height) * 4) + (4px * 3) + 10px);
+  box-sizing: border-box;
+  height: calc((var(--project-customer-result-row-height) * 4) + (4px * 3) + 12px);
   overflow-y: auto;
   border: 1px solid #d7e1ee;
-  border-radius: 2px;
+  border-radius: 0;
   background: #f8fafc;
   padding: 5px;
 }
 
 .project-customer-result-list button,
 .project-customer-empty {
+  box-sizing: border-box;
   min-height: var(--project-customer-result-row-height);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 7px 9px;
   font-size: 0.8rem;
 }
@@ -6839,7 +6842,7 @@ button.person-chip:focus-visible {
   gap: 2px;
   width: 100%;
   height: var(--project-customer-result-row-height);
-  border: 0;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #172033;
   text-align: left;
@@ -6849,6 +6852,7 @@ button.person-chip:focus-visible {
 .project-customer-result-list button:hover,
 .project-customer-result-list button:focus-visible,
 .project-customer-result-list button[aria-selected="true"] {
+  border-color: #c4d2e4;
   background: #eef4fb;
   outline: none;
 }
