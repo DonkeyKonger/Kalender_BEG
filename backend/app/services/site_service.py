@@ -453,7 +453,7 @@ def site_snapshot(site: Site) -> dict:
         "geofence_radius_m": site.geofence_radius_m,
         "location_status": site.location_status.value,
         "customer": site.customer,
-        "customer_id": site.customer_id,
+        "customer_id": getattr(site, "customer_id", None),
         "project_manager_person_id": site.project_manager_person_id,
         "status": site.status.value,
         "info": site.info,
