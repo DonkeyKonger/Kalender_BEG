@@ -195,10 +195,15 @@ class PersonService:
 
     def _soft_delete_person(self, person: Person, user_id: int) -> Person:
         old_value = person_snapshot(person)
+        deleted_at = datetime.now(timezone.utc)
+        archive_key = f"archiv-{person.id}"
+        archive_suffix = f" (archiviert #{person.id})"
+        previous_display_name = person.display_name.strip() or f"{person.first_name} {person.last_name}".strip() or DELETED_PERSON_LABEL
+        archived_display_name = f"{previous_display_name[:200 - len(archive_suffix)]}{archive_suffix}"
         person.first_name = DELETED_PERSON_LABEL
-        person.last_name = DELETED_PERSON_LABEL
-        person.display_name = DELETED_PERSON_LABEL
-        person.short_code = DELETED_PERSON_LABEL
+        person.last_name = archive_key
+        person.display_name = archived_display_name
+        person.short_code = archive_key
         person.is_active = False
         person.can_sign_measurements_immediately = False
         person.email = None
@@ -214,7 +219,7 @@ class PersonService:
         person.address_location_status = SiteLocationStatus.UNCHECKED
         person.company_phone_device_id = None
         person.notes = None
-        person.deleted_at = datetime.now(timezone.utc)
+        person.deleted_at = deleted_at
         self.audit.record(
             user_id=user_id,
             action="person.deleted",

@@ -162,7 +162,7 @@ export function PersonsPage() {
   async function deletePerson(person: Person) {
     const personLabel = calendarPersonCode(person) || person.display_name || `${person.first_name} ${person.last_name}`.trim();
     const confirmed = window.confirm(
-      `Person ${personLabel} endgültig löschen?\n\nBestehende Einsätze, Zeiten und Abwesenheiten bleiben historisch erhalten und werden künftig als "gelöscht" angezeigt.`,
+      `Mitarbeiter ${personLabel} wirklich ausblenden?\n\nHistorische Daten bleiben erhalten. Der Mitarbeiter verschwindet aus der normalen Übersicht und aus Auswahlfeldern.`,
     );
     if (!confirmed) {
       return;
@@ -182,9 +182,9 @@ export function PersonsPage() {
       });
       setDrawer(null);
       setIsEditingPerson(false);
-      setMessage("Person gelöscht. Historische Daten bleiben erhalten.");
+      setMessage("Mitarbeiter ausgeblendet. Historische Daten bleiben erhalten.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Person konnte nicht geloescht werden."));
+      setError(readApiError(requestError, "Mitarbeiter konnte nicht ausgeblendet werden."));
     } finally {
       setSavingPersonId(null);
     }
@@ -434,7 +434,7 @@ export function PersonsPage() {
                   onClick={() => void deletePerson(selectedPerson)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Person endgültig löschen"}</span>
+                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
