@@ -1,10 +1,11 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -18,6 +19,7 @@ import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
+import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteAddressSearch, SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
@@ -4690,6 +4692,9 @@ function CustomerAssignmentDialog({
   const [query, setQuery] = useState(currentCustomerText ?? "");
   const [isLoading, setIsLoading] = useState(true);
   const [actionCustomerId, setActionCustomerId] = useState<number | "new" | null>(null);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<CustomerCreate>(emptyCustomerForProjectRecord);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -4720,13 +4725,13 @@ function CustomerAssignmentDialog({
 
   useEffect(() => {
     function handleEscape(event: globalThis.KeyboardEvent): void {
-      if (event.key === "Escape" && actionCustomerId === null) {
+      if (event.key === "Escape" && actionCustomerId === null && !isCreateDrawerOpen) {
         onClose();
       }
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [actionCustomerId, onClose]);
+  }, [actionCustomerId, isCreateDrawerOpen, onClose]);
 
   const trimmedQuery = query.trim();
   const normalizedQuery = trimmedQuery.toLowerCase();
@@ -4737,10 +4742,26 @@ function CustomerAssignmentDialog({
       : activeCustomers;
     return matches.slice(0, 8);
   }, [customers, normalizedQuery]);
-  const hasExactCustomerName = Boolean(
-    normalizedQuery && customers.some((customer) => customer.company_name.trim().toLowerCase() === normalizedQuery),
-  );
-  const canCreateCustomer = Boolean(trimmedQuery) && !hasExactCustomerName && !isLoading;
+  const canOpenCreateDrawer = actionCustomerId === null && !isLoading;
+
+  function openCreateDrawer(): void {
+    setCreateForm({
+      ...emptyCustomerForProjectRecord,
+      company_name: trimmedQuery,
+    });
+    setCreateError(null);
+    setError(null);
+    setIsCreateDrawerOpen(true);
+  }
+
+  function closeCreateDrawer(): void {
+    if (actionCustomerId !== null) {
+      return;
+    }
+    setIsCreateDrawerOpen(false);
+    setCreateForm(emptyCustomerForProjectRecord);
+    setCreateError(null);
+  }
 
   async function assignExistingCustomer(customer: Customer): Promise<void> {
     if (actionCustomerId !== null) {
@@ -4762,24 +4783,29 @@ function CustomerAssignmentDialog({
     }
   }
 
-  async function createAndAssignCustomer(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (!canCreateCustomer || actionCustomerId !== null) {
+  async function createAndAssignCustomer(): Promise<void> {
+    if (actionCustomerId !== null) {
+      return;
+    }
+    const validationError = validateCustomerPayload(createForm);
+    if (validationError) {
+      setCreateError(validationError);
       return;
     }
     setActionCustomerId("new");
+    setCreateError(null);
     setError(null);
     let shouldClose = false;
     try {
-      const created = await api.createCustomer({
-        ...emptyCustomerForProjectRecord,
-        company_name: trimmedQuery,
-      });
+      const created = await api.createCustomer(normalizeCustomerPayload(createForm));
       setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
+      setQuery(created.company_name);
       await onAssignCustomer(created);
+      setIsCreateDrawerOpen(false);
+      setCreateForm(emptyCustomerForProjectRecord);
       shouldClose = true;
     } catch (requestError) {
-      setError(readApiError(requestError, "Kunde konnte nicht angelegt oder zugeordnet werden."));
+      setCreateError(readApiError(requestError, "Kunde konnte nicht angelegt oder zugeordnet werden."));
     } finally {
       setActionCustomerId(null);
     }
@@ -4844,16 +4870,35 @@ function CustomerAssignmentDialog({
           ) : null}
         </div>
 
-        <form className="project-customer-create-row" onSubmit={(event) => void createAndAssignCustomer(event)}>
-          <span>Neuen Kunden anlegen</span>
-          <button type="submit" className="secondary-action" disabled={!canCreateCustomer || actionCustomerId !== null}>
+        <div className="project-customer-create-row">
+          <span>Nicht in der Liste?</span>
+          <button type="button" className="secondary-action" disabled={!canOpenCreateDrawer} onClick={openCreateDrawer}>
             <UserPlus aria-hidden="true" size={15} />
-            {actionCustomerId === "new" ? "Wird angelegt..." : trimmedQuery ? `"${trimmedQuery}" anlegen` : "Name eingeben"}
+            Neuen Kunden anlegen
           </button>
-        </form>
+        </div>
 
         {error ? <p className="form-error">{error}</p> : null}
       </section>
+
+      <EntityDetailDrawer
+        isOpen={isCreateDrawerOpen}
+        title="Neuer Kunde"
+        subtitle="Kundenstammdaten anlegen"
+        onClose={closeCreateDrawer}
+        footer={(
+          <button className="icon-button" disabled={actionCustomerId !== null} type="button" onClick={() => void createAndAssignCustomer()}>
+            <UserPlus aria-hidden="true" size={17} />
+            <span>{actionCustomerId === "new" ? "Kunde wird angelegt..." : "Kunde anlegen"}</span>
+          </button>
+        )}
+      >
+        {createError ? <p className="form-error">{createError}</p> : null}
+        <CustomerFields
+          draft={createForm}
+          onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
+        />
+      </EntityDetailDrawer>
     </div>
   );
 }

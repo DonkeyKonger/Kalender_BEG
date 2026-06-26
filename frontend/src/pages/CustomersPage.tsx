@@ -736,7 +736,7 @@ function toEditableCustomer(customer: Customer): EditableCustomer {
   };
 }
 
-function validateCustomerPayload(customer: CustomerCreate): string | null {
+export function validateCustomerPayload(customer: CustomerCreate): string | null {
   if (!customer.company_name.trim()) {
     return "Firmenname ist Pflicht.";
   }
@@ -758,7 +758,7 @@ function validateCustomerPayload(customer: CustomerCreate): string | null {
   return null;
 }
 
-function normalizeCustomerPayload(customer: CustomerCreate): CustomerCreate {
+export function normalizeCustomerPayload(customer: CustomerCreate): CustomerCreate {
   return {
     company_name: customer.company_name.trim(),
     address_street: customer.address_street?.trim() || null,
