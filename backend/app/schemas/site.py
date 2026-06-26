@@ -32,6 +32,7 @@ class SiteBase(BaseModel):
     geofence_radius_m: int = Field(default=DEFAULT_SITE_GEOFENCE_RADIUS_M, ge=1, le=100000)
     location_status: SiteLocationStatus = SiteLocationStatus.UNCHECKED
     customer: str | None = Field(default=None, max_length=200)
+    customer_id: int | None = None
     project_manager_person_id: int | None = None
     status: SiteStatus = SiteStatus.ACTIVE
     info: str | None = None
@@ -59,6 +60,7 @@ class SiteUpdate(BaseModel):
     geofence_radius_m: int | None = Field(default=None, ge=1, le=100000)
     location_status: SiteLocationStatus | None = None
     customer: str | None = Field(default=None, max_length=200)
+    customer_id: int | None = None
     project_manager_person_id: int | None = None
     status: SiteStatus | None = None
     info: str | None = None
@@ -82,6 +84,7 @@ class SiteSummary(BaseModel):
     location: str | None = None
     city: str | None = None
     customer: str | None = None
+    customer_id: int | None = None
     project_manager_person_id: int | None = None
     project_manager: SitePersonSummary | None = None
     status: SiteStatus

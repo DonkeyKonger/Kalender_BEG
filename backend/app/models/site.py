@@ -30,6 +30,10 @@ class Site(TimestampMixin, Base):
         default=SiteLocationStatus.UNCHECKED,
     )
     customer: Mapped[str | None] = mapped_column(String(200))
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        index=True,
+    )
     project_manager_person_id: Mapped[int | None] = mapped_column(
         ForeignKey("persons.id", ondelete="SET NULL")
     )
@@ -53,6 +57,7 @@ class Site(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
 
+    customer_record = relationship("Customer")
     project_manager = relationship("Person")
     assignments = relationship("Assignment", back_populates="site")
     project_folders = relationship("ProjectFolder", back_populates="site", cascade="all, delete-orphan")

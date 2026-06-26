@@ -24,6 +24,7 @@ export type SiteSummary = {
   location: string | null;
   city: string | null;
   customer: string | null;
+  customer_id: number | null;
   project_manager_person_id: number | null;
   project_manager: SiteSummaryPerson | null;
   status: SiteStatus;
@@ -47,6 +48,7 @@ export type Site = {
   geofence_radius_m: number;
   location_status: SiteLocationStatus;
   customer: string | null;
+  customer_id: number | null;
   project_manager_person_id: number | null;
   project_manager: SitePerson | null;
   status: SiteStatus;
@@ -80,6 +82,7 @@ export type SiteCreate = {
   geofence_radius_m: number;
   location_status: SiteLocationStatus;
   customer: string | null;
+  customer_id: number | null;
   project_manager_person_id: number | null;
   status: SiteStatus;
   info: string | null;

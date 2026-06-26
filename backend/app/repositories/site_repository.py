@@ -53,6 +53,7 @@ class SiteRepository:
                     Site.location,
                     Site.city,
                     Site.customer,
+                    Site.customer_id,
                     Site.project_manager_person_id,
                     Site.status,
                     Site.color,

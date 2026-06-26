@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
+from app.models.customer import Customer
 from app.models.enums import SiteLocationStatus, SiteStatus
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
@@ -161,6 +162,7 @@ class SiteService:
         values = clean_site_values(payload.model_dump())
         validate_site_create_values(values)
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
+        self._apply_customer_reference(values)
         self._ensure_site_number_available(values.get("site_number"))
         apply_selected_geocode(values)
         site = Site(**values)
@@ -233,6 +235,7 @@ class SiteService:
 
         values = clean_site_values(payload.model_dump(exclude_unset=True))
         self._ensure_project_manager_exists(values.get("project_manager_person_id"))
+        self._apply_customer_reference(values)
         old_value = site_snapshot(site)
         address_changed = any(
             field in values and getattr(site, field) != values[field] for field in ADDRESS_FIELDS
@@ -371,6 +374,14 @@ class SiteService:
         if person_id is not None and self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Projektleiter-Person nicht gefunden.")
 
+    def _apply_customer_reference(self, values: dict) -> None:
+        if "customer_id" not in values or values.get("customer_id") is None:
+            return
+        customer = self.db.get(Customer, values["customer_id"])
+        if customer is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kunde nicht gefunden.")
+        values["customer"] = customer.company_name
+
     def _ensure_site_number_available(self, site_number: str | None) -> None:
         if site_number is None:
             return
@@ -442,6 +453,7 @@ def site_snapshot(site: Site) -> dict:
         "geofence_radius_m": site.geofence_radius_m,
         "location_status": site.location_status.value,
         "customer": site.customer,
+        "customer_id": site.customer_id,
         "project_manager_person_id": site.project_manager_person_id,
         "status": site.status.value,
         "info": site.info,

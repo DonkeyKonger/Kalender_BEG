@@ -28,6 +28,7 @@ const emptySite: SiteCreate = {
   geofence_radius_m: 5000,
   location_status: "unchecked",
   customer: null,
+  customer_id: null,
   project_manager_person_id: null,
   status: "active",
   info: null,
@@ -455,7 +456,7 @@ export function SiteCreateDrawer({
   }
 
   function selectCustomerForSite(customer: Customer) {
-    setCreateForm((current) => ({ ...current, customer: customer.company_name }));
+    setCreateForm((current) => ({ ...current, customer: customer.company_name, customer_id: customer.id }));
   }
 
   function openCustomerCreateDrawer(initialName: string) {
@@ -485,7 +486,7 @@ export function SiteCreateDrawer({
       const created = await api.createCustomer(normalizeCustomerPayloadForSite(customerCreateForm));
       setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
       setCustomersLoaded(true);
-      setCreateForm((current) => ({ ...current, customer: created.company_name }));
+      setCreateForm((current) => ({ ...current, customer: created.company_name, customer_id: created.id }));
       setCustomerCreateForm(emptyCustomerForSite);
       setIsCustomerCreateDrawerOpen(false);
     } catch (requestError) {
@@ -577,6 +578,7 @@ function toSiteSummary(site: Site): SiteSummary {
     location: site.location,
     city: site.city,
     customer: site.customer,
+    customer_id: site.customer_id,
     project_manager_person_id: site.project_manager_person_id,
     project_manager: site.project_manager
       ? {
@@ -640,7 +642,7 @@ export function SiteFields({
   const showCustomerSuggestions = canUseCustomerAutocomplete && isCustomerSuggestionsOpen && !disabled;
 
   function selectCustomer(customer: Customer) {
-    onChange({ customer: customer.company_name });
+    onChange({ customer: customer.company_name, customer_id: customer.id });
     onCustomerSelected?.(customer);
     setIsCustomerSuggestionsOpen(false);
     setActiveCustomerSuggestionIndex(0);
@@ -720,7 +722,7 @@ export function SiteFields({
               window.setTimeout(() => setIsCustomerSuggestionsOpen(false), 120);
             }}
             onChange={(event) => {
-              onChange({ customer: event.target.value || null });
+              onChange({ customer: event.target.value || null, customer_id: null });
               setActiveCustomerSuggestionIndex(0);
               setIsCustomerSuggestionsOpen(true);
             }}
@@ -982,6 +984,7 @@ export function toEditableSite(site: Site): EditableSite {
     geofence_radius_m: site.geofence_radius_m,
     location_status: site.location_status,
     customer: site.customer,
+    customer_id: site.customer_id,
     project_manager_person_id: site.project_manager_person_id,
     status: site.status,
     info: site.info,
@@ -1045,6 +1048,7 @@ export function normalizeSitePayload(site: SiteCreate): SiteCreate {
     geofence_radius_m: site.geofence_radius_m || 5000,
     location_status: site.location_status,
     customer: cleanOptionalText(site.customer),
+    customer_id: site.customer_id,
     info: cleanOptionalText(site.info),
     color: cleanOptionalText(site.color),
   };

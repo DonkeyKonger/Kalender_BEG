@@ -1,7 +1,7 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -14,6 +14,7 @@ import {
 } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
+import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
@@ -60,6 +61,21 @@ const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
   draft: "Entwurf",
   submitted: "Gemeldet",
   reviewed: "Geprüft",
+};
+
+const emptyCustomerForProjectRecord: CustomerCreate = {
+  company_name: "",
+  address_street: null,
+  address_house_number: null,
+  address_postal_code: null,
+  address_city: null,
+  address_country: "Deutschland",
+  company_phone: null,
+  project_lead_name: null,
+  project_lead_phone: null,
+  project_lead_email: null,
+  is_active: true,
+  contacts: [],
 };
 
 export function SiteDetailPage() {
@@ -1360,11 +1376,11 @@ function OverviewTab({
                 emptyMessage="Baustellennummer darf nicht leer sein."
                 onSave={(value) => onSaveField({ site_number: value })}
               />
-              <InlineEditableDetailItem
+              <CustomerAssignmentDetailItem
                 label="Kunde"
-                value={site.customer}
+                site={site}
                 canEdit={canEdit}
-                onSave={(value) => onSaveField({ customer: value })}
+                onSaveCustomer={(customer) => onSaveField({ customer_id: customer.id, customer: customer.company_name })}
               />
               <InlineEditableSelectItem
                 label="Status"
@@ -4599,6 +4615,268 @@ function DetailItem({
 }
 
 type InlineEditStatus = "idle" | "saving" | "saved" | "error";
+
+function CustomerAssignmentDetailItem({
+  label,
+  site,
+  canEdit,
+  onSaveCustomer,
+}: {
+  label: string;
+  site: Site;
+  canEdit: boolean;
+  onSaveCustomer: (customer: Customer) => Promise<void>;
+}) {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  async function assignCustomer(customer: Customer): Promise<void> {
+    setStatus("saving");
+    try {
+      await onSaveCustomer(customer);
+      setStatus("saved");
+    } catch (error) {
+      setStatus("error");
+      throw error;
+    }
+  }
+
+  return (
+    <div className="detail-item site-inline-edit-item project-customer-detail-item">
+      <span>{label}</span>
+      <strong className="site-inline-edit-display">
+        <span>{site.customer || "-"}</span>
+        {canEdit ? (
+          <button
+            type="button"
+            className="site-inline-edit-button"
+            aria-label={`${label} bearbeiten`}
+            onClick={() => {
+              setStatus("idle");
+              setIsDialogOpen(true);
+            }}
+          >
+            <Pencil aria-hidden="true" size={13} />
+          </button>
+        ) : null}
+      </strong>
+      {status === "saved" || status === "error" ? (
+        <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small>
+      ) : null}
+      {isDialogOpen ? (
+        <CustomerAssignmentDialog
+          currentCustomerText={site.customer}
+          currentCustomerId={site.customer_id}
+          onAssignCustomer={assignCustomer}
+          onClose={() => setIsDialogOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CustomerAssignmentDialog({
+  currentCustomerText,
+  currentCustomerId,
+  onAssignCustomer,
+  onClose,
+}: {
+  currentCustomerText: string | null;
+  currentCustomerId: number | null;
+  onAssignCustomer: (customer: Customer) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [query, setQuery] = useState(currentCustomerText ?? "");
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionCustomerId, setActionCustomerId] = useState<number | "new" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    api
+      .customers({ isActive: true })
+      .then((customerData) => {
+        if (!cancelled) {
+          setCustomers(customerData);
+        }
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
+          setError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleEscape(event: globalThis.KeyboardEvent): void {
+      if (event.key === "Escape" && actionCustomerId === null) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [actionCustomerId, onClose]);
+
+  const trimmedQuery = query.trim();
+  const normalizedQuery = trimmedQuery.toLowerCase();
+  const matchingCustomers = useMemo(() => {
+    const activeCustomers = customers.filter((customer) => customer.is_active);
+    const matches = normalizedQuery
+      ? activeCustomers.filter((customer) => customer.company_name.toLowerCase().includes(normalizedQuery))
+      : activeCustomers;
+    return matches.slice(0, 8);
+  }, [customers, normalizedQuery]);
+  const hasExactCustomerName = Boolean(
+    normalizedQuery && customers.some((customer) => customer.company_name.trim().toLowerCase() === normalizedQuery),
+  );
+  const canCreateCustomer = Boolean(trimmedQuery) && !hasExactCustomerName && !isLoading;
+
+  async function assignExistingCustomer(customer: Customer): Promise<void> {
+    if (actionCustomerId !== null) {
+      return;
+    }
+    setActionCustomerId(customer.id);
+    setError(null);
+    let shouldClose = false;
+    try {
+      await onAssignCustomer(customer);
+      shouldClose = true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Kunde konnte nicht zugeordnet werden."));
+    } finally {
+      setActionCustomerId(null);
+    }
+    if (shouldClose) {
+      onClose();
+    }
+  }
+
+  async function createAndAssignCustomer(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!canCreateCustomer || actionCustomerId !== null) {
+      return;
+    }
+    setActionCustomerId("new");
+    setError(null);
+    let shouldClose = false;
+    try {
+      const created = await api.createCustomer({
+        ...emptyCustomerForProjectRecord,
+        company_name: trimmedQuery,
+      });
+      setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created].sort(compareCustomersByName));
+      await onAssignCustomer(created);
+      shouldClose = true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Kunde konnte nicht angelegt oder zugeordnet werden."));
+    } finally {
+      setActionCustomerId(null);
+    }
+    if (shouldClose) {
+      onClose();
+    }
+  }
+
+  return (
+    <div
+      className="project-customer-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && actionCustomerId === null) {
+          onClose();
+        }
+      }}
+    >
+      <section className="project-customer-dialog" role="dialog" aria-modal="true" aria-labelledby="project-customer-dialog-title">
+        <header className="project-customer-dialog-header">
+          <div>
+            <h3 id="project-customer-dialog-title">Kunde zuordnen</h3>
+            <p>{currentCustomerId ? "Aktuell mit Kundenstamm verknuepft." : currentCustomerText ? `Bisheriger Kundentext: ${currentCustomerText}` : "Noch kein Kunde zugeordnet."}</p>
+          </div>
+          <button type="button" className="secondary-action" disabled={actionCustomerId !== null} onClick={onClose}>
+            Schliessen
+          </button>
+        </header>
+
+        <label className="project-customer-search-field">
+          <span>Kunde suchen</span>
+          <input
+            autoFocus
+            autoComplete="off"
+            disabled={actionCustomerId !== null}
+            placeholder="Kundenname"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setError(null);
+            }}
+          />
+        </label>
+
+        <div className="project-customer-result-list" role="listbox" aria-busy={isLoading}>
+          {isLoading ? <span className="project-customer-empty">Kunden werden geladen...</span> : null}
+          {!isLoading && matchingCustomers.map((customer) => (
+            <button
+              key={customer.id}
+              type="button"
+              role="option"
+              aria-selected={currentCustomerId === customer.id}
+              disabled={actionCustomerId !== null}
+              onClick={() => void assignExistingCustomer(customer)}
+            >
+              <strong>{customer.company_name}</strong>
+              <span>{formatCustomerMetaForProjectRecord(customer)}</span>
+            </button>
+          ))}
+          {!isLoading && matchingCustomers.length === 0 ? (
+            <span className="project-customer-empty">Kein passender Kunde gefunden.</span>
+          ) : null}
+        </div>
+
+        <form className="project-customer-create-row" onSubmit={(event) => void createAndAssignCustomer(event)}>
+          <span>Neuen Kunden anlegen</span>
+          <button type="submit" className="secondary-action" disabled={!canCreateCustomer || actionCustomerId !== null}>
+            <UserPlus aria-hidden="true" size={15} />
+            {actionCustomerId === "new" ? "Wird angelegt..." : trimmedQuery ? `"${trimmedQuery}" anlegen` : "Name eingeben"}
+          </button>
+        </form>
+
+        {error ? <p className="form-error">{error}</p> : null}
+      </section>
+    </div>
+  );
+}
+
+function compareCustomersByName(left: Customer, right: Customer): number {
+  return left.company_name.localeCompare(right.company_name, "de");
+}
+
+function formatCustomerMetaForProjectRecord(customer: Customer): string {
+  return [
+    formatCustomerAddressForProjectRecord(customer),
+    customer.project_lead_name ? `Projektleiter: ${customer.project_lead_name}` : "",
+    customer.company_phone,
+  ].filter(Boolean).join(" · ") || "Kundenstamm";
+}
+
+function formatCustomerAddressForProjectRecord(
+  customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country">,
+): string {
+  const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
+  const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
+  return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
+}
 
 function InlineEditableDetailItem({
   label,
