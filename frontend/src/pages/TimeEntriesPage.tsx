@@ -200,6 +200,7 @@ const TIME_REVIEW_API_OPEN_ENTRIES = "timeEntries(open review)";
 const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
 const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
+const OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung.";
 const EXPORT_MONTH_LABELS = [
   "Januar",
   "Februar",
@@ -850,6 +851,17 @@ export function TimeEntriesPage() {
     setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
   }
 
+  function applyCreatedTimeEntryFromMissingDay(missingEntry: TimeEntry, createdEntry: TimeEntry): TimeEntry {
+    const hydratedEntry = mergeTimeEntryReviewUpdate(missingEntry, createdEntry);
+    const shouldRemainInOpenReview = timeReviewIssue(hydratedEntry) !== null;
+    setReviewEntries((current) => {
+      const withoutMissingEntry = current.filter((entry) => entry.id !== missingEntry.id);
+      return shouldRemainInOpenReview ? upsertTimeEntryInList(withoutMissingEntry, hydratedEntry) : withoutMissingEntry;
+    });
+    setReviewAllEntries((current) => upsertTimeEntryInList(current, hydratedEntry));
+    return hydratedEntry;
+  }
+
   function applyCreatedTimeEntryFromGpsSuggestion(suggestionEntry: TimeEntry, createdEntry: TimeEntry): void {
     const hydratedEntry = mergeTimeEntryReviewUpdate(suggestionEntry, createdEntry);
     const shouldRemainInOpenReview = timeReviewIssue(hydratedEntry) !== null;
@@ -1089,6 +1101,22 @@ export function TimeEntriesPage() {
     setLocationReviewPopupTop(null);
   }
 
+  async function createTimeEntryForMissingDay(missingEntry: TimeEntry): Promise<TimeEntry> {
+    if (missingEntry.person_id <= 0) {
+      throw new Error("Monteur fehlt für die Büroprüfung.");
+    }
+    const createdEntry = await api.createTimeEntry({
+      person_id: missingEntry.person_id,
+      site_id: null,
+      work_date: missingEntry.work_date,
+      work_minutes: 0,
+      break_minutes: 0,
+      travel_minutes: 0,
+      note: OFFICE_ONLY_TIME_ENTRY_NOTE,
+    });
+    return applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry);
+  }
+
   function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
     if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
       return;
@@ -1133,7 +1161,7 @@ export function TimeEntriesPage() {
   }
 
   async function savePayrollTimeCorrection(): Promise<void> {
-    if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection || timeReviewDiagnosticEntry.id < 0) {
+    if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection) {
       return;
     }
     const payload = buildPayrollCorrectionPayload(payrollCorrectionForm);
@@ -1145,10 +1173,15 @@ export function TimeEntriesPage() {
     setIsSavingPayrollCorrection(true);
     setPayrollCorrectionError(null);
     try {
-      const updatedEntry = await api.setTimeEntryPayrollCorrection(timeReviewDiagnosticEntry.id, payload.payload);
+      const targetEntry = timeReviewDiagnosticEntry.id < 0
+        ? await createTimeEntryForMissingDay(timeReviewDiagnosticEntry)
+        : timeReviewDiagnosticEntry;
+      const updatedEntry = await api.setTimeEntryPayrollCorrection(targetEntry.id, payload.payload);
       applyUpdatedTimeEntry(updatedEntry);
       setTimeReviewDiagnosticEntry((currentEntry) => (
-        currentEntry?.id === updatedEntry.id ? mergeTimeEntryReviewUpdate(currentEntry, updatedEntry) : currentEntry
+        currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
+          ? mergeTimeEntryReviewUpdate(targetEntry, updatedEntry)
+          : currentEntry
       ));
     } catch (requestError) {
       setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
@@ -1158,7 +1191,7 @@ export function TimeEntriesPage() {
   }
 
   async function saveLocationReviewSite(): Promise<void> {
-    if (!canManageTimeEntries || !locationReviewDiagnosticEntry || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0) {
+    if (!canManageTimeEntries || !locationReviewDiagnosticEntry || isSavingLocationReview) {
       return;
     }
 
@@ -1171,7 +1204,10 @@ export function TimeEntriesPage() {
     setIsSavingLocationReview(true);
     setLocationReviewError(null);
     try {
-      const updatedEntry = await api.decideTimeEntryReview(locationReviewDiagnosticEntry.id, {
+      const targetEntry = locationReviewDiagnosticEntry.id < 0
+        ? await createTimeEntryForMissingDay(locationReviewDiagnosticEntry)
+        : locationReviewDiagnosticEntry;
+      const updatedEntry = await api.decideTimeEntryReview(targetEntry.id, {
         decision: "assign_site",
         final_work_minutes: null,
         reviewed_site_id: parsedSiteId,
@@ -1187,7 +1223,9 @@ export function TimeEntriesPage() {
         : updatedEntry;
       applyUpdatedTimeEntry(hydratedEntry);
       setLocationReviewDiagnosticEntry((currentEntry) => (
-        currentEntry?.id === hydratedEntry.id ? mergeTimeEntryReviewUpdate(currentEntry, hydratedEntry) : currentEntry
+        currentEntry?.id === locationReviewDiagnosticEntry.id || currentEntry?.id === hydratedEntry.id
+          ? mergeTimeEntryReviewUpdate(targetEntry, hydratedEntry)
+          : currentEntry
       ));
       setLocationReviewSiteId(String(parsedSiteId));
     } catch (requestError) {
@@ -1485,7 +1523,7 @@ export function TimeEntriesPage() {
                         </div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.start_time)}</div>
                         <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.end_time)}</div>
-                        <div className="time-review-week-time" role="cell">{formatTimeEntryMinutes(check.entry.break_minutes, "minutes")}</div>
+                        <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
@@ -1507,31 +1545,44 @@ export function TimeEntriesPage() {
                           })}
                         </div>
                       </div>
-                    )) : (
-                      <div className="time-review-week-check-row is-empty" key={day.date} role="row">
-                        <div className="time-review-week-move" role="cell"></div>
-                        <div className="time-review-week-day" role="cell">
-                          <strong>{day.weekdayLabel}</strong>
-                          <span>{formatDate(day.date)}</span>
+                    )) : (() => {
+                      const missingEntry = buildMissingTimeReviewEntry(selectedReviewWorker, day.date);
+                      return (
+                        <div className="time-review-week-check-row is-empty" key={day.date} role="row">
+                          <div className="time-review-week-move" role="cell"></div>
+                          <div className="time-review-week-day" role="cell">
+                            <strong>{day.weekdayLabel}</strong>
+                            <span>{formatDate(day.date)}</span>
+                          </div>
+                          <div className="time-review-week-site" role="cell">
+                            {day.absenceType ? (
+                              <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
+                                {absenceTypeLabels[day.absenceType]}
+                              </StatusBadge>
+                            ) : (
+                              <strong>Keine Zeitmeldung</strong>
+                            )}
+                          </div>
+                          <div className="time-review-week-time" role="cell">-</div>
+                          <div className="time-review-week-time" role="cell">-</div>
+                          <div className="time-review-week-time" role="cell">-</div>
+                          <div className="time-review-week-time" role="cell">-</div>
+                          <div role="cell">
+                            {renderTimeReviewCheckMark("unknown", {
+                              onClick: () => openLocationReviewDiagnostic(missingEntry),
+                              label: "Ort-Diagnose öffnen",
+                            })}
+                          </div>
+                          <div role="cell">
+                            {renderTimeReviewCheckMark("unknown", {
+                              onClick: () => openTimeReviewDiagnostic(missingEntry),
+                              label: "Arbeitszeit-Diagnose öffnen",
+                            })}
+                          </div>
+                          <div role="cell">{renderPayrollReviewEmptyMark()}</div>
                         </div>
-                        <div className="time-review-week-site" role="cell">
-                          {day.absenceType ? (
-                            <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
-                              {absenceTypeLabels[day.absenceType]}
-                            </StatusBadge>
-                          ) : (
-                            <strong>Keine Zeitmeldung</strong>
-                          )}
-                        </div>
-                        <div className="time-review-week-time" role="cell">-</div>
-                        <div className="time-review-week-time" role="cell">-</div>
-                        <div className="time-review-week-time" role="cell">-</div>
-                        <div className="time-review-week-time" role="cell">-</div>
-                        <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
-                        <div role="cell">{renderTimeReviewCheckMark("unknown")}</div>
-                        <div role="cell">{renderPayrollReviewEmptyMark()}</div>
-                      </div>
-                    )
+                      );
+                    })()
                   ))}
                 </div>
                 {payrollDatePicker && payrollDatePickerEntry && (
@@ -1965,7 +2016,7 @@ export function TimeEntriesPage() {
               <button
                 className="icon-button secondary time-review-diagnostic-save"
                 type="button"
-                disabled={!canManageTimeEntries || isSavingPayrollCorrection || timeReviewDiagnosticEntry.id < 0}
+                disabled={!canManageTimeEntries || isSavingPayrollCorrection}
                 onClick={() => void savePayrollTimeCorrection()}
               >
                 {isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern"}
@@ -2028,7 +2079,7 @@ export function TimeEntriesPage() {
                   className="time-review-location-change"
                   type="button"
                   aria-expanded={isLocationReviewPickerOpen}
-                  disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                  disabled={!canManageTimeEntries || isSavingLocationReview}
                   onClick={() => setIsLocationReviewPickerOpen((current) => !current)}
                 >
                   {isLocationReviewPickerOpen ? "Auswahl schliessen" : "Baustelle manuell anpassen"}
@@ -2044,7 +2095,7 @@ export function TimeEntriesPage() {
                         placeholder="Kommission oder Baustellenname"
                         value={locationReviewSiteSearch}
                         onChange={(event) => setLocationReviewSiteSearch(event.target.value)}
-                        disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                        disabled={!canManageTimeEntries || isSavingLocationReview}
                       />
                     </label>
                     {locationReviewSiteSearch.trim() && (
@@ -2057,7 +2108,7 @@ export function TimeEntriesPage() {
                               type="button"
                               role="option"
                               aria-selected={String(site.id) === locationReviewSiteId}
-                              disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                              disabled={!canManageTimeEntries || isSavingLocationReview}
                               onClick={() => {
                                 setLocationReviewSiteId(String(site.id));
                                 setLocationReviewSiteSearch("");
@@ -2087,7 +2138,7 @@ export function TimeEntriesPage() {
                           type="button"
                           role="option"
                           aria-selected={String(site.id) === locationReviewSiteId}
-                          disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                          disabled={!canManageTimeEntries || isSavingLocationReview}
                           onClick={() => setLocationReviewSiteId(String(site.id))}
                         >
                           <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
@@ -2104,7 +2155,7 @@ export function TimeEntriesPage() {
               <button
                 className="icon-button secondary time-review-diagnostic-save"
                 type="button"
-                disabled={!canManageTimeEntries || isSavingLocationReview || locationReviewDiagnosticEntry.id < 0}
+                disabled={!canManageTimeEntries || isSavingLocationReview}
                 onClick={() => void saveLocationReviewSite()}
               >
                 {isSavingLocationReview ? "Ort wird gespeichert..." : "Ort speichern"}
@@ -2897,6 +2948,7 @@ function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: Time
     gps_not_checkable: updatedEntry.gps_not_checkable || previousEntry.gps_not_checkable,
     mismatch_notice: updatedEntry.mismatch_notice ?? previousEntry.mismatch_notice,
     review_notices: updatedEntry.review_notices.length ? updatedEntry.review_notices : previousEntry.review_notices,
+    has_manual_entry: isOfficeOnlyTimeEntry(updatedEntry) ? false : updatedEntry.has_manual_entry,
   };
 }
 
@@ -3080,6 +3132,76 @@ function buildReviewWeekDayOptions(weekStart: string): Array<{ date: string; lab
   });
 }
 
+function buildMissingTimeReviewEntry(worker: TimeReviewWorkerSummary | null, workDate: string): TimeEntry {
+  const personId = worker?.personId ?? 0;
+  return {
+    id: missingTimeReviewEntryId(personId, workDate),
+    person_id: personId,
+    person_name: worker?.personName ?? "",
+    site_id: null,
+    site_name: null,
+    site_number: null,
+    original_site_id: null,
+    original_site_name: null,
+    original_site_number: null,
+    assignment_id: null,
+    work_date: workDate,
+    original_work_date: null,
+    start_time: null,
+    end_time: null,
+    break_minutes: 0,
+    travel_minutes: 0,
+    work_minutes: 0,
+    original_work_minutes: null,
+    corrected_work_minutes: null,
+    payroll_corrected_start_time: null,
+    payroll_corrected_end_time: null,
+    payroll_corrected_work_minutes: null,
+    note: OFFICE_ONLY_TIME_ENTRY_NOTE,
+    source: "manual",
+    status: "draft",
+    time_review_status: "open",
+    time_review_method: null,
+    gps_status: null,
+    gps_matched_points: null,
+    gps_total_points: null,
+    gps_first_seen_at: null,
+    gps_last_seen_at: null,
+    gps_work_minutes: null,
+    created_by_user_id: null,
+    reviewed_by_user_id: null,
+    reviewed_at: null,
+    payroll_reviewed_by_user_id: null,
+    payroll_reviewed_at: null,
+    created_at: `${workDate}T00:00:00Z`,
+    updated_at: `${workDate}T00:00:00Z`,
+    review_source: "manual",
+    is_gps_suggestion: false,
+    has_manual_entry: false,
+    gps_suggestion_key: null,
+    planned_site_labels: [],
+    gps_detected_site_id: null,
+    gps_detected_site_name: null,
+    gps_detected_site_number: null,
+    gps_detected_location_type: null,
+    planned_vs_gps_mismatch: false,
+    manual_vs_planned_mismatch: false,
+    manual_vs_gps_mismatch: false,
+    gps_not_checkable: false,
+    mismatch_notice: null,
+    review_notices: [],
+    payroll_review_state: {
+      state: "open",
+      is_auto_plausible: false,
+    },
+  };
+}
+
+function missingTimeReviewEntryId(personId: number, workDate: string): number {
+  const dateNumber = Number(workDate.replaceAll("-", ""));
+  return -(dateNumber + (personId * 100000000));
+}
+
 function findEntryInReviewWeekDays(days: TimeReviewWeekDay[], entryId: number): TimeEntry | null {
   for (const day of days) {
     const match = day.entries.find((check) => check.entry.id === entryId);
@@ -3203,16 +3325,27 @@ function renderPayrollWorkMinutes(entry: TimeEntry) {
       </span>
     );
   }
+  if (isOfficeOnlyTimeEntry(entry)) {
+    return "-";
+  }
   return formatTimeEntryMinutes(entry.work_minutes, "hours");
 }
 
+function renderTimeReviewBreakMinutes(entry: TimeEntry): string {
+  if (isOfficeOnlyTimeEntry(entry)) {
+    return "-";
+  }
+  return formatTimeEntryMinutes(entry.break_minutes, "minutes");
+}
+
 function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
+  const hasSubmittedTime = !isOfficeOnlyTimeEntry(entry);
   return [
     {
       source: "Eingetragene Monteursstunden",
-      start: formatTimeEntryClock(entry.start_time),
-      end: formatTimeEntryClock(entry.end_time),
-      total: formatTimeEntryMinutes(entry.work_minutes, "hours"),
+      start: hasSubmittedTime ? formatTimeEntryClock(entry.start_time) : "-",
+      end: hasSubmittedTime ? formatTimeEntryClock(entry.end_time) : "-",
+      total: hasSubmittedTime ? formatTimeEntryMinutes(entry.work_minutes, "hours") : "-",
     },
     {
       source: "Erkannte Handy GPS Stunden",
@@ -3230,14 +3363,15 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
 }
 
 function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
-  const originalSite = findSiteSummary(sites, entry.original_site_id ?? entry.site_id);
+  const hasSubmittedSite = !isOfficeOnlyTimeEntry(entry);
+  const originalSite = hasSubmittedSite ? findSiteSummary(sites, entry.original_site_id ?? entry.site_id) : null;
   const reviewedSite = findSiteSummary(sites, entry.site_id);
   const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
   const rows: LocationReviewDiagnosticRow[] = [
     {
       source: "Eingetragene Monteursbaustelle",
-      siteName: displayDiagnosticValue(originalTimeEntrySiteName(entry)),
-      siteNumber: displayDiagnosticValue(entry.original_site_id !== null ? entry.original_site_number : entry.site_number),
+      siteName: hasSubmittedSite ? displayDiagnosticValue(originalTimeEntrySiteName(entry)) : "-",
+      siteNumber: hasSubmittedSite ? displayDiagnosticValue(entry.original_site_id !== null ? entry.original_site_number : entry.site_number) : "-",
       location: siteLocationLabel(originalSite),
     },
     {
@@ -3297,6 +3431,20 @@ function siteLocationLabel(site: SiteSummary | null): string {
 function displayDiagnosticValue(value: string | null | undefined): string {
   const trimmed = value?.trim();
   return trimmed || "-";
+}
+
+function isOfficeOnlyTimeEntry(entry: TimeEntry): boolean {
+  return (
+    entry.note === OFFICE_ONLY_TIME_ENTRY_NOTE
+    || (
+      entry.id < 0
+      && !entry.is_gps_suggestion
+      && !entry.has_manual_entry
+      && entry.work_minutes === 0
+      && !entry.start_time
+      && !entry.end_time
+    )
+  );
 }
 
 function renderPayrollReviewMark(
@@ -4044,6 +4192,9 @@ function timeEntrySiteName(entry: TimeEntry): string {
 }
 
 function originalTimeEntrySiteName(entry: TimeEntry): string {
+  if (isOfficeOnlyTimeEntry(entry)) {
+    return "-";
+  }
   if (entry.original_site_id !== null) {
     return entry.original_site_name || "-";
   }
@@ -4051,7 +4202,7 @@ function originalTimeEntrySiteName(entry: TimeEntry): string {
 }
 
 function manualTimeEntrySiteText(entry: TimeEntry): string {
-  if (entry.site_id !== null || !entry.note) {
+  if (entry.site_id !== null || !entry.note || isOfficeOnlyTimeEntry(entry)) {
     return "";
   }
   return entry.note.replace(/^Manuelle Baustelle:\s*/i, "").trim();
