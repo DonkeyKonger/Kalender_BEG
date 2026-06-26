@@ -1451,7 +1451,7 @@ export function TimeEntriesPage() {
                     <span className="time-review-worker-name">{worker.personName}</span>
                     <small>
                       {worker.submittedMinutes > 0
-                        ? `${formatSubmittedHours(worker.submittedMinutes)} Std. eingereicht`
+                        ? `${formatSubmittedHours(worker.submittedMinutes)} Std. erfasst`
                         : "Keine Meldung"}
                     </small>
                     {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
@@ -1521,8 +1521,8 @@ export function TimeEntriesPage() {
                             </StatusBadge>
                           )}
                         </div>
-                        <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.start_time)}</div>
-                        <div className="time-review-week-time" role="cell">{formatTimeEntryClock(check.entry.end_time)}</div>
+                        <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
+                        <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
                         <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
@@ -3011,9 +3011,9 @@ function buildTimeReviewWorkerSummaries(
       const dayCount = new Set(summary.entries.map((entry) => entry.work_date)).size;
       const openIssueCount = summary.entries.filter((entry) => openEntryIds.has(entry.id)).length;
       const reviewedEntryCount = summary.entries.filter((entry) => !openEntryIds.has(entry.id)).length;
-      const totalMinutes = summary.entries.reduce((sum, entry) => sum + (entry.corrected_work_minutes ?? entry.work_minutes ?? 0), 0);
+      const totalMinutes = summary.entries.reduce((sum, entry) => sum + (effectivePayrollWorkMinutes(entry) ?? 0), 0);
       const submittedMinutes = summary.entries.reduce((sum, entry) => (
-        entry.is_gps_suggestion ? sum : sum + entry.work_minutes
+        entry.is_gps_suggestion ? sum : sum + (effectivePayrollWorkMinutes(entry) ?? 0)
       ), 0);
       return {
         ...summary,
@@ -3270,6 +3270,9 @@ function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState
 }
 
 function classifyTimeReviewTimeCheck(entry: TimeEntry, options: { hasMultipleEntriesOnDay?: boolean } = {}): TimeReviewCheckState {
+  if (hasPayrollTimeCorrection(entry)) {
+    return "ok";
+  }
   if (entry.time_review_status !== "open") {
     return entry.time_review_status === "not_verifiable" || entry.time_review_status === "clarification" ? "unknown" : "ok";
   }
@@ -3318,17 +3321,15 @@ function renderTimeReviewCheckMark(
 }
 
 function renderPayrollWorkMinutes(entry: TimeEntry) {
-  if (entry.payroll_corrected_work_minutes !== null) {
+  const workMinutes = effectivePayrollWorkMinutes(entry);
+  if (hasPayrollTimeCorrection(entry)) {
     return (
       <span className="time-review-payroll-corrected-time" title="Büro-geprüfte Zeit">
-        {formatTimeEntryMinutes(entry.payroll_corrected_work_minutes, "hours")}
+        {formatTimeEntryMinutes(workMinutes, "hours")}
       </span>
     );
   }
-  if (isOfficeOnlyTimeEntry(entry)) {
-    return "-";
-  }
-  return formatTimeEntryMinutes(entry.work_minutes, "hours");
+  return formatTimeEntryMinutes(workMinutes, "hours");
 }
 
 function renderTimeReviewBreakMinutes(entry: TimeEntry): string {
@@ -3336,6 +3337,54 @@ function renderTimeReviewBreakMinutes(entry: TimeEntry): string {
     return "-";
   }
   return formatTimeEntryMinutes(entry.break_minutes, "minutes");
+}
+
+function renderPayrollClock(entry: TimeEntry, field: "start" | "end") {
+  const value = field === "start" ? effectivePayrollStartTime(entry) : effectivePayrollEndTime(entry);
+  if (hasPayrollTimeCorrection(entry)) {
+    return (
+      <span className="time-review-payroll-corrected-time" title="Büro-geprüfte Zeit">
+        {formatTimeEntryClock(value)}
+      </span>
+    );
+  }
+  return formatTimeEntryClock(value);
+}
+
+function hasPayrollTimeCorrection(entry: TimeEntry): boolean {
+  return (
+    entry.payroll_corrected_start_time !== null
+    || entry.payroll_corrected_end_time !== null
+    || entry.payroll_corrected_work_minutes !== null
+  );
+}
+
+function effectivePayrollStartTime(entry: TimeEntry): string | null {
+  return entry.payroll_corrected_start_time ?? (isOfficeOnlyTimeEntry(entry) ? null : entry.start_time);
+}
+
+function effectivePayrollEndTime(entry: TimeEntry): string | null {
+  return entry.payroll_corrected_end_time ?? (isOfficeOnlyTimeEntry(entry) ? null : entry.end_time);
+}
+
+function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
+  const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry);
+  if (correctedMinutes !== null) {
+    return correctedMinutes;
+  }
+  return isOfficeOnlyTimeEntry(entry) ? null : entry.work_minutes;
+}
+
+function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {
+  if (entry.payroll_corrected_work_minutes !== null) {
+    return entry.payroll_corrected_work_minutes;
+  }
+  const startMinutes = clockValueToMinutes(entry.payroll_corrected_start_time);
+  const endMinutes = clockValueToMinutes(entry.payroll_corrected_end_time);
+  if (startMinutes === null || endMinutes === null || endMinutes < startMinutes) {
+    return null;
+  }
+  return endMinutes - startMinutes;
 }
 
 function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
@@ -3828,7 +3877,7 @@ function buildExportPreviewRows(entries: TimeEntry[], openEntries: TimeEntry[]):
 
 function timeEntryToExportPreviewRow(entry: TimeEntry): ExportPreviewRow {
   const reportedMinutes = entry.is_gps_suggestion ? null : entry.original_work_minutes ?? entry.work_minutes;
-  const correctedMinutes = entry.corrected_work_minutes;
+  const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry) ?? entry.corrected_work_minutes;
   const validMinutes = correctedMinutes ?? reportedMinutes;
   const status = exportPreviewStatus(entry);
   const tableRow = timeEntryToTableRow(entry, exportPreviewStatusLabel(status), exportPreviewStatusTone(status));
@@ -3860,6 +3909,7 @@ function exportPreviewStatus(entry: TimeEntry): ExportPreviewStatus {
   }
   if (
     entry.time_review_status === "corrected"
+    || hasPayrollTimeCorrection(entry)
     || entry.corrected_work_minutes !== null
     || entry.time_review_method === "accept_gps"
     || entry.time_review_method === "manual_correction"
@@ -3952,13 +4002,14 @@ function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {
     .map((entry) => {
       const originalMinutes = entry.original_work_minutes ?? entry.work_minutes;
       const gpsMinutes = entry.gps_work_minutes;
+      const finalMinutes = effectivePayrollWorkMinutes(entry);
       return {
         id: entry.id,
         workDate: entry.work_date,
         personName: entry.person_name,
         siteLabel: timeEntrySiteLabel(entry),
         siteKey: timeEntrySiteLabel(entry),
-        finalMinutes: entry.work_minutes,
+        finalMinutes,
         statusLabel: finalStatusLabel(entry),
         basisLabel: finalBasisLabel(entry),
         originalMinutes,
@@ -4029,6 +4080,9 @@ function finalStatusLabel(entry: TimeEntry): string {
 }
 
 function finalBasisLabel(entry: TimeEntry): string {
+  if (hasPayrollTimeCorrection(entry)) {
+    return "Bürozeit geprüft";
+  }
   if (entry.time_review_method === "accept_manual" || entry.time_review_method === "manual_confirmed") {
     return "manuelle Zeit übernommen";
   }
@@ -4118,7 +4172,12 @@ function buildPayrollCorrectionPayload(
   if (startTime.value && endTime.value && startTime.value >= endTime.value) {
     return { ok: false, error: "Ende Arbeitszeit muss nach dem Anfang liegen." };
   }
-  if (!startTime.value && !endTime.value && workMinutes.value === null) {
+  const calculatedWorkMinutes = workMinutes.value ?? (
+    startTime.value && endTime.value
+      ? (clockValueToMinutes(endTime.value) ?? 0) - (clockValueToMinutes(startTime.value) ?? 0)
+      : null
+  );
+  if (!startTime.value && !endTime.value && calculatedWorkMinutes === null) {
     return { ok: false, error: "Bitte mindestens eine Bürozeit eintragen." };
   }
   return {
@@ -4126,7 +4185,7 @@ function buildPayrollCorrectionPayload(
     payload: {
       payroll_corrected_start_time: startTime.value,
       payroll_corrected_end_time: endTime.value,
-      payroll_corrected_work_minutes: workMinutes.value,
+      payroll_corrected_work_minutes: calculatedWorkMinutes,
     },
   };
 }
@@ -4164,6 +4223,17 @@ function parseOptionalClockValue(value: string, label: string): { ok: true; valu
     return { ok: false, error: `${label} muss im Format HH:MM eingetragen werden.` };
   }
   return { ok: true, value: trimmed };
+}
+
+function clockValueToMinutes(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const clockMatch = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (!clockMatch) {
+    return null;
+  }
+  return Number(clockMatch[1]) * 60 + Number(clockMatch[2]);
 }
 
 function timeInputValue(value: string | null): string {
