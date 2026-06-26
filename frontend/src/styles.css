@@ -1542,6 +1542,21 @@ button.entity-card:focus-visible,
   color: #9f1c12;
 }
 
+.person-drawer-footer-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.person-drawer-footer-left,
+.person-drawer-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .persons-page .detail-read-view {
   gap: 12px;
 }

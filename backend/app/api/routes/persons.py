@@ -86,7 +86,7 @@ def remove_person(
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_person(
     person_id: int,
-    current_user=Depends(CAN_ADMIN),
+    current_user=Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> Response:
     PersonService(db).delete_person(person_id, current_user.id)

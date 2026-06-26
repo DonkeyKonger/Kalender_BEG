@@ -45,7 +45,7 @@ const emptyPerson: PersonCreate = {
 export function PersonsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
-  const canRemove = user?.role === "admin";
+  const canRemove = canEdit;
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
@@ -160,9 +160,8 @@ export function PersonsPage() {
   }
 
   async function deletePerson(person: Person) {
-    const personLabel = calendarPersonCode(person) || person.display_name || `${person.first_name} ${person.last_name}`.trim();
     const confirmed = window.confirm(
-      `Mitarbeiter ${personLabel} wirklich ausblenden?\n\nHistorische Daten bleiben erhalten. Der Mitarbeiter verschwindet aus der normalen Übersicht und aus Auswahlfeldern.`,
+      "Mitarbeiter wirklich ausblenden? Historische Daten bleiben erhalten.",
     );
     if (!confirmed) {
       return;
@@ -425,37 +424,41 @@ export function PersonsPage() {
         ) : undefined}
         footer={selectedPerson ? (
           isEditingPerson && canEdit ? (
-            <>
-              {canRemove && (
+            <div className="person-drawer-footer-actions">
+              <div className="person-drawer-footer-left">
+                {canRemove && (
+                  <button
+                    className="icon-button danger"
+                    disabled={savingPersonId === selectedPerson.id}
+                    type="button"
+                    onClick={() => void deletePerson(selectedPerson)}
+                  >
+                    <Trash2 aria-hidden="true" size={16} />
+                    <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
+                  </button>
+                )}
+              </div>
+              <div className="person-drawer-footer-right">
+                <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
+                  <span>Abbrechen</span>
+                </button>
                 <button
-                  className="icon-button danger danger-action"
+                  className="icon-button secondary"
                   disabled={savingPersonId === selectedPerson.id}
                   type="button"
-                  onClick={() => void deletePerson(selectedPerson)}
+                  onClick={() => {
+                    void savePerson(selectedPerson.id).then((saved) => {
+                      if (saved) {
+                        setIsEditingPerson(false);
+                      }
+                    });
+                  }}
                 >
-                  <Trash2 aria-hidden="true" size={16} />
-                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
+                  <Save aria-hidden="true" size={16} />
+                  <span>Speichern</span>
                 </button>
-              )}
-              <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
-                <span>Abbrechen</span>
-              </button>
-              <button
-                className="icon-button secondary"
-                disabled={savingPersonId === selectedPerson.id}
-                type="button"
-                onClick={() => {
-                  void savePerson(selectedPerson.id).then((saved) => {
-                    if (saved) {
-                      setIsEditingPerson(false);
-                    }
-                  });
-                }}
-              >
-                <Save aria-hidden="true" size={16} />
-                <span>Speichern</span>
-              </button>
-            </>
+              </div>
+            </div>
           ) : (
             <>
               <button className="icon-button secondary" type="button" onClick={closeDrawer}>
