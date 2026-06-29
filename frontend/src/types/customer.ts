@@ -56,6 +56,6 @@ export type CustomerCreate = {
 export type CustomerUpdate = Partial<CustomerCreate>;
 
 export type CustomerRemoveResponse = {
-  action: "deactivated";
+  action: "deleted";
   customer: Customer;
 };

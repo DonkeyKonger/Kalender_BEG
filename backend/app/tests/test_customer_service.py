@@ -10,6 +10,7 @@ from app.models import Base
 from app.models.customer import Customer, CustomerContact
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
+from app.schemas.customer import CustomerCreate
 from app.services.customer_service import CustomerService, clean_customer_contacts, clean_customer_values, customer_snapshot
 
 
@@ -124,3 +125,41 @@ def test_customer_read_includes_site_email_recipients_without_duplicates():
     read_customer = CustomerService(db).read_customer(customer)
 
     assert [item.email for item in read_customer.email_addresses] == ["Info@Klinik.example", "NEU@KLINIK.example"]
+
+
+def test_remove_customer_sets_tombstone_and_hides_from_normal_queries():
+    db = db_session()
+    service = CustomerService(db)
+    customer = Customer(company_name="Tombstone GmbH", is_active=True)
+    db.add(customer)
+    db.commit()
+
+    removed = service.remove_customer(customer.id, user_id=42)
+
+    assert removed.is_active is False
+    assert removed.deleted_at is not None
+    assert removed.deleted_by == 42
+    assert removed.deleted_tombstone_id.startswith(f"deleted::{customer.id}::")
+    assert service.customers.get(customer.id) is None
+    assert service.list_customers(is_active=None) == []
+    assert service.list_customers(is_active=False) == []
+    assert service.customers.get_including_deleted(customer.id) is not None
+
+
+def test_removed_customer_name_can_be_reused():
+    db = db_session()
+    service = CustomerService(db)
+    original = Customer(company_name="Wiederverwendbar GmbH", is_active=True)
+    db.add(original)
+    db.commit()
+
+    service.remove_customer(original.id, user_id=7)
+    recreated = service.create_customer(
+        CustomerCreate(company_name="Wiederverwendbar GmbH", contacts=[]),
+        user_id=7,
+    )
+
+    assert recreated.id != original.id
+    assert recreated.company_name == "Wiederverwendbar GmbH"
+    assert recreated.deleted_at is None
+    assert [customer.id for customer in service.list_customers()] == [recreated.id]

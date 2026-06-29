@@ -87,5 +87,5 @@ class CustomerRead(BaseModel):
 
 
 class CustomerRemoveResponse(BaseModel):
-    action: Literal["deactivated"]
+    action: Literal["deleted"]
     customer: CustomerRead

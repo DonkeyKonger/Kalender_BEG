@@ -158,7 +158,7 @@ class SiteEmailRecipientService:
             self.db.scalars(
                 select(Customer)
                 .options(selectinload(Customer.contacts))
-                .where(Customer.is_active.is_(True))
+                .where(Customer.is_active.is_(True), Customer.deleted_at.is_(None))
             ).all()
         )
         return [

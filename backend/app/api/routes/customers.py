@@ -16,7 +16,7 @@ CAN_ADMIN = require_roles(UserRole.ADMIN)
 
 @router.get("", response_model=list[CustomerRead])
 def list_customers(
-    is_active: bool | None = None,
+    is_active: bool | None = True,
     _user=Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[CustomerRead]:
@@ -55,4 +55,4 @@ def remove_customer(
 ) -> CustomerRemoveResponse:
     service = CustomerService(db)
     customer = service.remove_customer(customer_id, current_user.id)
-    return CustomerRemoveResponse(action="deactivated", customer=service.read_customer(customer))
+    return CustomerRemoveResponse(action="deleted", customer=service.read_customer(customer))

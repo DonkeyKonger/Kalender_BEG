@@ -14,6 +14,13 @@ class CustomerRepository:
         return self.db.scalar(
             select(Customer)
             .options(selectinload(Customer.contacts))
+            .where(Customer.id == customer_id, Customer.deleted_at.is_(None))
+        )
+
+    def get_including_deleted(self, customer_id: int) -> Customer | None:
+        return self.db.scalar(
+            select(Customer)
+            .options(selectinload(Customer.contacts))
             .where(Customer.id == customer_id)
         )
 
@@ -21,6 +28,7 @@ class CustomerRepository:
         statement = (
             select(Customer)
             .options(selectinload(Customer.contacts))
+            .where(Customer.deleted_at.is_(None))
             .order_by(Customer.company_name)
         )
         if is_active is not None:

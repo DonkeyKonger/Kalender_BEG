@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -85,17 +87,21 @@ class CustomerService:
         return self.customers.get(customer.id) or customer
 
     def remove_customer(self, customer_id: int, user_id: int) -> Customer:
-        customer = self.customers.get(customer_id)
+        customer = self.customers.get_including_deleted(customer_id)
         if customer is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Kunde nicht gefunden.")
-        if not customer.is_active:
+        if customer.deleted_at is not None:
             return customer
 
         old_value = customer_snapshot(customer)
+        deleted_at = datetime.now(timezone.utc)
         customer.is_active = False
+        customer.deleted_at = deleted_at
+        customer.deleted_by = user_id
+        customer.deleted_tombstone_id = f"deleted::{customer.id}::{deleted_at.strftime('%Y%m%dT%H%M%S%fZ')}"
         self.audit.record(
             user_id=user_id,
-            action="customer.deactivated",
+            action="customer.deleted",
             entity_type="customer",
             entity_id=customer.id,
             old_value=old_value,
@@ -103,7 +109,7 @@ class CustomerService:
         )
         self.db.commit()
         self.db.refresh(customer)
-        return self.customers.get(customer.id) or customer
+        return customer
 
 
 def clean_customer_values(values: dict, *, partial: bool = False) -> dict:
@@ -206,6 +212,7 @@ def normalize_customer_match_text(value: str | None) -> str:
 
 
 def customer_snapshot(customer: Customer) -> dict:
+    deleted_at = getattr(customer, "deleted_at", None)
     return {
         "id": customer.id,
         "company_name": customer.company_name,
@@ -219,6 +226,9 @@ def customer_snapshot(customer: Customer) -> dict:
         "project_lead_phone": customer.project_lead_phone,
         "project_lead_email": customer.project_lead_email,
         "is_active": customer.is_active,
+        "deleted_at": deleted_at.isoformat() if deleted_at else None,
+        "deleted_by": getattr(customer, "deleted_by", None),
+        "deleted_tombstone_id": getattr(customer, "deleted_tombstone_id", None),
         "contacts": [
             {
                 "id": contact.id,

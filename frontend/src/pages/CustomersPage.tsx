@@ -67,7 +67,7 @@ export function CustomersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const customerData = await api.customers({ isActive: null });
+      const customerData = await api.customers();
       setCustomers(customerData);
       setDrafts(toEditableCustomers(customerData));
     } catch (requestError) {
@@ -149,7 +149,7 @@ export function CustomersPage() {
 
   async function removeCustomer(customerId: number) {
     const confirmed = window.confirm(
-      "Dieser Kunde wird deaktiviert. Historische Zuordnungen und spaetere Dokumentbeziehungen bleiben damit nachvollziehbar. Fortfahren?",
+      "Kunde wirklich löschen? Der Kunde wird für alle Nutzer dauerhaft ausgeblendet und kann anschließend neu angelegt werden.",
     );
     if (!confirmed) {
       return;
@@ -159,16 +159,13 @@ export function CustomersPage() {
     setError(null);
     setMessage(null);
     try {
-      const result = await api.removeCustomer(customerId);
-      setCustomers((current) =>
-        current.map((customer) => customer.id === result.customer.id ? result.customer : customer).sort(compareCustomers),
-      );
-      setDrafts((current) => ({ ...current, [result.customer.id]: toEditableCustomer(result.customer) }));
-      setMessage("Kunde deaktiviert.");
+      await api.removeCustomer(customerId);
+      await loadCustomers();
+      setMessage("Kunde gelöscht.");
       setDrawer(null);
       setIsEditingCustomer(false);
     } catch (requestError) {
-      setError(readApiError(requestError, "Kunde konnte nicht deaktiviert werden."));
+      setError(readApiError(requestError, "Kunde konnte nicht gelöscht werden."));
     } finally {
       setSavingCustomerId(null);
     }
@@ -332,7 +329,7 @@ export function CustomersPage() {
                   onClick={() => void removeCustomer(selectedCustomer.id)}
                 >
                   <Trash2 aria-hidden="true" size={16} />
-                  <span>Kunde deaktivieren</span>
+                  <span>Kunden löschen</span>
                 </button>
               )}
               <button className="icon-button secondary" disabled={savingCustomerId === selectedCustomer.id} type="button" onClick={cancelCustomerEdit}>
