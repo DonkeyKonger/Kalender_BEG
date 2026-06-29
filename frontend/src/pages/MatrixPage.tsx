@@ -1833,6 +1833,12 @@ type AssignmentCollisionNoticePopupProps = {
 
 function AssignmentCollisionNoticePopup({ notice, onDeleteCollisionDay, onClose }: AssignmentCollisionNoticePopupProps) {
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const personNames = Array.from(new Set(
+    notice.days.flatMap((day) => day.items.map((item) => item.personName)),
+  )).filter(Boolean);
+  const title = personNames.length === 1
+    ? `Monteur ${personNames[0]} bereits eingeplant`
+    : `Monteure ${personNames.join(", ")} bereits eingeplant`;
 
   if (typeof document === "undefined") {
     return null;
@@ -1859,7 +1865,7 @@ function AssignmentCollisionNoticePopup({ notice, onDeleteCollisionDay, onClose 
         <header className="assignment-collision-notice-header">
           <div>
             <span>Planungshinweis</span>
-            <h2 id="assignment-collision-title">Monteur bereits eingeplant</h2>
+            <h2 id="assignment-collision-title">{title}</h2>
           </div>
           <button aria-label="Hinweis schließen" type="button" onClick={onClose}>
             x
@@ -1874,7 +1880,7 @@ function AssignmentCollisionNoticePopup({ notice, onDeleteCollisionDay, onClose 
                   const key = `${day.date}-${item.assignmentId}-${item.siteId}`;
                   return (
                     <li key={key}>
-                      <span>{item.personName} ist bereits auf {item.siteLabel} eingeplant</span>
+                      <span>{item.siteLabel}</span>
                       <button
                         className="assignment-collision-delete-day"
                         disabled={pendingDeleteKey !== null}
