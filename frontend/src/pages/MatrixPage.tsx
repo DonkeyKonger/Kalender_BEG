@@ -101,11 +101,9 @@ type AssignmentCollisionDay = {
   items: AssignmentCollisionItem[];
 };
 type AssignmentCollisionNotice = {
-  anchor: EditorAnchor | null;
   days: AssignmentCollisionDay[];
 };
 type AssignmentCollisionCheck = {
-  anchor?: EditorAnchor | null;
   endDate: string;
   personIds: number[];
   startDate: string;
@@ -150,7 +148,6 @@ export function MatrixPage() {
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const autosaveRef = useRef<number | null>(null);
-  const collisionNoticeTimeoutRef = useRef<number | null>(null);
   const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
   const errorTimeoutRef = useRef<number | null>(null);
   const skipNextDraftAutosaveRef = useRef(false);
@@ -616,14 +613,6 @@ export function MatrixPage() {
     return () => document.removeEventListener("keydown", handleMatrixKeyboard);
   }, [handleMatrixKeyboard]);
 
-  useEffect(() => {
-    return () => {
-      if (collisionNoticeTimeoutRef.current) {
-        window.clearTimeout(collisionNoticeTimeoutRef.current);
-      }
-    };
-  }, []);
-
   function updateCompactView(value: boolean) {
     setIsCompactView(value);
     if (user) {
@@ -850,7 +839,6 @@ export function MatrixPage() {
     const entries = entriesForSave.map(toMatrixEntryInput);
     const savedCell = activeCell;
     const collisionPersonIds = uniqueAddedPersonIds(entriesForSave, initialEntries);
-    const collisionAnchor = editorAnchor ?? selectionAnchorRef.current ?? fallbackEditorAnchor(matrixScrollRef.current);
     clearTemporaryCellFeedback(activeCell.key);
     setSaveStatus((current) => ({ ...current, [activeCell.key]: "saving" }));
     setCellMessage((current) => ({ ...current, [activeCell.key]: "" }));
@@ -889,7 +877,6 @@ export function MatrixPage() {
       }
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
       void showAssignmentCollisionNoticeForPlan({
-        anchor: collisionAnchor,
         endDate: savedCell.endDate,
         personIds: collisionPersonIds,
         startDate: savedCell.date,
@@ -1131,22 +1118,11 @@ export function MatrixPage() {
   }
 
   function dismissAssignmentCollisionNotice() {
-    if (collisionNoticeTimeoutRef.current) {
-      window.clearTimeout(collisionNoticeTimeoutRef.current);
-      collisionNoticeTimeoutRef.current = null;
-    }
     setAssignmentCollisionNotice(null);
   }
 
   function showAssignmentCollisionNotice(notice: AssignmentCollisionNotice) {
-    if (collisionNoticeTimeoutRef.current) {
-      window.clearTimeout(collisionNoticeTimeoutRef.current);
-    }
     setAssignmentCollisionNotice(notice);
-    collisionNoticeTimeoutRef.current = window.setTimeout(() => {
-      setAssignmentCollisionNotice(null);
-      collisionNoticeTimeoutRef.current = null;
-    }, 12000);
   }
 
   async function showAssignmentCollisionNoticeForPlan(check: AssignmentCollisionCheck) {
@@ -1157,7 +1133,7 @@ export function MatrixPage() {
     try {
       const days = await buildAssignmentCollisionDays({ ...check, personIds });
       if (days.length) {
-        showAssignmentCollisionNotice({ anchor: check.anchor ?? null, days });
+        showAssignmentCollisionNotice({ days });
       }
     } catch {
       // Kollisionshinweise duerfen die eigentliche Planung nicht stoeren.
@@ -1368,12 +1344,6 @@ export function MatrixPage() {
     }
 
     const key = cellKey(drag.target.siteId, targetStartDate);
-    const collisionAnchor: EditorAnchor = {
-      bottom: drag.top + drag.height,
-      left: drag.left,
-      top: drag.top,
-      width: drag.width,
-    };
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
@@ -1406,7 +1376,6 @@ export function MatrixPage() {
       showTemporaryCellFeedback(key, drag.mode === "copy" ? "Einsatz kopiert" : "Einsatz verschoben");
       await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
       void showAssignmentCollisionNoticeForPlan({
-        anchor: collisionAnchor,
         endDate: targetEndDate,
         personIds: [drag.assignment.person.id],
         startDate: targetStartDate,
@@ -1427,12 +1396,6 @@ export function MatrixPage() {
       return;
     }
     const key = cellKey(resize.siteId, resize.previewStartDate);
-    const collisionAnchor: EditorAnchor = {
-      bottom: resize.rowY + 12,
-      left: Math.max(12, window.innerWidth / 2 - 180),
-      top: resize.rowY - 12,
-      width: 360,
-    };
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
     setCellMessage((current) => ({ ...current, [key]: "" }));
@@ -1446,7 +1409,6 @@ export function MatrixPage() {
       showTemporaryCellFeedback(key, "Einsatz angepasst");
       await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
       void showAssignmentCollisionNoticeForPlan({
-        anchor: collisionAnchor,
         endDate: resize.previewEndDate,
         personIds: [resize.assignment.person.id],
         startDate: resize.previewStartDate,
@@ -1837,33 +1799,43 @@ function AssignmentCollisionNoticePopup({ notice, onClose }: AssignmentCollision
   }
 
   return createPortal(
-    <aside
-      aria-live="polite"
-      className="assignment-collision-notice"
-      role="status"
-      style={assignmentCollisionNoticePosition(notice.anchor)}
-    >
-      <div className="assignment-collision-notice-header">
-        <strong>Monteur bereits eingeplant</strong>
-        <button aria-label="Hinweis schliessen" type="button" onClick={onClose}>
-          x
-        </button>
-      </div>
-      <div className="assignment-collision-notice-body">
-        {notice.days.map((day) => (
-          <section className="assignment-collision-notice-day" key={day.date}>
-            <h3>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</h3>
-            <ul>
-              {day.items.map((item) => (
-                <li key={`${day.date}-${item.assignmentId}-${item.siteId}`}>
-                  {item.personName} ist bereits auf {item.siteLabel} eingeplant
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </aside>,
+    <div className="assignment-collision-backdrop" role="presentation">
+      <section
+        aria-labelledby="assignment-collision-title"
+        aria-modal="true"
+        className="assignment-collision-notice"
+        role="dialog"
+      >
+        <header className="assignment-collision-notice-header">
+          <div>
+            <span>Planungshinweis</span>
+            <h2 id="assignment-collision-title">Monteur bereits eingeplant</h2>
+          </div>
+          <button aria-label="Hinweis schliessen" type="button" onClick={onClose}>
+            x
+          </button>
+        </header>
+        <div className="assignment-collision-notice-body">
+          {notice.days.map((day) => (
+            <section className="assignment-collision-notice-day" key={day.date}>
+              <h3>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</h3>
+              <ul>
+                {day.items.map((item) => (
+                  <li key={`${day.date}-${item.assignmentId}-${item.siteId}`}>
+                    {item.personName} ist bereits auf {item.siteLabel} eingeplant
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <footer className="assignment-collision-notice-actions">
+          <button className="icon-button secondary" type="button" onClick={onClose}>
+            Schliessen
+          </button>
+        </footer>
+      </section>
+    </div>,
     document.body,
   );
 }
@@ -2894,7 +2866,6 @@ const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
 const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
 const ASSIGNMENT_AUTOCOMPLETE_WIDTH = 280;
-const ASSIGNMENT_COLLISION_NOTICE_WIDTH = 380;
 const STATUS_MENU_HEIGHT = 142;
 const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 614;
@@ -2998,23 +2969,6 @@ function statusMenuPosition(anchor: EditorAnchor): CSSProperties {
     : belowTop;
 
   return { left, top };
-}
-
-function assignmentCollisionNoticePosition(anchor: EditorAnchor | null): CSSProperties {
-  const gap = 8;
-  const width = Math.min(ASSIGNMENT_COLLISION_NOTICE_WIDTH, window.innerWidth - 16);
-  if (!anchor) {
-    return {
-      left: Math.max(8, window.innerWidth - width - 16),
-      top: 96,
-      width,
-    };
-  }
-  const preferredLeft = anchor.left + Math.max(0, (anchor.width - width) / 2);
-  const left = Math.max(8, Math.min(preferredLeft, window.innerWidth - width - 8));
-  const top = Math.max(8, Math.min(anchor.bottom + gap, window.innerHeight - 120));
-
-  return { left, top, width };
 }
 
 function uniqueAddedPersonIds(nextEntries: DraftEntry[], previousEntries: DraftEntry[]): number[] {
