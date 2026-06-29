@@ -730,6 +730,16 @@ button:disabled {
   z-index: 14;
 }
 
+.matrix-table thead .matrix-day-row .sticky-col:not(.site-number-col),
+.matrix-absence-row .sticky-col:not(.site-number-col) {
+  border-left: 1px solid #dce3ee;
+}
+
+.matrix-table thead .matrix-day-row .sticky-col:not(.site-number-col)::after,
+.matrix-absence-row .sticky-col:not(.site-number-col)::after {
+  border-left: 1px solid #dce3ee;
+}
+
 .matrix-week-fixed {
   color: transparent;
 }
