@@ -2146,10 +2146,10 @@ button.person-chip.is-absence-conflict:focus-visible {
 
 .assignment-collision-delete-day {
   min-height: 28px;
-  border: 1px solid #d3a5a5;
+  border: 1px solid #e1c4c4;
   border-radius: 0;
-  background: #fff7f7;
-  color: #8f1f1f;
+  background: transparent;
+  color: #9b2c2c;
   cursor: pointer;
   font-size: 0.73rem;
   font-weight: 800;
@@ -2160,9 +2160,9 @@ button.person-chip.is-absence-conflict:focus-visible {
 
 .assignment-collision-delete-day:hover,
 .assignment-collision-delete-day:focus-visible {
-  border-color: #b96f6f;
-  background: #fdecec;
-  color: #7f1d1d;
+  border-color: #c99a9a;
+  background: #fff8f8;
+  color: #842323;
 }
 
 .assignment-collision-delete-day:disabled {
