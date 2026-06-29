@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, timedelta, time
 from importlib import resources
@@ -55,6 +58,23 @@ WEEKLY_WORKER_TABLE_NAME = "LohnpruefungMonteurwoche"
 WEEKLY_WORKER_HEADER_ROW_INDEX = 8
 WEEKLY_WORKER_DATA_START_ROW_INDEX = WEEKLY_WORKER_HEADER_ROW_INDEX + 1
 WEEKLY_WORKER_LOGO_RESOURCE = "assets/beg_logo_icon.png"
+WEEKLY_WORKER_TEMPLATE_RESOURCE = "templates/time_entries/Wochenbericht_Digital_Master.xlsx"
+WEEKLY_WORKER_TEMPLATE_DATA_START_ROW = 15
+WEEKLY_WORKER_TEMPLATE_DATA_END_ROW = 24
+WEEKLY_WORKER_TEMPLATE_TOTAL_ROW = 26
+EXCEL_EPOCH = date(1899, 12, 30)
+SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+SHEET_NAMESPACES = {
+    "": SPREADSHEET_NS,
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+    "x14ac": "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac",
+    "xr": "http://schemas.microsoft.com/office/spreadsheetml/2014/revision",
+    "xr2": "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
+    "xr3": "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3",
+}
+for prefix, uri in SHEET_NAMESPACES.items():
+    ET.register_namespace(prefix, uri)
 
 
 @dataclass(frozen=True)
@@ -251,40 +271,27 @@ def build_weekly_worker_xlsx(
     end: date,
     rows: list[WeeklyWorkerExportRow],
 ) -> bytes:
-    sheet_name = unique_sheet_name(person_name, set())
-    data_values = [weekly_worker_row_values(row) for row in rows]
-    table_last_row = WEEKLY_WORKER_HEADER_ROW_INDEX + max(len(data_values), 1)
-    logo_bytes = load_weekly_worker_logo()
+    template = load_weekly_worker_template()
     output = BytesIO()
-    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", weekly_worker_content_types_xml(include_logo=logo_bytes is not None))
-        archive.writestr("_rels/.rels", package_relationships_xml())
-        archive.writestr("xl/workbook.xml", weekly_worker_workbook_xml(sheet_name))
-        archive.writestr("xl/_rels/workbook.xml.rels", workbook_relationships_xml(1))
-        archive.writestr("xl/styles.xml", weekly_worker_styles_xml())
-        archive.writestr(
-            "xl/worksheets/sheet1.xml",
-            weekly_worker_worksheet_xml(
-                person_name=person_name,
-                week_number=week_number,
-                year=year,
-                start=start,
-                end=end,
-                data_values=data_values,
-                table_last_row=table_last_row,
-                include_logo=logo_bytes is not None,
-            ),
-        )
-        archive.writestr(
-            "xl/worksheets/_rels/sheet1.xml.rels",
-            weekly_worker_sheet_relationships_xml(include_logo=logo_bytes is not None),
-        )
-        archive.writestr("xl/tables/table1.xml", weekly_worker_table_xml(table_last_row))
-        if logo_bytes is not None:
-            archive.writestr("xl/drawings/drawing1.xml", weekly_worker_drawing_xml())
-            archive.writestr("xl/drawings/_rels/drawing1.xml.rels", weekly_worker_drawing_relationships_xml())
-            archive.writestr("xl/media/beg_logo_icon.png", logo_bytes)
+    with ZipFile(BytesIO(template), "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        for item in source.infolist():
+            content = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                content = fill_weekly_worker_template_sheet(
+                    content,
+                    person_name=person_name,
+                    week_number=week_number,
+                    year=year,
+                    start=start,
+                    end=end,
+                    rows=rows,
+                )
+            archive.writestr(item, content)
     return output.getvalue()
+
+
+def load_weekly_worker_template() -> bytes:
+    return resources.files("app").joinpath(WEEKLY_WORKER_TEMPLATE_RESOURCE).read_bytes()
 
 
 def load_weekly_worker_logo() -> bytes | None:
@@ -292,6 +299,294 @@ def load_weekly_worker_logo() -> bytes | None:
         return resources.files("app").joinpath(WEEKLY_WORKER_LOGO_RESOURCE).read_bytes()
     except (FileNotFoundError, ModuleNotFoundError, OSError):
         return None
+
+
+def fill_weekly_worker_template_sheet(
+    sheet_xml: bytes,
+    *,
+    person_name: str,
+    week_number: int,
+    year: int,
+    start: date,
+    end: date,
+    rows: list[WeeklyWorkerExportRow],
+) -> bytes:
+    root = ET.fromstring(sheet_xml)
+    data_row_count = max(len(rows), 1)
+    template_row_count = (
+        WEEKLY_WORKER_TEMPLATE_DATA_END_ROW - WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + 1
+    )
+    extra_rows = max(0, data_row_count - template_row_count)
+    if extra_rows:
+        insert_weekly_worker_template_rows(root, extra_rows)
+
+    final_total_row = WEEKLY_WORKER_TEMPLATE_TOTAL_ROW + extra_rows
+    set_cell_string(root, "C5", start.strftime("%d.%m.%Y"))
+    set_cell_string(root, "E5", end.strftime("%d.%m.%Y"))
+    set_cell_string(root, "H5", str(week_number))
+    set_cell_string(root, "B7", person_name)
+
+    for row_number in range(
+        WEEKLY_WORKER_TEMPLATE_DATA_START_ROW,
+        WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + template_row_count + extra_rows,
+    ):
+        clear_weekly_worker_data_row(root, row_number)
+
+    total_minutes = 0
+    previous_date: date | None = None
+    for index, row in enumerate(rows):
+        row_number = WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + index
+        total_minutes += weekly_worker_total_minutes(row)
+        fill_weekly_worker_data_row(
+            root,
+            row_number,
+            row,
+            show_weekday=row.work_date != previous_date,
+        )
+        previous_date = row.work_date
+
+    set_cell_string(root, f"O{final_total_row}", format_export_hours(total_minutes))
+    update_sheet_dimension(root, 32 + extra_rows)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def insert_weekly_worker_template_rows(root: ET.Element, extra_rows: int) -> None:
+    sheet_data = root.find(qname("sheetData"))
+    if sheet_data is None:
+        return
+    clone_source = find_sheet_row(root, WEEKLY_WORKER_TEMPLATE_DATA_END_ROW)
+    if clone_source is None:
+        return
+
+    for row in sheet_data.findall(qname("row")):
+        row_number = int(row.attrib["r"])
+        if row_number >= WEEKLY_WORKER_TEMPLATE_TOTAL_ROW - 1:
+            move_row(row, row_number + extra_rows)
+
+    rows = list(sheet_data.findall(qname("row")))
+    insert_at = next(
+        (
+            index
+            for index, row in enumerate(rows)
+            if int(row.attrib["r"]) > WEEKLY_WORKER_TEMPLATE_DATA_END_ROW
+        ),
+        len(rows),
+    )
+    for offset in range(extra_rows):
+        new_row_number = WEEKLY_WORKER_TEMPLATE_DATA_END_ROW + 1 + offset
+        new_row = deepcopy(clone_source)
+        move_row(new_row, new_row_number)
+        sheet_data.insert(insert_at + offset, new_row)
+
+    shift_merge_cells(root, start_row=WEEKLY_WORKER_TEMPLATE_TOTAL_ROW - 1, offset=extra_rows)
+    add_weekly_worker_data_merges(root, WEEKLY_WORKER_TEMPLATE_DATA_END_ROW + 1, extra_rows)
+
+
+def clear_weekly_worker_data_row(root: ET.Element, row_number: int) -> None:
+    for column in ["A", "B", "C", "G", "J", "K", "L", "M", "N", "O"]:
+        clear_cell(root, f"{column}{row_number}")
+
+
+def fill_weekly_worker_data_row(
+    root: ET.Element,
+    row_number: int,
+    row: WeeklyWorkerExportRow,
+    *,
+    show_weekday: bool,
+) -> None:
+    set_cell_string(
+        root,
+        f"A{row_number}",
+        GERMAN_WEEKDAYS[row.work_date.weekday()] if show_weekday else "",
+    )
+    set_cell_style(root, f"B{row_number}", "5")
+    set_cell_number(root, f"B{row_number}", excel_date_serial(row.work_date))
+
+    entry = row.entry
+    if entry is None:
+        set_cell_string(root, f"C{row_number}", "Keine Zeitmeldung")
+        return
+
+    set_cell_string(root, f"C{row_number}", weekly_worker_site_label(entry))
+    set_cell_number_or_blank(root, f"J{row_number}", excel_time_serial(weekly_worker_start_time(entry)))
+    set_cell_number_or_blank(root, f"K{row_number}", excel_time_serial(weekly_worker_end_time(entry)))
+    set_cell_number(root, f"L{row_number}", (entry.break_minutes or 0) / 60)
+    set_cell_string(root, f"O{row_number}", format_export_hours(weekly_worker_total_minutes(row)))
+
+
+def weekly_worker_site_label(entry: WorkTimeEntry) -> str:
+    number = site_number(entry)
+    name = site_name(entry)
+    if number and name:
+        return f"{number} - {name}"
+    return name or number or "Keine Baustelle"
+
+
+def weekly_worker_start_time(entry: WorkTimeEntry) -> time | None:
+    return entry.payroll_corrected_start_time or entry.start_time
+
+
+def weekly_worker_end_time(entry: WorkTimeEntry) -> time | None:
+    return entry.payroll_corrected_end_time or entry.end_time
+
+
+def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
+    return (
+        entry.payroll_corrected_work_minutes
+        if entry.payroll_corrected_work_minutes is not None
+        else entry.work_minutes
+    )
+
+
+def weekly_worker_total_minutes(row: WeeklyWorkerExportRow) -> int:
+    if row.entry is None:
+        return 0
+    return weekly_worker_work_minutes(row.entry) + (row.entry.travel_minutes or 0)
+
+
+def find_sheet_row(root: ET.Element, row_number: int) -> ET.Element | None:
+    sheet_data = root.find(qname("sheetData"))
+    if sheet_data is None:
+        return None
+    for row in sheet_data.findall(qname("row")):
+        if int(row.attrib["r"]) == row_number:
+            return row
+    return None
+
+
+def move_row(row: ET.Element, row_number: int) -> None:
+    row.attrib["r"] = str(row_number)
+    for cell in row.findall(qname("c")):
+        column = cell_column(cell.attrib["r"])
+        cell.attrib["r"] = f"{column}{row_number}"
+
+
+def shift_merge_cells(root: ET.Element, *, start_row: int, offset: int) -> None:
+    merge_cells = root.find(qname("mergeCells"))
+    if merge_cells is None:
+        return
+    for merge_cell in merge_cells.findall(qname("mergeCell")):
+        merge_cell.attrib["ref"] = shift_range_ref(
+            merge_cell.attrib["ref"],
+            start_row=start_row,
+            offset=offset,
+        )
+
+
+def add_weekly_worker_data_merges(root: ET.Element, start_row: int, count: int) -> None:
+    merge_cells = root.find(qname("mergeCells"))
+    if merge_cells is None:
+        return
+    for row_number in range(start_row, start_row + count):
+        ET.SubElement(merge_cells, qname("mergeCell"), {"ref": f"C{row_number}:F{row_number}"})
+        ET.SubElement(merge_cells, qname("mergeCell"), {"ref": f"G{row_number}:I{row_number}"})
+    merge_cells.attrib["count"] = str(len(merge_cells.findall(qname("mergeCell"))))
+
+
+def shift_range_ref(range_ref: str, *, start_row: int, offset: int) -> str:
+    def replace(match: re.Match[str]) -> str:
+        column = match.group(1)
+        row_number = int(match.group(2))
+        if row_number >= start_row:
+            row_number += offset
+        return f"{column}{row_number}"
+
+    return re.sub(r"([A-Z]+)([0-9]+)", replace, range_ref)
+
+
+def update_sheet_dimension(root: ET.Element, last_row: int) -> None:
+    dimension = root.find(qname("dimension"))
+    if dimension is not None:
+        dimension.attrib["ref"] = f"A1:O{last_row}"
+
+
+def set_cell_string(root: ET.Element, ref: str, value: str) -> None:
+    cell = find_cell(root, ref)
+    if cell is None:
+        return
+    clear_cell_element(cell)
+    if value == "":
+        return
+    cell.attrib["t"] = "inlineStr"
+    inline = ET.SubElement(cell, qname("is"))
+    text = ET.SubElement(inline, qname("t"))
+    text.text = value
+
+
+def set_cell_number(root: ET.Element, ref: str, value: int | float) -> None:
+    cell = find_cell(root, ref)
+    if cell is None:
+        return
+    clear_cell_element(cell)
+    value_element = ET.SubElement(cell, qname("v"))
+    value_element.text = format_excel_number(value)
+
+
+def set_cell_number_or_blank(root: ET.Element, ref: str, value: float | None) -> None:
+    if value is None:
+        clear_cell(root, ref)
+    else:
+        set_cell_number(root, ref, value)
+
+
+def clear_cell(root: ET.Element, ref: str) -> None:
+    cell = find_cell(root, ref)
+    if cell is not None:
+        clear_cell_element(cell)
+
+
+def set_cell_style(root: ET.Element, ref: str, style_id: str) -> None:
+    cell = find_cell(root, ref)
+    if cell is not None:
+        cell.attrib["s"] = style_id
+
+
+def clear_cell_element(cell: ET.Element) -> None:
+    cell.attrib.pop("t", None)
+    for child in list(cell):
+        if child.tag in {qname("v"), qname("is"), qname("f")}:
+            cell.remove(child)
+
+
+def find_cell(root: ET.Element, ref: str) -> ET.Element | None:
+    row_number = cell_row(ref)
+    row = find_sheet_row(root, row_number)
+    if row is None:
+        return None
+    for cell in row.findall(qname("c")):
+        if cell.attrib.get("r") == ref:
+            return cell
+    return None
+
+
+def qname(local_name: str) -> str:
+    return f"{{{SPREADSHEET_NS}}}{local_name}"
+
+
+def cell_column(ref: str) -> str:
+    match = re.match(r"([A-Z]+)", ref)
+    return match.group(1) if match else ref
+
+
+def cell_row(ref: str) -> int:
+    match = re.search(r"([0-9]+)$", ref)
+    return int(match.group(1)) if match else 0
+
+
+def excel_date_serial(value: date) -> int:
+    return (value - EXCEL_EPOCH).days
+
+
+def excel_time_serial(value: time | None) -> float | None:
+    if value is None:
+        return None
+    return (value.hour * 3600 + value.minute * 60 + value.second) / 86400
+
+
+def format_excel_number(value: int | float) -> str:
+    if isinstance(value, int) or float(value).is_integer():
+        return str(int(value))
+    return f"{value:.12g}"
 
 
 def build_sheet_payloads(
