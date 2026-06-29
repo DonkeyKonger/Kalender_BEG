@@ -83,6 +83,28 @@ LOGGER = logging.getLogger(__name__)
 CustomerEmailStatus = tuple[datetime, bool | None]
 
 
+def _measurement_entry_area_key(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _measurement_entry_sort_key(entry: SiteMeasurementEntry) -> tuple[str, str, int]:
+    return (
+        _datetime_as_string(entry.updated_at) or "",
+        _datetime_as_string(entry.created_at) or "",
+        entry.id or 0,
+    )
+
+
+def _current_measurement_entries(entries: list[SiteMeasurementEntry]) -> list[SiteMeasurementEntry]:
+    current_by_cell: dict[tuple[int, str], SiteMeasurementEntry] = {}
+    for entry in entries:
+        key = (entry.measurement_item_id, _measurement_entry_area_key(entry.area_or_comment))
+        current_entry = current_by_cell.get(key)
+        if current_entry is None or _measurement_entry_sort_key(entry) > _measurement_entry_sort_key(current_entry):
+            current_by_cell[key] = entry
+    return sorted(current_by_cell.values(), key=lambda entry: (entry.created_at, entry.id))
+
+
 class MeasurementService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -359,6 +381,11 @@ class MeasurementService:
         if not comment:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
 
+        self._delete_existing_entries_for_cell(
+            batch_id=batch.id,
+            measurement_item_id=item.id,
+            area_or_comment=comment,
+        )
         entry = SiteMeasurementEntry(
             measurement_batch_id=batch.id,
             measurement_item_id=item.id,
@@ -420,6 +447,11 @@ class MeasurementService:
         if not comment:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich oder Kommentar ist erforderlich.")
 
+        self._delete_existing_entries_for_cell(
+            batch_id=batch.id,
+            measurement_item_id=item.id,
+            area_or_comment=comment,
+        )
         entry = SiteMeasurementEntry(
             measurement_batch_id=batch.id,
             measurement_item_id=item.id,
@@ -554,13 +586,14 @@ class MeasurementService:
         if batch.status != "draft":
             raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Aufmaß ist kein Entwurf mehr.")
         self._ensure_mobile_batch_can_be_edited_by_worker(batch)
-        if not batch.entries:
+        current_entries = _current_measurement_entries(list(batch.entries))
+        if not current_entries:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Ein Aufmaß ohne Aufmaßzeilen kann nicht gesendet werden.",
             )
 
-        for entry in batch.entries:
+        for entry in current_entries:
             entry.submitted_area_or_comment = entry.area_or_comment
             entry.submitted_quantity = entry.quantity
 
@@ -659,7 +692,7 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaß ist bereits abgeschlossen.",
             )
-        if not batch.entries:
+        if not _current_measurement_entries(list(batch.entries)):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Ein Aufmaß ohne Aufmaßzeilen kann nicht unterschrieben werden.",
@@ -962,21 +995,19 @@ class MeasurementService:
 
         measured_by_item_id: dict[int, Decimal] = {}
         if active_batch_ids:
-            measured_rows = self.db.execute(
-                select(
-                    SiteMeasurementEntry.measurement_item_id,
-                    func.coalesce(func.sum(SiteMeasurementEntry.quantity), Decimal("0")),
+            measured_entries = list(
+                self.db.scalars(
+                    select(SiteMeasurementEntry)
+                    .where(
+                        SiteMeasurementEntry.site_id == site_id,
+                        SiteMeasurementEntry.measurement_batch_id.in_(active_batch_ids),
+                    )
+                ).all()
+            )
+            for entry in _current_measurement_entries(measured_entries):
+                measured_by_item_id[entry.measurement_item_id] = (
+                    measured_by_item_id.get(entry.measurement_item_id, Decimal("0")) + entry.quantity
                 )
-                .where(
-                    SiteMeasurementEntry.site_id == site_id,
-                    SiteMeasurementEntry.measurement_batch_id.in_(active_batch_ids),
-                )
-                .group_by(SiteMeasurementEntry.measurement_item_id)
-            ).all()
-            measured_by_item_id = {
-                int(item_id): measured_quantity or Decimal("0")
-                for item_id, measured_quantity in measured_rows
-            }
 
         items = list(
             self.db.scalars(
@@ -1121,7 +1152,7 @@ class MeasurementService:
         for batch in batches:
             analysis_at = self._analysis_timestamp(batch)
             boundary = self._local_analysis_datetime(analysis_at) if analysis_at else None
-            measurement_minutes = self._sum_reported_minutes(batch.entries) or Decimal("0")
+            measurement_minutes = self._sum_reported_minutes(_current_measurement_entries(list(batch.entries))) or Decimal("0")
             actual_minutes = self._sum_work_minutes_for_period(
                 relevant_work_entries,
                 period_start=previous_boundary,
@@ -1253,7 +1284,7 @@ class MeasurementService:
             )
 
         batch.status = normalized_status
-        for entry in batch.entries:
+        for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = normalized_status
         if normalized_status == "billed" and current_user is not None:
             self._archive_billed_batch_pdf(batch=batch, current_user=current_user)
@@ -1286,10 +1317,10 @@ class MeasurementService:
         notification_user_id = (
             batch.submitted_by_user_id
             or batch.created_by_user_id
-            or next((entry.created_by_user_id for entry in batch.entries if entry.created_by_user_id), None)
+            or next((entry.created_by_user_id for entry in _current_measurement_entries(list(batch.entries)) if entry.created_by_user_id), None)
         )
         entry_author_user_ids = sorted(
-            {entry.created_by_user_id for entry in batch.entries if entry.created_by_user_id is not None}
+            {entry.created_by_user_id for entry in _current_measurement_entries(list(batch.entries)) if entry.created_by_user_id is not None}
         )
         LOGGER.info(
             "Measurement reviewed trigger fired: site_id=%s batch_id=%s previous_status=%s submitted_by_user_id=%s created_by_user_id=%s entry_author_user_ids=%s recipient_user_id=%s.",
@@ -1303,7 +1334,7 @@ class MeasurementService:
         )
 
         batch.status = "reviewed"
-        for entry in batch.entries:
+        for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = "reviewed"
         self.db.commit()
         self.db.refresh(batch)
@@ -1380,7 +1411,7 @@ class MeasurementService:
                 "Unterschriebene Aufmaße behalten die unterschriebene Fassung als Grundlage.",
             )
 
-        entries = list(batch.entries)
+        entries = _current_measurement_entries(list(batch.entries))
         if not entries:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -1867,6 +1898,27 @@ class MeasurementService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
         return batch
 
+    def _delete_existing_entries_for_cell(
+        self,
+        *,
+        batch_id: int,
+        measurement_item_id: int,
+        area_or_comment: str,
+    ) -> None:
+        area_key = _measurement_entry_area_key(area_or_comment)
+        existing_entries = list(
+            self.db.scalars(
+                select(SiteMeasurementEntry).where(
+                    SiteMeasurementEntry.measurement_batch_id == batch_id,
+                    SiteMeasurementEntry.measurement_item_id == measurement_item_id,
+                )
+            ).all()
+        )
+        for entry in existing_entries:
+            if _measurement_entry_area_key(entry.area_or_comment) == area_key:
+                self.db.delete(entry)
+        self.db.flush()
+
     def _format_user_display_name(self, user: User | None) -> str | None:
         if user is None:
             return None
@@ -1897,7 +1949,7 @@ class MeasurementService:
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
-            for entry in batch.entries
+            for entry in _current_measurement_entries(list(batch.entries))
             if not (entry.measurement_item and entry.measurement_item.is_hidden)
         ]
         position_ids = {entry.measurement_item_id for entry in visible_entries}
@@ -2123,7 +2175,7 @@ class MeasurementService:
 
     @staticmethod
     def _batch_has_measurement_content(batch: SiteMeasurementBatch) -> bool:
-        return bool(batch.entries) or bool(batch.area_rows)
+        return bool(_current_measurement_entries(list(batch.entries))) or bool(batch.area_rows)
 
     def _next_free_measurement_position(self, batch: SiteMeasurementBatch) -> str:
         existing_positions = set(
@@ -2149,7 +2201,7 @@ class MeasurementService:
         event_at: datetime,
     ) -> dict[str, object]:
         entries: list[dict[str, object]] = []
-        for entry in sorted(batch.entries, key=lambda row: (row.created_at, row.id)):
+        for entry in _current_measurement_entries(list(batch.entries)):
             item = entry.measurement_item
             if item is None:
                 continue
@@ -2184,7 +2236,8 @@ class MeasurementService:
     def _build_dashboard_submission(
         self, batch: SiteMeasurementBatch
     ) -> MeasurementDashboardSubmissionRead:
-        position_ids = {entry.measurement_item_id for entry in batch.entries}
+        current_entries = _current_measurement_entries(list(batch.entries))
+        position_ids = {entry.measurement_item_id for entry in current_entries}
         is_customer_signed = batch.customer_signed_at is not None and batch.status not in {
             "billed",
             "approved",
@@ -2205,7 +2258,7 @@ class MeasurementService:
             submitted_at=batch.submitted_at,
             customer_signature_name=batch.customer_signature_name,
             customer_signed_at=batch.customer_signed_at,
-            entry_count=len(batch.entries),
+            entry_count=len(current_entries),
             position_count=len(position_ids),
         )
 
@@ -2233,7 +2286,9 @@ class MeasurementService:
         self, item: SiteMeasurementItem, batch_id: int
     ) -> MobileMeasurementItemRead:
         entries = sorted(
-            (entry for entry in item.entries if entry.measurement_batch_id == batch_id),
+            _current_measurement_entries([
+                entry for entry in item.entries if entry.measurement_batch_id == batch_id
+            ]),
             key=lambda entry: (entry.created_at, entry.id),
         )
         reported_quantity = sum((entry.quantity for entry in entries), Decimal("0"))

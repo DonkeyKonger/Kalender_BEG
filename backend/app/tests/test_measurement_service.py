@@ -788,6 +788,164 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
     assert locked.value.status_code == 409
 
 
+def test_mobile_measurement_reentry_replaces_previous_area_quantity():
+    from datetime import date
+
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType, PersonType, UserRole
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
+    from app.models.user import User
+    from app.schemas.measurement import MeasurementEntryCreate
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max-reentry",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 5, 26),
+        end_date=date(2026, 5, 26),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([user, assignment, item])
+    db.commit()
+
+    service = MeasurementService(db)
+    batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
+    service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="EG", quantity=Decimal("10.00")),
+    )
+    service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment=" EG ", quantity=Decimal("5.00")),
+    )
+
+    stored_entries = list(
+        db.scalars(
+            select(SiteMeasurementEntry).where(SiteMeasurementEntry.measurement_batch_id == batch.id)
+        ).all()
+    )
+    mobile_items = service.list_mobile_batch_items(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+    )
+    submitted = service.submit_mobile_batch(assignment_id=assignment.id, batch_id=batch.id, current_user=user)
+    review_items = service.list_site_batch_items(site_id=site.id, batch_id=submitted.id)
+    _positions, _areas, checked_cells, checked_totals = MeasurementPdfService(db)._build_matrix(
+        db.get(SiteMeasurementBatch, submitted.id),
+        mode="checked",
+    )
+
+    assert len(stored_entries) == 1
+    assert stored_entries[0].quantity == Decimal("5.00")
+    assert mobile_items[0].reported_quantity == Decimal("5.00")
+    assert len(review_items[0].entries) == 1
+    assert review_items[0].entries[0].quantity == Decimal("5.00")
+    assert checked_cells[("eg", item.id)].quantity == Decimal("5.00")
+    assert checked_totals[item.id] == Decimal("5.00")
+    assert submitted.entry_count == 1
+
+
+def test_legacy_duplicate_measurement_entries_use_latest_cell_value():
+    from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="submitted",
+    )
+    old_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("10.00"),
+        area_or_comment="EG",
+        status="submitted",
+    )
+    db.add_all([item, batch, old_entry])
+    db.commit()
+    new_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("5.00"),
+        area_or_comment=" EG ",
+        status="submitted",
+    )
+    db.add(new_entry)
+    db.commit()
+    db.refresh(batch)
+
+    service = MeasurementService(db)
+    review_items = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    timesheet = service.get_site_measurement_timesheet(site.id)
+    _positions, _areas, checked_cells, checked_totals = MeasurementPdfService(db)._build_matrix(
+        db.get(SiteMeasurementBatch, batch.id),
+        mode="checked",
+    )
+
+    assert len(review_items[0].entries) == 1
+    assert review_items[0].entries[0].id == new_entry.id
+    assert review_items[0].entries[0].quantity == Decimal("5.00")
+    assert timesheet.rows[0].measured_quantity == Decimal("5.00")
+    assert checked_cells[("eg", item.id)].quantity == Decimal("5.00")
+    assert checked_totals[item.id] == Decimal("5.00")
+
+
 def test_site_measurement_billing_status_and_entry_update():
     from datetime import date
 

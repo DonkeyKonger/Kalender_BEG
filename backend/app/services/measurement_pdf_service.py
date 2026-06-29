@@ -27,7 +27,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
-from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY
+from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
@@ -374,7 +374,7 @@ class MeasurementPdfService:
                     "updated_at": entry.updated_at,
                     "item_updated_at": entry.measurement_item.updated_at if entry.measurement_item else None,
                 }
-                for entry in sorted(batch.entries or [], key=lambda entry: entry.id)
+                for entry in sorted(_current_measurement_entries(list(batch.entries or [])), key=lambda entry: entry.id)
             ],
             "area_rows": [
                 {
@@ -563,7 +563,7 @@ class MeasurementPdfService:
         dict[int, Decimal],
     ]:
         entries = sorted(
-            batch.entries,
+            _current_measurement_entries(list(batch.entries)),
             key=lambda entry: (
                 entry.measurement_item.sort_order if entry.measurement_item else 0,
                 entry.measurement_item.position if entry.measurement_item else "",
