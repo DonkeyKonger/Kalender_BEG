@@ -1125,6 +1125,42 @@ export function MatrixPage() {
     setAssignmentCollisionNotice(notice);
   }
 
+  async function deleteAssignmentCollisionDay(date: string, item: AssignmentCollisionItem) {
+    if (!matrixIsEditable) {
+      return;
+    }
+    if (!window.confirm("Vorhandene Planung an diesem Tag wirklich löschen?")) {
+      return;
+    }
+    try {
+      const response = await api.deleteAssignmentDay(item.assignmentId, date);
+      setError(null);
+      await replaceMatrixSiteCellsOrRefresh(response.updated_site_cells);
+      setAssignmentCollisionNotice((current) => {
+        if (!current) {
+          return current;
+        }
+        const days = current.days
+          .map((day) => {
+            if (day.date !== date) {
+              return day;
+            }
+            return {
+              ...day,
+              items: day.items.filter((collisionItem) => !(
+                collisionItem.assignmentId === item.assignmentId
+                && collisionItem.siteId === item.siteId
+              )),
+            };
+          })
+          .filter((day) => day.items.length > 0);
+        return days.length ? { days } : null;
+      });
+    } catch (requestError) {
+      setError(readApiError(requestError, "Vorhandene Planung konnte nicht für diesen Tag gelöscht werden."));
+    }
+  }
+
   async function showAssignmentCollisionNoticeForPlan(check: AssignmentCollisionCheck) {
     const personIds = Array.from(new Set(check.personIds.filter((personId) => Number.isFinite(personId))));
     if (!personIds.length) {
@@ -1779,6 +1815,7 @@ export function MatrixPage() {
           {assignmentCollisionNotice && (
             <AssignmentCollisionNoticePopup
               notice={assignmentCollisionNotice}
+              onDeleteCollisionDay={deleteAssignmentCollisionDay}
               onClose={dismissAssignmentCollisionNotice}
             />
           )}
@@ -1790,12 +1827,25 @@ export function MatrixPage() {
 
 type AssignmentCollisionNoticePopupProps = {
   notice: AssignmentCollisionNotice;
+  onDeleteCollisionDay: (date: string, item: AssignmentCollisionItem) => Promise<void>;
   onClose: () => void;
 };
 
-function AssignmentCollisionNoticePopup({ notice, onClose }: AssignmentCollisionNoticePopupProps) {
+function AssignmentCollisionNoticePopup({ notice, onDeleteCollisionDay, onClose }: AssignmentCollisionNoticePopupProps) {
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+
   if (typeof document === "undefined") {
     return null;
+  }
+
+  async function handleDeleteCollisionDay(date: string, item: AssignmentCollisionItem) {
+    const key = `${date}-${item.assignmentId}-${item.siteId}`;
+    setPendingDeleteKey(key);
+    try {
+      await onDeleteCollisionDay(date, item);
+    } finally {
+      setPendingDeleteKey(null);
+    }
   }
 
   return createPortal(
@@ -1811,7 +1861,7 @@ function AssignmentCollisionNoticePopup({ notice, onClose }: AssignmentCollision
             <span>Planungshinweis</span>
             <h2 id="assignment-collision-title">Monteur bereits eingeplant</h2>
           </div>
-          <button aria-label="Hinweis schliessen" type="button" onClick={onClose}>
+          <button aria-label="Hinweis schließen" type="button" onClick={onClose}>
             x
           </button>
         </header>
@@ -1820,18 +1870,29 @@ function AssignmentCollisionNoticePopup({ notice, onClose }: AssignmentCollision
             <section className="assignment-collision-notice-day" key={day.date}>
               <h3>{formatDayHeader(day.date)} {formatDayNumber(day.date)}</h3>
               <ul>
-                {day.items.map((item) => (
-                  <li key={`${day.date}-${item.assignmentId}-${item.siteId}`}>
-                    {item.personName} ist bereits auf {item.siteLabel} eingeplant
-                  </li>
-                ))}
+                {day.items.map((item) => {
+                  const key = `${day.date}-${item.assignmentId}-${item.siteId}`;
+                  return (
+                    <li key={key}>
+                      <span>{item.personName} ist bereits auf {item.siteLabel} eingeplant</span>
+                      <button
+                        className="assignment-collision-delete-day"
+                        disabled={pendingDeleteKey !== null}
+                        type="button"
+                        onClick={() => void handleDeleteCollisionDay(day.date, item)}
+                      >
+                        {pendingDeleteKey === key ? "Löscht..." : "Planung an diesem Tag löschen"}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
         </div>
         <footer className="assignment-collision-notice-actions">
           <button className="icon-button secondary" type="button" onClick={onClose}>
-            Schliessen
+            Schließen
           </button>
         </footer>
       </section>

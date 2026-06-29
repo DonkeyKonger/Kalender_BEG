@@ -171,6 +171,74 @@ class AssignmentService:
             ]),
         )
 
+    def delete_assignment_day(
+        self,
+        assignment_id: int,
+        target_date: Date,
+        user_id: int,
+    ) -> AssignmentMutationResult:
+        assignment = self.assignments.get(assignment_id)
+        if assignment is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
+        if target_date < assignment.start_date or target_date > assignment.end_date:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tag liegt ausserhalb des Einsatzes.")
+
+        affected_site_id = assignment.site_id
+        affected_start_date = assignment.start_date
+        affected_end_date = assignment.end_date
+        old_value = self._assignment_snapshot(assignment)
+        right_remainder = None
+
+        if assignment.start_date == assignment.end_date:
+            self.assignments.delete(assignment)
+            new_value = None
+        elif target_date == assignment.start_date:
+            assignment.start_date = target_date + timedelta(days=1)
+            assignment.updated_by_user_id = user_id
+            new_value = self._assignment_snapshot(assignment)
+        elif target_date == assignment.end_date:
+            assignment.end_date = target_date - timedelta(days=1)
+            assignment.updated_by_user_id = user_id
+            new_value = self._assignment_snapshot(assignment)
+        else:
+            right_remainder = Assignment(
+                site_id=assignment.site_id,
+                person_id=assignment.person_id,
+                start_date=target_date + timedelta(days=1),
+                end_date=assignment.end_date,
+                assignment_type=assignment.assignment_type,
+                note=assignment.note,
+                created_by_user_id=assignment.created_by_user_id,
+                updated_by_user_id=user_id,
+            )
+            assignment.end_date = target_date - timedelta(days=1)
+            assignment.updated_by_user_id = user_id
+            self.assignments.add(right_remainder)
+            new_value = {
+                "left_remainder": self._assignment_snapshot(assignment),
+                "right_remainder": self._assignment_snapshot(right_remainder),
+            }
+
+        self.audit.record(
+            user_id=user_id,
+            action="assignment.day_deleted",
+            entity_type="assignment",
+            entity_id=assignment_id,
+            old_value=old_value,
+            new_value=new_value,
+        )
+        self.db.commit()
+        if right_remainder is not None:
+            self.db.refresh(right_remainder)
+        return AssignmentMutationResult(
+            assignment=right_remainder or assignment,
+            warnings=[],
+            infos=[],
+            updated_site_cells=self._updated_site_cells([
+                (affected_site_id, affected_start_date, affected_end_date),
+            ]),
+        )
+
     def move_assignment_segment(
         self,
         assignment_id: int,

@@ -84,6 +84,17 @@ def delete_assignment(
     return _mutation_response(result)
 
 
+@router.delete("/{assignment_id}/days/{target_date}", response_model=AssignmentMutationResponse)
+def delete_assignment_day(
+    assignment_id: int,
+    target_date: date,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> AssignmentMutationResponse:
+    result = AssignmentService(db).delete_assignment_day(assignment_id, target_date, current_user.id)
+    return _mutation_response(result)
+
+
 def _mutation_response(result: AssignmentMutationResult) -> AssignmentMutationResponse:
     return AssignmentMutationResponse(
         assignment=AssignmentRead.model_validate(result.assignment),

@@ -1364,6 +1364,10 @@ export const api = {
     return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}`, { method: "DELETE" });
   },
 
+  async deleteAssignmentDay(assignmentId: number, targetDate: string): Promise<AssignmentMutationApiResponse> {
+    return request<AssignmentMutationApiResponse>(`/assignments/${assignmentId}/days/${targetDate}`, { method: "DELETE" });
+  },
+
   async assignments(params: {
     start?: string;
     end?: string;
