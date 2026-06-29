@@ -720,7 +720,6 @@ button:disabled {
   bottom: -4px;
   left: 0;
   height: 4px;
-  border-right: 1px solid #dce3ee;
   background: inherit;
   content: "";
   pointer-events: none;
@@ -728,16 +727,6 @@ button:disabled {
 
 .matrix-table thead .matrix-day-row .sticky-col {
   z-index: 14;
-}
-
-.matrix-table thead .matrix-day-row .sticky-col:not(.site-number-col),
-.matrix-absence-row .sticky-col:not(.site-number-col) {
-  border-left: 1px solid #dce3ee;
-}
-
-.matrix-table thead .matrix-day-row .sticky-col:not(.site-number-col)::after,
-.matrix-absence-row .sticky-col:not(.site-number-col)::after {
-  border-left: 1px solid #dce3ee;
 }
 
 .matrix-week-fixed {
@@ -2447,7 +2436,6 @@ button.person-chip:focus-visible {
   left: 0;
   height: var(--matrix-absence-separator-height);
   border-top: 1px solid #cbd7e6;
-  border-right: 1px solid #dce3ee;
   border-bottom: 1px solid #dce3ee;
   background: #f8fafc;
   content: "";
