@@ -714,19 +714,14 @@ button:disabled {
   z-index: 11;
 }
 
-.matrix-table thead .matrix-day-row th::after {
-  position: absolute;
-  right: -1px;
-  bottom: -4px;
-  left: 0;
-  height: 4px;
-  background: inherit;
-  content: "";
-  pointer-events: none;
-}
-
 .matrix-table thead .matrix-day-row .sticky-col {
   z-index: 14;
+}
+
+.matrix-table thead .matrix-day-row .status-col,
+.matrix-absence-row .status-col {
+  border-right: 1px solid #dce3ee;
+  box-shadow: none;
 }
 
 .matrix-week-fixed {
@@ -2422,7 +2417,7 @@ button.person-chip:focus-visible {
 .matrix-absence-row th,
 .matrix-absence-row td {
   position: sticky;
-  top: calc(var(--matrix-sticky-header-height) - 1px);
+  top: var(--matrix-sticky-header-height);
   z-index: 9;
   background: #fbfdff;
   box-shadow: inset 0 -1px 0 #cbd7e6;
