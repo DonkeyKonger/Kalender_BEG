@@ -28,7 +28,15 @@ type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteWorkTimeRangeMode = "week" | "month";
-type SiteWorkTimeBalanceStatus = "missing" | "within" | "near_limit" | "over";
+type SiteHoursComparisonStatus = "on_course" | "watch" | "critical" | "missing";
+type SiteHoursComparison = {
+  offerMinutes: number | null;
+  billedMeasurementMinutes: number | null;
+  workerMinutes: number;
+  offerDifferenceMinutes: number | null;
+  billedDifferenceMinutes: number | null;
+  status: SiteHoursComparisonStatus;
+};
 type ProjectFolderNavigationLevel = {
   itemId: string;
   name: string;
@@ -38,6 +46,7 @@ type ProjectFolderNavigationLevel = {
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
+const FINAL_MEASUREMENT_BATCH_STATUSES = new Set(["approved", "billed", "closed"]);
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 56;
 const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
@@ -1121,7 +1130,7 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "assembly-times" ? (
-        <SiteWorkTimesPanel site={site} canEdit={canEditSite} onSiteUpdated={setSite} />
+        <SiteWorkTimesPanel site={site} />
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
@@ -4256,22 +4265,18 @@ function MeasurementTimeAnalysisExtraWorkDropdown({
 
 function SiteWorkTimesPanel({
   site,
-  canEdit,
-  onSiteUpdated,
 }: {
   site: Site;
-  canEdit: boolean;
-  onSiteUpdated: (site: Site) => void;
 }) {
   const [rangeMode, setRangeMode] = useState<SiteWorkTimeRangeMode>("month");
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [projectEntries, setProjectEntries] = useState<TimeEntry[]>([]);
+  const [projectTimesheet, setProjectTimesheet] = useState<MeasurementTimesheet | null>(null);
+  const [projectMeasurementBatches, setProjectMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isComparisonLoading, setIsComparisonLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isEditingPlanned, setIsEditingPlanned] = useState(false);
-  const [plannedInput, setPlannedInput] = useState(() => formatPlannedWorkHours(site.planned_work_minutes));
-  const [plannedSaveError, setPlannedSaveError] = useState<string | null>(null);
-  const [plannedSaveMessage, setPlannedSaveMessage] = useState<string | null>(null);
-  const [isSavingPlanned, setIsSavingPlanned] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const activeRange = useMemo(
     () => (rangeMode === "week" ? getCurrentGermanWeekRange() : getCurrentMonthRange()),
     [rangeMode],
@@ -4283,17 +4288,13 @@ function SiteWorkTimesPanel({
     breakMinutes: sumSiteWorkTimeMinutes(entries, "break"),
     travelMinutes: sumSiteWorkTimeMinutes(entries, "travel"),
   }), [entries]);
-  const plannedMinutes = site.planned_work_minutes;
-  const hasPlannedMinutes = typeof plannedMinutes === "number" && plannedMinutes > 0;
-  const differenceMinutes = hasPlannedMinutes ? summary.workMinutes - plannedMinutes : null;
-  const usagePercent = hasPlannedMinutes ? (summary.workMinutes / plannedMinutes) * 100 : null;
-  const balanceStatus = getSiteWorkTimeBalanceStatus(plannedMinutes, summary.workMinutes);
-
-  useEffect(() => {
-    if (!isEditingPlanned) {
-      setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
-    }
-  }, [isEditingPlanned, site.planned_work_minutes]);
+  const projectSummary = useMemo(() => ({
+    workMinutes: sumSiteWorkTimeMinutes(projectEntries, "work"),
+  }), [projectEntries]);
+  const hoursComparison = useMemo(
+    () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, projectSummary.workMinutes),
+    [projectMeasurementBatches, projectSummary.workMinutes, projectTimesheet],
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -4328,43 +4329,44 @@ function SiteWorkTimesPanel({
     };
   }, [activeRange.end, activeRange.start, site.id]);
 
-  function startPlannedEdit(): void {
-    setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
-    setPlannedSaveError(null);
-    setPlannedSaveMessage(null);
-    setIsEditingPlanned(true);
-  }
+  useEffect(() => {
+    let ignore = false;
+    setIsComparisonLoading(true);
+    setComparisonError(null);
 
-  function cancelPlannedEdit(): void {
-    if (isSavingPlanned) {
-      return;
-    }
-    setPlannedInput(formatPlannedWorkHours(site.planned_work_minutes));
-    setPlannedSaveError(null);
-    setIsEditingPlanned(false);
-  }
+    Promise.all([
+      api.timeEntries({
+        siteId: site.id,
+        projectMountingOnly: true,
+      }),
+      api.measurementTimesheet(site.id),
+      api.siteMeasurementBatches(site.id),
+    ])
+      .then(([projectEntryData, timesheetData, batchData]) => {
+        if (!ignore) {
+          setProjectEntries(projectEntryData);
+          setProjectTimesheet(timesheetData);
+          setProjectMeasurementBatches(batchData);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setProjectEntries([]);
+          setProjectTimesheet(null);
+          setProjectMeasurementBatches([]);
+          setComparisonError(readApiError(requestError, "Stundenvergleich konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsComparisonLoading(false);
+        }
+      });
 
-  async function savePlannedWorkMinutes(): Promise<void> {
-    const parsed = parsePlannedWorkHours(plannedInput);
-    if (!parsed.ok) {
-      setPlannedSaveError(parsed.error);
-      setPlannedSaveMessage(null);
-      return;
-    }
-    setIsSavingPlanned(true);
-    setPlannedSaveError(null);
-    setPlannedSaveMessage(null);
-    try {
-      const updatedSite = await api.updateSite(site.id, { planned_work_minutes: parsed.value });
-      onSiteUpdated(updatedSite);
-      setIsEditingPlanned(false);
-      setPlannedSaveMessage("Soll-Stunden gespeichert.");
-    } catch (requestError) {
-      setPlannedSaveError(readApiError(requestError, "Soll-Stunden konnten nicht gespeichert werden."));
-    } finally {
-      setIsSavingPlanned(false);
-    }
-  }
+    return () => {
+      ignore = true;
+    };
+  }, [site.id]);
 
   return (
     <div className="project-record-tab-panel site-times-shell">
@@ -4375,7 +4377,7 @@ function SiteWorkTimesPanel({
           </span>
           <div>
             <h2>Montagezeiten</h2>
-            <p>Erfasste Ist-Arbeitszeiten für diese Baustelle. Soll-/Ist-Auswertung folgt, sobald Sollstunden angebunden sind.</p>
+            <p>Erfasste Ist-Arbeitszeiten und Stundenvergleich für diese Baustelle.</p>
           </div>
         </div>
         <div className="site-times-period">
@@ -4421,69 +4423,55 @@ function SiteWorkTimesPanel({
           </div>
         </section>
 
-        <section className="site-times-panel site-times-balance-panel" aria-label="Soll-Ist-Auswertung">
-          <div className="site-times-panel-heading site-times-panel-heading-with-action">
-            <div>
-              <h3>Soll / Ist Vergleich</h3>
-              <p>Ist-Stunden aus geprüften Arbeitszeiten für {formatDateRange(activeRange.start, activeRange.end)}</p>
-            </div>
-            {canEdit && !isEditingPlanned ? (
-              <button className="secondary-action" type="button" onClick={startPlannedEdit}>
-                Soll-Stunden bearbeiten
-              </button>
-            ) : null}
+        <section className="site-times-panel site-times-balance-panel" aria-label="Stundenvergleich">
+          <div className="site-times-panel-heading">
+            <h3>Stundenvergleich</h3>
+            <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und Montagezeiten</p>
           </div>
-
-          {isEditingPlanned ? (
-            <div className="site-worktime-planned-edit">
-              <label>
-                <span>Soll-Stunden für Auswertung</span>
-                <input
-                  inputMode="decimal"
-                  placeholder="z. B. 120,5"
-                  value={plannedInput}
-                  onChange={(event) => setPlannedInput(event.target.value)}
-                />
-              </label>
-              <div className="site-worktime-planned-actions">
-                <button className="icon-button secondary" disabled={isSavingPlanned} type="button" onClick={cancelPlannedEdit}>
-                  Abbrechen
-                </button>
-                <button className="icon-button" disabled={isSavingPlanned} type="button" onClick={() => void savePlannedWorkMinutes()}>
-                  {isSavingPlanned ? "Speichert..." : "Speichern"}
-                </button>
+          {comparisonError ? <div className="project-record-empty-state is-error">{comparisonError}</div> : null}
+          {isComparisonLoading ? (
+            <div className="project-record-empty-state">Stundenvergleich wird geladen...</div>
+          ) : null}
+          {!isComparisonLoading && !comparisonError ? (
+            <div className="site-times-balance-grid">
+              <div>
+                <span>Angebotsstunden gesamt</span>
+                <strong>
+                  {hoursComparison.offerMinutes !== null
+                    ? formatMeasurementDuration(hoursComparison.offerMinutes)
+                    : "Angebotsstunden nicht hinterlegt"}
+                </strong>
+              </div>
+              <div>
+                <span>Abgerechnete Aufmaßstunden</span>
+                <strong>
+                  {hoursComparison.billedMeasurementMinutes !== null
+                    ? formatMeasurementDuration(hoursComparison.billedMeasurementMinutes)
+                    : "Noch keine abgerechneten Aufmaße"}
+                </strong>
+              </div>
+              <div>
+                <span>Geleistete Monteurstunden</span>
+                <strong>{formatMeasurementDuration(hoursComparison.workerMinutes)}</strong>
+              </div>
+              <div>
+                <span>Delta Angebot</span>
+                <strong>{formatNullableSignedDuration(hoursComparison.offerDifferenceMinutes)}</strong>
+              </div>
+              <div>
+                <span>Delta Aufmaß</span>
+                <strong>{formatNullableSignedDuration(hoursComparison.billedDifferenceMinutes)}</strong>
+              </div>
+              <div>
+                <span>Statusbewertung</span>
+                <strong>
+                  <StatusBadge tone={siteHoursComparisonTone(hoursComparison.status)}>
+                    {siteHoursComparisonLabel(hoursComparison.status)}
+                  </StatusBadge>
+                </strong>
               </div>
             </div>
           ) : null}
-          {plannedSaveError ? <div className="project-record-empty-state is-error">{plannedSaveError}</div> : null}
-          {plannedSaveMessage ? <div className="project-record-empty-state is-success">{plannedSaveMessage}</div> : null}
-
-          <div className="site-times-balance-grid">
-            <div>
-              <span>Soll-Stunden</span>
-              <strong>{hasPlannedMinutes ? formatMeasurementDuration(plannedMinutes ?? 0) : "Nicht hinterlegt"}</strong>
-            </div>
-            <div>
-              <span>Ist-Stunden im Zeitraum</span>
-              <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
-            </div>
-            <div>
-              <span>Differenz Ist - Soll</span>
-              <strong>{differenceMinutes !== null ? formatMeasurementDuration(differenceMinutes) : "-"}</strong>
-            </div>
-            <div>
-              <span>Verbrauch</span>
-              <strong>{usagePercent !== null ? formatMeasurementPercent(usagePercent) : "-"}</strong>
-            </div>
-            <div>
-              <span>Hinweisstatus</span>
-              <strong>
-                <StatusBadge tone={siteWorkTimeBalanceTone(balanceStatus)}>
-                  {siteWorkTimeBalanceLabel(balanceStatus)}
-                </StatusBadge>
-              </strong>
-            </div>
-          </div>
         </section>
       </div>
 
@@ -5680,26 +5668,6 @@ function getCurrentMonthRange(referenceDate = new Date()): { start: string; end:
   };
 }
 
-function formatPlannedWorkHours(minutes: number | null): string {
-  if (minutes === null || minutes === undefined) {
-    return "";
-  }
-  const hours = minutes / 60;
-  return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2))).replace(".", ",");
-}
-
-function parsePlannedWorkHours(value: string): { ok: true; value: number | null } | { ok: false; error: string } {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return { ok: true, value: null };
-  }
-  const parsed = Number(trimmed.replace(",", "."));
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return { ok: false, error: "Soll-Stunden müssen eine Zahl ab 0 sein." };
-  }
-  return { ok: true, value: Math.round(parsed * 60) };
-}
-
 function sumSiteWorkTimeMinutes(entries: TimeEntry[], field: "work" | "break" | "travel"): number {
   return entries.reduce((sum, entry) => sum + getSiteWorkTimeMinutes(entry, field), 0);
 }
@@ -5726,41 +5694,90 @@ function countSiteWorkTimeParticipants(entries: TimeEntry[]): number {
   return participantIds.size;
 }
 
-function getSiteWorkTimeBalanceStatus(plannedMinutes: number | null, actualMinutes: number): SiteWorkTimeBalanceStatus {
-  if (typeof plannedMinutes !== "number" || plannedMinutes <= 0) {
+function buildSiteHoursComparison(
+  timesheet: MeasurementTimesheet | null,
+  batches: MobileMeasurementBatch[],
+  workerMinutes: number,
+): SiteHoursComparison {
+  const offerMinutes = timesheet?.kpi.has_planned_basis
+    ? getMeasurementNumericValue(timesheet.kpi.planned_minutes)
+    : null;
+  const billedMeasurementMinutes = getBilledMeasurementMinutes(batches);
+
+  return {
+    offerMinutes,
+    billedMeasurementMinutes,
+    workerMinutes,
+    offerDifferenceMinutes: offerMinutes !== null ? workerMinutes - offerMinutes : null,
+    billedDifferenceMinutes: billedMeasurementMinutes !== null ? workerMinutes - billedMeasurementMinutes : null,
+    status: getSiteHoursComparisonStatus(offerMinutes, billedMeasurementMinutes, workerMinutes),
+  };
+}
+
+function getBilledMeasurementMinutes(batches: MobileMeasurementBatch[]): number | null {
+  const billedBatches = batches.filter((batch) => FINAL_MEASUREMENT_BATCH_STATUSES.has(batch.status));
+  if (billedBatches.length === 0) {
+    return null;
+  }
+  return billedBatches.reduce(
+    (sum, batch) => sum + getMeasurementNumericValue(batch.reported_minutes),
+    0,
+  );
+}
+
+function getSiteHoursComparisonStatus(
+  offerMinutes: number | null,
+  billedMeasurementMinutes: number | null,
+  workerMinutes: number,
+): SiteHoursComparisonStatus {
+  if (
+    offerMinutes === null
+    || offerMinutes <= 0
+    || billedMeasurementMinutes === null
+    || billedMeasurementMinutes <= 0
+    || workerMinutes <= 0
+  ) {
     return "missing";
   }
-  const percent = (actualMinutes / plannedMinutes) * 100;
-  if (percent > 100) {
-    return "over";
+  const offerUsage = workerMinutes / offerMinutes;
+  const billedUsage = workerMinutes / billedMeasurementMinutes;
+  if (offerUsage > 1 || billedUsage > 1.15) {
+    return "critical";
   }
-  if (percent >= 80) {
-    return "near_limit";
+  if (offerUsage >= 0.85 || billedUsage > 1.05) {
+    return "watch";
   }
-  return "within";
+  return "on_course";
 }
 
-function siteWorkTimeBalanceLabel(status: SiteWorkTimeBalanceStatus): string {
-  if (status === "within") {
-    return "Im Rahmen";
+function siteHoursComparisonLabel(status: SiteHoursComparisonStatus): string {
+  if (status === "on_course") {
+    return "Auf Kurs";
   }
-  if (status === "near_limit") {
-    return "Soll fast erreicht";
+  if (status === "watch") {
+    return "Beobachten";
   }
-  if (status === "over") {
-    return "Soll überschritten";
+  if (status === "critical") {
+    return "Kritisch";
   }
-  return "Sollwert fehlt";
+  return "Daten fehlen";
 }
 
-function siteWorkTimeBalanceTone(status: SiteWorkTimeBalanceStatus): StatusBadgeTone {
-  if (status === "within") {
+function siteHoursComparisonTone(status: SiteHoursComparisonStatus): StatusBadgeTone {
+  if (status === "on_course") {
     return "active";
   }
-  if (status === "near_limit" || status === "over") {
+  if (status === "watch") {
     return "warning";
   }
+  if (status === "critical") {
+    return "danger";
+  }
   return "neutral";
+}
+
+function formatNullableSignedDuration(minutes: number | null): string {
+  return minutes !== null ? formatSignedMeasurementDuration(minutes) : "-";
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {
