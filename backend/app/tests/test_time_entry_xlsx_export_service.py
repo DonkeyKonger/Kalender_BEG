@@ -8,8 +8,12 @@ import pytest
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.time_entry_xlsx_export_service import (
+    WeeklyWorkerSheet,
+    build_weekly_workers_xlsx,
     build_weekly_worker_xlsx,
     excel_date_serial,
+    unique_weekly_worker_sheet_names,
+    weekly_worker_entry_has_hours,
     weekly_worker_rows,
 )
 
@@ -137,6 +141,75 @@ def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
     assert "L31:N31" in merge_refs
 
 
+def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():
+    erichsen_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=time(7, 0),
+        end_time=time(15, 0),
+        break_minutes=30,
+        work_minutes=450,
+        travel_minutes=0,
+        source="manual",
+    )
+    erichsen_entry.site = Site(site_number="8008", name="Friedensschule Osnabrück")
+    kramer_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 9),
+        start_time=time(8, 0),
+        end_time=time(12, 0),
+        break_minutes=0,
+        work_minutes=240,
+        travel_minutes=0,
+        source="manual",
+    )
+    kramer_entry.site = Site(site_number="4630", name="Neubau Volksbank Lathen")
+
+    content = build_weekly_workers_xlsx([
+        WeeklyWorkerSheet(
+            person_name="Christopher Erichsen",
+            sheet_name="Erichsen",
+            week_number=24,
+            year=2026,
+            start=date(2026, 6, 8),
+            end=date(2026, 6, 14),
+            rows=weekly_worker_rows(date(2026, 6, 8), date(2026, 6, 14), [erichsen_entry], {}),
+        ),
+        WeeklyWorkerSheet(
+            person_name="Christoph Kramer",
+            sheet_name="Kramer",
+            week_number=24,
+            year=2026,
+            start=date(2026, 6, 8),
+            end=date(2026, 6, 14),
+            rows=weekly_worker_rows(date(2026, 6, 8), date(2026, 6, 14), [kramer_entry], {}),
+        ),
+    ])
+
+    workbook = ZipFile(BytesIO(content))
+    names = set(workbook.namelist())
+    workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+    workbook_relationships = workbook.read("xl/_rels/workbook.xml.rels").decode("utf-8")
+    content_types = workbook.read("[Content_Types].xml").decode("utf-8")
+    first_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+    second_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
+
+    assert "xl/worksheets/sheet1.xml" in names
+    assert "xl/worksheets/sheet2.xml" in names
+    assert "xl/drawings/drawing1.xml" in names
+    assert "xl/drawings/drawing2.xml" in names
+    assert 'name="Erichsen" sheetId="1" r:id="rIdSheet1"' in workbook_xml
+    assert 'name="Kramer" sheetId="2" r:id="rIdSheet2"' in workbook_xml
+    assert "'Erichsen'!$A$1:$O$29" in workbook_xml
+    assert "'Kramer'!$A$1:$O$29" in workbook_xml
+    assert 'Target="worksheets/sheet1.xml"' in workbook_relationships
+    assert 'Target="worksheets/sheet2.xml"' in workbook_relationships
+    assert "/xl/worksheets/sheet2.xml" in content_types
+    assert "/xl/drawings/drawing2.xml" in content_types
+    assert cell_text(first_sheet, "B7") == "Christopher Erichsen"
+    assert cell_text(first_sheet, "C15") == "8008 - Friedensschule Osnabrück"
+    assert cell_text(second_sheet, "B7") == "Christoph Kramer"
+    assert cell_text(second_sheet, "C16") == "4630 - Neubau Volksbank Lathen"
+
+
 def test_weekly_worker_rows_skip_empty_weekends_but_keep_worked_weekends():
     sunday_entry = WorkTimeEntry(
         work_date=date(2026, 6, 14),
@@ -165,6 +238,37 @@ def test_weekly_worker_rows_skip_empty_weekends_but_keep_worked_weekends():
         date(2026, 6, 14),
     ]
     assert rows[-1].entry is sunday_entry
+
+
+def test_weekly_worker_hours_filter_and_sheet_names():
+    blank_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=None,
+        end_time=None,
+        break_minutes=0,
+        work_minutes=0,
+        travel_minutes=0,
+        source="manual",
+    )
+    office_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=None,
+        end_time=None,
+        break_minutes=0,
+        work_minutes=0,
+        travel_minutes=0,
+        payroll_corrected_start_time=time(8, 0),
+        payroll_corrected_end_time=time(12, 0),
+        source="manual",
+    )
+
+    assert not weekly_worker_entry_has_hours(blank_entry)
+    assert weekly_worker_entry_has_hours(office_entry)
+    assert unique_weekly_worker_sheet_names([
+        "Christopher Erichsen",
+        "Test Erichsen",
+        "Christoph Kramer",
+    ]) == ["Erichsen", "Erichsen 2", "Kramer"]
 
 
 def workbook_sheet(content: bytes):

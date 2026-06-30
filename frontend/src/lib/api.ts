@@ -1016,6 +1016,11 @@ export const api = {
     return requestBlob(`/exports/time-entries/weekly-worker-hours.pdf?${search.toString()}`);
   },
 
+  async weeklyAllWorkersTimeEntriesXlsx(params: { weekStart: string }): Promise<Blob> {
+    const search = new URLSearchParams({ week_start: params.weekStart });
+    return requestBlob(`/exports/time-entries/weekly-workers-xlsx?${search.toString()}`);
+  },
+
   async weeklyWorkerTimeEntriesXlsx(params: { personId: number; weekStart: string }): Promise<Blob> {
     const search = new URLSearchParams({
       person_id: String(params.personId),

@@ -274,7 +274,7 @@ export function TimeEntriesPage() {
   const [payrollCorrectionForm, setPayrollCorrectionForm] = useState<PayrollCorrectionFormState>({ start_time: "", end_time: "", hours: "" });
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
-  const [isDownloadingReviewHours, setIsDownloadingReviewHours] = useState(false);
+  const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
@@ -1254,19 +1254,22 @@ export function TimeEntriesPage() {
     }
   }
 
-  async function downloadWeeklyWorkerHoursPdf(): Promise<void> {
-    if (isDownloadingReviewHours) {
+  async function downloadAllReviewWeekXlsx(): Promise<void> {
+    if (isDownloadingAllReviewWeekXlsx) {
       return;
     }
-    setIsDownloadingReviewHours(true);
+    setIsDownloadingAllReviewWeekXlsx(true);
     setReviewHoursDownloadError(null);
     try {
-      const blob = await api.weeklyWorkerHoursPdf({ weekStart: reviewWeekRange.start });
-      downloadBlobFile(blob, `arbeitsstunden_kw${String(selectedReviewWeek.week).padStart(2, "0")}_${selectedReviewWeek.year}.pdf`);
+      const blob = await api.weeklyAllWorkersTimeEntriesXlsx({ weekStart: reviewWeekRange.start });
+      downloadBlobFile(
+        blob,
+        `Lohnpruefung_KW${String(selectedReviewWeek.week).padStart(2, "0")}_${selectedReviewWeek.year}_Alle_Monteure.xlsx`,
+      );
     } catch (requestError) {
-      setReviewHoursDownloadError(readApiError(requestError, "Arbeitsstunden-PDF konnte nicht erstellt werden."));
+      setReviewHoursDownloadError(readApiError(requestError, "Arbeitsstunden-Excel konnte nicht erstellt werden."));
     } finally {
-      setIsDownloadingReviewHours(false);
+      setIsDownloadingAllReviewWeekXlsx(false);
     }
   }
 
@@ -1412,10 +1415,10 @@ export function TimeEntriesPage() {
               <button
                 className="icon-button secondary time-review-download-button"
                 type="button"
-                disabled={isDownloadingReviewHours}
-                onClick={() => void downloadWeeklyWorkerHoursPdf()}
+                disabled={isDownloadingAllReviewWeekXlsx}
+                onClick={() => void downloadAllReviewWeekXlsx()}
               >
-                {isDownloadingReviewHours ? "Arbeitsstunden werden erstellt..." : "Arbeitsstunden downloaden"}
+                {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden Downloaden (Excel)"}
               </button>
             </div>
 

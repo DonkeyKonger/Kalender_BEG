@@ -9,6 +9,7 @@ from datetime import date, timedelta, time
 from importlib import resources
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape, quoteattr
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -113,6 +114,17 @@ class WeeklyWorkerExportRow:
     has_multiple_entries_on_day: bool = False
 
 
+@dataclass(frozen=True)
+class WeeklyWorkerSheet:
+    person_name: str
+    sheet_name: str
+    week_number: int
+    year: int
+    start: date
+    end: date
+    rows: list[WeeklyWorkerExportRow]
+
+
 class TimeEntryXlsxExportService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -160,14 +172,70 @@ class TimeEntryXlsxExportService:
         gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
 
         iso_week = start.isocalendar()
+        rows = weekly_worker_rows(start, end, entries, gps_evaluations)
         return build_weekly_worker_xlsx(
             person_name=person.display_name,
             week_number=iso_week.week,
             year=iso_week.year,
             start=start,
             end=end,
-            rows=weekly_worker_rows(start, end, entries, gps_evaluations),
+            rows=rows,
         )
+
+    def weekly_all_workers_export(self, *, week_start: date, current_user: User) -> bytes:
+        start = week_start - timedelta(days=week_start.weekday())
+        end = start + timedelta(days=6)
+        entries = TimeEntryService(self.db).list_entries(
+            current_user=current_user,
+            date_from=start,
+            date_to=end,
+        )
+        entries = [entry for entry in entries if entry.source != "gps_suggestion"]
+        entries.sort(
+            key=lambda entry: (
+                entry.person.display_name.casefold() if entry.person else "",
+                entry.work_date,
+                site_number(entry),
+                site_name(entry),
+                entry.id,
+            )
+        )
+        entries_by_person: dict[int, list[WorkTimeEntry]] = {}
+        for entry in entries:
+            if not weekly_worker_entry_has_hours(entry):
+                continue
+            entries_by_person.setdefault(entry.person_id, []).append(entry)
+
+        if not entries_by_person:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Für diese Kalenderwoche sind keine Arbeitsstunden vorhanden.",
+            )
+
+        gps_service = GpsPresenceService(self.db)
+        gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+        iso_week = start.isocalendar()
+        grouped_entries = sorted(
+            entries_by_person.values(),
+            key=lambda person_entries: weekly_worker_person_name(person_entries[0]).casefold(),
+        )
+        sheet_names = unique_weekly_worker_sheet_names(
+            weekly_worker_person_name(person_entries[0])
+            for person_entries in grouped_entries
+        )
+        sheets = [
+            WeeklyWorkerSheet(
+                person_name=weekly_worker_person_name(person_entries[0]),
+                sheet_name=sheet_names[index],
+                week_number=iso_week.week,
+                year=iso_week.year,
+                start=start,
+                end=end,
+                rows=weekly_worker_rows(start, end, person_entries, gps_evaluations),
+            )
+            for index, person_entries in enumerate(grouped_entries)
+        ]
+        return build_weekly_workers_xlsx(sheets)
 
     def _export_row(
         self,
@@ -288,26 +356,72 @@ def build_weekly_worker_xlsx(
     end: date,
     rows: list[WeeklyWorkerExportRow],
 ) -> bytes:
+    sheet = WeeklyWorkerSheet(
+        person_name=person_name,
+        sheet_name=WEEKLY_WORKER_TEMPLATE_SHEET_NAME,
+        week_number=week_number,
+        year=year,
+        start=start,
+        end=end,
+        rows=rows,
+    )
+    return build_weekly_workers_xlsx([sheet])
+
+
+def build_weekly_workers_xlsx(sheets: list[WeeklyWorkerSheet]) -> bytes:
+    if not sheets:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Für diese Kalenderwoche sind keine Arbeitsstunden vorhanden.",
+        )
     template = load_weekly_worker_template()
-    extra_rows = weekly_worker_template_extra_rows(rows)
-    print_last_row = WEEKLY_WORKER_TEMPLATE_PRINT_END_ROW + extra_rows
     output = BytesIO()
     with ZipFile(BytesIO(template), "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        template_sheet = source.read("xl/worksheets/sheet1.xml")
+        template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
+        template_drawing = source.read("xl/drawings/drawing1.xml")
+        template_drawing_relationships = source.read("xl/drawings/_rels/drawing1.xml.rels")
         for item in source.infolist():
+            if item.filename in {
+                "[Content_Types].xml",
+                "docProps/app.xml",
+                "xl/workbook.xml",
+                "xl/_rels/workbook.xml.rels",
+                "xl/worksheets/sheet1.xml",
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                "xl/drawings/drawing1.xml",
+                "xl/drawings/_rels/drawing1.xml.rels",
+            }:
+                continue
             content = source.read(item.filename)
-            if item.filename == "xl/worksheets/sheet1.xml":
-                content = fill_weekly_worker_template_sheet(
-                    content,
-                    person_name=person_name,
-                    week_number=week_number,
-                    year=year,
-                    start=start,
-                    end=end,
-                    rows=rows,
-                )
-            elif item.filename == "xl/workbook.xml":
-                content = set_weekly_worker_print_area(content, print_last_row=print_last_row)
             archive.writestr(item, content)
+
+        archive.writestr("[Content_Types].xml", weekly_worker_template_content_types(source.read("[Content_Types].xml"), len(sheets)))
+        archive.writestr("docProps/app.xml", weekly_worker_template_app_properties(source.read("docProps/app.xml"), [sheet.sheet_name for sheet in sheets]))
+        archive.writestr("xl/workbook.xml", weekly_worker_template_workbook_xml(source.read("xl/workbook.xml"), sheets))
+        archive.writestr("xl/_rels/workbook.xml.rels", weekly_worker_template_workbook_relationships(source.read("xl/_rels/workbook.xml.rels"), len(sheets)))
+        for index, sheet in enumerate(sheets, start=1):
+            archive.writestr(
+                f"xl/worksheets/sheet{index}.xml",
+                fill_weekly_worker_template_sheet(
+                    template_sheet,
+                    person_name=sheet.person_name,
+                    week_number=sheet.week_number,
+                    year=sheet.year,
+                    start=sheet.start,
+                    end=sheet.end,
+                    rows=sheet.rows,
+                ),
+            )
+            archive.writestr(
+                f"xl/worksheets/_rels/sheet{index}.xml.rels",
+                weekly_worker_template_sheet_relationships(template_sheet_relationships, index),
+            )
+            archive.writestr(f"xl/drawings/drawing{index}.xml", template_drawing)
+            archive.writestr(
+                f"xl/drawings/_rels/drawing{index}.xml.rels",
+                template_drawing_relationships,
+            )
     return output.getvalue()
 
 
@@ -378,23 +492,155 @@ def weekly_worker_template_extra_rows(rows: list[WeeklyWorkerExportRow]) -> int:
     return max(0, data_row_count - WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT)
 
 
-def set_weekly_worker_print_area(workbook_xml: bytes, *, print_last_row: int) -> bytes:
+def weekly_worker_template_content_types(content_types_xml: bytes, sheet_count: int) -> bytes:
+    text = content_types_xml.decode("utf-8")
+    text = re.sub(r'<Override PartName="/xl/worksheets/sheet\d+\.xml"[^>]*/>', "", text)
+    text = re.sub(r'<Override PartName="/xl/drawings/drawing\d+\.xml"[^>]*/>', "", text)
+    overrides = "".join(
+        '<Override '
+        f'PartName="/xl/worksheets/sheet{index}.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override '
+        f'PartName="/xl/drawings/drawing{index}.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
+    return text.replace("</Types>", f"{overrides}</Types>", 1).encode("utf-8")
+
+
+def weekly_worker_template_app_properties(app_xml: bytes, sheet_names: list[str]) -> bytes:
+    text = app_xml.decode("utf-8")
+    titles = "".join(f"<vt:lpstr>{escape(sheet_name)}</vt:lpstr>" for sheet_name in sheet_names)
+    text = re.sub(
+        r"(<HeadingPairs>.*?<vt:lpstr>Arbeitsblätter</vt:lpstr>.*?<vt:i4>)\d+(</vt:i4>.*?</HeadingPairs>)",
+        rf"\g<1>{len(sheet_names)}\g<2>",
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    titles_xml = (
+        f'<TitlesOfParts><vt:vector size="{len(sheet_names)}" baseType="lpstr">'
+        f"{titles}</vt:vector></TitlesOfParts>"
+    )
+    text = re.sub(
+        r"<TitlesOfParts>.*?</TitlesOfParts>",
+        titles_xml,
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    return text.encode("utf-8")
+
+
+def weekly_worker_template_workbook_xml(
+    workbook_xml: bytes,
+    sheets: list[WeeklyWorkerSheet],
+) -> bytes:
     text = workbook_xml.decode("utf-8")
-    print_area = (
-        f'<definedName name="_xlnm.Print_Area" localSheetId="0">'
-        f"'{WEEKLY_WORKER_TEMPLATE_SHEET_NAME}'!$A$1:$O${print_last_row}"
+    sheets_xml = "<sheets>" + "".join(
+        f"<sheet name={quoteattr(sheet.sheet_name)} sheetId=\"{index}\" "
+        f"r:id=\"rIdSheet{index}\"/>"
+        for index, sheet in enumerate(sheets, start=1)
+    ) + "</sheets>"
+    text = re.sub(r"<sheets>.*?</sheets>", sheets_xml, text, count=1, flags=re.DOTALL)
+
+    print_areas = "".join(
+        '<definedName name="_xlnm.Print_Area" '
+        f'localSheetId="{index - 1}">'
+        f"'{escape_excel_sheet_name(sheet.sheet_name)}'!$A$1:$O$"
+        f"{WEEKLY_WORKER_TEMPLATE_PRINT_END_ROW + weekly_worker_template_extra_rows(sheet.rows)}"
         "</definedName>"
+        for index, sheet in enumerate(sheets, start=1)
     )
     existing_print_area = re.compile(
-        r'<definedName\b[^>]*\bname="_xlnm\.Print_Area"[^>]*>.*?</definedName>'
+        r'<definedName\b[^>]*\bname="_xlnm\.Print_Area"[^>]*>.*?</definedName>',
+        re.DOTALL,
     )
-    if existing_print_area.search(text):
-        text = existing_print_area.sub(print_area, text, count=1)
-    elif "</definedNames>" in text:
-        text = text.replace("</definedNames>", f"{print_area}</definedNames>", 1)
+    text = existing_print_area.sub("", text)
+    if "</definedNames>" in text:
+        text = text.replace("</definedNames>", f"{print_areas}</definedNames>", 1)
     else:
-        text = text.replace("<calcPr", f"<definedNames>{print_area}</definedNames><calcPr", 1)
+        text = text.replace("<calcPr", f"<definedNames>{print_areas}</definedNames><calcPr", 1)
     return text.encode("utf-8")
+
+
+def weekly_worker_template_workbook_relationships(
+    relationships_xml: bytes,
+    sheet_count: int,
+) -> bytes:
+    text = relationships_xml.decode("utf-8")
+    relationship_tags = re.findall(r"<Relationship\b[^>]*/>", text)
+    preserved_relationships = [
+        tag
+        for tag in relationship_tags
+        if "officeDocument/2006/relationships/worksheet" not in tag
+    ]
+    sheet_relationships = [
+        '<Relationship '
+        f'Id="rIdSheet{index}" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        f'Target="worksheets/sheet{index}.xml"/>'
+        for index in range(1, sheet_count + 1)
+    ]
+    relationships = "".join([*sheet_relationships, *preserved_relationships])
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f"{relationships}</Relationships>"
+    ).encode("utf-8")
+
+
+def weekly_worker_template_sheet_relationships(
+    sheet_relationships_xml: bytes,
+    sheet_index: int,
+) -> bytes:
+    text = sheet_relationships_xml.decode("utf-8")
+    text = re.sub(r'Target="../drawings/drawing\d+\.xml"', f'Target="../drawings/drawing{sheet_index}.xml"', text)
+    return text.encode("utf-8")
+
+
+def unique_weekly_worker_sheet_names(person_names: Iterable[str]) -> list[str]:
+    used_names: set[str] = set()
+    sheet_names: list[str] = []
+    for person_name in person_names:
+        base_name = weekly_worker_sheet_base_name(person_name)
+        candidate = clamp_excel_sheet_name(base_name)
+        suffix = 2
+        while candidate.casefold() in used_names:
+            suffix_text = f" {suffix}"
+            candidate = clamp_excel_sheet_name(base_name, suffix=suffix_text)
+            suffix += 1
+        used_names.add(candidate.casefold())
+        sheet_names.append(candidate)
+    return sheet_names
+
+
+def weekly_worker_sheet_base_name(person_name: str) -> str:
+    cleaned = re.sub(r"\s+", " ", person_name).strip()
+    if not cleaned:
+        return "Monteur"
+    return cleaned.split(" ")[-1] or cleaned
+
+
+def clamp_excel_sheet_name(base_name: str, *, suffix: str = "") -> str:
+    cleaned = re.sub(r"[\[\]:*?/\\]", " ", base_name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip("' ").strip()
+    if not cleaned:
+        cleaned = "Monteur"
+    max_base_length = max(1, 31 - len(suffix))
+    return f"{cleaned[:max_base_length].rstrip()}{suffix}"
+
+
+def escape_excel_sheet_name(sheet_name: str) -> str:
+    return escape(sheet_name.replace("'", "''"))
+
+
+def weekly_worker_person_name(entry: WorkTimeEntry) -> str:
+    return entry.person.display_name if entry.person else f"Person {entry.person_id}"
+
+
+def weekly_worker_entry_has_hours(entry: WorkTimeEntry) -> bool:
+    return weekly_worker_work_minutes(entry) > 0
 
 
 def set_weekly_worker_page_setup(root: ET.Element) -> None:
