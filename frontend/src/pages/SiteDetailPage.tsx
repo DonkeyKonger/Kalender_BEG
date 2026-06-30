@@ -4374,50 +4374,43 @@ function SiteWorkTimesPanel({
         </section>
 
         <section className="site-times-panel site-times-balance-panel" aria-label="Stundenvergleich">
-          <div className="site-times-panel-heading">
-            <h3>Stundenvergleich</h3>
-            <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden</p>
+          <div className="site-times-panel-heading site-times-balance-heading">
+            <div>
+              <h3>Stundenvergleich</h3>
+              <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden</p>
+            </div>
+            <StatusBadge tone={siteHoursComparisonTone(hoursComparison.status)}>
+              {siteHoursComparisonLabel(hoursComparison.status)}
+            </StatusBadge>
           </div>
           {comparisonError ? <div className="project-record-empty-state is-error">{comparisonError}</div> : null}
           {isComparisonLoading ? (
             <div className="project-record-empty-state">Stundenvergleich wird geladen...</div>
           ) : null}
           {!isComparisonLoading && !comparisonError ? (
-            <div className="site-times-balance-grid">
-              <div>
+            <div className="site-times-summary-list site-times-comparison-list">
+              <div className="site-times-summary-row">
                 <span>Angebotsstunden gesamt</span>
                 <strong>
                   {hoursComparison.offerMinutes !== null
                     ? formatMeasurementDuration(hoursComparison.offerMinutes)
-                    : "Angebotsstunden nicht hinterlegt"}
+                    : "Nicht hinterlegt"}
                 </strong>
               </div>
-              <div>
+              <div className="site-times-summary-row">
                 <span>Abgerechnete Aufmaßstunden</span>
                 <strong>
                   {hoursComparison.billedMeasurementMinutes !== null
                     ? formatMeasurementDuration(hoursComparison.billedMeasurementMinutes)
-                    : "Noch keine abgerechneten Aufmaße"}
+                    : "Keine abgerechneten Aufmaße"}
                 </strong>
               </div>
-              <div>
+              <div className="site-times-summary-row">
                 <span>Geleistete Monteurstunden</span>
-                <strong>{formatMeasurementDuration(hoursComparison.workerMinutes)}</strong>
-              </div>
-              <div>
-                <span>Delta Angebot</span>
-                <strong>{formatNullableSignedDuration(hoursComparison.offerDifferenceMinutes)}</strong>
-              </div>
-              <div>
-                <span>Delta Aufmaß</span>
-                <strong>{formatNullableSignedDuration(hoursComparison.billedDifferenceMinutes)}</strong>
-              </div>
-              <div>
-                <span>Statusbewertung</span>
                 <strong>
-                  <StatusBadge tone={siteHoursComparisonTone(hoursComparison.status)}>
-                    {siteHoursComparisonLabel(hoursComparison.status)}
-                  </StatusBadge>
+                  {hoursComparison.workerMinutes > 0
+                    ? formatMeasurementDuration(hoursComparison.workerMinutes)
+                    : "Keine Stunden erfasst"}
                 </strong>
               </div>
             </div>
@@ -5717,10 +5710,6 @@ function siteHoursComparisonTone(status: SiteHoursComparisonStatus): StatusBadge
     return "danger";
   }
   return "neutral";
-}
-
-function formatNullableSignedDuration(minutes: number | null): string {
-  return minutes !== null ? formatSignedMeasurementDuration(minutes) : "-";
 }
 
 function timeEntryStatusTone(status: TimeEntryStatus): StatusBadgeTone {

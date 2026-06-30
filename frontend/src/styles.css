@@ -9768,14 +9768,6 @@ button.person-chip:focus-visible {
   line-height: 1.4;
 }
 
-.site-times-balance-grid span {
-  color: #53657f;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .site-times-insights {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
@@ -9791,6 +9783,22 @@ button.person-chip:focus-visible {
 
 .site-times-panel-heading {
   min-width: 0;
+}
+
+.site-times-balance-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-times-balance-heading > div {
+  min-width: 0;
+}
+
+.site-times-balance-heading .status-badge {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .site-times-panel-heading h3,
@@ -9850,26 +9858,6 @@ button.person-chip:focus-visible {
   font-size: 0.94rem;
   font-weight: 900;
   text-align: right;
-}
-
-.site-times-balance-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-  border-top: 1px solid #e1e8f2;
-}
-
-.site-times-balance-grid > div {
-  display: grid;
-  gap: 6px;
-  min-height: 48px;
-  border-bottom: 1px solid #e1e8f2;
-  padding: 12px 0;
-}
-
-.site-times-balance-grid strong {
-  color: #172033;
-  font-size: 1rem;
-  font-weight: 900;
 }
 
 .site-times-table-card {
