@@ -9733,7 +9733,7 @@ button.person-chip:focus-visible {
 .site-times-panel,
 .site-times-table-card {
   border: 1px solid #d7e1ee;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
 }
 
@@ -9760,7 +9760,7 @@ button.person-chip:focus-visible {
   width: 42px;
   height: 42px;
   border: 1px solid #dbe7f6;
-  border-radius: 10px;
+  border-radius: 2px;
   background: #f3f7fd;
   color: #1f5fae;
 }
@@ -9804,7 +9804,7 @@ button.person-chip:focus-visible {
 .site-times-period-toggle button {
   min-height: 32px;
   border: 1px solid #cbd8e8;
-  border-radius: 7px;
+  border-radius: 2px;
   background: #ffffff;
   color: #1f3657;
   cursor: pointer;
@@ -9892,7 +9892,7 @@ button.person-chip:focus-visible {
 .site-times-summary-list {
   display: grid;
   border: 1px solid #e1e8f2;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #fbfdff;
 }
 
@@ -9921,7 +9921,7 @@ button.person-chip:focus-visible {
 .site-times-summary-row i {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: 1px;
 }
 
 .site-times-summary-row i.is-work {
@@ -9949,7 +9949,7 @@ button.person-chip:focus-visible {
   align-items: end;
   gap: 10px;
   border: 1px solid #dce5f0;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #f8fbff;
   padding: 10px;
 }
@@ -9966,7 +9966,7 @@ button.person-chip:focus-visible {
 .site-worktime-planned-edit input {
   min-height: 38px;
   border: 1px solid #cbd7e6;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #ffffff;
   padding: 8px 10px;
   color: #172033;
@@ -10055,6 +10055,21 @@ button.person-chip:focus-visible {
 .site-worktime-number {
   text-align: right;
   white-space: nowrap;
+}
+
+.site-times-shell .secondary-action,
+.site-times-shell .icon-button {
+  border-radius: 2px;
+}
+
+.site-detail-page.is-project-file-workspace .site-times-shell .secondary-action {
+  border-radius: 2px;
+}
+
+.site-times-shell .status-badge {
+  border-radius: 2px;
+  min-height: 22px;
+  padding: 2px 7px;
 }
 
 @media (max-width: 980px) {
