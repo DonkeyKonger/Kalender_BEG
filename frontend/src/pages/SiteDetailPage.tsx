@@ -62,7 +62,7 @@ const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
 const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "overview", label: "Übersicht" },
   { key: "folders", label: "Projektdateien" },
-  { key: "assembly-times", label: "Montagezeiten" },
+  { key: "assembly-times", label: "Ausführungsstand" },
   { key: "measurement", label: "Aufmaß" },
   { key: "extra-work", label: "Zusatzaufträge" },
   { key: "tools-material", label: "Werkzeuge & Material" },
@@ -4370,14 +4370,14 @@ function SiteWorkTimesPanel({
 
   return (
     <div className="project-record-tab-panel site-times-shell">
-      <section className="site-times-hero" aria-label="Montagezeiten Zeitraum">
+      <section className="site-times-hero" aria-label="Ausführungsstand Zeitraum">
         <div className="site-times-hero-copy">
           <span className="site-times-hero-icon">
             <CalendarClock aria-hidden="true" size={22} />
           </span>
           <div>
-            <h2>Montagezeiten</h2>
-            <p>Erfasste Ist-Arbeitszeiten und Stundenvergleich für diese Baustelle.</p>
+            <h2>Ausführungsstand</h2>
+            <p>Vergleich von Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden.</p>
           </div>
         </div>
         <div className="site-times-period">
@@ -4426,7 +4426,7 @@ function SiteWorkTimesPanel({
         <section className="site-times-panel site-times-balance-panel" aria-label="Stundenvergleich">
           <div className="site-times-panel-heading">
             <h3>Stundenvergleich</h3>
-            <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und Montagezeiten</p>
+            <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden</p>
           </div>
           {comparisonError ? <div className="project-record-empty-state is-error">{comparisonError}</div> : null}
           {isComparisonLoading ? (
@@ -4475,17 +4475,17 @@ function SiteWorkTimesPanel({
         </section>
       </div>
 
-      <section className="site-times-table-card" aria-label="Geprüfte Montagezeiten">
+      <section className="site-times-table-card" aria-label="Geleistete Monteurstunden">
         <div className="site-times-table-toolbar">
           <div>
-            <h3>Geprüfte Montagezeiten</h3>
+            <h3>Geleistete Monteurstunden</h3>
             <p>Finale, abrechnungsfähige Ist-Zeiten im gewählten Zeitraum</p>
           </div>
         </div>
         {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
         {isLoading ? <div className="project-record-empty-state">Arbeitszeiten werden geladen...</div> : null}
         {!isLoading && !error && entries.length === 0 ? (
-          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine geprüften Montagezeiten auf diese Baustelle erfasst.</div>
+          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine geleisteten Monteurstunden auf diese Baustelle erfasst.</div>
         ) : null}
         {!isLoading && !error && entries.length > 0 ? (
           <div className="site-worktime-table-wrap">
