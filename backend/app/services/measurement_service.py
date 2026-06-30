@@ -2359,7 +2359,7 @@ class MeasurementService:
 
     @staticmethod
     def _entry_work_minutes(entry: WorkTimeEntry) -> Decimal:
-        minutes = entry.corrected_work_minutes if entry.corrected_work_minutes is not None else entry.work_minutes
+        minutes = TimeEntryService.project_mounting_work_minutes(entry)
         return Decimal(str(minutes or 0))
 
     def _sum_work_minutes_for_period(

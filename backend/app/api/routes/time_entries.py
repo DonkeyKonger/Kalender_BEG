@@ -79,7 +79,19 @@ def list_time_entries(
             for entry in entries
             if service.is_project_mounting_time_relevant(entry, gps_evaluations.get(entry.id))
         ]
-    response_entries = [time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id)) for entry in entries]
+    project_mounting_contexts = (
+        service.project_mounting_contexts(entries)
+        if project_mounting_only
+        else {}
+    )
+    response_entries = [
+        time_entry_read(
+            entry,
+            gps_evaluation=gps_evaluations.get(entry.id),
+            project_mounting_context=project_mounting_contexts.get(entry.id),
+        )
+        for entry in entries
+    ]
     if (
         review_open_only
         and not project_mounting_only
@@ -252,6 +264,7 @@ def time_entry_read(
     entry: WorkTimeEntry,
     gps_service: GpsPresenceService | None = None,
     gps_evaluation: GpsPresenceEvaluation | None = None,
+    project_mounting_context: dict[str, object] | None = None,
 ) -> TimeEntryRead:
     gps_status = None
     gps_matched_points = None
@@ -291,6 +304,43 @@ def time_entry_read(
         mismatch_notice = gps_evaluation.mismatch_notice
         review_notices = list(gps_evaluation.review_notices)
 
+    project_mounting_multiplier = int(project_mounting_context.get("multiplier", 1)) if project_mounting_context else 1
+    project_mounting_external_person_count = (
+        int(project_mounting_context.get("external_person_count", 0))
+        if project_mounting_context
+        else 0
+    )
+    project_mounting_participant_ids = (
+        list(project_mounting_context.get("participant_ids", []))
+        if project_mounting_context
+        else []
+    )
+    project_mounting_participant_names = (
+        list(project_mounting_context.get("participant_names", []))
+        if project_mounting_context
+        else []
+    )
+    project_mounting_base_work_minutes = (
+        int(project_mounting_context["base_work_minutes"])
+        if project_mounting_context and project_mounting_context.get("base_work_minutes") is not None
+        else None
+    )
+    project_mounting_work_minutes = (
+        int(project_mounting_context["work_minutes"])
+        if project_mounting_context and project_mounting_context.get("work_minutes") is not None
+        else None
+    )
+    project_mounting_break_minutes = (
+        int(project_mounting_context["break_minutes"])
+        if project_mounting_context and project_mounting_context.get("break_minutes") is not None
+        else None
+    )
+    project_mounting_travel_minutes = (
+        int(project_mounting_context["travel_minutes"])
+        if project_mounting_context and project_mounting_context.get("travel_minutes") is not None
+        else None
+    )
+
     return TimeEntryRead(
         id=entry.id,
         person_id=entry.person_id,
@@ -306,14 +356,22 @@ def time_entry_read(
         original_work_date=entry.original_work_date,
         start_time=entry.start_time,
         end_time=entry.end_time,
-        break_minutes=entry.break_minutes,
-        travel_minutes=entry.travel_minutes,
-        work_minutes=entry.work_minutes,
+        break_minutes=project_mounting_break_minutes if project_mounting_break_minutes is not None else entry.break_minutes,
+        travel_minutes=project_mounting_travel_minutes if project_mounting_travel_minutes is not None else entry.travel_minutes,
+        work_minutes=project_mounting_work_minutes if project_mounting_work_minutes is not None else entry.work_minutes,
         original_work_minutes=entry.original_work_minutes,
         corrected_work_minutes=entry.corrected_work_minutes,
         payroll_corrected_start_time=entry.payroll_corrected_start_time,
         payroll_corrected_end_time=entry.payroll_corrected_end_time,
         payroll_corrected_work_minutes=entry.payroll_corrected_work_minutes,
+        project_mounting_multiplier=project_mounting_multiplier,
+        project_mounting_external_person_count=project_mounting_external_person_count,
+        project_mounting_participant_ids=project_mounting_participant_ids,
+        project_mounting_participant_names=project_mounting_participant_names,
+        project_mounting_base_work_minutes=project_mounting_base_work_minutes,
+        project_mounting_work_minutes=project_mounting_work_minutes,
+        project_mounting_break_minutes=project_mounting_break_minutes,
+        project_mounting_travel_minutes=project_mounting_travel_minutes,
         note=entry.note,
         source=entry.source,
         status=entry.status,

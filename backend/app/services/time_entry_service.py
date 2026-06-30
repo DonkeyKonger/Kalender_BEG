@@ -1,11 +1,12 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.absence import Absence
 from app.models.assignment import Assignment
-from app.models.enums import UserRole
+from app.models.enums import AbsenceStatus, PersonType, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
@@ -22,19 +23,6 @@ TERMINAL_TIME_REVIEW_STATUSES = {
     "clarification",
     "auto_closed_by_deadline",
 }
-PROJECT_MOUNTING_REVIEW_STATUSES = {
-    "manually_approved",
-    "corrected",
-}
-PROJECT_MOUNTING_REVIEW_METHODS = {
-    "accept_manual",
-    "accept_gps",
-    "manual_confirmed",
-    "manual_correction",
-    "assign_site",
-}
-
-
 class TimeEntryService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -413,15 +401,136 @@ class TimeEntryService:
 
     @staticmethod
     def is_project_mounting_time_relevant(entry: WorkTimeEntry, gps_evaluation: object | None = None) -> bool:
-        review_status = getattr(entry, "time_review_status", OPEN_TIME_REVIEW_STATUS) or OPEN_TIME_REVIEW_STATUS
-        review_method = getattr(entry, "time_review_method", None)
-        if review_status in PROJECT_MOUNTING_REVIEW_STATUSES:
-            return True
-        if getattr(entry, "corrected_work_minutes", None) is not None:
-            return True
-        if review_method in PROJECT_MOUNTING_REVIEW_METHODS:
-            return True
-        return TimeEntryService.is_auto_plausible_time_entry(entry, gps_evaluation)
+        if getattr(entry, "source", "manual") == "gps_suggestion":
+            return False
+        if getattr(entry, "site_id", None) is None:
+            return False
+        return TimeEntryService.project_mounting_work_minutes(entry) > 0
+
+    @staticmethod
+    def project_mounting_work_minutes(entry: WorkTimeEntry) -> int:
+        payroll_minutes = getattr(entry, "payroll_corrected_work_minutes", None)
+        if payroll_minutes is not None:
+            return payroll_minutes
+        payroll_duration = TimeEntryService._duration_minutes(
+            getattr(entry, "payroll_corrected_start_time", None),
+            getattr(entry, "payroll_corrected_end_time", None),
+            getattr(entry, "break_minutes", 0),
+        )
+        if payroll_duration is not None:
+            return payroll_duration
+        corrected_minutes = getattr(entry, "corrected_work_minutes", None)
+        if corrected_minutes is not None:
+            return corrected_minutes
+        return getattr(entry, "work_minutes", 0) or 0
+
+    def project_mounting_contexts(self, entries: list[WorkTimeEntry]) -> dict[int, dict[str, object]]:
+        if not entries:
+            return {}
+        dated_site_entries = [
+            entry
+            for entry in entries
+            if entry.id is not None and entry.site_id is not None
+        ]
+        if not dated_site_entries:
+            return {}
+
+        dates_by_site: dict[int, set[date]] = {}
+        for entry in dated_site_entries:
+            dates_by_site.setdefault(entry.site_id, set()).add(entry.work_date)
+        site_ids = set(dates_by_site)
+        start = min(entry.work_date for entry in dated_site_entries)
+        end = max(entry.work_date for entry in dated_site_entries)
+
+        assignments = list(
+            self.db.scalars(
+                select(Assignment)
+                .options(selectinload(Assignment.person))
+                .where(Assignment.site_id.in_(site_ids))
+                .where(Assignment.start_date <= end)
+                .where(Assignment.end_date >= start)
+            ).all()
+        )
+        external_assignments = [
+            assignment
+            for assignment in assignments
+            if assignment.person is not None
+            and assignment.person.person_type in {PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP}
+        ]
+        absence_dates_by_person = self._active_absence_dates_by_person(
+            {assignment.person_id for assignment in external_assignments},
+            start=start,
+            end=end,
+        )
+
+        external_people_by_site_date: dict[tuple[int, date], dict[int, str]] = {}
+        for assignment in external_assignments:
+            relevant_dates = dates_by_site.get(assignment.site_id, set())
+            if not relevant_dates:
+                continue
+            cursor = max(assignment.start_date, start)
+            last_day = min(assignment.end_date, end)
+            while cursor <= last_day:
+                if (
+                    cursor in relevant_dates
+                    and cursor not in absence_dates_by_person.get(assignment.person_id, set())
+                ):
+                    external_people_by_site_date.setdefault(
+                        (assignment.site_id, cursor),
+                        {},
+                    )[assignment.person_id] = assignment.person.display_name
+                cursor += timedelta(days=1)
+
+        contexts: dict[int, dict[str, object]] = {}
+        for entry in dated_site_entries:
+            external_people = dict(external_people_by_site_date.get((entry.site_id, entry.work_date), {}))
+            external_people.pop(entry.person_id, None)
+            external_person_ids = sorted(external_people)
+            participant_ids = [entry.person_id, *external_person_ids]
+            participant_names = [
+                entry.person.display_name if entry.person else f"Person {entry.person_id}",
+                *(external_people[person_id] for person_id in external_person_ids),
+            ]
+            multiplier = max(1, len(participant_ids))
+            base_work_minutes = TimeEntryService.project_mounting_work_minutes(entry)
+            contexts[entry.id] = {
+                "multiplier": multiplier,
+                "external_person_count": len(external_person_ids),
+                "participant_ids": participant_ids,
+                "participant_names": participant_names,
+                "base_work_minutes": base_work_minutes,
+                "work_minutes": base_work_minutes * multiplier,
+                "break_minutes": (entry.break_minutes or 0) * multiplier,
+                "travel_minutes": (entry.travel_minutes or 0) * multiplier,
+            }
+        return contexts
+
+    def _active_absence_dates_by_person(
+        self,
+        person_ids: set[int],
+        *,
+        start: date,
+        end: date,
+    ) -> dict[int, set[date]]:
+        if not person_ids:
+            return {}
+        absences = list(
+            self.db.scalars(
+                select(Absence)
+                .where(Absence.person_id.in_(person_ids))
+                .where(Absence.status == AbsenceStatus.ACTIVE)
+                .where(Absence.start_date <= end)
+                .where(Absence.end_date >= start)
+            ).all()
+        )
+        dates_by_person: dict[int, set[date]] = {}
+        for absence in absences:
+            cursor = max(absence.start_date, start)
+            last_day = min(absence.end_date, end)
+            while cursor <= last_day:
+                dates_by_person.setdefault(absence.person_id, set()).add(cursor)
+                cursor += timedelta(days=1)
+        return dates_by_person
 
     @staticmethod
     def is_auto_plausible_time_entry(entry: WorkTimeEntry, gps_evaluation: object | None) -> bool:
@@ -570,6 +679,20 @@ class TimeEntryService:
         if calculated < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pause darf die Arbeitszeit nicht uebersteigen.")
         return calculated
+
+    @staticmethod
+    def _duration_minutes(
+        start_time: time | None,
+        end_time: time | None,
+        break_minutes: int,
+    ) -> int | None:
+        if start_time is None or end_time is None:
+            return None
+        start_minutes = start_time.hour * 60 + start_time.minute
+        end_minutes = end_time.hour * 60 + end_time.minute
+        if end_minutes <= start_minutes:
+            return None
+        return max(0, end_minutes - start_minutes - (break_minutes or 0))
 
     def _ensure_no_time_overlap(
         self,

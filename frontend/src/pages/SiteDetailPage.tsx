@@ -4278,10 +4278,10 @@ function SiteWorkTimesPanel({
   );
   const summary = useMemo(() => ({
     count: entries.length,
-    workerCount: new Set(entries.map((entry) => entry.person_id)).size,
-    workMinutes: sumTimeEntryMinutes(entries, "work_minutes"),
-    breakMinutes: sumTimeEntryMinutes(entries, "break_minutes"),
-    travelMinutes: sumTimeEntryMinutes(entries, "travel_minutes"),
+    workerCount: countSiteWorkTimeParticipants(entries),
+    workMinutes: sumSiteWorkTimeMinutes(entries, "work"),
+    breakMinutes: sumSiteWorkTimeMinutes(entries, "break"),
+    travelMinutes: sumSiteWorkTimeMinutes(entries, "travel"),
   }), [entries]);
   const plannedMinutes = site.planned_work_minutes;
   const hasPlannedMinutes = typeof plannedMinutes === "number" && plannedMinutes > 0;
@@ -4518,9 +4518,9 @@ function SiteWorkTimesPanel({
                   <tr key={entry.id}>
                     <td>{formatDateOnly(entry.work_date)}</td>
                     <td>{entry.person_name || `Person ${entry.person_id}`}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(entry.work_minutes)}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(entry.break_minutes)}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(entry.travel_minutes)}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "work"))}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "break"))}</td>
+                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "travel"))}</td>
                     <td>
                       <StatusBadge tone={timeEntryStatusTone(entry.status)}>
                         {timeEntryStatusLabels[entry.status] ?? entry.status}
@@ -5700,8 +5700,30 @@ function parsePlannedWorkHours(value: string): { ok: true; value: number | null 
   return { ok: true, value: Math.round(parsed * 60) };
 }
 
-function sumTimeEntryMinutes(entries: TimeEntry[], field: "work_minutes" | "break_minutes" | "travel_minutes"): number {
-  return entries.reduce((sum, entry) => sum + entry[field], 0);
+function sumSiteWorkTimeMinutes(entries: TimeEntry[], field: "work" | "break" | "travel"): number {
+  return entries.reduce((sum, entry) => sum + getSiteWorkTimeMinutes(entry, field), 0);
+}
+
+function getSiteWorkTimeMinutes(entry: TimeEntry, field: "work" | "break" | "travel"): number {
+  if (field === "work") {
+    return entry.project_mounting_work_minutes ?? entry.work_minutes;
+  }
+  if (field === "break") {
+    return entry.project_mounting_break_minutes ?? entry.break_minutes;
+  }
+  return entry.project_mounting_travel_minutes ?? entry.travel_minutes;
+}
+
+function countSiteWorkTimeParticipants(entries: TimeEntry[]): number {
+  const participantIds = new Set<number>();
+  entries.forEach((entry) => {
+    if (entry.project_mounting_participant_ids.length > 0) {
+      entry.project_mounting_participant_ids.forEach((participantId) => participantIds.add(participantId));
+    } else {
+      participantIds.add(entry.person_id);
+    }
+  });
+  return participantIds.size;
 }
 
 function getSiteWorkTimeBalanceStatus(plannedMinutes: number | null, actualMinutes: number): SiteWorkTimeBalanceStatus {

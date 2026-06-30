@@ -3,8 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-from app.models.enums import UserRole
+from app.models import Base
+from app.models.absence import Absence
+from app.models.assignment import Assignment
+from app.models.enums import AbsenceStatus, AbsenceType, PersonType, SiteStatus, UserRole
+from app.models.person import Person
+from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.time_entry_service import TimeEntryService
@@ -14,6 +21,12 @@ def service() -> TimeEntryService:
     item = TimeEntryService.__new__(TimeEntryService)
     item.db = SimpleNamespace()
     return item
+
+
+def db_session() -> Session:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    return Session(engine)
 
 
 def test_monteur_cannot_read_other_person_time_entries():
@@ -510,19 +523,23 @@ def test_deadline_does_not_close_current_month_review_case():
     assert entry.time_review_status == "open"
 
 
-def test_project_mounting_times_exclude_unreviewed_manual_entry():
+def test_project_mounting_times_include_open_manual_entry_with_site_and_minutes():
     entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=480,
         corrected_work_minutes=None,
         time_review_status="open",
         time_review_method=None,
     )
 
-    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is False
+    assert TimeEntryService.is_project_mounting_time_relevant(entry, None) is True
 
 
 def test_project_mounting_times_include_manually_approved_entry():
     entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=480,
         corrected_work_minutes=None,
         time_review_status="manually_approved",
@@ -534,6 +551,8 @@ def test_project_mounting_times_include_manually_approved_entry():
 
 def test_project_mounting_times_include_corrected_entry():
     entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=450,
         corrected_work_minutes=450,
         time_review_status="corrected",
@@ -545,6 +564,8 @@ def test_project_mounting_times_include_corrected_entry():
 
 def test_project_mounting_times_include_accepted_gps_entry():
     entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=420,
         corrected_work_minutes=420,
         time_review_status="corrected",
@@ -556,6 +577,8 @@ def test_project_mounting_times_include_accepted_gps_entry():
 
 def test_project_mounting_times_include_auto_plausible_entry():
     entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=480,
         corrected_work_minutes=None,
         time_review_status="open",
@@ -566,8 +589,10 @@ def test_project_mounting_times_include_auto_plausible_entry():
     assert TimeEntryService.is_project_mounting_time_relevant(entry, gps_evaluation) is True
 
 
-def test_project_mounting_times_exclude_gps_conflict_and_not_verifiable_entries():
+def test_project_mounting_times_include_gps_conflict_and_not_verifiable_entries_with_minutes():
     conflicting_entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=480,
         corrected_work_minutes=None,
         time_review_status="open",
@@ -575,11 +600,131 @@ def test_project_mounting_times_exclude_gps_conflict_and_not_verifiable_entries(
     )
     gps_evaluation = SimpleNamespace(work_minutes=480, review_notices=("GPS weicht von Planungsmatrix ab",))
     not_verifiable_entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
         work_minutes=480,
         corrected_work_minutes=None,
         time_review_status="not_verifiable",
         time_review_method="mark_not_verifiable",
     )
 
-    assert TimeEntryService.is_project_mounting_time_relevant(conflicting_entry, gps_evaluation) is False
-    assert TimeEntryService.is_project_mounting_time_relevant(not_verifiable_entry, None) is False
+    assert TimeEntryService.is_project_mounting_time_relevant(conflicting_entry, gps_evaluation) is True
+    assert TimeEntryService.is_project_mounting_time_relevant(not_verifiable_entry, None) is True
+
+
+def test_project_mounting_times_exclude_entries_without_site_or_minutes():
+    no_site_entry = SimpleNamespace(
+        site_id=None,
+        source="manual",
+        work_minutes=480,
+        corrected_work_minutes=None,
+    )
+    no_minutes_entry = SimpleNamespace(
+        site_id=12,
+        source="manual",
+        work_minutes=0,
+        corrected_work_minutes=None,
+        payroll_corrected_work_minutes=None,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        break_minutes=0,
+    )
+    gps_suggestion = SimpleNamespace(
+        site_id=12,
+        source="gps_suggestion",
+        work_minutes=480,
+        corrected_work_minutes=None,
+    )
+
+    assert TimeEntryService.is_project_mounting_time_relevant(no_site_entry, None) is False
+    assert TimeEntryService.is_project_mounting_time_relevant(no_minutes_entry, None) is False
+    assert TimeEntryService.is_project_mounting_time_relevant(gps_suggestion, None) is False
+
+
+def test_project_mounting_work_minutes_prefers_payroll_correction():
+    entry = SimpleNamespace(
+        work_minutes=480,
+        corrected_work_minutes=420,
+        payroll_corrected_work_minutes=None,
+        payroll_corrected_start_time=time(8, 0),
+        payroll_corrected_end_time=time(13, 0),
+        break_minutes=30,
+    )
+
+    assert TimeEntryService.project_mounting_work_minutes(entry) == 270
+
+    entry.payroll_corrected_work_minutes = 300
+
+    assert TimeEntryService.project_mounting_work_minutes(entry) == 300
+
+
+def test_project_mounting_context_multiplies_external_workers_without_absence():
+    db = db_session()
+    site = Site(name="Baustelle", status=SiteStatus.ACTIVE)
+    internal = Person(
+        first_name="Christopher",
+        last_name="Erichsen",
+        display_name="Christopher Erichsen",
+        short_code="CE",
+        person_type=PersonType.INTERNAL,
+    )
+    external_available = Person(
+        first_name="Max",
+        last_name="Extern",
+        display_name="Max Extern",
+        short_code="ME",
+        person_type=PersonType.EXTERNAL,
+    )
+    external_absent = Person(
+        first_name="Krank",
+        last_name="Extern",
+        display_name="Krank Extern",
+        short_code="KE",
+        person_type=PersonType.EXTERNAL_TEMP,
+    )
+    db.add_all([site, internal, external_available, external_absent])
+    db.flush()
+    work_date = date(2026, 6, 22)
+    entry = WorkTimeEntry(
+        person_id=internal.id,
+        site_id=site.id,
+        work_date=work_date,
+        start_time=time(8, 0),
+        end_time=time(16, 0),
+        break_minutes=30,
+        travel_minutes=15,
+        work_minutes=450,
+        source="manual",
+    )
+    db.add(entry)
+    db.add_all([
+        Assignment(
+            site_id=site.id,
+            person_id=external_available.id,
+            start_date=work_date,
+            end_date=work_date,
+        ),
+        Assignment(
+            site_id=site.id,
+            person_id=external_absent.id,
+            start_date=work_date,
+            end_date=work_date,
+        ),
+        Absence(
+            person_id=external_absent.id,
+            absence_type=AbsenceType.SICK,
+            start_date=work_date,
+            end_date=work_date,
+            status=AbsenceStatus.ACTIVE,
+        ),
+    ])
+    db.commit()
+
+    context = TimeEntryService(db).project_mounting_contexts([entry])[entry.id]
+
+    assert context["multiplier"] == 2
+    assert context["external_person_count"] == 1
+    assert context["participant_ids"] == [internal.id, external_available.id]
+    assert context["work_minutes"] == 900
+    assert context["break_minutes"] == 60
+    assert context["travel_minutes"] == 30

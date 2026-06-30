@@ -200,6 +200,14 @@ class TimeEntryRead(BaseModel):
     payroll_corrected_start_time: Time | None = None
     payroll_corrected_end_time: Time | None = None
     payroll_corrected_work_minutes: int | None = None
+    project_mounting_multiplier: int = 1
+    project_mounting_external_person_count: int = 0
+    project_mounting_participant_ids: list[int] = Field(default_factory=list)
+    project_mounting_participant_names: list[str] = Field(default_factory=list)
+    project_mounting_base_work_minutes: int | None = None
+    project_mounting_work_minutes: int | None = None
+    project_mounting_break_minutes: int | None = None
+    project_mounting_travel_minutes: int | None = None
     note: str | None = None
     source: str
     status: str

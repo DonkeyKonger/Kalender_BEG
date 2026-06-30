@@ -28,6 +28,14 @@ export type TimeEntry = {
   payroll_corrected_start_time: string | null;
   payroll_corrected_end_time: string | null;
   payroll_corrected_work_minutes: number | null;
+  project_mounting_multiplier: number;
+  project_mounting_external_person_count: number;
+  project_mounting_participant_ids: number[];
+  project_mounting_participant_names: string[];
+  project_mounting_base_work_minutes: number | null;
+  project_mounting_work_minutes: number | null;
+  project_mounting_break_minutes: number | null;
+  project_mounting_travel_minutes: number | null;
   note: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
