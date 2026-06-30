@@ -31,6 +31,16 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
         source="manual",
     )
     entry.site = Site(site_number="8008", name="Friedensschule Osnabrück")
+    friday_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 12),
+        start_time=time(7, 0),
+        end_time=time(16, 0),
+        break_minutes=60,
+        work_minutes=0,
+        travel_minutes=0,
+        source="manual",
+    )
+    friday_entry.site = Site(site_number="1000", name="Büsum")
 
     content = build_weekly_worker_xlsx(
         person_name="Christopher Erichsen",
@@ -38,14 +48,23 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
         year=2026,
         start=date(2026, 6, 8),
         end=date(2026, 6, 14),
-        rows=weekly_worker_rows(date(2026, 6, 8), date(2026, 6, 14), [entry], {}),
+        rows=weekly_worker_rows(
+            date(2026, 6, 8),
+            date(2026, 6, 14),
+            [entry, friday_entry],
+            {},
+        ),
     )
 
     workbook, sheet = workbook_sheet(content)
     names = set(workbook.namelist())
+    sheet_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
 
     assert "xl/tables/table1.xml" not in names
     assert "xl/media/image1.png" in names
+    assert 'mc:Ignorable="x14ac xr xr2 xr3"' in sheet_xml
+    assert 'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2"' in sheet_xml
+    assert 'xmlns:xr3="http://schemas.microsoft.com/office/spreadsheetml/2016/revision3"' in sheet_xml
     assert cell_text(sheet, "C5") == "08.06.2026"
     assert cell_text(sheet, "E5") == "14.06.2026"
     assert cell_text(sheet, "H5") == "24"
@@ -59,7 +78,14 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert cell_text(sheet, "O15") == "8,5 h"
     assert cell_text(sheet, "A16") == "Di"
     assert cell_text(sheet, "C16") == "Keine Zeitmeldung"
-    assert cell_text(sheet, "O26") == "8,5 h"
+    assert cell_text(sheet, "A19") == "Fr"
+    assert cell_text(sheet, "C19") == "1000 - Büsum"
+    assert cell_style(sheet, "J19") == "7"
+    assert cell_style(sheet, "K19") == "7"
+    assert cell_number(sheet, "J19") == pytest.approx(7 / 24)
+    assert cell_number(sheet, "K19") == pytest.approx(16 / 24)
+    assert cell_text(sheet, "O19") == "8,0 h"
+    assert cell_text(sheet, "O26") == "16,5 h"
 
 
 def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
@@ -123,3 +149,7 @@ def cell_number(sheet: ET.Element, ref: str) -> float:
     value = cell(sheet, ref).find("main:v", NS)
     assert value is not None
     return float(value.text)
+
+
+def cell_style(sheet: ET.Element, ref: str) -> str | None:
+    return cell(sheet, ref).attrib.get("s")

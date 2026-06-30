@@ -62,6 +62,18 @@ WEEKLY_WORKER_TEMPLATE_RESOURCE = "templates/time_entries/Wochenbericht_Digital_
 WEEKLY_WORKER_TEMPLATE_DATA_START_ROW = 15
 WEEKLY_WORKER_TEMPLATE_DATA_END_ROW = 24
 WEEKLY_WORKER_TEMPLATE_TOTAL_ROW = 26
+WEEKLY_WORKER_TEMPLATE_DATA_STYLES = {
+    "A": "19",
+    "B": "5",
+    "C": "35",
+    "G": "34",
+    "J": "7",
+    "K": "7",
+    "L": "8",
+    "M": "7",
+    "N": "7",
+    "O": "20",
+}
 EXCEL_EPOCH = date(1899, 12, 30)
 SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 SHEET_NAMESPACES = {
@@ -347,7 +359,24 @@ def fill_weekly_worker_template_sheet(
 
     set_cell_string(root, f"O{final_total_row}", format_export_hours(total_minutes))
     update_sheet_dimension(root, 32 + extra_rows)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    return preserve_weekly_worker_sheet_namespaces(
+        ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    )
+
+
+def preserve_weekly_worker_sheet_namespaces(sheet_xml: bytes) -> bytes:
+    text = sheet_xml.decode("utf-8")
+    ignorable_match = re.search(r'\bmc:Ignorable="([^"]+)"', text)
+    if ignorable_match is None:
+        return sheet_xml
+
+    for prefix in ignorable_match.group(1).split():
+        namespace_uri = SHEET_NAMESPACES.get(prefix)
+        if namespace_uri is None or f"xmlns:{prefix}=" in text:
+            continue
+        declaration = f' xmlns:{prefix}="{namespace_uri}"'
+        text = re.sub(r"(<worksheet\b[^>]*)(>)", rf"\1{declaration}\2", text, count=1)
+    return text.encode("utf-8")
 
 
 def insert_weekly_worker_template_rows(root: ET.Element, extra_rows: int) -> None:
@@ -383,6 +412,7 @@ def insert_weekly_worker_template_rows(root: ET.Element, extra_rows: int) -> Non
 
 
 def clear_weekly_worker_data_row(root: ET.Element, row_number: int) -> None:
+    apply_weekly_worker_data_row_styles(root, row_number)
     for column in ["A", "B", "C", "G", "J", "K", "L", "M", "N", "O"]:
         clear_cell(root, f"{column}{row_number}")
 
@@ -394,12 +424,12 @@ def fill_weekly_worker_data_row(
     *,
     show_weekday: bool,
 ) -> None:
+    apply_weekly_worker_data_row_styles(root, row_number)
     set_cell_string(
         root,
         f"A{row_number}",
         GERMAN_WEEKDAYS[row.work_date.weekday()] if show_weekday else "",
     )
-    set_cell_style(root, f"B{row_number}", "5")
     set_cell_number(root, f"B{row_number}", excel_date_serial(row.work_date))
 
     entry = row.entry
@@ -412,6 +442,11 @@ def fill_weekly_worker_data_row(
     set_cell_number_or_blank(root, f"K{row_number}", excel_time_serial(weekly_worker_end_time(entry)))
     set_cell_number(root, f"L{row_number}", (entry.break_minutes or 0) / 60)
     set_cell_string(root, f"O{row_number}", format_export_hours(weekly_worker_total_minutes(row)))
+
+
+def apply_weekly_worker_data_row_styles(root: ET.Element, row_number: int) -> None:
+    for column, style_id in WEEKLY_WORKER_TEMPLATE_DATA_STYLES.items():
+        set_cell_style(root, f"{column}{row_number}", style_id)
 
 
 def weekly_worker_site_label(entry: WorkTimeEntry) -> str:
@@ -431,17 +466,35 @@ def weekly_worker_end_time(entry: WorkTimeEntry) -> time | None:
 
 
 def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
-    return (
-        entry.payroll_corrected_work_minutes
-        if entry.payroll_corrected_work_minutes is not None
-        else entry.work_minutes
+    if entry.payroll_corrected_work_minutes is not None:
+        return entry.payroll_corrected_work_minutes
+    payroll_minutes = duration_minutes(
+        entry.payroll_corrected_start_time,
+        entry.payroll_corrected_end_time,
+        entry.break_minutes,
     )
+    if payroll_minutes is not None:
+        return payroll_minutes
+    if entry.work_minutes > 0:
+        return entry.work_minutes
+    entry_minutes = duration_minutes(entry.start_time, entry.end_time, entry.break_minutes)
+    return entry_minutes if entry_minutes is not None else entry.work_minutes
 
 
 def weekly_worker_total_minutes(row: WeeklyWorkerExportRow) -> int:
     if row.entry is None:
         return 0
     return weekly_worker_work_minutes(row.entry) + (row.entry.travel_minutes or 0)
+
+
+def duration_minutes(start_time: time | None, end_time: time | None, break_minutes: int) -> int | None:
+    if start_time is None or end_time is None:
+        return None
+    start_minutes = start_time.hour * 60 + start_time.minute
+    end_minutes = end_time.hour * 60 + end_time.minute
+    if end_minutes <= start_minutes:
+        return None
+    return max(0, end_minutes - start_minutes - (break_minutes or 0))
 
 
 def find_sheet_row(root: ET.Element, row_number: int) -> ET.Element | None:
