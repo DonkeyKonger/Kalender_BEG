@@ -29,10 +29,10 @@ type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteHoursComparisonStatus = "on_course" | "watch" | "critical" | "missing";
 type SiteHoursComparison = {
   offerMinutes: number | null;
-  billedMeasurementMinutes: number | null;
+  valuedMeasurementMinutes: number | null;
   workerMinutes: number;
   offerDifferenceMinutes: number | null;
-  billedDifferenceMinutes: number | null;
+  valuedDifferenceMinutes: number | null;
   status: SiteHoursComparisonStatus;
 };
 type ProjectFolderNavigationLevel = {
@@ -44,7 +44,17 @@ type ProjectFolderNavigationLevel = {
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
-const FINAL_MEASUREMENT_BATCH_STATUSES = new Set(["approved", "billed", "closed"]);
+const VALUED_MEASUREMENT_BATCH_STATUSES = new Set([
+  "reviewed",
+  "checked",
+  "customer_signed",
+  "signed",
+  "approved",
+  "billed",
+  "closed",
+  "completed",
+  "finalized",
+]);
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 56;
 const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
@@ -4377,7 +4387,7 @@ function SiteWorkTimesPanel({
           <div className="site-times-panel-heading site-times-balance-heading">
             <div>
               <h3>Stundenvergleich</h3>
-              <p>Gesamtvergleich aus Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden</p>
+              <p>Gesamtvergleich aus Angebot, gewerteten Aufmaßen und geleisteten Monteurstunden</p>
             </div>
             <StatusBadge tone={siteHoursComparisonTone(hoursComparison.status)}>
               {siteHoursComparisonLabel(hoursComparison.status)}
@@ -4398,11 +4408,11 @@ function SiteWorkTimesPanel({
                 </strong>
               </div>
               <div className="site-times-summary-row">
-                <span>Abgerechnete Aufmaßstunden</span>
+                <span>Gewertete Aufmaßstunden</span>
                 <strong>
-                  {hoursComparison.billedMeasurementMinutes !== null
-                    ? formatMeasurementDuration(hoursComparison.billedMeasurementMinutes)
-                    : "Keine abgerechneten Aufmaße"}
+                  {hoursComparison.valuedMeasurementMinutes !== null
+                    ? formatMeasurementDuration(hoursComparison.valuedMeasurementMinutes)
+                    : "Keine gewerteten Aufmaße"}
                 </strong>
               </div>
               <div className="site-times-summary-row">
@@ -5638,49 +5648,53 @@ function buildSiteHoursComparison(
   const offerMinutes = timesheet?.kpi.has_planned_basis
     ? getMeasurementNumericValue(timesheet.kpi.planned_minutes)
     : null;
-  const billedMeasurementMinutes = getBilledMeasurementMinutes(batches);
+  const valuedMeasurementMinutes = getValuedMeasurementMinutes(batches);
 
   return {
     offerMinutes,
-    billedMeasurementMinutes,
+    valuedMeasurementMinutes,
     workerMinutes,
     offerDifferenceMinutes: offerMinutes !== null ? workerMinutes - offerMinutes : null,
-    billedDifferenceMinutes: billedMeasurementMinutes !== null ? workerMinutes - billedMeasurementMinutes : null,
-    status: getSiteHoursComparisonStatus(offerMinutes, billedMeasurementMinutes, workerMinutes),
+    valuedDifferenceMinutes: valuedMeasurementMinutes !== null ? workerMinutes - valuedMeasurementMinutes : null,
+    status: getSiteHoursComparisonStatus(offerMinutes, valuedMeasurementMinutes, workerMinutes),
   };
 }
 
-function getBilledMeasurementMinutes(batches: MobileMeasurementBatch[]): number | null {
-  const billedBatches = batches.filter((batch) => FINAL_MEASUREMENT_BATCH_STATUSES.has(batch.status));
-  if (billedBatches.length === 0) {
+function getValuedMeasurementMinutes(batches: MobileMeasurementBatch[]): number | null {
+  const valuedBatches = batches.filter(isValuedMeasurementBatch);
+  if (valuedBatches.length === 0) {
     return null;
   }
-  return billedBatches.reduce(
+  return valuedBatches.reduce(
     (sum, batch) => sum + getMeasurementNumericValue(batch.reported_minutes),
     0,
   );
 }
 
+function isValuedMeasurementBatch(batch: MobileMeasurementBatch): boolean {
+  return VALUED_MEASUREMENT_BATCH_STATUSES.has(batch.status.toLowerCase()) || isCustomerSignedMeasurementBatch(batch);
+}
+
 function getSiteHoursComparisonStatus(
   offerMinutes: number | null,
-  billedMeasurementMinutes: number | null,
+  valuedMeasurementMinutes: number | null,
   workerMinutes: number,
 ): SiteHoursComparisonStatus {
   if (
     offerMinutes === null
     || offerMinutes <= 0
-    || billedMeasurementMinutes === null
-    || billedMeasurementMinutes <= 0
+    || valuedMeasurementMinutes === null
+    || valuedMeasurementMinutes <= 0
     || workerMinutes <= 0
   ) {
     return "missing";
   }
   const offerUsage = workerMinutes / offerMinutes;
-  const billedUsage = workerMinutes / billedMeasurementMinutes;
-  if (offerUsage > 1 || billedUsage > 1.15) {
+  const valuedUsage = workerMinutes / valuedMeasurementMinutes;
+  if (offerUsage > 1 || valuedUsage > 1.15) {
     return "critical";
   }
-  if (offerUsage >= 0.85 || billedUsage > 1.05) {
+  if (offerUsage >= 0.85 || valuedUsage > 1.05) {
     return "watch";
   }
   return "on_course";
