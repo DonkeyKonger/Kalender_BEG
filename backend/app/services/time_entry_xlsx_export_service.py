@@ -61,7 +61,12 @@ WEEKLY_WORKER_LOGO_RESOURCE = "assets/beg_logo_icon.png"
 WEEKLY_WORKER_TEMPLATE_RESOURCE = "templates/time_entries/Wochenbericht_Digital_Master.xlsx"
 WEEKLY_WORKER_TEMPLATE_DATA_START_ROW = 15
 WEEKLY_WORKER_TEMPLATE_DATA_END_ROW = 24
+WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT = (
+    WEEKLY_WORKER_TEMPLATE_DATA_END_ROW - WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + 1
+)
 WEEKLY_WORKER_TEMPLATE_TOTAL_ROW = 26
+WEEKLY_WORKER_TEMPLATE_PRINT_END_ROW = 29
+WEEKLY_WORKER_TEMPLATE_SHEET_NAME = "Tabelle1"
 WEEKLY_WORKER_TEMPLATE_DATA_STYLES = {
     "A": "19",
     "B": "5",
@@ -284,6 +289,8 @@ def build_weekly_worker_xlsx(
     rows: list[WeeklyWorkerExportRow],
 ) -> bytes:
     template = load_weekly_worker_template()
+    extra_rows = weekly_worker_template_extra_rows(rows)
+    print_last_row = WEEKLY_WORKER_TEMPLATE_PRINT_END_ROW + extra_rows
     output = BytesIO()
     with ZipFile(BytesIO(template), "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for item in source.infolist():
@@ -298,6 +305,8 @@ def build_weekly_worker_xlsx(
                     end=end,
                     rows=rows,
                 )
+            elif item.filename == "xl/workbook.xml":
+                content = set_weekly_worker_print_area(content, print_last_row=print_last_row)
             archive.writestr(item, content)
     return output.getvalue()
 
@@ -324,15 +333,12 @@ def fill_weekly_worker_template_sheet(
     rows: list[WeeklyWorkerExportRow],
 ) -> bytes:
     root = ET.fromstring(sheet_xml)
-    data_row_count = max(len(rows), 1)
-    template_row_count = (
-        WEEKLY_WORKER_TEMPLATE_DATA_END_ROW - WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + 1
-    )
-    extra_rows = max(0, data_row_count - template_row_count)
+    extra_rows = weekly_worker_template_extra_rows(rows)
     if extra_rows:
         insert_weekly_worker_template_rows(root, extra_rows)
 
     final_total_row = WEEKLY_WORKER_TEMPLATE_TOTAL_ROW + extra_rows
+    set_weekly_worker_page_setup(root)
     set_cell_string(root, "C5", start.strftime("%d.%m.%Y"))
     set_cell_string(root, "E5", end.strftime("%d.%m.%Y"))
     set_cell_string(root, "H5", str(week_number))
@@ -340,7 +346,9 @@ def fill_weekly_worker_template_sheet(
 
     for row_number in range(
         WEEKLY_WORKER_TEMPLATE_DATA_START_ROW,
-        WEEKLY_WORKER_TEMPLATE_DATA_START_ROW + template_row_count + extra_rows,
+        WEEKLY_WORKER_TEMPLATE_DATA_START_ROW
+        + WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT
+        + extra_rows,
     ):
         clear_weekly_worker_data_row(root, row_number)
 
@@ -359,9 +367,60 @@ def fill_weekly_worker_template_sheet(
 
     set_cell_string(root, f"O{final_total_row}", format_export_hours(total_minutes))
     update_sheet_dimension(root, 32 + extra_rows)
+    remove_page_breaks(root)
     return preserve_weekly_worker_sheet_namespaces(
         ET.tostring(root, encoding="utf-8", xml_declaration=True)
     )
+
+
+def weekly_worker_template_extra_rows(rows: list[WeeklyWorkerExportRow]) -> int:
+    data_row_count = max(len(rows), 1)
+    return max(0, data_row_count - WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT)
+
+
+def set_weekly_worker_print_area(workbook_xml: bytes, *, print_last_row: int) -> bytes:
+    text = workbook_xml.decode("utf-8")
+    print_area = (
+        f'<definedName name="_xlnm.Print_Area" localSheetId="0">'
+        f"'{WEEKLY_WORKER_TEMPLATE_SHEET_NAME}'!$A$1:$O${print_last_row}"
+        "</definedName>"
+    )
+    existing_print_area = re.compile(
+        r'<definedName\b[^>]*\bname="_xlnm\.Print_Area"[^>]*>.*?</definedName>'
+    )
+    if existing_print_area.search(text):
+        text = existing_print_area.sub(print_area, text, count=1)
+    elif "</definedNames>" in text:
+        text = text.replace("</definedNames>", f"{print_area}</definedNames>", 1)
+    else:
+        text = text.replace("<calcPr", f"<definedNames>{print_area}</definedNames><calcPr", 1)
+    return text.encode("utf-8")
+
+
+def set_weekly_worker_page_setup(root: ET.Element) -> None:
+    sheet_pr = root.find(qname("sheetPr"))
+    if sheet_pr is None:
+        sheet_pr = ET.Element(qname("sheetPr"))
+        root.insert(0, sheet_pr)
+    page_setup_pr = sheet_pr.find(qname("pageSetUpPr"))
+    if page_setup_pr is None:
+        page_setup_pr = ET.SubElement(sheet_pr, qname("pageSetUpPr"))
+    page_setup_pr.attrib["fitToPage"] = "1"
+
+    page_setup = root.find(qname("pageSetup"))
+    if page_setup is None:
+        page_setup = ET.SubElement(root, qname("pageSetup"))
+    page_setup.attrib["paperSize"] = "9"
+    page_setup.attrib["orientation"] = "landscape"
+    page_setup.attrib["fitToWidth"] = "1"
+    page_setup.attrib["fitToHeight"] = "1"
+
+
+def remove_page_breaks(root: ET.Element) -> None:
+    for tag_name in ("rowBreaks", "colBreaks"):
+        element = root.find(qname(tag_name))
+        if element is not None:
+            root.remove(element)
 
 
 def preserve_weekly_worker_sheet_namespaces(sheet_xml: bytes) -> bytes:
@@ -690,7 +749,8 @@ def weekly_worker_rows(
     while cursor <= end:
         day_entries = entries_by_date.get(cursor, [])
         if not day_entries:
-            rows.append(WeeklyWorkerExportRow(work_date=cursor, entry=None))
+            if cursor.weekday() < 5:
+                rows.append(WeeklyWorkerExportRow(work_date=cursor, entry=None))
         else:
             has_multiple = len(day_entries) > 1
             rows.extend(

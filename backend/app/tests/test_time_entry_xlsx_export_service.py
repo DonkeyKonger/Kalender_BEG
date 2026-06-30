@@ -59,12 +59,18 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     workbook, sheet = workbook_sheet(content)
     names = set(workbook.namelist())
     sheet_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
 
     assert "xl/tables/table1.xml" not in names
     assert "xl/media/image1.png" in names
     assert 'mc:Ignorable="x14ac xr xr2 xr3"' in sheet_xml
     assert 'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2"' in sheet_xml
     assert 'xmlns:xr3="http://schemas.microsoft.com/office/spreadsheetml/2016/revision3"' in sheet_xml
+    assert "'Tabelle1'!$A$1:$O$29" in workbook_xml
+    assert sheet.find("main:sheetPr/main:pageSetUpPr", NS).attrib["fitToPage"] == "1"
+    page_setup = sheet.find("main:pageSetup", NS)
+    assert page_setup.attrib["fitToWidth"] == "1"
+    assert page_setup.attrib["fitToHeight"] == "1"
     assert cell_text(sheet, "C5") == "08.06.2026"
     assert cell_text(sheet, "E5") == "14.06.2026"
     assert cell_text(sheet, "H5") == "24"
@@ -85,6 +91,8 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert cell_number(sheet, "J19") == pytest.approx(7 / 24)
     assert cell_number(sheet, "K19") == pytest.approx(16 / 24)
     assert cell_text(sheet, "O19") == "8,0 h"
+    assert cell_text(sheet, "A20") == ""
+    assert cell_text(sheet, "C20") == ""
     assert cell_text(sheet, "O26") == "16,5 h"
 
 
@@ -112,19 +120,51 @@ def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
         rows=weekly_worker_rows(date(2026, 6, 8), date(2026, 6, 14), entries, {}),
     )
 
-    _workbook, sheet = workbook_sheet(content)
+    workbook, sheet = workbook_sheet(content)
+    workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
 
-    assert sheet.find("main:dimension", NS).attrib["ref"] == "A1:O39"
+    assert sheet.find("main:dimension", NS).attrib["ref"] == "A1:O37"
     assert cell_text(sheet, "C25") == "8010 - Baustelle 10"
     assert cell_text(sheet, "C26") == "Keine Zeitmeldung"
-    assert cell_text(sheet, "O33") == "11,0 h"
+    assert cell_text(sheet, "O31") == "11,0 h"
+    assert "'Tabelle1'!$A$1:$O$34" in workbook_xml
     merge_refs = {
         merge.attrib["ref"]
         for merge in sheet.findall("main:mergeCells/main:mergeCell", NS)
     }
     assert "C25:F25" in merge_refs
     assert "G25:I25" in merge_refs
-    assert "L33:N33" in merge_refs
+    assert "L31:N31" in merge_refs
+
+
+def test_weekly_worker_rows_skip_empty_weekends_but_keep_worked_weekends():
+    sunday_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 14),
+        start_time=time(8, 0),
+        end_time=time(12, 0),
+        break_minutes=0,
+        work_minutes=240,
+        travel_minutes=0,
+        source="manual",
+    )
+    sunday_entry.site = Site(site_number="9000", name="Notdienst")
+
+    rows = weekly_worker_rows(
+        date(2026, 6, 8),
+        date(2026, 6, 14),
+        [sunday_entry],
+        {},
+    )
+
+    assert [row.work_date for row in rows] == [
+        date(2026, 6, 8),
+        date(2026, 6, 9),
+        date(2026, 6, 10),
+        date(2026, 6, 11),
+        date(2026, 6, 12),
+        date(2026, 6, 14),
+    ]
+    assert rows[-1].entry is sunday_entry
 
 
 def workbook_sheet(content: bytes):
