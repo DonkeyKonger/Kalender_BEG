@@ -3141,6 +3141,7 @@ function buildMissingTimeReviewEntry(worker: TimeReviewWorkerSummary | null, wor
     id: missingTimeReviewEntryId(personId, workDate),
     person_id: personId,
     person_name: worker?.personName ?? "",
+    person_type: "internal",
     site_id: null,
     site_name: null,
     site_number: null,

@@ -181,6 +181,7 @@ class TimeEntryRead(BaseModel):
     id: int
     person_id: int
     person_name: str
+    person_type: str | None = None
     site_id: int | None = None
     site_name: str | None = None
     site_number: str | None = None

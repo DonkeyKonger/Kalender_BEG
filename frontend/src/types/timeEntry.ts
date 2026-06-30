@@ -9,6 +9,7 @@ export type TimeEntry = {
   id: number;
   person_id: number;
   person_name: string;
+  person_type: "internal" | "external" | "external_temp" | string | null;
   site_id: number | null;
   site_name: string | null;
   site_number: string | null;

@@ -9845,6 +9845,10 @@ button.person-chip:focus-visible {
   background: #2769c8;
 }
 
+.site-times-summary-row i.is-external-work {
+  background: #b7791f;
+}
+
 .site-times-summary-row i.is-break {
   background: #718096;
 }

@@ -4286,6 +4286,8 @@ function SiteWorkTimesPanel({
   const summary = useMemo(() => ({
     count: entries.length,
     workerCount: countSiteWorkTimeParticipants(entries),
+    internalWorkMinutes: sumSiteWorkTimeMinutes(entries, "internal-work"),
+    externalWorkMinutes: sumSiteWorkTimeMinutes(entries, "external-work"),
     workMinutes: sumSiteWorkTimeMinutes(entries, "work"),
     breakMinutes: sumSiteWorkTimeMinutes(entries, "break"),
     travelMinutes: sumSiteWorkTimeMinutes(entries, "travel"),
@@ -4369,8 +4371,12 @@ function SiteWorkTimesPanel({
           </div>
           <div className="site-times-summary-list">
             <div className="site-times-summary-row">
-              <span><i className="is-work" aria-hidden="true" />Arbeitszeit</span>
-              <strong>{formatMeasurementDuration(summary.workMinutes)}</strong>
+              <span><i className="is-work" aria-hidden="true" />Arbeitszeit eigene</span>
+              <strong>{formatMeasurementDuration(summary.internalWorkMinutes)}</strong>
+            </div>
+            <div className="site-times-summary-row">
+              <span><i className="is-external-work" aria-hidden="true" />Arbeitszeit externe</span>
+              <strong>{formatMeasurementDuration(summary.externalWorkMinutes)}</strong>
             </div>
             <div className="site-times-summary-row">
               <span><i className="is-break" aria-hidden="true" />Pause</span>
@@ -5614,18 +5620,34 @@ function getCurrentGermanWeekRange(referenceDate = new Date()): { start: string;
   };
 }
 
-function sumSiteWorkTimeMinutes(entries: TimeEntry[], field: "work" | "break" | "travel"): number {
+function sumSiteWorkTimeMinutes(entries: TimeEntry[], field: "work" | "internal-work" | "external-work" | "break" | "travel"): number {
   return entries.reduce((sum, entry) => sum + getSiteWorkTimeMinutes(entry, field), 0);
 }
 
-function getSiteWorkTimeMinutes(entry: TimeEntry, field: "work" | "break" | "travel"): number {
+function getSiteWorkTimeMinutes(entry: TimeEntry, field: "work" | "internal-work" | "external-work" | "break" | "travel"): number {
   if (field === "work") {
     return entry.project_mounting_work_minutes ?? entry.work_minutes;
+  }
+  if (field === "internal-work") {
+    return isExternalTimeEntryPerson(entry) ? 0 : getSiteWorkTimeBaseMinutes(entry);
+  }
+  if (field === "external-work") {
+    const baseMinutes = getSiteWorkTimeBaseMinutes(entry);
+    const externalFactor = entry.project_mounting_external_person_count + (isExternalTimeEntryPerson(entry) ? 1 : 0);
+    return baseMinutes * externalFactor;
   }
   if (field === "break") {
     return entry.project_mounting_break_minutes ?? entry.break_minutes;
   }
   return entry.project_mounting_travel_minutes ?? entry.travel_minutes;
+}
+
+function getSiteWorkTimeBaseMinutes(entry: TimeEntry): number {
+  return entry.project_mounting_base_work_minutes ?? entry.work_minutes;
+}
+
+function isExternalTimeEntryPerson(entry: TimeEntry): boolean {
+  return entry.person_type === "external" || entry.person_type === "external_temp";
 }
 
 function countSiteWorkTimeParticipants(entries: TimeEntry[]): number {
