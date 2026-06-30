@@ -640,7 +640,7 @@ def weekly_worker_person_name(entry: WorkTimeEntry) -> str:
 
 
 def weekly_worker_entry_has_hours(entry: WorkTimeEntry) -> bool:
-    return weekly_worker_work_minutes(entry) > 0
+    return weekly_worker_work_minutes(entry) + (entry.travel_minutes or 0) > 0
 
 
 def set_weekly_worker_page_setup(root: ET.Element) -> None:
@@ -771,6 +771,8 @@ def weekly_worker_end_time(entry: WorkTimeEntry) -> time | None:
 
 
 def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
+    if weekly_worker_is_travel_only(entry):
+        return 0
     if entry.payroll_corrected_work_minutes is not None:
         return entry.payroll_corrected_work_minutes
     payroll_minutes = duration_minutes(
@@ -790,6 +792,10 @@ def weekly_worker_total_minutes(row: WeeklyWorkerExportRow) -> int:
     if row.entry is None:
         return 0
     return weekly_worker_work_minutes(row.entry) + (row.entry.travel_minutes or 0)
+
+
+def weekly_worker_is_travel_only(entry: WorkTimeEntry) -> bool:
+    return entry.work_minutes == 0 and (entry.travel_minutes or 0) > 0
 
 
 def duration_minutes(start_time: time | None, end_time: time | None, break_minutes: int) -> int | None:

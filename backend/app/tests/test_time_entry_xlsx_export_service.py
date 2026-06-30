@@ -15,6 +15,8 @@ from app.services.time_entry_xlsx_export_service import (
     unique_weekly_worker_sheet_names,
     weekly_worker_entry_has_hours,
     weekly_worker_rows,
+    weekly_worker_total_minutes,
+    weekly_worker_work_minutes,
 )
 
 
@@ -269,6 +271,28 @@ def test_weekly_worker_hours_filter_and_sheet_names():
         "Test Erichsen",
         "Christoph Kramer",
     ]) == ["Erichsen", "Erichsen 2", "Kramer"]
+
+
+def test_weekly_worker_travel_only_entry_counts_once():
+    travel_entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=time(6, 30),
+        end_time=time(7, 15),
+        break_minutes=0,
+        work_minutes=0,
+        travel_minutes=45,
+        source="manual",
+    )
+    row = weekly_worker_rows(
+        date(2026, 6, 8),
+        date(2026, 6, 14),
+        [travel_entry],
+        {},
+    )[0]
+
+    assert weekly_worker_entry_has_hours(travel_entry)
+    assert weekly_worker_work_minutes(travel_entry) == 0
+    assert weekly_worker_total_minutes(row) == 45
 
 
 def workbook_sheet(content: bytes):

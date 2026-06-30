@@ -30,7 +30,7 @@ type TimeFormState = {
   breakMinutesOverride: number | null;
 };
 
-type TimeEntrySheetMode = "closed" | "site" | "manual";
+type TimeEntrySheetMode = "closed" | "site" | "manual" | "travel";
 type TimePickerTarget = "start" | "end";
 
 type MobileTimeSiteOption = {
@@ -239,7 +239,7 @@ export function MobileTimeEntryPage() {
   const netMinutes = calculateNetMinutes(form.startTime, form.endTime, breakMinutes);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
   const breakValidationMessage = getBreakValidationMessage(grossMinutes, breakMinutes);
-  const selectedDateTotalMinutes = selectedDateEntries.reduce((total, entry) => total + entry.work_minutes, 0);
+  const selectedDateTotalMinutes = selectedDateEntries.reduce((total, entry) => total + timeEntryTotalMinutes(entry), 0);
   const selectedDateStatusLabel = `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)} erfasst`;
   const plannedSiteCountLabel = formatCountLabel(plannedSiteOptions.length, "Baustelle", "Baustellen");
 
@@ -312,6 +312,23 @@ export function MobileTimeEntryPage() {
     setIsBreakPickerOpen(false);
   }
 
+  function openTravelTimeEntry() {
+    const suggestedStart = normalizeTimeInput(prefillEntry?.end_time) ?? normalizeTimeInput(prefillEntry?.start_time);
+    setEditingEntryId(null);
+    setForm({
+      siteId: plannedSiteOptions[0] ? String(plannedSiteOptions[0].id) : "",
+      startTime: suggestedStart ?? "",
+      endTime: "",
+      breakMinutesOverride: 0,
+    });
+    setManualSiteText("");
+    setSheetMode("travel");
+    setSuggestionMessage(null);
+    setFormError(null);
+    setTimeConflict(null);
+    setIsBreakPickerOpen(false);
+  }
+
   function closeTimeEntrySheet() {
     setSheetMode("closed");
     setEditingEntryId(null);
@@ -345,7 +362,17 @@ export function MobileTimeEntryPage() {
       setFormError("Bitte Baustelle oder Ort beschreiben.");
       return;
     }
-    if (timeValidationMessage || breakValidationMessage || breakMinutes === null || netMinutes === null) {
+    const isTravelTimeEntry = sheetMode === "travel";
+    const effectiveBreakMinutes = isTravelTimeEntry ? 0 : breakMinutes;
+    const effectiveWorkMinutes = isTravelTimeEntry ? 0 : netMinutes;
+    const effectiveTravelMinutes = isTravelTimeEntry ? grossMinutes : editingEntry?.travel_minutes ?? 0;
+    if (
+      timeValidationMessage
+      || (!isTravelTimeEntry && breakValidationMessage)
+      || effectiveBreakMinutes === null
+      || effectiveWorkMinutes === null
+      || effectiveTravelMinutes === null
+    ) {
       setFormError(timeValidationMessage ?? breakValidationMessage ?? "Die Arbeitszeit konnte nicht berechnet werden.");
       return;
     }
@@ -366,11 +393,13 @@ export function MobileTimeEntryPage() {
     }
 
     const isManualEntry = sheetMode === "manual";
-    const nextSiteId = isManualEntry ? null : Number(form.siteId);
-    const nextAssignmentId = isManualEntry ? null : findAssignmentIdForSite(assignmentsForSelectedDate, form.siteId);
+    const nextSiteId = isManualEntry || !form.siteId ? null : Number(form.siteId);
+    const nextAssignmentId = isManualEntry || !form.siteId ? null : findAssignmentIdForSite(assignmentsForSelectedDate, form.siteId);
     const nextNote = isManualEntry
       ? `Manuelle Baustelle: ${manualSiteText.trim()}`
-      : editingEntry?.note ?? null;
+      : isTravelTimeEntry
+        ? "Fahrtzeit"
+        : editingEntry?.note ?? null;
 
     const payload: TimeEntryCreate = {
       person_id: personId,
@@ -379,9 +408,9 @@ export function MobileTimeEntryPage() {
       work_date: selectedDate,
       start_time: form.startTime,
       end_time: form.endTime,
-      break_minutes: breakMinutes,
-      travel_minutes: editingEntry?.travel_minutes ?? 0,
-      work_minutes: netMinutes,
+      break_minutes: effectiveBreakMinutes,
+      travel_minutes: effectiveTravelMinutes,
+      work_minutes: effectiveWorkMinutes,
       note: nextNote,
       source: "manual",
       status: "submitted",
@@ -441,7 +470,7 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: entry.break_minutes === automaticEntryBreakMinutes ? null : entry.break_minutes,
     });
     setManualSiteText(entry.site_id === null ? extractManualSiteText(entry.note) : "");
-    setSheetMode(entry.site_id === null ? "manual" : "site");
+    setSheetMode(isTravelOnlyTimeEntry(entry) ? "travel" : entry.site_id === null ? "manual" : "site");
     setSuggestionMessage(null);
     setFormError(null);
     setTimeConflict(null);
@@ -493,7 +522,9 @@ export function MobileTimeEntryPage() {
 
   const sheetSiteLabel = sheetMode === "manual"
     ? manualSiteText.trim() || "Baustelle abweichend von Planung"
-    : form.siteId ? formatSiteLabel(Number(form.siteId), siteById) : "Baustelle";
+    : sheetMode === "travel"
+      ? "Fahrtzeit erfassen"
+      : form.siteId ? formatSiteLabel(Number(form.siteId), siteById) : "Baustelle";
 
   return (
     <section className={classNames("mobile-page", "mobile-time-page", activeView === "day" && "is-day-view")}>
@@ -630,7 +661,10 @@ export function MobileTimeEntryPage() {
                   <p className="mobile-time-picker-empty">Keine geplante Baustelle für diesen Tag.</p>
                 )}
 
-                <div className="mobile-time-manual-action">
+                <div className="mobile-time-manual-actions">
+                  <button className="mobile-time-manual-card" type="button" onClick={() => openTravelTimeEntry()}>
+                    <strong>Fahrtzeit erfassen</strong>
+                  </button>
                   <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
                     <strong>Arbeitszeit manuell erfassen</strong>
                   </button>
@@ -656,7 +690,7 @@ export function MobileTimeEntryPage() {
                         >
                           <button className="mobile-time-entry-bubble-open" type="button" onClick={() => editEntry(entry)}>
                             <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-                            <span>{formatTimeRange(entry.start_time, entry.end_time)} · {formatHoursFromMinutes(entry.work_minutes)} netto</span>
+                            <span>{formatEntryBubbleMeta(entry)}</span>
                           </button>
                           <button
                             aria-label={`${formatEntryBubbleTitle(entry, siteById)} löschen`}
@@ -744,24 +778,33 @@ export function MobileTimeEntryPage() {
                     </div>
                   </div>
 
-                  <div className="mobile-time-summary">
-                    <button
-                      className="mobile-time-summary-card mobile-time-break-card"
-                      type="button"
-                      onClick={() => setIsBreakPickerOpen(true)}
-                    >
-                      <span>{form.breakMinutesOverride === null ? "Pause automatisch" : "Pause manuell"}</span>
-                      <strong>{breakMinutes !== null ? formatBreakHoursFromMinutes(breakMinutes) : "-"}</strong>
-                    </button>
-                    <div>
-                      <span>Arbeitszeit netto</span>
-                      <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
+                  {sheetMode === "travel" ? (
+                    <div className="mobile-time-summary is-travel">
+                      <div>
+                        <span>Fahrtzeit</span>
+                        <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <span>Brutto</span>
-                      <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
+                  ) : (
+                    <div className="mobile-time-summary">
+                      <button
+                        className="mobile-time-summary-card mobile-time-break-card"
+                        type="button"
+                        onClick={() => setIsBreakPickerOpen(true)}
+                      >
+                        <span>{form.breakMinutesOverride === null ? "Pause automatisch" : "Pause manuell"}</span>
+                        <strong>{breakMinutes !== null ? formatBreakHoursFromMinutes(breakMinutes) : "-"}</strong>
+                      </button>
+                      <div>
+                        <span>Arbeitszeit netto</span>
+                        <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
+                      </div>
+                      <div>
+                        <span>Brutto</span>
+                        <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
                   {breakValidationMessage ? <p className="form-error">{breakValidationMessage}</p> : null}
                   {formError ? <p className="form-error">{formError}</p> : null}
@@ -1044,15 +1087,19 @@ function buildRecentPlannedSiteOptions({
 function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, MobileTimeSiteOption>): DayWorkSummary[] {
   const summaries = new Map<string, DayWorkSummary>();
   for (const entry of entries) {
-    const key = entry.site_id !== null ? `site:${entry.site_id}` : "without-site";
-    const siteLabel = entry.site_id !== null
-      ? compactSiteLabel(entry.site_id, siteById, entry.site_name)
-      : extractManualSiteText(entry.note) || "Manuelle Baustelle";
+    const isTravelOnly = isTravelOnlyTimeEntry(entry);
+    const key = isTravelOnly ? "travel-time" : entry.site_id !== null ? `site:${entry.site_id}` : "without-site";
+    const siteLabel = isTravelOnly
+      ? "Fahrtzeit"
+      : entry.site_id !== null
+        ? compactSiteLabel(entry.site_id, siteById, entry.site_name)
+        : extractManualSiteText(entry.note) || "Manuelle Baustelle";
+    const minutes = timeEntryTotalMinutes(entry);
     const current = summaries.get(key);
     if (current) {
-      current.minutes += entry.work_minutes;
+      current.minutes += minutes;
     } else {
-      summaries.set(key, { key, siteLabel, minutes: entry.work_minutes });
+      summaries.set(key, { key, siteLabel, minutes });
     }
   }
   return Array.from(summaries.values()).sort((first, second) => first.siteLabel.localeCompare(second.siteLabel, "de"));
@@ -1383,11 +1430,28 @@ function extractManualSiteText(note: string | null | undefined): string {
   return note.replace(/^Manuelle Baustelle:\s*/i, "").trim();
 }
 
+function isTravelOnlyTimeEntry(entry: TimeEntry): boolean {
+  return entry.work_minutes === 0 && entry.travel_minutes > 0;
+}
+
+function timeEntryTotalMinutes(entry: TimeEntry): number {
+  return entry.work_minutes + (entry.travel_minutes || 0);
+}
+
 function formatEntryBubbleTitle(entry: TimeEntry, siteById: Map<number, MobileTimeSiteOption>): string {
+  if (isTravelOnlyTimeEntry(entry)) {
+    return "Fahrtzeit";
+  }
   if (entry.site_id === null) {
     return extractManualSiteText(entry.note) || "Manuelle Baustelle";
   }
   return formatSiteLabel(entry.site_id, siteById);
+}
+
+function formatEntryBubbleMeta(entry: TimeEntry): string {
+  const minutes = timeEntryTotalMinutes(entry);
+  const suffix = isTravelOnlyTimeEntry(entry) ? "Fahrtzeit" : "netto";
+  return `${formatTimeRange(entry.start_time, entry.end_time)} · ${formatHoursFromMinutes(minutes)} ${suffix}`;
 }
 
 function formatTimeRange(startTime: string | null | undefined, endTime: string | null | undefined): string {

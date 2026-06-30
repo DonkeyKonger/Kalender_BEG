@@ -3381,9 +3381,9 @@ function effectivePayrollEndTime(entry: TimeEntry): string | null {
 function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
   const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry);
   if (correctedMinutes !== null) {
-    return correctedMinutes;
+    return correctedMinutes + (entry.travel_minutes || 0);
   }
-  return isOfficeOnlyTimeEntry(entry) ? null : entry.work_minutes;
+  return isOfficeOnlyTimeEntry(entry) ? null : entry.work_minutes + (entry.travel_minutes || 0);
 }
 
 function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {
