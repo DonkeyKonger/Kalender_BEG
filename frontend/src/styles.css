@@ -9729,7 +9729,6 @@ button.person-chip:focus-visible {
 }
 
 .site-times-hero,
-.site-times-kpi-strip,
 .site-times-panel,
 .site-times-table-card {
   border: 1px solid #d7e1ee;
@@ -9828,36 +9827,12 @@ button.person-chip:focus-visible {
   box-shadow: inset 0 0 0 1px rgb(42 109 187 / 18%);
 }
 
-.site-times-kpi-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  overflow: hidden;
-}
-
-.site-times-kpi-item {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 14px 18px;
-}
-
-.site-times-kpi-item + .site-times-kpi-item {
-  border-left: 1px solid #e1e8f2;
-}
-
-.site-times-kpi-item span,
 .site-times-balance-grid span {
   color: #53657f;
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.site-times-kpi-item strong {
-  color: #121a2b;
-  font-size: 1.08rem;
-  font-weight: 900;
 }
 
 .site-times-insights {
@@ -10083,22 +10058,6 @@ button.person-chip:focus-visible {
     justify-items: start;
   }
 
-  .site-times-kpi-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .site-times-kpi-item + .site-times-kpi-item {
-    border-left: 0;
-  }
-
-  .site-times-kpi-item:nth-child(n + 3) {
-    border-top: 1px solid #e1e8f2;
-  }
-
-  .site-times-kpi-item:nth-child(even) {
-    border-left: 1px solid #e1e8f2;
-  }
-
   .site-times-insights {
     grid-template-columns: 1fr;
   }
@@ -10123,18 +10082,6 @@ button.person-chip:focus-visible {
     flex: 1 1 0;
   }
 
-  .site-times-kpi-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .site-times-kpi-item,
-  .site-times-kpi-item:nth-child(even) {
-    border-left: 0;
-  }
-
-  .site-times-kpi-item + .site-times-kpi-item {
-    border-top: 1px solid #e1e8f2;
-  }
 }
 
 .project-placeholder-actions {

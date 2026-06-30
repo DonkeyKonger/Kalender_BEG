@@ -4393,14 +4393,6 @@ function SiteWorkTimesPanel({
         </div>
       </section>
 
-      <div className="site-times-kpi-strip" aria-label="Arbeitszeiten Kennzahlen">
-        <div className="site-times-kpi-item"><span>Einträge</span><strong>{summary.count}</strong></div>
-        <div className="site-times-kpi-item"><span>Monteure</span><strong>{summary.workerCount}</strong></div>
-        <div className="site-times-kpi-item"><span>Arbeitszeit</span><strong>{formatMeasurementDuration(summary.workMinutes)}</strong></div>
-        <div className="site-times-kpi-item"><span>Pause</span><strong>{formatMeasurementDuration(summary.breakMinutes)}</strong></div>
-        <div className="site-times-kpi-item"><span>Fahrtzeit</span><strong>{formatMeasurementDuration(summary.travelMinutes)}</strong></div>
-      </div>
-
       <div className="site-times-insights">
         <section className="site-times-panel site-times-overview-panel" aria-label="Ist-Zeiten Überblick">
           <div className="site-times-panel-heading">
