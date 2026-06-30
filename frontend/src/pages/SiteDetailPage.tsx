@@ -10,7 +10,6 @@ import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } 
 import { ApiError, api } from "../lib/api";
 import {
   formatGermanDateKey as formatDateOnly,
-  formatGermanDateKeyRange as formatDateRange,
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
 import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
@@ -27,7 +26,6 @@ type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementPdfMode = "checked" | "original";
 type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
-type SiteWorkTimeRangeMode = "week" | "month";
 type SiteHoursComparisonStatus = "on_course" | "watch" | "critical" | "missing";
 type SiteHoursComparison = {
   offerMinutes: number | null;
@@ -4268,19 +4266,13 @@ function SiteWorkTimesPanel({
 }: {
   site: Site;
 }) {
-  const [rangeMode, setRangeMode] = useState<SiteWorkTimeRangeMode>("month");
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [projectEntries, setProjectEntries] = useState<TimeEntry[]>([]);
   const [projectTimesheet, setProjectTimesheet] = useState<MeasurementTimesheet | null>(null);
   const [projectMeasurementBatches, setProjectMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isComparisonLoading, setIsComparisonLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
-  const activeRange = useMemo(
-    () => (rangeMode === "week" ? getCurrentGermanWeekRange() : getCurrentMonthRange()),
-    [rangeMode],
-  );
   const summary = useMemo(() => ({
     count: entries.length,
     workerCount: countSiteWorkTimeParticipants(entries),
@@ -4288,12 +4280,9 @@ function SiteWorkTimesPanel({
     breakMinutes: sumSiteWorkTimeMinutes(entries, "break"),
     travelMinutes: sumSiteWorkTimeMinutes(entries, "travel"),
   }), [entries]);
-  const projectSummary = useMemo(() => ({
-    workMinutes: sumSiteWorkTimeMinutes(projectEntries, "work"),
-  }), [projectEntries]);
   const hoursComparison = useMemo(
-    () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, projectSummary.workMinutes),
-    [projectMeasurementBatches, projectSummary.workMinutes, projectTimesheet],
+    () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, summary.workMinutes),
+    [projectMeasurementBatches, projectTimesheet, summary.workMinutes],
   );
 
   useEffect(() => {
@@ -4303,8 +4292,6 @@ function SiteWorkTimesPanel({
 
     api.timeEntries({
       siteId: site.id,
-      dateFrom: activeRange.start,
-      dateTo: activeRange.end,
       projectMountingOnly: true,
     })
       .then((entryData) => {
@@ -4327,7 +4314,7 @@ function SiteWorkTimesPanel({
     return () => {
       ignore = true;
     };
-  }, [activeRange.end, activeRange.start, site.id]);
+  }, [site.id]);
 
   useEffect(() => {
     let ignore = false;
@@ -4335,23 +4322,17 @@ function SiteWorkTimesPanel({
     setComparisonError(null);
 
     Promise.all([
-      api.timeEntries({
-        siteId: site.id,
-        projectMountingOnly: true,
-      }),
       api.measurementTimesheet(site.id),
       api.siteMeasurementBatches(site.id),
     ])
-      .then(([projectEntryData, timesheetData, batchData]) => {
+      .then(([timesheetData, batchData]) => {
         if (!ignore) {
-          setProjectEntries(projectEntryData);
           setProjectTimesheet(timesheetData);
           setProjectMeasurementBatches(batchData);
         }
       })
       .catch((requestError) => {
         if (!ignore) {
-          setProjectEntries([]);
           setProjectTimesheet(null);
           setProjectMeasurementBatches([]);
           setComparisonError(readApiError(requestError, "Stundenvergleich konnte nicht geladen werden."));
@@ -4370,34 +4351,11 @@ function SiteWorkTimesPanel({
 
   return (
     <div className="project-record-tab-panel site-times-shell">
-      <section className="site-times-hero" aria-label="Ausführungsstand Zeitraum">
-        <div className="site-times-hero-copy">
-          <span className="site-times-hero-icon">
-            <CalendarClock aria-hidden="true" size={22} />
-          </span>
-          <div>
-            <h2>Ausführungsstand</h2>
-            <p>Vergleich von Angebot, abgerechneten Aufmaßen und geleisteten Monteurstunden.</p>
-          </div>
-        </div>
-        <div className="site-times-period">
-          <div className="site-times-period-toggle" aria-label="Zeitraum">
-            <button className={rangeMode === "week" ? "is-active" : ""} type="button" onClick={() => setRangeMode("week")}>
-              Aktuelle Woche
-            </button>
-            <button className={rangeMode === "month" ? "is-active" : ""} type="button" onClick={() => setRangeMode("month")}>
-              Aktueller Monat
-            </button>
-          </div>
-          <small>{formatDateRange(activeRange.start, activeRange.end)}</small>
-        </div>
-      </section>
-
       <div className="site-times-insights">
         <section className="site-times-panel site-times-overview-panel" aria-label="Ist-Zeiten Überblick">
           <div className="site-times-panel-heading">
             <h3>Ist-Zeiten Überblick</h3>
-            <p>Zusammenfassung der erfassten Zeiten im gewählten Zeitraum</p>
+            <p>Zusammenfassung aller erfassten Zeiten dieser Baustelle</p>
           </div>
           <div className="site-times-summary-list">
             <div className="site-times-summary-row">
@@ -4471,13 +4429,13 @@ function SiteWorkTimesPanel({
         <div className="site-times-table-toolbar">
           <div>
             <h3>Geleistete Monteurstunden</h3>
-            <p>Finale, abrechnungsfähige Ist-Zeiten im gewählten Zeitraum</p>
+            <p>Finale, abrechnungsfähige Ist-Zeiten dieser Baustelle</p>
           </div>
         </div>
         {error ? <div className="project-record-empty-state is-error">{error}</div> : null}
         {isLoading ? <div className="project-record-empty-state">Arbeitszeiten werden geladen...</div> : null}
         {!isLoading && !error && entries.length === 0 ? (
-          <div className="project-record-empty-state">Für diesen Zeitraum wurden noch keine geleisteten Monteurstunden auf diese Baustelle erfasst.</div>
+          <div className="project-record-empty-state">Für diese Baustelle wurden noch keine geleisteten Monteurstunden erfasst.</div>
         ) : null}
         {!isLoading && !error && entries.length > 0 ? (
           <div className="site-worktime-table-wrap">
@@ -5650,13 +5608,6 @@ function getCurrentGermanWeekRange(referenceDate = new Date()): { start: string;
   return {
     start: toLocalDateKey(start),
     end: toLocalDateKey(end),
-  };
-}
-
-function getCurrentMonthRange(referenceDate = new Date()): { start: string; end: string } {
-  return {
-    start: toLocalDateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)),
-    end: toLocalDateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)),
   };
 }
 
