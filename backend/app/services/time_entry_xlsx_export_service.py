@@ -1142,10 +1142,6 @@ def cell_reference(column_index: int, row_index: int) -> str:
     return f"{letters}{row_index}"
 
 
-def excel_date_serial(value: date) -> int:
-    return (value - date(1899, 12, 30)).days
-
-
 def excel_formula_sheet_name(value: str) -> str:
     escaped = value.replace("'", "''")
     return f"'{escaped}'"
