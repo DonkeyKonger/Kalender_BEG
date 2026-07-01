@@ -352,6 +352,25 @@ class TimeEntryService:
         statement = statement.order_by(TimeEntryWeeklyReview.iso_week, TimeEntryWeeklyReview.person_id)
         return list(self.db.scalars(statement))
 
+    def list_person_weekly_reviews(
+        self,
+        *,
+        person_id: int,
+        iso_year: int,
+        iso_week: int | None = None,
+    ) -> list[TimeEntryWeeklyReview]:
+        if iso_week is not None:
+            self._ensure_valid_iso_week(iso_year, iso_week)
+        statement = (
+            select(TimeEntryWeeklyReview)
+            .where(TimeEntryWeeklyReview.person_id == person_id)
+            .where(TimeEntryWeeklyReview.iso_year == iso_year)
+        )
+        if iso_week is not None:
+            statement = statement.where(TimeEntryWeeklyReview.iso_week == iso_week)
+        statement = statement.order_by(TimeEntryWeeklyReview.iso_week)
+        return list(self.db.scalars(statement))
+
     def mark_weekly_review(
         self,
         *,

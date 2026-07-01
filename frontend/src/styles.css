@@ -4251,6 +4251,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-calendar-day {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 4px;
@@ -4284,6 +4285,20 @@ button.person-chip:focus-visible {
   background: #fff6f5;
 }
 
+.mobile-calendar-day.is-locked {
+  background: #f3f5f8;
+  color: #7b8797;
+}
+
+.mobile-calendar-day.is-selected.is-locked {
+  background: #f8eeee;
+}
+
+.mobile-calendar-day.is-locked:not(.is-selected):hover,
+.mobile-calendar-day.is-locked:not(.is-selected):focus-visible {
+  background: #eef2f6;
+}
+
 .mobile-calendar-day-number {
   display: inline-flex;
   align-items: center;
@@ -4305,6 +4320,17 @@ button.person-chip:focus-visible {
 .mobile-calendar-day.is-selected:not(.is-today) .mobile-calendar-day-number {
   background: #111827;
   color: #ffffff;
+}
+
+.mobile-calendar-day-lock {
+  position: absolute;
+  top: 9px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b98ac;
+  line-height: 1;
 }
 
 .mobile-calendar-day-events {
@@ -4334,6 +4360,13 @@ button.person-chip:focus-visible {
   gap: 1px;
 }
 
+.mobile-calendar-day.is-locked .mobile-calendar-event-chip,
+.mobile-calendar-day.is-locked .mobile-calendar-more-chip,
+.mobile-calendar-day.is-locked .mobile-calendar-day-plan {
+  background: #e5e9ef;
+  color: #697589;
+}
+
 .mobile-calendar-event-chip span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4342,6 +4375,10 @@ button.person-chip:focus-visible {
 .mobile-calendar-event-chip strong {
   color: #0f5132;
   font-size: 0.58rem;
+}
+
+.mobile-calendar-day.is-locked .mobile-calendar-event-chip strong {
+  color: #64748b;
 }
 
 .mobile-calendar-more-chip {

@@ -10,7 +10,7 @@ import {
   formatHoursFromMinutes,
 } from "../lib/formatters";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
-import type { TimeEntry, TimeEntryCreate } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type MobileTimeView = "month" | "day";
 
@@ -79,6 +79,7 @@ export function MobileTimeEntryPage() {
   const [visibleMonth, setVisibleMonth] = useState(currentMonth);
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [weeklyReviews, setWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [assignments, setAssignments] = useState<MobileAssignment[]>([]);
   const [activeSites, setActiveSites] = useState<MobileSite[]>([]);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
@@ -129,10 +130,13 @@ export function MobileTimeEntryPage() {
     setLoadError(null);
     setAssignmentLoadError(null);
     try {
-      const [timeEntriesResult, assignmentResult, sitesResult] = await Promise.allSettled([
+      const weeklyReviewRequests = isoYearsInRange(timeEntryLoadRange.start, timeEntryLoadRange.end)
+        .map((isoYear) => api.myTimeEntryWeeklyReviews({ isoYear }));
+      const [timeEntriesResult, assignmentResult, sitesResult, weeklyReviewsResult] = await Promise.allSettled([
         api.timeEntries({ personId, dateFrom: timeEntryLoadRange.start, dateTo: timeEntryLoadRange.end }),
         api.myAssignmentHistory({ start: assignmentLoadRange.start, end: assignmentLoadRange.end }),
         api.mySites(),
+        Promise.all(weeklyReviewRequests).then((reviewGroups) => reviewGroups.flat()),
       ]);
 
       if (timeEntriesResult.status === "fulfilled") {
@@ -140,6 +144,13 @@ export function MobileTimeEntryPage() {
       } else {
         setEntries([]);
         setLoadError(getErrorMessage(timeEntriesResult.reason, "Arbeitszeiten konnten nicht geladen werden."));
+      }
+
+      if (weeklyReviewsResult.status === "fulfilled") {
+        setWeeklyReviews(weeklyReviewsResult.value);
+      } else {
+        setWeeklyReviews([]);
+        setLoadError(getErrorMessage(weeklyReviewsResult.reason, "Prüfstatus konnte nicht geladen werden."));
       }
 
       if (assignmentResult.status === "fulfilled") {
@@ -203,8 +214,17 @@ export function MobileTimeEntryPage() {
 
   const selectedDateEntries = entriesByDate.get(selectedDate) ?? [];
   const editingEntry = selectedDateEntries.find((entry) => entry.id === editingEntryId) ?? null;
-  const hasSelectedDateLockedEntries = selectedDateEntries.some(isLockedTimeEntry);
-  const isSelectedDateFullyLocked = selectedDateEntries.length > 0 && selectedDateEntries.every(isLockedTimeEntry);
+  const reviewedWeekKeys = useMemo(
+    () => new Set(
+      weeklyReviews
+        .filter((review) => personId === null || review.person_id === personId)
+        .map((review) => isoWeekKey(review.iso_year, review.iso_week)),
+    ),
+    [personId, weeklyReviews],
+  );
+  const isSelectedWeekLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(selectedDate));
+  const hasSelectedDateLockedEntries = isSelectedWeekLocked || selectedDateEntries.some(isLockedTimeEntry);
+  const isSelectedDateFullyLocked = isSelectedWeekLocked || (selectedDateEntries.length > 0 && selectedDateEntries.every(isLockedTimeEntry));
   const assignmentsForSelectedDate = useMemo(
     () => assignments.filter((assignment) => assignmentCoversDate(assignment, selectedDate)),
     [assignments, selectedDate],
@@ -363,7 +383,7 @@ export function MobileTimeEntryPage() {
       return;
     }
     if (isSelectedDateFullyLocked) {
-      setFormError("Dieser Tag wurde vom Büro geprüft und ist gesperrt.");
+      setFormError("Diese Woche wurde vom Büro geprüft und ist gesperrt.");
       return;
     }
     if (!form.startTime || !form.endTime) {
@@ -455,7 +475,7 @@ export function MobileTimeEntryPage() {
     if (deletingEntryId !== null) {
       return;
     }
-    if (isLockedTimeEntry(entry)) {
+    if (isSelectedDateFullyLocked || isLockedTimeEntry(entry)) {
       return;
     }
     if (!window.confirm("Zeiteintrag löschen?")) {
@@ -476,7 +496,7 @@ export function MobileTimeEntryPage() {
   }
 
   function editEntry(entry: TimeEntry) {
-    if (isLockedTimeEntry(entry)) {
+    if (isSelectedDateFullyLocked || isLockedTimeEntry(entry)) {
       return;
     }
     const startTime = normalizeTimeInput(entry.start_time) ?? "";
@@ -594,6 +614,7 @@ export function MobileTimeEntryPage() {
                 const dayEntries = entriesByDate.get(day.date) ?? [];
                 const daySummaries = buildDayWorkSummaries(dayEntries, siteById);
                 const hasPlannedAssignment = assignments.some((assignment) => assignmentCoversDate(assignment, day.date));
+                const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date)) || dayEntries.some(isLockedTimeEntry);
                 return (
                   <button
                     className={classNames(
@@ -604,12 +625,19 @@ export function MobileTimeEntryPage() {
                       hasPlannedAssignment && "has-plan",
                       day.isWeekend && "is-weekend",
                       !day.isCurrentMonth && "is-outside-month",
+                      isDayLocked && "is-locked",
                     )}
                     key={day.date}
+                    title={isDayLocked ? "Vom Büro geprüft" : undefined}
                     type="button"
                     onClick={() => openDay(day.date)}
                   >
                     <span className="mobile-calendar-day-number">{day.day}</span>
+                    {isDayLocked ? (
+                      <span className="mobile-calendar-day-lock" aria-label="Vom Büro geprüft">
+                        <LockKeyhole aria-hidden="true" size={11} />
+                      </span>
+                    ) : null}
                     <span className="mobile-calendar-day-events">
                       {daySummaries.slice(0, 2).map((summary) => (
                         <span className="mobile-calendar-event-chip" key={summary.key}>
@@ -632,7 +660,7 @@ export function MobileTimeEntryPage() {
         <>
           <section className="mobile-week-strip" aria-label="Woche auswählen">
             {weekDays.map((day) => {
-              const isDayLocked = (entriesByDate.get(day.date) ?? []).some(isLockedTimeEntry);
+              const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date)) || (entriesByDate.get(day.date) ?? []).some(isLockedTimeEntry);
               return (
                 <button
                   className={classNames(
@@ -681,7 +709,7 @@ export function MobileTimeEntryPage() {
                         <button
                           className="mobile-time-site-action"
                           disabled={isSelectedDateFullyLocked}
-                          title={isSelectedDateFullyLocked ? "Dieser Tag wurde vom Büro geprüft." : "Zeit erfassen"}
+                          title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Zeit erfassen"}
                           type="button"
                           onClick={() => openSiteEntry(site.id)}
                         >
@@ -704,7 +732,7 @@ export function MobileTimeEntryPage() {
                   <button
                     className="mobile-time-manual-card"
                     disabled={isSelectedDateFullyLocked}
-                    title={isSelectedDateFullyLocked ? "Dieser Tag wurde vom Büro geprüft." : "Fahrtzeit erfassen"}
+                    title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Fahrtzeit erfassen"}
                     type="button"
                     onClick={() => openTravelTimeEntry()}
                   >
@@ -717,7 +745,7 @@ export function MobileTimeEntryPage() {
                   <button
                     className="mobile-time-manual-card"
                     disabled={isSelectedDateFullyLocked}
-                    title={isSelectedDateFullyLocked ? "Dieser Tag wurde vom Büro geprüft." : "Manuell erfassen"}
+                    title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Manuell erfassen"}
                     type="button"
                     onClick={() => openManualEntry()}
                   >
@@ -747,7 +775,7 @@ export function MobileTimeEntryPage() {
                   <div className="mobile-time-entry-bubbles">
                     {selectedDateEntries.map((entry) => {
                       const isDeleting = deletingEntryId === entry.id;
-                      const isLocked = isLockedTimeEntry(entry);
+                      const isLocked = isSelectedWeekLocked || isLockedTimeEntry(entry);
                       return (
                         <article
                           className={classNames(
@@ -801,7 +829,7 @@ export function MobileTimeEntryPage() {
                         className="mobile-time-site-card is-recent"
                         disabled={isSelectedDateFullyLocked}
                         key={site.id}
-                        title={isSelectedDateFullyLocked ? "Dieser Tag wurde vom Büro geprüft." : undefined}
+                        title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : undefined}
                         type="button"
                         onClick={() => openSiteEntry(site.id)}
                       >
@@ -1495,6 +1523,36 @@ function addMonths(value: Date, count: number): Date {
 
 function addDays(value: Date, count: number): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
+}
+
+function isoYearsInRange(start: string, end: string): number[] {
+  const years = new Set<number>();
+  let current = parseDateInput(start);
+  const endDate = parseDateInput(end);
+  while (current <= endDate) {
+    years.add(isoWeekParts(current).year);
+    current = addDays(current, 7);
+  }
+  years.add(isoWeekParts(endDate).year);
+  return Array.from(years).sort((first, second) => first - second);
+}
+
+function isoWeekKeyFromDate(dateValue: string): string {
+  const parts = isoWeekParts(parseDateInput(dateValue));
+  return isoWeekKey(parts.year, parts.week);
+}
+
+function isoWeekKey(year: number, week: number): string {
+  return `${year}-${String(week).padStart(2, "0")}`;
+}
+
+function isoWeekParts(value: Date): { year: number; week: number } {
+  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { year: date.getUTCFullYear(), week };
 }
 
 function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {

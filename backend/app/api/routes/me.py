@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ from app.schemas.measurement import (
 from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, MobileSelfPlanRequest, MobileSite
 from app.schemas.push import PushDeviceRead, PushDeviceRegister
 from app.schemas.site_email_recipient import SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate
+from app.schemas.time_entry import TimeEntryWeeklyReviewRead
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
@@ -44,6 +45,7 @@ from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.extra_work_email_service import ExtraWorkEmailService
 from app.services.site_email_recipient_service import SiteEmailRecipientService
+from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/me", tags=["me"])
 logger = logging.getLogger(__name__)
@@ -92,6 +94,22 @@ def list_my_assignment_history(
         start=start,
         end=end,
         allow_history=True,
+    )
+
+
+@router.get("/time-entry-weekly-reviews", response_model=list[TimeEntryWeeklyReviewRead])
+def list_my_time_entry_weekly_reviews(
+    iso_year: int,
+    iso_week: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[TimeEntryWeeklyReviewRead]:
+    if current_user.person_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Für deinen Benutzer ist kein Monteurprofil hinterlegt.")
+    return TimeEntryService(db).list_person_weekly_reviews(
+        person_id=current_user.person_id,
+        iso_year=iso_year,
+        iso_week=iso_week,
     )
 
 

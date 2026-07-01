@@ -644,6 +644,16 @@ export const api = {
     return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`);
   },
 
+  async myTimeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number }): Promise<TimeEntryWeeklyReview[]> {
+    const search = new URLSearchParams({
+      iso_year: String(params.isoYear),
+    });
+    if (params.isoWeek !== undefined) {
+      search.set("iso_week", String(params.isoWeek));
+    }
+    return request<TimeEntryWeeklyReview[]>(`/me/time-entry-weekly-reviews?${search.toString()}`);
+  },
+
   async markTimeEntryWeeklyReview(payload: { personId: number; isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview> {
     return request<TimeEntryWeeklyReview>("/time-entries/weekly-reviews", {
       method: "POST",
