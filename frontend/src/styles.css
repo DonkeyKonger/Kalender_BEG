@@ -5180,18 +5180,6 @@ button.person-chip:focus-visible {
   text-transform: uppercase;
 }
 
-.mobile-time-day-entries-heading strong {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-  border-radius: 999px;
-  background: #eef3f8;
-  color: #65738a;
-  font-size: 0.72rem;
-  padding: 3px 7px;
-}
-
 .mobile-time-day-entries p {
   margin: 0;
   color: #65738a;

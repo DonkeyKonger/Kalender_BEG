@@ -238,7 +238,6 @@ export function MobileTimeEntryPage() {
   const netMinutes = calculateNetMinutes(form.startTime, form.endTime, breakMinutes);
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
   const breakValidationMessage = getBreakValidationMessage(grossMinutes, breakMinutes);
-  const selectedDateTotalMinutes = selectedDateEntries.reduce((total, entry) => total + timeEntryTotalMinutes(entry), 0);
 
   function showMonth(month: Date) {
     const monthStart = startOfMonth(month);
@@ -683,7 +682,6 @@ export function MobileTimeEntryPage() {
               <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
                 <div className="mobile-time-day-entries-heading">
                   <span>Heute erfasst</span>
-                  <strong>{selectedDateEntries.length === 0 ? "0 Einträge · 0,0 h" : `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)}`}</strong>
                 </div>
                 {entryActionError ? <p className="form-error">{entryActionError}</p> : null}
                 {selectedDateEntries.length === 0 ? (
@@ -726,8 +724,7 @@ export function MobileTimeEntryPage() {
 
               <section className="mobile-time-picker-section is-secondary" aria-label="Vergangene geplante Baustellen">
                 <div className="mobile-time-picker-heading">
-                  <span>Vergangene Baustellen</span>
-                  <small>Aus den letzten 6 Monaten</small>
+                  <span>Baustellen der letzten 6 Monate</span>
                 </div>
                 {recentSiteOptions.length ? (
                   <div className="mobile-time-recent-strip">
@@ -1409,10 +1406,6 @@ function addMonths(value: Date, count: number): Date {
 
 function addDays(value: Date, count: number): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
-}
-
-function formatCountLabel(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {
