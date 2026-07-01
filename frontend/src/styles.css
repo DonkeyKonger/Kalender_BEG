@@ -4322,17 +4322,6 @@ button.person-chip:focus-visible {
   color: #ffffff;
 }
 
-.mobile-calendar-day-lock {
-  position: absolute;
-  top: 9px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #8b98ac;
-  line-height: 1;
-}
-
 .mobile-calendar-day-events {
   display: grid;
   align-content: start;
@@ -4433,15 +4422,6 @@ button.person-chip:focus-visible {
   font-size: 1rem;
 }
 
-.mobile-week-day-lock {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 12px;
-  color: #8b98ac;
-  line-height: 1;
-}
-
 .mobile-week-day.is-today strong,
 .mobile-week-day.is-selected strong {
   background: #d9342b;
@@ -4449,10 +4429,6 @@ button.person-chip:focus-visible {
 }
 
 .mobile-week-day.is-selected span {
-  color: #d9342b;
-}
-
-.mobile-week-day.is-selected .mobile-week-day-lock {
   color: #d9342b;
 }
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Car, ChevronLeft, ChevronRight, Clock3, LockKeyhole, Pencil, Pause } from "lucide-react";
+import { ArrowLeft, Building2, Car, ChevronLeft, ChevronRight, Clock3, Pencil, Pause } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -223,8 +223,6 @@ export function MobileTimeEntryPage() {
     [personId, weeklyReviews],
   );
   const isSelectedWeekLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(selectedDate));
-  const hasSelectedDateLockedEntries = isSelectedWeekLocked || selectedDateEntries.some(isLockedTimeEntry);
-  const isSelectedDateFullyLocked = isSelectedWeekLocked || (selectedDateEntries.length > 0 && selectedDateEntries.every(isLockedTimeEntry));
   const assignmentsForSelectedDate = useMemo(
     () => assignments.filter((assignment) => assignmentCoversDate(assignment, selectedDate)),
     [assignments, selectedDate],
@@ -300,7 +298,7 @@ export function MobileTimeEntryPage() {
   }
 
   function openSiteEntry(siteId: number) {
-    if (isSelectedDateFullyLocked) {
+    if (isSelectedWeekLocked) {
       return;
     }
     const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
@@ -321,7 +319,7 @@ export function MobileTimeEntryPage() {
   }
 
   function openManualEntry(initialText = "") {
-    if (isSelectedDateFullyLocked) {
+    if (isSelectedWeekLocked) {
       return;
     }
     const suggestedStart = normalizeTimeInput(prefillEntry?.start_time);
@@ -342,7 +340,7 @@ export function MobileTimeEntryPage() {
   }
 
   function openTravelTimeEntry() {
-    if (isSelectedDateFullyLocked) {
+    if (isSelectedWeekLocked) {
       return;
     }
     const suggestedStart = normalizeTimeInput(prefillEntry?.end_time) ?? normalizeTimeInput(prefillEntry?.start_time);
@@ -382,7 +380,7 @@ export function MobileTimeEntryPage() {
       setFormError("Für deinen Benutzer ist kein Monteurprofil hinterlegt.");
       return;
     }
-    if (isSelectedDateFullyLocked) {
+    if (isSelectedWeekLocked) {
       setFormError("Diese Woche wurde vom Büro geprüft und ist gesperrt.");
       return;
     }
@@ -475,7 +473,7 @@ export function MobileTimeEntryPage() {
     if (deletingEntryId !== null) {
       return;
     }
-    if (isSelectedDateFullyLocked || isLockedTimeEntry(entry)) {
+    if (isSelectedWeekLocked) {
       return;
     }
     if (!window.confirm("Zeiteintrag löschen?")) {
@@ -496,7 +494,7 @@ export function MobileTimeEntryPage() {
   }
 
   function editEntry(entry: TimeEntry) {
-    if (isSelectedDateFullyLocked || isLockedTimeEntry(entry)) {
+    if (isSelectedWeekLocked) {
       return;
     }
     const startTime = normalizeTimeInput(entry.start_time) ?? "";
@@ -614,7 +612,7 @@ export function MobileTimeEntryPage() {
                 const dayEntries = entriesByDate.get(day.date) ?? [];
                 const daySummaries = buildDayWorkSummaries(dayEntries, siteById);
                 const hasPlannedAssignment = assignments.some((assignment) => assignmentCoversDate(assignment, day.date));
-                const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date)) || dayEntries.some(isLockedTimeEntry);
+                const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date));
                 return (
                   <button
                     className={classNames(
@@ -633,11 +631,6 @@ export function MobileTimeEntryPage() {
                     onClick={() => openDay(day.date)}
                   >
                     <span className="mobile-calendar-day-number">{day.day}</span>
-                    {isDayLocked ? (
-                      <span className="mobile-calendar-day-lock" aria-label="Vom Büro geprüft">
-                        <LockKeyhole aria-hidden="true" size={11} />
-                      </span>
-                    ) : null}
                     <span className="mobile-calendar-day-events">
                       {daySummaries.slice(0, 2).map((summary) => (
                         <span className="mobile-calendar-event-chip" key={summary.key}>
@@ -660,7 +653,7 @@ export function MobileTimeEntryPage() {
         <>
           <section className="mobile-week-strip" aria-label="Woche auswählen">
             {weekDays.map((day) => {
-              const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date)) || (entriesByDate.get(day.date) ?? []).some(isLockedTimeEntry);
+              const isDayLocked = reviewedWeekKeys.has(isoWeekKeyFromDate(day.date));
               return (
                 <button
                   className={classNames(
@@ -676,11 +669,6 @@ export function MobileTimeEntryPage() {
                 >
                   <span>{formatWeekdayShort(day.date)}</span>
                   <strong>{day.day}</strong>
-                  {isDayLocked ? (
-                    <small className="mobile-week-day-lock" aria-label="Vom Büro geprüft">
-                      <LockKeyhole aria-hidden="true" size={10} />
-                    </small>
-                  ) : null}
                 </button>
               );
             })}
@@ -708,8 +696,8 @@ export function MobileTimeEntryPage() {
                         </div>
                         <button
                           className="mobile-time-site-action"
-                          disabled={isSelectedDateFullyLocked}
-                          title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Zeit erfassen"}
+                          disabled={isSelectedWeekLocked}
+                          title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : "Zeit erfassen"}
                           type="button"
                           onClick={() => openSiteEntry(site.id)}
                         >
@@ -731,8 +719,8 @@ export function MobileTimeEntryPage() {
                 <div className="mobile-time-manual-actions">
                   <button
                     className="mobile-time-manual-card"
-                    disabled={isSelectedDateFullyLocked}
-                    title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Fahrtzeit erfassen"}
+                    disabled={isSelectedWeekLocked}
+                    title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : "Fahrtzeit erfassen"}
                     type="button"
                     onClick={() => openTravelTimeEntry()}
                   >
@@ -744,8 +732,8 @@ export function MobileTimeEntryPage() {
                   </button>
                   <button
                     className="mobile-time-manual-card"
-                    disabled={isSelectedDateFullyLocked}
-                    title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : "Manuell erfassen"}
+                    disabled={isSelectedWeekLocked}
+                    title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : "Manuell erfassen"}
                     type="button"
                     onClick={() => openManualEntry()}
                   >
@@ -761,7 +749,7 @@ export function MobileTimeEntryPage() {
               <section className="mobile-time-day-entries" aria-label="Gespeicherte Zeiten">
                 <div className="mobile-time-day-entries-heading">
                   <span>Heute erfasst</span>
-                  {hasSelectedDateLockedEntries ? <strong>Vom Büro geprüft</strong> : null}
+                  {isSelectedWeekLocked ? <strong>Monteurwoche geprüft</strong> : null}
                 </div>
                 {selectedDateEntries.length === 0 ? (
                   <div className="mobile-time-empty-state">
@@ -775,7 +763,7 @@ export function MobileTimeEntryPage() {
                   <div className="mobile-time-entry-bubbles">
                     {selectedDateEntries.map((entry) => {
                       const isDeleting = deletingEntryId === entry.id;
-                      const isLocked = isSelectedWeekLocked || isLockedTimeEntry(entry);
+                      const isLocked = isSelectedWeekLocked;
                       return (
                         <article
                           className={classNames(
@@ -796,7 +784,6 @@ export function MobileTimeEntryPage() {
                           </button>
                           {isLocked ? (
                             <span className="mobile-time-entry-lock-badge">
-                              <LockKeyhole aria-hidden="true" size={12} />
                               Geprüft
                             </span>
                           ) : (
@@ -827,9 +814,9 @@ export function MobileTimeEntryPage() {
                     {recentSiteOptions.map((site) => (
                       <button
                         className="mobile-time-site-card is-recent"
-                        disabled={isSelectedDateFullyLocked}
+                        disabled={isSelectedWeekLocked}
                         key={site.id}
-                        title={isSelectedDateFullyLocked ? "Diese Woche wurde vom Büro geprüft." : undefined}
+                        title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : undefined}
                         type="button"
                         onClick={() => openSiteEntry(site.id)}
                       >
@@ -1119,20 +1106,6 @@ export function MobileTimeEntryPage() {
 
 function isEditableManualEntry(entry: TimeEntry): boolean {
   return entry.source !== "gps_suggestion" && !entry.is_gps_suggestion;
-}
-
-function isLockedTimeEntry(entry: TimeEntry): boolean {
-  return (
-    entry.time_review_status !== "open"
-    || entry.status === "reviewed"
-    || entry.reviewed_by_user_id !== null
-    || entry.reviewed_at !== null
-    || entry.payroll_reviewed_by_user_id !== null
-    || entry.payroll_reviewed_at !== null
-    || entry.payroll_corrected_start_time !== null
-    || entry.payroll_corrected_end_time !== null
-    || entry.payroll_corrected_work_minutes !== null
-  );
 }
 
 function compareEntries(first: TimeEntry, second: TimeEntry): number {
