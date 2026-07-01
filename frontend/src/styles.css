@@ -4455,58 +4455,6 @@ button.person-chip:focus-visible {
   box-shadow: none;
 }
 
-.mobile-time-day-head {
-  display: grid;
-  overflow: hidden;
-  gap: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: #ffffff;
-  padding: 0;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 7%);
-}
-
-.mobile-time-day-title {
-  display: grid;
-  gap: 4px;
-  padding: 16px;
-}
-
-.mobile-time-day-status {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border-top: 1px solid #eef2f7;
-  background: #f7f9fc;
-  color: #8ea0bc;
-  padding: 12px 16px;
-}
-
-.mobile-time-day-title span {
-  color: #65738a;
-  font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.mobile-time-day-head h1,
-.mobile-time-day-head p {
-  margin: 0;
-}
-
-.mobile-time-day-head h1 {
-  color: #111827;
-  font-size: 1.15rem;
-  line-height: 1.1;
-}
-
-.mobile-time-day-head p {
-  color: #65738a;
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
 .mobile-time-site-picker {
   display: grid;
   gap: 18px;
@@ -4589,19 +4537,6 @@ button.person-chip:focus-visible {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-}
-
-.mobile-time-site-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  border: 1px solid #cfe0ff;
-  border-radius: 8px;
-  background: #eef5ff;
-  color: #0066ff;
-  font-size: 0.72rem;
-  font-weight: 800;
-  padding: 3px 8px;
 }
 
 .mobile-time-site-card.is-planned strong {

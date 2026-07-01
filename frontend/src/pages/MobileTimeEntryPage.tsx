@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import {
-  formatGermanDetailDate as formatDetailDate,
   formatGermanMonthYear as formatMonth,
   formatGermanWeekdayShortCompact as formatWeekdayShort,
   formatHoursFromMinutes,
@@ -240,8 +239,6 @@ export function MobileTimeEntryPage() {
   const timeValidationMessage = getTimeValidationMessage(form.startTime, form.endTime);
   const breakValidationMessage = getBreakValidationMessage(grossMinutes, breakMinutes);
   const selectedDateTotalMinutes = selectedDateEntries.reduce((total, entry) => total + timeEntryTotalMinutes(entry), 0);
-  const selectedDateStatusLabel = `${formatCountLabel(selectedDateEntries.length, "Eintrag", "Einträge")} · ${formatHoursFromMinutes(selectedDateTotalMinutes)} erfasst`;
-  const plannedSiteCountLabel = formatCountLabel(plannedSiteOptions.length, "Baustelle", "Baustellen");
 
   function showMonth(month: Date) {
     const monthStart = startOfMonth(month);
@@ -630,22 +627,10 @@ export function MobileTimeEntryPage() {
           </section>
 
           <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
-            <div className="mobile-time-day-head">
-              <div className="mobile-time-day-title">
-                <span>{formatCalendarWeek(selectedDate)}</span>
-                <h1>{formatDetailDate(selectedDate)}</h1>
-              </div>
-              <div className="mobile-time-day-status">
-                <Clock3 aria-hidden="true" size={17} />
-                <p>{selectedDateEntries.length === 0 ? "Noch keine Zeit erfasst" : `${formatHoursFromMinutes(selectedDateTotalMinutes)} erfasst`}</p>
-              </div>
-            </div>
-
             <div className="mobile-time-site-picker">
               <section className="mobile-time-picker-section is-primary" aria-label="Geplante Baustellen">
                 <div className="mobile-time-picker-heading">
                   <span>Heute geplant</span>
-                  <strong>{plannedSiteCountLabel}</strong>
                 </div>
                 {plannedSiteOptions.length ? (
                   <div className="mobile-time-site-grid">
@@ -660,7 +645,6 @@ export function MobileTimeEntryPage() {
                             <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
                             {site.site_number && site.location ? <small>{site.location}</small> : null}
                           </div>
-                          <span className="mobile-time-site-status">Geplant</span>
                         </div>
                         <button className="mobile-time-site-action" type="button" onClick={() => openSiteEntry(site.id)}>
                           <Clock3 aria-hidden="true" size={18} />
@@ -1429,11 +1413,6 @@ function addDays(value: Date, count: number): Date {
 
 function formatCountLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function formatCalendarWeek(value: string): string {
-  const { week, year } = getIsoWeek(parseDateInput(value));
-  return `KW ${week} · ${year}`;
 }
 
 function formatSiteLabel(siteId: number, siteById: Map<number, MobileTimeSiteOption>): string {
