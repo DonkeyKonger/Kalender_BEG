@@ -536,7 +536,15 @@ export function MobileTimeEntryPage() {
           </button>
           <button className="mobile-calendar-today" type="button" onClick={showToday}>Heute</button>
         </header>
-      ) : null}
+      ) : (
+        <header className="mobile-calendar-nav">
+          <button className="mobile-calendar-back" type="button" onClick={() => setActiveView("month")}>
+            <ArrowLeft aria-hidden="true" size={18} />
+            <span>Monat</span>
+          </button>
+          <strong>{formatMonth(visibleMonth)}</strong>
+        </header>
+      )}
 
       {loadError ? <p className="form-error">{loadError}</p> : null}
       {assignmentLoadError ? <p className="form-error">{assignmentLoadError}</p> : null}
