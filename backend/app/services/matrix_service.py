@@ -1,11 +1,13 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from hashlib import sha1
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.absence import Absence
 from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
 from app.models.enums import AbsenceStatus
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
@@ -24,6 +26,7 @@ from app.schemas.matrix import (
     MatrixResponse,
     MatrixRow,
     MatrixSite,
+    MatrixVersionResponse,
 )
 
 MAX_MATRIX_DAYS = 90
@@ -102,6 +105,133 @@ class MatrixService:
             days=[self._build_day(day) for day in visible_days],
             project_managers=project_managers,
             rows=rows,
+        )
+
+    def get_version(
+        self,
+        *,
+        start: date,
+        end: date,
+        include_closed: bool = False,
+        year_view: bool = False,
+        project_manager_person_id: int | None = None,
+    ) -> MatrixVersionResponse:
+        self._validate_range(start=start, end=end, year_view=year_view)
+        visible_sites = (
+            self.sites.list(include_closed=include_closed)
+            if project_manager_person_id is None
+            else self.sites.list(
+                include_closed=include_closed,
+                project_manager_person_id=project_manager_person_id,
+            )
+        )
+        site_ids = {site.id for site in visible_sites}
+        assignment_statement = select(
+            func.max(Assignment.updated_at),
+            func.count(Assignment.id),
+        ).where(
+            Assignment.start_date <= end,
+            Assignment.end_date >= start,
+        )
+        mark_statement = select(
+            func.max(PlanningCellMark.updated_at),
+            func.count(PlanningCellMark.id),
+        ).where(
+            PlanningCellMark.mark_date >= start,
+            PlanningCellMark.mark_date <= end,
+        )
+        if site_ids:
+            assignment_statement = assignment_statement.where(Assignment.site_id.in_(site_ids))
+            mark_statement = mark_statement.where(PlanningCellMark.site_id.in_(site_ids))
+        else:
+            assignment_statement = assignment_statement.where(False)
+            mark_statement = mark_statement.where(False)
+
+        assignment_latest, assignment_count = self.db.execute(assignment_statement).one()
+        mark_latest, mark_count = self.db.execute(mark_statement).one()
+        assignments = self.assignments.list(start=start, end=end)
+        if site_ids:
+            assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
+        else:
+            assignments = []
+        person_ids = {assignment.person_id for assignment in assignments}
+        person_ids.update(
+            site.project_manager_person_id
+            for site in visible_sites
+            if site.project_manager_person_id is not None
+        )
+        absence_statement = select(
+            func.max(Absence.updated_at),
+            func.count(Absence.id),
+        ).where(
+            Absence.status == AbsenceStatus.ACTIVE,
+            Absence.start_date <= end,
+            Absence.end_date >= start,
+        )
+        if person_ids:
+            absence_statement = absence_statement.where(Absence.person_id.in_(person_ids))
+        else:
+            absence_statement = absence_statement.where(False)
+        absence_latest, absence_count = self.db.execute(absence_statement).one()
+
+        person_statement = select(
+            func.max(Person.updated_at),
+            func.count(Person.id),
+        )
+        if person_ids:
+            person_statement = person_statement.where(Person.id.in_(person_ids))
+        else:
+            person_statement = person_statement.where(False)
+        person_latest, person_count = self.db.execute(person_statement).one()
+
+        site_statement = select(
+            func.max(Site.updated_at),
+            func.count(Site.id),
+        )
+        if site_ids:
+            site_statement = site_statement.where(Site.id.in_(site_ids))
+        else:
+            site_statement = site_statement.where(False)
+        site_latest, site_count = self.db.execute(site_statement).one()
+
+        audit_latest = self.db.scalar(
+            select(func.max(AuditLog.created_at)).where(
+                AuditLog.entity_type.in_(
+                    ["assignment", "absence", "matrix", "matrix_cell_mark", "site"]
+                )
+            )
+        )
+        latest_updated_at = max_datetime(
+            assignment_latest,
+            absence_latest,
+            person_latest,
+            mark_latest,
+            site_latest,
+            audit_latest,
+        )
+        version_source = "|".join(
+            [
+                start.isoformat(),
+                end.isoformat(),
+                str(project_manager_person_id or "all"),
+                str(include_closed),
+                str(year_view),
+                datetime_token(assignment_latest),
+                str(assignment_count or 0),
+                datetime_token(absence_latest),
+                str(absence_count or 0),
+                datetime_token(person_latest),
+                str(person_count or 0),
+                datetime_token(mark_latest),
+                str(mark_count or 0),
+                datetime_token(site_latest),
+                str(site_count or 0),
+                datetime_token(audit_latest),
+            ]
+        )
+        return MatrixVersionResponse(
+            version=sha1(version_source.encode("utf-8")).hexdigest(),
+            latest_updated_at=latest_updated_at,
         )
 
     def get_site_cells(self, *, site_id: int, start: date, end: date) -> list[MatrixCell]:
@@ -334,3 +464,19 @@ class MatrixService:
 
     def _date_range(self, start: date, end: date) -> list[date]:
         return [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+
+    def _validate_range(self, *, start: date, end: date, year_view: bool) -> None:
+        if end < start:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
+        max_days = MAX_MATRIX_YEAR_VIEW_DAYS if year_view else MAX_MATRIX_DAYS
+        if (end - start).days + 1 > max_days:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Matrixzeitraum ist zu gross.")
+
+
+def datetime_token(value: datetime | None) -> str:
+    return value.isoformat() if value is not None else ""
+
+
+def max_datetime(*values: datetime | None) -> datetime | None:
+    present_values = [value for value in values if value is not None]
+    return max(present_values) if present_values else None

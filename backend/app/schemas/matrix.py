@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as Date
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +74,11 @@ class MatrixResponse(BaseModel):
     days: list[MatrixDay]
     project_managers: list[MatrixPerson] = Field(default_factory=list)
     rows: list[MatrixRow]
+
+
+class MatrixVersionResponse(BaseModel):
+    version: str
+    latest_updated_at: datetime | None = None
 
 
 class MatrixEntryInput(BaseModel):

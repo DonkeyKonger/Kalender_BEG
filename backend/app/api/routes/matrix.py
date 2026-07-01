@@ -13,6 +13,7 @@ from app.schemas.matrix import (
     MatrixMutationResponse,
     MatrixRangePatch,
     MatrixResponse,
+    MatrixVersionResponse,
 )
 from app.services.matrix_mutation_service import MatrixMutationService
 from app.services.matrix_service import MatrixService
@@ -38,6 +39,25 @@ def get_matrix(
         start=start,
         end=end,
         include_weekends=include_weekends,
+        include_closed=include_closed,
+        year_view=year_view,
+        project_manager_person_id=project_manager_person_id,
+    )
+
+
+@router.get("/version", response_model=MatrixVersionResponse)
+def get_matrix_version(
+    start: date,
+    end: date,
+    include_closed: bool = False,
+    year_view: bool = False,
+    project_manager_person_id: int | None = None,
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> MatrixVersionResponse:
+    return MatrixService(db).get_version(
+        start=start,
+        end=end,
         include_closed=include_closed,
         year_view=year_view,
         project_manager_person_id=project_manager_person_id,

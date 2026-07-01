@@ -121,6 +121,7 @@ type UndoItem = {
 const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
 const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
+const MATRIX_BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 
 export function MatrixPage() {
   const { user } = useAuth();
@@ -164,6 +165,9 @@ export function MatrixPage() {
   const rangeScrollSecondFrameRef = useRef<number | null>(null);
   const rangeScrollFallbackTimeoutRef = useRef<number | null>(null);
   const initialScrollSnapResetTimeoutRef = useRef<number | null>(null);
+  const matrixVersionRef = useRef<string | null>(null);
+  const isCheckingMatrixVersionRef = useRef(false);
+  const hasDeferredMatrixRefreshRef = useRef(false);
   const isApplyingWeekSnapRef = useRef(false);
   const hasLoadedPeopleRef = useRef(false);
   const today = useMemo(() => toDateInputValue(new Date()), []);
@@ -181,6 +185,25 @@ export function MatrixPage() {
   const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const matrixIsEditable = isEditable && !isYearView;
+  const hasPendingMatrixSave = useMemo(
+    () => Object.values(saveStatus).some((status) => status === "dirty" || status === "saving"),
+    [saveStatus],
+  );
+  const isMatrixInteractionActive = Boolean(
+    activeCell
+    || activeEditorRange
+    || editorAnchor
+    || activeAbsenceCell
+    || absenceEditorAnchor
+    || isSelecting
+    || assignmentDrag
+    || assignmentResize
+    || isSiteCreateDrawerOpen
+    || isSavingAbsence
+    || savingInfoSiteId !== null
+    || savingStatusSiteId !== null
+    || hasPendingMatrixSave,
+  );
   const activeRange = useMemo(
     () => isYearView ? getYearPlanningRange(today) : defaultRange,
     [defaultRange, isYearView, today],
@@ -247,7 +270,7 @@ export function MatrixPage() {
     try {
       const shouldLoadPeople = !hasLoadedPeopleRef.current;
       const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
-      const [matrixData, personData, absenceData] = await Promise.all([
+      const [matrixData, personData, absenceData, versionData] = await Promise.all([
         api.matrix({
           start: activeRange.start,
           end: activeRange.end,
@@ -257,8 +280,15 @@ export function MatrixPage() {
         }),
         shouldLoadPeople ? api.persons() : Promise.resolve<Person[] | null>(null),
         api.absences({ start: activeRange.start, end: activeRange.end }),
+        api.matrixVersion({
+          start: activeRange.start,
+          end: activeRange.end,
+          yearView: isYearView,
+          projectManagerPersonId,
+        }),
       ]);
       setMatrix(matrixData);
+      matrixVersionRef.current = versionData.version;
       setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
       if (personData) {
         setPeople(personData);
@@ -290,9 +320,126 @@ export function MatrixPage() {
     setAbsences(absenceData);
   }, [activeRange.end, activeRange.start]);
 
+  const syncMatrixVersionSilently = useCallback(async () => {
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+    try {
+      const versionData = await api.matrixVersion({
+        start: activeRange.start,
+        end: activeRange.end,
+        yearView: isYearView,
+        projectManagerPersonId,
+      });
+      matrixVersionRef.current = versionData.version;
+    } catch {
+      // Hintergrund-Sync darf den Nutzer nicht stören.
+    }
+  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+
+  const refreshMatrixInBackground = useCallback(async (nextVersion: string) => {
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+    const matrixScroll = matrixScrollRef.current;
+    const scrollSnapshot = matrixScroll
+      ? { left: matrixScroll.scrollLeft, top: matrixScroll.scrollTop }
+      : null;
+    const windowScrollSnapshot = { left: window.scrollX, top: window.scrollY };
+    const [matrixData, absenceData] = await Promise.all([
+      api.matrix({
+        start: activeRange.start,
+        end: activeRange.end,
+        includeWeekends: true,
+        yearView: isYearView,
+        projectManagerPersonId,
+      }),
+      api.absences({ start: activeRange.start, end: activeRange.end }),
+    ]);
+    setMatrix(matrixData);
+    setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
+    setAbsences(absenceData);
+    matrixVersionRef.current = nextVersion;
+    window.requestAnimationFrame(() => {
+      if (scrollSnapshot && matrixScrollRef.current) {
+        matrixScrollRef.current.scrollLeft = scrollSnapshot.left;
+        matrixScrollRef.current.scrollTop = scrollSnapshot.top;
+      }
+      window.scrollTo(windowScrollSnapshot.left, windowScrollSnapshot.top);
+    });
+  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+
+  const checkMatrixVersionInBackground = useCallback(async () => {
+    if (!matrix || isCheckingMatrixVersionRef.current) {
+      return;
+    }
+    if (isMatrixInteractionActive || autosaveRef.current !== null) {
+      hasDeferredMatrixRefreshRef.current = true;
+      return;
+    }
+    isCheckingMatrixVersionRef.current = true;
+    try {
+      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+      const versionData = await api.matrixVersion({
+        start: activeRange.start,
+        end: activeRange.end,
+        yearView: isYearView,
+        projectManagerPersonId,
+      });
+      if (matrixVersionRef.current === null) {
+        matrixVersionRef.current = versionData.version;
+        return;
+      }
+      if (versionData.version !== matrixVersionRef.current) {
+        await refreshMatrixInBackground(versionData.version);
+      }
+      hasDeferredMatrixRefreshRef.current = false;
+    } catch {
+      // Polling bleibt unsichtbar. Fehler zeigt die normale manuelle/initiale Ladung.
+    } finally {
+      isCheckingMatrixVersionRef.current = false;
+    }
+  }, [
+    activeRange.end,
+    activeRange.start,
+    isMatrixInteractionActive,
+    isYearView,
+    matrix,
+    projectManagerFilter,
+    refreshMatrixInBackground,
+  ]);
+
   useEffect(() => {
     void loadMatrix();
   }, [loadMatrix]);
+
+  useEffect(() => {
+    if (!matrix) {
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      void checkMatrixVersionInBackground();
+    }, MATRIX_BACKGROUND_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [checkMatrixVersionInBackground, matrix]);
+
+  useEffect(() => {
+    function checkOnReturn() {
+      if (document.visibilityState === "visible") {
+        void checkMatrixVersionInBackground();
+      }
+    }
+    document.addEventListener("visibilitychange", checkOnReturn);
+    window.addEventListener("focus", checkOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", checkOnReturn);
+      window.removeEventListener("focus", checkOnReturn);
+    };
+  }, [checkMatrixVersionInBackground]);
+
+  useEffect(() => {
+    if (isMatrixInteractionActive || !hasDeferredMatrixRefreshRef.current) {
+      return;
+    }
+    hasDeferredMatrixRefreshRef.current = false;
+    void checkMatrixVersionInBackground();
+  }, [checkMatrixVersionInBackground, isMatrixInteractionActive]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -738,6 +885,7 @@ export function MatrixPage() {
       setError(null);
       closeAbsenceEditor();
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+      await syncMatrixVersionSilently();
     } catch (requestError) {
       setError(readApiError(requestError, "Fehlzeit konnte nicht gespeichert werden."));
     } finally {
@@ -757,9 +905,11 @@ export function MatrixPage() {
       }
       setError(null);
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+      await syncMatrixVersionSilently();
     } catch (requestError) {
       setError(readApiError(requestError, "Fehlzeit konnte nicht fuer diesen Tag entfernt werden."));
       await Promise.all([refreshAbsencesOnly(), refreshMatrixOnly()]);
+      await syncMatrixVersionSilently();
     }
   }
 
@@ -876,6 +1026,7 @@ export function MatrixPage() {
         showTemporaryCellFeedback(activeCell.key, "Gespeichert");
       }
       replaceMatrixCells(activeCell.siteId, response.updated_cells);
+      void syncMatrixVersionSilently();
       void showAssignmentCollisionNoticeForPlan({
         endDate: savedCell.endDate,
         personIds: collisionPersonIds,
@@ -1078,6 +1229,7 @@ export function MatrixPage() {
             entries,
           });
       replaceMatrixCells(item.siteId, response.updated_cells);
+      void syncMatrixVersionSilently();
     } catch (requestError) {
       setError(readApiError(requestError, "Undo konnte nicht ausgefuehrt werden."));
     }
@@ -1110,11 +1262,13 @@ export function MatrixPage() {
   async function replaceMatrixSiteCellsOrRefresh(updatedSiteCells: UpdatedMatrixSiteCells[] | undefined) {
     if (!updatedSiteCells?.length) {
       await refreshMatrixOnly();
+      await syncMatrixVersionSilently();
       return;
     }
     updatedSiteCells.forEach((item) => {
       replaceMatrixCells(item.site_id, item.cells);
     });
+    await syncMatrixVersionSilently();
   }
 
   function dismissAssignmentCollisionNotice() {
@@ -1475,6 +1629,7 @@ export function MatrixPage() {
       setError(null);
       showTemporaryCellFeedback(key, "Markierung entfernt");
       replaceMatrixCells(row.site.id, response.updated_cells);
+      void syncMatrixVersionSilently();
     } catch (requestError) {
       const message = readApiError(requestError, "Markierung konnte nicht entfernt werden.");
       setError(message);
@@ -1501,6 +1656,7 @@ export function MatrixPage() {
       setError(null);
       showTemporaryCellFeedback(key, nextMark ? "Markierung gespeichert" : "Markierung entfernt");
       replaceMatrixCells(row.site.id, response.updated_cells);
+      void syncMatrixVersionSilently();
     } catch (requestError) {
       const message = readApiError(requestError, "Markierung konnte nicht gespeichert werden.");
       setError(message);
@@ -1571,6 +1727,7 @@ export function MatrixPage() {
       setError(null);
       updateMatrixSiteInfo(updated.id, updated.info);
       setSiteInfoDrafts((current) => ({ ...current, [updated.id]: updated.info ?? "" }));
+      void syncMatrixVersionSilently();
     } catch (requestError) {
       setError(readApiError(requestError, "Info konnte nicht gespeichert werden."));
       setSiteInfoDrafts((current) => ({ ...current, [siteId]: currentRow.site.info ?? "" }));
@@ -1597,6 +1754,7 @@ export function MatrixPage() {
         delete next[updated.id];
         return next;
       });
+      void syncMatrixVersionSilently();
     } catch (requestError) {
       setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
     } finally {

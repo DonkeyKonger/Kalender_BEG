@@ -83,6 +83,11 @@ export type MatrixResponse = {
   rows: MatrixRow[];
 };
 
+export type MatrixVersionResponse = {
+  version: string;
+  latest_updated_at: string | null;
+};
+
 export type MatrixEntryInput = {
   person_id?: number;
   external_name?: string;

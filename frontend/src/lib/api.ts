@@ -3,7 +3,7 @@ import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
-import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite } from "../types/matrix";
+import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite, MatrixVersionResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
@@ -1415,6 +1415,25 @@ export const api = {
       search.set("project_manager_person_id", String(params.projectManagerPersonId));
     }
     return request<MatrixResponse>(`/matrix?${search.toString()}`);
+  },
+
+  async matrixVersion(params: {
+    start: string;
+    end: string;
+    yearView?: boolean;
+    projectManagerPersonId?: number;
+  }): Promise<MatrixVersionResponse> {
+    const search = new URLSearchParams({
+      start: params.start,
+      end: params.end,
+    });
+    if (params.yearView) {
+      search.set("year_view", "true");
+    }
+    if (params.projectManagerPersonId !== undefined) {
+      search.set("project_manager_person_id", String(params.projectManagerPersonId));
+    }
+    return request<MatrixVersionResponse>(`/matrix/version?${search.toString()}`);
   },
 
   async patchMatrixCell(params: {
