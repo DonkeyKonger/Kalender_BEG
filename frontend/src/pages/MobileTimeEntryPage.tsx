@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Building2, Car, ChevronLeft, ChevronRight, Clock3, Pencil, Pause } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -536,15 +536,7 @@ export function MobileTimeEntryPage() {
           </button>
           <button className="mobile-calendar-today" type="button" onClick={showToday}>Heute</button>
         </header>
-      ) : (
-        <header className="mobile-calendar-nav">
-          <button className="mobile-calendar-back" type="button" onClick={() => setActiveView("month")}>
-            <ArrowLeft aria-hidden="true" size={18} />
-            <span>Monat</span>
-          </button>
-          <strong>{formatMonth(visibleMonth)}</strong>
-        </header>
-      )}
+      ) : null}
 
       {loadError ? <p className="form-error">{loadError}</p> : null}
       {assignmentLoadError ? <p className="form-error">{assignmentLoadError}</p> : null}
@@ -631,9 +623,14 @@ export function MobileTimeEntryPage() {
 
           <section className="mobile-time-entry-panel mobile-time-day-panel" aria-label="Arbeitszeit erfassen">
             <div className="mobile-time-day-head">
-              <span>{formatCalendarWeek(selectedDate)}</span>
-              <h1>{formatDetailDate(selectedDate)}</h1>
-              <p>{selectedDateStatusLabel}</p>
+              <div className="mobile-time-day-title">
+                <span>{formatCalendarWeek(selectedDate)}</span>
+                <h1>{formatDetailDate(selectedDate)}</h1>
+              </div>
+              <div className="mobile-time-day-status">
+                <Clock3 aria-hidden="true" size={17} />
+                <p>{selectedDateEntries.length === 0 ? "Noch keine Zeit erfasst" : `${formatHoursFromMinutes(selectedDateTotalMinutes)} erfasst`}</p>
+              </div>
             </div>
 
             <div className="mobile-time-site-picker">
@@ -646,12 +643,19 @@ export function MobileTimeEntryPage() {
                   <div className="mobile-time-site-grid">
                     {plannedSiteOptions.map((site) => (
                       <article className="mobile-time-site-card is-planned" key={site.id}>
-                        <div className="mobile-time-site-copy">
-                          <strong>{site.site_number || site.name}</strong>
-                          <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
-                          {site.site_number && site.location ? <small>{site.location}</small> : null}
+                        <div className="mobile-time-site-card-head">
+                          <span className="mobile-time-site-icon" aria-hidden="true">
+                            <Building2 size={19} />
+                          </span>
+                          <div className="mobile-time-site-copy">
+                            <strong>{site.site_number || site.name}</strong>
+                            <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                            {site.site_number && site.location ? <small>{site.location}</small> : null}
+                          </div>
+                          <span className="mobile-time-site-status">Geplant</span>
                         </div>
                         <button className="mobile-time-site-action" type="button" onClick={() => openSiteEntry(site.id)}>
+                          <Clock3 aria-hidden="true" size={18} />
                           Zeit erfassen
                         </button>
                       </article>
@@ -660,13 +664,26 @@ export function MobileTimeEntryPage() {
                 ) : (
                   <p className="mobile-time-picker-empty">Keine geplante Baustelle für diesen Tag.</p>
                 )}
+              </section>
 
+              <section className="mobile-time-picker-section mobile-time-quick-section" aria-label="Schnellerfassung">
+                <div className="mobile-time-picker-heading">
+                  <span>Schnellerfassung</span>
+                </div>
                 <div className="mobile-time-manual-actions">
                   <button className="mobile-time-manual-card" type="button" onClick={() => openTravelTimeEntry()}>
-                    <strong>Fahrtzeit erfassen</strong>
+                    <span className="mobile-time-quick-icon" aria-hidden="true">
+                      <Car size={21} />
+                    </span>
+                    <strong>Fahrtzeit</strong>
+                    <span>erfassen</span>
                   </button>
                   <button className="mobile-time-manual-card" type="button" onClick={() => openManualEntry()}>
-                    <strong>Arbeitszeit manuell erfassen</strong>
+                    <span className="mobile-time-quick-icon" aria-hidden="true">
+                      <Pencil size={21} />
+                    </span>
+                    <strong>Manuell</strong>
+                    <span>erfassen</span>
                   </button>
                 </div>
               </section>
@@ -678,7 +695,13 @@ export function MobileTimeEntryPage() {
                 </div>
                 {entryActionError ? <p className="form-error">{entryActionError}</p> : null}
                 {selectedDateEntries.length === 0 ? (
-                  <p>Noch keine Zeit für diesen Tag erfasst.</p>
+                  <div className="mobile-time-empty-state">
+                    <span aria-hidden="true">
+                      <Pause size={24} />
+                    </span>
+                    <strong>Noch nichts erfasst</strong>
+                    <p>Zeiten werden hier nach der Erfassung angezeigt.</p>
+                  </div>
                 ) : (
                   <div className="mobile-time-entry-bubbles">
                     {selectedDateEntries.map((entry) => {
@@ -717,9 +740,10 @@ export function MobileTimeEntryPage() {
                 {recentSiteOptions.length ? (
                   <div className="mobile-time-recent-strip">
                     {recentSiteOptions.map((site) => (
-                      <button className="mobile-time-site-card" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
-                        <strong>{site.name}</strong>
-                        <span>{[site.site_number, `zuletzt ${formatShortDate(site.lastPlannedDate)}`].filter(Boolean).join(" · ")}</span>
+                      <button className="mobile-time-site-card is-recent" key={site.id} type="button" onClick={() => openSiteEntry(site.id)}>
+                        <strong>{site.site_number || site.name}</strong>
+                        <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                        <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
                       </button>
                     ))}
                   </div>
