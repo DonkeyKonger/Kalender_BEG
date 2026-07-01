@@ -4635,17 +4635,17 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 48px;
-  border: 1px solid #143c6d;
-  border-radius: 12px;
-  background: #1f4276;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid #234a7f;
+  border-radius: 10px;
+  background: #244a7b;
   color: #ffffff;
   font: inherit;
-  font-size: 0.96rem;
+  font-size: 0.88rem;
   font-weight: 850;
-  padding: 11px 14px;
-  box-shadow: 0 3px 8px rgb(15 23 42 / 18%);
+  padding: 9px 12px;
+  box-shadow: none;
 }
 
 .mobile-time-manual-action,
