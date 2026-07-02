@@ -9935,7 +9935,7 @@ button.person-chip:focus-visible {
 
 .site-times-panel,
 .site-times-table-card {
-  border: 1px solid #d9e2ef;
+  border: 1px solid #dfe7f1;
   border-radius: 0;
   background: #ffffff;
 }
@@ -9944,9 +9944,9 @@ button.person-chip:focus-visible {
 .site-times-table-toolbar h3 {
   margin: 0;
   color: #334155;
-  font-size: 0.82rem;
-  font-weight: 900;
-  letter-spacing: 0.045em;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -9954,8 +9954,8 @@ button.person-chip:focus-visible {
 .site-times-table-toolbar p {
   margin: 4px 0 0;
   color: #8ba0bb;
-  font-size: 0.84rem;
-  font-weight: 750;
+  font-size: 0.8rem;
+  font-weight: 680;
   line-height: 1.35;
 }
 
@@ -9974,9 +9974,9 @@ button.person-chip:focus-visible {
 
 .site-times-panel-heading {
   min-width: 0;
-  padding: 14px 16px 13px;
-  border-bottom: 1px solid #d9e2ef;
-  background: #f8fafd;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid #dfe7f1;
+  background: #fafcff;
 }
 
 .site-times-balance-heading {
@@ -10007,12 +10007,12 @@ button.person-chip:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 46px;
-  padding: 0 16px;
+  min-height: 39px;
+  padding: 0 14px;
 }
 
 .site-times-summary-row + .site-times-summary-row {
-  border-top: 1px solid #e8eef6;
+  border-top: 1px solid #edf2f7;
 }
 
 .site-times-summary-row span {
@@ -10020,13 +10020,13 @@ button.person-chip:focus-visible {
   align-items: center;
   gap: 8px;
   color: #40516b;
-  font-size: 0.88rem;
-  font-weight: 760;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .site-times-summary-row i {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 0;
 }
 
@@ -10048,30 +10048,30 @@ button.person-chip:focus-visible {
 
 .site-times-summary-row strong {
   color: #172033;
-  font-size: 0.95rem;
-  font-weight: 900;
+  font-size: 0.9rem;
+  font-weight: 820;
   text-align: right;
 }
 
 .site-times-credit-row {
   margin-top: 0;
-  border-top: 1px solid #d7e1ee;
+  border-top: 1px solid #edf2f7;
   background: #ffffff;
 }
 
 .site-times-credit-row.is-negative {
-  border-top-color: #fecaca;
-  background: #fff3f1;
+  border-top-color: #f3d7d7;
+  background: #fff9f8;
 }
 
 .site-times-credit-row.is-positive {
-  border-top-color: #bbf7d0;
-  background: #f1fff6;
+  border-top-color: #d9f2e1;
+  background: #f8fffb;
 }
 
 .site-times-credit-row span {
   color: #172033;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .site-times-credit-row strong.is-positive {
@@ -10098,9 +10098,9 @@ button.person-chip:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 13px;
-  border-bottom: 1px solid #d9e2ef;
-  background: #f8fafd;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid #dfe7f1;
+  background: #fafcff;
 }
 
 .site-worktime-table-wrap {
@@ -10116,26 +10116,26 @@ button.person-chip:focus-visible {
 
 .site-worktime-table th,
 .site-worktime-table td {
-  border-bottom: 1px solid #e5edf7;
-  padding: 9px 12px;
+  border-bottom: 1px solid #edf2f7;
+  padding: 7px 10px;
   text-align: left;
   vertical-align: middle;
 }
 
 .site-worktime-table th {
   border-top: 0;
-  background: #f8fafd;
+  background: #fafcff;
   color: #60718c;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
 }
 
 .site-worktime-table td {
   color: #40516b;
-  font-size: 0.84rem;
-  font-weight: 760;
+  font-size: 0.82rem;
+  font-weight: 680;
 }
 
 .site-worktime-table tbody tr:hover td {
@@ -10143,12 +10143,12 @@ button.person-chip:focus-visible {
 }
 
 .site-worktime-section-row td {
-  border-top: 1px solid #d7e1ee;
-  background: #edf3fa;
+  border-top: 1px solid #dfe7f1;
+  background: #f3f7fb;
   color: #60718c;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.045em;
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -10172,18 +10172,18 @@ button.person-chip:focus-visible {
 
 .site-times-shell .status-badge {
   border-radius: 0;
-  min-height: 24px;
-  padding: 3px 9px;
+  min-height: 20px;
+  padding: 2px 7px;
   border: 1px solid transparent;
   background: #f8fafc;
-  font-size: 0.72rem;
-  font-weight: 900;
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .site-times-balance-heading .status-badge-danger {
-  border-color: #fecaca;
-  background: #fff5f5;
-  color: #d10000;
+  border-color: #f4c7c7;
+  background: #fffafa;
+  color: #c81e1e;
 }
 
 .site-times-balance-heading .status-badge-active {
