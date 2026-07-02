@@ -4296,6 +4296,9 @@ function SiteWorkTimesPanel({
     () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, summary.workMinutes),
     [projectMeasurementBatches, projectTimesheet, summary.workMinutes],
   );
+  const hourCreditMinutes = hoursComparison.valuedDifferenceMinutes !== null
+    ? -hoursComparison.valuedDifferenceMinutes
+    : null;
   const internalWorkTimeRows = useMemo(() => buildSiteWorkTimeDisplayRows(entries, "internal"), [entries]);
   const externalWorkTimeRows = useMemo(() => buildSiteWorkTimeDisplayRows(entries, "external"), [entries]);
 
@@ -4425,9 +4428,9 @@ function SiteWorkTimesPanel({
               </div>
               <div className="site-times-summary-row site-times-credit-row">
                 <span>Stundenguthaben</span>
-                <strong className={siteTimeCreditClassName(hoursComparison.valuedDifferenceMinutes)}>
-                  {hoursComparison.valuedDifferenceMinutes !== null
-                    ? formatSignedMeasurementDuration(hoursComparison.valuedDifferenceMinutes)
+                <strong className={siteTimeCreditClassName(hourCreditMinutes)}>
+                  {hourCreditMinutes !== null
+                    ? formatSignedMeasurementDuration(hourCreditMinutes)
                     : "-"}
                 </strong>
               </div>
