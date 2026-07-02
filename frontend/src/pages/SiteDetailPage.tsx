@@ -12,7 +12,7 @@ import {
   formatGermanDateKey as formatDateOnly,
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
-import { formatProjectDocumentMeta, getProjectDocumentKind } from "../lib/projectFiles";
+import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
@@ -1554,19 +1554,6 @@ function ProjectFoldersPanel({
 
   return (
     <div className="project-record-tab-panel">
-      {canOpenSharePointDirectly && site.project_folder_web_url ? (
-        <div className="project-folder-actions">
-          <a
-            className="secondary-action"
-            href={site.project_folder_web_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Projektordner in SharePoint öffnen
-          </a>
-        </div>
-      ) : null}
-
       {site.project_folder_status === "error" && site.project_folder_error ? (
         <div className="project-record-empty-state is-error">{site.project_folder_error}</div>
       ) : null}
@@ -1598,7 +1585,6 @@ function ProjectFoldersPanel({
                     }}
                     title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
                   >
-                    <Folder aria-hidden="true" size={18} />
                     <span>{folder.sort_order}.</span>
                     <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
                   </button>
@@ -1766,6 +1752,17 @@ function ProjectFolderDocumentBrowser({
           <h3>{currentFolderTitle}</h3>
         </div>
         <div className="project-document-browser-actions">
+          {hasSharePointFolder ? (
+            <label className="project-document-search">
+              <Search aria-hidden="true" size={15} />
+              <input
+                type="search"
+                value={query}
+                placeholder="Suchen ..."
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+          ) : null}
           {isInSubfolder ? (
             <button type="button" className="secondary-action" onClick={handleBackToParentFolder}>
               <ArrowLeft aria-hidden="true" size={15} />
@@ -1775,7 +1772,7 @@ function ProjectFolderDocumentBrowser({
           {hasSharePointFolder && !isInSubfolder ? (
             <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
               <UploadCloud aria-hidden="true" size={15} />
-              <span>{isUploading ? "Wird hochgeladen..." : "Datei hochladen"}</span>
+              <span>{isUploading ? "Lädt..." : "Hochladen"}</span>
               <input
                 className="project-upload-input"
                 type="file"
@@ -1791,11 +1788,17 @@ function ProjectFolderDocumentBrowser({
           ) : null}
           {canOpenSharePointDirectly && !isInSubfolder && folder.external_web_url ? (
             <a className="secondary-action project-document-open-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
-              <ExternalLink aria-hidden="true" size={15} />
-              <span>Ordner öffnen</span>
+              <Folder aria-hidden="true" size={15} />
+              <span>Ordner</span>
             </a>
           ) : null}
-          <button type="button" className="secondary-action" onClick={onClose}>Schließen</button>
+          {canOpenSharePointDirectly && !isInSubfolder && folder.external_web_url ? (
+            <a className="project-document-sharepoint-link" href={folder.external_web_url} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden="true" size={15} />
+              <span>SharePoint</span>
+            </a>
+          ) : null}
+          <button type="button" className="secondary-action project-document-close-action" aria-label="Dateiansicht schließen" onClick={onClose}>×</button>
         </div>
       </div>
 
@@ -1807,19 +1810,6 @@ function ProjectFolderDocumentBrowser({
 
       {!hasSharePointFolder ? (
         <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
-      ) : null}
-      {hasSharePointFolder ? (
-        <div className="project-document-filter-row">
-          <label className="project-document-search">
-            <Search aria-hidden="true" size={16} />
-            <input
-              type="search"
-              value={query}
-              placeholder="Dateien suchen..."
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </div>
       ) : null}
       {hasSharePointFolder && isCurrentLoading ? (
         <div className="project-record-empty-state">Dateien werden geladen...</div>
@@ -1839,57 +1829,89 @@ function ProjectFolderDocumentBrowser({
         <div className="project-record-empty-state">Keine Dateien gefunden.</div>
       ) : null}
       {hasSharePointFolder && !isCurrentLoading && !error && visibleItems.length > 0 ? (
-        <ul className="project-document-list">
-          {visibleItems.map((item) => (
-            <li key={item.id || item.name} className="project-document-item">
-              <div>
-                <DocumentTypeIcon item={item} />
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>{formatProjectDocumentMeta(item)}</span>
-                </div>
-              </div>
-              <div className="project-document-item-actions">
-                {item.is_folder ? (
-                  <button
-                    type="button"
-                    className="secondary-action project-document-open-action"
-                    disabled={folderNavigationLoading}
-                    onClick={() => void handleOpenFolder(item)}
-                  >
-                    <Folder aria-hidden="true" size={15} />
-                    <span>Öffnen</span>
-                  </button>
-                ) : null}
-                {!item.is_folder ? (
-                  <button
-                    type="button"
-                    className="secondary-action project-document-open-action"
-                    disabled={openingItemId === item.id}
-                    onClick={() => void handleOpen(item)}
-                  >
-                    <ExternalLink aria-hidden="true" size={15} />
-                    <span>{openingItemId === item.id ? "Öffnet..." : "Öffnen"}</span>
-                  </button>
-                ) : null}
-                {!item.is_folder ? (
-                  <button
-                    type="button"
-                    className="secondary-action project-document-open-action"
-                    disabled={downloadingItemId === item.id}
-                    onClick={() => void handleDownload(item)}
-                  >
-                    <Download aria-hidden="true" size={15} />
-                    <span>{downloadingItemId === item.id ? "Lädt..." : "Download"}</span>
-                  </button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="project-document-table-wrap">
+          <table className="project-document-table">
+            <thead>
+              <tr>
+                <th>Dateiname</th>
+                <th>Typ</th>
+                <th>Geändert</th>
+                <th>Größe</th>
+                <th aria-label="Aktionen"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((item) => (
+                <tr key={item.id || item.name} className="project-document-row">
+                  <td>
+                    <div className="project-document-name-cell">
+                      <DocumentTypeIcon item={item} />
+                      <strong>{item.name}</strong>
+                    </div>
+                  </td>
+                  <td>{formatProjectDocumentType(item)}</td>
+                  <td>{formatProjectDocumentChanged(item)}</td>
+                  <td>{formatProjectDocumentSize(item)}</td>
+                  <td>
+                    <div className="project-document-item-actions">
+                      {item.is_folder ? (
+                        <button
+                          type="button"
+                          className="secondary-action project-document-open-action"
+                          disabled={folderNavigationLoading}
+                          onClick={() => void handleOpenFolder(item)}
+                        >
+                          <Folder aria-hidden="true" size={14} />
+                          <span>Öffnen</span>
+                        </button>
+                      ) : null}
+                      {!item.is_folder ? (
+                        <button
+                          type="button"
+                          className="secondary-action project-document-open-action"
+                          disabled={openingItemId === item.id}
+                          onClick={() => void handleOpen(item)}
+                        >
+                          <ExternalLink aria-hidden="true" size={14} />
+                          <span>{openingItemId === item.id ? "Öffnet..." : "Öffnen"}</span>
+                        </button>
+                      ) : null}
+                      {!item.is_folder ? (
+                        <button
+                          type="button"
+                          className="secondary-action project-document-open-action"
+                          disabled={downloadingItemId === item.id}
+                          onClick={() => void handleDownload(item)}
+                        >
+                          <Download aria-hidden="true" size={14} />
+                          <span>{downloadingItemId === item.id ? "Lädt..." : "Download"}</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </aside>
   );
+}
+
+function formatProjectDocumentType(item: ProjectFolderDocumentItem): string {
+  if (item.is_folder) {
+    return "Ordner";
+  }
+  return item.file_extension?.toUpperCase() ?? "Datei";
+}
+
+function formatProjectDocumentChanged(item: ProjectFolderDocumentItem): string {
+  return item.last_modified_date_time ? formatDateTime(item.last_modified_date_time) : "-";
+}
+
+function formatProjectDocumentSize(item: ProjectFolderDocumentItem): string {
+  return item.is_folder ? "-" : formatProjectFileSize(item.size) ?? "-";
 }
 
 function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
