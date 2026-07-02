@@ -19189,6 +19189,7 @@ button.person-chip:focus-visible {
 }
 
 .site-detail-page.is-project-file-workspace .project-document-browser {
+  display: block;
   min-height: 560px;
   border: 0;
   border-radius: 0;
