@@ -4366,14 +4366,14 @@ function SiteWorkTimesPanel({
   return (
     <div className="project-record-tab-panel site-times-shell">
       <div className="site-times-insights">
-        <section className="site-times-panel site-times-overview-panel" aria-label="Ist-Zeiten Überblick">
+        <section className="site-times-panel site-times-overview-panel" aria-label="Gesamtstunden">
           <div className="site-times-panel-heading">
-            <h3>Ist-Zeiten Überblick</h3>
+            <h3>Gesamtstunden</h3>
             <p>Zusammenfassung aller erfassten Zeiten dieser Baustelle</p>
           </div>
           <div className="site-times-summary-list">
             <div className="site-times-summary-row">
-              <span><i className="is-work" aria-hidden="true" />Arbeitszeit eigene</span>
+              <span><i className="is-work" aria-hidden="true" />Arbeitszeit Monteure</span>
               <strong>{formatMeasurementDuration(summary.internalWorkMinutes)}</strong>
             </div>
             <div className="site-times-summary-row">
