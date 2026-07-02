@@ -3382,9 +3382,9 @@ function effectivePayrollEndTime(entry: TimeEntry): string | null {
 function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
   const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry);
   if (correctedMinutes !== null) {
-    return correctedMinutes + (entry.travel_minutes || 0);
+    return roundMinutesToQuarterHour(correctedMinutes + (entry.travel_minutes || 0));
   }
-  return isOfficeOnlyTimeEntry(entry) ? null : entry.work_minutes + (entry.travel_minutes || 0);
+  return isOfficeOnlyTimeEntry(entry) ? null : roundMinutesToQuarterHour(entry.work_minutes + (entry.travel_minutes || 0));
 }
 
 function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {
@@ -3397,6 +3397,10 @@ function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {
     return null;
   }
   return endMinutes - startMinutes;
+}
+
+function roundMinutesToQuarterHour(minutes: number): number {
+  return Math.round(minutes / 15) * 15;
 }
 
 function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {

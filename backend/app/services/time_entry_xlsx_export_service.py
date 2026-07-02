@@ -791,7 +791,9 @@ def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
 def weekly_worker_total_minutes(row: WeeklyWorkerExportRow) -> int:
     if row.entry is None:
         return 0
-    return weekly_worker_work_minutes(row.entry) + (row.entry.travel_minutes or 0)
+    return round_minutes_to_quarter_hour(
+        weekly_worker_work_minutes(row.entry) + (row.entry.travel_minutes or 0)
+    )
 
 
 def weekly_worker_is_travel_only(entry: WorkTimeEntry) -> bool:
@@ -806,6 +808,10 @@ def duration_minutes(start_time: time | None, end_time: time | None, break_minut
     if end_minutes <= start_minutes:
         return None
     return max(0, end_minutes - start_minutes - (break_minutes or 0))
+
+
+def round_minutes_to_quarter_hour(minutes: int) -> int:
+    return ((minutes + 7) // 15) * 15
 
 
 def find_sheet_row(root: ET.Element, row_number: int) -> ET.Element | None:
@@ -1037,11 +1043,7 @@ def weekly_worker_row_values(row: WeeklyWorkerExportRow) -> list[object]:
             "Keine Zeitmeldung",
         ]
 
-    payroll_minutes = (
-        entry.payroll_corrected_work_minutes
-        if entry.payroll_corrected_work_minutes is not None
-        else entry.work_minutes
-    )
+    payroll_minutes = weekly_worker_total_minutes(row)
     return [
         GERMAN_WEEKDAYS[row.work_date.weekday()],
         row.work_date,
@@ -1163,9 +1165,7 @@ def format_minutes(minutes: int | None) -> str:
 def format_export_hours(minutes: int | None) -> str:
     if minutes is None:
         return ""
-    value = f"{minutes / 60:.2f}".rstrip("0").rstrip(".")
-    if "." not in value:
-        value = f"{value}.0"
+    value = f"{minutes / 60:.2f}"
     return f"{value.replace('.', ',')} h"
 
 

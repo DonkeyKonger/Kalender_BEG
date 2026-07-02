@@ -87,7 +87,7 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert cell_number(sheet, "J15") == pytest.approx(7.5 / 24)
     assert cell_number(sheet, "K15") == pytest.approx(15.5 / 24)
     assert cell_number(sheet, "L15") == 0.5
-    assert cell_text(sheet, "O15") == "8,5 h"
+    assert cell_text(sheet, "O15") == "8,50 h"
     assert cell_text(sheet, "A16") == "Di"
     assert cell_text(sheet, "C16") == "Keine Zeitmeldung"
     assert cell_text(sheet, "A19") == "Fr"
@@ -96,10 +96,10 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert cell_style(sheet, "K19") == "7"
     assert cell_number(sheet, "J19") == pytest.approx(7 / 24)
     assert cell_number(sheet, "K19") == pytest.approx(16 / 24)
-    assert cell_text(sheet, "O19") == "8,0 h"
+    assert cell_text(sheet, "O19") == "8,00 h"
     assert cell_text(sheet, "A20") == ""
     assert cell_text(sheet, "C20") == ""
-    assert cell_text(sheet, "O26") == "16,5 h"
+    assert cell_text(sheet, "O26") == "16,50 h"
 
 
 def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
@@ -132,7 +132,7 @@ def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
     assert sheet.find("main:dimension", NS).attrib["ref"] == "A1:O37"
     assert cell_text(sheet, "C25") == "8010 - Baustelle 10"
     assert cell_text(sheet, "C26") == "Keine Zeitmeldung"
-    assert cell_text(sheet, "O31") == "11,0 h"
+    assert cell_text(sheet, "O31") == "11,00 h"
     assert "'Tabelle1'!$A$1:$O$34" in workbook_xml
     merge_refs = {
         merge.attrib["ref"]
@@ -293,6 +293,26 @@ def test_weekly_worker_travel_only_entry_counts_once():
     assert weekly_worker_entry_has_hours(travel_entry)
     assert weekly_worker_work_minutes(travel_entry) == 0
     assert weekly_worker_total_minutes(row) == 45
+
+
+def test_weekly_worker_total_minutes_rounds_to_quarter_hours():
+    entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=time(7, 0),
+        end_time=time(15, 11),
+        break_minutes=30,
+        work_minutes=461,
+        travel_minutes=0,
+        source="manual",
+    )
+    row = weekly_worker_rows(
+        date(2026, 6, 8),
+        date(2026, 6, 14),
+        [entry],
+        {},
+    )[0]
+
+    assert weekly_worker_total_minutes(row) == 465
 
 
 def workbook_sheet(content: bytes):
