@@ -4411,7 +4411,7 @@ function SiteWorkTimesPanel({
           {!isComparisonLoading && !comparisonError ? (
             <div className="site-times-summary-list site-times-comparison-list">
               <div className="site-times-summary-row">
-                <span>Gewertete / abgerechnete Stunden</span>
+                <span>Stunden abgerechnet</span>
                 <strong>
                   {hoursComparison.valuedMeasurementMinutes !== null
                     ? formatMeasurementDuration(hoursComparison.valuedMeasurementMinutes)
