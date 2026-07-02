@@ -9981,6 +9981,29 @@ button.person-chip:focus-visible {
   text-align: right;
 }
 
+.site-times-credit-row {
+  margin-top: 8px;
+  border-top: 1px solid #d7e1ee;
+  background: #ffffff;
+}
+
+.site-times-credit-row span {
+  color: #172033;
+  font-weight: 900;
+}
+
+.site-times-credit-row strong.is-positive {
+  color: #0f7a3d;
+}
+
+.site-times-credit-row strong.is-negative {
+  color: #b42318;
+}
+
+.site-times-credit-row strong.is-neutral {
+  color: #172033;
+}
+
 .site-times-table-card {
   display: grid;
   gap: 12px;

@@ -4395,7 +4395,7 @@ function SiteWorkTimesPanel({
           <div className="site-times-panel-heading site-times-balance-heading">
             <div>
               <h3>Stundenvergleich</h3>
-              <p>Gesamtvergleich aus Angebot, gewerteten Aufmaßen und geleisteten Monteurstunden</p>
+              <p>Vergleich aus gewerteten Aufmaßen und geleisteten Monteurstunden</p>
             </div>
             <StatusBadge tone={siteHoursComparisonTone(hoursComparison.status)}>
               {siteHoursComparisonLabel(hoursComparison.status)}
@@ -4408,15 +4408,7 @@ function SiteWorkTimesPanel({
           {!isComparisonLoading && !comparisonError ? (
             <div className="site-times-summary-list site-times-comparison-list">
               <div className="site-times-summary-row">
-                <span>Angebotsstunden gesamt</span>
-                <strong>
-                  {hoursComparison.offerMinutes !== null
-                    ? formatMeasurementDuration(hoursComparison.offerMinutes)
-                    : "Nicht hinterlegt"}
-                </strong>
-              </div>
-              <div className="site-times-summary-row">
-                <span>Gewertete Aufmaßstunden</span>
+                <span>Gewertete / abgerechnete Stunden</span>
                 <strong>
                   {hoursComparison.valuedMeasurementMinutes !== null
                     ? formatMeasurementDuration(hoursComparison.valuedMeasurementMinutes)
@@ -4429,6 +4421,14 @@ function SiteWorkTimesPanel({
                   {hoursComparison.workerMinutes > 0
                     ? formatMeasurementDuration(hoursComparison.workerMinutes)
                     : "Keine Stunden erfasst"}
+                </strong>
+              </div>
+              <div className="site-times-summary-row site-times-credit-row">
+                <span>Stundenguthaben</span>
+                <strong className={siteTimeCreditClassName(hoursComparison.valuedDifferenceMinutes)}>
+                  {hoursComparison.valuedDifferenceMinutes !== null
+                    ? formatSignedMeasurementDuration(hoursComparison.valuedDifferenceMinutes)
+                    : "-"}
                 </strong>
               </div>
             </div>
@@ -5587,6 +5587,13 @@ function formatSignedMeasurementDuration(minutes: number): string {
     return formatMeasurementDuration(0);
   }
   return `${minutes > 0 ? "+" : ""}${formatMeasurementDuration(minutes)}`;
+}
+
+function siteTimeCreditClassName(minutes: number | null): string {
+  if (minutes === null || minutes === 0) {
+    return "is-neutral";
+  }
+  return minutes > 0 ? "is-positive" : "is-negative";
 }
 
 function formatMeasurementAnalysisPeriod(start: string | null, end: string | null): string {
