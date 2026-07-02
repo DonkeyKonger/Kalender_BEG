@@ -1490,7 +1490,14 @@ export function TimeEntriesPage() {
                   </div>
                   {selectedReviewWeekDays.map((day) => (
                     day.entries.length > 0 ? day.entries.map((check, index) => (
-                      <div className="time-review-week-check-row" key={`${day.date}-${check.entry.id}`} role="row">
+                      <div
+                        className={[
+                          "time-review-week-check-row",
+                          isTravelTimeEntry(check.entry) ? "is-travel-time" : "",
+                        ].filter(Boolean).join(" ")}
+                        key={`${day.date}-${check.entry.id}`}
+                        role="row"
+                      >
                         <div className="time-review-week-move" role="cell">
                           <button
                             className="time-review-day-move-button"
@@ -3510,6 +3517,10 @@ function isOfficeOnlyTimeEntry(entry: TimeEntry): boolean {
       && !entry.end_time
     )
   );
+}
+
+function isTravelTimeEntry(entry: TimeEntry): boolean {
+  return !isOfficeOnlyTimeEntry(entry) && entry.work_minutes === 0 && (entry.travel_minutes || 0) > 0;
 }
 
 function renderPayrollReviewMark(

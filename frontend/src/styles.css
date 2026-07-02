@@ -11878,6 +11878,11 @@ button.person-chip:focus-visible {
   min-height: 46px;
 }
 
+.time-review-week-check-row.is-travel-time {
+  background: #f8f5ef;
+  box-shadow: inset 3px 0 0 #d7c7aa;
+}
+
 .time-review-week-check-row:last-child {
   border-bottom: 0;
 }
