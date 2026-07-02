@@ -10034,6 +10034,37 @@ button.person-chip:focus-visible {
   background: #f8fbff;
 }
 
+.site-worktime-section-row td {
+  border-top: 1px solid #d7e1ee;
+  background: #f7f9fc;
+  color: #53657f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.site-worktime-section-row.is-external td {
+  background: #fbf7ed;
+  color: #7a5a22;
+}
+
+.site-worktime-table tbody tr.is-external-worktime td {
+  background: #fffaf0;
+}
+
+.site-worktime-table tbody tr.is-external-worktime:hover td {
+  background: #fff6e3;
+}
+
+.site-worktime-table tbody tr.is-external-worktime td:first-child {
+  border-left: 3px solid #d7bd82;
+}
+
+.site-worktime-table tbody tr.is-external-worktime td:nth-child(2) {
+  padding-left: 22px;
+}
+
 .site-worktime-number {
   text-align: right;
   white-space: nowrap;

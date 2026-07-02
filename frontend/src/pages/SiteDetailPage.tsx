@@ -4296,6 +4296,8 @@ function SiteWorkTimesPanel({
     () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, summary.workMinutes),
     [projectMeasurementBatches, projectTimesheet, summary.workMinutes],
   );
+  const internalWorkTimeRows = useMemo(() => buildSiteWorkTimeDisplayRows(entries, "internal"), [entries]);
+  const externalWorkTimeRows = useMemo(() => buildSiteWorkTimeDisplayRows(entries, "external"), [entries]);
 
   useEffect(() => {
     let ignore = false;
@@ -4461,27 +4463,62 @@ function SiteWorkTimesPanel({
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{formatDateOnly(entry.work_date)}</td>
-                    <td>{entry.person_name || `Person ${entry.person_id}`}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "work"))}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "break"))}</td>
-                    <td className="site-worktime-number">{formatMeasurementDuration(getSiteWorkTimeMinutes(entry, "travel"))}</td>
-                    <td>
-                      <StatusBadge tone={timeEntryStatusTone(entry.status)}>
-                        {timeEntryStatusLabels[entry.status] ?? entry.status}
-                      </StatusBadge>
-                    </td>
-                    <td>{entry.note || "-"}</td>
-                  </tr>
-                ))}
+                {internalWorkTimeRows.length > 0 ? (
+                  <>
+                    <tr className="site-worktime-section-row">
+                      <td colSpan={7}>Interne Monteurstunden</td>
+                    </tr>
+                    {internalWorkTimeRows.map((row) => (
+                      <SiteWorkTimeTableRow key={row.key} row={row} />
+                    ))}
+                  </>
+                ) : null}
+                {externalWorkTimeRows.length > 0 ? (
+                  <>
+                    <tr className="site-worktime-section-row is-external">
+                      <td colSpan={7}>Externe Monteurstunden</td>
+                    </tr>
+                    {externalWorkTimeRows.map((row) => (
+                      <SiteWorkTimeTableRow key={row.key} row={row} />
+                    ))}
+                  </>
+                ) : null}
               </tbody>
             </table>
           </div>
         ) : null}
       </section>
     </div>
+  );
+}
+
+type SiteWorkTimeDisplayScope = "internal" | "external";
+
+type SiteWorkTimeDisplayRow = {
+  key: string;
+  entry: TimeEntry;
+  scope: SiteWorkTimeDisplayScope;
+  personName: string;
+  workMinutes: number;
+  breakMinutes: number;
+  travelMinutes: number;
+};
+
+function SiteWorkTimeTableRow({ row }: { row: SiteWorkTimeDisplayRow }) {
+  return (
+    <tr className={row.scope === "external" ? "is-external-worktime" : undefined}>
+      <td>{formatDateOnly(row.entry.work_date)}</td>
+      <td>{row.personName}</td>
+      <td className="site-worktime-number">{formatMeasurementDuration(row.workMinutes)}</td>
+      <td className="site-worktime-number">{formatMeasurementDuration(row.breakMinutes)}</td>
+      <td className="site-worktime-number">{formatMeasurementDuration(row.travelMinutes)}</td>
+      <td>
+        <StatusBadge tone={timeEntryStatusTone(row.entry.status)}>
+          {timeEntryStatusLabels[row.entry.status] ?? row.entry.status}
+        </StatusBadge>
+      </td>
+      <td>{row.entry.note || "-"}</td>
+    </tr>
   );
 }
 
@@ -5624,6 +5661,40 @@ function sumSiteWorkTimeMinutes(entries: TimeEntry[], field: "work" | "internal-
   return entries.reduce((sum, entry) => sum + getSiteWorkTimeMinutes(entry, field), 0);
 }
 
+function buildSiteWorkTimeDisplayRows(entries: TimeEntry[], scope: SiteWorkTimeDisplayScope): SiteWorkTimeDisplayRow[] {
+  return entries.flatMap((entry): SiteWorkTimeDisplayRow[] => {
+    if (scope === "internal") {
+      if (isExternalTimeEntryPerson(entry)) {
+        return [];
+      }
+      return [{
+        key: `internal-${entry.id}`,
+        entry,
+        scope,
+        personName: entry.person_name || `Person ${entry.person_id}`,
+        workMinutes: getSiteWorkTimeBaseMinutes(entry),
+        breakMinutes: getSiteWorkTimeBaseBreakMinutes(entry),
+        travelMinutes: getSiteWorkTimeBaseTravelMinutes(entry),
+      }];
+    }
+
+    const externalFactor = getSiteWorkTimeExternalFactor(entry);
+    if (externalFactor <= 0) {
+      return [];
+    }
+
+    return [{
+      key: `external-${entry.id}`,
+      entry,
+      scope,
+      personName: formatSiteWorkTimeExternalNames(entry, externalFactor),
+      workMinutes: getSiteWorkTimeBaseMinutes(entry) * externalFactor,
+      breakMinutes: getSiteWorkTimeBaseBreakMinutes(entry) * externalFactor,
+      travelMinutes: getSiteWorkTimeBaseTravelMinutes(entry) * externalFactor,
+    }];
+  });
+}
+
 function getSiteWorkTimeMinutes(entry: TimeEntry, field: "work" | "internal-work" | "external-work" | "break" | "travel"): number {
   if (field === "work") {
     return entry.project_mounting_work_minutes ?? entry.work_minutes;
@@ -5646,8 +5717,43 @@ function getSiteWorkTimeBaseMinutes(entry: TimeEntry): number {
   return entry.project_mounting_base_work_minutes ?? entry.work_minutes;
 }
 
+function getSiteWorkTimeBaseBreakMinutes(entry: TimeEntry): number {
+  return getSiteWorkTimeBaseShare(entry.project_mounting_break_minutes, entry.break_minutes, entry.project_mounting_multiplier);
+}
+
+function getSiteWorkTimeBaseTravelMinutes(entry: TimeEntry): number {
+  return getSiteWorkTimeBaseShare(entry.project_mounting_travel_minutes, entry.travel_minutes, entry.project_mounting_multiplier);
+}
+
+function getSiteWorkTimeBaseShare(totalMinutes: number | null, fallbackMinutes: number, multiplier: number): number {
+  if (totalMinutes === null || multiplier <= 1) {
+    return fallbackMinutes;
+  }
+  return Math.round(totalMinutes / multiplier);
+}
+
 function isExternalTimeEntryPerson(entry: TimeEntry): boolean {
   return entry.person_type === "external" || entry.person_type === "external_temp";
+}
+
+function getSiteWorkTimeExternalFactor(entry: TimeEntry): number {
+  return entry.project_mounting_external_person_count + (isExternalTimeEntryPerson(entry) ? 1 : 0);
+}
+
+function formatSiteWorkTimeExternalNames(entry: TimeEntry, externalFactor: number): string {
+  const participantNames = entry.project_mounting_participant_names.filter((name) => name.trim().length > 0);
+  const externalNames = isExternalTimeEntryPerson(entry)
+    ? [entry.person_name || `Person ${entry.person_id}`, ...participantNames.filter((name) => name !== entry.person_name)]
+    : participantNames.slice(1);
+  const uniqueNames = Array.from(new Set(externalNames)).filter((name) => name.trim().length > 0);
+
+  if (uniqueNames.length === 1) {
+    return uniqueNames[0];
+  }
+  if (uniqueNames.length > 1) {
+    return `${uniqueNames.length} externe Monteure (${uniqueNames.join(", ")})`;
+  }
+  return externalFactor === 1 ? "Externer Monteur" : `${externalFactor} externe Monteure`;
 }
 
 function countSiteWorkTimeParticipants(entries: TimeEntry[]): number {
