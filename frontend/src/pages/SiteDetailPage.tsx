@@ -4426,7 +4426,7 @@ function SiteWorkTimesPanel({
                     : "Keine Stunden erfasst"}
                 </strong>
               </div>
-              <div className="site-times-summary-row site-times-credit-row">
+              <div className={["site-times-summary-row", "site-times-credit-row", siteTimeCreditClassName(hourCreditMinutes)].join(" ")}>
                 <span>Stundenguthaben</span>
                 <strong className={siteTimeCreditClassName(hourCreditMinutes)}>
                   {hourCreditMinutes !== null

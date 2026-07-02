@@ -9859,47 +9859,53 @@ button.person-chip:focus-visible {
 }
 
 .site-times-shell {
-  gap: 12px;
+  gap: 24px;
 }
 
 .site-times-panel,
 .site-times-table-card {
-  border: 1px solid #d7e1ee;
-  border-radius: 2px;
+  border: 1px solid #d9e2ef;
+  border-radius: 0;
   background: #ffffff;
 }
 
 .site-times-panel-heading h3,
 .site-times-table-toolbar h3 {
   margin: 0;
-  color: #121a2b;
+  color: #334155;
+  font-size: 1rem;
   font-weight: 900;
-  letter-spacing: 0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .site-times-panel-heading p,
 .site-times-table-toolbar p {
-  margin: 4px 0 0;
-  color: #53657f;
-  font-size: 0.86rem;
-  line-height: 1.4;
+  margin: 6px 0 0;
+  color: #8ba0bb;
+  font-size: 0.98rem;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .site-times-insights {
   display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
 }
 
 .site-times-panel {
   display: grid;
   align-content: start;
-  gap: 14px;
-  padding: 16px;
+  gap: 0;
+  padding: 0;
 }
 
 .site-times-panel-heading {
   min-width: 0;
+  padding: 22px 28px 20px;
+  border-bottom: 1px solid #d9e2ef;
+  background: #f8fafd;
 }
 
 .site-times-balance-heading {
@@ -9918,73 +9924,78 @@ button.person-chip:focus-visible {
   margin-top: 1px;
 }
 
-.site-times-panel-heading h3,
-.site-times-table-toolbar h3 {
-  font-size: 1rem;
-}
-
 .site-times-summary-list {
   display: grid;
-  border: 1px solid #e1e8f2;
-  border-radius: 2px;
-  background: #fbfdff;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .site-times-summary-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 44px;
-  padding: 10px 14px;
+  gap: 18px;
+  min-height: 74px;
+  padding: 0 28px;
 }
 
 .site-times-summary-row + .site-times-summary-row {
-  border-top: 1px solid #e1e8f2;
+  border-top: 1px solid #e8eef6;
 }
 
 .site-times-summary-row span {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #334155;
-  font-size: 0.85rem;
-  font-weight: 820;
+  gap: 12px;
+  color: #40516b;
+  font-size: 1.08rem;
+  font-weight: 760;
 }
 
 .site-times-summary-row i {
-  width: 8px;
-  height: 8px;
-  border-radius: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
 }
 
 .site-times-summary-row i.is-work {
-  background: #2769c8;
+  background: #2f7cf6;
 }
 
 .site-times-summary-row i.is-external-work {
-  background: #b7791f;
+  background: #ff9800;
 }
 
 .site-times-summary-row i.is-break {
-  background: #718096;
+  background: #10b981;
 }
 
 .site-times-summary-row i.is-travel {
-  background: #36a267;
+  background: #94a3b8;
 }
 
 .site-times-summary-row strong {
-  color: #121a2b;
-  font-size: 0.94rem;
+  color: #172033;
+  font-size: 1.08rem;
   font-weight: 900;
   text-align: right;
 }
 
 .site-times-credit-row {
-  margin-top: 8px;
-  border-top: 1px solid #d7e1ee;
+  margin-top: 0;
+  border-top: 2px solid #d7e1ee;
   background: #ffffff;
+}
+
+.site-times-credit-row.is-negative {
+  border-top-color: #fecaca;
+  background: #fff3f1;
+}
+
+.site-times-credit-row.is-positive {
+  border-top-color: #bbf7d0;
+  background: #f1fff6;
 }
 
 .site-times-credit-row span {
@@ -10006,9 +10017,9 @@ button.person-chip:focus-visible {
 
 .site-times-table-card {
   display: grid;
-  gap: 12px;
+  gap: 0;
   min-width: 0;
-  padding: 14px;
+  padding: 0;
 }
 
 .site-times-table-toolbar {
@@ -10016,6 +10027,9 @@ button.person-chip:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 22px 28px 20px;
+  border-bottom: 1px solid #d9e2ef;
+  background: #f8fafd;
 }
 
 .site-worktime-table-wrap {
@@ -10032,25 +10046,25 @@ button.person-chip:focus-visible {
 .site-worktime-table th,
 .site-worktime-table td {
   border-bottom: 1px solid #e5edf7;
-  padding: 9px 12px;
+  padding: 14px 22px;
   text-align: left;
   vertical-align: middle;
 }
 
 .site-worktime-table th {
-  border-top: 1px solid #e5edf7;
-  background: #f5f8fc;
-  color: #41516a;
-  font-size: 0.72rem;
+  border-top: 0;
+  background: #f8fafd;
+  color: #60718c;
+  font-size: 0.84rem;
   font-weight: 900;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .site-worktime-table td {
-  color: #172033;
-  font-size: 0.84rem;
-  font-weight: 720;
+  color: #40516b;
+  font-size: 1.03rem;
+  font-weight: 760;
 }
 
 .site-worktime-table tbody tr:hover td {
@@ -10059,11 +10073,11 @@ button.person-chip:focus-visible {
 
 .site-worktime-section-row td {
   border-top: 1px solid #d7e1ee;
-  background: #f7f9fc;
-  color: #53657f;
-  font-size: 0.72rem;
+  background: #edf3fa;
+  color: #60718c;
+  font-size: 0.82rem;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -10086,9 +10100,37 @@ button.person-chip:focus-visible {
 }
 
 .site-times-shell .status-badge {
-  border-radius: 2px;
-  min-height: 22px;
-  padding: 2px 7px;
+  border-radius: 0;
+  min-height: 34px;
+  padding: 5px 16px;
+  border: 1px solid transparent;
+  background: #f8fafc;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.site-times-balance-heading .status-badge-danger {
+  border-color: #fecaca;
+  background: #fff5f5;
+  color: #d10000;
+}
+
+.site-times-balance-heading .status-badge-active {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.site-times-balance-heading .status-badge-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.site-times-balance-heading .status-badge-neutral {
+  border-color: #d9e2ef;
+  background: #f8fafc;
+  color: #60718c;
 }
 
 @media (max-width: 980px) {
@@ -10098,9 +10140,11 @@ button.person-chip:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .site-times-panel,
-  .site-times-table-card {
-    padding: 12px;
+  .site-times-panel-heading,
+  .site-times-table-toolbar,
+  .site-times-summary-row {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 
