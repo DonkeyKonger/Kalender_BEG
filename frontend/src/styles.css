@@ -14762,7 +14762,9 @@ button.person-chip:focus-visible {
 }
 
 .absence-matrix-scroll {
-  max-width: calc(100vw - 308px);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   max-height: calc(100vh - 272px);
   overflow: auto;
   border: 1px solid #cbd8e8;
