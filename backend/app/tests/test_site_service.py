@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -122,6 +123,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
         status=SiteStatus.COMPLETED,
         info=None,
         color="#1d5c99",
+        project_value=Decimal("12500.50"),
         planned_work_minutes=1200,
         closed_at=closed_at,
         closed_by_user_id=4,
@@ -132,6 +134,7 @@ def test_site_snapshot_uses_json_safe_status_and_dates():
     assert snapshot["status"] == "completed"
     assert snapshot["location_status"] == "geocoded"
     assert snapshot["geofence_radius_m"] == 5000
+    assert snapshot["project_value"] == 12500.5
     assert snapshot["planned_work_minutes"] == 1200
     assert snapshot["closed_at"] == "2026-05-20T10:15:00+00:00"
 
@@ -357,6 +360,7 @@ def test_create_site_accepts_missing_customer_and_address():
             project_manager_person_id=project_manager.id,
             status=SiteStatus.PAUSED,
             color="#D97706",
+            project_value=25000.5,
             customer=None,
             location=None,
             address=None,
@@ -377,6 +381,7 @@ def test_create_site_accepts_missing_customer_and_address():
     assert site.project_manager_person_id == project_manager.id
     assert site.status == SiteStatus.PAUSED
     assert site.color == "#D97706"
+    assert float(site.project_value) == 25000.5
 
 
 def test_create_site_rejects_duplicate_site_number_with_clear_message():

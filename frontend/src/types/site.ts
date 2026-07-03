@@ -54,6 +54,7 @@ export type Site = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  project_value: number | null;
   planned_work_minutes: number | null;
   requires_extra_work_approval: boolean;
   project_folder_id: string | null;
@@ -87,6 +88,7 @@ export type SiteCreate = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  project_value?: number | null;
   planned_work_minutes?: number | null;
   requires_extra_work_approval?: boolean;
 };

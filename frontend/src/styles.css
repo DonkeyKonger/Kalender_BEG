@@ -14235,6 +14235,19 @@ button.person-chip:focus-visible {
   cursor: pointer;
 }
 
+.site-color-option-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.12;
+}
+
+.site-color-option-text small {
+  color: #6b778c;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 .site-color-select-trigger {
   height: var(--site-drawer-control-height, 32px);
   overflow: hidden;
@@ -14386,6 +14399,13 @@ button.person-chip:focus-visible {
   resize: vertical;
 }
 
+.site-project-value-hint {
+  color: #6b778c;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .site-form-grid input:focus,
 .site-form-grid select:focus,
 .site-form-grid textarea:focus,
@@ -14488,6 +14508,7 @@ button.person-chip:focus-visible {
   }
 
   .site-field-status,
+  .site-field-project-value,
   .site-field-color {
     grid-column: span 1;
   }

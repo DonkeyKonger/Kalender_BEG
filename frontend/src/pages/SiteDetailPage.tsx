@@ -14,6 +14,13 @@ import {
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
 import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
+import {
+  formatSiteProjectValue,
+  formatSiteProjectValueInput,
+  getSiteColorForProjectValue,
+  getSiteProjectValueClass,
+  parseSiteProjectValueInput,
+} from "../lib/siteColors";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
@@ -1525,6 +1532,14 @@ function OverviewTab({
                 canEdit={canEdit}
                 disabled={isSaving}
                 onSave={(color) => onSaveField({ color })}
+              />
+              <ProjectValueDetailItem
+                label="Projektwert"
+                value={site.project_value}
+                currentColor={site.color}
+                canEdit={canEdit}
+                disabled={isSaving}
+                onSave={(values) => onSaveField(values)}
               />
             </DetailSection>
           </div>
@@ -5025,6 +5040,121 @@ function SiteColorDetailItem({
 }
 
 type InlineEditStatus = "idle" | "saving" | "saved" | "error";
+
+function ProjectValueDetailItem({
+  label,
+  value,
+  currentColor,
+  canEdit,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: number | null | undefined;
+  currentColor: string | null;
+  canEdit: boolean;
+  disabled?: boolean;
+  onSave: (values: SiteUpdate) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState(formatSiteProjectValueInput(value));
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+  const projectValueClass = getSiteProjectValueClass(value);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftValue(formatSiteProjectValueInput(value));
+    }
+  }, [isEditing, value]);
+
+  async function commit(): Promise<void> {
+    const nextProjectValue = parseSiteProjectValueInput(draftValue);
+    const currentValue = value ?? null;
+    if (nextProjectValue === currentValue) {
+      setIsEditing(false);
+      return;
+    }
+    const previousAutoColor = getSiteColorForProjectValue(value);
+    const nextAutoColor = getSiteColorForProjectValue(nextProjectValue);
+    const colorCanFollowProjectValue = !previousAutoColor
+      || !currentColor
+      || currentColor.toLowerCase() === previousAutoColor.toLowerCase();
+    const payload: SiteUpdate = { project_value: nextProjectValue };
+    if (nextAutoColor && colorCanFollowProjectValue) {
+      payload.color = nextAutoColor;
+    }
+    setStatus("saving");
+    try {
+      await onSave(payload);
+      setIsEditing(false);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  function cancel(): void {
+    setDraftValue(formatSiteProjectValueInput(value));
+    setIsEditing(false);
+    setStatus("idle");
+  }
+
+  return (
+    <div className={`detail-item site-inline-edit-item site-project-value-detail-item${isEditing ? " is-editing" : ""}`}>
+      <span>{label}</span>
+      {isEditing ? (
+        <div className="site-inline-edit-control">
+          <input
+            className="site-inline-edit-input"
+            autoFocus
+            inputMode="decimal"
+            placeholder="0,00 EUR"
+            value={draftValue}
+            onChange={(event) => {
+              setDraftValue(event.target.value);
+              setStatus("idle");
+            }}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void commit();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancel();
+              }
+            }}
+          />
+          {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </div>
+      ) : (
+        <>
+          <strong className="site-inline-edit-display">
+            <span>{formatSiteProjectValue(value)}</span>
+            {canEdit ? (
+              <button
+                type="button"
+                className="site-inline-edit-button"
+                disabled={disabled}
+                aria-label={`${label} bearbeiten`}
+                onClick={() => {
+                  setDraftValue(formatSiteProjectValueInput(value));
+                  setIsEditing(true);
+                  setStatus("idle");
+                }}
+              >
+                <Pencil aria-hidden="true" size={13} />
+              </button>
+            ) : null}
+          </strong>
+          {projectValueClass ? <small className="site-project-value-hint">Größenklasse {projectValueClass.label}</small> : null}
+          {status === "saved" || status === "error" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+        </>
+      )}
+    </div>
+  );
+}
 
 function CustomerAssignmentDetailItem({
   label,

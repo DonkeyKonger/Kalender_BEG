@@ -1,19 +1,6 @@
 import { useState } from "react";
 
-type SiteColorOption = { name: string; value: string };
-
-export const SITE_COLOR_OPTIONS: SiteColorOption[] = [
-  { name: "Blau", value: "#2563EB" },
-  { name: "Dunkelblau", value: "#1E40AF" },
-  { name: "Gruen", value: "#16A34A" },
-  { name: "Rot", value: "#DC2626" },
-  { name: "Orange", value: "#F97316" },
-  { name: "Ocker", value: "#D97706" },
-  { name: "Tuerkis", value: "#0891B2" },
-  { name: "Violett", value: "#7C3AED" },
-  { name: "Magenta", value: "#DB2777" },
-  { name: "Grau", value: "#64748B" },
-];
+import { SITE_COLOR_OPTIONS } from "../lib/siteColors";
 
 export function SiteColorSelect({
   className,
@@ -68,7 +55,10 @@ export function SiteColorSelect({
                 }}
               >
                 <span className="site-color-swatch" style={{ backgroundColor: option.value }} />
-                <span>{option.name}</span>
+                <span className="site-color-option-text">
+                  <span>{option.name}</span>
+                  {option.projectValueHint ? <small>{option.projectValueHint}</small> : null}
+                </span>
               </button>
             ))}
           </div>
