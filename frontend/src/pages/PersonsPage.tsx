@@ -698,7 +698,6 @@ function PersonFields({
         {!isCreateForm && (
           <div>
             <h3>Adresse / Startort</h3>
-            <p>Adresse suchen, passenden Treffer auswaehlen. Koordinaten werden technisch gespeichert.</p>
           </div>
         )}
         <label className="address-field site-address-search">

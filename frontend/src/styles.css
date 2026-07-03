@@ -10863,10 +10863,48 @@ button.person-chip:focus-visible {
 }
 
 .person-form-grid .checkbox-field input {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
   flex: 0 0 16px;
   width: 16px;
+  height: 16px;
   min-height: 16px;
-  border-radius: 0;
+  border: 1px solid #9fb0c4;
+  border-radius: 1px;
+  background: #ffffff;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.person-form-grid .checkbox-field input::after {
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  content: "";
+  opacity: 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.person-form-grid .checkbox-field input:checked {
+  border-color: #143c6d;
+  background: #143c6d;
+}
+
+.person-form-grid .checkbox-field input:checked::after {
+  opacity: 1;
+}
+
+.person-form-grid .checkbox-field input:focus-visible {
+  outline: 2px solid rgb(29 92 153 / 22%);
+  outline-offset: 2px;
+}
+
+.person-form-grid .checkbox-field input:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .person-list {
