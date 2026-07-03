@@ -307,7 +307,6 @@ export function DashboardPage() {
               <FreeWorkerPopover
                 title="Monteure heute - Alle"
                 people={allSummaryWorkers}
-                getMeta={(person) => formatWorkerSummaryPersonMeta(person)}
               />
             ) : null}
           </div>
@@ -329,7 +328,6 @@ export function DashboardPage() {
                       <FreeWorkerPopover
                         title={formatWorkerSummaryPopoverTitle(group)}
                         people={group.people}
-                        getMeta={(person) => formatWorkerSummaryPersonMeta(person)}
                       />
                     ) : null}
                   </span>
@@ -444,11 +442,9 @@ export function DashboardPage() {
 function FreeWorkerPopover({
   title,
   people,
-  getMeta,
 }: {
   title: string;
   people: DashboardOverviewPerson[];
-  getMeta: (person: DashboardOverviewPerson) => string;
 }) {
   return (
     <div className="dashboard-free-popover" role="dialog" aria-label={title}>
@@ -461,7 +457,6 @@ function FreeWorkerPopover({
           {people.map((person, index) => (
             <div className="dashboard-free-person-row" key={`${person.id}:${person.detail ?? ""}:${index}`}>
               <strong>{person.display_name}</strong>
-              <span>{getMeta(person)}</span>
             </div>
           ))}
         </div>
@@ -730,10 +725,6 @@ function formatWorkerSummaryPopoverTitle(group: WorkerSummaryGroup): string {
     return "Ohne Zuordnung / nicht eingesetzt";
   }
   return `Eingesetzt - ${group.manager.label}`;
-}
-
-function formatWorkerSummaryPersonMeta(person: DashboardOverviewPerson): string {
-  return [person.short_code, person.detail].filter(Boolean).join(" · ") || "-";
 }
 
 function formatWorkerSummaryGroupDetail(person: DashboardOverviewPerson, group: WorkerSummaryGroup): string {

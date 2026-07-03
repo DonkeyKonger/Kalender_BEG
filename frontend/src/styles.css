@@ -15626,7 +15626,6 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
-.dashboard-free-person-row span,
 .dashboard-free-empty {
   color: #6b778c;
   font-size: 0.7rem;
