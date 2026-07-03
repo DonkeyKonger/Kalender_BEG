@@ -14542,6 +14542,14 @@ button.person-chip:focus-visible {
   gap: 14px;
 }
 
+.absences-page .entity-search {
+  border-radius: 2px;
+}
+
+.absences-page .entity-search:focus {
+  outline-width: 2px;
+}
+
 .absence-matrix-toolbar {
   display: flex;
   flex-wrap: wrap;
