@@ -44,10 +44,18 @@ class DashboardService:
             for worker in active_workers
             if worker.id not in today_assigned_person_ids and worker.id not in today_absences
         ]
+        worker_summary_groups = self._worker_summary_groups_for_day(
+            matrix.rows,
+            today,
+            active_workers,
+            free_workers,
+        )
 
         return {
             "todayAssignedSites": today_assigned_sites,
             "todayAssignedSiteGroups": self._group_assigned_sites_by_manager(today_assigned_sites),
+            "workerSummaryGroups": worker_summary_groups,
+            "totalWorkerSummaryPeople": sum(len(group["people"]) for group in worker_summary_groups),
             "freeWorkerGroups": self._group_free_workers_by_last_manager(free_workers, last_manager_by_person_id),
             "totalFreeWorkers": len(free_workers),
             "openStaffingNeeds": open_staffing_needs,
@@ -276,6 +284,84 @@ class DashboardService:
             )
         return sorted(grouped, key=lambda group: group["manager"]["label"])
 
+    def _worker_summary_groups_for_day(
+        self,
+        rows: list[MatrixRow],
+        target_date: date,
+        active_workers: list[Person],
+        free_workers: list[Person],
+    ) -> list[dict]:
+        active_worker_by_id = {worker.id: worker for worker in active_workers}
+        assigned_by_manager: dict[str, dict] = {}
+
+        for row in rows:
+            cell = next((entry for entry in row.cells if entry.date == target_date), None)
+            if cell is None:
+                continue
+            if not cell.assignments:
+                continue
+            manager = self._matrix_manager_summary(row.site.project_manager)
+            site_label = self._site_label(row.site.site_number, row.site.name)
+            group = assigned_by_manager.setdefault(
+                manager["key"],
+                {"kind": "assigned", "manager": manager, "peopleById": {}},
+            )
+            for assignment in cell.assignments:
+                worker = active_worker_by_id.get(assignment.person.id)
+                if worker is None:
+                    continue
+                person_summary = group["peopleById"].setdefault(
+                    worker.id,
+                    {
+                        **self._worker_person_summary(worker),
+                        "siteLabels": [],
+                    },
+                )
+                if site_label not in person_summary["siteLabels"]:
+                    person_summary["siteLabels"].append(site_label)
+
+        groups: list[dict] = []
+        for group in assigned_by_manager.values():
+            people = []
+            for person in group["peopleById"].values():
+                site_labels = sorted(person.pop("siteLabels"))
+                people.append(
+                    {
+                        **person,
+                        "detail": ", ".join(site_labels),
+                    }
+                )
+            if not people:
+                continue
+            groups.append(
+                {
+                    "kind": "assigned",
+                    "manager": group["manager"],
+                    "people": sorted(people, key=lambda person: person["display_name"]),
+                }
+            )
+
+        if free_workers:
+            groups.append(
+                {
+                    "kind": "free",
+                    "manager": {
+                        "key": "free-workers",
+                        "label": "Ohne Zuordnung",
+                        "name": "Nicht eingesetzte Monteure",
+                    },
+                    "people": [
+                        {
+                            **self._worker_person_summary(worker),
+                            "detail": "kein Einsatz heute",
+                        }
+                        for worker in sorted(free_workers, key=lambda person: person.display_name)
+                    ],
+                }
+            )
+
+        return sorted(groups, key=self._worker_summary_group_sort_key)
+
     def _worker_lookup(
         self,
         rows: list[MatrixRow],
@@ -341,6 +427,9 @@ class DashboardService:
             "short_code": person.short_code,
         }
 
+    def _site_label(self, site_number: str | None, site_name: str) -> str:
+        return f"{site_number} - {site_name}" if site_number else site_name
+
     def _matrix_manager_summary(self, manager: MatrixPerson | None) -> dict:
         if manager is None:
             return {"key": "unassigned", "label": "Ohne PL", "name": "Ohne Projektleiter"}
@@ -379,6 +468,14 @@ class DashboardService:
         manager = group["manager"]
         return (
             1 if manager["key"] == "unassigned" else 0,
+            manager["label"],
+            manager["name"],
+        )
+
+    def _worker_summary_group_sort_key(self, group: dict) -> tuple[int, str, str]:
+        manager = group["manager"]
+        return (
+            1 if group.get("kind") == "free" else 0,
             manager["label"],
             manager["name"],
         )

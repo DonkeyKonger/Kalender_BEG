@@ -111,6 +111,7 @@ export type DashboardOverviewPerson = {
   last_name: string;
   display_name: string;
   short_code: string;
+  detail?: string;
 };
 
 export type DashboardOverview = {
@@ -123,6 +124,16 @@ export type DashboardOverview = {
     };
     sites: DashboardOverviewAssignedSite[];
   }>;
+  workerSummaryGroups: Array<{
+    kind: "assigned" | "free";
+    manager: {
+      key: string;
+      label: string;
+      name: string;
+    };
+    people: DashboardOverviewPerson[];
+  }>;
+  totalWorkerSummaryPeople: number;
   freeWorkerGroups: Array<{
     manager: {
       key: string;

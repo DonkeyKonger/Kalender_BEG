@@ -43,6 +43,12 @@ type FreeWorkerGroup = {
   people: Person[];
 };
 
+type WorkerSummaryGroup = {
+  kind: "assigned" | "free";
+  manager: ManagerSummary;
+  people: DashboardOverviewPerson[];
+};
+
 type StaffingNeed = {
   date: string;
   siteName: string;
@@ -61,6 +67,8 @@ type DashboardConflict = {
 type DashboardData = {
   todayAssignedSites: AssignedSiteSummary[];
   todayAssignedSiteGroups: AssignedSiteGroup[];
+  workerSummaryGroups: WorkerSummaryGroup[];
+  totalWorkerSummaryPeople: number;
   freeWorkerGroups: FreeWorkerGroup[];
   totalFreeWorkers: number;
   openStaffingNeeds: StaffingNeed[];
@@ -223,8 +231,14 @@ export function DashboardPage() {
   }, [user?.role]);
 
   const dashboard = dashboardOverview;
-  const freeWorkerCount = dashboard?.totalFreeWorkers ?? 0;
-  const allFreeWorkers = dashboard?.freeWorkerGroups.flatMap((group) => group.people) ?? [];
+  const workerSummaryGroups = dashboard?.workerSummaryGroups ?? [];
+  const workerSummaryCount = dashboard?.totalWorkerSummaryPeople ?? 0;
+  const allSummaryWorkers = workerSummaryGroups.flatMap((group) => (
+    group.people.map((person) => ({
+      ...person,
+      detail: formatWorkerSummaryGroupDetail(person, group),
+    }))
+  ));
 
   function toggleFreeWorkerPopover(key: string): void {
     setOpenFreeWorkerKey((current) => current === key ? null : key);
@@ -286,21 +300,21 @@ export function DashboardPage() {
               type="button"
               onClick={() => toggleFreeWorkerPopover(FREE_WORKER_ALL_KEY)}
             >
-              <span className="dashboard-free-summary-label">Nicht eingesetzt</span>
-              <strong>{dashboard ? formatCount(freeWorkerCount, "Monteur", "Monteure") : loading ? "Lade..." : "-"}</strong>
+              <span className="dashboard-free-summary-label">Einsatzübersicht</span>
+              <strong>{dashboard ? formatCount(workerSummaryCount, "Monteur", "Monteure") : loading ? "Lade..." : "-"}</strong>
             </button>
             {dashboard && openFreeWorkerKey === FREE_WORKER_ALL_KEY ? (
               <FreeWorkerPopover
-                title="Nicht eingesetzt - Alle"
-                people={allFreeWorkers}
-                getMeta={(person) => formatFreeWorkerPersonMeta(person, findFreeWorkerGroupLabel(dashboard.freeWorkerGroups, person.id))}
+                title="Monteure heute - Alle"
+                people={allSummaryWorkers}
+                getMeta={(person) => formatWorkerSummaryPersonMeta(person)}
               />
             ) : null}
           </div>
           {dashboard ? (
             <>
               <div className="dashboard-pill-row">
-                {dashboard.freeWorkerGroups.length > 0 ? dashboard.freeWorkerGroups.map((group) => (
+                {workerSummaryGroups.length > 0 ? workerSummaryGroups.map((group) => (
                   <span className="dashboard-pill-shell" key={group.manager.key}>
                     <button
                       aria-expanded={openFreeWorkerKey === group.manager.key}
@@ -313,13 +327,13 @@ export function DashboardPage() {
                     </button>
                     {openFreeWorkerKey === group.manager.key ? (
                       <FreeWorkerPopover
-                        title={`Nicht eingesetzt - ${group.manager.label}`}
+                        title={formatWorkerSummaryPopoverTitle(group)}
                         people={group.people}
-                        getMeta={(person) => formatFreeWorkerPersonMeta(person)}
+                        getMeta={(person) => formatWorkerSummaryPersonMeta(person)}
                       />
                     ) : null}
                   </span>
-                )) : <span className="dashboard-muted">Keine freien Monteure erkannt</span>}
+                )) : <span className="dashboard-muted">Keine Monteure erkannt</span>}
               </div>
             </>
           ) : null}
@@ -444,8 +458,8 @@ function FreeWorkerPopover({
       </div>
       {people.length > 0 ? (
         <div className="dashboard-free-person-list">
-          {people.map((person) => (
-            <div className="dashboard-free-person-row" key={person.id}>
+          {people.map((person, index) => (
+            <div className="dashboard-free-person-row" key={`${person.id}:${person.detail ?? ""}:${index}`}>
               <strong>{person.display_name}</strong>
               <span>{getMeta(person)}</span>
             </div>
@@ -610,6 +624,7 @@ function buildDashboardData(
 
   const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
   const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
+  const workerSummaryGroups = overview?.workerSummaryGroups ?? buildWorkerSummaryGroupsForDay(matrix.rows, range.today, activeWorkers, freeWorkers);
   const todayAssignedSites = overview?.todayAssignedSites ?? getAssignedSitesForDay(matrix.rows, range.today, peopleById);
   const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites);
   const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
@@ -618,6 +633,8 @@ function buildDashboardData(
   return {
     todayAssignedSites,
     todayAssignedSiteGroups,
+    workerSummaryGroups,
+    totalWorkerSummaryPeople: overview?.totalWorkerSummaryPeople ?? workerSummaryGroups.reduce((total, group) => total + group.people.length, 0),
     freeWorkerGroups,
     totalFreeWorkers: freeWorkers.length,
     openStaffingNeeds,
@@ -708,12 +725,22 @@ function formatCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function formatFreeWorkerPersonMeta(person: DashboardOverviewPerson, managerLabel?: string): string {
-  return [person.short_code, managerLabel].filter(Boolean).join(" · ") || "-";
+function formatWorkerSummaryPopoverTitle(group: WorkerSummaryGroup): string {
+  if (group.kind === "free") {
+    return "Ohne Zuordnung / nicht eingesetzt";
+  }
+  return `Eingesetzt - ${group.manager.label}`;
 }
 
-function findFreeWorkerGroupLabel(groups: DashboardOverview["freeWorkerGroups"], personId: number): string {
-  return groups.find((group) => group.people.some((person) => person.id === personId))?.manager.label ?? "Ohne Zuordnung";
+function formatWorkerSummaryPersonMeta(person: DashboardOverviewPerson): string {
+  return [person.short_code, person.detail].filter(Boolean).join(" · ") || "-";
+}
+
+function formatWorkerSummaryGroupDetail(person: DashboardOverviewPerson, group: WorkerSummaryGroup): string {
+  if (group.kind === "free") {
+    return person.detail || "kein Einsatz heute";
+  }
+  return person.detail ? `${group.manager.label} · ${person.detail}` : group.manager.label;
 }
 
 function compareSiteNumbers(left: string | null, right: string | null): number {
@@ -759,6 +786,106 @@ function groupFreeWorkersByLastManager(workers: Person[], lastManagerByPersonId:
       people: group.people.sort((first, second) => first.display_name.localeCompare(second.display_name, "de")),
     }))
     .sort((first, second) => first.manager.label.localeCompare(second.manager.label, "de"));
+}
+
+function buildWorkerSummaryGroupsForDay(
+  rows: MatrixRow[],
+  date: string,
+  activeWorkers: Person[],
+  freeWorkers: Person[],
+): WorkerSummaryGroup[] {
+  const activeWorkerById = new Map(activeWorkers.map((worker) => [worker.id, worker]));
+  const assignedGroups = new Map<string, {
+    manager: ManagerSummary;
+    peopleById: Map<number, DashboardOverviewPerson & { siteLabels: Set<string> }>;
+  }>();
+
+  rows.forEach((row) => {
+    const cell = row.cells.find((entry) => entry.date === date);
+    if (!cell) {
+      return;
+    }
+    if (cell.assignments.length === 0) {
+      return;
+    }
+    const manager = getManagerSummary(row.site.project_manager);
+    const group = assignedGroups.get(manager.key) ?? {
+      manager,
+      peopleById: new Map<number, DashboardOverviewPerson & { siteLabels: Set<string> }>(),
+    };
+    const siteLabel = formatWorkerSummarySiteLabel(row.site);
+    cell.assignments.forEach((assignment) => {
+      const worker = activeWorkerById.get(assignment.person.id);
+      if (!worker) {
+        return;
+      }
+      const person = group.peopleById.get(worker.id) ?? {
+        ...toDashboardOverviewPerson(worker),
+        siteLabels: new Set<string>(),
+      };
+      person.siteLabels.add(siteLabel);
+      group.peopleById.set(worker.id, person);
+    });
+    assignedGroups.set(manager.key, group);
+  });
+
+  const groups: WorkerSummaryGroup[] = Array.from(assignedGroups.values()).map((group) => ({
+    kind: "assigned" as const,
+    manager: group.manager,
+    people: Array.from(group.peopleById.values())
+      .map((person) => {
+        const { siteLabels, ...summary } = person;
+        return {
+          ...summary,
+          detail: Array.from(siteLabels).sort((first, second) => first.localeCompare(second, "de")).join(", "),
+        };
+      })
+      .sort(compareDashboardOverviewPeople),
+  })).filter((group) => group.people.length > 0);
+
+  if (freeWorkers.length > 0) {
+    groups.push({
+      kind: "free",
+      manager: {
+        key: "free-workers",
+        label: "Ohne Zuordnung",
+        name: "Nicht eingesetzte Monteure",
+      },
+      people: freeWorkers.map((person) => toDashboardOverviewPerson(person, "kein Einsatz heute")).sort(compareDashboardOverviewPeople),
+    });
+  }
+
+  return groups.sort(compareWorkerSummaryGroups);
+}
+
+function toDashboardOverviewPerson(person: Person, detail?: string): DashboardOverviewPerson {
+  return {
+    id: person.id,
+    first_name: person.first_name,
+    last_name: person.last_name,
+    display_name: person.display_name,
+    short_code: person.short_code,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+function formatWorkerSummarySiteLabel(site: MatrixSite): string {
+  return site.site_number ? `${site.site_number} - ${site.name}` : site.name;
+}
+
+function compareDashboardOverviewPeople(first: DashboardOverviewPerson, second: DashboardOverviewPerson): number {
+  return first.display_name.localeCompare(second.display_name, "de") || first.id - second.id;
+}
+
+function compareWorkerSummaryGroups(first: WorkerSummaryGroup, second: WorkerSummaryGroup): number {
+  if (first.kind === "free" && second.kind !== "free") {
+    return 1;
+  }
+  if (second.kind === "free" && first.kind !== "free") {
+    return -1;
+  }
+  return first.manager.label.localeCompare(second.manager.label, "de")
+    || first.manager.name.localeCompare(second.manager.name, "de");
 }
 
 function buildLastManagerByPersonId(rows: MatrixRow[], date: string): Map<number, ManagerSummary> {
