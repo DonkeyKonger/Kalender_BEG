@@ -1840,7 +1840,7 @@ export function MatrixPage() {
                   type="button"
                   onClick={() => updateProjectManagerFilter(String(manager.id))}
                 >
-                  {isCompactView ? compactProjectManagerFilterLabel(manager) : manager.shortCode || manager.name}
+                  {compactProjectManagerFilterLabel(manager)}
                 </button>
               ))}
             </div>
