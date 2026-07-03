@@ -14843,6 +14843,10 @@ button.person-chip:focus-visible {
   padding: 4px 8px;
 }
 
+.absence-matrix tbody tr:not(.absence-person-group-row) .absence-person-col span {
+  font-weight: 400;
+}
+
 .absence-day-col {
   position: sticky;
   top: calc(var(--absence-month-header-height) + var(--absence-week-header-height));
