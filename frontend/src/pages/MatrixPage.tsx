@@ -2182,17 +2182,33 @@ function AbsenceCellEditorPopup({
       onClose();
     }
 
+    function handleScroll(event: Event) {
+      const target = event.target instanceof Node ? event.target : null;
+      if (target && popupRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    }
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onClose();
       }
     }
 
+    function handleResize() {
+      onClose();
+    }
+
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [onClose]);
 
@@ -2200,7 +2216,7 @@ function AbsenceCellEditorPopup({
     return null;
   }
 
-  const position = editorPopupPosition(anchor);
+  const position = absenceEditorPopupPosition(anchor);
 
   return createPortal(
     <div
@@ -2379,8 +2395,8 @@ function AbsenceCellEditor({
       </section>
 
       <footer className="cell-editor-actions">
-        <button className="secondary" type="button" onClick={onClose}>Abbrechen</button>
-        <button disabled={!selectedPersonId || isSaving} type="button" onClick={onSave}>
+        <button className="cell-editor-secondary" type="button" onClick={onClose}>Abbrechen</button>
+        <button className="cell-editor-primary" disabled={!selectedPersonId || isSaving} type="button" onClick={onSave}>
           {isSaving ? "Speichert..." : "Speichern"}
         </button>
       </footer>
@@ -3089,6 +3105,8 @@ const WEEKEND_DAY_COLUMN_WIDTH = 70;
 const COMPACT_WEEKEND_DAY_COLUMN_WIDTH = 53;
 const EDITOR_POPUP_HEIGHT = 560;
 const EDITOR_POPUP_WIDTH = 390;
+const ABSENCE_EDITOR_POPUP_HEIGHT = 420;
+const ABSENCE_EDITOR_POPUP_WIDTH = 360;
 const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
 const ASSIGNMENT_AUTOCOMPLETE_WIDTH = 280;
 const STATUS_MENU_HEIGHT = 142;
@@ -3161,6 +3179,22 @@ function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number 
   const aboveTop = anchor.top - EDITOR_POPUP_HEIGHT - gap;
   const top = belowTop + EDITOR_POPUP_HEIGHT > viewportHeight
     ? Math.max(8, aboveTop)
+    : belowTop;
+
+  return { left, top };
+}
+
+function absenceEditorPopupPosition(anchor: EditorAnchor): { left: number; top: number } {
+  const gap = 6;
+  const margin = 8;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const width = Math.min(ABSENCE_EDITOR_POPUP_WIDTH, viewportWidth - margin * 2);
+  const left = Math.max(margin, Math.min(anchor.left, viewportWidth - width - margin));
+  const belowTop = anchor.bottom + gap;
+  const aboveTop = anchor.top - ABSENCE_EDITOR_POPUP_HEIGHT - gap;
+  const top = belowTop + ABSENCE_EDITOR_POPUP_HEIGHT > viewportHeight - margin
+    ? Math.max(margin, aboveTop)
     : belowTop;
 
   return { left, top };

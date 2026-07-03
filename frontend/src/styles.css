@@ -15120,6 +15120,114 @@ button.person-chip:focus-visible {
   min-width: 0;
 }
 
+.matrix-cell-editor-popup.absence-cell-editor-popup {
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  border: 1px solid #cbd7e6;
+  border-radius: 2px;
+  background: #ffffff;
+  padding: 0;
+  box-shadow: 0 12px 26px rgb(18 29 52 / 14%);
+}
+
+.absence-cell-editor {
+  gap: 0;
+}
+
+.absence-cell-editor .cell-editor-header {
+  gap: 2px;
+  border-bottom: 1px solid #dbe5f1;
+  background: #f8fafc;
+  padding: 12px 14px 10px;
+}
+
+.absence-cell-editor .cell-editor-eyebrow,
+.absence-cell-editor .cell-editor-label {
+  color: #5f6f84;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.absence-cell-editor .cell-editor-header h2 {
+  font-size: 0.98rem;
+}
+
+.absence-cell-editor .cell-editor-context {
+  font-size: 0.74rem;
+}
+
+.absence-cell-editor .cell-editor-section {
+  padding: 11px 14px 0;
+}
+
+.absence-cell-editor .cell-editor-section + .cell-editor-section {
+  padding-top: 10px;
+}
+
+.absence-cell-editor input,
+.absence-cell-editor select {
+  min-height: 34px;
+  border-radius: 2px;
+  border-color: #b9c7d8;
+  padding: 7px 9px;
+  font-size: 0.8rem;
+}
+
+.absence-cell-editor input:focus,
+.absence-cell-editor select:focus {
+  border-color: #7fa0c8;
+  outline: 2px solid rgb(29 92 153 / 14%);
+}
+
+.absence-cell-editor .absence-selected-person {
+  border: 1px solid #d5e1ef;
+  border-radius: 2px;
+  background: #f3f7fb;
+  padding: 7px 9px;
+}
+
+.absence-cell-editor .cell-editor-suggestions {
+  max-height: 146px;
+  border-radius: 2px;
+}
+
+.absence-cell-editor .cell-editor-suggestions button {
+  padding: 7px 9px;
+}
+
+.absence-cell-editor .cell-editor-actions {
+  justify-content: flex-end;
+  border-top: 1px solid #dbe5f1;
+  background: #f8fafc;
+  margin-top: 12px;
+  padding: 11px 14px;
+}
+
+.absence-cell-editor .cell-editor-actions button {
+  min-height: 32px;
+  border-radius: 2px;
+  padding: 6px 11px;
+}
+
+.absence-cell-editor .cell-editor-secondary {
+  border: 1px solid #cbd7e6;
+  background: #ffffff;
+  color: #44546a;
+}
+
+.absence-cell-editor .cell-editor-primary {
+  border: 1px solid #183f69;
+  background: #1d4775;
+}
+
+.absence-cell-editor .cell-editor-primary:disabled {
+  border-color: #cbd7e6;
+  background: #edf2f7;
+  color: #8a98aa;
+  opacity: 1;
+}
+
 .matrix-cell-editor-status {
   display: flex;
   align-items: flex-start;
