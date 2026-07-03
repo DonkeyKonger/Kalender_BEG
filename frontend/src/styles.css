@@ -14406,10 +14406,13 @@ button.person-chip:focus-visible {
   z-index: 10;
   top: calc(100% + 4px);
   right: 0;
-  left: 0;
+  left: auto;
   display: grid;
   gap: 3px;
+  width: max(100%, 230px);
+  max-width: min(260px, calc(100vw - 48px));
   max-height: 240px;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid #d7e1ee;
   border-radius: 2px;
@@ -14422,6 +14425,11 @@ button.person-chip:focus-visible {
   height: 30px;
   border-color: transparent;
   background: transparent;
+}
+
+.site-color-menu button > span:last-child {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .site-color-menu button:hover,
