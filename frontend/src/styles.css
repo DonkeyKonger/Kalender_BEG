@@ -6936,6 +6936,30 @@ button.person-chip:focus-visible {
   color: #a33a32;
 }
 
+.site-planstatus-color-control {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  max-width: 190px;
+}
+
+.site-planstatus-color-select {
+  --site-drawer-control-height: 30px;
+  width: 100%;
+}
+
+.site-planstatus-color-item .site-color-select-trigger {
+  padding: 0 7px;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.site-planstatus-color-item .site-color-swatch {
+  width: 15px;
+  height: 15px;
+  border-radius: 2px;
+}
+
 .project-customer-dialog-backdrop {
   position: fixed;
   z-index: 110;
@@ -14163,7 +14187,7 @@ button.person-chip:focus-visible {
 }
 
 .site-color-select-trigger {
-  height: var(--site-drawer-control-height);
+  height: var(--site-drawer-control-height, 32px);
   overflow: hidden;
   white-space: nowrap;
 }

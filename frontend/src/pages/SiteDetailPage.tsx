@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 
 import { useAuth } from "../auth/AuthContext";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -1513,6 +1514,13 @@ function OverviewTab({
             <DetailSection title="Planstatus" icon={CalendarClock}>
               <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
               <DetailItem label="Geschlossen" value={site.closed_at ? formatDateTime(site.closed_at) : null} />
+              <SiteColorDetailItem
+                label="Farbe"
+                value={site.color ?? "#64748B"}
+                canEdit={canEdit}
+                disabled={isSaving}
+                onSave={(color) => onSaveField({ color })}
+              />
             </DetailSection>
           </div>
 
@@ -4853,6 +4861,55 @@ function DetailItem({
       <span>{label}</span>
       <strong>{Icon && value ? <Icon aria-hidden="true" size={14} /> : null}{value || "-"}</strong>
     </p>
+  );
+}
+
+function SiteColorDetailItem({
+  label,
+  value,
+  canEdit,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  canEdit: boolean;
+  disabled?: boolean;
+  onSave: (value: string) => Promise<void>;
+}) {
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  useEffect(() => {
+    setStatus("idle");
+  }, [value]);
+
+  async function commit(nextColor: string): Promise<void> {
+    if (!canEdit || disabled || nextColor.toLowerCase() === value.toLowerCase()) {
+      return;
+    }
+    setStatus("saving");
+    try {
+      await onSave(nextColor);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="detail-item site-planstatus-color-item">
+      <span>{label}</span>
+      <div className="site-planstatus-color-control">
+        <SiteColorSelect
+          className="site-planstatus-color-select"
+          disabled={!canEdit || disabled || status === "saving"}
+          hideLabel
+          value={value}
+          onChange={(color) => void commit(color)}
+        />
+        {status !== "idle" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+      </div>
+    </div>
   );
 }
 
