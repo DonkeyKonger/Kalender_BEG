@@ -1,7 +1,6 @@
 from datetime import datetime
-from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
@@ -46,7 +45,6 @@ class Site(TimestampMixin, Base):
     )
     info: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str | None] = mapped_column(String(30))
-    project_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     planned_work_minutes: Mapped[int | None] = mapped_column(Integer)
     requires_extra_work_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     project_folder_id: Mapped[str | None] = mapped_column(String(200))

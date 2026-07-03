@@ -8,12 +8,6 @@ import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
-import {
-  formatSiteProjectValueInput,
-  getSiteColorForProjectValue,
-  getSiteProjectValueClass,
-  parseSiteProjectValueInput,
-} from "../lib/siteColors";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
@@ -40,7 +34,6 @@ const emptySite: SiteCreate = {
   status: "active",
   info: null,
   color: "#64748B",
-  project_value: null,
 };
 
 const emptyCustomerForSite: CustomerCreate = {
@@ -624,7 +617,6 @@ export function SiteFields({
   );
 
   const customerQuery = draft.customer ?? "";
-  const projectValueClass = getSiteProjectValueClass(draft.project_value ?? null);
   const customerSuggestions = useMemo(() => {
     const needle = customerQuery.trim().toLowerCase();
     const activeCustomers = customers.filter((customer) => customer.is_active);
@@ -679,15 +671,6 @@ export function SiteFields({
       setIsCustomerSuggestionsOpen(false);
       setActiveCustomerSuggestionIndex(0);
     }
-  }
-
-  function updateProjectValue(rawValue: string): void {
-    const projectValue = parseSiteProjectValueInput(rawValue);
-    const suggestedColor = getSiteColorForProjectValue(projectValue);
-    onChange({
-      project_value: projectValue,
-      ...(suggestedColor ? { color: suggestedColor } : {}),
-    });
   }
 
   return (
@@ -800,21 +783,6 @@ export function SiteFields({
             </option>
           ))}
         </select>
-      </label>
-      <label className="site-field-project-value">
-        <span>Projektwert</span>
-        <input
-          disabled={disabled}
-          inputMode="decimal"
-          placeholder="0,00 EUR"
-          value={formatSiteProjectValueInput(draft.project_value)}
-          onChange={(event) => updateProjectValue(event.target.value)}
-        />
-        <small className="site-project-value-hint">
-          {projectValueClass
-            ? `Größenklasse ${projectValueClass.label} - Farbe wird vorgeschlagen.`
-            : "Farben orientieren sich an der Projektgröße."}
-        </small>
       </label>
       <SiteColorSelect
         disabled={disabled}
@@ -1008,7 +976,6 @@ export function toEditableSite(site: Site): EditableSite {
     status: site.status,
     info: site.info,
     color: site.color,
-    project_value: site.project_value,
   };
 }
 
@@ -1071,7 +1038,6 @@ export function normalizeSitePayload(site: SiteCreate): SiteCreate {
     customer_id: site.customer_id,
     info: cleanOptionalText(site.info),
     color: cleanOptionalText(site.color),
-    project_value: site.project_value ?? null,
   };
 }
 

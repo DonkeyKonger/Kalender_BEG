@@ -479,7 +479,6 @@ def site_snapshot(site: Site) -> dict:
         "status": site.status.value,
         "info": site.info,
         "color": site.color,
-        "project_value": float(project_value) if (project_value := getattr(site, "project_value", None)) is not None else None,
         "planned_work_minutes": site.planned_work_minutes,
         "project_folder_id": getattr(site, "project_folder_id", None),
         "project_folder_web_url": getattr(site, "project_folder_web_url", None),

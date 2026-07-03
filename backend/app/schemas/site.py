@@ -37,7 +37,6 @@ class SiteBase(BaseModel):
     status: SiteStatus = SiteStatus.ACTIVE
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
-    project_value: float | None = Field(default=None, ge=0)
     planned_work_minutes: int | None = Field(default=None, ge=0)
     requires_extra_work_approval: bool = False
 
@@ -66,7 +65,6 @@ class SiteUpdate(BaseModel):
     status: SiteStatus | None = None
     info: str | None = None
     color: str | None = Field(default=None, max_length=30)
-    project_value: float | None = Field(default=None, ge=0)
     planned_work_minutes: int | None = Field(default=None, ge=0)
     requires_extra_work_approval: bool | None = None
 

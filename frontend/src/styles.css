@@ -14399,13 +14399,6 @@ button.person-chip:focus-visible {
   resize: vertical;
 }
 
-.site-project-value-hint {
-  color: #6b778c;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
 .site-form-grid input:focus,
 .site-form-grid select:focus,
 .site-form-grid textarea:focus,
@@ -14508,7 +14501,6 @@ button.person-chip:focus-visible {
   }
 
   .site-field-status,
-  .site-field-project-value,
   .site-field-color {
     grid-column: span 1;
   }

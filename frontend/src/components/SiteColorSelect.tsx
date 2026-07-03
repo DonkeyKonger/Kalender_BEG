@@ -19,7 +19,7 @@ export function SiteColorSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = SITE_COLOR_OPTIONS.find((option) => option.value.toLowerCase() === value.toLowerCase());
-  const selectedLabel = selectedOption?.name ?? label;
+  const selectedLabel = selectedOption?.label ?? label;
 
   return (
     <div className={["site-color-select-field site-field-color", className].filter(Boolean).join(" ")}>
@@ -44,9 +44,11 @@ export function SiteColorSelect({
           <div className="site-color-menu" role="listbox">
             {SITE_COLOR_OPTIONS.map((option) => (
               <button
+                aria-label={`${option.label} (${option.name})`}
                 aria-selected={option.value.toLowerCase() === value.toLowerCase()}
                 key={option.value}
                 role="option"
+                title={option.name}
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
@@ -56,8 +58,7 @@ export function SiteColorSelect({
               >
                 <span className="site-color-swatch" style={{ backgroundColor: option.value }} />
                 <span className="site-color-option-text">
-                  <span>{option.name}</span>
-                  {option.projectValueHint ? <small>{option.projectValueHint}</small> : null}
+                  <span>{option.label}</span>
                 </span>
               </button>
             ))}
