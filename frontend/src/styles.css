@@ -14736,6 +14736,7 @@ button.person-chip:focus-visible {
 .absence-person-col span {
   font-size: 0.78rem;
   font-weight: 900;
+  line-height: 1.15;
 }
 
 .absence-person-col small {
@@ -14772,6 +14773,10 @@ button.person-chip:focus-visible {
 .absence-person-group-fill {
   background: #f8fafc;
   padding: 0;
+}
+
+.absence-matrix tbody tr:not(.absence-person-group-row) .absence-person-col {
+  padding: 4px 8px;
 }
 
 .absence-day-col {
@@ -14829,7 +14834,7 @@ button.person-chip:focus-visible {
   width: 42px;
   min-width: 42px;
   max-width: 42px;
-  height: 30px;
+  height: 26px;
   background: #ffffff;
   padding: 2px;
   vertical-align: middle;
@@ -14841,7 +14846,7 @@ button.person-chip:focus-visible {
   width: 25px;
   min-width: 25px;
   max-width: 25px;
-  height: 24px;
+  height: 22px;
   padding: 1px;
 }
 

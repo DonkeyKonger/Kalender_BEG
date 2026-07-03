@@ -714,7 +714,6 @@ function AbsenceMatrix({
                 <tr key={row.person.id}>
                   <th className="absence-person-col" scope="row">
                     <span>{row.person.display_name}</span>
-                    <small>{row.person.short_code}</small>
                   </th>
                   {row.cells.map((cell) => (
                     <td
