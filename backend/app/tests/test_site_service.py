@@ -38,10 +38,33 @@ class FakeProjectStorage:
             ms_graph_create_project_folders_enabled=project_folders_enabled,
         )
 
-    def create_project_folder_for_site(self, *, site_id, site_number, site_name):
-        self.calls.append({"site_id": site_id, "site_number": site_number, "site_name": site_name})
+    def sync_project_folder_for_site(
+        self,
+        *,
+        site_id,
+        site_number,
+        site_name,
+        project_manager_name=None,
+        project_manager_id=None,
+        is_archived=False,
+        existing_folder_id=None,
+    ):
+        self.calls.append(
+            {
+                "site_id": site_id,
+                "site_number": site_number,
+                "site_name": site_name,
+                "project_manager_name": project_manager_name,
+                "project_manager_id": project_manager_id,
+                "is_archived": is_archived,
+                "existing_folder_id": existing_folder_id,
+            }
+        )
         index = min(len(self.calls) - 1, len(self.results) - 1)
         return self.results[index]
+
+    def create_project_folder_for_site(self, **kwargs):
+        return self.sync_project_folder_for_site(**kwargs)
 
 
 def create_project_manager(db: Session, *, short_code: str = "KE") -> Person:
@@ -272,7 +295,15 @@ def test_create_site_stores_created_project_folder_metadata():
 
     assert site.id is not None
     assert storage.calls == [
-        {"site_id": site.id, "site_number": "8007", "site_name": "Testbaustelle"}
+        {
+            "site_id": site.id,
+            "site_number": "8007",
+            "site_name": "Testbaustelle",
+            "project_manager_name": "Keno Erichsen",
+            "project_manager_id": project_manager.id,
+            "is_archived": False,
+            "existing_folder_id": None,
+        }
     ]
     assert site.project_folder_status == "created"
     assert site.project_folder_id == "folder-1"
@@ -374,6 +405,7 @@ def add_site(
     name: str,
     status: SiteStatus = SiteStatus.ACTIVE,
     site_number: str | None = None,
+    project_manager_person_id: int | None = None,
     project_folder_id: str | None = None,
     project_folder_web_url: str | None = None,
 ) -> Site:
@@ -382,6 +414,7 @@ def add_site(
         site_number=site_number,
         status=status,
         location_status=SiteLocationStatus.UNCHECKED,
+        project_manager_person_id=project_manager_person_id,
         project_folder_id=project_folder_id,
         project_folder_web_url=project_folder_web_url,
     )
@@ -426,6 +459,69 @@ def test_deleted_site_can_be_restored_via_status_update():
     assert any(entry.id == site.id for entry in service.list_sites())
 
 
+def test_archive_site_syncs_existing_project_folder_into_archive():
+    db = db_session()
+    project_manager = create_project_manager(db)
+    site = add_site(
+        db,
+        name="Archivieren",
+        site_number="8097",
+        project_manager_person_id=project_manager.id,
+        project_folder_id="folder-1",
+    )
+    storage = FakeProjectStorage({"status": "created", "folder_id": "folder-1"})
+
+    archived = SiteService(db, project_storage=storage).archive_site(site.id, user_id=1)
+
+    assert archived.status == SiteStatus.COMPLETED
+    assert storage.calls == [
+        {
+            "site_id": site.id,
+            "site_number": "8097",
+            "site_name": "Archivieren",
+            "project_manager_name": "Keno Erichsen",
+            "project_manager_id": project_manager.id,
+            "is_archived": True,
+            "existing_folder_id": "folder-1",
+        }
+    ]
+
+
+def test_project_manager_change_syncs_project_folder_to_new_manager():
+    db = db_session()
+    old_manager = create_project_manager(db, short_code="KE")
+    new_manager = create_project_manager(db, short_code="CE")
+    new_manager.first_name = "Christopher"
+    new_manager.last_name = "Erichsen"
+    new_manager.display_name = "Christopher Erichsen"
+    site = add_site(
+        db,
+        name="Leiterwechsel",
+        site_number="8096",
+        project_manager_person_id=old_manager.id,
+        project_folder_id="folder-1",
+    )
+    storage = FakeProjectStorage({"status": "created", "folder_id": "folder-1"})
+
+    SiteService(db, project_storage=storage).update_site(
+        site.id,
+        SiteUpdate(project_manager_person_id=new_manager.id),
+        user_id=1,
+    )
+
+    assert storage.calls == [
+        {
+            "site_id": site.id,
+            "site_number": "8096",
+            "site_name": "Leiterwechsel",
+            "project_manager_name": "Christopher Erichsen",
+            "project_manager_id": new_manager.id,
+            "is_archived": False,
+            "existing_folder_id": "folder-1",
+        }
+    ]
+
+
 def test_backfill_project_folders_requires_feature_flag():
     db = db_session()
     storage = FakeProjectStorage(
@@ -441,11 +537,27 @@ def test_backfill_project_folders_requires_feature_flag():
     assert "MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED" in error.value.detail
 
 
-def test_backfill_project_folders_creates_missing_open_sites_only():
+def test_backfill_project_folders_syncs_existing_and_archived_sites():
     db = db_session()
-    missing = add_site(db, name="Offene Baustelle", site_number="8001")
-    add_site(db, name="Mit Ordner", project_folder_id="existing-folder")
-    add_site(db, name="Abgeschlossen", status=SiteStatus.COMPLETED)
+    project_manager = create_project_manager(db)
+    missing = add_site(
+        db,
+        name="Offene Baustelle",
+        site_number="8001",
+        project_manager_person_id=project_manager.id,
+    )
+    existing = add_site(
+        db,
+        name="Mit Ordner",
+        project_manager_person_id=project_manager.id,
+        project_folder_id="existing-folder",
+    )
+    archived = add_site(
+        db,
+        name="Abgeschlossen",
+        status=SiteStatus.COMPLETED,
+        project_manager_person_id=project_manager.id,
+    )
     storage = FakeProjectStorage(
         {
             "status": "created",
@@ -466,13 +578,14 @@ def test_backfill_project_folders_creates_missing_open_sites_only():
 
     result = SiteService(db, project_storage=storage).backfill_project_folders(limit=10)
 
-    assert result["total_candidates"] == 1
-    assert result["created_count"] == 1
-    assert result["skipped_count"] == 1
+    assert result["total_candidates"] == 3
+    assert result["created_count"] == 3
+    assert result["skipped_count"] == 0
     assert result["error_count"] == 0
-    assert storage.calls == [
-        {"site_id": missing.id, "site_number": "8001", "site_name": "Offene Baustelle"}
-    ]
+    assert [call["site_id"] for call in storage.calls] == [missing.id, existing.id, archived.id]
+    assert storage.calls[0]["project_manager_name"] == "Keno Erichsen"
+    assert storage.calls[1]["existing_folder_id"] == "existing-folder"
+    assert storage.calls[2]["is_archived"] is True
     db.refresh(missing)
     assert missing.project_folder_status == "created"
     assert missing.project_folder_web_url == "https://example.invalid/folder-1"

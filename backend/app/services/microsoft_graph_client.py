@@ -102,6 +102,9 @@ class MicrosoftGraphClient:
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", path, payload=payload)
 
+    def patch(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PATCH", path, payload=payload)
+
     def delete(self, path: str) -> dict[str, Any]:
         return self._request("DELETE", path)
 

@@ -31,6 +31,7 @@ class FakeGraphClient:
         self.puts = []
         self.downloads = []
         self.deletes = []
+        self.patches = []
 
     def get_access_token(self):
         return "token-not-returned"
@@ -150,6 +151,10 @@ class FakeGraphClient:
                 "name": "Drive Root",
                 "folder": {},
             }
+        if path.startswith("/drives/drive-1/items/") and path.endswith(
+            "/children?$select=id,name,webUrl,folder,parentReference"
+        ):
+            return {"value": []}
         raise AssertionError(f"unexpected get path: {path}")
 
     def post(self, path, payload):
@@ -181,6 +186,16 @@ class FakeGraphClient:
     def delete(self, path):
         self.deletes.append(path)
         return {}
+
+    def patch(self, path, payload):
+        self.patches.append((path, payload))
+        return {
+            "id": path.rsplit("/", 1)[-1],
+            "name": payload["name"],
+            "webUrl": f"https://example.invalid/{payload['name']}",
+            "folder": {},
+            "parentReference": payload.get("parentReference"),
+        }
 
 
 class FailingTokenGraphClient:
@@ -340,6 +355,7 @@ def test_create_project_folder_for_site_is_blocked_without_project_feature_flag(
         site_id=42,
         site_number="8007",
         site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
     )
 
     assert result == {"status": "disabled"}
@@ -355,19 +371,90 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
         site_id=42,
         site_number="8007",
         site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
     )
 
     assert result["status"] == "created"
     assert result["folder_name"] == "8007_Schuechtermann_Klinik"
-    assert result["folder_id"] == "folder-1"
-    assert result["web_url"] == "https://example.invalid/folder-1"
+    assert result["folder_id"] == "folder-2"
+    assert result["web_url"] == "https://example.invalid/folder-2"
     assert result["drive_id"] == "drive-1"
     assert len(result["subfolders"]) == 15
-    assert graph.posts[0][1]["name"] == "8007_Schuechtermann_Klinik"
-    assert graph.posts[1][1]["name"] == "01_Angebote"
-    assert graph.posts[3][1]["name"] == "03_Aufträge"
+    assert result["target_path"] == ["Keno_Erichsen", "8007_Schuechtermann_Klinik"]
+    assert graph.posts[0][1]["name"] == "Keno_Erichsen"
+    assert graph.posts[1][1]["name"] == "8007_Schuechtermann_Klinik"
+    assert graph.posts[2][1]["name"] == "01_Angebote"
+    assert graph.posts[4][1]["name"] == "03_Aufträge"
     assert graph.posts[-1][1]["name"] == "15_Mails"
     assert "super-secret-value" not in str(result)
+
+
+def test_sync_project_folder_for_site_moves_existing_flat_folder_to_project_manager_folder():
+    class ExistingFlatFolderGraphClient(FakeGraphClient):
+        def get(self, path):
+            if path == (
+                "/drives/drive-1/items/root-1/children"
+                "?$select=id,name,webUrl,folder,parentReference"
+            ):
+                return {
+                    "value": [
+                        {
+                            "id": "old-folder",
+                            "name": "8007_Schuechtermann_Klinik",
+                            "webUrl": "https://example.invalid/old-folder",
+                            "folder": {},
+                            "parentReference": {"id": "root-1"},
+                        }
+                    ]
+                }
+            return super().get(path)
+
+    graph = ExistingFlatFolderGraphClient()
+
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=graph,
+    ).sync_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
+    )
+
+    assert result["status"] == "created"
+    assert result["folder_id"] == "old-folder"
+    assert result["target_path"] == ["Keno_Erichsen", "8007_Schuechtermann_Klinik"]
+    assert graph.posts[0][1]["name"] == "Keno_Erichsen"
+    assert graph.patches == [
+        (
+            "/drives/drive-1/items/old-folder",
+            {
+                "name": "8007_Schuechtermann_Klinik",
+                "parentReference": {"id": "folder-1"},
+            },
+        )
+    ]
+
+
+def test_sync_project_folder_for_site_uses_archive_project_manager_path():
+    graph = FakeGraphClient()
+
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=graph,
+    ).sync_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
+        is_archived=True,
+    )
+
+    assert result["status"] == "created"
+    assert result["target_path"] == ["Archiv", "Keno_Erichsen", "8007_Schuechtermann_Klinik"]
+    assert graph.posts[0][1]["name"] == "Archiv"
+    assert graph.posts[1][1]["name"] == "Keno_Erichsen"
+    assert graph.posts[2][1]["name"] == "8007_Schuechtermann_Klinik"
 
 
 def test_list_folder_children_returns_safe_document_items():
@@ -578,6 +665,7 @@ def test_create_project_folder_for_site_returns_error_without_raising():
         site_id=42,
         site_number="8007",
         site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
     )
 
     assert result["status"] == "error"

@@ -47,6 +47,7 @@ PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT = 10
 PROJECT_FOLDER_BACKFILL_MAX_LIMIT = 25
 ADDRESS_FIELDS = {"address", "postal_code", "city", "street", "house_number", "address_extra"}
 TECHNICAL_LOCATION_FIELDS = {"latitude", "longitude", "location_status"}
+PROJECT_FOLDER_SYNC_FIELDS = {"name", "project_manager_person_id", "site_number", "status"}
 VALID_MAP_LOCATION_STATUSES = {SiteLocationStatus.GEOCODED}
 SITE_LOCATION_DEPENDENCY_FIELDS = (
     "location",
@@ -105,6 +106,7 @@ class SiteService:
         old_value = site_snapshot(site)
         site.status = SiteStatus.DELETED
         self._apply_status_metadata(site, SiteStatus.DELETED, user_id)
+        self._sync_project_folder_for_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.deleted",
@@ -124,6 +126,7 @@ class SiteService:
         old_value = site_snapshot(site)
         site.status = SiteStatus.COMPLETED
         self._apply_status_metadata(site, SiteStatus.COMPLETED, user_id)
+        self._sync_project_folder_for_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.completed",
@@ -170,7 +173,7 @@ class SiteService:
         self.sites.add(site)
         self.db.flush()
         ProjectFolderService(self.db).create_default_project_folders_for_site(site.id)
-        self._create_project_folder_for_new_site(site)
+        self._sync_project_folder_for_site(site, force=True)
         self.audit.record(
             user_id=user_id,
             action="site.created",
@@ -186,22 +189,13 @@ class SiteService:
     def backfill_project_folders(self, limit: int = PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT) -> dict:
         self._ensure_project_folder_creation_enabled()
         safe_limit = max(1, min(limit, PROJECT_FOLDER_BACKFILL_MAX_LIMIT))
-        open_sites = self.db.scalars(
-            select(Site).where(Site.status.in_(tuple(OPEN_STATUSES))).order_by(Site.id)
-        ).all()
-
-        candidates = []
+        candidates = self.db.scalars(select(Site).order_by(Site.id)).all()
         skipped = []
-        for site in open_sites:
-            if site.project_folder_id or site.project_folder_web_url:
-                skipped.append(backfill_site_result(site, reason="existing_project_folder"))
-            else:
-                candidates.append(site)
 
         created = []
         errors = []
         for site in candidates[:safe_limit]:
-            self._create_project_folder_for_new_site(site)
+            self._sync_project_folder_for_site(site, force=True)
             if site.project_folder_status == PROJECT_FOLDER_STATUS_CREATED:
                 created.append(backfill_site_result(site))
             elif site.project_folder_status == PROJECT_FOLDER_STATUS_DISABLED:
@@ -240,6 +234,7 @@ class SiteService:
         address_changed = any(
             field in values and getattr(site, field) != values[field] for field in ADDRESS_FIELDS
         )
+        project_folder_sync_needed = any(field in values for field in PROJECT_FOLDER_SYNC_FIELDS)
         selected_geocode = apply_selected_geocode(values)
         status_value = values.get("status")
         if status_value is not None:
@@ -250,6 +245,8 @@ class SiteService:
             site.latitude = None
             site.longitude = None
             site.location_status = SiteLocationStatus.UNCHECKED
+        if project_folder_sync_needed:
+            self._sync_project_folder_for_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.updated",
@@ -269,6 +266,7 @@ class SiteService:
         old_value = site_snapshot(site)
         site.status = SiteStatus.COMPLETED
         self._apply_status_metadata(site, SiteStatus.COMPLETED, user_id)
+        self._sync_project_folder_for_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.completed",
@@ -288,6 +286,7 @@ class SiteService:
         old_value = site_snapshot(site)
         site.status = SiteStatus.ACTIVE
         self._apply_status_metadata(site, SiteStatus.ACTIVE, user_id)
+        self._sync_project_folder_for_site(site)
         self.audit.record(
             user_id=user_id,
             action="site.reactivated",
@@ -344,20 +343,42 @@ class SiteService:
                 status.HTTP_400_BAD_REQUEST, "MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED is false."
             )
 
-    def _create_project_folder_for_new_site(self, site: Site) -> dict:
-        result = self.project_storage.create_project_folder_for_site(
+    def _sync_project_folder_for_site(self, site: Site, *, force: bool = False) -> dict | None:
+        if not force and not self._project_folder_sync_enabled():
+            return None
+        result = self.project_storage.sync_project_folder_for_site(
             site_id=site.id,
             site_number=site.site_number,
             site_name=site.name,
+            project_manager_name=self._project_manager_folder_name(site),
+            project_manager_id=site.project_manager_person_id,
+            is_archived=site.status in CLOSED_STATUSES,
+            existing_folder_id=site.project_folder_id,
         )
         self._apply_project_folder_result(site, result)
         return result
 
+    def _project_folder_sync_enabled(self) -> bool:
+        return bool(
+            self.project_storage.config.ms_graph_enabled
+            and self.project_storage.config.ms_graph_create_project_folders_enabled
+        )
+
+    def _project_manager_folder_name(self, site: Site) -> str | None:
+        if site.project_manager_person_id is None:
+            project_manager = getattr(site, "project_manager", None)
+            return project_manager.display_name if project_manager is not None else None
+        person = self.people.get(site.project_manager_person_id, include_deleted=True)
+        return person.display_name if person is not None else None
+
     def _apply_project_folder_result(self, site: Site, result: dict) -> None:
         site.project_folder_status = result.get("status") or "not_configured"
-        site.project_folder_id = result.get("folder_id")
-        site.project_folder_web_url = result.get("web_url")
-        site.project_folder_name = result.get("folder_name")
+        if result.get("folder_id") is not None or site.project_folder_id is None:
+            site.project_folder_id = result.get("folder_id")
+        if result.get("web_url") is not None or site.project_folder_web_url is None:
+            site.project_folder_web_url = result.get("web_url")
+        if result.get("folder_name") is not None or site.project_folder_name is None:
+            site.project_folder_name = result.get("folder_name")
         site.project_folder_error = result.get("error")
         if site.project_folder_status != PROJECT_FOLDER_STATUS_CREATED:
             return
