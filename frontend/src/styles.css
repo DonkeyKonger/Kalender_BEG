@@ -2884,18 +2884,24 @@ button.person-chip:focus-visible {
   white-space: nowrap;
 }
 
+.matrix-page.is-compact .matrix-info-editor {
+  inset: 0 3px;
+}
+
 .matrix-page.is-compact .matrix-info-editor textarea {
+  height: 34px;
   min-height: 0;
-  max-height: none;
-  padding: 2px 3px;
-  font-size: 0.62rem;
-  line-height: 1.12;
-  overflow: hidden;
+  max-height: 34px;
+  padding: 1px 3px;
+  font-size: 0.6rem;
+  line-height: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
   resize: none;
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea.info-text-long {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea.info-text-very-long,
