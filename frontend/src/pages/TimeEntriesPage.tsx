@@ -21,7 +21,7 @@ import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
-type TimeSubtab = "review" | "gpsVerification" | "evaluation" | "export";
+type TimeSubtab = "review" | "gpsVerification" | "evaluation";
 type TimeReviewIssue = {
   id: number;
   entry: TimeEntry;
@@ -65,10 +65,6 @@ type CalendarWeekOption = CalendarWeekSelection & {
   start: string;
   end: string;
   isCurrent: boolean;
-};
-type ExportMonthSelection = {
-  year: number;
-  month: number;
 };
 type TimeReviewTableRow = {
   id: number;
@@ -166,33 +162,6 @@ type FinalHoursEntry = {
   reviewedAt: string | null;
   reviewedByUserId: number | null;
 };
-type ExportPreviewStatus = "auto_checked" | "manually_checked" | "corrected" | "not_exportable";
-type ExportPreviewRow = {
-  id: number;
-  entry: TimeEntry;
-  workDate: string;
-  personName: string;
-  siteNumber: string;
-  siteName: string;
-  reportedMinutes: number | null;
-  gpsMinutes: number | null;
-  correctedMinutes: number | null;
-  validMinutes: number | null;
-  status: ExportPreviewStatus;
-  statusLabel: string;
-  statusTone: StatusBadgeTone;
-  isExportable: boolean;
-  instruction: string;
-};
-type ExportPreviewSummary = {
-  autoChecked: number;
-  manuallyChecked: number;
-  corrected: number;
-  open: number;
-  exportable: number;
-  notExportable: number;
-};
-
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
@@ -201,25 +170,10 @@ const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
 const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
 const OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung.";
-const EXPORT_MONTH_LABELS = [
-  "Januar",
-  "Februar",
-  "März",
-  "April",
-  "Mai",
-  "Juni",
-  "Juli",
-  "August",
-  "September",
-  "Oktober",
-  "November",
-  "Dezember",
-];
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
   { key: "gpsVerification", label: "GPS-Prüfung" },
   { key: "evaluation", label: "Auswertung" },
-  { key: "export", label: "Export" },
 ];
 
 const gpsStatusLabels: Record<TimeEntryGpsStatus, string> = {
@@ -278,9 +232,6 @@ export function TimeEntriesPage() {
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
-  const [selectedExportMonth, setSelectedExportMonth] = useState<ExportMonthSelection>(() => currentExportMonth());
-  const [isDownloadingExport, setIsDownloadingExport] = useState(false);
-  const [exportDownloadError, setExportDownloadError] = useState<string | null>(null);
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
@@ -351,20 +302,7 @@ export function TimeEntriesPage() {
     () => isoWeekRange(selectedEvaluationWeek.year, selectedEvaluationWeek.week),
     [selectedEvaluationWeek.week, selectedEvaluationWeek.year],
   );
-  const exportMonthRange = useMemo(
-    () => monthRange(selectedExportMonth.year, selectedExportMonth.month),
-    [selectedExportMonth.month, selectedExportMonth.year],
-  );
-  const reviewDataRange = activeTimeSubtab === "export"
-    ? exportMonthRange
-    : activeTimeSubtab === "evaluation"
-      ? evaluationWeekRange
-      : reviewWeekRange;
-  const exportMonthLabel = `${EXPORT_MONTH_LABELS[selectedExportMonth.month - 1]} ${selectedExportMonth.year}`;
-  const exportYearOptions = useMemo(
-    () => buildExportYearOptions(selectedExportMonth.year),
-    [selectedExportMonth.year],
-  );
+  const reviewDataRange = activeTimeSubtab === "evaluation" ? evaluationWeekRange : reviewWeekRange;
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
     [currentReviewWeek],
@@ -377,7 +315,6 @@ export function TimeEntriesPage() {
     () => buildCompletedReviewWeekKeys(reviewWeekCompletionReviews, payrollReviewWorkerIds),
     [payrollReviewWorkerIds, reviewWeekCompletionReviews],
   );
-  const currentExportMonthSelection = useMemo(() => currentExportMonth(), []);
   const siteOptions = useMemo(
     () => [...sites].sort((left, right) => siteOptionLabel(left).localeCompare(siteOptionLabel(right), "de")),
     [sites],
@@ -430,19 +367,6 @@ export function TimeEntriesPage() {
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
-  const exportPreviewRows = useMemo(
-    () => buildExportPreviewRows(reviewAllEntries, reviewEntries),
-    [reviewAllEntries, reviewEntries],
-  );
-  const exportPreviewSummary = useMemo(() => calculateExportPreviewSummary(exportPreviewRows), [exportPreviewRows]);
-  const exportableRows = useMemo(
-    () => exportPreviewRows.filter((row) => row.isExportable),
-    [exportPreviewRows],
-  );
-  const notExportableRows = useMemo(
-    () => exportPreviewRows.filter((row) => !row.isExportable),
-    [exportPreviewRows],
-  );
   useEffect(() => {
     let ignore = false;
     api.siteSummaries()
@@ -561,7 +485,7 @@ export function TimeEntriesPage() {
   }, [locationReviewDiagnosticEntry, timeReviewDiagnosticEntry]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
       return;
     }
 
@@ -782,7 +706,7 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, canManageTimeEntries, payrollReviewWorkerIds.length, reviewWeekOptions]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation" && activeTimeSubtab !== "export") {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
       return;
     }
 
@@ -1232,25 +1156,6 @@ export function TimeEntriesPage() {
       setLocationReviewError(readApiError(requestError, "Ort konnte nicht gespeichert werden."));
     } finally {
       setIsSavingLocationReview(false);
-    }
-  }
-
-  async function downloadTimeExportXlsx(): Promise<void> {
-    if (!exportableRows.length || isDownloadingExport) {
-      return;
-    }
-    setIsDownloadingExport(true);
-    setExportDownloadError(null);
-    try {
-      const blob = await api.monthlyTimeEntriesXlsx({
-        year: selectedExportMonth.year,
-        month: selectedExportMonth.month,
-      });
-      downloadBlobFile(blob, `zeiten_export_${selectedExportMonth.year}_${String(selectedExportMonth.month).padStart(2, "0")}.xlsx`);
-    } catch (requestError) {
-      setExportDownloadError(readApiError(requestError, "XLSX-Export konnte nicht erstellt werden."));
-    } finally {
-      setIsDownloadingExport(false);
     }
   }
 
@@ -1714,167 +1619,6 @@ export function TimeEntriesPage() {
               <FinalSummaryList title="Summe je Monteur" rows={finalHoursTotals.byPerson} />
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
-          </div>
-        </div>
-      )}
-
-      {activeTimeSubtab === "export" && (
-        <div className="time-entries-main time-export-main">
-          <div className="time-export-period-panel" aria-label="Exportmonat">
-            <div className="time-export-period-header">
-              <div>
-                <span>Exportmonat</span>
-                <strong>{exportMonthLabel}</strong>
-              </div>
-              <label>
-                Jahr
-                <select
-                  value={selectedExportMonth.year}
-                  onChange={(event) => {
-                    setSelectedExportMonth((current) => ({ ...current, year: Number(event.target.value) }));
-                    setExportDownloadError(null);
-                  }}
-                >
-                  {exportYearOptions.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="time-export-month-grid">
-              {EXPORT_MONTH_LABELS.map((label, index) => {
-                const month = index + 1;
-                return (
-                <button
-                  className={[
-                    month === selectedExportMonth.month ? "is-active" : "",
-                    currentExportMonthSelection.year === selectedExportMonth.year && currentExportMonthSelection.month === month ? "is-current" : "",
-                  ].filter(Boolean).join(" ")}
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    setSelectedExportMonth((current) => ({ ...current, month }));
-                    setExportDownloadError(null);
-                  }}
-                >
-                  {label}
-                </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="time-export-panel">
-            <div className="time-entries-toolbar">
-              <div>
-                <h2>Exportvorschau</h2>
-                <p>{exportMonthLabel} · {formatRangeLabel(exportMonthRange.start, exportMonthRange.end)}.</p>
-              </div>
-            </div>
-
-            {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
-            {reviewEntriesError && <p className="time-table-note">{reviewEntriesError}</p>}
-            {(isLoadingReviewAllEntries || isLoadingReviewEntries) && <p className="time-table-note">Exportvorschau wird geladen...</p>}
-
-            <div className="time-summary-strip">
-              <div><span>Automatisch geprüft</span><strong>{exportPreviewSummary.autoChecked}</strong></div>
-              <div><span>Manuell geprüft</span><strong>{exportPreviewSummary.manuallyChecked}</strong></div>
-              <div><span>Korrigiert</span><strong>{exportPreviewSummary.corrected}</strong></div>
-              <div><span>Offen / Prüfung empfohlen</span><strong>{exportPreviewSummary.open}</strong></div>
-              <div><span>Exportierbar</span><strong>{exportPreviewSummary.exportable}</strong></div>
-              <div><span>Nicht exportierbar</span><strong>{exportPreviewSummary.notExportable}</strong></div>
-            </div>
-
-            <p className={notExportableRows.length ? "time-export-readiness is-blocked" : "time-export-readiness is-ready"}>
-              {notExportableRows.length
-                ? "Export noch nicht vollständig bereit: Es gibt noch Einträge mit Prüfung empfohlen."
-                : "Export bereit: Alle Einträge sind automatisch oder manuell geprüft."}
-            </p>
-
-            <div className="time-export-download-panel">
-              {notExportableRows.length > 0 && (
-                <p>
-                  Achtung: Es gibt noch offene Einträge mit Prüfung empfohlen. Der XLSX-Export enthält nur automatisch oder manuell geprüfte Zeiten.
-                </p>
-              )}
-              {exportDownloadError && <p>{exportDownloadError}</p>}
-              <div className="time-export-download-actions">
-                <div>
-                  <strong>{exportPreviewSummary.exportable}</strong>
-                  <span>exportierbare Einträge</span>
-                </div>
-                <div>
-                  <strong>{exportPreviewSummary.notExportable}</strong>
-                  <span>offene Einträge</span>
-                </div>
-                <button
-                  className="icon-button"
-                  disabled={exportableRows.length === 0 || isDownloadingExport}
-                  type="button"
-                  onClick={() => void downloadTimeExportXlsx()}
-                >
-                  {isDownloadingExport ? "XLSX wird erstellt..." : "Geprüfte Zeiten als XLSX exportieren"}
-                </button>
-              </div>
-            </div>
-
-            {notExportableRows.length > 0 && (
-              <div className="time-export-open-panel">
-                <h3>Diese Einträge sind noch nicht exportierbar</h3>
-                <div className="time-export-open-list">
-                  {notExportableRows.map((row) => (
-                    <div key={row.id}>
-                      <strong>{formatDate(row.workDate)} · {row.personName}</strong>
-                      <span>{row.siteNumber} · {row.siteName}</span>
-                      <small>{row.instruction}</small>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!reviewAllEntriesError && exportPreviewRows.length === 0 && !isLoadingReviewAllEntries && (
-              <div className="empty-panel">Keine Zeiten im ausgewählten Zeitraum vorhanden.</div>
-            )}
-
-            {!reviewAllEntriesError && exportPreviewRows.length > 0 && (
-              <div className="time-table-scroll">
-                <table className="time-entries-table time-export-preview-table">
-                  <thead>
-                    <tr>
-                      <th>Datum</th>
-                      <th>Tag</th>
-                      <th>Monteur</th>
-                      <th>Baustellennr.</th>
-                      <th>Baustellenname</th>
-                      <th>Gemeldete Zeit</th>
-                      <th>GPS-Zeit</th>
-                      <th>Korrigierte Zeit</th>
-                      <th>Gültige Arbeitszeit</th>
-                      <th>Exportstatus</th>
-                      <th>Prüfhinweis</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exportPreviewRows.map((row) => (
-                      <tr className={row.status === "corrected" ? "is-corrected" : ""} key={row.id}>
-                        <td>{formatDate(row.workDate)}</td>
-                        <td>{formatWeekday(row.workDate)}</td>
-                        <td>{row.personName}</td>
-                        <td>{row.siteNumber}</td>
-                        <td>{row.siteName}</td>
-                        <td>{formatHalfHour(row.reportedMinutes)}</td>
-                        <td>{formatHalfHour(row.gpsMinutes)}</td>
-                        <td>{formatHalfHour(row.correctedMinutes)}</td>
-                        <td><strong>{formatHalfHour(row.validMinutes)}</strong></td>
-                        <td><StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge></td>
-                        <td>{row.instruction}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2720,42 +2464,6 @@ function buildTimeReviewInstruction(row: TimeReviewTableRow): string {
     return row.systemHint || "manuell geprüft";
   }
   return "automatisch geprüft";
-}
-
-function currentMonthRange(): { start: string; end: string } {
-  const today = new Date();
-  return {
-    start: toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)),
-    end: toDateInputValue(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-  };
-}
-
-function currentExportMonth(): ExportMonthSelection {
-  const today = new Date();
-  return { year: today.getFullYear(), month: today.getMonth() + 1 };
-}
-
-function monthRange(year: number, month: number): { start: string; end: string } {
-  return {
-    start: toDateInputValue(new Date(year, month - 1, 1)),
-    end: toDateInputValue(new Date(year, month, 0)),
-  };
-}
-
-function buildExportYearOptions(selectedYear: number): number[] {
-  const currentYear = new Date().getFullYear();
-  const years = new Set([currentYear - 1, currentYear, currentYear + 1, selectedYear]);
-  return [...years].sort((left, right) => left - right);
-}
-
-function currentWeekRange(): { start: string; end: string } {
-  const today = new Date();
-  const mondayOffset = (today.getDay() + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - mondayOffset);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { start: toDateInputValue(monday), end: toDateInputValue(sunday) };
 }
 
 function currentIsoWeek(): CalendarWeekSelection {
@@ -3880,128 +3588,6 @@ function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntr
     critical,
     notVerifiable,
   };
-}
-
-function buildExportPreviewRows(entries: TimeEntry[], openEntries: TimeEntry[]): ExportPreviewRow[] {
-  const entryById = new Map<number, TimeEntry>();
-  for (const entry of entries) {
-    entryById.set(entry.id, entry);
-  }
-  for (const entry of openEntries) {
-    if (entry.is_gps_suggestion) {
-      entryById.set(entry.id, entry);
-    }
-  }
-  return [...entryById.values()]
-    .map(timeEntryToExportPreviewRow)
-    .sort((left, right) => (
-      left.workDate.localeCompare(right.workDate)
-      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
-      || left.siteNumber.localeCompare(right.siteNumber, "de", { sensitivity: "base" })
-      || left.id - right.id
-    ));
-}
-
-function timeEntryToExportPreviewRow(entry: TimeEntry): ExportPreviewRow {
-  const reportedMinutes = entry.is_gps_suggestion ? null : entry.original_work_minutes ?? entry.work_minutes;
-  const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry) ?? entry.corrected_work_minutes;
-  const validMinutes = correctedMinutes ?? reportedMinutes;
-  const status = exportPreviewStatus(entry);
-  const tableRow = timeEntryToTableRow(entry, exportPreviewStatusLabel(status), exportPreviewStatusTone(status));
-  return {
-    id: entry.id,
-    entry,
-    workDate: entry.work_date,
-    personName: entry.person_name,
-    siteNumber: timeEntrySiteNumber(entry),
-    siteName: timeEntrySiteName(entry),
-    reportedMinutes,
-    gpsMinutes: entry.gps_work_minutes,
-    correctedMinutes,
-    validMinutes,
-    status,
-    statusLabel: exportPreviewStatusLabel(status),
-    statusTone: exportPreviewStatusTone(status),
-    isExportable: status !== "not_exportable",
-    instruction: buildTimeReviewInstruction(tableRow),
-  };
-}
-
-function exportPreviewStatus(entry: TimeEntry): ExportPreviewStatus {
-  if (entry.is_gps_suggestion) {
-    return "not_exportable";
-  }
-  if (isAutoPlausibleEntry(entry)) {
-    return "auto_checked";
-  }
-  if (
-    entry.time_review_status === "corrected"
-    || hasPayrollTimeCorrection(entry)
-    || entry.corrected_work_minutes !== null
-    || entry.time_review_method === "accept_gps"
-    || entry.time_review_method === "manual_correction"
-    || entry.time_review_method === "assign_site"
-  ) {
-    return "corrected";
-  }
-  if (
-    entry.time_review_status === "manually_approved"
-    || entry.time_review_status === "not_verifiable"
-    || entry.time_review_status === "auto_closed_by_deadline"
-  ) {
-    return "manually_checked";
-  }
-  return "not_exportable";
-}
-
-function exportPreviewStatusLabel(status: ExportPreviewStatus): string {
-  if (status === "auto_checked") {
-    return "automatisch geprüft";
-  }
-  if (status === "manually_checked") {
-    return "manuell geprüft";
-  }
-  if (status === "corrected") {
-    return "korrigiert";
-  }
-  return "offen / nicht exportierbar";
-}
-
-function exportPreviewStatusTone(status: ExportPreviewStatus): StatusBadgeTone {
-  if (status === "not_exportable") {
-    return "warning";
-  }
-  if (status === "corrected") {
-    return "planned";
-  }
-  return "active";
-}
-
-function calculateExportPreviewSummary(rows: ExportPreviewRow[]): ExportPreviewSummary {
-  return rows.reduce<ExportPreviewSummary>((summary, row) => {
-    if (row.status === "auto_checked") {
-      summary.autoChecked += 1;
-    } else if (row.status === "manually_checked") {
-      summary.manuallyChecked += 1;
-    } else if (row.status === "corrected") {
-      summary.corrected += 1;
-    } else {
-      summary.open += 1;
-    }
-    if (row.isExportable) {
-      summary.exportable += 1;
-    } else {
-      summary.notExportable += 1;
-    }
-    return summary;
-  }, {
-    autoChecked: 0,
-    manuallyChecked: 0,
-    corrected: 0,
-    open: 0,
-    exportable: 0,
-    notExportable: 0,
-  });
 }
 
 function sanitizeFilenamePart(value: string): string {
