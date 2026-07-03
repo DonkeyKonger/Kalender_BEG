@@ -14953,7 +14953,7 @@ button.person-chip:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.58rem;
-  font-weight: 900;
+  font-weight: 500;
   line-height: 1.15;
   cursor: pointer;
 }
