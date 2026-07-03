@@ -14550,6 +14550,26 @@ button.person-chip:focus-visible {
   outline-width: 2px;
 }
 
+.absences-page .icon-button,
+.absences-page .icon-only-button,
+.absences-page .segmented-control,
+.absences-page .segmented-control button,
+.absences-page .status-badge,
+.absences-page .empty-panel,
+.absences-page .matrix-state,
+.absences-page .entity-drawer-close,
+.absences-page .entity-drawer-footer .icon-button,
+.absences-page .drawer-field,
+.absences-page .drawer-field input,
+.absences-page .drawer-field select,
+.absences-page .drawer-field textarea {
+  border-radius: 2px;
+}
+
+.absences-page .entity-drawer-panel {
+  border-radius: 0;
+}
+
 .absence-matrix-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -14637,7 +14657,7 @@ button.person-chip:focus-visible {
   max-height: calc(100vh - 272px);
   overflow: auto;
   border: 1px solid #cbd8e8;
-  border-radius: 8px;
+  border-radius: 0;
   background: #ffffff;
   box-shadow: 0 8px 22px rgb(18 29 52 / 6%);
 }
@@ -14887,7 +14907,7 @@ button.person-chip:focus-visible {
   min-height: 18px;
   overflow: hidden;
   border: 0;
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 2px 3px;
   color: #ffffff;
   text-overflow: ellipsis;
@@ -14900,7 +14920,7 @@ button.person-chip:focus-visible {
 
 .absence-matrix-scroll.is-year .absence-block {
   min-height: 18px;
-  border-radius: 3px;
+  border-radius: 2px;
   padding: 1px;
   font-size: 0.56rem;
 }
@@ -14940,7 +14960,7 @@ button.person-chip:focus-visible {
   z-index: 6000;
   width: 240px;
   border: 1px solid #cbd8e8;
-  border-radius: 8px;
+  border-radius: 2px;
   background: rgb(255 255 255 / 96%);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
@@ -14976,7 +14996,7 @@ button.person-chip:focus-visible {
 .absence-selection-type {
   min-height: 30px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 2px;
   padding: 6px 8px;
   color: #ffffff;
   font-size: 0.75rem;
@@ -15000,7 +15020,7 @@ button.person-chip:focus-visible {
   min-height: 30px;
   margin-top: 8px;
   border: 1px solid #cbd5e1;
-  border-radius: 5px;
+  border-radius: 2px;
   background: #ffffff;
   color: #334155;
   font-size: 0.75rem;
