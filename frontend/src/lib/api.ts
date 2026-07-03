@@ -874,6 +874,17 @@ export const api = {
     return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`);
   },
 
+  async createSiteMeasurementFreeItem(
+    siteId: number,
+    batchId: number,
+    payload: MobileMeasurementFreeItemPayload,
+  ): Promise<MobileMeasurementItem> {
+    return request<MobileMeasurementItem>(`/sites/${siteId}/measurement-batches/${batchId}/items`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async markSiteMeasurementBatchBilled(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-billed`, {
       method: "POST",

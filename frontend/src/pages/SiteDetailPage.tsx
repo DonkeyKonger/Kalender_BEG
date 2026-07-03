@@ -16,7 +16,7 @@ import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFil
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteAddressSearch, SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -662,6 +662,25 @@ export function SiteDetailPage() {
     }
   }
 
+  async function createMeasurementFreeItem(
+    batch: MobileMeasurementBatch,
+    payload: MobileMeasurementFreeItemPayload,
+  ): Promise<MobileMeasurementItem> {
+    if (!site) {
+      throw new Error("Baustelle ist nicht geladen.");
+    }
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const createdItem = await api.createSiteMeasurementFreeItem(site.id, batch.id, payload);
+      setMeasurementBatchItems((current) => [...current, createdItem]);
+      return createdItem;
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Büro-Zusatzposition konnte nicht angelegt werden."));
+      throw requestError;
+    }
+  }
+
   async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -1206,6 +1225,7 @@ export function SiteDetailPage() {
           onDeleteBatch={deleteMeasurementBatch}
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
+          onCreateFreeItem={createMeasurementFreeItem}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
           onExportPdf={downloadMeasurementBatchPdf}
         />
@@ -2090,6 +2110,7 @@ function MeasurementTab({
   onDeleteBatch,
   onUpdateEntry,
   onCreateEntry,
+  onCreateFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -2135,6 +2156,7 @@ function MeasurementTab({
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -2316,6 +2338,7 @@ function MeasurementTab({
           onDeleteBatch={onDeleteBatch}
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
+          onCreateFreeItem={onCreateFreeItem}
           onResetToSubmitted={onResetToSubmitted}
           onExportPdf={onExportPdf}
         />
@@ -3069,6 +3092,8 @@ type MeasurementManualColumnDraft = {
   linkedItemId?: number | null;
 };
 
+const MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY = "office-extra-column";
+
 type MeasurementSuggestionState = {
   columnKey: string;
   query: string;
@@ -3241,6 +3266,7 @@ function MeasurementReviewPanel({
   onDeleteBatch,
   onUpdateEntry,
   onCreateEntry,
+  onCreateFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -3263,6 +3289,7 @@ function MeasurementReviewPanel({
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
+  onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -3535,7 +3562,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
         ) : null}
-        {!batchItemsLoading && itemsWithEntries.length > 0 ? (
+        {!batchItemsLoading ? (
           <MeasurementReviewTable
             items={itemsWithEntries}
             positionSuggestions={batchItems}
@@ -3545,6 +3572,7 @@ function MeasurementReviewPanel({
             onDraftSave={(entry, draft) => void saveEntryDraft(selectedBatch, entry, draft)}
             onDraftReset={resetEntryDraft}
             onCellCreate={(item, areaLabel, quantity) => onCreateEntry(selectedBatch, item.id, { area_or_comment: areaLabel, quantity })}
+            onFreeItemCreate={(payload) => onCreateFreeItem(selectedBatch, payload)}
           />
         ) : null}
       </div>
@@ -3663,6 +3691,7 @@ function MeasurementReviewTable({
   onDraftSave,
   onDraftReset,
   onCellCreate,
+  onFreeItemCreate,
 }: {
   items: MobileMeasurementItem[];
   positionSuggestions: MobileMeasurementItem[];
@@ -3672,6 +3701,7 @@ function MeasurementReviewTable({
   onDraftSave: (entry: MobileMeasurementItem["entries"][number], draft: MeasurementEntryDraft | undefined) => void;
   onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
+  onFreeItemCreate: (payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
 }) {
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
@@ -3683,19 +3713,25 @@ function MeasurementReviewTable({
   const [areaDraftVersion, setAreaDraftVersion] = useState(0);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
-  const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length, viewportColumnCount);
-  const placeholderColumnCount = Math.max(0, displayColumnCount - items.length);
+  const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
+  const fillerColumnCount = Math.max(0, displayColumnCount - items.length - 1);
   const displayColumns: Array<
     | { key: string; kind: "item"; item: MobileMeasurementItem }
     | { key: string; kind: "placeholder"; index: number }
+    | { key: string; kind: "office-extra"; index: number }
   > = useMemo(() => ([
     ...items.map((item) => ({ key: `item-${item.id}`, kind: "item" as const, item })),
-    ...Array.from({ length: placeholderColumnCount }, (_, index) => ({
+    ...Array.from({ length: fillerColumnCount }, (_, index) => ({
       key: `placeholder-column-${index + 1}`,
       kind: "placeholder" as const,
       index: index + 1,
     })),
-  ]), [items, placeholderColumnCount]);
+    {
+      key: MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY,
+      kind: "office-extra" as const,
+      index: fillerColumnCount + 1,
+    },
+  ]), [items, fillerColumnCount]);
   const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = useMemo(() => {
     const placeholderAreaRows = Array.from({ length: Math.max(0, MEASUREMENT_TABLE_MIN_AREA_ROWS - areaRows.length) }, (_, index) => ({
       key: `placeholder-area-${index + 1}`,
@@ -3874,6 +3910,64 @@ function MeasurementReviewTable({
     }
   }
 
+  async function saveOfficeExtraCellDraft(
+    columnKey: string,
+    area: MeasurementMatrixAreaRow,
+    input: HTMLInputElement,
+  ): Promise<void> {
+    const value = input.value;
+    const quantity = parseMeasurementQuantityInput(value);
+    const areaLabel = getAreaLabel(area).trim();
+    if (value.trim() === "") {
+      return;
+    }
+    if (!areaLabel || quantity === null || quantity <= 0) {
+      input.value = "";
+      updateManualColumnTotal(columnKey);
+      return;
+    }
+
+    const draft = getManualColumnDraft(columnKey);
+    const position = draft.position.trim();
+    const description = draft.description.trim();
+    const unit = normalizeMeasurementUnitDisplay(draft.unit);
+    if (!description || !unit) {
+      return;
+    }
+
+    const cellKey = `${area.key}-${columnKey}`;
+    if (savingCellKeysRef.current.has(cellKey)) {
+      return;
+    }
+    savingCellKeysRef.current.add(cellKey);
+    try {
+      await onFreeItemCreate({
+        position: position || null,
+        description,
+        unit,
+        quantity,
+        area_or_comment: areaLabel,
+      });
+      input.value = "";
+      if (area.key.startsWith("placeholder-area-")) {
+        clearAreaLabelDraft(area.key);
+      }
+      setManualColumnDrafts((current) => {
+        const next = { ...current };
+        delete next[columnKey];
+        return next;
+      });
+      setManualColumnTotals((current) => {
+        const next = { ...current };
+        delete next[columnKey];
+        return next;
+      });
+      setSuggestionState(null);
+    } finally {
+      savingCellKeysRef.current.delete(cellKey);
+    }
+  }
+
   function saveExistingQuantityDraft(entry: MobileMeasurementItem["entries"][number], input: HTMLInputElement): void {
     onDraftSave(entry, {
       area_or_comment: entry.area_or_comment,
@@ -3901,14 +3995,20 @@ function MeasurementReviewTable({
               </th>
                 );
               }
+              if (column.kind === "placeholder") {
+                return (
+                  <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" />
+                );
+              }
               const draft = getManualColumnDraft(column.key);
               const isSuggestionOpen = suggestionState?.columnKey === column.key && suggestionMatches.length > 0;
               return (
-              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading measurement-matrix-office-extra-heading" key={column.key} scope="col">
                 <input
                   className="measurement-placeholder-header-input"
                   value={draft.position}
-                  aria-label={`Manuelle Pos.-Nr. Spalte ${column.index}`}
+                  disabled={!canEditRows || reviewActionLoading}
+                  aria-label="Büro-Zusatzposition Pos.-Nr."
                   placeholder="Pos."
                   autoComplete="off"
                   onChange={(event) => {
@@ -3970,43 +4070,70 @@ function MeasurementReviewTable({
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
             <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
-            {displayColumns.map((column) => column.kind === "item" ? (
+            {displayColumns.map((column) => {
+              if (column.kind === "item") {
+                return (
               <th className="measurement-matrix-description-heading" key={column.key} scope="col" title={column.item.description}><span>{column.item.description}</span></th>
-            ) : (
-              <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+                );
+              }
+              if (column.kind === "placeholder") {
+                return (
+                  <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" />
+                );
+              }
+              return (
+              <th className="measurement-matrix-description-heading measurement-matrix-placeholder-heading measurement-matrix-office-extra-heading" key={column.key} scope="col">
                 <textarea
                   className="measurement-placeholder-header-input is-description"
                   value={getManualColumnDraft(column.key).description}
-                  aria-label={`Manuelle Beschreibung Spalte ${column.index}`}
+                  disabled={!canEditRows || reviewActionLoading}
+                  aria-label="Büro-Zusatzposition Beschreibung"
                   placeholder="Beschreibung"
                   rows={2}
                   onChange={(event) => updateManualColumnDraft(column.key, { description: event.currentTarget.value })}
                 />
               </th>
-            ))}
+              );
+            })}
           </tr>
           <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
             <th className="measurement-matrix-axis" scope="row">Einheit</th>
-            {displayColumns.map((column) => column.kind === "item" ? (
+            {displayColumns.map((column) => {
+              if (column.kind === "item") {
+                return (
               <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{normalizeMeasurementUnitDisplay(column.item.unit) || "-"}</th>
-            ) : (
-              <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col">
+                );
+              }
+              if (column.kind === "placeholder") {
+                return (
+                  <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading" key={column.key} scope="col" />
+                );
+              }
+              return (
+              <th className="measurement-matrix-unit-heading measurement-matrix-placeholder-heading measurement-matrix-office-extra-heading" key={column.key} scope="col">
                 <input
                   className="measurement-placeholder-header-input"
                   value={getManualColumnDraft(column.key).unit}
-                  aria-label={`Manuelle Einheit Spalte ${column.index}`}
+                  disabled={!canEditRows || reviewActionLoading}
+                  aria-label="Büro-Zusatzposition Einheit"
                   placeholder="Einheit"
                   onChange={(event) => updateManualColumnDraft(column.key, { unit: event.currentTarget.value })}
                   onBlur={(event) => updateManualColumnDraft(column.key, { unit: normalizeMeasurementUnitDisplay(event.currentTarget.value) })}
                 />
               </th>
-            ))}
+              );
+            })}
           </tr>
         </thead>
         <tbody>
           <tr className="measurement-matrix-section-row">
             <th className="measurement-matrix-axis" scope="row">Bauteil / Ort</th>
-            {displayColumns.map((column) => <td className={column.kind === "placeholder" ? "measurement-matrix-placeholder-cell" : undefined} key={column.key} />)}
+            {displayColumns.map((column) => (
+              <td
+                className={column.kind === "item" ? undefined : `measurement-matrix-placeholder-cell${column.kind === "office-extra" ? " is-office-extra-column" : ""}`}
+                key={column.key}
+              />
+            ))}
           </tr>
           {displayAreaRows.map((area) => {
             const areaLabel = getAreaLabel(area);
@@ -4025,6 +4152,11 @@ function MeasurementReviewTable({
               </th>
               {displayColumns.map((column) => {
                 if (column.kind === "placeholder") {
+                  return (
+                    <td className="measurement-matrix-empty-cell measurement-matrix-placeholder-cell" key={column.key} />
+                  );
+                }
+                if (column.kind === "office-extra") {
                   const manualItem = getManualColumnItem(column.key);
                   const manualDraft = getManualColumnDraft(column.key);
                   const isManualColumnActive = Boolean(
@@ -4035,7 +4167,7 @@ function MeasurementReviewTable({
                   );
                   if (manualItem) {
                     return (
-                      <td className="measurement-matrix-empty-cell is-manual-column" key={column.key}>
+                      <td className="measurement-matrix-empty-cell is-manual-column is-office-extra-column" key={column.key}>
                         <input
                           className="measurement-table-input is-quantity"
                           data-manual-column={column.key}
@@ -4063,16 +4195,25 @@ function MeasurementReviewTable({
                     );
                   }
                   return (
-                    <td className={`measurement-matrix-empty-cell${isManualColumnActive ? " is-manual-column" : " measurement-matrix-placeholder-cell"}`} key={column.key}>
+                    <td className={`measurement-matrix-empty-cell is-office-extra-column${isManualColumnActive ? " is-manual-column" : " measurement-matrix-placeholder-cell"}`} key={column.key}>
                       <input
                         className="measurement-table-input is-quantity"
                         data-manual-column={column.key}
                         disabled={!canEditRows || reviewActionLoading}
                         inputMode="decimal"
-                        aria-label={`Vorbereitete Menge ${areaLabel || "ohne Bereich"} in manueller Positionsspalte`}
-                        title="Diese manuelle Spalte ist lokal vorbereitet. Dauerhaft gespeichert wird sie erst nach Auswahl einer vorhandenen Position."
+                        aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} in Büro-Zusatzspalte`}
+                        title="Büro-Zusatzposition: Pos.-Nr., Beschreibung und Einheit oben eintragen, danach Menge speichern."
                         onInput={() => updateManualColumnTotal(column.key)}
+                        onBlur={(event) => {
+                          updateManualColumnTotal(column.key);
+                          void saveOfficeExtraCellDraft(column.key, area, event.currentTarget);
+                        }}
                         onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            updateManualColumnTotal(column.key);
+                            void saveOfficeExtraCellDraft(column.key, area, event.currentTarget);
+                          }
                           if (event.key === "Escape") {
                             event.currentTarget.value = "";
                             updateManualColumnTotal(column.key);
@@ -4151,8 +4292,10 @@ function MeasurementReviewTable({
               <td className="measurement-matrix-quantity-cell" key={column.key}>
                 <strong>{formatMeasurementNumber(totalsByItemId.get(column.item.id) ?? 0)}</strong>
               </td>
+            ) : column.kind === "placeholder" ? (
+              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key} />
             ) : (
-              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key}>
+              <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell is-office-extra-column" key={column.key}>
                 <strong>{(manualColumnTotals[column.key] ?? 0) > 0 ? formatMeasurementNumber(manualColumnTotals[column.key] ?? 0) : ""}</strong>
               </td>
             ))}

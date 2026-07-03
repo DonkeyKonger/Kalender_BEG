@@ -1094,6 +1094,65 @@ def test_site_measurement_billing_status_and_entry_update():
     assert stored_entry.submitted_quantity == Decimal("10.00")
 
 
+def test_site_free_item_creates_office_extra_position_with_entry():
+    from app.models.enums import UserRole
+    from app.models.user import User
+    from app.schemas.measurement import MobileMeasurementFreeItemCreate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    imported_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=10,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="submitted",
+    )
+    db.add_all([user, imported_item, batch])
+    db.commit()
+
+    created = MeasurementService(db).create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=user,
+        payload=MobileMeasurementFreeItemCreate(
+            position=None,
+            description="Zusätzliche Trennstege 60 mm",
+            unit="m",
+            quantity=Decimal("2.00"),
+            area_or_comment="EG Technikraum",
+        ),
+    )
+
+    stored_item = db.get(SiteMeasurementItem, created.id)
+    listed_items = MeasurementService(db).list_site_batch_items(site_id=site.id, batch_id=batch.id)
+
+    assert stored_item is not None
+    assert stored_item.position == "FREI-1"
+    assert stored_item.is_free_position is True
+    assert stored_item.measurement_batch_id == batch.id
+    assert stored_item.source_section_key == "office_extra"
+    assert stored_item.source_section_title == "Büro-Zusatzposition"
+    assert created.entries[0].area_or_comment == "EG Technikraum"
+    assert created.entries[0].quantity == Decimal("2.00")
+    assert created.entries[0].created_by_user_id == user.id
+    assert any(item.id == created.id and item.entries for item in listed_items)
+
+
 def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():
     from app.models.enums import PersonType
     from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry

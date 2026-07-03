@@ -20152,6 +20152,16 @@ button.person-chip:focus-visible {
   vertical-align: top !important;
 }
 
+.measurement-review-detail.is-table-view .measurement-matrix-office-extra-heading,
+.measurement-review-detail.is-table-view .measurement-matrix-empty-cell.is-office-extra-column,
+.measurement-review-detail.is-table-view .measurement-matrix-placeholder-cell.is-office-extra-column {
+  background: #f8fbff !important;
+}
+
+.measurement-review-detail.is-table-view .measurement-matrix-office-extra-heading {
+  box-shadow: inset 2px 0 0 #c7d6ea;
+}
+
 .measurement-review-detail.is-table-view .measurement-position-suggestions {
   position: absolute;
   top: calc(100% + 2px);

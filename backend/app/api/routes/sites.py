@@ -23,6 +23,7 @@ from app.schemas.measurement import (
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
+    MobileMeasurementFreeItemCreate,
     MobileMeasurementItemRead,
 )
 from app.schemas.person import PersonRead
@@ -572,6 +573,25 @@ def list_measurement_batch_items(
     db: Session = Depends(get_db),
 ) -> list[MobileMeasurementItemRead]:
     return MeasurementService(db).list_site_batch_items(site_id=site_id, batch_id=batch_id)
+
+
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/items",
+    response_model=MobileMeasurementItemRead,
+)
+def create_measurement_batch_free_item(
+    site_id: int,
+    batch_id: int,
+    payload: MobileMeasurementFreeItemCreate,
+    user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementItemRead:
+    return MeasurementService(db).create_site_free_item(
+        site_id=site_id,
+        batch_id=batch_id,
+        current_user=user,
+        payload=payload,
+    )
 
 
 @router.post(
