@@ -1555,6 +1555,47 @@ button.entity-card:focus-visible,
   gap: 10px;
 }
 
+.person-detail-footer-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.person-detail-action-buttons {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.person-detail-action-button {
+  min-height: 30px;
+  border: 1px solid #cbd7e6;
+  border-radius: 1px;
+  background: #ffffff;
+  color: #243348;
+  padding: 5px 8px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.15;
+  cursor: pointer;
+}
+
+.person-detail-action-button:hover,
+.person-detail-action-button:focus-visible,
+.person-detail-action-button.is-active {
+  border-color: #9db7d4;
+  background: #eef5fc;
+  color: #143c6d;
+  outline: none;
+}
+
+.person-detail-action-button:focus-visible {
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 14%);
+}
+
 .persons-page .detail-read-view {
   gap: 12px;
 }
@@ -1570,6 +1611,38 @@ button.entity-card:focus-visible,
 
 .persons-page .detail-read-item .status-badge {
   border-radius: 0;
+}
+
+.person-detail-placeholder-panel {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.person-detail-placeholder-panel span,
+.person-detail-placeholder-panel small {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.person-detail-placeholder-panel h3,
+.person-detail-placeholder-panel p {
+  margin: 0;
+}
+
+.person-detail-placeholder-panel h3 {
+  color: #111827;
+  font-size: 0.94rem;
+}
+
+.person-detail-placeholder-panel p {
+  color: #42526a;
+  font-size: 0.82rem;
+  line-height: 1.42;
 }
 
 .drawer-field {

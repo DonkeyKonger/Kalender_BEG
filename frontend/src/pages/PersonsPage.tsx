@@ -19,6 +19,39 @@ type EditablePerson = PersonCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
 type PersonScope = "internal" | "external";
 type PeopleOverviewGroup = { key: string; label: string; people: Person[]; collapsible?: boolean };
+type PersonDetailActionKey = "absence" | "equipment" | "vehicle" | "performance";
+
+const personDetailActions: Array<{
+  key: PersonDetailActionKey;
+  label: string;
+  title: string;
+  description: string;
+}> = [
+  {
+    key: "absence",
+    label: "Urlaub / Krankheit",
+    title: "Urlaub / Krankheit",
+    description: "Gesamturlaubstage und Krankheitstage pro Person werden hier vorbereitet.",
+  },
+  {
+    key: "equipment",
+    label: "Werkzeug / Material",
+    title: "Werkzeug / Material",
+    description: "Ausgegebenes Werkzeug und Material je Person werden hier vorbereitet.",
+  },
+  {
+    key: "vehicle",
+    label: "Fahrzeug",
+    title: "Fahrzeug",
+    description: "Zugewiesene Fahrzeuge je Person werden hier vorbereitet.",
+  },
+  {
+    key: "performance",
+    label: "Performance",
+    title: "Monteurperformance",
+    description: "Leistungs- und Auswertungsdaten je Monteur werden hier vorbereitet.",
+  },
+];
 
 const emptyPerson: PersonCreate = {
   first_name: "",
@@ -51,6 +84,7 @@ export function PersonsPage() {
   const [createForm, setCreateForm] = useState<PersonCreate>(emptyPerson);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingPerson, setIsEditingPerson] = useState(false);
+  const [activePersonAction, setActivePersonAction] = useState<PersonDetailActionKey | null>(null);
   const [personScope, setPersonScope] = useState<PersonScope>("internal");
   const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set());
   const [searchTerm, setSearchTerm] = useState("");
@@ -226,11 +260,13 @@ export function PersonsPage() {
       person_type: personScopeToCreateType(personScope),
     });
     setIsEditingPerson(false);
+    setActivePersonAction(null);
     setDrawer({ mode: "new" });
   }
 
   function openPersonDrawer(personId: number) {
     setIsEditingPerson(false);
+    setActivePersonAction(null);
     setDrawer({ mode: "edit", personId });
   }
 
@@ -250,6 +286,7 @@ export function PersonsPage() {
       setCreateForm(emptyPerson);
     }
     setIsEditingPerson(false);
+    setActivePersonAction(null);
     setDrawer(null);
   }
 
@@ -418,7 +455,14 @@ export function PersonsPage() {
         subtitle={selectedPerson ? `${personTypeLabels[selectedPerson.person_type]} · ${calendarPersonCode(selectedPerson)}` : undefined}
         onClose={closeDrawer}
         actions={selectedPerson && canEdit && !isEditingPerson ? (
-          <button className="icon-button secondary" type="button" onClick={() => setIsEditingPerson(true)}>
+          <button
+            className="icon-button secondary"
+            type="button"
+            onClick={() => {
+              setActivePersonAction(null);
+              setIsEditingPerson(true);
+            }}
+          >
             <span>Bearbeiten</span>
           </button>
         ) : undefined}
@@ -460,11 +504,23 @@ export function PersonsPage() {
               </div>
             </div>
           ) : (
-            <>
+            <div className="person-detail-footer-actions">
+              <div className="person-detail-action-buttons" aria-label="Personenbezogene Zusatzfunktionen">
+                {personDetailActions.map((action) => (
+                  <button
+                    className={`person-detail-action-button${activePersonAction === action.key ? " is-active" : ""}`}
+                    type="button"
+                    key={action.key}
+                    onClick={() => setActivePersonAction((current) => current === action.key ? null : action.key)}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
               <button className="icon-button secondary" type="button" onClick={closeDrawer}>
                 <span>Schliessen</span>
               </button>
-            </>
+            </div>
           )
         ) : undefined}
       >
@@ -476,7 +532,7 @@ export function PersonsPage() {
               onGeocodeSelected={(values) => void applyGeocodedPerson(selectedPerson.id, values)}
             />
           ) : (
-            <PersonReadView person={selectedPerson} />
+            <PersonReadView person={selectedPerson} activeAction={activePersonAction} />
           )
         )}
       </EntityDetailDrawer>
@@ -484,8 +540,9 @@ export function PersonsPage() {
   );
 }
 
-function PersonReadView({ person }: { person: Person }) {
+function PersonReadView({ person, activeAction }: { person: Person; activeAction: PersonDetailActionKey | null }) {
   const addressText = formatPersonAddress(person);
+  const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
   return (
     <div className="detail-read-view">
       <section className="detail-read-section">
@@ -519,7 +576,28 @@ function PersonReadView({ person }: { person: Person }) {
         <h3>Info / Notizen</h3>
         <p className={person.notes ? "detail-note" : "detail-empty"}>{person.notes || "Keine Notizen hinterlegt."}</p>
       </section>
+
+      {action ? <PersonDetailPlaceholderPanel action={action} person={person} /> : null}
     </div>
+  );
+}
+
+function PersonDetailPlaceholderPanel({
+  action,
+  person,
+}: {
+  action: (typeof personDetailActions)[number];
+  person: Person;
+}) {
+  return (
+    <section className="person-detail-placeholder-panel" aria-live="polite">
+      <div>
+        <span>Funktion wird vorbereitet</span>
+        <h3>{action.title}</h3>
+      </div>
+      <p>{action.description}</p>
+      <small>{person.display_name}</small>
+    </section>
   );
 }
 
