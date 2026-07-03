@@ -1,4 +1,4 @@
-import { AlertTriangle, BriefcaseBusiness, CalendarClock, CloudSun, Inbox } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, CalendarClock, Clock, CloudSun, Inbox } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -62,6 +62,11 @@ type DashboardConflict = {
   detail: string;
   severity: "hard" | "warning";
   date: string;
+};
+
+type DashboardMessageMetaItem = {
+  key: string;
+  label: string;
 };
 
 type DashboardData = {
@@ -383,29 +388,42 @@ export function DashboardPage() {
             >
               {measurementMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
-                  {measurementMessages.map((message) => (
-                    <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
-                      <Link
-                        className="dashboard-message-link"
-                        to={getDashboardMessageLink(message)}
-                      >
-                        <span className="dashboard-alert-dot signal-blue" aria-hidden="true" />
-                        <div>
-                          <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
-                          <span>{formatMeasurementDashboardMessageMeta(message)}</span>
+                  {measurementMessages.map((message) => {
+                    const metaItems = getMeasurementDashboardMessageMetaItems(message);
+                    return (
+                      <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
+                        <span className="dashboard-message-accent" aria-hidden="true" />
+                        <div className="dashboard-message-stack">
+                          <Link
+                            className="dashboard-message-link"
+                            to={getDashboardMessageLink(message)}
+                          >
+                            <div className="dashboard-message-content">
+                              <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
+                              <span className="dashboard-message-meta">
+                                <Clock aria-hidden="true" size={13} />
+                                {metaItems.map((item, index) => (
+                                  <span className="dashboard-message-meta-part" key={item.key}>
+                                    {index > 0 ? <span className="dashboard-message-meta-separator" aria-hidden="true">·</span> : null}
+                                    {item.label}
+                                  </span>
+                                ))}
+                              </span>
+                            </div>
+                          </Link>
+                          <button
+                            type="button"
+                            className="dashboard-message-read-button"
+                            aria-label="Meldung als gelesen markieren"
+                            disabled={dismissingMessageKey === message.message_key}
+                            onClick={() => void dismissMeasurementMessage(message)}
+                          >
+                            Als gelesen markieren
+                          </button>
                         </div>
-                      </Link>
-                      <button
-                        type="button"
-                        className="dashboard-message-read-button"
-                        aria-label="Meldung als gelesen markieren"
-                        disabled={dismissingMessageKey === message.message_key}
-                        onClick={() => void dismissMeasurementMessage(message)}
-                      >
-                        Als gelesen markieren
-                      </button>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                   <p className="dashboard-message-unread-note">
                     {measurementMessages.length} ungelesene {measurementMessages.length === 1 ? "Meldung" : "Meldungen"} — bitte prüfen.
                   </p>
@@ -645,18 +663,25 @@ function getDashboardMessageLink(message: MeasurementDashboardSubmission): strin
   return `/sites/${message.site_id}?tab=measurement&measurementSubtab=review`;
 }
 
-function formatMeasurementDashboardMessageMeta(message: MeasurementDashboardSubmission): string {
+function getMeasurementDashboardMessageMetaItems(message: MeasurementDashboardSubmission): DashboardMessageMetaItem[] {
   const eventAt = message.event_at ?? message.customer_signed_at ?? message.submitted_at;
   const timeLabel = eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt";
-  const siteLabel = message.site_number ? ` · ${message.site_number}` : "";
+  const items: DashboardMessageMetaItem[] = [{ key: "time", label: timeLabel }];
+
   if (message.message_type === "measurement_customer_signed") {
     const signerLabel = message.customer_signature_name
       ? `Unterschrieben von ${message.customer_signature_name}`
       : "Kundenunterschrift";
-    return `${signerLabel} · ${timeLabel}${siteLabel}`;
+    items.push({ key: "context", label: signerLabel });
+  } else if (message.submitted_by_name) {
+    items.push({ key: "context", label: message.submitted_by_name });
   }
-  const submitterLabel = message.submitted_by_name ? `Von ${message.submitted_by_name} · ` : "";
-  return `${submitterLabel}${timeLabel}${siteLabel}`;
+
+  if (message.site_number) {
+    items.push({ key: "site", label: message.site_number });
+  }
+
+  return items;
 }
 
 function formatDashboardDateTime(value: string): string {

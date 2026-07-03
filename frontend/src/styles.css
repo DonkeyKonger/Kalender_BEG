@@ -15804,21 +15804,20 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-message-link {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
+  display: block;
+  min-width: 0;
   color: inherit;
   text-decoration: none;
 }
 
 .dashboard-message-row {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
   border: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 12px;
+  padding: 12px 14px 12px 12px;
 }
 
 .dashboard-message-link:hover strong,
@@ -15826,13 +15825,67 @@ button.person-chip:focus-visible {
   color: #1f3657;
 }
 
-.dashboard-message-link .dashboard-alert-dot {
+.dashboard-message-accent {
+  display: block;
   width: 4px;
-  min-height: 64px;
   align-self: stretch;
   border-radius: 0;
   margin: 0;
   background: #2563eb;
+}
+
+.dashboard-message-stack,
+.dashboard-message-content {
+  display: grid;
+  min-width: 0;
+}
+
+.dashboard-message-stack {
+  gap: 9px;
+  align-content: start;
+}
+
+.dashboard-message-content {
+  gap: 8px;
+}
+
+.dashboard-message-content strong {
+  color: #172033;
+  font-size: 0.9rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.dashboard-message-row .dashboard-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 7px;
+  min-width: 0;
+  margin-top: 0;
+  color: #8b9bb2;
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.dashboard-message-meta svg {
+  flex: 0 0 auto;
+  color: #8aa0bd;
+}
+
+.dashboard-message-meta .dashboard-message-meta-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.dashboard-message-meta .dashboard-message-meta-separator {
+  display: inline;
+  margin-top: 0;
+  color: #bcc7d7;
 }
 
 .dashboard-message-read-button {
@@ -15844,7 +15897,7 @@ button.person-chip:focus-visible {
   padding: 0;
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 850;
 }
 
