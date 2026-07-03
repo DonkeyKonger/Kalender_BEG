@@ -1,9 +1,9 @@
 import { AlertTriangle, BriefcaseBusiness, CalendarClock, CloudSun, Inbox } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { api, type DashboardOverview } from "../lib/api";
+import { api, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { MeasurementDashboardSubmission } from "../types/site";
@@ -74,6 +74,7 @@ type DashboardData = {
 
 const MAX_PREVIEW_ITEMS = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
+const FREE_WORKER_ALL_KEY = "__all__";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -84,6 +85,8 @@ export function DashboardPage() {
   const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
+  const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
+  const freeSummaryRef = useRef<HTMLDivElement | null>(null);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
 
@@ -162,6 +165,32 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!openFreeWorkerKey) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: PointerEvent): void {
+      if (!freeSummaryRef.current?.contains(event.target as Node)) {
+        setOpenFreeWorkerKey(null);
+      }
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setOpenFreeWorkerKey(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openFreeWorkerKey]);
+
+  useEffect(() => {
     let active = true;
 
     if (user?.role === "monteur") {
@@ -194,6 +223,12 @@ export function DashboardPage() {
   }, [user?.role]);
 
   const dashboard = dashboardOverview;
+  const freeWorkerCount = dashboard?.totalFreeWorkers ?? 0;
+  const allFreeWorkers = dashboard?.freeWorkerGroups.flatMap((group) => group.people) ?? [];
+
+  function toggleFreeWorkerPopover(key: string): void {
+    setOpenFreeWorkerKey((current) => current === key ? null : key);
+  }
 
   async function dismissMeasurementMessage(message: MeasurementDashboardSubmission): Promise<void> {
     if (dismissingMessageKey) {
@@ -242,20 +277,52 @@ export function DashboardPage() {
             <p>{weather?.label ?? "Firmenzentrale"}{weather?.is_cached ? " · aus Cache" : ""}</p>
           </div>
         </div>
-        <div className="dashboard-free-summary">
-          <span>Nicht eingesetzt</span>
+        <div className="dashboard-free-summary" ref={freeSummaryRef}>
+          <div className="dashboard-free-total">
+            <button
+              aria-expanded={openFreeWorkerKey === FREE_WORKER_ALL_KEY}
+              className={`dashboard-free-total-button${openFreeWorkerKey === FREE_WORKER_ALL_KEY ? " is-active" : ""}`}
+              disabled={!dashboard}
+              type="button"
+              onClick={() => toggleFreeWorkerPopover(FREE_WORKER_ALL_KEY)}
+            >
+              <span className="dashboard-free-summary-label">Nicht eingesetzt</span>
+              <strong>{dashboard ? formatCount(freeWorkerCount, "Monteur", "Monteure") : loading ? "Lade..." : "-"}</strong>
+            </button>
+            {dashboard && openFreeWorkerKey === FREE_WORKER_ALL_KEY ? (
+              <FreeWorkerPopover
+                title="Nicht eingesetzt - Alle"
+                people={allFreeWorkers}
+                getMeta={(person) => formatFreeWorkerPersonMeta(person, findFreeWorkerGroupLabel(dashboard.freeWorkerGroups, person.id))}
+              />
+            ) : null}
+          </div>
           {dashboard ? (
             <>
-              <strong>{dashboard.totalFreeWorkers} Monteure</strong>
               <div className="dashboard-pill-row">
                 {dashboard.freeWorkerGroups.length > 0 ? dashboard.freeWorkerGroups.map((group) => (
-                  <span className="dashboard-pill" key={group.manager.key} title={group.people.map((person) => person.display_name).join(", ")}>
-                    {group.manager.label}: {group.people.length}
+                  <span className="dashboard-pill-shell" key={group.manager.key}>
+                    <button
+                      aria-expanded={openFreeWorkerKey === group.manager.key}
+                      className={`dashboard-pill${openFreeWorkerKey === group.manager.key ? " is-active" : ""}`}
+                      title={group.people.map((person) => person.display_name).join(", ")}
+                      type="button"
+                      onClick={() => toggleFreeWorkerPopover(group.manager.key)}
+                    >
+                      {group.manager.label}: {group.people.length}
+                    </button>
+                    {openFreeWorkerKey === group.manager.key ? (
+                      <FreeWorkerPopover
+                        title={`Nicht eingesetzt - ${group.manager.label}`}
+                        people={group.people}
+                        getMeta={(person) => formatFreeWorkerPersonMeta(person)}
+                      />
+                    ) : null}
                   </span>
                 )) : <span className="dashboard-muted">Keine freien Monteure erkannt</span>}
               </div>
             </>
-          ) : <strong>{loading ? "Lade..." : "-"}</strong>}
+          ) : null}
         </div>
       </header>
 
@@ -357,6 +424,37 @@ export function DashboardPage() {
         </>
       )}
     </section>
+  );
+}
+
+function FreeWorkerPopover({
+  title,
+  people,
+  getMeta,
+}: {
+  title: string;
+  people: DashboardOverviewPerson[];
+  getMeta: (person: DashboardOverviewPerson) => string;
+}) {
+  return (
+    <div className="dashboard-free-popover" role="dialog" aria-label={title}>
+      <div className="dashboard-free-popover-header">
+        <strong>{title}</strong>
+        <span>{people.length}</span>
+      </div>
+      {people.length > 0 ? (
+        <div className="dashboard-free-person-list">
+          {people.map((person) => (
+            <div className="dashboard-free-person-row" key={person.id}>
+              <strong>{person.display_name}</strong>
+              <span>{getMeta(person)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="dashboard-free-empty">Keine Personen</p>
+      )}
+    </div>
   );
 }
 
@@ -608,6 +706,14 @@ function formatAssignedSiteGroupMeta(sites: AssignedSiteSummary[]): string {
 
 function formatCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatFreeWorkerPersonMeta(person: DashboardOverviewPerson, managerLabel?: string): string {
+  return [person.short_code, managerLabel].filter(Boolean).join(" · ") || "-";
+}
+
+function findFreeWorkerGroupLabel(groups: DashboardOverview["freeWorkerGroups"], personId: number): string {
+  return groups.find((group) => group.people.some((person) => person.id === personId))?.manager.label ?? "Ohne Zuordnung";
 }
 
 function compareSiteNumbers(left: string | null, right: string | null): number {
