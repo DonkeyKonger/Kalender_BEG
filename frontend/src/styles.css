@@ -15575,6 +15575,34 @@ button.person-chip:focus-visible {
   font-weight: 900;
 }
 
+.dashboard-card-messages .dashboard-card-header {
+  min-height: 36px;
+  gap: 7px;
+  padding: 7px 10px;
+}
+
+.dashboard-card-messages .dashboard-card-header > span:first-child {
+  width: 18px;
+  height: 18px;
+}
+
+.dashboard-card-messages .dashboard-card-header svg {
+  width: 17px;
+  height: 17px;
+}
+
+.dashboard-card-messages h2 {
+  font-size: 0.78rem;
+  letter-spacing: 0.055em;
+}
+
+.dashboard-card-messages .dashboard-card-badge {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 0.78rem;
+}
+
 .dashboard-card > .dashboard-empty-text,
 .dashboard-card > .dashboard-message-box {
   margin: 12px;
@@ -15605,6 +15633,11 @@ button.person-chip:focus-visible {
   display: grid;
   gap: 9px;
   padding: 12px;
+}
+
+.dashboard-card-messages .dashboard-alert-list {
+  gap: 7px;
+  padding: 9px;
 }
 
 .dashboard-site-group-list {
@@ -15829,12 +15862,12 @@ button.person-chip:focus-visible {
 
 .dashboard-message-row {
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 9px;
   align-items: stretch;
   border: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 12px 14px 12px 12px;
+  padding: 9px 11px 9px 9px;
 }
 
 .dashboard-message-link:hover strong,
@@ -15844,7 +15877,7 @@ button.person-chip:focus-visible {
 
 .dashboard-message-accent {
   display: block;
-  width: 4px;
+  width: 3px;
   align-self: stretch;
   border-radius: 0;
   margin: 0;
@@ -15858,43 +15891,45 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-message-stack {
-  gap: 9px;
+  gap: 6px;
   align-content: start;
 }
 
 .dashboard-message-content {
-  gap: 8px;
+  gap: 5px;
 }
 
 .dashboard-message-content strong {
   color: #172033;
-  font-size: 0.9rem;
-  font-weight: 850;
-  line-height: 1.35;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.32;
 }
 
 .dashboard-message-row .dashboard-message-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 7px;
+  gap: 3px 6px;
   min-width: 0;
   margin-top: 0;
   color: #8b9bb2;
-  font-size: 0.78rem;
-  font-weight: 720;
+  font-size: 0.7rem;
+  font-weight: 690;
   line-height: 1.35;
 }
 
 .dashboard-message-meta svg {
   flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
   color: #8aa0bd;
 }
 
 .dashboard-message-meta .dashboard-message-meta-part {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
   margin-top: 0;
 }
@@ -15914,8 +15949,8 @@ button.person-chip:focus-visible {
   padding: 0;
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 850;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .dashboard-message-read-button:hover,
@@ -15933,14 +15968,14 @@ button.person-chip:focus-visible {
 .dashboard-message-unread-note {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 2px 0 0;
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #1d4ed8;
-  padding: 10px 12px;
-  font-size: 0.82rem;
-  font-weight: 850;
+  padding: 7px 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .dashboard-alert-dot {

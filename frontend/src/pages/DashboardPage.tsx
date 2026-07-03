@@ -385,6 +385,7 @@ export function DashboardPage() {
               title="Eingang / Meldungen"
               icon={<Inbox aria-hidden="true" size={20} />}
               badge={measurementMessages.length > 0 ? String(measurementMessages.length) : undefined}
+              className="dashboard-card-messages"
             >
               {measurementMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
