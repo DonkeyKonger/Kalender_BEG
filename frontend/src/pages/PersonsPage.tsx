@@ -451,7 +451,7 @@ export function PersonsPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedPerson && selectedDraft)}
-        title={selectedPerson ? isEditingPerson ? "Person bearbeiten" : "Person" : "Person"}
+        title={selectedPerson ? isEditingPerson ? "Mitarbeiter bearbeiten" : "Mitarbeiter" : "Mitarbeiter"}
         subtitle={selectedPerson ? `${personTypeLabels[selectedPerson.person_type]} · ${calendarPersonCode(selectedPerson)}` : undefined}
         onClose={closeDrawer}
         actions={selectedPerson && canEdit && !isEditingPerson ? (
@@ -505,18 +505,6 @@ export function PersonsPage() {
             </div>
           ) : (
             <div className="person-detail-footer-actions">
-              <div className="person-detail-action-buttons" aria-label="Personenbezogene Zusatzfunktionen">
-                {personDetailActions.map((action) => (
-                  <button
-                    className={`person-detail-action-button${activePersonAction === action.key ? " is-active" : ""}`}
-                    type="button"
-                    key={action.key}
-                    onClick={() => setActivePersonAction((current) => current === action.key ? null : action.key)}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
               <button className="icon-button secondary" type="button" onClick={closeDrawer}>
                 <span>Schliessen</span>
               </button>
@@ -532,7 +520,11 @@ export function PersonsPage() {
               onGeocodeSelected={(values) => void applyGeocodedPerson(selectedPerson.id, values)}
             />
           ) : (
-            <PersonReadView person={selectedPerson} activeAction={activePersonAction} />
+            <PersonReadView
+              person={selectedPerson}
+              activeAction={activePersonAction}
+              onActionChange={setActivePersonAction}
+            />
           )
         )}
       </EntityDetailDrawer>
@@ -540,11 +532,34 @@ export function PersonsPage() {
   );
 }
 
-function PersonReadView({ person, activeAction }: { person: Person; activeAction: PersonDetailActionKey | null }) {
+function PersonReadView({
+  person,
+  activeAction,
+  onActionChange,
+}: {
+  person: Person;
+  activeAction: PersonDetailActionKey | null;
+  onActionChange: (action: PersonDetailActionKey | null) => void;
+}) {
   const addressText = formatPersonAddress(person);
   const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
   return (
     <div className="detail-read-view">
+      <section className="person-detail-action-section" aria-label="Mitarbeiterfunktionen">
+        <div className="person-detail-action-buttons">
+          {personDetailActions.map((detailAction) => (
+            <button
+              className={`person-detail-action-button${activeAction === detailAction.key ? " is-active" : ""}`}
+              type="button"
+              key={detailAction.key}
+              onClick={() => onActionChange(activeAction === detailAction.key ? null : detailAction.key)}
+            >
+              {detailAction.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="detail-read-section">
         <h3>Stammdaten</h3>
         <div className="detail-read-grid">

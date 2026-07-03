@@ -1559,8 +1559,15 @@ button.entity-card:focus-visible,
   display: flex;
   width: 100%;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
+}
+
+.person-detail-action-section {
+  border: 1px solid #dce6f2;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 10px;
 }
 
 .person-detail-action-buttons {
