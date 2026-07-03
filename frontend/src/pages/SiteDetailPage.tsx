@@ -16,7 +16,7 @@ import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFil
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteAddressSearch, SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -681,6 +681,26 @@ export function SiteDetailPage() {
     }
   }
 
+  async function updateMeasurementFreeItem(
+    batch: MobileMeasurementBatch,
+    measurementItemId: number,
+    payload: MeasurementItemUpdatePayload,
+  ): Promise<MobileMeasurementItem> {
+    if (!site) {
+      throw new Error("Baustelle ist nicht geladen.");
+    }
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const updatedItem = await api.updateSiteMeasurementFreeItem(site.id, batch.id, measurementItemId, payload);
+      setMeasurementBatchItems((current) => replaceMeasurementItem(current, updatedItem));
+      return updatedItem;
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Manuelle Positionsnummer konnte nicht gespeichert werden."));
+      throw requestError;
+    }
+  }
+
   async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -1226,6 +1246,7 @@ export function SiteDetailPage() {
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
           onCreateFreeItem={createMeasurementFreeItem}
+          onUpdateFreeItem={updateMeasurementFreeItem}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
           onExportPdf={downloadMeasurementBatchPdf}
         />
@@ -2111,6 +2132,7 @@ function MeasurementTab({
   onUpdateEntry,
   onCreateEntry,
   onCreateFreeItem,
+  onUpdateFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -2157,6 +2179,7 @@ function MeasurementTab({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
+  onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -2339,6 +2362,7 @@ function MeasurementTab({
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
           onCreateFreeItem={onCreateFreeItem}
+          onUpdateFreeItem={onUpdateFreeItem}
           onResetToSubmitted={onResetToSubmitted}
           onExportPdf={onExportPdf}
         />
@@ -3209,6 +3233,15 @@ function getMeasurementCellQuantity(entries: MobileMeasurementItem["entries"]): 
   }, 0);
 }
 
+function isTechnicalFreeMeasurementPosition(value: string | null | undefined): boolean {
+  const normalized = (value ?? "").trim().toUpperCase();
+  return /^FREI-\d+$/.test(normalized);
+}
+
+function getVisibleMeasurementPosition(item: MobileMeasurementItem): string {
+  return item.is_free_position && isTechnicalFreeMeasurementPosition(item.position) ? "" : item.position;
+}
+
 function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: MeasurementEntry[]): MobileMeasurementItem {
   const reportedQuantity = getMeasurementCellQuantity(entries);
   const minutesPerUnit = typeof item.minutes_per_unit === "number" ? item.minutes_per_unit : Number(item.minutes_per_unit);
@@ -3222,6 +3255,10 @@ function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: 
     reported_hours: reportedHours,
     mobile_status: reportedQuantity > 0 ? "edited" : "open",
   };
+}
+
+function replaceMeasurementItem(items: MobileMeasurementItem[], updatedItem: MobileMeasurementItem): MobileMeasurementItem[] {
+  return items.map((item) => (item.id === updatedItem.id ? updatedItem : item));
 }
 
 function replaceMeasurementEntryInItems(items: MobileMeasurementItem[], updatedEntry: MeasurementEntry): MobileMeasurementItem[] {
@@ -3267,6 +3304,7 @@ function MeasurementReviewPanel({
   onUpdateEntry,
   onCreateEntry,
   onCreateFreeItem,
+  onUpdateFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -3290,6 +3328,7 @@ function MeasurementReviewPanel({
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
+  onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -3573,6 +3612,7 @@ function MeasurementReviewPanel({
             onDraftReset={resetEntryDraft}
             onCellCreate={(item, areaLabel, quantity) => onCreateEntry(selectedBatch, item.id, { area_or_comment: areaLabel, quantity })}
             onFreeItemCreate={(payload) => onCreateFreeItem(selectedBatch, payload)}
+            onFreeItemUpdate={(item, payload) => onUpdateFreeItem(selectedBatch, item.id, payload)}
           />
         ) : null}
       </div>
@@ -3692,6 +3732,7 @@ function MeasurementReviewTable({
   onDraftReset,
   onCellCreate,
   onFreeItemCreate,
+  onFreeItemUpdate,
 }: {
   items: MobileMeasurementItem[];
   positionSuggestions: MobileMeasurementItem[];
@@ -3702,6 +3743,7 @@ function MeasurementReviewTable({
   onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
   onFreeItemCreate: (payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
+  onFreeItemUpdate: (item: MobileMeasurementItem, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
 }) {
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
@@ -3711,6 +3753,7 @@ function MeasurementReviewTable({
   const [manualColumnTotals, setManualColumnTotals] = useState<Record<string, number>>({});
   const [suggestionState, setSuggestionState] = useState<MeasurementSuggestionState>(null);
   const [areaDraftVersion, setAreaDraftVersion] = useState(0);
+  const [savingPositionItemId, setSavingPositionItemId] = useState<number | null>(null);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
@@ -3837,7 +3880,7 @@ function MeasurementReviewTable({
 
   function selectPositionSuggestion(columnKey: string, item: MobileMeasurementItem): void {
     updateManualColumnDraft(columnKey, {
-      position: item.position,
+      position: getVisibleMeasurementPosition(item),
       description: item.description,
       unit: normalizeMeasurementUnitDisplay(item.unit),
       linkedItemId: item.id,
@@ -3968,6 +4011,25 @@ function MeasurementReviewTable({
     }
   }
 
+  async function saveFreeItemPositionDraft(item: MobileMeasurementItem, input: HTMLInputElement): Promise<void> {
+    const currentVisiblePosition = getVisibleMeasurementPosition(item);
+    const nextPosition = input.value.trim();
+    if (nextPosition === currentVisiblePosition || savingPositionItemId === item.id) {
+      input.value = currentVisiblePosition;
+      return;
+    }
+
+    setSavingPositionItemId(item.id);
+    try {
+      const updatedItem = await onFreeItemUpdate(item, { position: nextPosition || null });
+      input.value = getVisibleMeasurementPosition(updatedItem);
+    } catch {
+      input.value = currentVisiblePosition;
+    } finally {
+      setSavingPositionItemId(null);
+    }
+  }
+
   function saveExistingQuantityDraft(entry: MobileMeasurementItem["entries"][number], input: HTMLInputElement): void {
     onDraftSave(entry, {
       area_or_comment: entry.area_or_comment,
@@ -3989,9 +4051,35 @@ function MeasurementReviewTable({
             <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
+                const visiblePosition = getVisibleMeasurementPosition(column.item);
+                if (column.item.is_free_position) {
+                  const isSavingPosition = savingPositionItemId === column.item.id;
+                  return (
+              <th className="measurement-matrix-position-heading" key={column.key} scope="col">
+                <input
+                  key={`${column.item.id}-${column.item.updated_at}-${visiblePosition}`}
+                  className="measurement-placeholder-header-input is-free-position"
+                  defaultValue={visiblePosition}
+                  disabled={!canEditRows || reviewActionLoading || isSavingPosition}
+                  aria-label={`Positionsnummer für manuelle Position ${column.item.description}`}
+                  placeholder="Pos."
+                  onBlur={(event) => void saveFreeItemPositionDraft(column.item, event.currentTarget)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void saveFreeItemPositionDraft(column.item, event.currentTarget);
+                    }
+                    if (event.key === "Escape") {
+                      event.currentTarget.value = visiblePosition;
+                    }
+                  }}
+                />
+              </th>
+                  );
+                }
                 return (
               <th className="measurement-matrix-position-heading" key={column.key} scope="col">
-                <strong>{column.item.position}</strong>
+                <strong>{visiblePosition}</strong>
               </th>
                 );
               }
@@ -4057,7 +4145,7 @@ function MeasurementReviewTable({
                           selectPositionSuggestion(column.key, item);
                         }}
                       >
-                        <strong>{item.position}</strong>
+                        <strong>{getVisibleMeasurementPosition(item)}</strong>
                         <span>{item.description}</span>
                         <small>{normalizeMeasurementUnitDisplay(item.unit)}</small>
                       </button>

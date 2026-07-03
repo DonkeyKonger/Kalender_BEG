@@ -34,6 +34,7 @@ from app.schemas.measurement import (
     MeasurementEntryCreate,
     MeasurementDashboardSubmissionRead,
     MeasurementEntryRead,
+    MeasurementItemUpdate,
     MeasurementItemRead,
     MobileMeasurementBatchAvailableActionsRead,
     MobileMeasurementBatchBlockReasonsRead,
@@ -93,6 +94,15 @@ def _measurement_entry_sort_key(entry: SiteMeasurementEntry) -> tuple[str, str, 
         _datetime_as_string(entry.created_at) or "",
         entry.id or 0,
     )
+
+
+def _is_technical_free_measurement_position(value: str | None) -> bool:
+    if value is None:
+        return False
+    normalized = value.strip().upper()
+    if not normalized.startswith("FREI-"):
+        return False
+    return normalized.removeprefix("FREI-").isdigit()
 
 
 def _current_measurement_entries(entries: list[SiteMeasurementEntry]) -> list[SiteMeasurementEntry]:
@@ -487,6 +497,51 @@ class MeasurementService:
                 created_by_user_id=current_user.id,
             )
             self.db.add(entry)
+
+        self.db.commit()
+        self.db.refresh(item)
+        return self._build_mobile_item(item, batch.id)
+
+    def update_site_free_item(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        measurement_item_id: int,
+        payload: MeasurementItemUpdate,
+    ) -> MobileMeasurementItemRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        item = self.db.get(SiteMeasurementItem, measurement_item_id)
+        if (
+            item is None
+            or item.site_id != site_id
+            or item.measurement_base_id != batch.measurement_base_id
+            or item.measurement_batch_id != batch.id
+            or item.is_hidden
+            or not item.is_free_position
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
+
+        if payload.position is not None:
+            position = payload.position.strip()
+            if position:
+                existing_position = self.db.scalar(
+                    select(SiteMeasurementItem.id).where(
+                        SiteMeasurementItem.site_id == batch.site_id,
+                        SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                        SiteMeasurementItem.id != item.id,
+                        func.lower(SiteMeasurementItem.position) == position.lower(),
+                    )
+                )
+                if existing_position is not None:
+                    raise HTTPException(
+                        status.HTTP_409_CONFLICT,
+                        "Diese Positionsnummer existiert in diesem Aufmaß bereits.",
+                    )
+                item.position = position
+            elif not _is_technical_free_measurement_position(item.position):
+                item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
         self.db.commit()
         self.db.refresh(item)
@@ -2269,15 +2324,16 @@ class MeasurementService:
     def _batch_has_measurement_content(batch: SiteMeasurementBatch) -> bool:
         return bool(_current_measurement_entries(list(batch.entries))) or bool(batch.area_rows)
 
-    def _next_free_measurement_position(self, batch: SiteMeasurementBatch) -> str:
-        existing_positions = set(
-            self.db.scalars(
-                select(SiteMeasurementItem.position).where(
-                    SiteMeasurementItem.site_id == batch.site_id,
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                )
-            ).all()
+    def _next_free_measurement_position(
+        self, batch: SiteMeasurementBatch, *, exclude_item_id: int | None = None
+    ) -> str:
+        statement = select(SiteMeasurementItem.position).where(
+            SiteMeasurementItem.site_id == batch.site_id,
+            SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
         )
+        if exclude_item_id is not None:
+            statement = statement.where(SiteMeasurementItem.id != exclude_item_id)
+        existing_positions = set(self.db.scalars(statement).all())
         index = 1
         while True:
             candidate = f"FREI-{index}"
@@ -2302,7 +2358,7 @@ class MeasurementService:
                     "entry_id": entry.id,
                     "measurement_item_id": item.id,
                     "site_id": entry.site_id,
-                    "position": item.position,
+                    "position": "" if item.is_free_position and _is_technical_free_measurement_position(item.position) else item.position,
                     "description": item.description,
                     "unit": item.unit,
                     "sort_order": item.sort_order,

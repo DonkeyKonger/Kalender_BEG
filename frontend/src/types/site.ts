@@ -231,6 +231,10 @@ export type MeasurementItem = {
   updated_at: string;
 };
 
+export type MeasurementItemUpdatePayload = {
+  position?: string | null;
+};
+
 
 
 export type MeasurementEntry = {

@@ -57,6 +57,17 @@ class MeasurementItemRead(BaseModel):
     updated_at: datetime
 
 
+class MeasurementItemUpdate(BaseModel):
+    position: str | None = Field(default=None, max_length=80)
+
+    @field_validator("position", mode="before")
+    @classmethod
+    def strip_position(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class MobileMeasurementFreeItemCreate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
     description: str = Field(..., min_length=1, max_length=2000)

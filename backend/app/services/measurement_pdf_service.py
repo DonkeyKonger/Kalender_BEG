@@ -132,6 +132,14 @@ class SnapshotMatrix:
     quantities: dict[tuple[str, int], Decimal]
 
 
+def _visible_measurement_position(position: str | None) -> str:
+    normalized = (position or "").strip()
+    upper = normalized.upper()
+    if upper.startswith("FREI-") and upper.removeprefix("FREI-").isdigit():
+        return ""
+    return normalized
+
+
 @dataclass(frozen=True)
 class PdfImage:
     width: int
@@ -588,7 +596,7 @@ class MeasurementPdfService:
                 item.id,
                 MatrixPosition(
                     item_id=item.id,
-                    position=item.position,
+                    position=_visible_measurement_position(item.position),
                     description=item.description,
                     unit=item.unit or "",
                     sort_order=item.sort_order,
@@ -601,7 +609,7 @@ class MeasurementPdfService:
             if item.id not in positions_by_id:
                 positions_by_id[item.id] = MatrixPosition(
                     item_id=item.id,
-                    position=item.position,
+                    position=_visible_measurement_position(item.position),
                     description=item.description,
                     unit=item.unit or "",
                     sort_order=item.sort_order,
@@ -1269,7 +1277,7 @@ def _snapshot_matrix(snapshot: dict[str, object] | None) -> SnapshotMatrix | Non
             item_id,
             MatrixPosition(
                 item_id=item_id,
-                position=position,
+                position=_visible_measurement_position(position),
                 description=description,
                 unit=unit if isinstance(unit, str) else "",
                 sort_order=sort_order_value,

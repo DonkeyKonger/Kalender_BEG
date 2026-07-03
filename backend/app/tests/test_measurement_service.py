@@ -1097,7 +1097,7 @@ def test_site_measurement_billing_status_and_entry_update():
 def test_site_free_item_creates_office_extra_position_with_entry():
     from app.models.enums import UserRole
     from app.models.user import User
-    from app.schemas.measurement import MobileMeasurementFreeItemCreate
+    from app.schemas.measurement import MeasurementItemUpdate, MobileMeasurementFreeItemCreate
 
     db = db_session()
     site = create_site(db)
@@ -1151,6 +1151,25 @@ def test_site_free_item_creates_office_extra_position_with_entry():
     assert created.entries[0].quantity == Decimal("2.00")
     assert created.entries[0].created_by_user_id == user.id
     assert any(item.id == created.id and item.entries for item in listed_items)
+
+    updated = MeasurementService(db).update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=created.id,
+        payload=MeasurementItemUpdate(position="444.4.999"),
+    )
+    assert updated.id == created.id
+    assert updated.position == "444.4.999"
+    assert updated.entries[0].quantity == Decimal("2.00")
+
+    cleared = MeasurementService(db).update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=created.id,
+        payload=MeasurementItemUpdate(position=""),
+    )
+    assert cleared.id == created.id
+    assert cleared.position == "FREI-1"
 
 
 def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():

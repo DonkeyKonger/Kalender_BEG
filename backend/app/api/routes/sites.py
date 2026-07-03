@@ -20,6 +20,7 @@ from app.schemas.measurement import (
     MeasurementEntryRead,
     MeasurementImportResponse,
     MeasurementItemRead,
+    MeasurementItemUpdate,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
@@ -590,6 +591,26 @@ def create_measurement_batch_free_item(
         site_id=site_id,
         batch_id=batch_id,
         current_user=user,
+        payload=payload,
+    )
+
+
+@router.patch(
+    "/{site_id}/measurement-batches/{batch_id}/items/{measurement_item_id}",
+    response_model=MobileMeasurementItemRead,
+)
+def update_measurement_batch_free_item(
+    site_id: int,
+    batch_id: int,
+    measurement_item_id: int,
+    payload: MeasurementItemUpdate,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementItemRead:
+    return MeasurementService(db).update_site_free_item(
+        site_id=site_id,
+        batch_id=batch_id,
+        measurement_item_id=measurement_item_id,
         payload=payload,
     )
 

@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite, MatrixVersionResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { WeatherSummary } from "../types/weather";
@@ -881,6 +881,18 @@ export const api = {
   ): Promise<MobileMeasurementItem> {
     return request<MobileMeasurementItem>(`/sites/${siteId}/measurement-batches/${batchId}/items`, {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateSiteMeasurementFreeItem(
+    siteId: number,
+    batchId: number,
+    measurementItemId: number,
+    payload: MeasurementItemUpdatePayload,
+  ): Promise<MobileMeasurementItem> {
+    return request<MobileMeasurementItem>(`/sites/${siteId}/measurement-batches/${batchId}/items/${measurementItemId}`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
