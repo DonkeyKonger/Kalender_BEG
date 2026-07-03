@@ -1009,6 +1009,8 @@ button:disabled {
 
 .matrix-info-cell {
   overflow: visible;
+  padding: 0;
+  vertical-align: stretch;
   white-space: normal;
 }
 
@@ -2705,21 +2707,26 @@ button.person-chip:focus-visible {
 
 .matrix-info-editor {
   display: block;
+  position: absolute;
+  inset: 2px 3px;
+  min-width: 0;
 }
 
 .matrix-info-editor textarea {
   box-sizing: border-box;
+  display: block;
   width: 100%;
-  min-height: 32px;
-  max-height: 48px;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 2px;
   background: transparent;
   color: #a8322b;
-  padding: 3px 4px;
+  padding: 5px 6px;
   font-size: 0.68rem;
   line-height: 1.16;
-  resize: vertical;
+  resize: none;
   white-space: normal;
   overflow: auto;
   overflow-wrap: anywhere;
@@ -2878,9 +2885,9 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea {
-  min-height: 28px;
-  max-height: 28px;
-  padding: 2px 4px;
+  min-height: 0;
+  max-height: none;
+  padding: 2px 3px;
   font-size: 0.62rem;
   line-height: 1.12;
   overflow: hidden;
