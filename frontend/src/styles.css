@@ -2801,7 +2801,8 @@ button.person-chip:focus-visible {
   line-height: 1.14;
   resize: none;
   white-space: normal;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overflow-wrap: anywhere;
 }
 
@@ -2962,10 +2963,10 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-info-editor textarea {
-  height: 34px;
+  height: 100%;
   min-height: 0;
-  max-height: 34px;
-  padding: 1px 3px;
+  max-height: none;
+  padding: 2px 3px;
   font-size: 0.6rem;
   line-height: 10px;
   overflow-x: hidden;

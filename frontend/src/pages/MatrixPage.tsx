@@ -3081,13 +3081,57 @@ function MatrixInfoEditor({
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
+  const containerRef = useRef<HTMLLabelElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [textareaHeight, setTextareaHeight] = useState<number | null>(null);
   const displayValue = matrixInfoDisplayValue(value);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const textarea = textareaRef.current;
+    if (!container || !textarea || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const updateTextareaHeight = () => {
+      const containerHeight = container.clientHeight;
+      const styles = window.getComputedStyle(textarea);
+      const lineHeight = Number.parseFloat(styles.lineHeight);
+      const parsePixelValue = (value: string) => {
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const verticalSpacing =
+        parsePixelValue(styles.paddingTop) +
+        parsePixelValue(styles.paddingBottom) +
+        parsePixelValue(styles.borderTopWidth) +
+        parsePixelValue(styles.borderBottomWidth);
+
+      if (!Number.isFinite(containerHeight) || !Number.isFinite(lineHeight) || lineHeight <= 0) {
+        setTextareaHeight(null);
+        return;
+      }
+
+      const availableTextHeight = Math.max(0, containerHeight - verticalSpacing);
+      const visibleRows = Math.max(1, Math.floor(availableTextHeight / lineHeight));
+      const nextHeight = Math.min(containerHeight, Math.floor(visibleRows * lineHeight + verticalSpacing));
+      setTextareaHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+
+    updateTextareaHeight();
+    const resizeObserver = new ResizeObserver(updateTextareaHeight);
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [displayValue]);
+
   return (
-    <label className="matrix-info-editor">
+    <label className="matrix-info-editor" ref={containerRef}>
       <span className="sr-only">Info</span>
       <textarea
         className={matrixInfoTextClassName(displayValue)}
         disabled={disabled || isSaving}
+        ref={textareaRef}
+        style={textareaHeight ? { height: `${textareaHeight}px` } : undefined}
         title={displayValue || undefined}
         value={displayValue}
         onChange={(event) => onChange(event.target.value)}
