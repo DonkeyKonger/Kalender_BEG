@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { SITE_COLOR_OPTIONS } from "../lib/siteColors";
+import { LEGACY_SITE_COLOR_LABELS, SITE_COLOR_OPTIONS } from "../lib/siteColors";
 
 export function SiteColorSelect({
   className,
@@ -19,7 +19,7 @@ export function SiteColorSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = SITE_COLOR_OPTIONS.find((option) => option.value.toLowerCase() === value.toLowerCase());
-  const selectedLabel = selectedOption?.label ?? label;
+  const selectedLabel = selectedOption?.label ?? LEGACY_SITE_COLOR_LABELS[value.toLowerCase()] ?? label;
 
   return (
     <div className={["site-color-select-field site-field-color", className].filter(Boolean).join(" ")}>
