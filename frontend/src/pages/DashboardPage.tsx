@@ -284,12 +284,13 @@ export function DashboardPage() {
           <p>Heute, morgen und die nächsten beiden Wochen auf einen Blick.</p>
         </div>
         <div className="dashboard-weather" aria-label="Wetter Firmenzentrale">
-          <CloudSun aria-hidden="true" size={24} />
-          <div>
-            <span>Wetter Firmenzentrale</span>
-            <strong>{weatherLoading ? "Wetter wird geladen..." : weather?.available ? weather.summary : "derzeit nicht verfuegbar"}</strong>
-            <p>{weather?.label ?? "Firmenzentrale"}{weather?.is_cached ? " · aus Cache" : ""}</p>
+          <span className="dashboard-panel-label">Wetter Firmenzentrale</span>
+          <div className="dashboard-weather-main">
+            <CloudSun aria-hidden="true" size={24} />
+            <strong>{formatDashboardWeatherTemperature(weather, weatherLoading)}</strong>
+            <span>{formatDashboardWeatherCondition(weather, weatherLoading)}</span>
           </div>
+          <p>{formatDashboardWeatherMeta(weather)}</p>
         </div>
         <div className="dashboard-free-summary" ref={freeSummaryRef}>
           <div className="dashboard-free-total">
@@ -300,8 +301,9 @@ export function DashboardPage() {
               type="button"
               onClick={() => toggleFreeWorkerPopover(FREE_WORKER_ALL_KEY)}
             >
-              <span className="dashboard-free-summary-label">Einsatzübersicht</span>
-              <strong>{dashboard ? formatCount(workerSummaryCount, "Monteur", "Monteure") : loading ? "Lade..." : "-"}</strong>
+              <span className="dashboard-free-summary-label">Einsatz heute</span>
+              <strong>{dashboard ? workerSummaryCount : loading ? "..." : "-"}</strong>
+              <small>Monteure</small>
             </button>
             {dashboard && openFreeWorkerKey === FREE_WORKER_ALL_KEY ? (
               <FreeWorkerPopover
@@ -322,7 +324,8 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => toggleFreeWorkerPopover(group.manager.key)}
                     >
-                      {group.manager.label}: {group.people.length}
+                      <span>{formatWorkerSummaryBadgeLabel(group)}</span>
+                      <strong>{group.people.length}</strong>
                     </button>
                     {openFreeWorkerKey === group.manager.key ? (
                       <FreeWorkerPopover
@@ -344,7 +347,12 @@ export function DashboardPage() {
       {dashboard && !loading && (
         <>
           <div className="dashboard-main-grid">
-            <DashboardCard title="Heute besetzte Baustellen" icon={<BriefcaseBusiness aria-hidden="true" size={20} />} className="dashboard-card-large">
+            <DashboardCard
+              title="Heute besetzte Baustellen"
+              icon={<BriefcaseBusiness aria-hidden="true" size={20} />}
+              meta={formatTodayAssignedMeta(dashboard.todayAssignedSites)}
+              className="dashboard-card-large"
+            >
               {dashboard.todayAssignedSites.length > 0 ? (
                 <div className="dashboard-site-group-list">
                   {dashboard.todayAssignedSiteGroups.map((group) => (
@@ -357,9 +365,7 @@ export function DashboardPage() {
                         {group.sites.map((siteSummary) => (
                           <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
                             <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
-                            <span className="dashboard-site-tile-count">
-                              {formatCount(siteSummary.internalCount + siteSummary.externalCount, "Monteur", "Monteure")}
-                            </span>
+                            <span className="dashboard-site-tile-count">{formatSiteTileMeta(siteSummary)}</span>
                             {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Pruefen</span>}
                           </Link>
                         ))}
@@ -370,7 +376,11 @@ export function DashboardPage() {
               ) : <EmptyDashboardText text="Heute sind keine Baustellen besetzt." />}
             </DashboardCard>
 
-            <DashboardCard title="Eingang / Meldungen" icon={<Inbox aria-hidden="true" size={20} />}>
+            <DashboardCard
+              title="Eingang / Meldungen"
+              icon={<Inbox aria-hidden="true" size={20} />}
+              badge={measurementMessages.length > 0 ? String(measurementMessages.length) : undefined}
+            >
               {measurementMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
                   {measurementMessages.map((message) => (
@@ -387,15 +397,18 @@ export function DashboardPage() {
                       </Link>
                       <button
                         type="button"
-                        className="dashboard-message-dismiss-button"
-                        aria-label="Meldung ausblenden"
+                        className="dashboard-message-read-button"
+                        aria-label="Meldung als gelesen markieren"
                         disabled={dismissingMessageKey === message.message_key}
                         onClick={() => void dismissMeasurementMessage(message)}
                       >
-                        ×
+                        Als gelesen markieren
                       </button>
                     </div>
                   ))}
+                  <p className="dashboard-message-unread-note">
+                    {measurementMessages.length} ungelesene {measurementMessages.length === 1 ? "Meldung" : "Meldungen"} — bitte prüfen.
+                  </p>
                 </div>
               ) : (
                 <div className="dashboard-message-box">
@@ -472,17 +485,25 @@ function DashboardCard({
   icon,
   children,
   className,
+  meta,
+  badge,
 }: {
   title: string;
   icon: ReactNode;
   children: ReactNode;
   className?: string;
+  meta?: ReactNode;
+  badge?: ReactNode;
 }) {
   return (
     <article className={["dashboard-card", className ?? ""].filter(Boolean).join(" ")}>
       <div className="dashboard-card-header">
         <span>{icon}</span>
-        <h2>{title}</h2>
+        <div>
+          <h2>{title}</h2>
+          {meta ? <p>{meta}</p> : null}
+        </div>
+        {badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
       </div>
       {children}
     </article>
@@ -541,6 +562,55 @@ function DashboardNeedSection({ title, needs }: { title: string; needs: Staffing
 
 function EmptyDashboardText({ text }: { text: string }) {
   return <p className="dashboard-empty-text">{text}</p>;
+}
+
+function formatDashboardWeatherTemperature(weather: WeatherSummary | null, isLoading: boolean): string {
+  if (isLoading) {
+    return "...";
+  }
+  if (!weather?.available || weather.temperature === null) {
+    return "-";
+  }
+  return `${Math.round(weather.temperature)}°C`;
+}
+
+function formatDashboardWeatherCondition(weather: WeatherSummary | null, isLoading: boolean): string {
+  if (isLoading) {
+    return "wird geladen";
+  }
+  if (!weather?.available) {
+    return "nicht verfügbar";
+  }
+  if (weather.precipitation_hint) {
+    return weather.precipitation_hint;
+  }
+  if (weather.summary && weather.temperature !== null) {
+    return weather.summary.replace(`${Math.round(weather.temperature)}°C`, "").trim() || weather.summary;
+  }
+  return weather.summary || "aktuell";
+}
+
+function formatDashboardWeatherMeta(weather: WeatherSummary | null): string {
+  const label = weather?.label ?? "Firmenzentrale";
+  if (weather?.available && weather.wind_speed !== null) {
+    return `Wind ${Math.round(weather.wind_speed)} km/h · ${label}`;
+  }
+  return label;
+}
+
+function formatWorkerSummaryBadgeLabel(group: WorkerSummaryGroup): string {
+  return group.kind === "free" ? "O.Z." : group.manager.label;
+}
+
+function formatTodayAssignedMeta(sites: AssignedSiteSummary[]): string {
+  const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
+  return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
+}
+
+function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
+  const workerCount = siteSummary.internalCount + siteSummary.externalCount;
+  const workerLabel = `${workerCount} M`;
+  return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
 }
 
 function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]): string {
