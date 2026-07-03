@@ -261,12 +261,29 @@ button:disabled {
   gap: 12px;
   border-bottom: 1px solid #dce3ee;
   background: #ffffff;
-  padding: 12px 16px;
+  padding: 7px 14px;
 }
 
 .topbar-user {
   color: #111827;
+  font-size: 0.86rem;
   font-weight: 750;
+}
+
+.topbar-label {
+  font-size: 0.72rem;
+}
+
+.topbar .icon-button {
+  min-height: 30px;
+  border-radius: 2px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+.topbar .icon-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .icon-button {
@@ -487,8 +504,8 @@ button:disabled {
   }
 
   .topbar {
-    min-height: 72px;
-    padding: 14px 24px;
+    min-height: 52px;
+    padding: 8px 20px;
   }
 
   .content-area {
@@ -15638,13 +15655,13 @@ button.person-chip:focus-visible {
 .dashboard-site-tile {
   position: relative;
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d9e2ef;
   border-radius: 0;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   color: inherit;
-  padding: 7px 9px;
+  padding: 8px 10px;
   text-decoration: none;
 }
 
@@ -15665,14 +15682,14 @@ button.person-chip:focus-visible {
 
 .dashboard-site-tile-name {
   color: #111827;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 850;
 }
 
 .dashboard-site-tile-count {
   color: #8b9bb2;
-  font-size: 0.66rem;
-  font-weight: 720;
+  font-size: 0.68rem;
+  font-weight: 760;
 }
 
 .dashboard-site-tile .dashboard-signal {

@@ -371,7 +371,7 @@ export function DashboardPage() {
                           <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
                             <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
                             <span className="dashboard-site-tile-count">{formatSiteTileMeta(siteSummary)}</span>
-                            {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Pruefen</span>}
+                            {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Prüfen</span>}
                           </Link>
                         ))}
                       </div>
@@ -438,7 +438,7 @@ export function DashboardPage() {
           </div>
 
           <div className="dashboard-main-grid">
-            <DashboardCard title="Pruefen / Konflikte" icon={<AlertTriangle aria-hidden="true" size={20} />}>
+            <DashboardCard title="Prüfen / Konflikte" icon={<AlertTriangle aria-hidden="true" size={20} />}>
               <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
             </DashboardCard>
 
@@ -627,7 +627,7 @@ function formatTodayAssignedMeta(sites: AssignedSiteSummary[]): string {
 
 function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   const workerCount = siteSummary.internalCount + siteSummary.externalCount;
-  const workerLabel = `${workerCount} M`;
+  const workerLabel = formatCount(workerCount, "Monteur", "Monteure");
   return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
 }
 
