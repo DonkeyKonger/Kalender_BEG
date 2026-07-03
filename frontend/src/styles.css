@@ -6750,6 +6750,48 @@ button.person-chip:focus-visible {
   letter-spacing: 0;
 }
 
+.site-header-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.site-header-name-row h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.site-header-name-edit-button {
+  margin-top: 2px;
+}
+
+.site-header-name-edit {
+  display: grid;
+  gap: 3px;
+  width: min(560px, 100%);
+}
+
+.site-header-name-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d6dfeb;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #111827;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 1.14rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.site-header-name-input:focus {
+  border-color: #8ba8cc;
+  box-shadow: 0 0 0 3px rgb(47 96 150 / 12%);
+  outline: none;
+}
+
 .site-detail-header p:not(.eyebrow) {
   color: #65738a;
 }

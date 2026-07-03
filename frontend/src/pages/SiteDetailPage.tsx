@@ -1106,7 +1106,12 @@ export function SiteDetailPage() {
         <span className="site-color large" style={{ backgroundColor: site.color ?? "#94a3b8" }} />
         <div>
           <p className="eyebrow">Projektakte</p>
-          <h1>{site.name}</h1>
+          <EditableSiteHeaderName
+            name={site.name}
+            canEdit={canEditSite}
+            disabled={isSavingSite}
+            onSave={(name) => saveSiteInline({ name })}
+          />
           <p>{[site.site_number, site.customer].filter(Boolean).join(" - ")}</p>
         </div>
         <div className="site-detail-header-actions">
@@ -4861,6 +4866,112 @@ function DetailItem({
       <span>{label}</span>
       <strong>{Icon && value ? <Icon aria-hidden="true" size={14} /> : null}{value || "-"}</strong>
     </p>
+  );
+}
+
+function EditableSiteHeaderName({
+  name,
+  canEdit,
+  disabled,
+  onSave,
+}: {
+  name: string;
+  canEdit: boolean;
+  disabled?: boolean;
+  onSave: (name: string) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftName, setDraftName] = useState(name);
+  const [status, setStatus] = useState<InlineEditStatus>("idle");
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftName(name);
+    }
+  }, [isEditing, name]);
+
+  async function commit(): Promise<void> {
+    const nextName = draftName.trim();
+    if (!nextName) {
+      setStatus("error");
+      return;
+    }
+    if (nextName === name.trim()) {
+      setDraftName(name);
+      setIsEditing(false);
+      setStatus("idle");
+      return;
+    }
+    setStatus("saving");
+    try {
+      await onSave(nextName);
+      setIsEditing(false);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  function cancel(): void {
+    setDraftName(name);
+    setIsEditing(false);
+    setStatus("idle");
+  }
+
+  if (isEditing) {
+    return (
+      <div className="site-header-name-edit">
+        <input
+          className="site-header-name-input"
+          autoFocus
+          value={draftName}
+          aria-invalid={!draftName.trim()}
+          disabled={disabled || status === "saving"}
+          onBlur={() => void commit()}
+          onChange={(event) => {
+            setDraftName(event.target.value);
+            setStatus("idle");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commit();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancel();
+            }
+          }}
+        />
+        {status !== "idle" ? (
+          <small className={`site-inline-edit-status is-${status}`}>
+            {status === "error" && !draftName.trim() ? "Baustellenname darf nicht leer sein." : formatInlineEditStatus(status)}
+          </small>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="site-header-name-row">
+      <h1>{name}</h1>
+      {canEdit ? (
+        <button
+          type="button"
+          className="site-inline-edit-button site-header-name-edit-button"
+          aria-label="Baustellenname bearbeiten"
+          disabled={disabled}
+          onClick={() => {
+            setDraftName(name);
+            setIsEditing(true);
+            setStatus("idle");
+          }}
+        >
+          <Pencil aria-hidden="true" size={13} />
+        </button>
+      ) : null}
+      {status === "saved" || status === "error" ? <small className={`site-inline-edit-status is-${status}`}>{formatInlineEditStatus(status)}</small> : null}
+    </div>
   );
 }
 
