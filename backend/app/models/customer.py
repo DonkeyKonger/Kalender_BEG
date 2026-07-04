@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.enums import SiteLocationStatus, enum_values
 
 
 class Customer(TimestampMixin, Base):
@@ -16,6 +17,15 @@ class Customer(TimestampMixin, Base):
     address_postal_code: Mapped[str | None] = mapped_column(String(20))
     address_city: Mapped[str | None] = mapped_column(String(120))
     address_country: Mapped[str | None] = mapped_column(String(120), default="Deutschland")
+    address_extra: Mapped[str | None] = mapped_column(String(200))
+    address_formatted: Mapped[str | None] = mapped_column(String(500))
+    address_latitude: Mapped[float | None] = mapped_column(Float)
+    address_longitude: Mapped[float | None] = mapped_column(Float)
+    address_location_status: Mapped[SiteLocationStatus] = mapped_column(
+        Enum(SiteLocationStatus, values_callable=enum_values, name="site_location_status"),
+        nullable=False,
+        default=SiteLocationStatus.UNCHECKED,
+    )
     company_phone: Mapped[str | None] = mapped_column(String(80))
     project_lead_name: Mapped[str | None] = mapped_column(String(200))
     project_lead_phone: Mapped[str | None] = mapped_column(String(80))

@@ -27,6 +27,11 @@ export type Customer = {
   address_postal_code: string | null;
   address_city: string | null;
   address_country: string | null;
+  address_extra: string | null;
+  address_formatted: string | null;
+  address_latitude: number | null;
+  address_longitude: number | null;
+  address_location_status: "unchecked" | "geocoded" | "ambiguous" | "failed";
   company_phone: string | null;
   project_lead_name: string | null;
   project_lead_phone: string | null;
@@ -45,6 +50,11 @@ export type CustomerCreate = {
   address_postal_code: string | null;
   address_city: string | null;
   address_country: string | null;
+  address_extra: string | null;
+  address_formatted: string | null;
+  address_latitude: number | null;
+  address_longitude: number | null;
+  address_location_status: "unchecked" | "geocoded" | "ambiguous" | "failed";
   company_phone: string | null;
   project_lead_name: string | null;
   project_lead_phone: string | null;

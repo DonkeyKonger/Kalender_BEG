@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import SiteLocationStatus
+
 
 class CustomerContactBase(BaseModel):
     contact_type: str = Field(default="monteur", max_length=40)
@@ -38,6 +40,11 @@ class CustomerBase(BaseModel):
     address_postal_code: str | None = Field(default=None, max_length=20)
     address_city: str | None = Field(default=None, max_length=120)
     address_country: str | None = Field(default="Deutschland", max_length=120)
+    address_extra: str | None = Field(default=None, max_length=200)
+    address_formatted: str | None = Field(default=None, max_length=500)
+    address_latitude: float | None = Field(default=None, ge=-90, le=90)
+    address_longitude: float | None = Field(default=None, ge=-180, le=180)
+    address_location_status: SiteLocationStatus = SiteLocationStatus.UNCHECKED
     company_phone: str | None = Field(default=None, max_length=80)
     project_lead_name: str | None = Field(default=None, max_length=200)
     project_lead_phone: str | None = Field(default=None, max_length=80)
@@ -57,6 +64,11 @@ class CustomerUpdate(BaseModel):
     address_postal_code: str | None = Field(default=None, max_length=20)
     address_city: str | None = Field(default=None, max_length=120)
     address_country: str | None = Field(default=None, max_length=120)
+    address_extra: str | None = Field(default=None, max_length=200)
+    address_formatted: str | None = Field(default=None, max_length=500)
+    address_latitude: float | None = Field(default=None, ge=-90, le=90)
+    address_longitude: float | None = Field(default=None, ge=-180, le=180)
+    address_location_status: SiteLocationStatus | None = None
     company_phone: str | None = Field(default=None, max_length=80)
     project_lead_name: str | None = Field(default=None, max_length=200)
     project_lead_phone: str | None = Field(default=None, max_length=80)
@@ -73,6 +85,11 @@ class CustomerRead(BaseModel):
     address_postal_code: str | None = None
     address_city: str | None = None
     address_country: str | None = None
+    address_extra: str | None = None
+    address_formatted: str | None = None
+    address_latitude: float | None = None
+    address_longitude: float | None = None
+    address_location_status: SiteLocationStatus = SiteLocationStatus.UNCHECKED
     company_phone: str | None = None
     project_lead_name: str | None = None
     project_lead_phone: str | None = None

@@ -2,6 +2,7 @@ import { ArrowLeft, Building2, ChevronDown, ChevronRight, Plus, Save, Search, Tr
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
+import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
@@ -26,6 +27,11 @@ const emptyCustomer: CustomerCreate = {
   address_postal_code: null,
   address_city: null,
   address_country: "Deutschland",
+  address_extra: null,
+  address_formatted: null,
+  address_latitude: null,
+  address_longitude: null,
+  address_location_status: "unchecked",
   company_phone: null,
   project_lead_name: null,
   project_lead_phone: null,
@@ -587,43 +593,32 @@ export function CustomerFields({
       <section className="person-location-section site-location-section">
         <div>
           <h3>Firmenadresse</h3>
-          <p>Strukturierte Adresse fuer spaetere Baustellen-, Dokument- und Versandfunktionen.</p>
         </div>
-        <label className="address-street-field">
-          <span>Strasse</span>
-          <input
-            value={draft.address_street ?? ""}
-            onChange={(event) => onChange({ address_street: event.target.value || null })}
-          />
-        </label>
-        <label className="address-house-number-field">
-          <span>Hausnummer</span>
-          <input
-            value={draft.address_house_number ?? ""}
-            onChange={(event) => onChange({ address_house_number: event.target.value || null })}
-          />
-        </label>
-        <label className="address-postal-field">
-          <span>PLZ</span>
-          <input
-            value={draft.address_postal_code ?? ""}
-            onChange={(event) => onChange({ address_postal_code: event.target.value || null })}
-          />
-        </label>
-        <label className="address-city-field">
-          <span>Ort</span>
-          <input
-            value={draft.address_city ?? ""}
-            onChange={(event) => onChange({ address_city: event.target.value || null })}
-          />
-        </label>
-        <label className="address-extra-field address-field">
-          <span>Land</span>
-          <input
-            value={draft.address_country ?? ""}
-            onChange={(event) => onChange({ address_country: event.target.value || null })}
-          />
-        </label>
+        <AddressSearch
+          inputName="customer-address-query"
+          onSelect={(result) => {
+            onChange({
+              address_formatted: result.label,
+              address_postal_code: result.postal_code,
+              address_city: result.city,
+              address_street: result.street,
+              address_house_number: result.house_number,
+              address_country: draft.address_country || "Deutschland",
+              address_extra: draft.address_extra ?? null,
+              address_latitude: result.latitude,
+              address_longitude: result.longitude,
+              address_location_status: "geocoded",
+            });
+          }}
+        />
+        <div className="site-address-display-grid">
+          <AddressDisplayItem label="PLZ" value={draft.address_postal_code} />
+          <AddressDisplayItem label="Stadt" value={draft.address_city} />
+          <AddressDisplayItem label="Strasse" value={draft.address_street} />
+          <AddressDisplayItem label="Hausnummer" value={draft.address_house_number} />
+          <AddressDisplayItem label="Land" value={draft.address_country} />
+          <AddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
+        </div>
       </section>
 
       {showContactSections && (
@@ -735,6 +730,11 @@ function toEditableCustomer(customer: Customer): EditableCustomer {
     address_postal_code: customer.address_postal_code,
     address_city: customer.address_city,
     address_country: customer.address_country ?? "Deutschland",
+    address_extra: customer.address_extra,
+    address_formatted: customer.address_formatted,
+    address_latitude: customer.address_latitude,
+    address_longitude: customer.address_longitude,
+    address_location_status: customer.address_location_status ?? "unchecked",
     company_phone: customer.company_phone,
     project_lead_name: customer.project_lead_name,
     project_lead_phone: customer.project_lead_phone,
@@ -779,6 +779,11 @@ export function normalizeCustomerPayload(customer: CustomerCreate): CustomerCrea
     address_postal_code: customer.address_postal_code?.trim() || null,
     address_city: customer.address_city?.trim() || null,
     address_country: customer.address_country?.trim() || "Deutschland",
+    address_extra: customer.address_extra?.trim() || null,
+    address_formatted: customer.address_formatted?.trim() || null,
+    address_latitude: customer.address_latitude,
+    address_longitude: customer.address_longitude,
+    address_location_status: customer.address_location_status,
     company_phone: customer.company_phone?.trim() || null,
     project_lead_name: customer.project_lead_name?.trim() || null,
     project_lead_phone: customer.project_lead_phone?.trim() || null,
@@ -819,7 +824,10 @@ function groupCustomersAlphabetically(customers: Customer[]): Array<{ key: strin
     }));
 }
 
-function formatCustomerAddress(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country">): string {
+function formatCustomerAddress(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country" | "address_formatted">): string {
+  if (customer.address_formatted?.trim()) {
+    return customer.address_formatted.trim();
+  }
   const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
   const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
   return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
@@ -873,6 +881,8 @@ function customerSearchText(customer: Customer): string {
     customer.address_postal_code,
     customer.address_city,
     customer.address_country,
+    customer.address_extra,
+    customer.address_formatted,
     customer.project_lead_name,
     customer.project_lead_phone,
     customer.project_lead_email,

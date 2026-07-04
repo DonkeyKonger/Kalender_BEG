@@ -8,9 +8,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.models import Base
 from app.models.customer import Customer, CustomerContact
+from app.models.enums import SiteLocationStatus
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
-from app.schemas.customer import CustomerCreate
+from app.schemas.customer import CustomerCreate, CustomerUpdate
 from app.services.customer_service import CustomerService, clean_customer_contacts, clean_customer_values, customer_snapshot
 
 
@@ -125,6 +126,64 @@ def test_customer_read_includes_site_email_recipients_without_duplicates():
     read_customer = CustomerService(db).read_customer(customer)
 
     assert [item.email for item in read_customer.email_addresses] == ["Info@Klinik.example", "NEU@KLINIK.example"]
+
+
+def test_create_customer_keeps_selected_address_geocode():
+    db = db_session()
+    service = CustomerService(db)
+
+    customer = service.create_customer(
+        CustomerCreate(
+            company_name="Geocode GmbH",
+            address_street="Moorburger Str.",
+            address_house_number="16",
+            address_postal_code="21079",
+            address_city="Hamburg",
+            address_country="Deutschland",
+            address_formatted="Moorburger Str. 16, 21079 Hamburg",
+            address_latitude=53.456,
+            address_longitude=9.987,
+            address_location_status=SiteLocationStatus.GEOCODED,
+            contacts=[],
+        ),
+        user_id=7,
+    )
+
+    assert customer.address_formatted == "Moorburger Str. 16, 21079 Hamburg"
+    assert customer.address_latitude == 53.456
+    assert customer.address_longitude == 9.987
+    assert customer.address_location_status == SiteLocationStatus.GEOCODED
+
+
+def test_update_customer_clears_coordinates_when_address_changes_without_selected_geocode():
+    db = db_session()
+    service = CustomerService(db)
+    customer = Customer(
+        company_name="Alt GmbH",
+        address_street="Altstrasse",
+        address_house_number="1",
+        address_postal_code="11111",
+        address_city="Altstadt",
+        address_formatted="Altstrasse 1, 11111 Altstadt",
+        address_latitude=53.456,
+        address_longitude=9.987,
+        address_location_status=SiteLocationStatus.GEOCODED,
+        is_active=True,
+    )
+    db.add(customer)
+    db.commit()
+
+    updated = service.update_customer(
+        customer.id,
+        CustomerUpdate(address_city="Neustadt"),
+        user_id=7,
+    )
+
+    assert updated.address_city == "Neustadt"
+    assert updated.address_formatted is None
+    assert updated.address_latitude is None
+    assert updated.address_longitude is None
+    assert updated.address_location_status == SiteLocationStatus.UNCHECKED
 
 
 def test_remove_customer_sets_tombstone_and_hides_from_normal_queries():

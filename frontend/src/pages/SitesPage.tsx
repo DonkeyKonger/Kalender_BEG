@@ -4,6 +4,7 @@ import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
@@ -12,7 +13,7 @@ import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { Site, SiteCreate, SiteGeocodeSearchResult, SiteSummary, SiteSummaryPerson } from "../types/site";
+import type { Site, SiteCreate, SiteSummary, SiteSummaryPerson } from "../types/site";
 
 const emptySite: SiteCreate = {
   site_number: null,
@@ -43,6 +44,11 @@ const emptyCustomerForSite: CustomerCreate = {
   address_postal_code: null,
   address_city: null,
   address_country: "Deutschland",
+  address_extra: null,
+  address_formatted: null,
+  address_latitude: null,
+  address_longitude: null,
+  address_location_status: "unchecked",
   company_phone: null,
   project_lead_name: null,
   project_lead_phone: null,
@@ -790,11 +796,25 @@ export function SiteFields({
         onChange={(color) => onChange({ color })}
       />
       <section className="site-location-section">
-        <SiteAddressSearch
-          draft={draft}
+        <AddressSearch
           disabled={disabled}
-          onChange={onChange}
-          onGeocodeSelected={onGeocodeSelected}
+          inputId="site-query-token"
+          inputName="site-query-token"
+          onSelect={(result) => {
+            const selectedValues: Partial<SiteCreate> = {
+              address: result.label,
+              postal_code: result.postal_code,
+              city: result.city,
+              location: result.city ?? draft.location,
+              street: result.street,
+              house_number: result.house_number,
+              latitude: result.latitude,
+              longitude: result.longitude,
+              location_status: "geocoded",
+            };
+            onChange(selectedValues);
+            onGeocodeSelected?.(selectedValues);
+          }}
         />
         <div className="site-address-display-grid">
           <AddressDisplayItem label="PLZ" value={draft.postal_code} />
@@ -813,142 +833,6 @@ export function SiteFields({
           onChange={(event) => onChange({ info: event.target.value || null })}
         />
       </label>
-    </div>
-  );
-}
-
-export function SiteAddressSearch({
-  className = "",
-  draft,
-  disabled = false,
-  onChange,
-  onGeocodeSelected,
-}: {
-  className?: string;
-  draft: SiteCreate;
-  disabled?: boolean;
-  onChange: (values: Partial<SiteCreate>) => void;
-  onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
-}) {
-  const [addressSearch, setAddressSearch] = useState("");
-  const [addressResults, setAddressResults] = useState<SiteGeocodeSearchResult[]>([]);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
-  const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
-  const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<SiteGeocodeSearchResult | null>(null);
-
-  useEffect(() => {
-    const query = addressSearch.trim();
-    if (selectedGeocodeResult && query === selectedGeocodeResult.label) {
-      setAddressResults([]);
-      setIsSearchingAddress(false);
-      return;
-    }
-    if (query.length < 3 || disabled) {
-      setAddressResults([]);
-      setIsSearchingAddress(false);
-      setAddressSearchMessage(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsSearchingAddress(true);
-    setAddressSearchMessage(null);
-    const timer = window.setTimeout(() => {
-      api
-        .searchSiteAddress(query)
-        .then((results) => {
-          if (cancelled) {
-            return;
-          }
-          setAddressResults(results);
-          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Eingabe pruefen oder genauer formulieren.");
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setAddressResults([]);
-            setAddressSearchMessage("Adresssuche aktuell nicht verfuegbar.");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setIsSearchingAddress(false);
-          }
-        });
-    }, 400);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [addressSearch, disabled, selectedGeocodeResult]);
-
-  function applyGeocodeResult(result: SiteGeocodeSearchResult) {
-    const selectedValues: Partial<SiteCreate> = {
-      address: result.label,
-      postal_code: result.postal_code,
-      city: result.city,
-      location: result.city ?? draft.location,
-      street: result.street,
-      house_number: result.house_number,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      location_status: "geocoded",
-    };
-    setSelectedGeocodeResult(result);
-    onChange(selectedValues);
-    onGeocodeSelected?.(selectedValues);
-    setAddressSearch("");
-    setAddressResults([]);
-    setIsSearchingAddress(false);
-    setAddressSearchMessage("Standort aus Vorschlag uebernommen und geprueft.");
-    (document.activeElement as HTMLElement | null)?.blur();
-  }
-
-  return (
-    <label className={`address-field site-address-search${className ? ` ${className}` : ""}`}>
-      <span>Adresse suchen</span>
-      <input
-        aria-label="Adresse suchen"
-        autoCapitalize="none"
-        autoComplete="new-password"
-        autoCorrect="off"
-        disabled={disabled}
-        id="site-query-token"
-        inputMode="search"
-        name="site-query-token"
-        placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
-        spellCheck={false}
-        value={addressSearch}
-        onChange={(event) => {
-          setSelectedGeocodeResult(null);
-          setAddressSearch(event.target.value);
-        }}
-      />
-      {isSearchingAddress && <small>Adresse wird gesucht...</small>}
-      {addressSearchMessage && <small>{addressSearchMessage}</small>}
-      {addressResults.length > 0 && (
-        <div className="site-address-results" role="listbox">
-          {addressResults.map((result) => (
-            <button
-              key={`${result.latitude}-${result.longitude}-${result.label}`}
-              type="button"
-              onClick={() => applyGeocodeResult(result)}
-            >
-              <strong>{result.label}</strong>
-              <span>{formatGeocodeMeta(result)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </label>
-  );
-}
-
-function AddressDisplayItem({ label, value, wide = false }: { label: string; value: string | null | undefined; wide?: boolean }) {
-  return (
-    <div className={`site-address-display-item${wide ? " is-wide" : ""}`}>
-      <span>{label}</span>
-      <strong>{value || "—"}</strong>
     </div>
   );
 }
@@ -1087,6 +971,11 @@ function normalizeCustomerPayloadForSite(customer: CustomerCreate): CustomerCrea
     address_postal_code: customer.address_postal_code?.trim() || null,
     address_city: customer.address_city?.trim() || null,
     address_country: customer.address_country?.trim() || "Deutschland",
+    address_extra: customer.address_extra?.trim() || null,
+    address_formatted: customer.address_formatted?.trim() || null,
+    address_latitude: customer.address_latitude,
+    address_longitude: customer.address_longitude,
+    address_location_status: customer.address_location_status,
     company_phone: customer.company_phone?.trim() || null,
     project_lead_name: customer.project_lead_name?.trim() || null,
     project_lead_phone: customer.project_lead_phone?.trim() || null,
@@ -1111,7 +1000,10 @@ function compareCustomersByName(left: Customer, right: Customer): number {
   return left.company_name.localeCompare(right.company_name, "de");
 }
 
-function formatCustomerAddressForSite(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country">): string {
+function formatCustomerAddressForSite(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country" | "address_formatted">): string {
+  if (customer.address_formatted?.trim()) {
+    return customer.address_formatted.trim();
+  }
   const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
   const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
   return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
@@ -1126,6 +1018,8 @@ function customerSearchTextForSite(customer: Customer): string {
     customer.address_postal_code,
     customer.address_city,
     customer.address_country,
+    customer.address_extra,
+    customer.address_formatted,
     customer.project_lead_name,
     customer.project_lead_phone,
     customer.project_lead_email,
@@ -1302,14 +1196,6 @@ function siteSearchText(site: SiteSummary): string {
     siteStatusLabels[site.status],
   ].filter(Boolean).join(" ").toLowerCase();
 }
-
-
-function formatGeocodeMeta(result: SiteGeocodeSearchResult): string {
-  const place = [result.postal_code, result.city].filter(Boolean).join(" ");
-  const precision = result.street || result.house_number ? "Adresse" : "Ort";
-  return [place, precision].filter(Boolean).join(" · ");
-}
-
 
 
 function readApiError(error: unknown, fallback: string): string {

@@ -5,6 +5,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { AddressSearch } from "../components/AddressSearch";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
@@ -20,7 +21,7 @@ import type { Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
-import { SiteAddressSearch, SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
+import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
@@ -90,6 +91,11 @@ const emptyCustomerForProjectRecord: CustomerCreate = {
   address_postal_code: null,
   address_city: null,
   address_country: "Deutschland",
+  address_extra: null,
+  address_formatted: null,
+  address_latitude: null,
+  address_longitude: null,
+  address_location_status: "unchecked",
   company_phone: null,
   project_lead_name: null,
   project_lead_phone: null,
@@ -1461,12 +1467,24 @@ function OverviewTab({
 
             <DetailSection title="Adresse / Standort" icon={MapPin}>
               {canEdit && draft ? (
-                <SiteAddressSearch
+                <AddressSearch
                   className="site-detail-address-search"
-                  draft={draft}
                   disabled={isSaving}
-                  onChange={onDraftChange}
-                  onGeocodeSelected={onGeocodeSelected}
+                  onSelect={(result) => {
+                    const selectedValues: Partial<SiteCreate> = {
+                      address: result.label,
+                      postal_code: result.postal_code,
+                      city: result.city,
+                      location: result.city ?? draft.location,
+                      street: result.street,
+                      house_number: result.house_number,
+                      latitude: result.latitude,
+                      longitude: result.longitude,
+                      location_status: "geocoded",
+                    };
+                    onDraftChange(selectedValues);
+                    onGeocodeSelected?.(selectedValues);
+                  }}
                 />
               ) : null}
               <InlineEditableDetailItem

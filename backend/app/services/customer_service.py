@@ -5,11 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer, CustomerContact
+from app.models.enums import SiteLocationStatus
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.repositories.customer_repository import CustomerRepository
 from app.schemas.customer import CustomerCreate, CustomerEmailAddressRead, CustomerRead, CustomerUpdate
 from app.services.audit_service import AuditService
+from app.services.geo_service import has_valid_coordinates
 
 
 OPTIONAL_CUSTOMER_TEXT_FIELDS = [
@@ -19,11 +21,23 @@ OPTIONAL_CUSTOMER_TEXT_FIELDS = [
     "address_postal_code",
     "address_city",
     "address_country",
+    "address_extra",
+    "address_formatted",
     "company_phone",
     "project_lead_name",
     "project_lead_phone",
     "project_lead_email",
 ]
+ADDRESS_FIELDS = {
+    "address_street",
+    "address_house_number",
+    "address_postal_code",
+    "address_city",
+    "address_country",
+    "address_extra",
+    "address_formatted",
+}
+TECHNICAL_LOCATION_FIELDS = {"address_latitude", "address_longitude", "address_location_status"}
 CONTACT_TEXT_FIELDS = ["contact_type", "name", "phone", "email"]
 
 
@@ -43,6 +57,7 @@ class CustomerService:
 
     def create_customer(self, payload: CustomerCreate, user_id: int) -> Customer:
         values = clean_customer_values(payload.model_dump())
+        apply_selected_customer_geocode(values)
         contact_values = values.pop("contacts", [])
         customer = Customer(**values)
         customer.contacts = [CustomerContact(**contact) for contact in contact_values]
@@ -68,9 +83,19 @@ class CustomerService:
         values = clean_customer_values(payload.model_dump(exclude_unset=True), partial=True)
         contact_values = values.pop("contacts", None)
         old_value = customer_snapshot(customer)
+        address_changed = any(
+            field in values and getattr(customer, field) != values[field]
+            for field in ADDRESS_FIELDS
+        )
+        selected_geocode = apply_selected_customer_geocode(values)
 
         for field, value in values.items():
             setattr(customer, field, value)
+        if address_changed and not selected_geocode:
+            customer.address_formatted = None
+            customer.address_latitude = None
+            customer.address_longitude = None
+            customer.address_location_status = SiteLocationStatus.UNCHECKED
         if contact_values is not None:
             customer.contacts = [CustomerContact(**contact) for contact in contact_values]
 
@@ -221,6 +246,11 @@ def customer_snapshot(customer: Customer) -> dict:
         "address_postal_code": customer.address_postal_code,
         "address_city": customer.address_city,
         "address_country": customer.address_country,
+        "address_extra": getattr(customer, "address_extra", None),
+        "address_formatted": getattr(customer, "address_formatted", None),
+        "address_latitude": getattr(customer, "address_latitude", None),
+        "address_longitude": getattr(customer, "address_longitude", None),
+        "address_location_status": getattr(customer, "address_location_status", SiteLocationStatus.UNCHECKED).value,
         "company_phone": customer.company_phone,
         "project_lead_name": customer.project_lead_name,
         "project_lead_phone": customer.project_lead_phone,
@@ -240,3 +270,22 @@ def customer_snapshot(customer: Customer) -> dict:
             for contact in customer.contacts
         ],
     }
+
+
+def apply_selected_customer_geocode(values: dict) -> bool:
+    if values.get("address_location_status") == SiteLocationStatus.GEOCODED and has_valid_coordinates(
+        CoordinateDraft(values.get("address_latitude"), values.get("address_longitude"))
+    ):
+        return True
+    had_location_status = "address_location_status" in values
+    for field in TECHNICAL_LOCATION_FIELDS:
+        values.pop(field, None)
+    if had_location_status:
+        values["address_location_status"] = SiteLocationStatus.UNCHECKED
+    return False
+
+
+class CoordinateDraft:
+    def __init__(self, latitude: float | None, longitude: float | None) -> None:
+        self.latitude = latitude
+        self.longitude = longitude
