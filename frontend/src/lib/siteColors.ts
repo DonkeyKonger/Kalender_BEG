@@ -18,3 +18,13 @@ export const SITE_COLOR_OPTIONS: SiteColorOption[] = [
 export const LEGACY_SITE_COLOR_LABELS: Record<string, string> = {
   "#0891b2": "5.000 €",
 };
+
+export function getSiteColorLabel(value: string | null | undefined): string | null {
+  const normalizedValue = value?.toLowerCase();
+  if (!normalizedValue) {
+    return null;
+  }
+  return SITE_COLOR_OPTIONS.find((option) => option.value.toLowerCase() === normalizedValue)?.label
+    ?? LEGACY_SITE_COLOR_LABELS[normalizedValue]
+    ?? null;
+}

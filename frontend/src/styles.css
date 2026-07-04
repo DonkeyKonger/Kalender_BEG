@@ -2120,6 +2120,96 @@ button.entity-card:focus-visible,
   padding: 7px 10px;
 }
 
+.customer-project-table-wrap {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid #dbe4ef;
+  background: #ffffff;
+}
+
+.customer-project-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  color: #172033;
+  font-size: 0.83rem;
+}
+
+.customer-project-table th,
+.customer-project-table td {
+  border-bottom: 1px solid #e5edf6;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.customer-project-table th {
+  background: #f4f7fb;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.customer-project-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.customer-project-table th:first-child,
+.customer-project-table td:first-child {
+  width: 92px;
+}
+
+.customer-project-table th:last-child,
+.customer-project-table td:last-child {
+  width: 116px;
+}
+
+.customer-project-number-link,
+.customer-project-name-link {
+  color: #172033;
+  text-decoration: none;
+}
+
+.customer-project-number-link {
+  font-weight: 650;
+}
+
+.customer-project-name-link {
+  display: block;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-project-number-link:hover,
+.customer-project-number-link:focus-visible,
+.customer-project-name-link:hover,
+.customer-project-name-link:focus-visible {
+  color: #1d5c99;
+  text-decoration: underline;
+  outline: none;
+}
+
+.customer-project-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.customer-project-size .site-color-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+}
+
+.customer-project-empty-value {
+  color: #94a3b8;
+}
+
 .detail-read-grid {
   display: grid;
   gap: 10px;

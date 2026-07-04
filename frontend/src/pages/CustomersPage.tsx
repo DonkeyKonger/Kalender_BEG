@@ -17,13 +17,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
+import { getSiteColorLabel } from "../lib/siteColors";
+import { compareSiteNumbers } from "../lib/siteSorting";
 import type { Customer, CustomerContactInput, CustomerCreate } from "../types/customer";
+import type { SiteSummary } from "../types/site";
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
@@ -62,6 +66,7 @@ export function CustomersPage() {
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const canRemove = user?.role === "admin";
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [siteSummaries, setSiteSummaries] = useState<SiteSummary[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditableCustomer>>({});
   const [createForm, setCreateForm] = useState<CustomerCreate>(emptyCustomer);
   const [drawer, setDrawer] = useState<DrawerState>(null);
@@ -80,8 +85,12 @@ export function CustomersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const customerData = await api.customers();
+      const [customerData, siteData] = await Promise.all([
+        api.customers(),
+        api.siteSummaries({ includeClosed: true }),
+      ]);
       setCustomers(customerData);
+      setSiteSummaries(siteData);
       setDrafts(toEditableCustomers(customerData));
     } catch (requestError) {
       setError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
@@ -105,6 +114,10 @@ export function CustomersPage() {
   const selectedDraft = drawer?.mode === "edit" && selectedCustomer
     ? drafts[selectedCustomer.id] ?? toEditableCustomer(selectedCustomer)
     : null;
+  const selectedCustomerProjects = useMemo(
+    () => selectedCustomer ? customerProjects(siteSummaries, selectedCustomer.id) : [],
+    [selectedCustomer, siteSummaries],
+  );
 
   async function createCustomer() {
     const validationError = validateCustomerPayload(createForm);
@@ -405,6 +418,7 @@ export function CustomersPage() {
               canEdit={canEdit}
               customer={selectedCustomer}
               isSaving={savingCustomerId === selectedCustomer.id}
+              projects={selectedCustomerProjects}
               onSaveContacts={(contacts) => saveCustomerContacts(selectedCustomer.id, contacts)}
             />
           )
@@ -418,11 +432,13 @@ function CustomerReadView({
   canEdit,
   customer,
   isSaving,
+  projects,
   onSaveContacts,
 }: {
   canEdit: boolean;
   customer: Customer;
   isSaving: boolean;
+  projects: SiteSummary[];
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
   const contactRows = customerContactRows(customer);
@@ -490,7 +506,9 @@ function CustomerReadView({
             icon={Briefcase}
             onOpen={() => setActiveSubview("projects")}
             title="Projekte"
-            preview="Projektübersicht wird vorbereitet."
+            preview={projects.length
+              ? `${projects.length} Projekt${projects.length === 1 ? "" : "e"} zugeordnet`
+              : "Keine Projekte zugeordnet"}
           />
         </section>
       </div>
@@ -498,7 +516,7 @@ function CustomerReadView({
       {activeSubview && (
         <CustomerDetailSubpage title={subviewTitle} onBack={() => setActiveSubview(null)}>
           {activeSubview === "projects" ? (
-            <p className="detail-empty">Projektübersicht wird vorbereitet.</p>
+            <CustomerProjectsList projects={projects} />
           ) : (
             <CustomerContactEditor
               canEdit={canEdit}
@@ -509,6 +527,55 @@ function CustomerReadView({
           )}
         </CustomerDetailSubpage>
       )}
+    </div>
+  );
+}
+
+function CustomerProjectsList({ projects }: { projects: SiteSummary[] }) {
+  if (!projects.length) {
+    return <p className="detail-empty">Keine Projekte zugeordnet.</p>;
+  }
+
+  return (
+    <div className="customer-project-table-wrap">
+      <table className="customer-project-table">
+        <thead>
+          <tr>
+            <th scope="col">Nummer</th>
+            <th scope="col">Baustelle</th>
+            <th scope="col">Größe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((site) => {
+            const sizeLabel = getSiteColorLabel(site.color);
+            return (
+              <tr key={site.id}>
+                <td>
+                  <Link className="customer-project-number-link" to={`/sites/${site.id}`}>
+                    {site.site_number ?? "-"}
+                  </Link>
+                </td>
+                <td>
+                  <Link className="customer-project-name-link" to={`/sites/${site.id}`} title={site.name}>
+                    {site.name}
+                  </Link>
+                </td>
+                <td>
+                  {sizeLabel ? (
+                    <span className="customer-project-size">
+                      <span className="site-color-swatch" style={{ backgroundColor: site.color ?? "#94a3b8" }} />
+                      <span>{sizeLabel}</span>
+                    </span>
+                  ) : (
+                    <span className="customer-project-empty-value">-</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -901,6 +968,18 @@ function groupCustomersAlphabetically(customers: Customer[]): Array<{ key: strin
       label: key === "#" ? "Sonstige" : key,
       customers: groupCustomers,
     }));
+}
+
+function customerProjects(sites: SiteSummary[], customerId: number): SiteSummary[] {
+  return sites
+    .filter((site) => site.customer_id === customerId && site.status !== "deleted")
+    .sort(compareCustomerProjects);
+}
+
+function compareCustomerProjects(left: SiteSummary, right: SiteSummary): number {
+  return compareSiteNumbers(left.site_number, right.site_number)
+    || left.name.localeCompare(right.name, "de")
+    || left.id - right.id;
 }
 
 function formatCustomerAddress(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country" | "address_formatted">): string {

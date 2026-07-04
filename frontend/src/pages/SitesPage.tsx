@@ -9,6 +9,7 @@ import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
+import { compareSiteNumbers } from "../lib/siteSorting";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
@@ -1032,29 +1033,6 @@ function compareSites(left: SiteSummary, right: SiteSummary): number {
   return compareSiteNumbers(left.site_number, right.site_number)
     || left.name.localeCompare(right.name, "de")
     || left.id - right.id;
-}
-
-function compareSiteNumbers(left: string | null, right: string | null): number {
-  const leftNumber = parseSiteNumber(left);
-  const rightNumber = parseSiteNumber(right);
-  if (leftNumber !== null && rightNumber !== null) {
-    return leftNumber - rightNumber;
-  }
-  if (leftNumber !== null) {
-    return -1;
-  }
-  if (rightNumber !== null) {
-    return 1;
-  }
-  return (left ?? "").localeCompare(right ?? "", "de");
-}
-
-function parseSiteNumber(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-  const matches = value.match(/\d+/g);
-  return matches?.length ? Number(matches[matches.length - 1]) : null;
 }
 
 function renderSiteCard(
