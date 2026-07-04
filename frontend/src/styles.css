@@ -2113,6 +2113,9 @@ button.entity-card:focus-visible,
 
 .customer-contact-add-button {
   justify-self: start;
+  min-height: 32px;
+  border-radius: 0;
+  padding: 7px 10px;
 }
 
 .detail-read-grid {
