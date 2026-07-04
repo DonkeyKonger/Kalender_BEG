@@ -490,7 +490,6 @@ function CustomerReadView({
 
         <section className="detail-read-section customer-detail-address-section">
           <div className="customer-detail-section-heading">
-            <MapPin aria-hidden="true" size={17} />
             <h3>Firmenadresse</h3>
           </div>
           <div className={`customer-address-panel ${hasAddress ? "has-address" : "is-empty"}`}>
