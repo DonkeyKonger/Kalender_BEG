@@ -1155,7 +1155,6 @@ function displayCustomerContactRole(value: string | null | undefined): string {
 function customerCardMeta(customer: Customer): string[] {
   return [
     customer.company_phone,
-    customer.contacts.length ? `${customer.contacts.length} Ansprechpartner` : "",
   ].filter((item): item is string => Boolean(item));
 }
 
