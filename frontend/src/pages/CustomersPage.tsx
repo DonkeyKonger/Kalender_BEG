@@ -362,6 +362,7 @@ export function CustomersPage() {
           isEditingCustomer ? (
             <CustomerFields
               draft={selectedDraft}
+              showContactSections={false}
               onChange={(values) => updateDraft(selectedCustomer.id, values)}
             />
           ) : (
@@ -530,9 +531,11 @@ function ReadItem({ label, value }: { label: string; value: string }) {
 
 export function CustomerFields({
   draft,
+  showContactSections = true,
   onChange,
 }: {
   draft: CustomerCreate;
+  showContactSections?: boolean;
   onChange: (values: Partial<CustomerCreate>) => void;
 }) {
   function updateContact(index: number, values: Partial<CustomerContactInput>) {
@@ -617,92 +620,96 @@ export function CustomerFields({
         </label>
       </section>
 
-      <section className="customer-form-section">
-        <div>
-          <h3>Projektleiter Kunde</h3>
-          <p>Kontaktdaten der kundenseitigen Projektleitung.</p>
-        </div>
-        <label>
-          <span>Name</span>
-          <input
-            value={draft.project_lead_name ?? ""}
-            onChange={(event) => onChange({ project_lead_name: event.target.value || null })}
-          />
-        </label>
-        <label>
-          <span>Telefon</span>
-          <input
-            value={draft.project_lead_phone ?? ""}
-            onChange={(event) => onChange({ project_lead_phone: event.target.value || null })}
-          />
-        </label>
-        <label>
-          <span>Mail</span>
-          <input
-            value={draft.project_lead_email ?? ""}
-            onChange={(event) => onChange({ project_lead_email: event.target.value || null })}
-          />
-        </label>
-      </section>
+      {showContactSections && (
+        <>
+          <section className="customer-form-section">
+            <div>
+              <h3>Projektleiter Kunde</h3>
+              <p>Kontaktdaten der kundenseitigen Projektleitung.</p>
+            </div>
+            <label>
+              <span>Name</span>
+              <input
+                value={draft.project_lead_name ?? ""}
+                onChange={(event) => onChange({ project_lead_name: event.target.value || null })}
+              />
+            </label>
+            <label>
+              <span>Telefon</span>
+              <input
+                value={draft.project_lead_phone ?? ""}
+                onChange={(event) => onChange({ project_lead_phone: event.target.value || null })}
+              />
+            </label>
+            <label>
+              <span>Mail</span>
+              <input
+                value={draft.project_lead_email ?? ""}
+                onChange={(event) => onChange({ project_lead_email: event.target.value || null })}
+              />
+            </label>
+          </section>
 
-      <section className="customer-form-section customer-contacts-section">
-        <div className="customer-contacts-header">
-          <div>
-            <h3>Ansprechpartner vor Ort</h3>
-            <p>Kunden-Ansprechpartner, nicht interne BEG-Monteure.</p>
-          </div>
-          <button className="icon-button secondary" type="button" onClick={addContact}>
-            <Plus aria-hidden="true" size={15} />
-            <span>Kontakt</span>
-          </button>
-        </div>
-        {draft.contacts.length === 0 ? (
-          <p className="detail-empty">Noch kein Ansprechpartner hinterlegt.</p>
-        ) : (
-          <div className="customer-contact-form-list">
-            {draft.contacts.map((contact, index) => (
-              <div className="customer-contact-form-row" key={index}>
-                <label>
-                  <span>Typ</span>
-                  <select
-                    value={contact.contact_type}
-                    onChange={(event) => updateContact(index, { contact_type: event.target.value })}
-                  >
-                    {Object.entries(customerContactTypeLabels).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Name</span>
-                  <input
-                    value={contact.name}
-                    onChange={(event) => updateContact(index, { name: event.target.value })}
-                  />
-                </label>
-                <label>
-                  <span>Telefon</span>
-                  <input
-                    value={contact.phone ?? ""}
-                    onChange={(event) => updateContact(index, { phone: event.target.value || null })}
-                  />
-                </label>
-                <label>
-                  <span>Mail</span>
-                  <input
-                    value={contact.email ?? ""}
-                    onChange={(event) => updateContact(index, { email: event.target.value || null })}
-                  />
-                </label>
-                <button className="icon-button secondary" type="button" onClick={() => removeContact(index)}>
-                  <Trash2 aria-hidden="true" size={15} />
-                  <span>Entfernen</span>
-                </button>
+          <section className="customer-form-section customer-contacts-section">
+            <div className="customer-contacts-header">
+              <div>
+                <h3>Ansprechpartner vor Ort</h3>
+                <p>Kunden-Ansprechpartner, nicht interne BEG-Monteure.</p>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+              <button className="icon-button secondary" type="button" onClick={addContact}>
+                <Plus aria-hidden="true" size={15} />
+                <span>Kontakt</span>
+              </button>
+            </div>
+            {draft.contacts.length === 0 ? (
+              <p className="detail-empty">Noch kein Ansprechpartner hinterlegt.</p>
+            ) : (
+              <div className="customer-contact-form-list">
+                {draft.contacts.map((contact, index) => (
+                  <div className="customer-contact-form-row" key={index}>
+                    <label>
+                      <span>Typ</span>
+                      <select
+                        value={contact.contact_type}
+                        onChange={(event) => updateContact(index, { contact_type: event.target.value })}
+                      >
+                        {Object.entries(customerContactTypeLabels).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Name</span>
+                      <input
+                        value={contact.name}
+                        onChange={(event) => updateContact(index, { name: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Telefon</span>
+                      <input
+                        value={contact.phone ?? ""}
+                        onChange={(event) => updateContact(index, { phone: event.target.value || null })}
+                      />
+                    </label>
+                    <label>
+                      <span>Mail</span>
+                      <input
+                        value={contact.email ?? ""}
+                        onChange={(event) => updateContact(index, { email: event.target.value || null })}
+                      />
+                    </label>
+                    <button className="icon-button secondary" type="button" onClick={() => removeContact(index)}>
+                      <Trash2 aria-hidden="true" size={15} />
+                      <span>Entfernen</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }
