@@ -31,7 +31,7 @@ type CustomerDetailSubviewKey = "contacts" | "projects";
 type CustomerContactRow = CustomerContactInput & { key: string };
 
 const customerContactTypeLabels: Record<string, string> = {
-  monteur: "Ansprechpartner vor Ort",
+  monteur: "Ansprechpartner",
   bauleiter: "Bauleiter Kunde",
   einkauf: "Einkauf",
   rechnung: "Rechnung",
@@ -56,15 +56,6 @@ const emptyCustomer: CustomerCreate = {
   is_active: true,
   contacts: [],
 };
-
-function emptyCustomerContact(): CustomerContactInput {
-  return {
-    contact_type: "monteur",
-    name: "",
-    phone: null,
-    email: null,
-  };
-}
 
 export function CustomersPage() {
   const { user } = useAuth();
@@ -335,7 +326,6 @@ export function CustomersPage() {
       >
         <CustomerFields
           draft={createForm}
-          showContactSections={false}
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
@@ -407,7 +397,6 @@ export function CustomersPage() {
               </button>
               <CustomerFields
                 draft={selectedDraft}
-                showContactSections={false}
                 onChange={(values) => updateDraft(selectedCustomer.id, values)}
               />
             </div>
@@ -740,28 +729,11 @@ function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {
 
 export function CustomerFields({
   draft,
-  showContactSections = true,
   onChange,
 }: {
   draft: CustomerCreate;
-  showContactSections?: boolean;
   onChange: (values: Partial<CustomerCreate>) => void;
 }) {
-  function updateContact(index: number, values: Partial<CustomerContactInput>) {
-    const nextContacts = draft.contacts.map((contact, currentIndex) => (
-      currentIndex === index ? { ...contact, ...values } : contact
-    ));
-    onChange({ contacts: nextContacts });
-  }
-
-  function addContact() {
-    onChange({ contacts: [...draft.contacts, emptyCustomerContact()] });
-  }
-
-  function removeContact(index: number) {
-    onChange({ contacts: draft.contacts.filter((_, currentIndex) => currentIndex !== index) });
-  }
-
   return (
     <div className="person-form-grid customer-form-grid">
       <label className="customer-company-field">
@@ -817,97 +789,6 @@ export function CustomerFields({
           <AddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
         </div>
       </section>
-
-      {showContactSections && (
-        <>
-          <section className="customer-form-section">
-            <div>
-              <h3>Projektleiter Kunde</h3>
-              <p>Kontaktdaten der kundenseitigen Projektleitung.</p>
-            </div>
-            <label>
-              <span>Name</span>
-              <input
-                value={draft.project_lead_name ?? ""}
-                onChange={(event) => onChange({ project_lead_name: event.target.value || null })}
-              />
-            </label>
-            <label>
-              <span>Telefon</span>
-              <input
-                value={draft.project_lead_phone ?? ""}
-                onChange={(event) => onChange({ project_lead_phone: event.target.value || null })}
-              />
-            </label>
-            <label>
-              <span>Mail</span>
-              <input
-                value={draft.project_lead_email ?? ""}
-                onChange={(event) => onChange({ project_lead_email: event.target.value || null })}
-              />
-            </label>
-          </section>
-
-          <section className="customer-form-section customer-contacts-section">
-            <div className="customer-contacts-header">
-              <div>
-                <h3>Ansprechpartner vor Ort</h3>
-                <p>Kunden-Ansprechpartner, nicht interne BEG-Monteure.</p>
-              </div>
-              <button className="icon-button secondary" type="button" onClick={addContact}>
-                <Plus aria-hidden="true" size={15} />
-                <span>Kontakt</span>
-              </button>
-            </div>
-            {draft.contacts.length === 0 ? (
-              <p className="detail-empty">Noch kein Ansprechpartner hinterlegt.</p>
-            ) : (
-              <div className="customer-contact-form-list">
-                {draft.contacts.map((contact, index) => (
-                  <div className="customer-contact-form-row" key={index}>
-                    <label>
-                      <span>Typ</span>
-                      <select
-                        value={contact.contact_type ?? "monteur"}
-                        onChange={(event) => updateContact(index, { contact_type: event.target.value })}
-                      >
-                        {Object.entries(customerContactTypeLabels).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Name</span>
-                      <input
-                        value={contact.name ?? ""}
-                        onChange={(event) => updateContact(index, { name: event.target.value })}
-                      />
-                    </label>
-                    <label>
-                      <span>Telefon</span>
-                      <input
-                        value={contact.phone ?? ""}
-                        onChange={(event) => updateContact(index, { phone: event.target.value || null })}
-                      />
-                    </label>
-                    <label>
-                      <span>Mail</span>
-                      <input
-                        value={contact.email ?? ""}
-                        onChange={(event) => updateContact(index, { email: event.target.value || null })}
-                      />
-                    </label>
-                    <button className="icon-button secondary" type="button" onClick={() => removeContact(index)}>
-                      <Trash2 aria-hidden="true" size={15} />
-                      <span>Entfernen</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </>
-      )}
     </div>
   );
 }
