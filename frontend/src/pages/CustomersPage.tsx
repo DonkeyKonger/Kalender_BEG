@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Mail,
   MapPin,
   Pencil,
   Phone,
@@ -27,7 +28,7 @@ import type { Customer, CustomerContactInput, CustomerCreate } from "../types/cu
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
-type CustomerAccordionKey = "contacts" | "projects";
+type CustomerDetailSubviewKey = "emails" | "contacts" | "projects";
 type CustomerContactRow = CustomerContactInput & { key: string };
 
 const customerContactTypeLabels: Record<string, string> = {
@@ -436,118 +437,150 @@ function CustomerReadView({
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
   const contactRows = customerContactRows(customer);
+  const emailCount = contactRows.filter((contact) => contact.email?.trim()).length;
   const addressLines = customerAddressLines(customer);
   const hasAddress = addressLines.length > 0;
-  const [openSections, setOpenSections] = useState<Record<CustomerAccordionKey, boolean>>({
-    contacts: false,
-    projects: false,
-  });
+  const [activeSubview, setActiveSubview] = useState<CustomerDetailSubviewKey | null>(null);
 
-  function toggleSection(section: CustomerAccordionKey) {
-    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
-  }
+  useEffect(() => {
+    setActiveSubview(null);
+  }, [customer.id]);
+
+  const subviewTitle = activeSubview === "emails"
+    ? "E-Mail-Adressen"
+    : activeSubview === "contacts"
+      ? "Ansprechpartner / Kontakte"
+      : activeSubview === "projects"
+        ? "Projekte"
+        : "";
 
   return (
     <div className="detail-read-view customer-detail-view">
-      <section className="detail-read-section customer-detail-master-section">
-        <div className="customer-detail-master-grid">
-          <CustomerDetailField label="Firmenname">
-            <strong>{customer.company_name}</strong>
-          </CustomerDetailField>
-          <CustomerDetailField label="Firmentelefon">
-            <CustomerPhoneLink phone={customer.company_phone} />
-          </CustomerDetailField>
-        </div>
-      </section>
-
-      <section className="detail-read-section customer-detail-address-section">
-        <div className="customer-detail-section-heading">
-          <MapPin aria-hidden="true" size={17} />
-          <h3>Firmenadresse</h3>
-        </div>
-        <div className={`customer-address-panel ${hasAddress ? "has-address" : "is-empty"}`}>
-          <div className="customer-address-status">
-            <CheckCircle2 aria-hidden="true" size={16} />
-            <span>{hasAddress ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+      <div className="customer-detail-main" aria-hidden={activeSubview ? true : undefined}>
+        <section className="detail-read-section customer-detail-master-section">
+          <div className="customer-detail-master-grid">
+            <CustomerDetailField label="Firmenname">
+              <strong>{customer.company_name}</strong>
+            </CustomerDetailField>
+            <CustomerDetailField label="Firmentelefon">
+              <CustomerPhoneLink phone={customer.company_phone} />
+            </CustomerDetailField>
           </div>
-          {hasAddress ? (
-            <div className="customer-address-lines">
-              <MapPin aria-hidden="true" size={18} />
-              <div>
-                {addressLines.map((line) => <strong key={line}>{line}</strong>)}
-              </div>
+        </section>
+
+        <section className="detail-read-section customer-detail-address-section">
+          <div className="customer-detail-section-heading">
+            <MapPin aria-hidden="true" size={17} />
+            <h3>Firmenadresse</h3>
+          </div>
+          <div className={`customer-address-panel ${hasAddress ? "has-address" : "is-empty"}`}>
+            <div className="customer-address-status">
+              <CheckCircle2 aria-hidden="true" size={16} />
+              <span>{hasAddress ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
             </div>
-          ) : (
-            <p className="detail-empty">Noch keine Firmenadresse hinterlegt.</p>
-          )}
-        </div>
-      </section>
+            {hasAddress ? (
+              <div className="customer-address-lines">
+                <MapPin aria-hidden="true" size={18} />
+                <div>
+                  {addressLines.map((line) => <strong key={line}>{line}</strong>)}
+                </div>
+              </div>
+            ) : (
+              <p className="detail-empty">Noch keine Firmenadresse hinterlegt.</p>
+            )}
+          </div>
+        </section>
 
-      <div className="customer-accordion-list">
-        <CustomerDetailAccordionSection
-          icon={Users}
-          isOpen={openSections.contacts}
-          onToggle={() => toggleSection("contacts")}
-          title="Ansprechpartner / Kontakte"
-          preview={contactRows.length
-            ? `${contactRows.length} Kontakt${contactRows.length === 1 ? "" : "e"} hinterlegt`
-            : "Keine Kontakte hinterlegt"}
-        >
-          <CustomerContactEditor
-            canEdit={canEdit}
-            contactRows={contactRows}
-            isSaving={isSaving}
-            onSaveContacts={onSaveContacts}
+        <section className="detail-read-section customer-detail-nav-section">
+          <CustomerDetailNavItem
+            icon={Mail}
+            onOpen={() => setActiveSubview("emails")}
+            title="E-Mail-Adressen"
+            preview={emailCount
+              ? `${emailCount} E-Mail-Adresse${emailCount === 1 ? "" : "n"} hinterlegt`
+              : "Keine E-Mail-Adressen hinterlegt"}
           />
-        </CustomerDetailAccordionSection>
-
-        <CustomerDetailAccordionSection
-          icon={Briefcase}
-          isOpen={openSections.projects}
-          onToggle={() => toggleSection("projects")}
-          title="Projekte"
-          preview="Projektübersicht wird vorbereitet."
-        >
-          <p className="detail-empty">Projektübersicht wird vorbereitet.</p>
-        </CustomerDetailAccordionSection>
+          <CustomerDetailNavItem
+            icon={Users}
+            onOpen={() => setActiveSubview("contacts")}
+            title="Ansprechpartner / Kontakte"
+            preview={contactRows.length
+              ? `${contactRows.length} Kontakt${contactRows.length === 1 ? "" : "e"} hinterlegt`
+              : "Keine Kontakte hinterlegt"}
+          />
+          <CustomerDetailNavItem
+            icon={Briefcase}
+            onOpen={() => setActiveSubview("projects")}
+            title="Projekte"
+            preview="Projektübersicht wird vorbereitet."
+          />
+        </section>
       </div>
+
+      {activeSubview && (
+        <CustomerDetailSubpage title={subviewTitle} onBack={() => setActiveSubview(null)}>
+          {activeSubview === "projects" ? (
+            <p className="detail-empty">Projektübersicht wird vorbereitet.</p>
+          ) : (
+            <CustomerContactEditor
+              canEdit={canEdit}
+              contactRows={contactRows}
+              isSaving={isSaving}
+              onSaveContacts={onSaveContacts}
+            />
+          )}
+        </CustomerDetailSubpage>
+      )}
     </div>
   );
 }
 
-function CustomerDetailAccordionSection({
+function CustomerDetailNavItem({
   icon: Icon,
-  isOpen,
   title,
   preview,
-  onToggle,
-  children,
+  onOpen,
 }: {
   icon: LucideIcon;
-  isOpen: boolean;
   title: string;
   preview: string;
-  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  return (
+    <button className="customer-detail-nav-button" type="button" onClick={onOpen}>
+      <span className="customer-detail-nav-icon">
+        <Icon aria-hidden="true" size={18} />
+      </span>
+      <span className="customer-detail-nav-copy">
+        <span className="customer-detail-nav-title">{title}</span>
+        <span className="customer-detail-nav-preview">{preview}</span>
+      </span>
+      <ChevronRight aria-hidden="true" size={17} />
+    </button>
+  );
+}
+
+function CustomerDetailSubpage({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
   children: ReactNode;
 }) {
   return (
-    <section className="customer-accordion-section">
-      <button
-        aria-expanded={isOpen}
-        className={`customer-accordion-button${isOpen ? " is-open" : ""}`}
-        type="button"
-        onClick={onToggle}
-      >
-        <span className="customer-accordion-icon">
-          <Icon aria-hidden="true" size={18} />
-        </span>
-        <span className="customer-accordion-copy">
-          <span className="customer-accordion-title">{title}</span>
-          <span className="customer-accordion-preview">{preview}</span>
-        </span>
-        <ChevronRight aria-hidden="true" className="customer-accordion-chevron" size={17} />
-      </button>
-      {isOpen && <div className="customer-accordion-content">{children}</div>}
+    <section className="customer-detail-subpage" aria-label={title}>
+      <header className="customer-detail-subpage-header">
+        <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={16} />
+          <span>Zurück</span>
+        </button>
+        <h3>{title}</h3>
+      </header>
+      <div className="customer-detail-subpage-body">
+        {children}
+      </div>
     </section>
   );
 }
