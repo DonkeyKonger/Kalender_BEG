@@ -1,5 +1,23 @@
-import { ArrowLeft, Building2, ChevronDown, ChevronRight, Plus, Save, Search, Trash2, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  Users,
+  UserPlus,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
@@ -10,7 +28,7 @@ import type { Customer, CustomerContactInput, CustomerCreate } from "../types/cu
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
-type CustomerDetailSubview = "emails" | "contacts" | "projects";
+type CustomerAccordionKey = "emails" | "contacts" | "projects";
 
 const customerContactTypeLabels: Record<string, string> = {
   monteur: "Ansprechpartner vor Ort",
@@ -58,7 +76,6 @@ export function CustomersPage() {
   const [createForm, setCreateForm] = useState<CustomerCreate>(emptyCustomer);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
-  const [customerDetailSubview, setCustomerDetailSubview] = useState<CustomerDetailSubview | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingCustomerId, setSavingCustomerId] = useState<number | null>(null);
@@ -187,13 +204,11 @@ export function CustomersPage() {
   function openNewCustomerDrawer() {
     setCreateForm(emptyCustomer);
     setIsEditingCustomer(false);
-    setCustomerDetailSubview(null);
     setDrawer({ mode: "new" });
   }
 
   function openCustomerDrawer(customerId: number) {
     setIsEditingCustomer(false);
-    setCustomerDetailSubview(null);
     setDrawer({ mode: "edit", customerId });
   }
 
@@ -213,7 +228,6 @@ export function CustomersPage() {
       setCreateForm(emptyCustomer);
     }
     setIsEditingCustomer(false);
-    setCustomerDetailSubview(null);
     setDrawer(null);
   }
 
@@ -309,18 +323,19 @@ export function CustomersPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedCustomer && selectedDraft)}
-        title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : "Kunde" : "Kunde"}
-        subtitle={selectedCustomer ? selectedCustomer.company_name : undefined}
+        eyebrow={selectedCustomer && !isEditingCustomer ? "KUNDE" : undefined}
+        title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : selectedCustomer.company_name : "Kunde"}
+        subtitle={selectedCustomer && isEditingCustomer ? selectedCustomer.company_name : undefined}
         onClose={closeDrawer}
-        actions={selectedCustomer && canEdit && !isEditingCustomer && !customerDetailSubview ? (
+        actions={selectedCustomer && canEdit && !isEditingCustomer ? (
           <button
             className="icon-button secondary"
             type="button"
             onClick={() => {
-              setCustomerDetailSubview(null);
               setIsEditingCustomer(true);
             }}
           >
+            <Pencil aria-hidden="true" size={16} />
             <span>Bearbeiten</span>
           </button>
         ) : undefined}
@@ -378,15 +393,7 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            customerDetailSubview ? (
-              <CustomerDetailSubviewView
-                customer={selectedCustomer}
-                view={customerDetailSubview}
-                onBack={() => setCustomerDetailSubview(null)}
-              />
-            ) : (
-              <CustomerReadView customer={selectedCustomer} onOpenSubview={setCustomerDetailSubview} />
-            )
+            <CustomerReadView customer={selectedCustomer} />
           )
         )}
       </EntityDetailDrawer>
@@ -394,103 +401,67 @@ export function CustomersPage() {
   );
 }
 
-function CustomerReadView({
-  customer,
-  onOpenSubview,
-}: {
-  customer: Customer;
-  onOpenSubview: (view: CustomerDetailSubview) => void;
-}) {
+function CustomerReadView({ customer }: { customer: Customer }) {
   const emailItems = customerEmailItems(customer);
+  const addressLines = customerAddressLines(customer);
+  const hasAddress = addressLines.length > 0;
+  const [openSections, setOpenSections] = useState<Record<CustomerAccordionKey, boolean>>({
+    emails: false,
+    contacts: false,
+    projects: false,
+  });
+
+  function toggleSection(section: CustomerAccordionKey) {
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
+  }
 
   return (
-    <div className="detail-read-view">
-      <section className="detail-read-section">
-        <h3>Firma</h3>
-        <div className="detail-read-grid">
-          <ReadItem label="Firmenname" value={customer.company_name} />
-          <ReadItem label="Firmentelefon" value={customer.company_phone || "-"} />
+    <div className="detail-read-view customer-detail-view">
+      <section className="detail-read-section customer-detail-master-section">
+        <div className="customer-detail-master-grid">
+          <CustomerDetailField label="Firmenname">
+            <strong>{customer.company_name}</strong>
+          </CustomerDetailField>
+          <CustomerDetailField label="Firmentelefon">
+            <CustomerPhoneLink phone={customer.company_phone} />
+          </CustomerDetailField>
         </div>
       </section>
 
-      <section className="detail-read-section">
-        <h3>Firmenadresse</h3>
-        <div className={`detail-address-card ${formatCustomerAddress(customer) ? "has-address" : "is-empty"}`}>
-          <span>{formatCustomerAddress(customer) ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
-          {formatCustomerAddress(customer) ? <strong>{formatCustomerAddress(customer)}</strong> : null}
+      <section className="detail-read-section customer-detail-address-section">
+        <div className="customer-detail-section-heading">
+          <MapPin aria-hidden="true" size={17} />
+          <h3>Firmenadresse</h3>
+        </div>
+        <div className={`customer-address-panel ${hasAddress ? "has-address" : "is-empty"}`}>
+          <div className="customer-address-status">
+            <CheckCircle2 aria-hidden="true" size={16} />
+            <span>{hasAddress ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+          </div>
+          {hasAddress ? (
+            <div className="customer-address-lines">
+              <MapPin aria-hidden="true" size={18} />
+              <div>
+                {addressLines.map((line) => <strong key={line}>{line}</strong>)}
+              </div>
+            </div>
+          ) : (
+            <p className="detail-empty">Noch keine Firmenadresse hinterlegt.</p>
+          )}
         </div>
       </section>
 
-      <CustomerDetailNavSection
-        title="E-Mail-Adressen"
-        preview={emailItems.length
-          ? `${emailItems.length} E-Mail-Adresse${emailItems.length === 1 ? "" : "n"} hinterlegt`
-          : "Keine E-Mail-Adressen hinterlegt."}
-        onClick={() => onOpenSubview("emails")}
-      />
-
-      <CustomerDetailNavSection
-        title="Ansprechpartner"
-        preview={customer.contacts.length
-          ? `${customer.contacts.length} Ansprechpartner hinterlegt`
-          : "Keine Ansprechpartner hinterlegt."}
-        onClick={() => onOpenSubview("contacts")}
-      />
-
-      <CustomerDetailNavSection
-        title="Projekte"
-        preview="Projektübersicht wird vorbereitet."
-        onClick={() => onOpenSubview("projects")}
-      />
-    </div>
-  );
-}
-
-function CustomerDetailNavSection({
-  title,
-  preview,
-  onClick,
-}: {
-  title: string;
-  preview: string;
-  onClick: () => void;
-}) {
-  return (
-    <section className="detail-read-section customer-detail-nav-section">
-      <button className="customer-detail-nav-button" type="button" onClick={onClick}>
-        <span className="customer-detail-nav-copy">
-          <span className="customer-detail-nav-title">{title}</span>
-          <span className="customer-detail-nav-preview">{preview}</span>
-        </span>
-        <ChevronRight aria-hidden="true" size={17} />
-      </button>
-    </section>
-  );
-}
-
-function CustomerDetailSubviewView({
-  customer,
-  view,
-  onBack,
-}: {
-  customer: Customer;
-  view: CustomerDetailSubview;
-  onBack: () => void;
-}) {
-  const emailItems = customerEmailItems(customer);
-  const title = view === "emails" ? "E-Mail-Adressen" : view === "contacts" ? "Ansprechpartner" : "Projekte";
-
-  return (
-    <div className="detail-read-view customer-detail-subview">
-      <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={16} />
-        <span>Zurück</span>
-      </button>
-
-      <section className="detail-read-section">
-        <h3>{title}</h3>
-        {view === "emails" && (
-          emailItems.length ? (
+      <div className="customer-accordion-list">
+        <CustomerDetailAccordionSection
+          icon={Mail}
+          isOpen={openSections.emails}
+          onToggle={() => toggleSection("emails")}
+          title="E-Mail-Adressen"
+          preview={emailItems.length
+            ? `${emailItems.length} E-Mail-Adresse${emailItems.length === 1 ? "" : "n"} hinterlegt`
+            : "Keine E-Mail-Adressen hinterlegt"}
+        >
+          {emailItems.length ? (
             <div className="customer-email-list">
               {emailItems.map((item) => (
                 <div className="customer-email-row" key={item.email}>
@@ -501,20 +472,95 @@ function CustomerDetailSubviewView({
             </div>
           ) : (
             <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>
-          )
-        )}
-        {view === "contacts" && (
-          customer.contacts.length ? (
+          )}
+        </CustomerDetailAccordionSection>
+
+        <CustomerDetailAccordionSection
+          icon={Users}
+          isOpen={openSections.contacts}
+          onToggle={() => toggleSection("contacts")}
+          title="Ansprechpartner"
+          preview={customer.contacts.length
+            ? `${customer.contacts.length} Ansprechpartner hinterlegt`
+            : "Keine Ansprechpartner hinterlegt"}
+        >
+          {customer.contacts.length ? (
             <CustomerContactCardList contacts={customer.contacts} />
           ) : (
             <p className="detail-empty">Keine Ansprechpartner hinterlegt.</p>
-          )
-        )}
-        {view === "projects" && (
+          )}
+        </CustomerDetailAccordionSection>
+
+        <CustomerDetailAccordionSection
+          icon={Briefcase}
+          isOpen={openSections.projects}
+          onToggle={() => toggleSection("projects")}
+          title="Projekte"
+          preview="Projektübersicht wird vorbereitet."
+        >
           <p className="detail-empty">Projektübersicht wird vorbereitet.</p>
-        )}
-      </section>
+        </CustomerDetailAccordionSection>
+      </div>
     </div>
+  );
+}
+
+function CustomerDetailAccordionSection({
+  icon: Icon,
+  isOpen,
+  title,
+  preview,
+  onToggle,
+  children,
+}: {
+  icon: LucideIcon;
+  isOpen: boolean;
+  title: string;
+  preview: string;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="customer-accordion-section">
+      <button
+        aria-expanded={isOpen}
+        className={`customer-accordion-button${isOpen ? " is-open" : ""}`}
+        type="button"
+        onClick={onToggle}
+      >
+        <span className="customer-accordion-icon">
+          <Icon aria-hidden="true" size={18} />
+        </span>
+        <span className="customer-accordion-copy">
+          <span className="customer-accordion-title">{title}</span>
+          <span className="customer-accordion-preview">{preview}</span>
+        </span>
+        <ChevronRight aria-hidden="true" className="customer-accordion-chevron" size={17} />
+      </button>
+      {isOpen && <div className="customer-accordion-content">{children}</div>}
+    </section>
+  );
+}
+
+function CustomerDetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="customer-detail-field">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {
+  if (!phone) {
+    return <strong>-</strong>;
+  }
+
+  return (
+    <a className="customer-detail-phone-link" href={`tel:${phone.replace(/\s+/g, "")}`}>
+      <Phone aria-hidden="true" size={16} />
+      <span>{phone}</span>
+    </a>
   );
 }
 
@@ -528,15 +574,6 @@ function CustomerContactCardList({ contacts }: { contacts: Customer["contacts"] 
           <small>{[contact.phone, contact.email].filter(Boolean).join(" · ") || "Keine Kontaktdaten"}</small>
         </div>
       ))}
-    </div>
-  );
-}
-
-function ReadItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="detail-read-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
@@ -831,6 +868,24 @@ function formatCustomerAddress(customer: Pick<Customer, "address_street" | "addr
   const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ");
   const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ");
   return [streetLine, cityLine, customer.address_country].filter(Boolean).join(", ");
+}
+
+function customerAddressLines(customer: Pick<Customer, "address_street" | "address_house_number" | "address_postal_code" | "address_city" | "address_country" | "address_formatted">): string[] {
+  const streetLine = [customer.address_street, customer.address_house_number].filter(Boolean).join(" ").trim();
+  const cityLine = [customer.address_postal_code, customer.address_city].filter(Boolean).join(" ").trim();
+  const country = customer.address_country?.trim();
+  const formatted = customer.address_formatted?.trim();
+
+  if (!streetLine && !cityLine) {
+    return formatted ? [formatted] : [];
+  }
+
+  const structuredLines = [
+    streetLine,
+    [cityLine, country].filter(Boolean).join(", "),
+  ].filter(Boolean);
+
+  return structuredLines;
 }
 
 function customerEmailItems(customer: Customer): Array<{ email: string; label: string }> {

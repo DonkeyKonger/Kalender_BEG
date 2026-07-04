@@ -5,6 +5,7 @@ import { useEffect } from "react";
 export type EntityDetailDrawerProps = {
   isOpen: boolean;
   title: string;
+  eyebrow?: string;
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -15,6 +16,7 @@ export type EntityDetailDrawerProps = {
 export function EntityDetailDrawer({
   isOpen,
   title,
+  eyebrow,
   subtitle,
   children,
   footer,
@@ -45,7 +47,8 @@ export function EntityDetailDrawer({
       <button className="entity-drawer-overlay" type="button" aria-label="Detailfenster schliessen" onClick={onClose} />
       <aside className="entity-drawer-panel" aria-modal="true" role="dialog" aria-labelledby="entity-drawer-title">
         <header className="entity-drawer-header">
-          <div>
+          <div className="entity-drawer-title-copy">
+            {eyebrow && <span className="entity-drawer-eyebrow">{eyebrow}</span>}
             <h2 id="entity-drawer-title">{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
