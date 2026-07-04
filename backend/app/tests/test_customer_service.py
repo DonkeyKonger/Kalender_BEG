@@ -167,6 +167,30 @@ def test_update_customer_persists_email_only_contact():
     assert updated.contacts[0].contact_type is None
 
 
+def test_update_customer_persists_optional_notes():
+    db = db_session()
+    service = CustomerService(db)
+    customer = Customer(company_name="Hinweis GmbH", is_active=True)
+    db.add(customer)
+    db.commit()
+
+    updated = service.update_customer(
+        customer.id,
+        CustomerUpdate(notes="  Rechnung nur mit Bestellnummer  "),
+        user_id=7,
+    )
+
+    assert updated.notes == "Rechnung nur mit Bestellnummer"
+
+    cleared = service.update_customer(
+        customer.id,
+        CustomerUpdate(notes="   "),
+        user_id=7,
+    )
+
+    assert cleared.notes is None
+
+
 def test_create_customer_keeps_selected_address_geocode():
     db = db_session()
     service = CustomerService(db)

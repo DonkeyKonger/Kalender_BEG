@@ -54,6 +54,7 @@ const emptyCustomerForSite: CustomerCreate = {
   project_lead_name: null,
   project_lead_phone: null,
   project_lead_email: null,
+  notes: null,
   is_active: true,
   contacts: [],
 };
@@ -982,6 +983,7 @@ function normalizeCustomerPayloadForSite(customer: CustomerCreate): CustomerCrea
     project_lead_name: customer.project_lead_name?.trim() || null,
     project_lead_phone: customer.project_lead_phone?.trim() || null,
     project_lead_email: customer.project_lead_email?.trim() || null,
+    notes: customer.notes?.trim() || null,
     is_active: customer.is_active,
     contacts: customer.contacts
       .map((contact) => ({

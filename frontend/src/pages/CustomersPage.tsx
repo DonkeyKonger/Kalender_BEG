@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Search,
+  StickyNote,
   Trash2,
   Users,
   UserPlus,
@@ -57,6 +58,7 @@ const emptyCustomer: CustomerCreate = {
   project_lead_name: null,
   project_lead_phone: null,
   project_lead_email: null,
+  notes: null,
   is_active: true,
   contacts: [],
 };
@@ -186,6 +188,25 @@ export function CustomersPage() {
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Kundenkontakt konnte nicht gespeichert werden."));
+      return false;
+    } finally {
+      setSavingCustomerId(null);
+    }
+  }
+
+  async function saveCustomerNotes(customerId: number, notes: string | null): Promise<boolean> {
+    setSavingCustomerId(customerId);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updateCustomer(customerId, { notes });
+      setCustomers((current) =>
+        current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditableCustomer(updated) }));
+      return true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Hinweise konnten nicht gespeichert werden."));
       return false;
     } finally {
       setSavingCustomerId(null);
@@ -414,6 +435,7 @@ export function CustomersPage() {
               isSaving={savingCustomerId === selectedCustomer.id}
               projects={selectedCustomerProjects}
               onSaveContacts={(contacts) => saveCustomerContacts(selectedCustomer.id, contacts)}
+              onSaveNotes={(notes) => saveCustomerNotes(selectedCustomer.id, notes)}
             />
           )
         )}
@@ -428,12 +450,14 @@ function CustomerReadView({
   isSaving,
   projects,
   onSaveContacts,
+  onSaveNotes,
 }: {
   canEdit: boolean;
   customer: Customer;
   isSaving: boolean;
   projects: SiteSummary[];
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
+  onSaveNotes: (notes: string | null) => Promise<boolean>;
 }) {
   const contactRows = customerContactRows(customer);
   const addressLines = customerAddressLines(customer);
@@ -487,6 +511,13 @@ function CustomerReadView({
           </div>
         </section>
 
+        <CustomerNotesSection
+          canEdit={canEdit}
+          isSaving={isSaving}
+          notes={customer.notes}
+          onSaveNotes={onSaveNotes}
+        />
+
         <section className="detail-read-section customer-detail-nav-section">
           <CustomerDetailNavItem
             icon={Users}
@@ -522,6 +553,54 @@ function CustomerReadView({
         </CustomerDetailSubpage>
       )}
     </div>
+  );
+}
+
+function CustomerNotesSection({
+  canEdit,
+  isSaving,
+  notes,
+  onSaveNotes,
+}: {
+  canEdit: boolean;
+  isSaving: boolean;
+  notes: string | null;
+  onSaveNotes: (notes: string | null) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(notes ?? "");
+
+  useEffect(() => {
+    setDraft(notes ?? "");
+  }, [notes]);
+
+  async function persistNotes() {
+    const normalizedDraft = draft.trim() || null;
+    const normalizedSource = notes?.trim() || null;
+    if (normalizedDraft === normalizedSource) {
+      return;
+    }
+    const saved = await onSaveNotes(normalizedDraft);
+    if (!saved) {
+      setDraft(notes ?? "");
+    }
+  }
+
+  return (
+    <section className="detail-read-section customer-notes-section">
+      <div className="customer-detail-section-heading">
+        <StickyNote aria-hidden="true" size={17} />
+        <h3>Hinweise</h3>
+      </div>
+      <textarea
+        className="customer-notes-textarea"
+        disabled={!canEdit || isSaving}
+        placeholder="Interne Hinweise zum Kunden..."
+        rows={3}
+        value={draft}
+        onBlur={() => void persistNotes()}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+    </section>
   );
 }
 
@@ -878,6 +957,7 @@ function toEditableCustomer(customer: Customer): EditableCustomer {
     project_lead_name: customer.project_lead_name,
     project_lead_phone: customer.project_lead_phone,
     project_lead_email: customer.project_lead_email,
+    notes: customer.notes,
     is_active: customer.is_active,
     contacts: customer.contacts.map((contact) => ({
       contact_type: contact.contact_type,
@@ -928,6 +1008,7 @@ export function normalizeCustomerPayload(customer: CustomerCreate): CustomerCrea
     project_lead_name: customer.project_lead_name?.trim() || null,
     project_lead_phone: customer.project_lead_phone?.trim() || null,
     project_lead_email: customer.project_lead_email?.trim() || null,
+    notes: customer.notes?.trim() || null,
     is_active: customer.is_active,
     contacts: customer.contacts
       .map((contact) => ({

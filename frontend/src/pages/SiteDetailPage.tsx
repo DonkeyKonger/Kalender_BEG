@@ -100,6 +100,7 @@ const emptyCustomerForProjectRecord: CustomerCreate = {
   project_lead_name: null,
   project_lead_phone: null,
   project_lead_email: null,
+  notes: null,
   is_active: true,
   contacts: [],
 };

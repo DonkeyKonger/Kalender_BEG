@@ -27,6 +27,7 @@ OPTIONAL_CUSTOMER_TEXT_FIELDS = [
     "project_lead_name",
     "project_lead_phone",
     "project_lead_email",
+    "notes",
 ]
 ADDRESS_FIELDS = {
     "address_street",
@@ -271,6 +272,7 @@ def customer_snapshot(customer: Customer) -> dict:
         "project_lead_name": customer.project_lead_name,
         "project_lead_phone": customer.project_lead_phone,
         "project_lead_email": customer.project_lead_email,
+        "notes": getattr(customer, "notes", None),
         "is_active": customer.is_active,
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "deleted_by": getattr(customer, "deleted_by", None),

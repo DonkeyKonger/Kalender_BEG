@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -30,6 +30,7 @@ class Customer(TimestampMixin, Base):
     project_lead_name: Mapped[str | None] = mapped_column(String(200))
     project_lead_phone: Mapped[str | None] = mapped_column(String(80))
     project_lead_email: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     deleted_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

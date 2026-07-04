@@ -49,6 +49,7 @@ class CustomerBase(BaseModel):
     project_lead_name: str | None = Field(default=None, max_length=200)
     project_lead_phone: str | None = Field(default=None, max_length=80)
     project_lead_email: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, max_length=2000)
     is_active: bool = True
     contacts: list[CustomerContactCreate] = Field(default_factory=list)
 
@@ -73,6 +74,7 @@ class CustomerUpdate(BaseModel):
     project_lead_name: str | None = Field(default=None, max_length=200)
     project_lead_phone: str | None = Field(default=None, max_length=80)
     project_lead_email: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = None
     contacts: list[CustomerContactCreate] | None = None
 
@@ -94,6 +96,7 @@ class CustomerRead(BaseModel):
     project_lead_name: str | None = None
     project_lead_phone: str | None = None
     project_lead_email: str | None = None
+    notes: str | None = None
     is_active: bool
     contacts: list[CustomerContactRead] = Field(default_factory=list)
     email_addresses: list[CustomerEmailAddressRead] = Field(default_factory=list)

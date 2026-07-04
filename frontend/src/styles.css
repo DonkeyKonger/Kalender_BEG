@@ -2013,6 +2013,45 @@ button.entity-card:focus-visible,
   overflow-wrap: anywhere;
 }
 
+.customer-notes-section {
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+.customer-notes-textarea {
+  width: 100%;
+  min-height: 66px;
+  max-height: 132px;
+  resize: vertical;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 8px 9px;
+  overflow-y: auto;
+}
+
+.customer-notes-textarea::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.customer-notes-textarea:focus {
+  border-color: #7aa7d9;
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 14%);
+  outline: none;
+}
+
+.customer-notes-textarea:disabled {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .customer-contact-editor {
   display: grid;
   gap: 10px;

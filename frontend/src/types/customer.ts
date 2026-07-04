@@ -36,6 +36,7 @@ export type Customer = {
   project_lead_name: string | null;
   project_lead_phone: string | null;
   project_lead_email: string | null;
+  notes: string | null;
   is_active: boolean;
   contacts: CustomerContact[];
   email_addresses: CustomerEmailAddress[];
@@ -59,6 +60,7 @@ export type CustomerCreate = {
   project_lead_name: string | null;
   project_lead_phone: string | null;
   project_lead_email: string | null;
+  notes: string | null;
   is_active: boolean;
   contacts: CustomerContactInput[];
 };
