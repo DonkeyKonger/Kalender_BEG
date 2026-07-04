@@ -306,7 +306,7 @@ export function CustomersPage() {
         title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : "Kunde" : "Kunde"}
         subtitle={selectedCustomer ? selectedCustomer.company_name : undefined}
         onClose={closeDrawer}
-        actions={selectedCustomer && canEdit && !isEditingCustomer ? (
+        actions={selectedCustomer && canEdit && !isEditingCustomer && !customerDetailSubview ? (
           <button
             className="icon-button secondary"
             type="button"
