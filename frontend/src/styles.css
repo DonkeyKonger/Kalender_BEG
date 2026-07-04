@@ -1766,6 +1766,45 @@ button.entity-card:focus-visible,
   justify-self: start;
 }
 
+.customer-email-list {
+  display: grid;
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.customer-email-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  min-width: 0;
+  border-bottom: 1px solid #e5edf6;
+  padding: 8px 10px;
+}
+
+.customer-email-row:last-child {
+  border-bottom: 0;
+}
+
+.customer-email-row span,
+.customer-email-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.customer-email-row span {
+  color: #42506a;
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.customer-email-row strong {
+  color: #172033;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .detail-read-grid {
   display: grid;
   gap: 10px;
@@ -1833,6 +1872,13 @@ button.entity-card:focus-visible,
 @media (min-width: 620px) {
   .detail-read-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .customer-email-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 }
 

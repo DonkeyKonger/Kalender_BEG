@@ -478,9 +478,12 @@ function CustomerDetailSubviewView({
         <h3>{title}</h3>
         {view === "emails" && (
           emailItems.length ? (
-            <div className="detail-read-grid">
+            <div className="customer-email-list">
               {emailItems.map((item) => (
-                <ReadItem key={item.email} label={item.label} value={item.email} />
+                <div className="customer-email-row" key={item.email}>
+                  <span>{item.label}</span>
+                  <strong>{item.email}</strong>
+                </div>
               ))}
             </div>
           ) : (
