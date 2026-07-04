@@ -1764,6 +1764,9 @@ button.entity-card:focus-visible,
 
 .customer-detail-back-button {
   justify-self: start;
+  min-height: 34px;
+  border-radius: 0;
+  padding: 8px 11px;
 }
 
 .customer-email-list {
