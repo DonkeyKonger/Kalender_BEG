@@ -3324,9 +3324,15 @@ button.person-chip:focus-visible {
   line-height: 1.14;
   resize: none;
   white-space: normal;
+  -ms-overflow-style: none;
   overflow-x: hidden;
   overflow-y: auto;
   overflow-wrap: anywhere;
+  scrollbar-width: none;
+}
+
+.matrix-info-editor textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .matrix-info-editor textarea.info-text-long {
