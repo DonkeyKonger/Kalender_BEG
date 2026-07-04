@@ -335,6 +335,7 @@ export function CustomersPage() {
       >
         <CustomerFields
           draft={createForm}
+          showContactSections={false}
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
