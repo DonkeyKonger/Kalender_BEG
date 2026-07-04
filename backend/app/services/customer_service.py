@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.customer import Customer, CustomerContact
+from app.models.customer import Customer, CustomerContact, CustomerEmailLabel
 from app.models.enums import SiteLocationStatus
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
@@ -82,6 +82,7 @@ class CustomerService:
 
         values = clean_customer_values(payload.model_dump(exclude_unset=True), partial=True)
         contact_values = values.pop("contacts", None)
+        email_label_values = values.pop("email_addresses", None)
         old_value = customer_snapshot(customer)
         address_changed = any(
             field in values and getattr(customer, field) != values[field]
@@ -98,6 +99,8 @@ class CustomerService:
             customer.address_location_status = SiteLocationStatus.UNCHECKED
         if contact_values is not None:
             customer.contacts = [CustomerContact(**contact) for contact in contact_values]
+        if email_label_values is not None:
+            sync_customer_email_labels(customer, email_label_values, self.db)
 
         self.audit.record(
             user_id=user_id,
@@ -151,6 +154,8 @@ def clean_customer_values(values: dict, *, partial: bool = False) -> dict:
     validate_email(cleaned.get("project_lead_email"), "Projektleiter-Mail")
     if "contacts" in cleaned:
         cleaned["contacts"] = clean_customer_contacts(cleaned.get("contacts") or [])
+    if "email_addresses" in cleaned:
+        cleaned["email_addresses"] = clean_customer_email_labels(cleaned.get("email_addresses") or [])
     return cleaned
 
 
@@ -183,8 +188,62 @@ def validate_email(value: str | None, label: str) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{label} ist nicht gueltig.")
 
 
+def clean_customer_email_labels(email_labels: list[dict]) -> list[dict]:
+    cleaned_labels: dict[str, dict] = {}
+    for raw_label in email_labels:
+        email = raw_label.get("email")
+        cleaned_email = email.strip() if isinstance(email, str) else ""
+        if not cleaned_email:
+            continue
+        validate_email(cleaned_email, "E-Mail-Adresse")
+        label = raw_label.get("label")
+        cleaned_label = label.strip() if isinstance(label, str) else None
+        normalized_email = normalize_email_key(cleaned_email)
+        cleaned_labels[normalized_email] = {
+            "email": cleaned_email,
+            "email_normalized": normalized_email,
+            "label": cleaned_label or None,
+        }
+    return list(cleaned_labels.values())
+
+
+def sync_customer_email_labels(customer: Customer, email_labels: list[dict], db: Session) -> None:
+    existing_labels = {
+        label.email_normalized: label
+        for label in db.scalars(
+            select(CustomerEmailLabel).where(CustomerEmailLabel.customer_id == customer.id)
+        )
+    }
+    next_keys = {label["email_normalized"] for label in email_labels}
+
+    for removed_key, removed_label in existing_labels.items():
+        if removed_key not in next_keys:
+            db.delete(removed_label)
+
+    for label in email_labels:
+        existing_label = existing_labels.get(label["email_normalized"])
+        if existing_label:
+            existing_label.email = label["email"]
+            existing_label.label = label["label"]
+        else:
+            db.add(
+                CustomerEmailLabel(
+                    customer_id=customer.id,
+                    email=label["email"],
+                    email_normalized=label["email_normalized"],
+                    label=label["label"],
+                )
+            )
+
+
 def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEmailAddressRead]:
     items: dict[str, CustomerEmailAddressRead] = {}
+    manual_labels = {
+        label.email_normalized: label.label or ""
+        for label in db.scalars(
+            select(CustomerEmailLabel).where(CustomerEmailLabel.customer_id == customer.id)
+        )
+    }
 
     def add_email(
         email: str | None,
@@ -195,14 +254,14 @@ def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEm
         cleaned_email = email.strip() if isinstance(email, str) else ""
         if not cleaned_email:
             return
-        normalized_email = cleaned_email.casefold()
+        normalized_email = normalize_email_key(cleaned_email)
         if "@" not in normalized_email:
             return
         items.setdefault(
             normalized_email,
             CustomerEmailAddressRead(
                 email=cleaned_email,
-                label=label,
+                label=manual_labels[normalized_email] if normalized_email in manual_labels else label,
                 source=source,
                 created_at=created_at,
             ),
@@ -234,6 +293,10 @@ def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEm
 
 def normalize_customer_match_text(value: str | None) -> str:
     return " ".join((value or "").casefold().split())
+
+
+def normalize_email_key(value: str) -> str:
+    return value.strip().casefold()
 
 
 def customer_snapshot(customer: Customer) -> dict:
@@ -268,6 +331,13 @@ def customer_snapshot(customer: Customer) -> dict:
                 "email": contact.email,
             }
             for contact in customer.contacts
+        ],
+        "email_labels": [
+            {
+                "email": label.email,
+                "label": label.label,
+            }
+            for label in getattr(customer, "email_labels", [])
         ],
     }
 

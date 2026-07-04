@@ -2063,7 +2063,8 @@ button.entity-card:focus-visible,
 }
 
 .customer-email-row span,
-.customer-email-row strong {
+.customer-email-row strong,
+.customer-email-row input {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -2078,6 +2079,41 @@ button.entity-card:focus-visible,
   color: #172033;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.customer-email-editor .customer-email-row {
+  align-items: center;
+}
+
+.customer-email-row input {
+  width: 100%;
+  min-height: 29px;
+  border: 1px solid #d5dfec;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 680;
+  line-height: 1.25;
+  padding: 5px 7px;
+}
+
+.customer-email-row input::placeholder {
+  color: #9aabc0;
+  font-weight: 650;
+}
+
+.customer-email-row input:focus {
+  border-color: #8fb3d6;
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.customer-email-row input:disabled {
+  background: #f8fafc;
+  color: #8a9ab2;
+  cursor: wait;
 }
 
 .detail-read-grid {

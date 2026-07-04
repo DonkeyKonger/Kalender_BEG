@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
-from app.models.customer import Customer, CustomerContact
+from app.models.customer import Customer, CustomerContact, CustomerEmailLabel
 from app.models.enums import SiteLocationStatus
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
@@ -126,6 +126,52 @@ def test_customer_read_includes_site_email_recipients_without_duplicates():
     read_customer = CustomerService(db).read_customer(customer)
 
     assert [item.email for item in read_customer.email_addresses] == ["Info@Klinik.example", "NEU@KLINIK.example"]
+
+
+def test_customer_email_labels_override_raw_suggestion_labels():
+    db = db_session()
+    customer = Customer(company_name="Klinik GmbH", is_active=True)
+    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
+    db.add_all([customer, site])
+    db.flush()
+    db.add(SiteEmailRecipient(site_id=site.id, email="info@klinik.example", label="Mobile E-Mail", source="manual"))
+    db.add(
+        CustomerEmailLabel(
+            customer_id=customer.id,
+            email="info@klinik.example",
+            email_normalized="info@klinik.example",
+            label="Sekretariat",
+        )
+    )
+    db.commit()
+
+    read_customer = CustomerService(db).read_customer(customer)
+
+    assert [(item.email, item.label) for item in read_customer.email_addresses] == [
+        ("info@klinik.example", "Sekretariat"),
+    ]
+
+
+def test_update_customer_persists_empty_email_label_override():
+    db = db_session()
+    service = CustomerService(db)
+    customer = Customer(company_name="Klinik GmbH", is_active=True)
+    customer.contacts = [
+        CustomerContact(contact_type="monteur", name="Manuel Wüller", email="manuel@example.de"),
+    ]
+    db.add(customer)
+    db.commit()
+
+    service.update_customer(
+        customer.id,
+        CustomerUpdate(email_addresses=[{"email": "manuel@example.de", "label": ""}]),
+        user_id=7,
+    )
+    read_customer = service.read_customer(customer)
+
+    assert [(item.email, item.label) for item in read_customer.email_addresses] == [
+        ("manuel@example.de", ""),
+    ]
 
 
 def test_create_customer_keeps_selected_address_geocode():

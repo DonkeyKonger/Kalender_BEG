@@ -33,6 +33,11 @@ class CustomerEmailAddressRead(BaseModel):
     created_at: datetime | None = None
 
 
+class CustomerEmailAddressUpdate(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+    label: str | None = Field(default=None, max_length=200)
+
+
 class CustomerBase(BaseModel):
     company_name: str = Field(min_length=1, max_length=200)
     address_street: str | None = Field(default=None, max_length=200)
@@ -75,6 +80,7 @@ class CustomerUpdate(BaseModel):
     project_lead_email: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     contacts: list[CustomerContactCreate] | None = None
+    email_addresses: list[CustomerEmailAddressUpdate] | None = None
 
 
 class CustomerRead(BaseModel):

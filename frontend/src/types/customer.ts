@@ -19,6 +19,11 @@ export type CustomerEmailAddress = {
   created_at: string | null;
 };
 
+export type CustomerEmailAddressUpdate = {
+  email: string;
+  label: string | null;
+};
+
 export type Customer = {
   id: number;
   company_name: string;
@@ -63,7 +68,9 @@ export type CustomerCreate = {
   contacts: CustomerContactInput[];
 };
 
-export type CustomerUpdate = Partial<CustomerCreate>;
+export type CustomerUpdate = Partial<CustomerCreate> & {
+  email_addresses?: CustomerEmailAddressUpdate[];
+};
 
 export type CustomerRemoveResponse = {
   action: "deleted";

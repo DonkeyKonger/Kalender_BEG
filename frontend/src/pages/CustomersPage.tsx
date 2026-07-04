@@ -24,11 +24,12 @@ import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
-import type { Customer, CustomerContactInput, CustomerCreate } from "../types/customer";
+import type { Customer, CustomerContactInput, CustomerCreate, CustomerEmailAddressUpdate } from "../types/customer";
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
 type CustomerAccordionKey = "emails" | "contacts" | "projects";
+type CustomerEmailItem = CustomerEmailAddressUpdate;
 
 const customerContactTypeLabels: Record<string, string> = {
   monteur: "Ansprechpartner vor Ort",
@@ -164,6 +165,25 @@ export function CustomersPage() {
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Kunde konnte nicht gespeichert werden."));
+      return false;
+    } finally {
+      setSavingCustomerId(null);
+    }
+  }
+
+  async function saveCustomerEmailLabels(customerId: number, emailAddresses: CustomerEmailAddressUpdate[]): Promise<boolean> {
+    setSavingCustomerId(customerId);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updateCustomer(customerId, { email_addresses: emailAddresses });
+      setCustomers((current) =>
+        current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditableCustomer(updated) }));
+      return true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "E-Mail-Zuordnung konnte nicht gespeichert werden."));
       return false;
     } finally {
       setSavingCustomerId(null);
@@ -393,7 +413,12 @@ export function CustomersPage() {
               />
             </div>
           ) : (
-            <CustomerReadView customer={selectedCustomer} />
+            <CustomerReadView
+              canEdit={canEdit}
+              customer={selectedCustomer}
+              isSaving={savingCustomerId === selectedCustomer.id}
+              onSaveEmailLabels={(emailAddresses) => saveCustomerEmailLabels(selectedCustomer.id, emailAddresses)}
+            />
           )
         )}
       </EntityDetailDrawer>
@@ -401,7 +426,17 @@ export function CustomersPage() {
   );
 }
 
-function CustomerReadView({ customer }: { customer: Customer }) {
+function CustomerReadView({
+  canEdit,
+  customer,
+  isSaving,
+  onSaveEmailLabels,
+}: {
+  canEdit: boolean;
+  customer: Customer;
+  isSaving: boolean;
+  onSaveEmailLabels: (emailAddresses: CustomerEmailAddressUpdate[]) => Promise<boolean>;
+}) {
   const emailItems = customerEmailItems(customer);
   const addressLines = customerAddressLines(customer);
   const hasAddress = addressLines.length > 0;
@@ -461,18 +496,12 @@ function CustomerReadView({ customer }: { customer: Customer }) {
             ? `${emailItems.length} E-Mail-Adresse${emailItems.length === 1 ? "" : "n"} hinterlegt`
             : "Keine E-Mail-Adressen hinterlegt"}
         >
-          {emailItems.length ? (
-            <div className="customer-email-list">
-              {emailItems.map((item) => (
-                <div className="customer-email-row" key={item.email}>
-                  <span>{item.label}</span>
-                  <strong>{item.email}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>
-          )}
+          <CustomerEmailEditor
+            canEdit={canEdit}
+            emailItems={emailItems}
+            isSaving={isSaving}
+            onSaveEmailLabels={onSaveEmailLabels}
+          />
         </CustomerDetailAccordionSection>
 
         <CustomerDetailAccordionSection
@@ -539,6 +568,83 @@ function CustomerDetailAccordionSection({
       </button>
       {isOpen && <div className="customer-accordion-content">{children}</div>}
     </section>
+  );
+}
+
+function CustomerEmailEditor({
+  canEdit,
+  emailItems,
+  isSaving,
+  onSaveEmailLabels,
+}: {
+  canEdit: boolean;
+  emailItems: CustomerEmailItem[];
+  isSaving: boolean;
+  onSaveEmailLabels: (emailAddresses: CustomerEmailAddressUpdate[]) => Promise<boolean>;
+}) {
+  const sourceKey = customerEmailItemsKey(emailItems);
+  const [rows, setRows] = useState<CustomerEmailItem[]>(() => emailItems.map((item) => ({ ...item })));
+
+  useEffect(() => {
+    setRows(emailItems.map((item) => ({ ...item })));
+  }, [sourceKey]);
+
+  if (!rows.length) {
+    return <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>;
+  }
+
+  function updateLabel(index: number, label: string) {
+    setRows((current) => current.map((row, currentIndex) => (
+      currentIndex === index ? { ...row, label } : row
+    )));
+  }
+
+  function resetRows() {
+    setRows(emailItems.map((item) => ({ ...item })));
+  }
+
+  async function persistRows(nextRows: CustomerEmailItem[] = rows) {
+    if (!canEdit) {
+      return;
+    }
+    const payload = normalizeCustomerEmailLabelPayload(nextRows);
+    if (customerEmailItemsKey(payload) === customerEmailItemsKey(emailItems)) {
+      return;
+    }
+    await onSaveEmailLabels(payload);
+  }
+
+  return (
+    <div className="customer-email-list customer-email-editor">
+      {rows.map((item, index) => (
+        <div className="customer-email-row" key={item.email}>
+          {canEdit ? (
+            <input
+              aria-label={`Zuordnung für ${item.email}`}
+              disabled={isSaving}
+              placeholder="Zuordnung"
+              value={item.label ?? ""}
+              onBlur={() => void persistRows()}
+              onChange={(event) => updateLabel(index, event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  resetRows();
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          ) : (
+            <span>{item.label ?? ""}</span>
+          )}
+          <strong>{item.email}</strong>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -888,25 +994,25 @@ function customerAddressLines(customer: Pick<Customer, "address_street" | "addre
   return structuredLines;
 }
 
-function customerEmailItems(customer: Customer): Array<{ email: string; label: string }> {
-  const items = new Map<string, { email: string; label: string }>();
-  const addEmail = (email: string | null, label: string) => {
+function customerEmailItems(customer: Customer): CustomerEmailItem[] {
+  const items = new Map<string, CustomerEmailItem>();
+  const addEmail = (email: string | null, label: string | null) => {
     const cleanedEmail = email?.trim();
     if (!cleanedEmail) {
       return;
     }
     const key = cleanedEmail.toLowerCase();
     if (!items.has(key)) {
-      items.set(key, { email: cleanedEmail, label });
+      items.set(key, { email: cleanedEmail, label: label ?? "" });
     }
   };
 
-  addEmail(customer.project_lead_email, customerEmailOwnerLabel(customer.project_lead_name) || "Nicht zugeordnet");
-  for (const contact of customer.contacts) {
-    addEmail(contact.email, customerEmailOwnerLabel(contact.name) || "Nicht zugeordnet");
-  }
   for (const emailAddress of customer.email_addresses) {
-    addEmail(emailAddress.email, customerEmailOwnerLabel(emailAddress.label) || "Nicht zugeordnet");
+    addEmail(emailAddress.email, customerEmailOwnerLabel(emailAddress.label));
+  }
+  addEmail(customer.project_lead_email, customerEmailOwnerLabel(customer.project_lead_name));
+  for (const contact of customer.contacts) {
+    addEmail(contact.email, customerEmailOwnerLabel(contact.name));
   }
   return [...items.values()];
 }
@@ -916,7 +1022,21 @@ function customerEmailOwnerLabel(value: string | null | undefined): string | nul
   if (!label) {
     return null;
   }
-  return label.toLowerCase() === "mobile e-mail" ? null : label;
+  const normalizedLabel = label.toLowerCase();
+  return normalizedLabel === "mobile e-mail" || normalizedLabel === "projektleiter kunde" ? null : label;
+}
+
+function normalizeCustomerEmailLabelPayload(rows: CustomerEmailItem[]): CustomerEmailAddressUpdate[] {
+  return rows.map((row) => ({
+    email: row.email.trim(),
+    label: row.label?.trim() || null,
+  })).filter((row) => row.email);
+}
+
+function customerEmailItemsKey(rows: CustomerEmailItem[] | CustomerEmailAddressUpdate[]): string {
+  return rows
+    .map((row) => `${row.email.trim().toLowerCase()}\u0000${row.label?.trim() ?? ""}`)
+    .join("\u0001");
 }
 
 function customerCardMeta(customer: Customer): string[] {
