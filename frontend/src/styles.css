@@ -2047,13 +2047,13 @@ button.entity-card:focus-visible,
 .customer-contact-editor-row span {
   color: #42506a;
   font-size: 0.82rem;
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .customer-contact-editor-row strong {
   color: #172033;
   font-size: 0.84rem;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .customer-contact-editor-row input {
@@ -2065,14 +2065,14 @@ button.entity-card:focus-visible,
   color: #172033;
   font: inherit;
   font-size: 0.83rem;
-  font-weight: 680;
+  font-weight: 400;
   line-height: 1.25;
   padding: 5px 7px;
 }
 
 .customer-contact-editor-row input::placeholder {
   color: #9aabc0;
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .customer-contact-editor-row input:focus {
