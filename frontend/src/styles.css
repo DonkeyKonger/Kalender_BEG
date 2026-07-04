@@ -2041,51 +2041,52 @@ button.entity-card:focus-visible,
   border-radius: 0;
 }
 
-.customer-email-list {
+.customer-contact-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-contact-editor-table {
   display: grid;
   border: 1px solid #dbe4ef;
   border-radius: 0;
   background: #ffffff;
 }
 
-.customer-email-row {
+.customer-contact-editor-row {
   display: grid;
-  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: baseline;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(130px, 1.1fr) minmax(90px, 0.8fr) minmax(80px, 0.75fr) auto;
+  gap: 8px;
+  align-items: center;
   min-width: 0;
   border-bottom: 1px solid #e5edf6;
-  padding: 8px 10px;
+  padding: 7px 8px;
 }
 
-.customer-email-row:last-child {
+.customer-contact-editor-row:last-child {
   border-bottom: 0;
 }
 
-.customer-email-row span,
-.customer-email-row strong,
-.customer-email-row input {
+.customer-contact-editor-row span,
+.customer-contact-editor-row strong,
+.customer-contact-editor-row input {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.customer-email-row span {
+.customer-contact-editor-row span {
   color: #42506a;
   font-size: 0.82rem;
-  font-weight: 760;
+  font-weight: 650;
 }
 
-.customer-email-row strong {
+.customer-contact-editor-row strong {
   color: #172033;
   font-size: 0.84rem;
   font-weight: 700;
 }
 
-.customer-email-editor .customer-email-row {
-  align-items: center;
-}
-
-.customer-email-row input {
+.customer-contact-editor-row input {
   width: 100%;
   min-height: 29px;
   border: 1px solid #d5dfec;
@@ -2099,21 +2100,49 @@ button.entity-card:focus-visible,
   padding: 5px 7px;
 }
 
-.customer-email-row input::placeholder {
+.customer-contact-editor-row input::placeholder {
   color: #9aabc0;
   font-weight: 650;
 }
 
-.customer-email-row input:focus {
+.customer-contact-editor-row input:focus {
   border-color: #8fb3d6;
   box-shadow: 0 0 0 2px rgb(29 92 153 / 12%);
   outline: none;
 }
 
-.customer-email-row input:disabled {
+.customer-contact-editor-row input:disabled {
   background: #f8fafc;
   color: #8a9ab2;
   cursor: wait;
+}
+
+.customer-contact-remove-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border: 1px solid #f2b8b5;
+  border-radius: 0;
+  background: #ffffff;
+  color: #b42318;
+  cursor: pointer;
+}
+
+.customer-contact-remove-button:hover,
+.customer-contact-remove-button:focus-visible {
+  background: #fff7f6;
+  outline: none;
+}
+
+.customer-contact-remove-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.customer-contact-add-button {
+  justify-self: start;
 }
 
 .detail-read-grid {
@@ -2200,7 +2229,7 @@ button.entity-card:focus-visible,
     padding-left: 14px;
   }
 
-  .customer-email-row {
+  .customer-contact-editor-row {
     grid-template-columns: 1fr;
     gap: 3px;
   }

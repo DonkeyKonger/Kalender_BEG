@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -41,13 +41,6 @@ class Customer(TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="CustomerContact.id",
     )
-    email_labels = relationship(
-        "CustomerEmailLabel",
-        back_populates="customer",
-        cascade="all, delete-orphan",
-        order_by="CustomerEmailLabel.id",
-    )
-
 
 class CustomerContact(TimestampMixin, Base):
     __tablename__ = "customer_contacts"
@@ -58,28 +51,9 @@ class CustomerContact(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    contact_type: Mapped[str] = mapped_column(String(40), nullable=False, default="monteur")
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    contact_type: Mapped[str | None] = mapped_column(String(40))
+    name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(80))
     email: Mapped[str | None] = mapped_column(String(255))
 
     customer = relationship("Customer", back_populates="contacts")
-
-
-class CustomerEmailLabel(TimestampMixin, Base):
-    __tablename__ = "customer_email_labels"
-    __table_args__ = (
-        UniqueConstraint("customer_id", "email_normalized", name="uq_customer_email_labels_customer_email"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    customer_id: Mapped[int] = mapped_column(
-        ForeignKey("customers.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
-    email_normalized: Mapped[str] = mapped_column(String(255), nullable=False)
-    label: Mapped[str | None] = mapped_column(String(200))
-
-    customer = relationship("Customer", back_populates="email_labels")

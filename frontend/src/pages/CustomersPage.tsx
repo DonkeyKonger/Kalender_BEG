@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Mail,
   MapPin,
   Pencil,
   Phone,
@@ -17,26 +16,25 @@ import {
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
-import type { Customer, CustomerContactInput, CustomerCreate, CustomerEmailAddressUpdate } from "../types/customer";
+import type { Customer, CustomerContactInput, CustomerCreate } from "../types/customer";
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
-type CustomerAccordionKey = "emails" | "contacts" | "projects";
-type CustomerEmailItem = CustomerEmailAddressUpdate;
+type CustomerAccordionKey = "contacts" | "projects";
+type CustomerContactRow = CustomerContactInput & { key: string };
 
 const customerContactTypeLabels: Record<string, string> = {
   monteur: "Ansprechpartner vor Ort",
   bauleiter: "Bauleiter Kunde",
   einkauf: "Einkauf",
   rechnung: "Rechnung",
-  mobile_email: "Mobile E-Mail",
 };
 
 const emptyCustomer: CustomerCreate = {
@@ -171,19 +169,19 @@ export function CustomersPage() {
     }
   }
 
-  async function saveCustomerEmailLabels(customerId: number, emailAddresses: CustomerEmailAddressUpdate[]): Promise<boolean> {
+  async function saveCustomerContacts(customerId: number, contacts: CustomerContactInput[]): Promise<boolean> {
     setSavingCustomerId(customerId);
     setError(null);
     setMessage(null);
     try {
-      const updated = await api.updateCustomer(customerId, { email_addresses: emailAddresses });
+      const updated = await api.updateCustomer(customerId, { contacts });
       setCustomers((current) =>
         current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditableCustomer(updated) }));
       return true;
     } catch (requestError) {
-      setError(readApiError(requestError, "E-Mail-Zuordnung konnte nicht gespeichert werden."));
+      setError(readApiError(requestError, "Kundenkontakt konnte nicht gespeichert werden."));
       return false;
     } finally {
       setSavingCustomerId(null);
@@ -417,7 +415,7 @@ export function CustomersPage() {
               canEdit={canEdit}
               customer={selectedCustomer}
               isSaving={savingCustomerId === selectedCustomer.id}
-              onSaveEmailLabels={(emailAddresses) => saveCustomerEmailLabels(selectedCustomer.id, emailAddresses)}
+              onSaveContacts={(contacts) => saveCustomerContacts(selectedCustomer.id, contacts)}
             />
           )
         )}
@@ -430,18 +428,17 @@ function CustomerReadView({
   canEdit,
   customer,
   isSaving,
-  onSaveEmailLabels,
+  onSaveContacts,
 }: {
   canEdit: boolean;
   customer: Customer;
   isSaving: boolean;
-  onSaveEmailLabels: (emailAddresses: CustomerEmailAddressUpdate[]) => Promise<boolean>;
+  onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
-  const emailItems = customerEmailItems(customer);
+  const contactRows = customerContactRows(customer);
   const addressLines = customerAddressLines(customer);
   const hasAddress = addressLines.length > 0;
   const [openSections, setOpenSections] = useState<Record<CustomerAccordionKey, boolean>>({
-    emails: false,
     contacts: false,
     projects: false,
   });
@@ -488,36 +485,20 @@ function CustomerReadView({
 
       <div className="customer-accordion-list">
         <CustomerDetailAccordionSection
-          icon={Mail}
-          isOpen={openSections.emails}
-          onToggle={() => toggleSection("emails")}
-          title="E-Mail-Adressen"
-          preview={emailItems.length
-            ? `${emailItems.length} E-Mail-Adresse${emailItems.length === 1 ? "" : "n"} hinterlegt`
-            : "Keine E-Mail-Adressen hinterlegt"}
-        >
-          <CustomerEmailEditor
-            canEdit={canEdit}
-            emailItems={emailItems}
-            isSaving={isSaving}
-            onSaveEmailLabels={onSaveEmailLabels}
-          />
-        </CustomerDetailAccordionSection>
-
-        <CustomerDetailAccordionSection
           icon={Users}
           isOpen={openSections.contacts}
           onToggle={() => toggleSection("contacts")}
-          title="Ansprechpartner"
-          preview={customer.contacts.length
-            ? `${customer.contacts.length} Ansprechpartner hinterlegt`
-            : "Keine Ansprechpartner hinterlegt"}
+          title="Ansprechpartner / Kontakte"
+          preview={contactRows.length
+            ? `${contactRows.length} Kontakt${contactRows.length === 1 ? "" : "e"} hinterlegt`
+            : "Keine Kontakte hinterlegt"}
         >
-          {customer.contacts.length ? (
-            <CustomerContactCardList contacts={customer.contacts} />
-          ) : (
-            <p className="detail-empty">Keine Ansprechpartner hinterlegt.</p>
-          )}
+          <CustomerContactEditor
+            canEdit={canEdit}
+            contactRows={contactRows}
+            isSaving={isSaving}
+            onSaveContacts={onSaveContacts}
+          />
         </CustomerDetailAccordionSection>
 
         <CustomerDetailAccordionSection
@@ -571,81 +552,146 @@ function CustomerDetailAccordionSection({
   );
 }
 
-function CustomerEmailEditor({
+function CustomerContactEditor({
   canEdit,
-  emailItems,
+  contactRows,
   isSaving,
-  onSaveEmailLabels,
+  onSaveContacts,
 }: {
   canEdit: boolean;
-  emailItems: CustomerEmailItem[];
+  contactRows: CustomerContactRow[];
   isSaving: boolean;
-  onSaveEmailLabels: (emailAddresses: CustomerEmailAddressUpdate[]) => Promise<boolean>;
+  onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
-  const sourceKey = customerEmailItemsKey(emailItems);
-  const [rows, setRows] = useState<CustomerEmailItem[]>(() => emailItems.map((item) => ({ ...item })));
+  const sourceKey = customerContactsKey(contactRows);
+  const [rows, setRows] = useState<CustomerContactRow[]>(() => contactRows.map((item) => ({ ...item })));
 
   useEffect(() => {
-    setRows(emailItems.map((item) => ({ ...item })));
+    setRows(contactRows.map((item) => ({ ...item })));
   }, [sourceKey]);
 
-  if (!rows.length) {
-    return <p className="detail-empty">Keine E-Mail-Adressen hinterlegt.</p>;
-  }
-
-  function updateLabel(index: number, label: string) {
+  function updateContact(index: number, values: Partial<CustomerContactInput>) {
     setRows((current) => current.map((row, currentIndex) => (
-      currentIndex === index ? { ...row, label } : row
+      currentIndex === index ? { ...row, ...values } : row
     )));
   }
 
-  function resetRows() {
-    setRows(emailItems.map((item) => ({ ...item })));
+  function addContact() {
+    setRows((current) => [
+      ...current,
+      { key: `new:${Date.now()}`, contact_type: null, name: null, phone: null, email: null },
+    ]);
   }
 
-  async function persistRows(nextRows: CustomerEmailItem[] = rows) {
+  function removeContact(index: number) {
+    const nextRows = rows.filter((_, currentIndex) => currentIndex !== index);
+    setRows(nextRows);
+    void persistRows(nextRows);
+  }
+
+  function resetRows() {
+    setRows(contactRows.map((item) => ({ ...item })));
+  }
+
+  async function persistRows(nextRows: CustomerContactRow[] = rows) {
     if (!canEdit) {
       return;
     }
-    const payload = normalizeCustomerEmailLabelPayload(nextRows);
-    if (customerEmailItemsKey(payload) === customerEmailItemsKey(emailItems)) {
+    const payload = normalizeCustomerContactsPayload(nextRows);
+    if (customerContactsKey(payload) === customerContactsKey(contactRows)) {
       return;
     }
-    await onSaveEmailLabels(payload);
+    await onSaveContacts(payload);
   }
 
   return (
-    <div className="customer-email-list customer-email-editor">
-      {rows.map((item, index) => (
-        <div className="customer-email-row" key={item.email}>
-          {canEdit ? (
-            <input
-              aria-label={`Zuordnung für ${item.email}`}
-              disabled={isSaving}
-              placeholder="Zuordnung"
-              value={item.label ?? ""}
-              onBlur={() => void persistRows()}
-              onChange={(event) => updateLabel(index, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  resetRows();
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-          ) : (
-            <span>{item.label ?? ""}</span>
-          )}
-          <strong>{item.email}</strong>
+    <div className="customer-contact-editor">
+      {rows.length ? (
+        <div className="customer-contact-editor-table">
+          {rows.map((item, index) => (
+            <div className="customer-contact-editor-row" key={item.key}>
+              {canEdit ? (
+                <>
+                  <input
+                    aria-label="Name"
+                    disabled={isSaving}
+                    placeholder="Name"
+                    value={item.name ?? ""}
+                    onBlur={() => void persistRows()}
+                    onChange={(event) => updateContact(index, { name: event.target.value })}
+                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
+                  />
+                  <input
+                    aria-label="E-Mail"
+                    disabled={isSaving}
+                    placeholder="E-Mail"
+                    value={item.email ?? ""}
+                    onBlur={() => void persistRows()}
+                    onChange={(event) => updateContact(index, { email: event.target.value })}
+                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
+                  />
+                  <input
+                    aria-label="Telefon"
+                    disabled={isSaving}
+                    placeholder="Telefon"
+                    value={item.phone ?? ""}
+                    onBlur={() => void persistRows()}
+                    onChange={(event) => updateContact(index, { phone: event.target.value })}
+                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
+                  />
+                  <input
+                    aria-label="Rolle"
+                    disabled={isSaving}
+                    placeholder="Rolle"
+                    value={displayCustomerContactRole(item.contact_type)}
+                    onBlur={() => void persistRows()}
+                    onChange={(event) => updateContact(index, { contact_type: event.target.value })}
+                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
+                  />
+                  <button
+                    aria-label="Kontakt entfernen"
+                    className="customer-contact-remove-button"
+                    disabled={isSaving}
+                    type="button"
+                    onClick={() => removeContact(index)}
+                  >
+                    <Trash2 aria-hidden="true" size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>{item.name ?? ""}</span>
+                  <strong>{item.email ?? ""}</strong>
+                  <span>{item.phone ?? ""}</span>
+                  <span>{displayCustomerContactRole(item.contact_type)}</span>
+                </>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      ) : (
+        <p className="detail-empty">Keine Kontakte hinterlegt.</p>
+      )}
+      {canEdit && (
+        <button className="icon-button secondary customer-contact-add-button" disabled={isSaving} type="button" onClick={addContact}>
+          <Plus aria-hidden="true" size={15} />
+          <span>Kontakt hinzufügen</span>
+        </button>
+      )}
     </div>
   );
+}
+
+function handleCustomerContactEditorKey(event: KeyboardEvent<HTMLInputElement>, onCancel: () => void) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.currentTarget.blur();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    onCancel();
+    event.currentTarget.blur();
+  }
 }
 
 function CustomerDetailField({ label, children }: { label: string; children: ReactNode }) {
@@ -667,20 +713,6 @@ function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {
       <Phone aria-hidden="true" size={16} />
       <span>{phone}</span>
     </a>
-  );
-}
-
-function CustomerContactCardList({ contacts }: { contacts: Customer["contacts"] }) {
-  return (
-    <div className="customer-contact-card-list">
-      {contacts.map((contact) => (
-        <div className="customer-contact-card" key={contact.id}>
-          <strong>{contact.name}</strong>
-          <span>{customerContactTypeLabels[contact.contact_type] ?? contact.contact_type}</span>
-          <small>{[contact.phone, contact.email].filter(Boolean).join(" · ") || "Keine Kontaktdaten"}</small>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -814,7 +846,7 @@ export function CustomerFields({
                     <label>
                       <span>Typ</span>
                       <select
-                        value={contact.contact_type}
+                        value={contact.contact_type ?? "monteur"}
                         onChange={(event) => updateContact(index, { contact_type: event.target.value })}
                       >
                         {Object.entries(customerContactTypeLabels).map(([value, label]) => (
@@ -825,7 +857,7 @@ export function CustomerFields({
                     <label>
                       <span>Name</span>
                       <input
-                        value={contact.name}
+                        value={contact.name ?? ""}
                         onChange={(event) => updateContact(index, { name: event.target.value })}
                       />
                     </label>
@@ -900,12 +932,13 @@ export function validateCustomerPayload(customer: CustomerCreate): string | null
     return "Projektleiter-Mail ist nicht gueltig.";
   }
   for (const contact of customer.contacts) {
-    const hasContactData = Boolean(contact.name.trim() || contact.phone?.trim() || contact.email?.trim());
+    const hasContactData = Boolean(
+      contact.name?.trim()
+      || contact.phone?.trim()
+      || contact.email?.trim(),
+    );
     if (!hasContactData) {
       continue;
-    }
-    if (!contact.name.trim()) {
-      return "Ansprechpartner brauchen einen Namen.";
     }
     if (!isValidOptionalEmail(contact.email)) {
       return "Ansprechpartner-Mail ist nicht gueltig.";
@@ -934,8 +967,8 @@ export function normalizeCustomerPayload(customer: CustomerCreate): CustomerCrea
     is_active: customer.is_active,
     contacts: customer.contacts
       .map((contact) => ({
-        contact_type: contact.contact_type.trim() || "monteur",
-        name: contact.name.trim(),
+        contact_type: contact.contact_type?.trim() || null,
+        name: contact.name?.trim() || null,
         phone: contact.phone?.trim() || null,
         email: contact.email?.trim() || null,
       }))
@@ -994,49 +1027,129 @@ function customerAddressLines(customer: Pick<Customer, "address_street" | "addre
   return structuredLines;
 }
 
-function customerEmailItems(customer: Customer): CustomerEmailItem[] {
-  const items = new Map<string, CustomerEmailItem>();
-  const addEmail = (email: string | null, label: string | null) => {
-    const cleanedEmail = email?.trim();
-    if (!cleanedEmail) {
-      return;
+function customerContactRows(customer: Customer): CustomerContactRow[] {
+  const rows: CustomerContactRow[] = [];
+  const rowIndexByEmail = new Map<string, number>();
+
+  const addRow = (row: CustomerContactRow) => {
+    const emailKey = normalizeCustomerContactEmailKey(row.email);
+    if (emailKey) {
+      const existingIndex = rowIndexByEmail.get(emailKey);
+      if (existingIndex !== undefined) {
+        rows[existingIndex] = mergeCustomerContactRows(rows[existingIndex], row);
+        return;
+      }
+      rowIndexByEmail.set(emailKey, rows.length);
     }
-    const key = cleanedEmail.toLowerCase();
-    if (!items.has(key)) {
-      items.set(key, { email: cleanedEmail, label: label ?? "" });
-    }
+    rows.push(row);
   };
 
-  for (const emailAddress of customer.email_addresses) {
-    addEmail(emailAddress.email, customerEmailOwnerLabel(emailAddress.label));
-  }
-  addEmail(customer.project_lead_email, customerEmailOwnerLabel(customer.project_lead_name));
   for (const contact of customer.contacts) {
-    addEmail(contact.email, customerEmailOwnerLabel(contact.name));
+    addRow({
+      key: `contact:${contact.id}`,
+      contact_type: contact.contact_type,
+      name: customerContactNameFromEmailLabel(contact.name),
+      phone: contact.phone,
+      email: contact.email,
+    });
   }
-  return [...items.values()];
+
+  for (const emailAddress of customer.email_addresses) {
+    const email = emailAddress.email?.trim();
+    if (!email) {
+      continue;
+    }
+    const label = customerContactNameFromEmailLabel(emailAddress.label);
+    addRow({
+      key: `email:${email.toLowerCase()}`,
+      contact_type: null,
+      name: label,
+      phone: null,
+      email,
+    });
+  }
+
+  return rows;
 }
 
-function customerEmailOwnerLabel(value: string | null | undefined): string | null {
+function mergeCustomerContactRows(existing: CustomerContactRow, incoming: CustomerContactRow): CustomerContactRow {
+  return {
+    ...existing,
+    name: existing.name?.trim() ? existing.name : incoming.name,
+    phone: existing.phone?.trim() ? existing.phone : incoming.phone,
+    contact_type: existing.contact_type?.trim() ? existing.contact_type : incoming.contact_type,
+    email: existing.email?.trim() ? existing.email : incoming.email,
+  };
+}
+
+function customerContactNameFromEmailLabel(value: string | null | undefined): string | null {
   const label = value?.trim();
   if (!label) {
     return null;
   }
   const normalizedLabel = label.toLowerCase();
-  return normalizedLabel === "mobile e-mail" || normalizedLabel === "projektleiter kunde" ? null : label;
+  if (normalizedLabel === "mobile e-mail" || normalizedLabel === "projektleiter kunde") {
+    return null;
+  }
+  return label;
 }
 
-function normalizeCustomerEmailLabelPayload(rows: CustomerEmailItem[]): CustomerEmailAddressUpdate[] {
-  return rows.map((row) => ({
-    email: row.email.trim(),
-    label: row.label?.trim() || null,
-  })).filter((row) => row.email);
+function normalizeCustomerContactsPayload(rows: Array<CustomerContactInput | CustomerContactRow>): CustomerContactInput[] {
+  const contacts: CustomerContactInput[] = [];
+  const contactIndexByEmail = new Map<string, number>();
+
+  for (const row of rows) {
+    const contact: CustomerContactInput = {
+      contact_type: row.contact_type?.trim() || null,
+      name: row.name?.trim() || null,
+      phone: row.phone?.trim() || null,
+      email: row.email?.trim() || null,
+    };
+    if (!contact.name && !contact.phone && !contact.email) {
+      continue;
+    }
+    const emailKey = normalizeCustomerContactEmailKey(contact.email);
+    if (emailKey) {
+      const existingIndex = contactIndexByEmail.get(emailKey);
+      if (existingIndex !== undefined) {
+        contacts[existingIndex] = mergeCustomerContactRows(
+          { ...contacts[existingIndex], key: "existing" },
+          { ...contact, key: "incoming" },
+        );
+        continue;
+      }
+      contactIndexByEmail.set(emailKey, contacts.length);
+    }
+    contacts.push(contact);
+  }
+
+  return contacts;
 }
 
-function customerEmailItemsKey(rows: CustomerEmailItem[] | CustomerEmailAddressUpdate[]): string {
-  return rows
-    .map((row) => `${row.email.trim().toLowerCase()}\u0000${row.label?.trim() ?? ""}`)
+function customerContactsKey(rows: Array<CustomerContactInput | CustomerContactRow>): string {
+  return normalizeCustomerContactsPayload(rows)
+    .map((row) => [
+      row.email?.trim().toLowerCase() ?? "",
+      row.name?.trim() ?? "",
+      row.phone?.trim() ?? "",
+      row.contact_type?.trim() ?? "",
+    ].join("\u0000"))
     .join("\u0001");
+}
+
+function normalizeCustomerContactEmailKey(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function displayCustomerContactRole(value: string | null | undefined): string {
+  const role = value?.trim();
+  if (!role) {
+    return "";
+  }
+  if (role === "mobile_email") {
+    return "";
+  }
+  return customerContactTypeLabels[role] ?? role;
 }
 
 function customerCardMeta(customer: Customer): string[] {
@@ -1065,7 +1178,7 @@ function customerSearchText(customer: Customer): string {
       contact.name,
       contact.phone,
       contact.email,
-      customerContactTypeLabels[contact.contact_type] ?? contact.contact_type,
+      displayCustomerContactRole(contact.contact_type),
     ]),
   ].filter(Boolean).join(" ").toLowerCase();
 }

@@ -949,12 +949,13 @@ function validateCustomerPayloadForSite(customer: CustomerCreate): string | null
     return "Projektleiter-Mail ist nicht gueltig.";
   }
   for (const contact of customer.contacts) {
-    const hasContactData = Boolean(contact.name.trim() || contact.phone?.trim() || contact.email?.trim());
+    const hasContactData = Boolean(
+      contact.name?.trim()
+      || contact.phone?.trim()
+      || contact.email?.trim(),
+    );
     if (!hasContactData) {
       continue;
-    }
-    if (!contact.name.trim()) {
-      return "Ansprechpartner brauchen einen Namen.";
     }
     if (!isValidOptionalEmail(contact.email)) {
       return "Ansprechpartner-Mail ist nicht gueltig.";
@@ -983,8 +984,8 @@ function normalizeCustomerPayloadForSite(customer: CustomerCreate): CustomerCrea
     is_active: customer.is_active,
     contacts: customer.contacts
       .map((contact) => ({
-        contact_type: contact.contact_type.trim() || "monteur",
-        name: contact.name.trim(),
+        contact_type: contact.contact_type?.trim() || null,
+        name: contact.name?.trim() || null,
         phone: contact.phone?.trim() || null,
         email: contact.email?.trim() || null,
       }))

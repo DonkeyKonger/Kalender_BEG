@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
-from app.models.customer import Customer, CustomerContact, CustomerEmailLabel
+from app.models.customer import Customer, CustomerContact
 from app.models.enums import SiteLocationStatus
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
@@ -128,50 +128,43 @@ def test_customer_read_includes_site_email_recipients_without_duplicates():
     assert [item.email for item in read_customer.email_addresses] == ["Info@Klinik.example", "NEU@KLINIK.example"]
 
 
-def test_customer_email_labels_override_raw_suggestion_labels():
-    db = db_session()
-    customer = Customer(company_name="Klinik GmbH", is_active=True)
-    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
-    db.add_all([customer, site])
-    db.flush()
-    db.add(SiteEmailRecipient(site_id=site.id, email="info@klinik.example", label="Mobile E-Mail", source="manual"))
-    db.add(
-        CustomerEmailLabel(
-            customer_id=customer.id,
-            email="info@klinik.example",
-            email_normalized="info@klinik.example",
-            label="Sekretariat",
-        )
+def test_clean_customer_contacts_allows_email_without_name_and_deduplicates_by_email():
+    contacts = clean_customer_contacts(
+        [
+            {"contact_type": " ", "name": " ", "phone": " ", "email": " info@kunde.example "},
+            {"contact_type": "Buchhaltung", "name": " Rechnung ", "phone": " 0541 ", "email": "INFO@KUNDE.example"},
+        ]
     )
-    db.commit()
 
-    read_customer = CustomerService(db).read_customer(customer)
-
-    assert [(item.email, item.label) for item in read_customer.email_addresses] == [
-        ("info@klinik.example", "Sekretariat"),
+    assert contacts == [
+        {
+            "contact_type": "Buchhaltung",
+            "name": "Rechnung",
+            "phone": "0541",
+            "email": "info@kunde.example",
+        }
     ]
 
 
-def test_update_customer_persists_empty_email_label_override():
+def test_update_customer_persists_email_only_contact():
     db = db_session()
     service = CustomerService(db)
     customer = Customer(company_name="Klinik GmbH", is_active=True)
-    customer.contacts = [
-        CustomerContact(contact_type="monteur", name="Manuel Wüller", email="manuel@example.de"),
-    ]
     db.add(customer)
     db.commit()
 
     service.update_customer(
         customer.id,
-        CustomerUpdate(email_addresses=[{"email": "manuel@example.de", "label": ""}]),
+        CustomerUpdate(contacts=[{"email": "info@kunde.example", "name": None, "phone": None, "contact_type": None}]),
         user_id=7,
     )
-    read_customer = service.read_customer(customer)
+    updated = service.customers.get(customer.id)
 
-    assert [(item.email, item.label) for item in read_customer.email_addresses] == [
-        ("manuel@example.de", ""),
-    ]
+    assert updated is not None
+    assert len(updated.contacts) == 1
+    assert updated.contacts[0].email == "info@kunde.example"
+    assert updated.contacts[0].name is None
+    assert updated.contacts[0].contact_type is None
 
 
 def test_create_customer_keeps_selected_address_geocode():

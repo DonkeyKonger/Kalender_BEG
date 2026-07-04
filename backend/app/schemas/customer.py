@@ -7,8 +7,8 @@ from app.models.enums import SiteLocationStatus
 
 
 class CustomerContactBase(BaseModel):
-    contact_type: str = Field(default="monteur", max_length=40)
-    name: str = Field(min_length=1, max_length=200)
+    contact_type: str | None = Field(default=None, max_length=40)
+    name: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=80)
     email: str | None = Field(default=None, max_length=255)
 
@@ -31,11 +31,6 @@ class CustomerEmailAddressRead(BaseModel):
     label: str | None = None
     source: str | None = None
     created_at: datetime | None = None
-
-
-class CustomerEmailAddressUpdate(BaseModel):
-    email: str = Field(min_length=1, max_length=255)
-    label: str | None = Field(default=None, max_length=200)
 
 
 class CustomerBase(BaseModel):
@@ -80,7 +75,6 @@ class CustomerUpdate(BaseModel):
     project_lead_email: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     contacts: list[CustomerContactCreate] | None = None
-    email_addresses: list[CustomerEmailAddressUpdate] | None = None
 
 
 class CustomerRead(BaseModel):

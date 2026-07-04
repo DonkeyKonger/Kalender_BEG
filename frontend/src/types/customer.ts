@@ -1,6 +1,6 @@
 export type CustomerContactInput = {
-  contact_type: string;
-  name: string;
+  contact_type: string | null;
+  name: string | null;
   phone: string | null;
   email: string | null;
 };
@@ -17,11 +17,6 @@ export type CustomerEmailAddress = {
   label: string | null;
   source: string | null;
   created_at: string | null;
-};
-
-export type CustomerEmailAddressUpdate = {
-  email: string;
-  label: string | null;
 };
 
 export type Customer = {
@@ -68,9 +63,7 @@ export type CustomerCreate = {
   contacts: CustomerContactInput[];
 };
 
-export type CustomerUpdate = Partial<CustomerCreate> & {
-  email_addresses?: CustomerEmailAddressUpdate[];
-};
+export type CustomerUpdate = Partial<CustomerCreate>;
 
 export type CustomerRemoveResponse = {
   action: "deleted";
