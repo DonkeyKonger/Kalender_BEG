@@ -838,14 +838,22 @@ function customerEmailItems(customer: Customer): Array<{ email: string; label: s
     }
   };
 
-  addEmail(customer.project_lead_email, customer.project_lead_name || "Projektleiter Kunde");
+  addEmail(customer.project_lead_email, customerEmailOwnerLabel(customer.project_lead_name) || "Nicht zugeordnet");
   for (const contact of customer.contacts) {
-    addEmail(contact.email, contact.name || customerContactTypeLabels[contact.contact_type] || "Kontakt");
+    addEmail(contact.email, customerEmailOwnerLabel(contact.name) || "Nicht zugeordnet");
   }
   for (const emailAddress of customer.email_addresses) {
-    addEmail(emailAddress.email, emailAddress.label || "Mobile E-Mail");
+    addEmail(emailAddress.email, customerEmailOwnerLabel(emailAddress.label) || "Nicht zugeordnet");
   }
   return [...items.values()];
+}
+
+function customerEmailOwnerLabel(value: string | null | undefined): string | null {
+  const label = value?.trim();
+  if (!label) {
+    return null;
+  }
+  return label.toLowerCase() === "mobile e-mail" ? null : label;
 }
 
 function customerCardMeta(customer: Customer): string[] {
