@@ -360,11 +360,17 @@ export function CustomersPage() {
       >
         {selectedCustomer && selectedDraft && (
           isEditingCustomer ? (
-            <CustomerFields
-              draft={selectedDraft}
-              showContactSections={false}
-              onChange={(values) => updateDraft(selectedCustomer.id, values)}
-            />
+            <div className="detail-read-view customer-detail-subview">
+              <button className="icon-button secondary customer-detail-back-button" type="button" onClick={cancelCustomerEdit}>
+                <ArrowLeft aria-hidden="true" size={16} />
+                <span>Zurück</span>
+              </button>
+              <CustomerFields
+                draft={selectedDraft}
+                showContactSections={false}
+                onChange={(values) => updateDraft(selectedCustomer.id, values)}
+              />
+            </div>
           ) : (
             customerDetailSubview ? (
               <CustomerDetailSubviewView
