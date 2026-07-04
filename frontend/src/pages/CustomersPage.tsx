@@ -361,44 +361,38 @@ export function CustomersPage() {
             <span>Bearbeiten</span>
           </button>
         ) : undefined}
-        footer={selectedCustomer ? (
-          isEditingCustomer && canEdit ? (
-            <>
-              {canRemove && (
-                <button
-                  className="icon-button danger danger-action"
-                  disabled={savingCustomerId === selectedCustomer.id}
-                  type="button"
-                  onClick={() => void removeCustomer(selectedCustomer.id)}
-                >
-                  <Trash2 aria-hidden="true" size={16} />
-                  <span>Kunden löschen</span>
-                </button>
-              )}
-              <button className="icon-button secondary" disabled={savingCustomerId === selectedCustomer.id} type="button" onClick={cancelCustomerEdit}>
-                <span>Abbrechen</span>
-              </button>
+        footer={selectedCustomer && isEditingCustomer && canEdit ? (
+          <>
+            {canRemove && (
               <button
-                className="icon-button secondary"
+                className="icon-button danger danger-action"
                 disabled={savingCustomerId === selectedCustomer.id}
                 type="button"
-                onClick={() => {
-                  void saveCustomer(selectedCustomer.id).then((saved) => {
-                    if (saved) {
-                      setIsEditingCustomer(false);
-                    }
-                  });
-                }}
+                onClick={() => void removeCustomer(selectedCustomer.id)}
               >
-                <Save aria-hidden="true" size={16} />
-                <span>Speichern</span>
+                <Trash2 aria-hidden="true" size={16} />
+                <span>Kunden löschen</span>
               </button>
-            </>
-          ) : (
-            <button className="icon-button secondary" type="button" onClick={closeDrawer}>
-              <span>Schliessen</span>
+            )}
+            <button className="icon-button secondary" disabled={savingCustomerId === selectedCustomer.id} type="button" onClick={cancelCustomerEdit}>
+              <span>Abbrechen</span>
             </button>
-          )
+            <button
+              className="icon-button secondary"
+              disabled={savingCustomerId === selectedCustomer.id}
+              type="button"
+              onClick={() => {
+                void saveCustomer(selectedCustomer.id).then((saved) => {
+                  if (saved) {
+                    setIsEditingCustomer(false);
+                  }
+                });
+              }}
+            >
+              <Save aria-hidden="true" size={16} />
+              <span>Speichern</span>
+            </button>
+          </>
         ) : undefined}
       >
         {selectedCustomer && selectedDraft && (
