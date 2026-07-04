@@ -1454,6 +1454,11 @@ button.entity-card:focus-visible,
   padding: 20px 22px;
 }
 
+.entity-drawer-header.is-action-only {
+  justify-content: flex-end;
+  padding: 12px 22px;
+}
+
 .entity-drawer-header h2,
 .entity-drawer-header p {
   margin: 0;
@@ -1787,6 +1792,10 @@ button.entity-card:focus-visible,
 
 .customers-page .entity-drawer-header {
   padding: 18px 22px;
+}
+
+.customers-page .entity-drawer-header.is-action-only {
+  padding: 10px 22px;
 }
 
 .customers-page .entity-drawer-header h2 {

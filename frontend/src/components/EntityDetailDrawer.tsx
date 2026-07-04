@@ -4,9 +4,10 @@ import { useEffect } from "react";
 
 export type EntityDetailDrawerProps = {
   isOpen: boolean;
-  title: string;
+  title?: string;
   eyebrow?: string;
   subtitle?: string;
+  ariaLabel?: string;
   children: ReactNode;
   footer?: ReactNode;
   actions?: ReactNode;
@@ -18,6 +19,7 @@ export function EntityDetailDrawer({
   title,
   eyebrow,
   subtitle,
+  ariaLabel,
   children,
   footer,
   actions,
@@ -41,17 +43,27 @@ export function EntityDetailDrawer({
   if (!isOpen) {
     return null;
   }
+  const hasTitleCopy = Boolean(eyebrow || title || subtitle);
+  const titleId = title ? "entity-drawer-title" : undefined;
 
   return (
     <div className="entity-drawer" role="presentation">
       <button className="entity-drawer-overlay" type="button" aria-label="Detailfenster schliessen" onClick={onClose} />
-      <aside className="entity-drawer-panel" aria-modal="true" role="dialog" aria-labelledby="entity-drawer-title">
-        <header className="entity-drawer-header">
-          <div className="entity-drawer-title-copy">
-            {eyebrow && <span className="entity-drawer-eyebrow">{eyebrow}</span>}
-            <h2 id="entity-drawer-title">{title}</h2>
-            {subtitle && <p>{subtitle}</p>}
-          </div>
+      <aside
+        className="entity-drawer-panel"
+        aria-label={titleId ? undefined : ariaLabel ?? "Detailfenster"}
+        aria-labelledby={titleId}
+        aria-modal="true"
+        role="dialog"
+      >
+        <header className={`entity-drawer-header${hasTitleCopy ? "" : " is-action-only"}`}>
+          {hasTitleCopy && (
+            <div className="entity-drawer-title-copy">
+              {eyebrow && <span className="entity-drawer-eyebrow">{eyebrow}</span>}
+              {title && <h2 id={titleId}>{title}</h2>}
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+          )}
           <div className="entity-drawer-header-actions">
             {actions}
             <button className="entity-drawer-close" type="button" onClick={onClose} aria-label="Schliessen">

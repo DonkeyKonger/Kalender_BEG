@@ -341,8 +341,8 @@ export function CustomersPage() {
 
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedCustomer && selectedDraft)}
-        eyebrow={selectedCustomer && !isEditingCustomer ? "KUNDE" : undefined}
-        title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : selectedCustomer.company_name : "Kunde"}
+        ariaLabel={selectedCustomer && !isEditingCustomer ? `Kunde ${selectedCustomer.company_name}` : undefined}
+        title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : undefined : "Kunde"}
         subtitle={selectedCustomer && isEditingCustomer ? selectedCustomer.company_name : undefined}
         onClose={closeDrawer}
         actions={selectedCustomer && canEdit && !isEditingCustomer ? (
