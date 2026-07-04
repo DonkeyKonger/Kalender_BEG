@@ -866,7 +866,6 @@ function customerEmailOwnerLabel(value: string | null | undefined): string | nul
 
 function customerCardMeta(customer: Customer): string[] {
   return [
-    customer.project_lead_name ? `Projektleiter: ${customer.project_lead_name}` : "",
     customer.company_phone,
     customer.contacts.length ? `${customer.contacts.length} Ansprechpartner` : "",
   ].filter((item): item is string => Boolean(item));
