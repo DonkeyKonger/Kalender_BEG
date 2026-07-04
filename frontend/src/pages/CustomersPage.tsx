@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Mail,
   MapPin,
   Pencil,
   Phone,
@@ -28,7 +27,7 @@ import type { Customer, CustomerContactInput, CustomerCreate } from "../types/cu
 
 type EditableCustomer = CustomerCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
-type CustomerDetailSubviewKey = "emails" | "contacts" | "projects";
+type CustomerDetailSubviewKey = "contacts" | "projects";
 type CustomerContactRow = CustomerContactInput & { key: string };
 
 const customerContactTypeLabels: Record<string, string> = {
@@ -437,7 +436,6 @@ function CustomerReadView({
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
   const contactRows = customerContactRows(customer);
-  const emailCount = contactRows.filter((contact) => contact.email?.trim()).length;
   const addressLines = customerAddressLines(customer);
   const hasAddress = addressLines.length > 0;
   const [activeSubview, setActiveSubview] = useState<CustomerDetailSubviewKey | null>(null);
@@ -446,13 +444,11 @@ function CustomerReadView({
     setActiveSubview(null);
   }, [customer.id]);
 
-  const subviewTitle = activeSubview === "emails"
-    ? "E-Mail-Adressen"
-    : activeSubview === "contacts"
-      ? "Ansprechpartner / Kontakte"
-      : activeSubview === "projects"
-        ? "Projekte"
-        : "";
+  const subviewTitle = activeSubview === "contacts"
+    ? "Ansprechpartner / Kontakte"
+    : activeSubview === "projects"
+      ? "Projekte"
+      : "";
 
   return (
     <div className="detail-read-view customer-detail-view">
@@ -492,14 +488,6 @@ function CustomerReadView({
         </section>
 
         <section className="detail-read-section customer-detail-nav-section">
-          <CustomerDetailNavItem
-            icon={Mail}
-            onOpen={() => setActiveSubview("emails")}
-            title="E-Mail-Adressen"
-            preview={emailCount
-              ? `${emailCount} E-Mail-Adresse${emailCount === 1 ? "" : "n"} hinterlegt`
-              : "Keine E-Mail-Adressen hinterlegt"}
-          />
           <CustomerDetailNavItem
             icon={Users}
             onOpen={() => setActiveSubview("contacts")}
