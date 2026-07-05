@@ -638,19 +638,16 @@ function PersonReadView({
     <div className="detail-read-view person-detail-view">
       <div className="person-detail-main" aria-hidden={action ? true : undefined}>
         <section className="detail-read-section person-detail-info-section">
-          <div className="person-detail-section-heading person-detail-section-heading-with-action">
-            <h3>Informationen</h3>
-            {canEdit ? (
-              <button
-                aria-label="Mitarbeiterinformationen bearbeiten"
-                className="site-inline-edit-button person-detail-section-edit-button"
-                type="button"
-                onClick={onEditInformation}
-              >
-                <Pencil aria-hidden="true" size={13} />
-              </button>
-            ) : null}
-          </div>
+          {canEdit ? (
+            <button
+              aria-label="Mitarbeiterinformationen bearbeiten"
+              className="site-inline-edit-button person-detail-section-edit-button person-detail-info-edit-button"
+              type="button"
+              onClick={onEditInformation}
+            >
+              <Pencil aria-hidden="true" size={13} />
+            </button>
+          ) : null}
           <div className="person-detail-info-grid">
             <PersonDetailField label="Name">
               <strong>{person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}</strong>
