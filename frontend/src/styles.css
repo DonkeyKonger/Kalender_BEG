@@ -2230,23 +2230,23 @@ button.entity-card:focus-visible,
 
 .person-absence-overview {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .person-absence-year-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid #dbe4ef;
   border-radius: 0;
-  background: #fbfdff;
-  padding: 5px 6px;
+  background: #f8fafc;
+  padding: 8px;
 }
 
 .person-absence-year-control strong {
   color: #172033;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -2254,16 +2254,16 @@ button.entity-card:focus-visible,
 .person-absence-year-control button {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  min-height: 24px;
+  gap: 4px;
+  min-height: 28px;
   border: 1px solid #cbd8e8;
   border-radius: 0;
   background: #ffffff;
   color: #334155;
   font: inherit;
-  font-size: 0.66rem;
-  font-weight: 700;
-  padding: 0 6px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  padding: 0 8px;
   cursor: pointer;
 }
 
@@ -2276,11 +2276,11 @@ button.entity-card:focus-visible,
 
 .person-absence-summary-card {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   border: 1px solid #dbe4ef;
   border-radius: 0;
   background: #ffffff;
-  padding: 9px;
+  padding: 10px;
 }
 
 .person-absence-remaining {
@@ -2318,12 +2318,12 @@ button.entity-card:focus-visible,
 
 .person-absence-type-summary-item {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
   border: 1px solid #e5edf6;
   border-radius: 0;
   background: #f8fafc;
-  padding: 6px;
+  padding: 7px;
 }
 
 .person-absence-type-summary-item .status-badge {
@@ -2331,12 +2331,12 @@ button.entity-card:focus-visible,
 }
 
 .person-absence-overview .status-badge {
-  min-height: 18px;
+  min-height: 20px;
   border-radius: 0;
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.66rem;
+  font-weight: 750;
   line-height: 1.1;
-  padding: 2px 5px;
+  padding: 3px 6px;
 }
 
 .person-absence-type-summary-item strong {
@@ -2384,11 +2384,11 @@ button.entity-card:focus-visible,
 .person-absence-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   border-bottom: 1px solid #e5edf6;
   border-left: 3px solid #94a3b8;
-  padding: 7px 9px;
+  padding: 8px 10px;
 }
 
 .person-absence-row:last-child {
@@ -2416,31 +2416,28 @@ button.entity-card:focus-visible,
 }
 
 .person-absence-row > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 7px;
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
 .person-absence-row strong {
   color: #172033;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 750;
   line-height: 1.25;
 }
 
 .person-absence-row p {
-  flex-basis: 100%;
   margin: 0;
   color: #65738a;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   line-height: 1.35;
 }
 
 .person-absence-row > span {
   color: #25354b;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 800;
   white-space: nowrap;
 }
