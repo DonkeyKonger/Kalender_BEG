@@ -1684,6 +1684,49 @@ button.entity-card:focus-visible,
   line-height: 1.15;
 }
 
+.person-signature-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 340px);
+  border: 1px solid #cfd9e6;
+  background: #f8fafc;
+}
+
+.person-signature-toggle button {
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  border-left: 1px solid #cfd9e6;
+  background: transparent;
+  color: #52637a;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.1;
+  padding: 0 9px;
+  cursor: pointer;
+}
+
+.person-signature-toggle button:first-child {
+  border-left: 0;
+}
+
+.person-signature-toggle button.is-active {
+  background: #e8f0f8;
+  color: #143c6d;
+  box-shadow: inset 0 -2px 0 #2d5d8f;
+}
+
+.person-signature-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.person-signature-toggle button:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(29 92 153 / 28%);
+  outline: none;
+}
+
 .person-detail-address-section {
   gap: 5px;
   padding: 8px 10px;

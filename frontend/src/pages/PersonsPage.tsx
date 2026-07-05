@@ -275,6 +275,31 @@ export function PersonsPage() {
     }
   }
 
+  async function updatePersonSignaturePermission(person: Person, canSignImmediately: boolean) {
+    if (person.can_sign_measurements_immediately === canSignImmediately) {
+      return;
+    }
+    const nextDraft = {
+      ...toEditablePerson(person),
+      can_sign_measurements_immediately: canSignImmediately,
+    };
+    setSavingPersonId(person.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
+      setPeople((current) =>
+        current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      setMessage("Kundenunterschrift aktualisiert.");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Kundenunterschrift konnte nicht gespeichert werden."));
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
   function updateDraft(personId: number, values: Partial<EditablePerson>) {
     setDrafts((current) => ({
       ...current,
@@ -544,7 +569,10 @@ export function PersonsPage() {
             <PersonReadView
               person={selectedPerson}
               activeAction={activePersonAction}
+              canEdit={canEdit}
+              isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
+              onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
             />
           )
         )}
@@ -556,11 +584,17 @@ export function PersonsPage() {
 function PersonReadView({
   person,
   activeAction,
+  canEdit,
+  isSaving,
   onActionChange,
+  onSignaturePermissionChange,
 }: {
   person: Person;
   activeAction: PersonDetailActionKey | null;
+  canEdit: boolean;
+  isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
+  onSignaturePermissionChange: (canSignImmediately: boolean) => void;
 }) {
   const addressText = formatPersonAddress(person);
   const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
@@ -591,7 +625,12 @@ function PersonReadView({
               <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
             </PersonDetailField>
             <PersonDetailField label="Kundenunterschrift">
-              <strong>{person.can_sign_measurements_immediately ? "Sofort erlaubt" : "Erst nach Prüfung"}</strong>
+              <PersonSignatureToggle
+                canEdit={canEdit}
+                disabled={isSaving}
+                value={person.can_sign_measurements_immediately}
+                onChange={onSignaturePermissionChange}
+              />
             </PersonDetailField>
           </div>
         </section>
@@ -667,6 +706,41 @@ function PersonDetailNavItem({
       </span>
       <ChevronRight aria-hidden="true" size={17} />
     </button>
+  );
+}
+
+function PersonSignatureToggle({
+  canEdit,
+  disabled,
+  value,
+  onChange,
+}: {
+  canEdit: boolean;
+  disabled: boolean;
+  value: boolean;
+  onChange: (canSignImmediately: boolean) => void;
+}) {
+  return (
+    <div className="person-signature-toggle" role="group" aria-label="Kundenunterschrift">
+      <button
+        aria-pressed={value}
+        className={value ? "is-active" : ""}
+        disabled={!canEdit || disabled}
+        type="button"
+        onClick={() => onChange(true)}
+      >
+        Sofort erlaubt
+      </button>
+      <button
+        aria-pressed={!value}
+        className={!value ? "is-active" : ""}
+        disabled={!canEdit || disabled}
+        type="button"
+        onClick={() => onChange(false)}
+      >
+        Erst nach Prüfung
+      </button>
+    </div>
   );
 }
 
