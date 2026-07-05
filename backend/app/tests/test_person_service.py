@@ -51,12 +51,14 @@ def test_person_snapshot_uses_json_safe_enum_value():
         person_type=PersonType.INTERNAL,
         is_active=True,
         employment_status=PersonEmploymentStatus.ACTIVE.value,
+        annual_vacation_days=30,
         email=None,
         phone=None,
         notes=None,
     )
 
     assert person_snapshot(person)["person_type"] == "internal"
+    assert person_snapshot(person)["annual_vacation_days"] == 30
 
 
 def test_apply_selected_person_geocode_keeps_selected_coordinates():

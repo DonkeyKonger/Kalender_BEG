@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -26,6 +26,7 @@ class Person(TimestampMixin, Base):
         nullable=False,
         default=PersonEmploymentStatus.ACTIVE.value,
     )
+    annual_vacation_days: Mapped[int | None] = mapped_column(Integer)
     can_sign_measurements_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(80))

@@ -207,6 +207,7 @@ class PersonService:
         person.short_code = archive_key
         person.is_active = False
         person.employment_status = PersonEmploymentStatus.DEPARTED.value
+        person.annual_vacation_days = None
         person.can_sign_measurements_immediately = False
         person.email = None
         person.phone = None
@@ -355,6 +356,7 @@ def person_snapshot(person: Person) -> dict:
         "person_type": person.person_type.value,
         "is_active": person.is_active,
         "employment_status": person_employment_status(person),
+        "annual_vacation_days": getattr(person, "annual_vacation_days", None),
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,

@@ -1682,6 +1682,121 @@ button.entity-card:focus-visible,
   overflow-wrap: anywhere;
 }
 
+.person-inline-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.person-inline-field.is-editing {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 6px;
+}
+
+.person-inline-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #6b7c93;
+  cursor: pointer;
+}
+
+.person-inline-edit-button:hover,
+.person-inline-edit-button:focus-visible {
+  border-color: #c6d4e4;
+  background: #f3f7fb;
+  color: #173c66;
+  outline: none;
+}
+
+.person-inline-edit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.person-inline-field input {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid #c8d5e5;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 3px 6px;
+}
+
+.person-inline-field input:focus {
+  border-color: #7fa2c9;
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 14%);
+  outline: none;
+}
+
+.person-inline-field input:disabled {
+  background: #f3f6fa;
+  color: #708198;
+}
+
+.person-inline-field-actions {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #c8d5e5;
+}
+
+.person-inline-field-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 24px;
+  border: 0;
+  border-left: 1px solid #d7e1ec;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.person-inline-field-actions button:first-child {
+  border-left: 0;
+}
+
+.person-inline-field-actions button:hover,
+.person-inline-field-actions button:focus-visible {
+  background: #f3f7fb;
+  color: #173c66;
+  outline: none;
+}
+
+.person-inline-field-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.person-inline-field small {
+  grid-column: 1 / -1;
+  color: #b42318;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
 .person-detail-info-field .status-badge {
   width: fit-content;
   border-radius: 2px;

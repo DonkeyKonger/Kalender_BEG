@@ -336,6 +336,36 @@ export function PersonsPage() {
     }
   }
 
+  async function updatePersonInformation(person: Person, values: Partial<PersonCreate>): Promise<boolean> {
+    const nextDraft = {
+      ...toEditablePerson(person),
+      ...values,
+    };
+    const validationError = validatePersonPayload(nextDraft);
+    if (validationError) {
+      setError(validationError);
+      setMessage(null);
+      return false;
+    }
+    setSavingPersonId(person.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
+      setPeople((current) =>
+        current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      setMessage("Mitarbeiterdaten aktualisiert.");
+      return true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Mitarbeiterdaten konnten nicht gespeichert werden."));
+      return false;
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
   async function updatePersonNotes(person: Person, notes: string | null): Promise<boolean> {
     const currentNotes = person.notes?.trim() || null;
     const nextNotes = notes?.trim() || null;
@@ -635,10 +665,7 @@ export function PersonsPage() {
               canEdit={canEdit}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
-              onEditInformation={() => {
-                setActivePersonAction(null);
-                setIsEditingPerson(true);
-              }}
+              onInformationSave={(values) => updatePersonInformation(selectedPerson, values)}
               onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
               onStatusChange={(status) => updatePersonEmploymentStatus(selectedPerson, status)}
               onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
@@ -656,7 +683,7 @@ function PersonReadView({
   canEdit,
   isSaving,
   onActionChange,
-  onEditInformation,
+  onInformationSave,
   onNotesSave,
   onStatusChange,
   onSignaturePermissionChange,
@@ -666,7 +693,7 @@ function PersonReadView({
   canEdit: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
-  onEditInformation: () => void;
+  onInformationSave: (values: Partial<PersonCreate>) => Promise<boolean>;
   onNotesSave: (notes: string | null) => Promise<boolean>;
   onStatusChange: (employmentStatus: PersonEmploymentStatus) => Promise<boolean>;
   onSignaturePermissionChange: (canSignImmediately: boolean) => void;
@@ -677,25 +704,38 @@ function PersonReadView({
     <div className="detail-read-view person-detail-view">
       <div className="person-detail-main" aria-hidden={action ? true : undefined}>
         <section className="detail-read-section person-detail-info-section">
-          {canEdit ? (
-            <button
-              aria-label="Mitarbeiterinformationen bearbeiten"
-              className="site-inline-edit-button person-detail-section-edit-button person-detail-info-edit-button"
-              type="button"
-              onClick={onEditInformation}
-            >
-              <Pencil aria-hidden="true" size={13} />
-            </button>
-          ) : null}
           <div className="person-detail-info-grid">
             <PersonDetailField label="Name">
-              <strong>{person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}</strong>
+              <PersonInlineEditableField
+                ariaLabel="Name bearbeiten"
+                canEdit={canEdit}
+                displayValue={person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}
+                isSaving={isSaving}
+                required
+                value={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
+                onSave={(value) => onInformationSave(personNameUpdateValues(person, value))}
+              />
             </PersonDetailField>
             <PersonDetailField label="Telefon">
-              <strong>{person.phone || "-"}</strong>
+              <PersonInlineEditableField
+                ariaLabel="Telefon bearbeiten"
+                canEdit={canEdit}
+                displayValue={person.phone || "-"}
+                isSaving={isSaving}
+                value={person.phone ?? ""}
+                onSave={(value) => onInformationSave({ phone: value.trim() || null })}
+              />
             </PersonDetailField>
             <PersonDetailField label="E-Mail">
-              <strong>{person.email || "-"}</strong>
+              <PersonInlineEditableField
+                ariaLabel="E-Mail bearbeiten"
+                canEdit={canEdit}
+                displayValue={person.email || "-"}
+                inputMode="email"
+                isSaving={isSaving}
+                value={person.email ?? ""}
+                onSave={(value) => onInformationSave({ email: value.trim() || null })}
+              />
             </PersonDetailField>
             <PersonDetailField label="Status">
               <PersonEmploymentStatusSelect
@@ -706,7 +746,16 @@ function PersonReadView({
               />
             </PersonDetailField>
             <PersonDetailField className="is-wide" label="Jahresurlaub">
-              <strong>{formatAnnualVacationDays(person.annual_vacation_days)}</strong>
+              <PersonInlineEditableField
+                ariaLabel="Jahresurlaub bearbeiten"
+                canEdit={canEdit}
+                displayValue={formatAnnualVacationDays(person.annual_vacation_days)}
+                inputMode="numeric"
+                isSaving={isSaving}
+                type="number"
+                value={person.annual_vacation_days?.toString() ?? ""}
+                onSave={(value) => onInformationSave({ annual_vacation_days: parseOptionalInteger(value) })}
+              />
             </PersonDetailField>
             <PersonDetailField className="is-wide person-detail-signature-field" label="Kundenunterschrift">
               <PersonSignatureToggle
@@ -1045,6 +1094,119 @@ function PersonDetailField({
   );
 }
 
+function PersonInlineEditableField({
+  ariaLabel,
+  canEdit,
+  displayValue,
+  inputMode,
+  isSaving,
+  required = false,
+  type = "text",
+  value,
+  onSave,
+}: {
+  ariaLabel: string;
+  canEdit: boolean;
+  displayValue: string;
+  inputMode?: "decimal" | "email" | "numeric" | "search" | "tel" | "text" | "url";
+  isSaving: boolean;
+  required?: boolean;
+  type?: "email" | "number" | "tel" | "text";
+  value: string;
+  onSave: (value: string) => Promise<boolean>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraft(value);
+      setFieldError(null);
+    }
+  }, [isEditing, value]);
+
+  function cancelEdit() {
+    setDraft(value);
+    setFieldError(null);
+    setIsEditing(false);
+  }
+
+  async function saveEdit() {
+    const nextValue = draft.trim();
+    if (required && !nextValue) {
+      setFieldError("Pflichtfeld");
+      return;
+    }
+    if (nextValue === value.trim()) {
+      cancelEdit();
+      return;
+    }
+    const saved = await onSave(nextValue);
+    if (saved) {
+      setIsEditing(false);
+      setFieldError(null);
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <div className="person-inline-field is-editing">
+        <input
+          aria-label={ariaLabel}
+          disabled={isSaving}
+          inputMode={inputMode}
+          max={type === "number" ? 365 : undefined}
+          min={type === "number" ? 0 : undefined}
+          step={type === "number" ? 1 : undefined}
+          type={type}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setFieldError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void saveEdit();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelEdit();
+            }
+          }}
+        />
+        <div className="person-inline-field-actions">
+          <button aria-label="Speichern" disabled={isSaving} type="button" onClick={() => void saveEdit()}>
+            <Save aria-hidden="true" size={13} />
+          </button>
+          <button aria-label="Abbrechen" disabled={isSaving} type="button" onClick={cancelEdit}>
+            ×
+          </button>
+        </div>
+        {fieldError ? <small>{fieldError}</small> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="person-inline-field">
+      <strong>{displayValue}</strong>
+      {canEdit ? (
+        <button
+          aria-label={ariaLabel}
+          className="person-inline-edit-button"
+          disabled={isSaving}
+          type="button"
+          onClick={() => setIsEditing(true)}
+        >
+          <Pencil aria-hidden="true" size={12} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function PersonFields({
   draft,
   isCreateForm = false,
@@ -1314,6 +1476,24 @@ function toEditablePerson(person: Person): EditablePerson {
     address_longitude: person.address_longitude,
     address_location_status: person.address_location_status,
     notes: person.notes,
+  };
+}
+
+function personNameUpdateValues(person: Person, value: string): Partial<PersonCreate> {
+  const displayName = value.trim();
+  const parts = displayName.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] ?? person.first_name;
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? person.last_name;
+  return {
+    first_name: firstName,
+    last_name: lastName,
+    display_name: displayName,
+    short_code: getEmployeeShortName({
+      first_name: firstName,
+      last_name: lastName,
+      display_name: displayName,
+      short_code: person.short_code,
+    }),
   };
 }
 
