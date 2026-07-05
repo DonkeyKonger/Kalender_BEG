@@ -1686,25 +1686,26 @@ button.entity-card:focus-visible,
 }
 
 .person-signature-toggle {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(100%, 340px);
-  border: 1px solid #cfd9e6;
-  background: #f8fafc;
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid #d5deeb;
+  background: #ffffff;
 }
 
 .person-signature-toggle button {
   min-width: 0;
-  min-height: 28px;
+  min-height: 24px;
   border: 0;
-  border-left: 1px solid #cfd9e6;
+  border-left: 1px solid #d5deeb;
   background: transparent;
   color: #52637a;
   font: inherit;
-  font-size: 0.74rem;
-  font-weight: 750;
+  font-size: 0.68rem;
+  font-weight: 650;
   line-height: 1.1;
-  padding: 0 9px;
+  padding: 0 10px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1713,9 +1714,9 @@ button.entity-card:focus-visible,
 }
 
 .person-signature-toggle button.is-active {
-  background: #e8f0f8;
-  color: #143c6d;
-  box-shadow: inset 0 -2px 0 #2d5d8f;
+  background: #edf3f9;
+  color: #173c66;
+  box-shadow: inset 0 0 0 1px #a8bdd6;
 }
 
 .person-signature-toggle button:disabled {
