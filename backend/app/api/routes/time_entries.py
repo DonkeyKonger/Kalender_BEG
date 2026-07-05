@@ -68,8 +68,9 @@ def list_time_entries(
         for entry in entries:
             gps_evaluation = gps_evaluations.get(entry.id)
             gps_work_minutes = gps_evaluation.work_minutes if gps_evaluation is not None else None
+            has_gps_review_notice = bool(gps_evaluation is not None and gps_evaluation.review_notices)
             if service.is_open_time_review_case(entry, gps_work_minutes) or (
-                gps_evaluation is not None and gps_evaluation.has_source_mismatch
+                gps_evaluation is not None and (gps_evaluation.has_source_mismatch or has_gps_review_notice)
             ):
                 open_entries.append(entry)
         entries = open_entries
