@@ -1679,6 +1679,7 @@ button.entity-card:focus-visible,
 
 .person-detail-info-field .status-badge {
   width: fit-content;
+  border-radius: 2px;
   padding: 3px 7px;
   font-size: 0.66rem;
   line-height: 1.15;
