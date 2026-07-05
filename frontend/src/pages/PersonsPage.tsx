@@ -127,7 +127,6 @@ export function PersonsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void loadPeople();
@@ -178,12 +177,10 @@ export function PersonsPage() {
     const validationError = validatePersonPayload(createForm);
     if (validationError) {
       setError(validationError);
-      setMessage(null);
       return;
     }
     setSavingPersonId(0);
     setError(null);
-    setMessage(null);
     try {
       const payload = normalizePersonPayload(createForm);
       const created = await api.createPerson(payload);
@@ -191,7 +188,6 @@ export function PersonsPage() {
       setDrafts((current) => ({ ...current, [created.id]: toEditablePerson(created) }));
       setCreateForm(emptyPerson);
       setDrawer(null);
-      setMessage("Person angelegt.");
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht angelegt werden."));
     } finally {
@@ -207,19 +203,16 @@ export function PersonsPage() {
     const validationError = validatePersonPayload(draft);
     if (validationError) {
       setError(validationError);
-      setMessage(null);
       return false;
     }
     setSavingPersonId(personId);
     setError(null);
-    setMessage(null);
     try {
       const updated = await api.updatePerson(personId, normalizePersonPayload(draft));
       setPeople((current) =>
         current.map((person) => person.id === updated.id ? updated : person).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
-      setMessage("Person gespeichert.");
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Person konnte nicht gespeichert werden."));
@@ -240,7 +233,6 @@ export function PersonsPage() {
     const personId = person.id;
     setSavingPersonId(personId);
     setError(null);
-    setMessage(null);
     try {
       await api.deletePerson(personId);
       setPeople((current) => current.filter((person) => person.id !== personId));
@@ -251,7 +243,6 @@ export function PersonsPage() {
       });
       setDrawer(null);
       setIsEditingPerson(false);
-      setMessage("Mitarbeiter ausgeblendet. Historische Daten bleiben erhalten.");
     } catch (requestError) {
       setError(readApiError(requestError, "Mitarbeiter konnte nicht ausgeblendet werden."));
     } finally {
@@ -267,7 +258,6 @@ export function PersonsPage() {
     const nextDraft = { ...draft, ...values };
     setSavingPersonId(personId);
     setError(null);
-    setMessage(null);
     updateDraft(personId, values as Partial<EditablePerson>);
     try {
       const updated = await api.updatePerson(personId, normalizePersonPayload(nextDraft));
@@ -275,7 +265,6 @@ export function PersonsPage() {
         current.map((person) => person.id === updated.id ? updated : person).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
-      setMessage("Startort aus Vorschlag uebernommen und gespeichert.");
     } catch (requestError) {
       setError(readApiError(requestError, "Startort konnte nicht gespeichert werden."));
     } finally {
@@ -293,14 +282,12 @@ export function PersonsPage() {
     };
     setSavingPersonId(person.id);
     setError(null);
-    setMessage(null);
     try {
       const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
       setPeople((current) =>
         current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
-      setMessage("Kundenunterschrift aktualisiert.");
     } catch (requestError) {
       setError(readApiError(requestError, "Kundenunterschrift konnte nicht gespeichert werden."));
     } finally {
@@ -319,14 +306,12 @@ export function PersonsPage() {
     };
     setSavingPersonId(person.id);
     setError(null);
-    setMessage(null);
     try {
       const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
       setPeople((current) =>
         current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
-      setMessage("Status aktualisiert.");
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
@@ -344,19 +329,16 @@ export function PersonsPage() {
     const validationError = validatePersonPayload(nextDraft);
     if (validationError) {
       setError(validationError);
-      setMessage(null);
       return false;
     }
     setSavingPersonId(person.id);
     setError(null);
-    setMessage(null);
     try {
       const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
       setPeople((current) =>
         current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
-      setMessage("Mitarbeiterdaten aktualisiert.");
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Mitarbeiterdaten konnten nicht gespeichert werden."));
@@ -378,7 +360,6 @@ export function PersonsPage() {
     };
     setSavingPersonId(person.id);
     setError(null);
-    setMessage(null);
     try {
       const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
       setPeople((current) =>
@@ -469,7 +450,6 @@ export function PersonsPage() {
       </div>
 
       {error && <p className="form-error">{error}</p>}
-      {message && <p className="form-info">{message}</p>}
 
       <div className="overview-toolbar">
         <div className="overview-toolbar-left">
