@@ -599,6 +599,10 @@ export function PersonsPage() {
               canEdit={canEdit}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
+              onEditInformation={() => {
+                setActivePersonAction(null);
+                setIsEditingPerson(true);
+              }}
               onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
               onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
             />
@@ -615,6 +619,7 @@ function PersonReadView({
   canEdit,
   isSaving,
   onActionChange,
+  onEditInformation,
   onNotesSave,
   onSignaturePermissionChange,
 }: {
@@ -623,6 +628,7 @@ function PersonReadView({
   canEdit: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
+  onEditInformation: () => void;
   onNotesSave: (notes: string | null) => Promise<boolean>;
   onSignaturePermissionChange: (canSignImmediately: boolean) => void;
 }) {
@@ -632,8 +638,18 @@ function PersonReadView({
     <div className="detail-read-view person-detail-view">
       <div className="person-detail-main" aria-hidden={action ? true : undefined}>
         <section className="detail-read-section person-detail-info-section">
-          <div className="person-detail-section-heading">
+          <div className="person-detail-section-heading person-detail-section-heading-with-action">
             <h3>Informationen</h3>
+            {canEdit ? (
+              <button
+                aria-label="Mitarbeiterinformationen bearbeiten"
+                className="site-inline-edit-button person-detail-section-edit-button"
+                type="button"
+                onClick={onEditInformation}
+              >
+                <Pencil aria-hidden="true" size={13} />
+              </button>
+            ) : null}
           </div>
           <div className="person-detail-info-grid">
             <PersonDetailField label="Name">

@@ -1620,6 +1620,10 @@ button.entity-card:focus-visible,
 }
 
 .person-detail-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid #e5edf6;
   padding: 7px 9px;
 }
@@ -1632,6 +1636,16 @@ button.entity-card:focus-visible,
   letter-spacing: 0.07em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.person-detail-section-heading-with-action h3 {
+  min-width: 0;
+}
+
+.persons-page .person-detail-section-edit-button {
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
 }
 
 .person-detail-info-grid {
