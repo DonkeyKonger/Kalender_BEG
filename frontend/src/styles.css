@@ -1615,7 +1615,7 @@ button.entity-card:focus-visible,
 
 .person-detail-info-section {
   gap: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
   position: relative;
 }
@@ -1683,6 +1683,114 @@ button.entity-card:focus-visible,
   padding: 3px 7px;
   font-size: 0.66rem;
   line-height: 1.15;
+}
+
+.person-status-select {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.person-status-trigger {
+  min-height: 23px;
+  border: 1px solid #d4deea;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.person-status-trigger.is-active {
+  border-color: #9ed7b6;
+  background: #eaf8f0;
+  color: #146c43;
+}
+
+.person-status-trigger.is-paused {
+  border-color: #e3c66b;
+  background: #fff8df;
+  color: #8a5d00;
+}
+
+.person-status-trigger.is-departed {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.person-status-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.person-status-trigger:focus-visible {
+  box-shadow: 0 0 0 2px rgb(45 93 143 / 18%);
+  outline: none;
+}
+
+.person-status-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 154px;
+  border: 1px solid #cfd9e6;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgb(31 47 70 / 14%);
+}
+
+.person-status-option {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #e5edf6;
+  background: #ffffff;
+  color: #26344a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.2;
+  padding: 7px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person-status-option:last-child {
+  border-bottom: 0;
+}
+
+.person-status-option:hover,
+.person-status-option:focus-visible,
+.person-status-option.is-selected {
+  background: #f3f7fb;
+  outline: none;
+}
+
+.person-status-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid currentColor;
+  background: currentColor;
+}
+
+.person-status-dot.is-active {
+  color: #23a559;
+}
+
+.person-status-dot.is-paused {
+  color: #d19a00;
+}
+
+.person-status-dot.is-departed {
+  color: #94a3b8;
 }
 
 .person-signature-toggle {

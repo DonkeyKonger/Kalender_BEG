@@ -17,20 +17,26 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
-import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
+import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
 import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
   internal: "Intern",
   external: "Extern",
   external_temp: "Extern schnell",
+};
+
+const personEmploymentStatusLabels: Record<PersonEmploymentStatus, string> = {
+  active: "Aktiv",
+  paused: "Pausiert",
+  departed: "Ausgeschieden",
 };
 
 type EditablePerson = PersonCreate & { id: number };
@@ -88,6 +94,7 @@ const emptyPerson: PersonCreate = {
   short_code: "",
   person_type: "internal",
   is_active: true,
+  employment_status: "active",
   can_sign_measurements_immediately: false,
   email: null,
   phone: null,
@@ -300,6 +307,34 @@ export function PersonsPage() {
     }
   }
 
+  async function updatePersonEmploymentStatus(person: Person, employmentStatus: PersonEmploymentStatus): Promise<boolean> {
+    if (personEmploymentStatus(person) === employmentStatus) {
+      return true;
+    }
+    const nextDraft = {
+      ...toEditablePerson(person),
+      employment_status: employmentStatus,
+      is_active: employmentStatus === "active",
+    };
+    setSavingPersonId(person.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
+      setPeople((current) =>
+        current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      setMessage("Status aktualisiert.");
+      return true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Status konnte nicht gespeichert werden."));
+      return false;
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
   async function updatePersonNotes(person: Person, notes: string | null): Promise<boolean> {
     const currentNotes = person.notes?.trim() || null;
     const nextNotes = notes?.trim() || null;
@@ -487,7 +522,7 @@ export function PersonsPage() {
                             subtitle={personTypeLabels[person.person_type]}
                             meta={personCardMeta(person)}
                             icon={<Users aria-hidden="true" size={17} />}
-                            status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
+                            status={<StatusBadge tone={personStatusBadgeTone(personEmploymentStatus(person))}>{personEmploymentStatusLabels[personEmploymentStatus(person)]}</StatusBadge>}
                             isInactive={!person.is_active}
                             onClick={() => openPersonDrawer(person.id)}
                           />
@@ -604,6 +639,7 @@ export function PersonsPage() {
                 setIsEditingPerson(true);
               }}
               onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
+              onStatusChange={(status) => updatePersonEmploymentStatus(selectedPerson, status)}
               onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
             />
           )
@@ -621,6 +657,7 @@ function PersonReadView({
   onActionChange,
   onEditInformation,
   onNotesSave,
+  onStatusChange,
   onSignaturePermissionChange,
 }: {
   person: Person;
@@ -630,6 +667,7 @@ function PersonReadView({
   onActionChange: (action: PersonDetailActionKey | null) => void;
   onEditInformation: () => void;
   onNotesSave: (notes: string | null) => Promise<boolean>;
+  onStatusChange: (employmentStatus: PersonEmploymentStatus) => Promise<boolean>;
   onSignaturePermissionChange: (canSignImmediately: boolean) => void;
 }) {
   const addressText = formatPersonAddress(person);
@@ -659,7 +697,12 @@ function PersonReadView({
               <strong>{person.email || "-"}</strong>
             </PersonDetailField>
             <PersonDetailField label="Status">
-              <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
+              <PersonEmploymentStatusSelect
+                canEdit={canEdit}
+                disabled={isSaving}
+                value={personEmploymentStatus(person)}
+                onChange={onStatusChange}
+              />
             </PersonDetailField>
             <PersonDetailField label="Kundenunterschrift">
               <PersonSignatureToggle
@@ -817,6 +860,88 @@ function PersonDetailNavItem({
       </span>
       <ChevronRight aria-hidden="true" size={17} />
     </button>
+  );
+}
+
+function PersonEmploymentStatusSelect({
+  canEdit,
+  disabled,
+  value,
+  onChange,
+}: {
+  canEdit: boolean;
+  disabled: boolean;
+  value: PersonEmploymentStatus;
+  onChange: (employmentStatus: PersonEmploymentStatus) => Promise<boolean>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  async function selectStatus(nextStatus: PersonEmploymentStatus) {
+    if (nextStatus === value) {
+      setIsOpen(false);
+      return;
+    }
+    setIsSaving(true);
+    const saved = await onChange(nextStatus);
+    setIsSaving(false);
+    if (saved) {
+      setIsOpen(false);
+    }
+  }
+
+  return (
+    <div className="person-status-select" ref={containerRef}>
+      <button
+        aria-expanded={isOpen}
+        className={`person-status-trigger is-${value}`}
+        disabled={!canEdit || disabled || isSaving}
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        {isSaving ? "Speichert..." : personEmploymentStatusLabels[value]}
+      </button>
+      {isOpen ? (
+        <div className="person-status-menu" role="menu">
+          {(["active", "paused", "departed"] as PersonEmploymentStatus[]).map((status) => (
+            <button
+              className={`person-status-option is-${status}${status === value ? " is-selected" : ""}`}
+              key={status}
+              role="menuitemradio"
+              aria-checked={status === value}
+              type="button"
+              onClick={() => void selectStatus(status)}
+            >
+              <span className={`person-status-dot is-${status}`} aria-hidden="true" />
+              <span>{personEmploymentStatusLabels[status]}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1048,7 +1173,13 @@ function PersonFields({
         <input
           checked={draft.is_active}
           type="checkbox"
-          onChange={(event) => onChange({ is_active: event.target.checked })}
+          onChange={(event) => {
+            const isActive = event.target.checked;
+            onChange({
+              is_active: isActive,
+              employment_status: isActive ? "active" : "departed",
+            });
+          }}
         />
         <span>Aktiv</span>
       </label>
@@ -1145,6 +1276,7 @@ function toEditablePerson(person: Person): EditablePerson {
     short_code: person.short_code,
     person_type: person.person_type,
     is_active: person.is_active,
+    employment_status: personEmploymentStatus(person),
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     email: person.email,
     phone: person.phone,
@@ -1171,12 +1303,15 @@ function validatePersonPayload(person: PersonCreate): string | null {
 function normalizePersonPayload(person: PersonCreate): PersonCreate {
   const firstName = person.first_name.trim();
   const lastName = person.last_name.trim();
+  const employmentStatus = person.employment_status ?? (person.is_active ? "active" : "departed");
   return {
     ...person,
     first_name: firstName,
     last_name: lastName,
     display_name: person.display_name.trim() || `${firstName} ${lastName}`.trim(),
     short_code: getEmployeeShortName({ ...person, first_name: firstName, last_name: lastName }),
+    is_active: employmentStatus === "active",
+    employment_status: employmentStatus,
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,
@@ -1240,6 +1375,10 @@ function isWorkerPerson(person: Person): boolean {
   return !isProjectManagerPerson(person) && !isOfficePerson(person);
 }
 
+function personEmploymentStatus(person: Pick<Person, "employment_status" | "is_active">): PersonEmploymentStatus {
+  return person.employment_status ?? (person.is_active ? "active" : "departed");
+}
+
 function personCardColor(person: Person): string {
   if (!person.is_active) {
     return "#94a3b8";
@@ -1248,6 +1387,16 @@ function personCardColor(person: Person): string {
     return "#f2b84b";
   }
   return "#1d5c99";
+}
+
+function personStatusBadgeTone(status: PersonEmploymentStatus): "active" | "warning" | "inactive" {
+  if (status === "active") {
+    return "active";
+  }
+  if (status === "paused") {
+    return "warning";
+  }
+  return "inactive";
 }
 
 function formatPersonAddress(person: Pick<Person, "address_formatted" | "address_postal_code" | "address_city" | "address_street" | "address_house_number" | "address_extra">): string {

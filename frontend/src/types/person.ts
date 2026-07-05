@@ -1,6 +1,7 @@
 import type { UserRole } from "./auth";
 
 export type PersonType = "internal" | "external" | "external_temp";
+export type PersonEmploymentStatus = "active" | "paused" | "departed";
 export type PersonLocationStatus = "unchecked" | "geocoded" | "ambiguous" | "failed";
 
 export type Person = {
@@ -12,6 +13,7 @@ export type Person = {
   short_code: string;
   person_type: PersonType;
   is_active: boolean;
+  employment_status: PersonEmploymentStatus;
   can_sign_measurements_immediately: boolean;
   email: string | null;
   phone: string | null;
@@ -41,6 +43,7 @@ export type PersonCreate = {
   short_code: string;
   person_type: PersonType;
   is_active: boolean;
+  employment_status: PersonEmploymentStatus;
   can_sign_measurements_immediately: boolean;
   email: string | null;
   phone: string | null;

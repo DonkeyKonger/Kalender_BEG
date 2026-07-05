@@ -18,6 +18,12 @@ class PersonType(StrEnum):
     EXTERNAL_TEMP = "external_temp"
 
 
+class PersonEmploymentStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    DEPARTED = "departed"
+
+
 class SiteStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
