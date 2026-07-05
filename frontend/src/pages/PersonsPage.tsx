@@ -505,7 +505,6 @@ export function PersonsPage() {
       <EntityDetailDrawer
         isOpen={drawer?.mode === "edit" && Boolean(selectedPerson && selectedDraft)}
         title={selectedPerson ? isEditingPerson ? "Mitarbeiter bearbeiten" : "Mitarbeiter" : "Mitarbeiter"}
-        subtitle={selectedPerson ? `${personTypeLabels[selectedPerson.person_type]} · ${calendarPersonCode(selectedPerson)}` : undefined}
         onClose={closeDrawer}
         actions={selectedPerson && canEdit && !isEditingPerson ? (
           <button
