@@ -1565,6 +1565,11 @@ function comparePeople(left: Person, right: Person): number {
   return left.display_name.localeCompare(right.display_name);
 }
 
+function comparePeopleForOverview(left: Person, right: Person): number {
+  const statusDiff = personEmploymentStatusRank(left) - personEmploymentStatusRank(right);
+  return statusDiff || comparePeople(left, right);
+}
+
 function personInScope(person: Person, scope: PersonScope): boolean {
   if (scope === "internal") {
     return person.person_type === "internal";
@@ -1579,17 +1584,48 @@ function personScopeToCreateType(scope: PersonScope): PersonType {
 function groupPeopleForOverview(people: Person[], scope: PersonScope): PeopleOverviewGroup[] {
   if (scope === "external") {
     return [
-      { key: "external", label: "Externe / Leiharbeiter", people: people.filter((person) => person.is_active && person.person_type === "external") },
-      { key: "external-temp", label: "Schnell angelegt", people: people.filter((person) => person.is_active && person.person_type === "external_temp") },
-      { key: "inactive-external", label: "Inaktive Externe", people: people.filter((person) => !person.is_active) },
+      {
+        key: "external",
+        label: "Externe / Leiharbeiter",
+        people: sortPeopleForOverview(people.filter((person) => person.is_active && person.person_type === "external")),
+      },
+      {
+        key: "external-temp",
+        label: "Schnell angelegt",
+        people: sortPeopleForOverview(people.filter((person) => person.is_active && person.person_type === "external_temp")),
+      },
+      {
+        key: "inactive-external",
+        label: "Inaktive Externe",
+        people: sortPeopleForOverview(people.filter((person) => !person.is_active)),
+      },
     ].filter((group) => group.people.length > 0);
   }
   const internalPeople = people.filter((person) => person.person_type === "internal");
   return [
-    { key: "internal-project-managers", label: "Projektleiter", people: internalPeople.filter(isProjectManagerPerson), collapsible: true },
-    { key: "internal-office", label: "Büro", people: internalPeople.filter(isOfficePerson), collapsible: true },
-    { key: "internal-workers", label: "Monteure", people: internalPeople.filter(isWorkerPerson), collapsible: true },
+    {
+      key: "internal-project-managers",
+      label: "Projektleiter",
+      people: sortPeopleForOverview(internalPeople.filter(isProjectManagerPerson)),
+      collapsible: true,
+    },
+    {
+      key: "internal-office",
+      label: "Büro",
+      people: sortPeopleForOverview(internalPeople.filter(isOfficePerson)),
+      collapsible: true,
+    },
+    {
+      key: "internal-workers",
+      label: "Monteure",
+      people: sortPeopleForOverview(internalPeople.filter(isWorkerPerson)),
+      collapsible: true,
+    },
   ].filter((group) => group.people.length > 0);
+}
+
+function sortPeopleForOverview(people: Person[]): Person[] {
+  return [...people].sort(comparePeopleForOverview);
 }
 
 function isProjectManagerPerson(person: Person): boolean {
@@ -1610,6 +1646,17 @@ function isWorkerPerson(person: Person): boolean {
 
 function personEmploymentStatus(person: Pick<Person, "employment_status" | "is_active">): PersonEmploymentStatus {
   return person.employment_status ?? (person.is_active ? "active" : "departed");
+}
+
+function personEmploymentStatusRank(person: Pick<Person, "employment_status" | "is_active">): number {
+  const status = personEmploymentStatus(person);
+  if (status === "active") {
+    return 0;
+  }
+  if (status === "paused") {
+    return 1;
+  }
+  return 2;
 }
 
 function personCardColor(person: Person): string {
