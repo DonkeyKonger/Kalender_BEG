@@ -35,23 +35,31 @@ def _status_column_type():
     return sa.String(length=20)
 
 
+def _column_exists(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return any(column["name"] == column_name for column in inspector.get_columns(table_name))
+
+
 def upgrade() -> None:
-    op.add_column(
-        "persons",
-        sa.Column(
-            "employment_status",
-            _status_column_type(),
-            nullable=False,
-            server_default="active",
-        ),
-    )
+    if not _column_exists("persons", "employment_status"):
+        op.add_column(
+            "persons",
+            sa.Column(
+                "employment_status",
+                _status_column_type(),
+                nullable=False,
+                server_default="active",
+            ),
+        )
     op.execute(
         "UPDATE persons SET employment_status = CASE WHEN is_active THEN 'active' ELSE 'departed' END",
     )
 
 
 def downgrade() -> None:
-    op.drop_column("persons", "employment_status")
+    if _column_exists("persons", "employment_status"):
+        op.drop_column("persons", "employment_status")
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         person_employment_status.drop(bind, checkfirst=True)

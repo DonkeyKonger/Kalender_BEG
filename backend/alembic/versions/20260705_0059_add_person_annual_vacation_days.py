@@ -17,9 +17,17 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _column_exists(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return any(column["name"] == column_name for column in inspector.get_columns(table_name))
+
+
 def upgrade() -> None:
-    op.add_column("persons", sa.Column("annual_vacation_days", sa.Integer(), nullable=True))
+    if not _column_exists("persons", "annual_vacation_days"):
+        op.add_column("persons", sa.Column("annual_vacation_days", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("persons", "annual_vacation_days")
+    if _column_exists("persons", "annual_vacation_days"):
+        op.drop_column("persons", "annual_vacation_days")
