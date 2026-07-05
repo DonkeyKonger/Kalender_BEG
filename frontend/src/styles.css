@@ -1593,69 +1593,133 @@ button.entity-card:focus-visible,
   gap: 10px;
 }
 
-.person-detail-footer-actions {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.person-detail-action-section {
-  border: 1px solid #dce6f2;
-  border-radius: 0;
-  background: #f8fafc;
-  padding: 10px;
-}
-
-.person-detail-action-buttons {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.person-detail-action-button {
-  min-height: 30px;
-  border: 1px solid #cbd7e6;
-  border-radius: 1px;
-  background: #ffffff;
-  color: #243348;
-  padding: 5px 8px;
-  font-size: 0.74rem;
-  font-weight: 800;
-  line-height: 1.15;
-  cursor: pointer;
-}
-
-.person-detail-action-button:hover,
-.person-detail-action-button:focus-visible,
-.person-detail-action-button.is-active {
-  border-color: #9db7d4;
-  background: #eef5fc;
-  color: #143c6d;
-  outline: none;
-}
-
-.person-detail-action-button:focus-visible {
-  box-shadow: 0 0 0 2px rgb(29 92 153 / 14%);
-}
-
 .persons-page .detail-read-view {
-  gap: 12px;
+  gap: 8px;
 }
 
 .persons-page .detail-read-section {
   border-radius: 0;
-  padding: 12px;
+  padding: 10px 12px;
 }
 
-.persons-page .detail-address-card {
-  border-radius: 0;
+.person-detail-view {
+  position: relative;
+  min-height: 100%;
 }
 
-.persons-page .detail-read-item .status-badge {
-  border-radius: 0;
+.person-detail-main {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.person-detail-info-section {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.person-detail-section-heading {
+  border-bottom: 1px solid #e5edf6;
+  padding: 9px 11px;
+}
+
+.person-detail-section-heading h3 {
+  margin: 0;
+  color: #7b8aa2;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.person-detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.person-detail-info-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border-top: 1px solid #e5edf6;
+  padding: 9px 11px;
+}
+
+.person-detail-info-field:nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.person-detail-info-field:nth-child(even) {
+  border-left: 1px solid #e5edf6;
+}
+
+.person-detail-info-field:last-child {
+  grid-column: 1 / -1;
+}
+
+.person-detail-info-field span {
+  color: #8a9ab2;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.person-detail-info-field strong {
+  min-width: 0;
+  color: #172033;
+  font-size: 0.88rem;
+  font-weight: 720;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.person-detail-info-field .status-badge {
+  width: fit-content;
+}
+
+.person-detail-address-section {
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.person-detail-notes-section {
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+.person-detail-note-panel {
+  min-height: 42px;
+  border: 1px solid #dbe4ef;
+  background: #ffffff;
+  padding: 8px 9px;
+}
+
+.person-detail-note-panel p {
+  margin: 0;
+  color: #2c3a4f;
+  font-size: 0.83rem;
+  font-weight: 550;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.person-detail-note-panel.is-empty p {
+  color: #8a9ab2;
+  font-weight: 650;
+}
+
+.person-detail-nav-section {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.person-detail-subpage {
+  min-height: 100%;
 }
 
 .person-detail-placeholder-panel {
@@ -2327,6 +2391,19 @@ button.entity-card:focus-visible,
   .customer-detail-field + .customer-detail-field {
     border-top: 1px solid #e5edf6;
     border-left: 0;
+  }
+
+  .person-detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .person-detail-info-field:nth-child(n) {
+    border-top: 1px solid #e5edf6;
+    border-left: 0;
+  }
+
+  .person-detail-info-field:first-child {
+    border-top: 0;
   }
 
   .customer-contact-editor-row {

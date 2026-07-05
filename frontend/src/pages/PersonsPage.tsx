@@ -1,5 +1,23 @@
-import { ChevronDown, Save, Search, Trash2, UserPlus, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Car,
+  ChartColumn,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Pencil,
+  Save,
+  Search,
+  StickyNote,
+  Trash2,
+  UserPlus,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -26,30 +44,40 @@ const personDetailActions: Array<{
   label: string;
   title: string;
   description: string;
+  preview: string;
+  icon: LucideIcon;
 }> = [
   {
     key: "absence",
     label: "Urlaub / Krankheit",
     title: "Urlaub / Krankheit",
     description: "Gesamturlaubstage und Krankheitstage pro Person werden hier vorbereitet.",
+    preview: "Urlaubs- und Krankheitstage werden vorbereitet.",
+    icon: CalendarDays,
   },
   {
     key: "equipment",
     label: "Werkzeug / Material",
     title: "Werkzeug / Material",
     description: "Ausgegebenes Werkzeug und Material je Person werden hier vorbereitet.",
+    preview: "Ausgegebenes Werkzeug und Material.",
+    icon: Wrench,
   },
   {
     key: "vehicle",
     label: "Fahrzeug",
     title: "Fahrzeug",
     description: "Zugewiesene Fahrzeuge je Person werden hier vorbereitet.",
+    preview: "Fahrzeugzuordnung wird vorbereitet.",
+    icon: Car,
   },
   {
     key: "performance",
     label: "Performance",
     title: "Monteurperformance",
     description: "Leistungs- und Auswertungsdaten je Monteur werden hier vorbereitet.",
+    preview: "Auswertung wird vorbereitet.",
+    icon: ChartColumn,
   },
 ];
 
@@ -463,53 +491,46 @@ export function PersonsPage() {
               setIsEditingPerson(true);
             }}
           >
+            <Pencil aria-hidden="true" size={16} />
             <span>Bearbeiten</span>
           </button>
         ) : undefined}
-        footer={selectedPerson ? (
-          isEditingPerson && canEdit ? (
-            <div className="person-drawer-footer-actions">
-              <div className="person-drawer-footer-left">
-                {canRemove && (
-                  <button
-                    className="icon-button danger"
-                    disabled={savingPersonId === selectedPerson.id}
-                    type="button"
-                    onClick={() => void deletePerson(selectedPerson)}
-                  >
-                    <Trash2 aria-hidden="true" size={16} />
-                    <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
-                  </button>
-                )}
-              </div>
-              <div className="person-drawer-footer-right">
-                <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
-                  <span>Abbrechen</span>
-                </button>
+        footer={selectedPerson && isEditingPerson && canEdit ? (
+          <div className="person-drawer-footer-actions">
+            <div className="person-drawer-footer-left">
+              {canRemove && (
                 <button
-                  className="icon-button secondary"
+                  className="icon-button danger"
                   disabled={savingPersonId === selectedPerson.id}
                   type="button"
-                  onClick={() => {
-                    void savePerson(selectedPerson.id).then((saved) => {
-                      if (saved) {
-                        setIsEditingPerson(false);
-                      }
-                    });
-                  }}
+                  onClick={() => void deletePerson(selectedPerson)}
                 >
-                  <Save aria-hidden="true" size={16} />
-                  <span>Speichern</span>
+                  <Trash2 aria-hidden="true" size={16} />
+                  <span>{savingPersonId === selectedPerson.id ? "Löscht..." : "Löschen"}</span>
                 </button>
-              </div>
+              )}
             </div>
-          ) : (
-            <div className="person-detail-footer-actions">
-              <button className="icon-button secondary" type="button" onClick={closeDrawer}>
-                <span>Schliessen</span>
+            <div className="person-drawer-footer-right">
+              <button className="icon-button secondary" disabled={savingPersonId === selectedPerson.id} type="button" onClick={cancelPersonEdit}>
+                <span>Abbrechen</span>
+              </button>
+              <button
+                className="icon-button secondary"
+                disabled={savingPersonId === selectedPerson.id}
+                type="button"
+                onClick={() => {
+                  void savePerson(selectedPerson.id).then((saved) => {
+                    if (saved) {
+                      setIsEditingPerson(false);
+                    }
+                  });
+                }}
+              >
+                <Save aria-hidden="true" size={16} />
+                <span>Speichern</span>
               </button>
             </div>
-          )
+          </div>
         ) : undefined}
       >
         {selectedPerson && selectedDraft && (
@@ -544,56 +565,133 @@ function PersonReadView({
   const addressText = formatPersonAddress(person);
   const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
   return (
-    <div className="detail-read-view">
-      <section className="person-detail-action-section" aria-label="Mitarbeiterfunktionen">
-        <div className="person-detail-action-buttons">
-          {personDetailActions.map((detailAction) => (
-            <button
-              className={`person-detail-action-button${activeAction === detailAction.key ? " is-active" : ""}`}
-              type="button"
-              key={detailAction.key}
-              onClick={() => onActionChange(activeAction === detailAction.key ? null : detailAction.key)}
-            >
-              {detailAction.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="detail-read-section">
-        <h3>Stammdaten</h3>
-        <div className="detail-read-grid">
-          <ReadItem label="Name" value={person.display_name || `${person.first_name} ${person.last_name}`.trim()} />
-          <ReadItem label="Typ" value={personTypeLabels[person.person_type]} />
-          <ReadItem label="Kuerzel" value={calendarPersonCode(person)} />
-          <ReadItem label="E-Mail" value={person.email || "-"} />
-          <ReadItem label="Telefon" value={person.phone || "-"} />
-          <div className="detail-read-item">
-            <span>Status</span>
-            <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
+    <div className="detail-read-view person-detail-view">
+      <div className="person-detail-main" aria-hidden={action ? true : undefined}>
+        <section className="detail-read-section person-detail-info-section">
+          <div className="person-detail-section-heading">
+            <h3>Informationen</h3>
           </div>
-          <ReadItem
-            label="Kundenunterschrift"
-            value={person.can_sign_measurements_immediately ? "Sofort erlaubt" : "Erst nach Prüfung"}
-          />
-        </div>
-      </section>
+          <div className="person-detail-info-grid">
+            <PersonDetailField label="Name">
+              <strong>{person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}</strong>
+            </PersonDetailField>
+            <PersonDetailField label="Kürzel">
+              <strong>{calendarPersonCode(person) || "-"}</strong>
+            </PersonDetailField>
+            <PersonDetailField label="Typ">
+              <strong>{personTypeLabels[person.person_type]}</strong>
+            </PersonDetailField>
+            <PersonDetailField label="Telefon">
+              <strong>{person.phone || "-"}</strong>
+            </PersonDetailField>
+            <PersonDetailField label="E-Mail">
+              <strong>{person.email || "-"}</strong>
+            </PersonDetailField>
+            <PersonDetailField label="Status">
+              <strong><StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge></strong>
+            </PersonDetailField>
+            <PersonDetailField label="Kundenunterschrift">
+              <strong>{person.can_sign_measurements_immediately ? "Sofort erlaubt" : "Erst nach Prüfung"}</strong>
+            </PersonDetailField>
+          </div>
+        </section>
 
-      <section className="detail-read-section">
-        <h3>Adresse / Startort</h3>
-        <div className={`detail-address-card ${addressText ? "has-address" : "is-empty"}`}>
-          <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
-          {addressText ? <strong>{addressText}</strong> : null}
-        </div>
-      </section>
+        <section className="detail-read-section customer-detail-address-section person-detail-address-section">
+          <div className="customer-detail-section-heading">
+            <h3>Adresse</h3>
+          </div>
+          <div className={`customer-address-panel ${addressText ? "has-address" : "is-empty"}`}>
+            <div className="customer-address-status">
+              <CheckCircle2 aria-hidden="true" size={16} />
+              <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+            </div>
+            {addressText ? (
+              <div className="customer-address-lines">
+                <MapPin aria-hidden="true" size={18} />
+                <div>
+                  <strong>{addressText}</strong>
+                </div>
+              </div>
+            ) : (
+              <p className="detail-empty">Noch keine Adresse hinterlegt.</p>
+            )}
+          </div>
+        </section>
 
-      <section className="detail-read-section">
-        <h3>Info / Notizen</h3>
-        <p className={person.notes ? "detail-note" : "detail-empty"}>{person.notes || "Keine Notizen hinterlegt."}</p>
-      </section>
+        <section className="detail-read-section person-detail-notes-section">
+          <div className="customer-detail-section-heading">
+            <StickyNote aria-hidden="true" size={17} />
+            <h3>Hinweise</h3>
+          </div>
+          <div className={person.notes ? "person-detail-note-panel" : "person-detail-note-panel is-empty"}>
+            <p>{person.notes || "Keine Hinweise hinterlegt."}</p>
+          </div>
+        </section>
 
-      {action ? <PersonDetailPlaceholderPanel action={action} person={person} /> : null}
+        <section className="detail-read-section customer-detail-nav-section person-detail-nav-section">
+          {personDetailActions.map((detailAction) => (
+            <PersonDetailNavItem
+              action={detailAction}
+              key={detailAction.key}
+              onOpen={() => onActionChange(detailAction.key)}
+            />
+          ))}
+        </section>
+      </div>
+
+      {action ? (
+        <PersonDetailSubpage title={action.title} onBack={() => onActionChange(null)}>
+          <PersonDetailPlaceholderPanel action={action} person={person} />
+        </PersonDetailSubpage>
+      ) : null}
     </div>
+  );
+}
+
+function PersonDetailNavItem({
+  action,
+  onOpen,
+}: {
+  action: (typeof personDetailActions)[number];
+  onOpen: () => void;
+}) {
+  const Icon = action.icon;
+  return (
+    <button className="customer-detail-nav-button person-detail-nav-button" type="button" onClick={onOpen}>
+      <span className="customer-detail-nav-icon">
+        <Icon aria-hidden="true" size={18} />
+      </span>
+      <span className="customer-detail-nav-copy">
+        <span className="customer-detail-nav-title">{action.label}</span>
+        <span className="customer-detail-nav-preview">{action.preview}</span>
+      </span>
+      <ChevronRight aria-hidden="true" size={17} />
+    </button>
+  );
+}
+
+function PersonDetailSubpage({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="customer-detail-subpage person-detail-subpage" aria-label={title}>
+      <header className="customer-detail-subpage-header">
+        <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={16} />
+          <span>Zurück</span>
+        </button>
+        <h3>{title}</h3>
+      </header>
+      <div className="customer-detail-subpage-body">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -616,11 +714,11 @@ function PersonDetailPlaceholderPanel({
   );
 }
 
-function ReadItem({ label, value }: { label: string; value: string }) {
+function PersonDetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="detail-read-item">
+    <div className="person-detail-info-field">
       <span>{label}</span>
-      <strong>{value}</strong>
+      {children}
     </div>
   );
 }
