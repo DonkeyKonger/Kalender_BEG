@@ -1966,7 +1966,7 @@ export function MatrixPage() {
                 width: assignmentDrag.width,
               }}
             >
-              <span className="person-chip-label">{assignmentDrag.assignment.person.short_code}</span>
+              <span className="person-chip-label">{calendarPersonCode(assignmentDrag.assignment.person)}</span>
             </div>,
             document.body,
           )}
@@ -2135,7 +2135,7 @@ function AssignmentAutocompleteDropdown({
               <>
                 <span className="assignment-autocomplete-name">{item.person.display_name}</span>
                 <span className="assignment-autocomplete-short">
-                  {item.person.person_type === "internal" ? item.person.short_code : `Extern · ${item.person.short_code}`}
+                  {item.person.person_type === "internal" ? calendarPersonCode(item.person) : `Extern · ${calendarPersonCode(item.person)}`}
                 </span>
               </>
             )}
@@ -2266,7 +2266,7 @@ function AbsenceCellEditor({
     }
     return people
       .filter((person) => person.is_active)
-      .filter((person) => [person.display_name, person.first_name, person.last_name, person.short_code]
+      .filter((person) => [person.display_name, person.first_name, person.last_name, person.short_code, calendarPersonCode(person)]
         .some((value) => value.toLowerCase().includes(query)))
       .slice(0, 6);
   }, [people, personQuery]);
@@ -2303,7 +2303,7 @@ function AbsenceCellEditor({
         {selectedPerson && (
           <div className="absence-selected-person">
             <span>{selectedPerson.display_name}</span>
-            <small>{selectedPerson.short_code}</small>
+            <small>{calendarPersonCode(selectedPerson)}</small>
           </div>
         )}
         <input
@@ -2367,7 +2367,7 @@ function AbsenceCellEditor({
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
                 <span>{person.display_name}</span>
-                <small>{person.short_code}</small>
+                <small>{calendarPersonCode(person)}</small>
               </button>
             ))}
           </div>
@@ -3049,7 +3049,7 @@ function CellDisplay({
                 onPointerDown={(event) => onStartAssignmentResize(assignment, "start", event)}
               />
             )}
-            <span className="person-chip-label">{assignment.person.short_code}</span>
+            <span className="person-chip-label">{calendarPersonCode(assignment.person)}</span>
             {canResizeEnd && (
               <span
                 className="assignment-resize-handle right"
@@ -3399,7 +3399,7 @@ function projectManagerOptionsFromPeople(people: MatrixPerson[]): ProjectManager
     .map((person) => ({
       id: person.id,
       name: person.display_name,
-      shortCode: person.short_code,
+      shortCode: calendarPersonCode(person),
     }))
     .sort((left, right) => left.name.localeCompare(right.name, "de"));
 }
@@ -3735,7 +3735,7 @@ function compactProjectManagerCode(person: MatrixPerson | null): string {
   if (!person) {
     return "";
   }
-  return compactCodeFromText(person.short_code || person.display_name);
+  return compactCodeFromText(calendarPersonCode(person) || person.display_name);
 }
 
 function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
@@ -3911,7 +3911,7 @@ function isoDateToTime(value: string): number {
 function entriesFromCell(cell: MatrixCell): DraftEntry[] {
   return cell.assignments.map((assignment) => ({
     key: `p-${assignment.person.id}`,
-    label: assignment.person.short_code,
+    label: calendarPersonCode(assignment.person),
     person_id: assignment.person.id,
   }));
 }

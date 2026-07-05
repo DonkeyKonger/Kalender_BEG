@@ -25,7 +25,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
-import { calendarPersonCode } from "../types/person";
+import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
   internal: "Intern",
@@ -456,7 +456,7 @@ export function PersonsPage() {
                             className={`overview-card person-overview-card ${person.person_type !== "internal" ? "is-external-person" : ""}`}
                             color={personCardColor(person)}
                             title={person.display_name || `${person.first_name} ${person.last_name}`.trim()}
-                            subtitle={`${personTypeLabels[person.person_type]} · Kuerzel: ${calendarPersonCode(person)}`}
+                            subtitle={personTypeLabels[person.person_type]}
                             meta={personCardMeta(person)}
                             icon={<Users aria-hidden="true" size={17} />}
                             status={<StatusBadge tone={person.is_active ? "active" : "inactive"}>{person.is_active ? "Aktiv" : "Inaktiv"}</StatusBadge>}
@@ -607,9 +607,6 @@ function PersonReadView({
           <div className="person-detail-info-grid">
             <PersonDetailField label="Name">
               <strong>{person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}</strong>
-            </PersonDetailField>
-            <PersonDetailField label="Kürzel">
-              <strong>{calendarPersonCode(person) || "-"}</strong>
             </PersonDetailField>
             <PersonDetailField label="Typ">
               <strong>{personTypeLabels[person.person_type]}</strong>
@@ -904,28 +901,19 @@ function PersonFields({
         />
       </label>
       {!isCreateForm && (
-        <>
-          <label>
-            <span>Kuerzel/Suche</span>
-            <input
-              value={draft.short_code}
-              onChange={(event) => onChange({ short_code: event.target.value })}
-            />
-          </label>
-          <label>
-            <span>Typ</span>
-            <select
-              value={draft.person_type}
-              onChange={(event) => onChange({ person_type: event.target.value as PersonType })}
-            >
-              {Object.entries(personTypeLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
+        <label>
+          <span>Typ</span>
+          <select
+            value={draft.person_type}
+            onChange={(event) => onChange({ person_type: event.target.value as PersonType })}
+          >
+            {Object.entries(personTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       <label>
         <span>E-Mail</span>
@@ -1073,7 +1061,7 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
     first_name: firstName,
     last_name: lastName,
     display_name: person.display_name.trim() || `${firstName} ${lastName}`.trim(),
-    short_code: person.short_code.trim() || `${firstName.slice(0, 1)}.${lastName}`.trim(),
+    short_code: getEmployeeShortName({ ...person, first_name: firstName, last_name: lastName }),
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,

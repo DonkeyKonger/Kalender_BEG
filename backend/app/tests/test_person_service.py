@@ -21,6 +21,19 @@ def test_clean_person_values_generates_display_name_and_calendar_search_code():
     assert values["short_code"] == "N.Stern"
 
 
+def test_clean_person_values_derives_calendar_search_code_from_name():
+    values = clean_person_values(
+        {
+            "first_name": "Christopher",
+            "last_name": "Erichsen",
+            "display_name": "Christopher Erichsen",
+            "short_code": "CE",
+        }
+    )
+
+    assert values["short_code"] == "C.Erichsen"
+
+
 def test_clean_person_values_rejects_blank_required_fields():
     with pytest.raises(HTTPException) as error:
         clean_person_values({"first_name": "   "})

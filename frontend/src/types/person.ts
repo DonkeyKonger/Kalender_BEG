@@ -58,28 +58,47 @@ export type PersonCreate = {
 
 export type PersonUpdate = Partial<PersonCreate>;
 
-export function calendarPersonCode(
-  person: Pick<Person, "first_name" | "last_name" | "display_name" | "short_code"> & {
+export function getEmployeeShortName(
+  person: {
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+    short_code?: string | null;
     person_type?: PersonType;
   },
 ): string {
-  if (person.person_type === "external" || person.person_type === "external_temp") {
-    return person.display_name.trim() || person.short_code;
+  const displayParts = nameParts(person.display_name ?? "");
+  if (displayParts.length >= 2) {
+    return `${displayParts[0].slice(0, 1)}.${displayParts[displayParts.length - 1]}`;
   }
-  const first = person.first_name.trim() || person.display_name.trim();
-  const last = person.last_name.trim() || fallbackLastName(person.display_name);
+  const first = person.first_name?.trim() || "";
+  const last = person.last_name?.trim() || "";
   if (!first && !last) {
-    return person.short_code;
+    return person.short_code?.trim() || displayParts[0] || "-";
   }
-  if (!last) {
-    return `${first.slice(0, 1)}.`;
+  if (!first || !last) {
+    return person.short_code?.trim() || first || last || "-";
   }
   return `${first.slice(0, 1)}.${last}`;
 }
 
-function fallbackLastName(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  return parts.length >= 2 ? parts[parts.length - 1] : displayName.trim();
+export function calendarPersonCode(
+  person: {
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+    short_code?: string | null;
+    person_type?: PersonType;
+  },
+): string {
+  if (person.person_type === "external" || person.person_type === "external_temp") {
+    return person.display_name?.trim() || person.short_code?.trim() || "-";
+  }
+  return getEmployeeShortName(person);
+}
+
+function nameParts(displayName: string): string[] {
+  return displayName.trim().split(/\s+/).filter(Boolean);
 }
 
 

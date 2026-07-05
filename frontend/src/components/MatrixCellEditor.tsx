@@ -1,7 +1,7 @@
 import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 
 export type MatrixCellEditorEntry = {
   key: string;
@@ -78,7 +78,7 @@ export function MatrixCellEditor({
         if (assignedKeys.has("p-" + person.id)) {
           return false;
         }
-        return [person.display_name, person.first_name, person.last_name, person.short_code]
+        return [person.display_name, person.first_name, person.last_name, person.short_code, calendarPersonCode(person)]
           .some((value) => value.toLowerCase().includes(query));
       })
       .slice(0, 6);
@@ -216,7 +216,7 @@ export function MatrixCellEditor({
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
                 <span>{person.display_name}</span>
-                <small>{person.short_code}</small>
+                <small>{calendarPersonCode(person)}</small>
               </button>
             ))}
           </div>

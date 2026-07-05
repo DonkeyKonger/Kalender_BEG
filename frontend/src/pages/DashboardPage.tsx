@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 import type { MeasurementDashboardSubmission } from "../types/site";
 import type { WeatherSummary } from "../types/weather";
 
@@ -951,7 +951,7 @@ function toDashboardOverviewPerson(person: Person, detail?: string): DashboardOv
     first_name: person.first_name,
     last_name: person.last_name,
     display_name: person.display_name,
-    short_code: person.short_code,
+    short_code: calendarPersonCode(person),
     ...(detail ? { detail } : {}),
   };
 }
@@ -1111,7 +1111,7 @@ function getManagerLabel(manager: MatrixPerson | null): string {
   if (!manager) {
     return "Ohne PL";
   }
-  return normalizeShortCode(manager.short_code || manager.display_name);
+  return normalizeShortCode(calendarPersonCode(manager) || manager.display_name);
 }
 
 function normalizeShortCode(value: string): string {

@@ -14,7 +14,7 @@ import { compareSiteNumbers } from "../lib/siteSorting";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 import type { Site, SiteCreate, SiteSummary, SiteSummaryPerson } from "../types/site";
 
 const emptySite: SiteCreate = {
@@ -1121,7 +1121,7 @@ function projectManagerOptionsFromSites(sites: SiteSummary[]): ProjectManagerOpt
     options.set(manager.id, {
       id: manager.id,
       name: manager.display_name,
-      shortCode: manager.short_code,
+      shortCode: calendarPersonCode(manager),
     });
   });
   return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, "de"));
@@ -1152,7 +1152,7 @@ function groupSites(sites: SiteSummary[], projectManagerFilter: string): SiteGro
 }
 
 function siteProjectManagerLabel(site: SiteSummary): string {
-  return site.project_manager?.short_code || site.project_manager?.display_name || "offen";
+  return site.project_manager ? calendarPersonCode(site.project_manager) : "offen";
 }
 
 function compactSiteGroupLabel(label: string): string {
@@ -1175,6 +1175,7 @@ function siteSearchText(site: SiteSummary): string {
     site.customer,
     site.project_manager?.display_name,
     site.project_manager?.short_code,
+    site.project_manager ? calendarPersonCode(site.project_manager) : null,
     siteStatusLabels[site.status],
   ].filter(Boolean).join(" ").toLowerCase();
 }

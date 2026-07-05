@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.matrix import MatrixRow
 from app.services.matrix_service import MatrixService
+from app.services.person_display import calendar_short_code_from_values
 
 PAGE_WIDTH = 595
 PAGE_HEIGHT = 842
@@ -110,7 +111,7 @@ class PdfExportService:
             cell = row.cells[0]
             pdf.text(site_title(row), bold=True)
             pdf.text(f"Ort: {row.site.location or '-'}", indent=12)
-            pdf.text(f"PL: {row.site.project_manager.short_code if row.site.project_manager else '-'}", indent=12)
+            pdf.text(f"PL: {project_manager_code(row)}", indent=12)
             pdf.text("Personen: " + ", ".join(item.person.display_name for item in cell.assignments), indent=12)
             notes = [item.note for item in cell.assignments if item.note]
             if row.site.info:
@@ -142,7 +143,7 @@ class PdfExportService:
 
         for row in planned_rows:
             pdf.text(site_title(row), bold=True)
-            pdf.text(f"Ort: {row.site.location or '-'} | PL: {row.site.project_manager.short_code if row.site.project_manager else '-'}", indent=12)
+            pdf.text(f"Ort: {row.site.location or '-'} | PL: {project_manager_code(row)}", indent=12)
             for day, cell in zip(matrix.days, row.cells, strict=True):
                 if not cell.assignments:
                     continue
@@ -157,6 +158,13 @@ class PdfExportService:
 def site_title(row: MatrixRow) -> str:
     number = f"{row.site.site_number} - " if row.site.site_number else ""
     return f"{number}{row.site.name}"
+
+
+def project_manager_code(row: MatrixRow) -> str:
+    manager = row.site.project_manager
+    if manager is None:
+        return "-"
+    return calendar_short_code_from_values(display_name=manager.display_name, short_code=manager.short_code)
 
 
 def format_date(value: date) -> str:

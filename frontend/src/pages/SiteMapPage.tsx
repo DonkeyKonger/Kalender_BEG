@@ -9,7 +9,7 @@ import { siteStatusLabels } from "../components/StatusBadge";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
-import type { PersonMapItem, PersonMapResponse, PersonType } from "../types/person";
+import { calendarPersonCode, type PersonMapItem, type PersonMapResponse, type PersonType } from "../types/person";
 import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
 const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
@@ -279,7 +279,7 @@ export function SiteMapPage() {
             <option value={ALL_FILTER}>Alle</option>
             {projectManagers.map((manager) => (
               <option key={manager.id} value={manager.id}>
-                {manager.short_code || manager.display_name}
+                {calendarPersonCode(manager)}
               </option>
             ))}
           </select>
@@ -290,7 +290,7 @@ export function SiteMapPage() {
             <option value={ALL_FILTER}>Alle</option>
             {personProjectManagers.map((manager) => (
               <option key={manager.id} value={manager.id}>
-                {manager.short_code || manager.display_name}
+                {calendarPersonCode(manager)}
               </option>
             ))}
           </select>
@@ -491,7 +491,7 @@ function VisibleMarkerTracker({
 }
 
 function SiteMapPopup({ site }: { site: SiteMapItem }) {
-  const projectManager = site.project_manager?.short_code || site.project_manager?.display_name || "Nicht zugeordnet";
+  const projectManager = site.project_manager ? calendarPersonCode(site.project_manager) : "Nicht zugeordnet";
   return (
     <div className="site-map-popup">
       <strong>{site.name}</strong>
@@ -506,7 +506,7 @@ function SiteMapPopup({ site }: { site: SiteMapItem }) {
 }
 
 function PersonMapPopup({ person }: { person: PersonMapItem }) {
-  const projectManager = person.project_manager_assignment?.short_code || person.project_manager_assignment?.display_name || "Nicht zugeordnet";
+  const projectManager = person.project_manager_assignment ? calendarPersonCode(person.project_manager_assignment) : "Nicht zugeordnet";
   return (
     <div className="site-map-popup">
       <strong>{person.display_name}</strong>

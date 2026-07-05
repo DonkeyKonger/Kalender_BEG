@@ -16,7 +16,7 @@ from app.repositories.person_repository import PersonRepository
 from app.schemas.person import ExternalPersonCreate, PersonCreate, PersonMapItem, PersonMapProjectManager, PersonMapResponse, PersonUpdate
 from app.services.audit_service import AuditService
 from app.services.geo_service import has_valid_coordinates
-from app.services.person_display import calendar_short_code
+from app.services.person_display import calendar_short_code, employee_short_code_from_values
 
 
 REQUIRED_TEXT_FIELDS = {
@@ -311,8 +311,13 @@ def clean_person_values(values: dict) -> dict:
             cleaned[field] = cleaned[field].strip() or None
     if not cleaned.get("display_name") and cleaned.get("first_name") and cleaned.get("last_name"):
         cleaned["display_name"] = f"{cleaned['first_name']} {cleaned['last_name']}"
-    if not cleaned.get("short_code") and cleaned.get("first_name") and cleaned.get("last_name"):
-        cleaned["short_code"] = f"{cleaned['first_name'][:1]}.{cleaned['last_name']}"
+    if cleaned.get("display_name") or (cleaned.get("first_name") and cleaned.get("last_name")) or cleaned.get("short_code"):
+        cleaned["short_code"] = employee_short_code_from_values(
+            first_name=cleaned.get("first_name"),
+            last_name=cleaned.get("last_name"),
+            display_name=cleaned.get("display_name"),
+            short_code=cleaned.get("short_code"),
+        )
     for field, message in REQUIRED_TEXT_FIELDS.items():
         if field in cleaned and not cleaned.get(field):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, message)

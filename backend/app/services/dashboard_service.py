@@ -10,6 +10,7 @@ from app.models.person import Person
 from app.schemas.matrix import MatrixPerson, MatrixResponse, MatrixRow
 from app.services.conflict_service import BLOCKED_SITE_STATUSES, HARD_ABSENCE_TYPES
 from app.services.matrix_service import MatrixService
+from app.services.person_display import calendar_short_code, calendar_short_code_from_values
 
 
 class DashboardService:
@@ -424,7 +425,7 @@ class DashboardService:
             "first_name": person.first_name,
             "last_name": person.last_name,
             "display_name": person.display_name,
-            "short_code": person.short_code,
+            "short_code": calendar_short_code(person),
         }
 
     def _site_label(self, site_number: str | None, site_name: str) -> str:
@@ -444,14 +445,18 @@ class DashboardService:
             return {"key": "unassigned", "label": "Ohne PL", "name": "Ohne Projektleiter"}
         return {
             "key": str(manager["id"]),
-            "label": self._manager_label_from_values(manager.get("short_code") or manager["display_name"]),
+            "label": self._manager_label_from_values(
+                calendar_short_code_from_values(display_name=manager["display_name"], short_code=manager.get("short_code"))
+            ),
             "name": manager["display_name"],
         }
 
     def _manager_label(self, manager: MatrixPerson | None) -> str:
         if manager is None:
             return "Ohne PL"
-        return self._manager_label_from_values(manager.short_code or manager.display_name)
+        return self._manager_label_from_values(
+            calendar_short_code_from_values(display_name=manager.display_name, short_code=manager.short_code)
+        )
 
     def _manager_label_from_values(self, value: str) -> str:
         cleaned = value.strip()

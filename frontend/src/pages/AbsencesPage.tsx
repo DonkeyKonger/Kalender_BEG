@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 import {
   formatDayHeader,
   formatDayNumber,
@@ -1039,6 +1039,7 @@ function personSearchText(person: Person): string {
     person.first_name,
     person.last_name,
     person.short_code,
+    calendarPersonCode(person),
     person.person_type,
     ...(person.user_roles ?? []),
   ].filter(Boolean).join(" ").toLowerCase();

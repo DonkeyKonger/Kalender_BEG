@@ -17,7 +17,7 @@ import {
 import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
@@ -3940,6 +3940,7 @@ function personSearchText(person: Person): string {
     person.first_name,
     person.last_name,
     person.short_code,
+    calendarPersonCode(person),
   ].filter(Boolean).join(" ").toLowerCase();
 }
 

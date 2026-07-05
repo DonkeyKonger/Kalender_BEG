@@ -18,7 +18,7 @@ import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFil
 import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
-import type { Person } from "../types/person";
+import { calendarPersonCode, type Person } from "../types/person";
 import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
@@ -1532,7 +1532,7 @@ function OverviewTab({
                 options={projectManagerOptions}
                 onSave={(value) => onSaveField({ project_manager_person_id: value ? Number(value) : null })}
               />
-              <DetailItem label="Kuerzel" value={site.project_manager?.short_code} />
+              <DetailItem label="Kuerzel" value={site.project_manager ? calendarPersonCode(site.project_manager) : null} />
               <DetailItem label="Telefon" value={site.project_manager?.phone} icon={Phone} />
             </DetailSection>
 
