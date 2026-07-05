@@ -5,6 +5,7 @@ import {
   ChartColumn,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   MapPin,
   Pencil,
@@ -21,9 +22,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
+import type { Absence } from "../types/absence";
+import type { AbsenceType } from "../types/matrix";
 import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
 import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
@@ -829,7 +832,11 @@ function PersonReadView({
 
       {action ? (
         <PersonDetailSubpage title={action.title} onBack={() => onActionChange(null)}>
-          <PersonDetailPlaceholderPanel action={action} person={person} />
+          {action.key === "absence" ? (
+            <PersonAbsenceOverviewPanel person={person} />
+          ) : (
+            <PersonDetailPlaceholderPanel action={action} person={person} />
+          )}
         </PersonDetailSubpage>
       ) : null}
     </div>
@@ -1119,6 +1126,123 @@ function PersonDetailSubpage({
         {children}
       </div>
     </section>
+  );
+}
+
+const PERSON_ABSENCE_TYPES: AbsenceType[] = ["vacation", "sick", "school", "free", "other"];
+
+function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [absences, setAbsences] = useState<Absence[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPersonAbsences() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const loadedAbsences = await api.absences({
+          personId: person.id,
+          start: `${year}-01-01`,
+          end: `${year}-12-31`,
+        });
+        if (!cancelled) {
+          setAbsences(loadedAbsences);
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setAbsences([]);
+          setError(readApiError(requestError, "Abwesenheiten konnten nicht geladen werden."));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+    void loadPersonAbsences();
+    return () => {
+      cancelled = true;
+    };
+  }, [person.id, year]);
+
+  const activeAbsences = useMemo(
+    () => absences
+      .filter((absence) => absence.status === "active" && absence.person_id === person.id && absenceOverlapsYear(absence, year))
+      .sort(comparePersonAbsences),
+    [absences, person.id, year],
+  );
+  const summary = useMemo(() => summarizeAbsencesByType(activeAbsences, year), [activeAbsences, year]);
+  const vacationDays = summary.vacation;
+  const remainingVacationDays = person.annual_vacation_days === null || person.annual_vacation_days === undefined
+    ? null
+    : person.annual_vacation_days - vacationDays;
+
+  return (
+    <div className="person-absence-overview">
+      <div className="person-absence-year-control" aria-label="Jahr auswählen">
+        <button type="button" onClick={() => setYear((current) => current - 1)}>
+          <ChevronLeft aria-hidden="true" size={14} />
+          <span>Vorjahr</span>
+        </button>
+        <strong>{year}</strong>
+        <button type="button" onClick={() => setYear((current) => current + 1)}>
+          <span>Nächstes Jahr</span>
+          <ChevronRight aria-hidden="true" size={14} />
+        </button>
+      </div>
+
+      <section className="person-absence-summary-card">
+        <div className="person-absence-remaining">
+          <span>Verbleibende Urlaubstage {year}</span>
+          {remainingVacationDays === null ? (
+            <strong>Jahresurlaub nicht hinterlegt</strong>
+          ) : (
+            <strong className={remainingVacationDays < 0 ? "is-negative" : ""}>{formatAbsenceDays(remainingVacationDays)}</strong>
+          )}
+        </div>
+        <div className="person-absence-type-summary" aria-label={`Fehlzeiten ${year}`}>
+          {PERSON_ABSENCE_TYPES.map((type) => (
+            <div className="person-absence-type-summary-item" key={type}>
+              <StatusBadge tone={type}>{absenceTypeLabels[type]}</StatusBadge>
+              <strong>{summary[type]}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="person-absence-list-section">
+        <div className="person-absence-list-heading">
+          <h4>Fehlzeiten {year}</h4>
+          <span>{activeAbsences.length} {activeAbsences.length === 1 ? "Eintrag" : "Einträge"}</span>
+        </div>
+        {isLoading ? (
+          <div className="person-absence-state">Abwesenheiten werden geladen...</div>
+        ) : error ? (
+          <div className="person-absence-state is-error">{error}</div>
+        ) : activeAbsences.length ? (
+          <div className="person-absence-list">
+            {activeAbsences.map((absence) => {
+              const countedDays = countAbsenceDaysInYear(absence, year);
+              return (
+                <article className={`person-absence-row is-${absence.absence_type}`} key={absence.id}>
+                  <div>
+                    <StatusBadge tone={absence.absence_type}>{absenceTypeLabels[absence.absence_type]}</StatusBadge>
+                    <strong>{formatPersonAbsenceDateRange(absence)}</strong>
+                    {absence.note ? <p>{absence.note}</p> : null}
+                  </div>
+                  <span>{formatAbsenceDays(countedDays)}</span>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="person-absence-state">Keine Abwesenheiten im Jahr {year} hinterlegt.</div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -1624,6 +1748,70 @@ function formatAnnualVacationDays(value: number | null | undefined): string {
     return "-";
   }
   return `${value} ${value === 1 ? "Tag" : "Tage"}`;
+}
+
+function summarizeAbsencesByType(absences: Absence[], year: number): Record<AbsenceType, number> {
+  const summary: Record<AbsenceType, number> = {
+    vacation: 0,
+    sick: 0,
+    school: 0,
+    free: 0,
+    other: 0,
+  };
+  absences.forEach((absence) => {
+    summary[absence.absence_type] += countAbsenceDaysInYear(absence, year);
+  });
+  return summary;
+}
+
+function absenceOverlapsYear(absence: Pick<Absence, "start_date" | "end_date">, year: number): boolean {
+  return absence.start_date <= `${year}-12-31` && absence.end_date >= `${year}-01-01`;
+}
+
+function countAbsenceDaysInYear(absence: Pick<Absence, "start_date" | "end_date">, year: number): number {
+  const start = maxIsoDate(absence.start_date, `${year}-01-01`);
+  const end = minIsoDate(absence.end_date, `${year}-12-31`);
+  if (end < start) {
+    return 0;
+  }
+  return inclusiveIsoDateDiff(start, end) + 1;
+}
+
+function inclusiveIsoDateDiff(start: string, end: string): number {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.round((isoDateSerial(end) - isoDateSerial(start)) / dayMs);
+}
+
+function isoDateSerial(value: string): number {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function minIsoDate(left: string, right: string): string {
+  return left <= right ? left : right;
+}
+
+function maxIsoDate(left: string, right: string): string {
+  return left >= right ? left : right;
+}
+
+function comparePersonAbsences(left: Absence, right: Absence): number {
+  return left.start_date.localeCompare(right.start_date) || left.end_date.localeCompare(right.end_date) || left.id - right.id;
+}
+
+function formatPersonAbsenceDateRange(absence: Pick<Absence, "start_date" | "end_date">): string {
+  if (absence.start_date === absence.end_date) {
+    return formatIsoDate(absence.start_date);
+  }
+  return `${formatIsoDate(absence.start_date)} - ${formatIsoDate(absence.end_date)}`;
+}
+
+function formatIsoDate(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatAbsenceDays(value: number): string {
+  return `${value} ${Math.abs(value) === 1 ? "Tag" : "Tage"}`;
 }
 
 function normalizePersonPayload(person: PersonCreate): PersonCreate {

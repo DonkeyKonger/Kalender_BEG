@@ -2228,6 +2228,237 @@ button.entity-card:focus-visible,
   line-height: 1.42;
 }
 
+.person-absence-overview {
+  display: grid;
+  gap: 10px;
+}
+
+.person-absence-year-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.person-absence-year-control strong {
+  color: #172033;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.person-absence-year-control button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  border: 1px solid #cbd8e8;
+  border-radius: 0;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.person-absence-year-control button:hover,
+.person-absence-year-control button:focus-visible {
+  border-color: #9db6d4;
+  background: #f3f7fb;
+  outline: none;
+}
+
+.person-absence-summary-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.person-absence-remaining {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid #e5edf6;
+  padding-bottom: 9px;
+}
+
+.person-absence-remaining span {
+  color: #728199;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.person-absence-remaining strong {
+  color: #172033;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.person-absence-remaining strong.is-negative {
+  color: #b42318;
+}
+
+.person-absence-type-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 6px;
+}
+
+.person-absence-type-summary-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid #e5edf6;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 7px;
+}
+
+.person-absence-type-summary-item .status-badge {
+  justify-self: start;
+}
+
+.person-absence-overview .status-badge {
+  min-height: 20px;
+  border-radius: 0;
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.1;
+  padding: 3px 6px;
+}
+
+.person-absence-type-summary-item strong {
+  color: #172033;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.person-absence-list-section {
+  display: grid;
+  gap: 7px;
+}
+
+.person-absence-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.person-absence-list-heading h4 {
+  margin: 0;
+  color: #172033;
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.person-absence-list-heading span {
+  color: #7b8aa2;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.person-absence-list {
+  display: grid;
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.person-absence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid #e5edf6;
+  border-left: 3px solid #94a3b8;
+  padding: 8px 10px;
+}
+
+.person-absence-row:last-child {
+  border-bottom: 0;
+}
+
+.person-absence-row.is-vacation {
+  border-left-color: #16a34a;
+}
+
+.person-absence-row.is-sick {
+  border-left-color: #dc2626;
+}
+
+.person-absence-row.is-school {
+  border-left-color: #2563eb;
+}
+
+.person-absence-row.is-free {
+  border-left-color: #7c3aed;
+}
+
+.person-absence-row.is-other {
+  border-left-color: #64748b;
+}
+
+.person-absence-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.person-absence-row strong {
+  color: #172033;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.person-absence-row p {
+  margin: 0;
+  color: #65738a;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.person-absence-row > span {
+  color: #25354b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.person-absence-state {
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.4;
+  padding: 10px;
+}
+
+.person-absence-state.is-error {
+  border-color: #f2b8b5;
+  background: #fff7f6;
+  color: #b42318;
+}
+
 .drawer-field {
   display: grid;
   gap: 6px;
