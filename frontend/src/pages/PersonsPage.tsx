@@ -1131,6 +1131,15 @@ function PersonDetailSubpage({
 
 const PERSON_ABSENCE_TYPES: AbsenceType[] = ["vacation", "sick", "school", "free", "other"];
 
+type PersonAbsenceListEntry = {
+  absence_type: AbsenceType;
+  start_date: string;
+  end_date: string;
+  note: string | null;
+  dayCount: number;
+  sourceIds: number[];
+};
+
 function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -1175,6 +1184,7 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
     [absences, person.id, year],
   );
   const summary = useMemo(() => summarizeAbsencesByType(activeAbsences, year), [activeAbsences, year]);
+  const listEntries = useMemo(() => buildPersonAbsenceListEntries(activeAbsences, year), [activeAbsences, year]);
   const vacationDays = summary.vacation;
   const remainingVacationDays = person.annual_vacation_days === null || person.annual_vacation_days === undefined
     ? null
@@ -1216,27 +1226,24 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
       <section className="person-absence-list-section">
         <div className="person-absence-list-heading">
           <h4>Fehlzeiten {year}</h4>
-          <span>{activeAbsences.length} {activeAbsences.length === 1 ? "Eintrag" : "Einträge"}</span>
+          <span>{listEntries.length} {listEntries.length === 1 ? "Eintrag" : "Einträge"}</span>
         </div>
         {isLoading ? (
           <div className="person-absence-state">Abwesenheiten werden geladen...</div>
         ) : error ? (
           <div className="person-absence-state is-error">{error}</div>
-        ) : activeAbsences.length ? (
+        ) : listEntries.length ? (
           <div className="person-absence-list">
-            {activeAbsences.map((absence) => {
-              const countedDays = countAbsenceDaysInYear(absence, year);
-              return (
-                <article className={`person-absence-row is-${absence.absence_type}`} key={absence.id}>
-                  <div>
-                    <StatusBadge tone={absence.absence_type}>{absenceTypeLabels[absence.absence_type]}</StatusBadge>
-                    <strong>{formatPersonAbsenceDateRange(absence)}</strong>
-                    {absence.note ? <p>{absence.note}</p> : null}
-                  </div>
-                  <span>{formatAbsenceDays(countedDays)}</span>
-                </article>
-              );
-            })}
+            {listEntries.map((entry) => (
+              <article className={`person-absence-row is-${entry.absence_type}`} key={personAbsenceListEntryKey(entry)}>
+                <div>
+                  <StatusBadge tone={entry.absence_type}>{absenceTypeLabels[entry.absence_type]}</StatusBadge>
+                  <strong>{formatPersonAbsenceDateRange(entry)}</strong>
+                  {entry.note ? <p>{entry.note}</p> : null}
+                </div>
+                <span>{formatAbsenceDays(entry.dayCount)}</span>
+              </article>
+            ))}
           </div>
         ) : (
           <div className="person-absence-state">Keine Abwesenheiten im Jahr {year} hinterlegt.</div>
@@ -1764,6 +1771,62 @@ function summarizeAbsencesByType(absences: Absence[], year: number): Record<Abse
   return summary;
 }
 
+function buildPersonAbsenceListEntries(absences: Absence[], year: number): PersonAbsenceListEntry[] {
+  const clippedAbsences = absences
+    .map((absence) => {
+      const startDate = maxIsoDate(absence.start_date, `${year}-01-01`);
+      const endDate = minIsoDate(absence.end_date, `${year}-12-31`);
+      if (endDate < startDate) {
+        return null;
+      }
+      return {
+        absence,
+        startDate,
+        endDate,
+        noteKey: normalizeAbsenceNote(absence.note),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    .sort((left, right) =>
+      left.startDate.localeCompare(right.startDate)
+      || left.endDate.localeCompare(right.endDate)
+      || left.absence.id - right.absence.id,
+    );
+
+  return clippedAbsences.reduce<PersonAbsenceListEntry[]>((entries, entry) => {
+    const previous = entries[entries.length - 1];
+    if (
+      previous
+      && previous.absence_type === entry.absence.absence_type
+      && normalizeAbsenceNote(previous.note) === entry.noteKey
+      && entry.startDate <= addIsoDays(previous.end_date, 1)
+    ) {
+      previous.end_date = maxIsoDate(previous.end_date, entry.endDate);
+      previous.dayCount = inclusiveIsoDateDiff(previous.start_date, previous.end_date) + 1;
+      previous.sourceIds.push(entry.absence.id);
+      return entries;
+    }
+
+    entries.push({
+      absence_type: entry.absence.absence_type,
+      start_date: entry.startDate,
+      end_date: entry.endDate,
+      note: entry.absence.note?.trim() || null,
+      dayCount: inclusiveIsoDateDiff(entry.startDate, entry.endDate) + 1,
+      sourceIds: [entry.absence.id],
+    });
+    return entries;
+  }, []);
+}
+
+function personAbsenceListEntryKey(entry: PersonAbsenceListEntry): string {
+  return `${entry.absence_type}-${entry.start_date}-${entry.end_date}-${entry.sourceIds.join("-")}`;
+}
+
+function normalizeAbsenceNote(note: string | null | undefined): string {
+  return note?.trim().toLowerCase() || "";
+}
+
 function absenceOverlapsYear(absence: Pick<Absence, "start_date" | "end_date">, year: number): boolean {
   return absence.start_date <= `${year}-12-31` && absence.end_date >= `${year}-01-01`;
 }
@@ -1793,6 +1856,15 @@ function minIsoDate(left: string, right: string): string {
 
 function maxIsoDate(left: string, right: string): string {
   return left >= right ? left : right;
+}
+
+function addIsoDays(value: string, offset: number): string {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + offset);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function comparePersonAbsences(left: Absence, right: Absence): number {
