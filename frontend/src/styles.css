@@ -1657,6 +1657,7 @@ button.entity-card:focus-visible,
 
 .person-detail-info-field:last-child {
   grid-column: 1 / -1;
+  gap: 6px;
 }
 
 .person-detail-info-field span {
