@@ -300,6 +300,34 @@ export function PersonsPage() {
     }
   }
 
+  async function updatePersonNotes(person: Person, notes: string | null): Promise<boolean> {
+    const currentNotes = person.notes?.trim() || null;
+    const nextNotes = notes?.trim() || null;
+    if (currentNotes === nextNotes) {
+      return true;
+    }
+    const nextDraft = {
+      ...toEditablePerson(person),
+      notes: nextNotes,
+    };
+    setSavingPersonId(person.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await api.updatePerson(person.id, normalizePersonPayload(nextDraft));
+      setPeople((current) =>
+        current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
+      );
+      setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      return true;
+    } catch (requestError) {
+      setError(readApiError(requestError, "Info konnte nicht gespeichert werden."));
+      return false;
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
   function updateDraft(personId: number, values: Partial<EditablePerson>) {
     setDrafts((current) => ({
       ...current,
@@ -571,6 +599,7 @@ export function PersonsPage() {
               canEdit={canEdit}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
+              onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
               onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
             />
           )
@@ -586,6 +615,7 @@ function PersonReadView({
   canEdit,
   isSaving,
   onActionChange,
+  onNotesSave,
   onSignaturePermissionChange,
 }: {
   person: Person;
@@ -593,6 +623,7 @@ function PersonReadView({
   canEdit: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
+  onNotesSave: (notes: string | null) => Promise<boolean>;
   onSignaturePermissionChange: (canSignImmediately: boolean) => void;
 }) {
   const addressText = formatPersonAddress(person);
@@ -653,11 +684,15 @@ function PersonReadView({
         <section className="detail-read-section person-detail-notes-section">
           <div className="customer-detail-section-heading">
             <StickyNote aria-hidden="true" size={17} />
-            <h3>Hinweise</h3>
+            <h3>Info</h3>
           </div>
-          <div className={person.notes ? "person-detail-note-panel" : "person-detail-note-panel is-empty"}>
-            <p>{person.notes || "Keine Hinweise hinterlegt."}</p>
-          </div>
+          <PersonNotesEditor
+            canEdit={canEdit}
+            disabled={isSaving}
+            personId={person.id}
+            value={person.notes}
+            onSave={onNotesSave}
+          />
         </section>
 
         <section className="detail-read-section customer-detail-nav-section person-detail-nav-section">
@@ -676,6 +711,76 @@ function PersonReadView({
           <PersonDetailPlaceholderPanel action={action} person={person} />
         </PersonDetailSubpage>
       ) : null}
+    </div>
+  );
+}
+
+function PersonNotesEditor({
+  canEdit,
+  disabled,
+  personId,
+  value,
+  onSave,
+}: {
+  canEdit: boolean;
+  disabled: boolean;
+  personId: number;
+  value: string | null | undefined;
+  onSave: (notes: string | null) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    setDraft(value ?? "");
+    setSaveState("idle");
+  }, [personId, value]);
+
+  async function saveIfChanged() {
+    if (!canEdit || disabled || saveState === "saving") {
+      return;
+    }
+    const currentNotes = value?.trim() || null;
+    const nextNotes = draft.trim() || null;
+    if (currentNotes === nextNotes) {
+      setSaveState("idle");
+      return;
+    }
+    setSaveState("saving");
+    const saved = await onSave(nextNotes);
+    setSaveState(saved ? "saved" : "error");
+  }
+
+  const statusText = saveState === "dirty"
+    ? "Wird beim Verlassen gespeichert"
+    : saveState === "saving"
+      ? "Speichert..."
+      : saveState === "saved"
+        ? "Gespeichert"
+        : saveState === "error"
+          ? "Speichern fehlgeschlagen"
+          : "";
+
+  return (
+    <div className="person-detail-info-editor">
+      <textarea
+        aria-label="Info"
+        className="person-detail-info-textarea"
+        disabled={!canEdit || disabled}
+        placeholder="Interne Hinweise zum Mitarbeiter..."
+        value={draft}
+        onBlur={() => void saveIfChanged()}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setSaveState("dirty");
+        }}
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
+      />
+      {statusText ? <span className={`person-detail-info-save-state is-${saveState}`} aria-live="polite">{statusText}</span> : null}
     </div>
   );
 }
