@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
-from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationStatus
+from app.models.enums import PersonType, SiteLocationStatus
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
@@ -181,7 +181,6 @@ class PersonService:
             return person
         old_value = person_snapshot(person)
         person.is_active = False
-        person.employment_status = PersonEmploymentStatus.DEPARTED
         self.audit.record(
             user_id=user_id,
             action="person.deactivated",
@@ -206,7 +205,6 @@ class PersonService:
         person.display_name = archived_display_name
         person.short_code = archive_key
         person.is_active = False
-        person.employment_status = PersonEmploymentStatus.DEPARTED
         person.can_sign_measurements_immediately = False
         person.email = None
         person.phone = None
@@ -279,7 +277,6 @@ class PersonService:
         for person in stale_people:
             old_value = person_snapshot(person)
             person.is_active = False
-            person.employment_status = PersonEmploymentStatus.DEPARTED
             self.audit.record(
                 user_id=None,
                 action="person.external.auto_deactivated",
@@ -324,20 +321,7 @@ def clean_person_values(values: dict) -> dict:
     for field, message in REQUIRED_TEXT_FIELDS.items():
         if field in cleaned and not cleaned.get(field):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, message)
-    sync_person_employment_status(cleaned)
     return cleaned
-
-
-def sync_person_employment_status(values: dict) -> None:
-    if "employment_status" in values:
-        values["is_active"] = values["employment_status"] == PersonEmploymentStatus.ACTIVE
-        return
-    if "is_active" in values:
-        values["employment_status"] = (
-            PersonEmploymentStatus.ACTIVE
-            if values["is_active"]
-            else PersonEmploymentStatus.DEPARTED
-        )
 
 
 def external_person_values(display_name: str) -> dict:
@@ -351,7 +335,6 @@ def external_person_values(display_name: str) -> dict:
         "short_code": f"{first_name[:1]}.{last_name}",
         "person_type": PersonType.EXTERNAL_TEMP,
         "is_active": True,
-        "employment_status": PersonEmploymentStatus.ACTIVE,
         "notes": "Aus Matrix-Schnelleingabe erzeugt.",
     }
 
@@ -366,9 +349,7 @@ def person_snapshot(person: Person) -> dict:
         "short_code": person.short_code,
         "person_type": person.person_type.value,
         "is_active": person.is_active,
-        "employment_status": getattr(person, "employment_status", PersonEmploymentStatus.ACTIVE).value,
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
-        "annual_vacation_days": getattr(person, "annual_vacation_days", None),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
         "phone": person.phone,

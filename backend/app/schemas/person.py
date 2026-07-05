@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
-from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationStatus, UserRole
+from app.models.enums import PersonType, SiteLocationStatus, UserRole
 
 
 class PersonBase(BaseModel):
@@ -13,9 +13,7 @@ class PersonBase(BaseModel):
     short_code: str = Field(min_length=1, max_length=30)
     person_type: PersonType = PersonType.INTERNAL
     is_active: bool = True
-    employment_status: PersonEmploymentStatus = PersonEmploymentStatus.ACTIVE
     can_sign_measurements_immediately: bool = False
-    annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)
@@ -28,18 +26,6 @@ class PersonBase(BaseModel):
     address_longitude: float | None = Field(default=None, ge=-180, le=180)
     address_location_status: SiteLocationStatus = SiteLocationStatus.UNCHECKED
     notes: str | None = None
-
-    @model_validator(mode="after")
-    def sync_status(self):
-        if "employment_status" in self.model_fields_set:
-            self.is_active = self.employment_status == PersonEmploymentStatus.ACTIVE
-        elif "is_active" in self.model_fields_set:
-            self.employment_status = (
-                PersonEmploymentStatus.ACTIVE
-                if self.is_active
-                else PersonEmploymentStatus.DEPARTED
-            )
-        return self
 
 
 class PersonCreate(PersonBase):
@@ -57,9 +43,7 @@ class PersonUpdate(BaseModel):
     short_code: str | None = Field(default=None, min_length=1, max_length=30)
     person_type: PersonType | None = None
     is_active: bool | None = None
-    employment_status: PersonEmploymentStatus | None = None
     can_sign_measurements_immediately: bool | None = None
-    annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)
@@ -72,18 +56,6 @@ class PersonUpdate(BaseModel):
     address_longitude: float | None = Field(default=None, ge=-180, le=180)
     address_location_status: SiteLocationStatus | None = None
     notes: str | None = None
-
-    @model_validator(mode="after")
-    def sync_status(self):
-        if "employment_status" in self.model_fields_set and self.employment_status is not None:
-            self.is_active = self.employment_status == PersonEmploymentStatus.ACTIVE
-        elif "is_active" in self.model_fields_set and self.is_active is not None:
-            self.employment_status = (
-                PersonEmploymentStatus.ACTIVE
-                if self.is_active
-                else PersonEmploymentStatus.DEPARTED
-            )
-        return self
 
 
 class PersonRead(PersonBase):
