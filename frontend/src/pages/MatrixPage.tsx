@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
 import type {
@@ -2745,7 +2746,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           {props.isCompactView ? (
             <span
               className="site-color"
-              style={{ backgroundColor: row.site.color ?? "#94a3b8" }}
+              style={{ backgroundColor: getSiteColorDisplayValue(row.site.color) }}
             />
           ) : null}
           <Link className="matrix-site-link" to={`/sites/${row.site.id}`} state={{ returnTo: "matrix" }}>

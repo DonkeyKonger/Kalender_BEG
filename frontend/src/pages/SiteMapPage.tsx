@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
+import { getSiteColorDisplayValue } from "../lib/siteColors";
 import type { PersonMapItem, PersonMapResponse, PersonType } from "../types/person";
 import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
@@ -594,7 +595,7 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
     return "#64748b";
   }
   if (site.color && /^#[0-9a-f]{6}$/i.test(site.color)) {
-    return site.color;
+    return getSiteColorDisplayValue(site.color);
   }
   if (site.status === "active") {
     return "#17803d";

@@ -15,6 +15,7 @@ import {
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
 import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
+import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
@@ -1110,7 +1111,7 @@ export function SiteDetailPage() {
       </Link>
 
       <div className="site-detail-header">
-        <span className="site-color large" style={{ backgroundColor: site.color ?? "#94a3b8" }} />
+        <span className="site-color large" style={{ backgroundColor: getSiteColorDisplayValue(site.color) }} />
         <div>
           <p className="eyebrow">Projektakte</p>
           <EditableSiteHeaderName
@@ -1540,7 +1541,7 @@ function OverviewTab({
               <DetailItem label="Geschlossen" value={site.closed_at ? formatDateTime(site.closed_at) : null} />
               <SiteColorDetailItem
                 label="Farbe"
-                value={site.color ?? "#64748B"}
+                value={site.color ?? DEFAULT_SITE_COLOR}
                 canEdit={canEdit}
                 disabled={isSaving}
                 onSave={(color) => onSaveField({ color })}

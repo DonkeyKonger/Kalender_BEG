@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { getSiteColorLabel, SITE_COLOR_OPTIONS } from "../lib/siteColors";
+import { getSiteColorDisplayValue, getSiteColorLabel, SITE_COLOR_OPTIONS } from "../lib/siteColors";
 
 export function SiteColorSelect({
   className,
@@ -19,6 +19,7 @@ export function SiteColorSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedLabel = getSiteColorLabel(value) ?? label;
+  const selectedDisplayValue = getSiteColorDisplayValue(value);
 
   return (
     <div className={["site-color-select-field site-field-color", className].filter(Boolean).join(" ")}>
@@ -36,7 +37,7 @@ export function SiteColorSelect({
           }}
           onClick={() => setIsOpen((current) => !current)}
         >
-          <span className="site-color-swatch" style={{ backgroundColor: value }} />
+          <span className="site-color-swatch" style={{ backgroundColor: selectedDisplayValue }} />
           <span>{selectedLabel}</span>
         </button>
         {isOpen && !disabled && (
@@ -44,7 +45,7 @@ export function SiteColorSelect({
             {SITE_COLOR_OPTIONS.map((option) => (
               <button
                 aria-label={`${option.label} (${option.name})`}
-                aria-selected={option.value.toLowerCase() === value.toLowerCase()}
+                aria-selected={option.label === selectedLabel}
                 key={option.value}
                 role="option"
                 title={option.name}

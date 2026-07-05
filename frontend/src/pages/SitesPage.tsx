@@ -9,6 +9,7 @@ import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
+import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
@@ -35,7 +36,7 @@ const emptySite: SiteCreate = {
   project_manager_person_id: null,
   status: "active",
   info: null,
-  color: "#64748B",
+  color: DEFAULT_SITE_COLOR,
 };
 
 const emptyCustomerForSite: CustomerCreate = {
@@ -794,7 +795,7 @@ export function SiteFields({
       </label>
       <SiteColorSelect
         disabled={disabled}
-        value={draft.color ?? "#64748B"}
+        value={draft.color ?? DEFAULT_SITE_COLOR}
         onChange={(color) => onChange({ color })}
       />
       <section className="site-location-section">
@@ -1048,7 +1049,7 @@ function renderSiteCard(
   return (
     <article className={classes} key={site.id}>
       <button className="site-card-main" type="button" onClick={() => openSiteDetail(site.id)}>
-        <span className="entity-card-color site-card-color" style={{ backgroundColor: site.color ?? "#94a3b8" }} aria-hidden="true" />
+        <span className="entity-card-color site-card-color" style={{ backgroundColor: getSiteColorDisplayValue(site.color) }} aria-hidden="true" />
         <span className="entity-card-icon site-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
         <span className="entity-card-body">
           <span className="entity-card-title">{site.name}</span>

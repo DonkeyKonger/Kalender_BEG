@@ -25,7 +25,7 @@ import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
-import { getSiteColorLabel } from "../lib/siteColors";
+import { getSiteColorDisplayValue, getSiteColorLabel } from "../lib/siteColors";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import type { Customer, CustomerContactInput, CustomerCreate } from "../types/customer";
 import type { SiteSummary } from "../types/site";
@@ -636,7 +636,7 @@ function CustomerProjectsList({ projects }: { projects: SiteSummary[] }) {
                 <td>
                   {sizeLabel ? (
                     <span className="customer-project-size">
-                      <span className="site-color-swatch" style={{ backgroundColor: site.color ?? "#94a3b8" }} />
+                      <span className="site-color-swatch" style={{ backgroundColor: getSiteColorDisplayValue(site.color) }} />
                       <span>{sizeLabel}</span>
                     </span>
                   ) : (
