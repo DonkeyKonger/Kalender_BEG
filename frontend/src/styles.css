@@ -14690,11 +14690,11 @@ button.person-chip:focus-visible {
   z-index: 10;
   top: calc(100% + 4px);
   right: 0;
-  left: auto;
+  left: 0;
   display: grid;
   gap: 3px;
-  width: max(100%, 230px);
-  max-width: min(260px, calc(100vw - 48px));
+  width: 100%;
+  max-width: none;
   max-height: 240px;
   overflow-x: hidden;
   overflow-y: auto;
