@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, DateTime, Enum, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import PersonType, SiteLocationStatus, enum_values
+from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationStatus, enum_values
 
 
 class Person(TimestampMixin, Base):
@@ -21,6 +21,11 @@ class Person(TimestampMixin, Base):
         default=PersonType.INTERNAL,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    employment_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=PersonEmploymentStatus.ACTIVE.value,
+    )
     can_sign_measurements_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(80))

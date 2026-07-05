@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
-from app.models.enums import PersonType, SiteLocationStatus
+from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationStatus
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
@@ -181,6 +181,7 @@ class PersonService:
             return person
         old_value = person_snapshot(person)
         person.is_active = False
+        person.employment_status = PersonEmploymentStatus.DEPARTED.value
         self.audit.record(
             user_id=user_id,
             action="person.deactivated",
@@ -205,6 +206,7 @@ class PersonService:
         person.display_name = archived_display_name
         person.short_code = archive_key
         person.is_active = False
+        person.employment_status = PersonEmploymentStatus.DEPARTED.value
         person.can_sign_measurements_immediately = False
         person.email = None
         person.phone = None
@@ -277,6 +279,7 @@ class PersonService:
         for person in stale_people:
             old_value = person_snapshot(person)
             person.is_active = False
+            person.employment_status = PersonEmploymentStatus.DEPARTED.value
             self.audit.record(
                 user_id=None,
                 action="person.external.auto_deactivated",
@@ -306,6 +309,7 @@ class PersonService:
 
 def clean_person_values(values: dict) -> dict:
     cleaned = dict(values)
+    sync_person_employment_status(cleaned)
     for field in OPTIONAL_TEXT_FIELDS:
         if isinstance(cleaned.get(field), str):
             cleaned[field] = cleaned[field].strip() or None
@@ -335,6 +339,7 @@ def external_person_values(display_name: str) -> dict:
         "short_code": f"{first_name[:1]}.{last_name}",
         "person_type": PersonType.EXTERNAL_TEMP,
         "is_active": True,
+        "employment_status": PersonEmploymentStatus.ACTIVE.value,
         "notes": "Aus Matrix-Schnelleingabe erzeugt.",
     }
 
@@ -349,6 +354,7 @@ def person_snapshot(person: Person) -> dict:
         "short_code": person.short_code,
         "person_type": person.person_type.value,
         "is_active": person.is_active,
+        "employment_status": person_employment_status(person),
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
@@ -372,6 +378,31 @@ def has_valid_person_map_location(person: Person) -> bool:
         and person.address_longitude is not None
         and person.address_location_status in VALID_MAP_LOCATION_STATUSES
     )
+
+
+def sync_person_employment_status(values: dict) -> None:
+    if "employment_status" in values and values["employment_status"] is not None:
+        status_value = person_employment_status_value(values["employment_status"])
+        values["employment_status"] = status_value
+        values["is_active"] = status_value == PersonEmploymentStatus.ACTIVE.value
+        return
+    if "is_active" in values and values["is_active"] is not None:
+        values["employment_status"] = (
+            PersonEmploymentStatus.ACTIVE.value if values["is_active"] else PersonEmploymentStatus.DEPARTED.value
+        )
+
+
+def person_employment_status_value(value: PersonEmploymentStatus | str) -> str:
+    if isinstance(value, PersonEmploymentStatus):
+        return value.value
+    return str(value)
+
+
+def person_employment_status(person: Person) -> str:
+    status_value = getattr(person, "employment_status", None)
+    if status_value:
+        return person_employment_status_value(status_value)
+    return PersonEmploymentStatus.ACTIVE.value if person.is_active else PersonEmploymentStatus.DEPARTED.value
 
 
 def person_map_item(person: Person, project_manager: Person | None) -> PersonMapItem:
