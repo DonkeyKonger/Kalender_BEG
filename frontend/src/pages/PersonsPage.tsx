@@ -96,6 +96,7 @@ const emptyPerson: PersonCreate = {
   is_active: true,
   employment_status: "active",
   can_sign_measurements_immediately: false,
+  annual_vacation_days: null,
   email: null,
   phone: null,
   address_postal_code: null,
@@ -704,7 +705,10 @@ function PersonReadView({
                 onChange={onStatusChange}
               />
             </PersonDetailField>
-            <PersonDetailField label="Kundenunterschrift">
+            <PersonDetailField className="is-wide" label="Jahresurlaub">
+              <strong>{formatAnnualVacationDays(person.annual_vacation_days)}</strong>
+            </PersonDetailField>
+            <PersonDetailField className="is-wide person-detail-signature-field" label="Kundenunterschrift">
               <PersonSignatureToggle
                 canEdit={canEdit}
                 disabled={isSaving}
@@ -1024,9 +1028,17 @@ function PersonDetailPlaceholderPanel({
   );
 }
 
-function PersonDetailField({ label, children }: { label: string; children: ReactNode }) {
+function PersonDetailField({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="person-detail-info-field">
+    <div className={["person-detail-info-field", className].filter(Boolean).join(" ")}>
       <span>{label}</span>
       {children}
     </div>
@@ -1169,6 +1181,17 @@ function PersonFields({
           onChange={(event) => onChange({ phone: event.target.value || null })}
         />
       </label>
+      <label>
+        <span>Jahresurlaub</span>
+        <input
+          max={365}
+          min={0}
+          step={1}
+          type="number"
+          value={draft.annual_vacation_days ?? ""}
+          onChange={(event) => onChange({ annual_vacation_days: parseOptionalInteger(event.target.value) })}
+        />
+      </label>
       <label className="checkbox-field">
         <input
           checked={draft.is_active}
@@ -1278,6 +1301,7 @@ function toEditablePerson(person: Person): EditablePerson {
     is_active: person.is_active,
     employment_status: personEmploymentStatus(person),
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
+    annual_vacation_days: person.annual_vacation_days,
     email: person.email,
     phone: person.phone,
     address_postal_code: person.address_postal_code,
@@ -1297,7 +1321,35 @@ function validatePersonPayload(person: PersonCreate): string | null {
   if (!person.first_name.trim() || !person.last_name.trim()) {
     return "Vorname und Nachname sind Pflicht.";
   }
+  if (
+    person.annual_vacation_days !== null
+    && (!Number.isInteger(person.annual_vacation_days) || person.annual_vacation_days < 0 || person.annual_vacation_days > 365)
+  ) {
+    return "Jahresurlaub muss eine ganze Zahl zwischen 0 und 365 sein.";
+  }
   return null;
+}
+
+function parseOptionalInteger(value: string): number | null {
+  if (!value.trim()) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAnnualVacationDays(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.trunc(value);
+}
+
+function formatAnnualVacationDays(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  return `${value} ${value === 1 ? "Tag" : "Tage"}`;
 }
 
 function normalizePersonPayload(person: PersonCreate): PersonCreate {
@@ -1313,6 +1365,7 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
     is_active: employmentStatus === "active",
     employment_status: employmentStatus,
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
+    annual_vacation_days: normalizeAnnualVacationDays(person.annual_vacation_days),
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,
     address_postal_code: person.address_postal_code?.trim() || null,

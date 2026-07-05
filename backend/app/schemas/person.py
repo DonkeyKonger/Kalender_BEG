@@ -15,6 +15,7 @@ class PersonBase(BaseModel):
     is_active: bool = True
     employment_status: PersonEmploymentStatus = PersonEmploymentStatus.ACTIVE
     can_sign_measurements_immediately: bool = False
+    annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)
@@ -58,6 +59,7 @@ class PersonUpdate(BaseModel):
     is_active: bool | None = None
     employment_status: PersonEmploymentStatus | None = None
     can_sign_measurements_immediately: bool | None = None
+    annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
     address_postal_code: str | None = Field(default=None, max_length=20)

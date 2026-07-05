@@ -368,6 +368,7 @@ def person_snapshot(person: Person) -> dict:
         "is_active": person.is_active,
         "employment_status": getattr(person, "employment_status", PersonEmploymentStatus.ACTIVE).value,
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
+        "annual_vacation_days": getattr(person, "annual_vacation_days", None),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
         "phone": person.phone,

@@ -1655,8 +1655,12 @@ button.entity-card:focus-visible,
   border-left: 1px solid #e5edf6;
 }
 
-.person-detail-info-field:last-child {
+.person-detail-info-field.is-wide {
   grid-column: 1 / -1;
+  border-left: 0;
+}
+
+.person-detail-signature-field {
   gap: 6px;
 }
 

@@ -15,6 +15,7 @@ export type Person = {
   is_active: boolean;
   employment_status: PersonEmploymentStatus;
   can_sign_measurements_immediately: boolean;
+  annual_vacation_days: number | null;
   email: string | null;
   phone: string | null;
   address_postal_code: string | null;
@@ -45,6 +46,7 @@ export type PersonCreate = {
   is_active: boolean;
   employment_status: PersonEmploymentStatus;
   can_sign_measurements_immediately: boolean;
+  annual_vacation_days: number | null;
   email: string | null;
   phone: string | null;
   address_postal_code: string | null;
