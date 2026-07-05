@@ -608,9 +608,6 @@ function PersonReadView({
             <PersonDetailField label="Name">
               <strong>{person.display_name || `${person.first_name} ${person.last_name}`.trim() || "-"}</strong>
             </PersonDetailField>
-            <PersonDetailField label="Typ">
-              <strong>{personTypeLabels[person.person_type]}</strong>
-            </PersonDetailField>
             <PersonDetailField label="Telefon">
               <strong>{person.phone || "-"}</strong>
             </PersonDetailField>
