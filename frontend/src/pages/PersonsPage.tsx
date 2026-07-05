@@ -272,9 +272,9 @@ export function PersonsPage() {
     }
   }
 
-  async function updatePersonSignaturePermission(person: Person, canSignImmediately: boolean) {
+  async function updatePersonSignaturePermission(person: Person, canSignImmediately: boolean): Promise<boolean> {
     if (person.can_sign_measurements_immediately === canSignImmediately) {
-      return;
+      return true;
     }
     const nextDraft = {
       ...toEditablePerson(person),
@@ -288,8 +288,10 @@ export function PersonsPage() {
         current.map((currentPerson) => currentPerson.id === updated.id ? updated : currentPerson).sort(comparePeople),
       );
       setDrafts((current) => ({ ...current, [updated.id]: toEditablePerson(updated) }));
+      return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Kundenunterschrift konnte nicht gespeichert werden."));
+      return false;
     } finally {
       setSavingPersonId(null);
     }
@@ -580,19 +582,6 @@ export function PersonsPage() {
         isOpen={drawer?.mode === "edit" && Boolean(selectedPerson && selectedDraft)}
         title={selectedPerson ? isEditingPerson ? "Mitarbeiter bearbeiten" : "Mitarbeiter" : "Mitarbeiter"}
         onClose={closeDrawer}
-        actions={selectedPerson && canEdit && !isEditingPerson ? (
-          <button
-            className="icon-button secondary"
-            type="button"
-            onClick={() => {
-              setActivePersonAction(null);
-              setIsEditingPerson(true);
-            }}
-          >
-            <Pencil aria-hidden="true" size={16} />
-            <span>Bearbeiten</span>
-          </button>
-        ) : undefined}
         footer={selectedPerson && isEditingPerson && canEdit ? (
           <div className="person-drawer-footer-actions">
             <div className="person-drawer-footer-left">
@@ -648,7 +637,7 @@ export function PersonsPage() {
               onInformationSave={(values) => updatePersonInformation(selectedPerson, values)}
               onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
               onStatusChange={(status) => updatePersonEmploymentStatus(selectedPerson, status)}
-              onSignaturePermissionChange={(value) => void updatePersonSignaturePermission(selectedPerson, value)}
+              onSignaturePermissionChange={(value) => updatePersonSignaturePermission(selectedPerson, value)}
             />
           )
         )}
@@ -676,10 +665,16 @@ function PersonReadView({
   onInformationSave: (values: Partial<PersonCreate>) => Promise<boolean>;
   onNotesSave: (notes: string | null) => Promise<boolean>;
   onStatusChange: (employmentStatus: PersonEmploymentStatus) => Promise<boolean>;
-  onSignaturePermissionChange: (canSignImmediately: boolean) => void;
+  onSignaturePermissionChange: (canSignImmediately: boolean) => Promise<boolean>;
 }) {
   const addressText = formatPersonAddress(person);
   const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+
+  useEffect(() => {
+    setIsEditingAddress(false);
+  }, [person.id]);
+
   return (
     <div className="detail-read-view person-detail-view">
       <div className="person-detail-main" aria-hidden={action ? true : undefined}>
@@ -738,7 +733,7 @@ function PersonReadView({
               />
             </PersonDetailField>
             <PersonDetailField className="is-wide person-detail-signature-field" label="Kundenunterschrift">
-              <PersonSignatureToggle
+              <PersonSignaturePermissionSelect
                 canEdit={canEdit}
                 disabled={isSaving}
                 value={person.can_sign_measurements_immediately}
@@ -749,25 +744,62 @@ function PersonReadView({
         </section>
 
         <section className="detail-read-section customer-detail-address-section person-detail-address-section">
-          <div className="customer-detail-section-heading">
+          <div className="customer-detail-section-heading person-detail-address-heading">
             <h3>Adresse</h3>
+            {canEdit && !isEditingAddress ? (
+              <button
+                aria-label="Adresse bearbeiten"
+                className="person-inline-edit-button person-detail-address-edit-button"
+                disabled={isSaving}
+                type="button"
+                onClick={() => setIsEditingAddress(true)}
+              >
+                <Pencil aria-hidden="true" size={12} />
+              </button>
+            ) : null}
           </div>
-          <div className={`customer-address-panel ${addressText ? "has-address" : "is-empty"}`}>
-            <div className="customer-address-status">
-              <CheckCircle2 aria-hidden="true" size={16} />
-              <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
-            </div>
-            {addressText ? (
-              <div className="customer-address-lines">
-                <MapPin aria-hidden="true" size={18} />
-                <div>
+          {isEditingAddress ? (
+            <div className="person-detail-address-editor">
+              {addressText ? (
+                <div className="person-detail-address-current">
+                  <span>Aktuelle Adresse</span>
                   <strong>{addressText}</strong>
                 </div>
+              ) : null}
+              <PersonAddressSearchField
+                disabled={isSaving}
+                onSelect={async (values) => {
+                  const saved = await onInformationSave(values);
+                  if (saved) {
+                    setIsEditingAddress(false);
+                  }
+                  return saved;
+                }}
+              />
+              <div className="person-detail-address-editor-actions">
+                <button disabled={isSaving} type="button" onClick={() => setIsEditingAddress(false)}>
+                  Abbrechen
+                </button>
               </div>
-            ) : (
-              <p className="detail-empty">Noch keine Adresse hinterlegt.</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className={`customer-address-panel ${addressText ? "has-address" : "is-empty"}`}>
+              <div className="customer-address-status">
+                <CheckCircle2 aria-hidden="true" size={16} />
+                <span>{addressText ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
+              </div>
+              {addressText ? (
+                <div className="customer-address-lines">
+                  <MapPin aria-hidden="true" size={18} />
+                  <div>
+                    <strong>{addressText}</strong>
+                  </div>
+                </div>
+              ) : (
+                <p className="detail-empty">Noch keine Adresse hinterlegt.</p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="detail-read-section person-detail-notes-section">
@@ -978,7 +1010,7 @@ function PersonEmploymentStatusSelect({
   );
 }
 
-function PersonSignatureToggle({
+function PersonSignaturePermissionSelect({
   canEdit,
   disabled,
   value,
@@ -987,28 +1019,80 @@ function PersonSignatureToggle({
   canEdit: boolean;
   disabled: boolean;
   value: boolean;
-  onChange: (canSignImmediately: boolean) => void;
+  onChange: (canSignImmediately: boolean) => Promise<boolean>;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const label = value ? "Sofort erlaubt" : "Erst nach Prüfung";
+  const options = [
+    { value: true, label: "Sofort erlaubt" },
+    { value: false, label: "Erst nach Prüfung" },
+  ];
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  async function selectSignaturePermission(nextValue: boolean) {
+    if (nextValue === value) {
+      setIsOpen(false);
+      return;
+    }
+    setIsSaving(true);
+    const saved = await onChange(nextValue);
+    setIsSaving(false);
+    if (saved) {
+      setIsOpen(false);
+    }
+  }
+
   return (
-    <div className="person-signature-toggle" role="group" aria-label="Kundenunterschrift">
+    <div className="person-signature-select" ref={containerRef}>
       <button
-        aria-pressed={value}
-        className={value ? "is-active" : ""}
-        disabled={!canEdit || disabled}
+        aria-expanded={isOpen}
+        className="person-signature-trigger"
+        disabled={!canEdit || disabled || isSaving}
         type="button"
-        onClick={() => onChange(true)}
+        onClick={() => setIsOpen((current) => !current)}
       >
-        Sofort erlaubt
+        <span>{isSaving ? "Speichert..." : label}</span>
+        <ChevronDown aria-hidden="true" size={13} />
       </button>
-      <button
-        aria-pressed={!value}
-        className={!value ? "is-active" : ""}
-        disabled={!canEdit || disabled}
-        type="button"
-        onClick={() => onChange(false)}
-      >
-        Erst nach Prüfung
-      </button>
+      {isOpen ? (
+        <div className="person-signature-menu" role="menu">
+          {options.map((option) => (
+            <button
+              aria-checked={option.value === value}
+              className={`person-signature-option${option.value === value ? " is-selected" : ""}`}
+              key={option.label}
+              role="menuitemradio"
+              type="button"
+              onClick={() => void selectSignaturePermission(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1187,20 +1271,19 @@ function PersonInlineEditableField({
   );
 }
 
-function PersonFields({
-  draft,
-  isCreateForm = false,
-  onChange,
-  onGeocodeSelected,
+function PersonAddressSearchField({
+  disabled = false,
+  name,
+  onSelect,
 }: {
-  draft: PersonCreate;
-  isCreateForm?: boolean;
-  onChange: (values: Partial<PersonCreate>) => void;
-  onGeocodeSelected?: (values: Partial<PersonCreate>) => void;
+  disabled?: boolean;
+  name?: string;
+  onSelect: (values: Partial<PersonCreate>, result: PersonGeocodeSearchResult) => boolean | Promise<boolean>;
 }) {
   const [addressSearch, setAddressSearch] = useState("");
   const [addressResults, setAddressResults] = useState<PersonGeocodeSearchResult[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [isApplyingAddress, setIsApplyingAddress] = useState(false);
   const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
   const [selectedGeocodeResult, setSelectedGeocodeResult] = useState<PersonGeocodeSearchResult | null>(null);
 
@@ -1250,7 +1333,7 @@ function PersonFields({
     };
   }, [addressSearch, selectedGeocodeResult]);
 
-  function applyGeocodeResult(result: PersonGeocodeSearchResult) {
+  async function applyGeocodeResult(result: PersonGeocodeSearchResult) {
     const selectedValues: Partial<PersonCreate> = {
       address_postal_code: result.postal_code,
       address_city: result.city,
@@ -1261,9 +1344,14 @@ function PersonFields({
       address_longitude: result.longitude,
       address_location_status: "geocoded",
     };
+    setIsApplyingAddress(true);
+    const saved = await onSelect(selectedValues, result);
+    setIsApplyingAddress(false);
+    if (saved === false) {
+      setAddressSearchMessage("Adresse konnte nicht gespeichert werden.");
+      return;
+    }
     setSelectedGeocodeResult(result);
-    onChange(selectedValues);
-    onGeocodeSelected?.(selectedValues);
     setAddressSearch("");
     setAddressResults([]);
     setIsSearchingAddress(false);
@@ -1271,6 +1359,58 @@ function PersonFields({
     (document.activeElement as HTMLElement | null)?.blur();
   }
 
+  return (
+    <label className="address-field site-address-search">
+      <span>Adresse suchen</span>
+      <input
+        aria-label="Adresse suchen"
+        autoCapitalize="none"
+        autoComplete="new-password"
+        autoCorrect="off"
+        disabled={disabled || isApplyingAddress}
+        inputMode="search"
+        name={name}
+        placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
+        spellCheck={false}
+        value={addressSearch}
+        onChange={(event) => {
+          setSelectedGeocodeResult(null);
+          setAddressSearch(event.target.value);
+        }}
+      />
+      {isSearchingAddress && <small>Adresse wird gesucht...</small>}
+      {isApplyingAddress && <small>Adresse wird gespeichert...</small>}
+      {addressSearchMessage && <small>{addressSearchMessage}</small>}
+      {addressResults.length > 0 && (
+        <div className="site-address-results" role="listbox">
+          {addressResults.map((result) => (
+            <button
+              disabled={disabled || isApplyingAddress}
+              key={`${result.latitude}-${result.longitude}-${result.label}`}
+              type="button"
+              onClick={() => void applyGeocodeResult(result)}
+            >
+              <strong>{result.label}</strong>
+              <span>{formatGeocodeMeta(result)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
+  );
+}
+
+function PersonFields({
+  draft,
+  isCreateForm = false,
+  onChange,
+  onGeocodeSelected,
+}: {
+  draft: PersonCreate;
+  isCreateForm?: boolean;
+  onChange: (values: Partial<PersonCreate>) => void;
+  onGeocodeSelected?: (values: Partial<PersonCreate>) => void;
+}) {
   return (
     <div className="person-form-grid">
       <label>
@@ -1363,40 +1503,14 @@ function PersonFields({
             <h3>Adresse / Startort</h3>
           </div>
         )}
-        <label className="address-field site-address-search">
-          <span>Adresse suchen</span>
-          <input
-            aria-label="Adresse suchen"
-            autoCapitalize="none"
-            autoComplete="new-password"
-            autoCorrect="off"
-            inputMode="search"
-            name={isCreateForm ? "person-location-query" : undefined}
-            placeholder="z. B. Moorburger Str. 16, 21079 Hamburg"
-            spellCheck={false}
-            value={addressSearch}
-            onChange={(event) => {
-              setSelectedGeocodeResult(null);
-              setAddressSearch(event.target.value);
-            }}
-          />
-          {isSearchingAddress && <small>Adresse wird gesucht...</small>}
-          {addressSearchMessage && <small>{addressSearchMessage}</small>}
-          {addressResults.length > 0 && (
-            <div className="site-address-results" role="listbox">
-              {addressResults.map((result) => (
-                <button
-                  key={`${result.latitude}-${result.longitude}-${result.label}`}
-                  type="button"
-                  onClick={() => applyGeocodeResult(result)}
-                >
-                  <strong>{result.label}</strong>
-                  <span>{formatGeocodeMeta(result)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </label>
+        <PersonAddressSearchField
+          name={isCreateForm ? "person-location-query" : undefined}
+          onSelect={(selectedValues) => {
+            onChange(selectedValues);
+            onGeocodeSelected?.(selectedValues);
+            return true;
+          }}
+        />
         <div className="site-address-display-grid person-address-display-grid">
           <PersonAddressDisplayItem label="PLZ" value={draft.address_postal_code} />
           <PersonAddressDisplayItem label="Stadt" value={draft.address_city} />

@@ -1913,53 +1913,96 @@ button.entity-card:focus-visible,
   color: #94a3b8;
 }
 
-.person-signature-toggle {
-  display: inline-flex;
+.person-signature-select {
+  position: relative;
   width: max-content;
   max-width: 100%;
-  border: 1px solid #d5deeb;
-  background: #ffffff;
 }
 
-.person-signature-toggle button {
-  min-width: 0;
-  min-height: 24px;
-  border: 0;
-  border-left: 1px solid #d5deeb;
-  background: transparent;
-  color: #52637a;
+.person-signature-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  min-width: 128px;
+  max-width: 100%;
+  min-height: 26px;
+  border: 1px solid #cfd9e6;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #25354b;
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 650;
   line-height: 1.1;
-  padding: 0 10px;
-  white-space: nowrap;
+  padding: 0 8px;
   cursor: pointer;
 }
 
-.person-signature-toggle button:first-child {
-  border-left: 0;
+.person-signature-trigger:hover,
+.person-signature-trigger:focus-visible {
+  border-color: #9db6d4;
+  background: #f8fafc;
+  outline: none;
 }
 
-.person-signature-toggle button.is-active {
-  background: #edf3f9;
-  color: #173c66;
-  box-shadow: inset 0 0 0 1px #a8bdd6;
-}
-
-.person-signature-toggle button:disabled {
+.person-signature-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.72;
 }
 
-.person-signature-toggle button:focus-visible {
-  box-shadow: inset 0 0 0 2px rgb(29 92 153 / 28%);
+.person-signature-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 100%;
+  border: 1px solid #cfd9e6;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgb(31 47 70 / 14%);
+}
+
+.person-signature-option {
+  border: 0;
+  border-bottom: 1px solid #e5edf6;
+  background: #ffffff;
+  color: #26344a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.2;
+  padding: 7px 9px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.person-signature-option:last-child {
+  border-bottom: 0;
+}
+
+.person-signature-option:hover,
+.person-signature-option:focus-visible,
+.person-signature-option.is-selected {
+  background: #f3f7fb;
   outline: none;
 }
 
 .person-detail-address-section {
   gap: 5px;
   padding: 8px 10px;
+}
+
+.person-detail-address-heading {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.person-detail-address-edit-button {
+  flex: 0 0 auto;
 }
 
 .person-detail-address-section .customer-address-panel {
@@ -1980,6 +2023,99 @@ button.entity-card:focus-visible,
 .person-detail-address-section .customer-address-lines strong {
   font-size: 0.8rem;
   line-height: 1.2;
+}
+
+.person-detail-address-editor {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #dbe4ef;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.person-detail-address-current {
+  display: grid;
+  gap: 2px;
+  border-left: 3px solid #9fb0c4;
+  padding-left: 7px;
+}
+
+.person-detail-address-current span {
+  color: #728199;
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.person-detail-address-current strong {
+  color: #233449;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.person-detail-address-editor .site-address-search {
+  display: grid;
+  gap: 4px;
+  color: #42526a;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.person-detail-address-editor .site-address-search input {
+  width: 100%;
+  height: 30px;
+  min-height: 0;
+  border: 1px solid #cbd8e8;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #172033;
+  padding: 0 8px;
+  font: inherit;
+}
+
+.person-detail-address-editor .site-address-search input:focus {
+  border-color: #7aa2d2;
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.person-detail-address-editor .site-address-search input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.person-detail-address-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.person-detail-address-editor-actions button {
+  min-height: 28px;
+  border: 1px solid #cbd8e8;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.person-detail-address-editor-actions button:hover,
+.person-detail-address-editor-actions button:focus-visible {
+  border-color: #9db6d4;
+  background: #f3f7fb;
+  outline: none;
+}
+
+.person-detail-address-editor-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .person-detail-notes-section {
