@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   MapPin,
   Pencil,
   Save,
@@ -46,7 +47,7 @@ type EditablePerson = PersonCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
 type PersonScope = "internal" | "external";
 type PeopleOverviewGroup = { key: string; label: string; people: Person[]; collapsible?: boolean };
-type PersonDetailActionKey = "absence" | "equipment" | "vehicle" | "performance";
+type PersonDetailActionKey = "absence" | "timeAccount" | "equipment" | "vehicle" | "performance";
 
 const personDetailActions: Array<{
   key: PersonDetailActionKey;
@@ -63,6 +64,14 @@ const personDetailActions: Array<{
     description: "Gesamturlaubstage und Krankheitstage pro Person werden hier vorbereitet.",
     preview: "Urlaubs- und Krankheitstage werden vorbereitet.",
     icon: CalendarDays,
+  },
+  {
+    key: "timeAccount",
+    label: "Stundenkonto",
+    title: "Stundenkonto",
+    description: "Das Stundenkonto für diesen Monteur wird hier später nachverfolgbar dargestellt.",
+    preview: "Stundenkonto und Überstunden werden vorbereitet.",
+    icon: Clock,
   },
   {
     key: "equipment",
