@@ -523,4 +523,10 @@ class DashboardService:
             return "Urlaub"
         if absence_type == AbsenceType.SICK:
             return "Krankheit"
+        if absence_type == AbsenceType.SCHOOL:
+            return "Schule"
+        if absence_type == AbsenceType.FREE:
+            return "Überstunden"
+        if absence_type == AbsenceType.OTHER:
+            return "Abwesenheit"
         return absence_type.value

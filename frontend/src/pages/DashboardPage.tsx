@@ -1193,7 +1193,7 @@ function getAbsenceLabel(value: string): string {
     vacation: "Urlaub",
     sick: "Krank",
     school: "Schule",
-    free: "Frei",
+    free: "Überstunden",
     other: "Sonstiges",
   };
   return labels[value] ?? value;

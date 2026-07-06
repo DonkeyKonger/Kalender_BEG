@@ -432,7 +432,7 @@ class MatrixService:
             "vacation": "Urlaub",
             "sick": "Krankheit",
             "school": "Schule",
-            "free": "Frei",
+            "free": "Überstunden",
             "other": "Abwesenheit",
         }
         return labels.get(absence_type.value, "Abwesenheit")

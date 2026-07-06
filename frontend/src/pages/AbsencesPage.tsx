@@ -552,7 +552,7 @@ export function AbsencesPage() {
       <EntityDetailDrawer
         isOpen={drawer?.mode === "new"}
         title="Neue Abwesenheit"
-        subtitle="Krankheit, Urlaub, Schule, Frei oder Sonstiges eintragen"
+        subtitle="Krankheit, Urlaub, Schule, Überstunden oder Sonstiges eintragen"
         onClose={closeDrawer}
         footer={canEdit ? (
           <button className="icon-button" disabled={savingAbsenceId === 0} type="button" onClick={() => void createAbsence()}>
@@ -1060,7 +1060,7 @@ function absenceTypeShortLabel(type: AbsenceType): string {
     vacation: "U",
     sick: "K",
     school: "S",
-    free: "F",
+    free: "Ü",
     other: "O",
   };
   return labels[type];

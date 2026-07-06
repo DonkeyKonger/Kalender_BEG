@@ -46,7 +46,7 @@ export const absenceTypeLabels: Record<AbsenceType, string> = {
   vacation: "Urlaub",
   sick: "Krank",
   school: "Schule",
-  free: "Frei",
+  free: "Überstunden",
   other: "Sonstiges",
 };
 
