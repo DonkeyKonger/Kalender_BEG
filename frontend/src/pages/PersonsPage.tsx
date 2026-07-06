@@ -1802,7 +1802,7 @@ function buildPersonAbsenceListEntries(absences: Absence[], year: number): Perso
       && entry.startDate <= addIsoDays(previous.end_date, 1)
     ) {
       previous.end_date = maxIsoDate(previous.end_date, entry.endDate);
-      previous.dayCount = inclusiveIsoDateDiff(previous.start_date, previous.end_date) + 1;
+      previous.dayCount = countWeekdaysInclusive(previous.start_date, previous.end_date);
       previous.sourceIds.push(entry.absence.id);
       return entries;
     }
@@ -1812,7 +1812,7 @@ function buildPersonAbsenceListEntries(absences: Absence[], year: number): Perso
       start_date: entry.startDate,
       end_date: entry.endDate,
       note: entry.absence.note?.trim() || null,
-      dayCount: inclusiveIsoDateDiff(entry.startDate, entry.endDate) + 1,
+      dayCount: countWeekdaysInclusive(entry.startDate, entry.endDate),
       sourceIds: [entry.absence.id],
     });
     return entries;
@@ -1837,17 +1837,42 @@ function countAbsenceDaysInYear(absence: Pick<Absence, "start_date" | "end_date"
   if (end < start) {
     return 0;
   }
-  return inclusiveIsoDateDiff(start, end) + 1;
+  return countWeekdaysInclusive(start, end);
 }
 
-function inclusiveIsoDateDiff(start: string, end: string): number {
-  const dayMs = 24 * 60 * 60 * 1000;
-  return Math.round((isoDateSerial(end) - isoDateSerial(start)) / dayMs);
+function countWeekdaysInclusive(startDate: string, endDate: string): number {
+  const start = parseIsoDateStrict(startDate);
+  const end = parseIsoDateStrict(endDate);
+  if (!start || !end || end.getTime() < start.getTime()) {
+    return 0;
+  }
+
+  let count = 0;
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    const weekday = cursor.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) {
+      count += 1;
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return count;
 }
 
-function isoDateSerial(value: string): number {
+function parseIsoDateStrict(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
   const [year, month, day] = value.split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return parsed;
 }
 
 function minIsoDate(left: string, right: string): string {
