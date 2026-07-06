@@ -27,6 +27,7 @@ class Person(TimestampMixin, Base):
         default=PersonEmploymentStatus.ACTIVE.value,
     )
     annual_vacation_days: Mapped[int | None] = mapped_column(Integer)
+    weekly_hours: Mapped[float | None] = mapped_column(Float)
     can_sign_measurements_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(80))

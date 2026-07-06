@@ -2,9 +2,16 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationStatus
-from app.services.person_service import PersonService, apply_selected_person_geocode, clean_person_values, person_snapshot
+from app.schemas.person import PersonUpdate
+from app.services.person_service import (
+    PersonService,
+    apply_selected_person_geocode,
+    clean_person_values,
+    person_snapshot,
+)
 
 
 def test_clean_person_values_generates_display_name_and_calendar_search_code():
@@ -52,6 +59,7 @@ def test_person_snapshot_uses_json_safe_enum_value():
         is_active=True,
         employment_status=PersonEmploymentStatus.ACTIVE.value,
         annual_vacation_days=30,
+        weekly_hours=37.5,
         email=None,
         phone=None,
         notes=None,
@@ -59,6 +67,19 @@ def test_person_snapshot_uses_json_safe_enum_value():
 
     assert person_snapshot(person)["person_type"] == "internal"
     assert person_snapshot(person)["annual_vacation_days"] == 30
+    assert person_snapshot(person)["weekly_hours"] == 37.5
+
+
+def test_person_update_accepts_decimal_weekly_hours():
+    payload = PersonUpdate(weekly_hours=37.5)
+
+    assert payload.weekly_hours == 37.5
+
+
+@pytest.mark.parametrize("weekly_hours", [-0.25, 80.25])
+def test_person_update_rejects_invalid_weekly_hours(weekly_hours):
+    with pytest.raises(ValidationError):
+        PersonUpdate(weekly_hours=weekly_hours)
 
 
 def test_apply_selected_person_geocode_keeps_selected_coordinates():

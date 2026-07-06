@@ -100,6 +100,7 @@ const emptyPerson: PersonCreate = {
   employment_status: "active",
   can_sign_measurements_immediately: false,
   annual_vacation_days: null,
+  weekly_hours: null,
   email: null,
   phone: null,
   address_postal_code: null,
@@ -723,16 +724,33 @@ function PersonReadView({
                 onChange={onStatusChange}
               />
             </PersonDetailField>
-            <PersonDetailField className="is-wide" label="Jahresurlaub">
+            <PersonDetailField label="Jahresurlaub">
               <PersonInlineEditableField
                 ariaLabel="Jahresurlaub bearbeiten"
                 canEdit={canEdit}
                 displayValue={formatAnnualVacationDays(person.annual_vacation_days)}
                 inputMode="numeric"
                 isSaving={isSaving}
+                max={365}
+                min={0}
+                step={1}
                 type="number"
                 value={person.annual_vacation_days?.toString() ?? ""}
                 onSave={(value) => onInformationSave({ annual_vacation_days: parseOptionalInteger(value) })}
+              />
+            </PersonDetailField>
+            <PersonDetailField label="Wochenstunden">
+              <PersonInlineEditableField
+                ariaLabel="Wochenstunden bearbeiten"
+                canEdit={canEdit}
+                displayValue={formatWeeklyHours(person.weekly_hours)}
+                inputMode="decimal"
+                isSaving={isSaving}
+                max={80}
+                min={0}
+                step="0.25"
+                value={person.weekly_hours?.toString() ?? ""}
+                onSave={(value) => onInformationSave({ weekly_hours: parseOptionalDecimal(value) })}
               />
             </PersonDetailField>
             <PersonDetailField className="is-wide person-detail-signature-field" label="Kundenunterschrift">
@@ -1295,7 +1313,10 @@ function PersonInlineEditableField({
   displayValue,
   inputMode,
   isSaving,
+  max,
+  min,
   required = false,
+  step,
   type = "text",
   value,
   onSave,
@@ -1305,7 +1326,10 @@ function PersonInlineEditableField({
   displayValue: string;
   inputMode?: "decimal" | "email" | "numeric" | "search" | "tel" | "text" | "url";
   isSaving: boolean;
+  max?: number;
+  min?: number;
   required?: boolean;
+  step?: number | string;
   type?: "email" | "number" | "tel" | "text";
   value: string;
   onSave: (value: string) => Promise<boolean>;
@@ -1351,9 +1375,9 @@ function PersonInlineEditableField({
           aria-label={ariaLabel}
           disabled={isSaving}
           inputMode={inputMode}
-          max={type === "number" ? 365 : undefined}
-          min={type === "number" ? 0 : undefined}
-          step={type === "number" ? 1 : undefined}
+          max={type === "number" ? max : undefined}
+          min={type === "number" ? min : undefined}
+          step={type === "number" ? step : undefined}
           type={type}
           value={draft}
           onChange={(event) => {
@@ -1605,6 +1629,18 @@ function PersonFields({
           onChange={(event) => onChange({ annual_vacation_days: parseOptionalInteger(event.target.value) })}
         />
       </label>
+      <label>
+        <span>Wochenstunden</span>
+        <input
+          inputMode="decimal"
+          max={80}
+          min={0}
+          step={0.25}
+          type="text"
+          value={Number.isFinite(draft.weekly_hours) ? draft.weekly_hours ?? "" : ""}
+          onChange={(event) => onChange({ weekly_hours: parseOptionalDecimal(event.target.value) })}
+        />
+      </label>
       <label className="checkbox-field">
         <input
           checked={draft.is_active}
@@ -1689,6 +1725,7 @@ function toEditablePerson(person: Person): EditablePerson {
     employment_status: personEmploymentStatus(person),
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     annual_vacation_days: person.annual_vacation_days,
+    weekly_hours: person.weekly_hours,
     email: person.email,
     phone: person.phone,
     address_postal_code: person.address_postal_code,
@@ -1732,6 +1769,12 @@ function validatePersonPayload(person: PersonCreate): string | null {
   ) {
     return "Jahresurlaub muss eine ganze Zahl zwischen 0 und 365 sein.";
   }
+  if (
+    person.weekly_hours !== null
+    && (!Number.isFinite(person.weekly_hours) || person.weekly_hours < 0 || person.weekly_hours > 80)
+  ) {
+    return "Wochenstunden müssen eine Zahl zwischen 0 und 80 sein.";
+  }
   return null;
 }
 
@@ -1743,6 +1786,14 @@ function parseOptionalInteger(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseOptionalDecimal(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+  return Number(normalized);
+}
+
 function normalizeAnnualVacationDays(value: number | null): number | null {
   if (value === null || !Number.isFinite(value)) {
     return null;
@@ -1750,11 +1801,25 @@ function normalizeAnnualVacationDays(value: number | null): number | null {
   return Math.trunc(value);
 }
 
+function normalizeWeeklyHours(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
 function formatAnnualVacationDays(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "-";
   }
   return `${value} ${value === 1 ? "Tag" : "Tage"}`;
+}
+
+function formatWeeklyHours(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(value)} Std.`;
 }
 
 function summarizeAbsencesByType(absences: Absence[], year: number): Record<AbsenceType, number> {
@@ -1925,6 +1990,7 @@ function normalizePersonPayload(person: PersonCreate): PersonCreate {
     employment_status: employmentStatus,
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     annual_vacation_days: normalizeAnnualVacationDays(person.annual_vacation_days),
+    weekly_hours: normalizeWeeklyHours(person.weekly_hours),
     email: person.email?.trim() || null,
     phone: person.phone?.trim() || null,
     address_postal_code: person.address_postal_code?.trim() || null,

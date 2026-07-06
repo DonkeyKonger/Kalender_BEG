@@ -15,6 +15,7 @@ class PersonBase(BaseModel):
     is_active: bool = True
     employment_status: PersonEmploymentStatus = PersonEmploymentStatus.ACTIVE
     annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
+    weekly_hours: float | None = Field(default=None, ge=0, le=80)
     can_sign_measurements_immediately: bool = False
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)
@@ -55,6 +56,7 @@ class PersonUpdate(BaseModel):
     is_active: bool | None = None
     employment_status: PersonEmploymentStatus | None = None
     annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
+    weekly_hours: float | None = Field(default=None, ge=0, le=80)
     can_sign_measurements_immediately: bool | None = None
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=80)

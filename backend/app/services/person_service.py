@@ -208,6 +208,7 @@ class PersonService:
         person.is_active = False
         person.employment_status = PersonEmploymentStatus.DEPARTED.value
         person.annual_vacation_days = None
+        person.weekly_hours = None
         person.can_sign_measurements_immediately = False
         person.email = None
         person.phone = None
@@ -341,6 +342,7 @@ def external_person_values(display_name: str) -> dict:
         "person_type": PersonType.EXTERNAL_TEMP,
         "is_active": True,
         "employment_status": PersonEmploymentStatus.ACTIVE.value,
+        "weekly_hours": None,
         "notes": "Aus Matrix-Schnelleingabe erzeugt.",
     }
 
@@ -357,6 +359,7 @@ def person_snapshot(person: Person) -> dict:
         "is_active": person.is_active,
         "employment_status": person_employment_status(person),
         "annual_vacation_days": getattr(person, "annual_vacation_days", None),
+        "weekly_hours": getattr(person, "weekly_hours", None),
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "email": person.email,
