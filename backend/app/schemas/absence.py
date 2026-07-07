@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import AbsenceStatus, AbsenceType
 
@@ -49,3 +49,15 @@ class AbsenceRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class VacationCarryoverRead(BaseModel):
+    person_id: int
+    year: int
+    carryover_days: int
+
+
+class VacationCarryoverUpdate(BaseModel):
+    person_id: int
+    year: int = Field(ge=2000, le=2100)
+    carryover_days: int = Field(default=0, ge=0, le=365)

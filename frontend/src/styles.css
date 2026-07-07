@@ -2531,20 +2531,75 @@ button.entity-card:focus-visible,
   padding: 10px;
 }
 
-.person-absence-remaining {
+.person-absence-summary-top {
   display: grid;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: end;
+  gap: 10px;
   border-bottom: 1px solid #e5edf6;
   padding-bottom: 9px;
 }
 
-.person-absence-remaining span {
+.person-absence-remaining {
+  display: grid;
+  gap: 3px;
+}
+
+.person-vacation-carryover-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.person-absence-remaining span,
+.person-vacation-carryover-field > span {
   color: #728199;
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.055em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.person-vacation-carryover-field > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.person-vacation-carryover-field input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid #cbd8e8;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.2;
+  padding: 4px 7px;
+}
+
+.person-vacation-carryover-field input:focus {
+  border-color: #7aa2d2;
+  box-shadow: 0 0 0 2px rgb(29 92 153 / 12%);
+  outline: none;
+}
+
+.person-vacation-carryover-field input:disabled {
+  background: #f3f6fa;
+  color: #708198;
+  cursor: not-allowed;
+}
+
+.person-vacation-carryover-field small {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1;
 }
 
 .person-absence-remaining strong {

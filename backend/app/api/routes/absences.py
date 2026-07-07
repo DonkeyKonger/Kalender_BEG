@@ -7,13 +7,14 @@ from app.api.dependencies import require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.absence import AbsenceCreate, AbsenceRead, AbsenceUpdate
+from app.schemas.absence import AbsenceCreate, AbsenceRead, AbsenceUpdate, VacationCarryoverRead, VacationCarryoverUpdate
 from app.services.absence_service import AbsenceService
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_CARRYOVER_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 
 
 @router.get("", response_model=list[AbsenceRead])
@@ -40,6 +41,40 @@ def create_absence(
 ) -> AbsenceRead:
     absence = AbsenceService(db).create_absence(payload, current_user.id)
     return AbsenceRead.model_validate(absence)
+
+
+@router.get("/vacation-carryover", response_model=VacationCarryoverRead)
+def get_vacation_carryover(
+    person_id: int,
+    year: int,
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> VacationCarryoverRead:
+    carryover = AbsenceService(db).get_vacation_carryover(person_id=person_id, year=year)
+    return VacationCarryoverRead(
+        person_id=person_id,
+        year=year,
+        carryover_days=carryover.carryover_days if carryover is not None else 0,
+    )
+
+
+@router.put("/vacation-carryover", response_model=VacationCarryoverRead)
+def update_vacation_carryover(
+    payload: VacationCarryoverUpdate,
+    current_user: User = Depends(CAN_CARRYOVER_WRITE),
+    db: Session = Depends(get_db),
+) -> VacationCarryoverRead:
+    carryover = AbsenceService(db).set_vacation_carryover(
+        person_id=payload.person_id,
+        year=payload.year,
+        carryover_days=payload.carryover_days,
+        user_id=current_user.id,
+    )
+    return VacationCarryoverRead(
+        person_id=carryover.person_id,
+        year=carryover.year,
+        carryover_days=carryover.carryover_days,
+    )
 
 
 @router.patch("/{absence_id}", response_model=AbsenceRead)

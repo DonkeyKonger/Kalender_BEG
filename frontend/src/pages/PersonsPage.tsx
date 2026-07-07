@@ -128,6 +128,7 @@ export function PersonsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
   const canManageHoursAccount = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
+  const canManageVacationCarryover = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canRemove = canEdit;
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
@@ -647,6 +648,7 @@ export function PersonsPage() {
               activeAction={activePersonAction}
               canEdit={canEdit}
               canManageHoursAccount={canManageHoursAccount}
+              canManageVacationCarryover={canManageVacationCarryover}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
               onInformationSave={(values) => updatePersonInformation(selectedPerson, values)}
@@ -666,6 +668,7 @@ function PersonReadView({
   activeAction,
   canEdit,
   canManageHoursAccount,
+  canManageVacationCarryover,
   isSaving,
   onActionChange,
   onInformationSave,
@@ -677,6 +680,7 @@ function PersonReadView({
   activeAction: PersonDetailActionKey | null;
   canEdit: boolean;
   canManageHoursAccount: boolean;
+  canManageVacationCarryover: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
   onInformationSave: (values: Partial<PersonCreate>) => Promise<boolean>;
@@ -864,7 +868,7 @@ function PersonReadView({
       {action ? (
         <PersonDetailSubpage title={action.title} onBack={() => onActionChange(null)}>
           {action.key === "absence" ? (
-            <PersonAbsenceOverviewPanel person={person} />
+            <PersonAbsenceOverviewPanel canManageCarryover={canManageVacationCarryover} person={person} />
           ) : action.key === "timeAccount" ? (
             <PersonHoursAccountPanel canManage={canManageHoursAccount} person={person} />
           ) : (
@@ -1173,9 +1177,12 @@ type PersonAbsenceListEntry = {
   sourceIds: number[];
 };
 
-function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
+function PersonAbsenceOverviewPanel({ person, canManageCarryover }: { person: Person; canManageCarryover: boolean }) {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [vacationCarryoverDays, setVacationCarryoverDays] = useState(0);
+  const [carryoverDraft, setCarryoverDraft] = useState("0");
+  const [isSavingCarryover, setIsSavingCarryover] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1185,17 +1192,24 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
       setIsLoading(true);
       setError(null);
       try {
-        const loadedAbsences = await api.absences({
-          personId: person.id,
-          start: `${year}-01-01`,
-          end: `${year}-12-31`,
-        });
+        const [loadedAbsences, loadedCarryover] = await Promise.all([
+          api.absences({
+            personId: person.id,
+            start: `${year}-01-01`,
+            end: `${year}-12-31`,
+          }),
+          api.vacationCarryover({ personId: person.id, year }),
+        ]);
         if (!cancelled) {
           setAbsences(loadedAbsences);
+          setVacationCarryoverDays(loadedCarryover.carryover_days);
+          setCarryoverDraft(String(loadedCarryover.carryover_days));
         }
       } catch (requestError) {
         if (!cancelled) {
           setAbsences([]);
+          setVacationCarryoverDays(0);
+          setCarryoverDraft("0");
           setError(readApiError(requestError, "Abwesenheiten konnten nicht geladen werden."));
         }
       } finally {
@@ -1210,6 +1224,37 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
     };
   }, [person.id, year]);
 
+  async function saveVacationCarryover() {
+    if (!canManageCarryover || isSavingCarryover) {
+      return;
+    }
+    const parsedCarryover = parseVacationCarryoverDays(carryoverDraft);
+    if (!parsedCarryover.ok) {
+      setError(parsedCarryover.error);
+      return;
+    }
+    if (parsedCarryover.value === vacationCarryoverDays) {
+      setCarryoverDraft(String(vacationCarryoverDays));
+      return;
+    }
+    setIsSavingCarryover(true);
+    setError(null);
+    try {
+      const updatedCarryover = await api.updateVacationCarryover({
+        person_id: person.id,
+        year,
+        carryover_days: parsedCarryover.value,
+      });
+      setVacationCarryoverDays(updatedCarryover.carryover_days);
+      setCarryoverDraft(String(updatedCarryover.carryover_days));
+    } catch (requestError) {
+      setError(readApiError(requestError, "Resturlaub konnte nicht gespeichert werden."));
+      setCarryoverDraft(String(vacationCarryoverDays));
+    } finally {
+      setIsSavingCarryover(false);
+    }
+  }
+
   const activeAbsences = useMemo(
     () => absences
       .filter((absence) => absence.status === "active" && absence.person_id === person.id && absenceOverlapsYear(absence, year))
@@ -1221,7 +1266,7 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
   const vacationDays = summary.vacation;
   const remainingVacationDays = person.annual_vacation_days === null || person.annual_vacation_days === undefined
     ? null
-    : person.annual_vacation_days - vacationDays;
+    : person.annual_vacation_days + vacationCarryoverDays - vacationDays;
 
   return (
     <div className="person-absence-overview">
@@ -1238,13 +1283,45 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
       </div>
 
       <section className="person-absence-summary-card">
-        <div className="person-absence-remaining">
-          <span>Verbleibende Urlaubstage {year}</span>
-          {remainingVacationDays === null ? (
-            <strong>Jahresurlaub nicht hinterlegt</strong>
-          ) : (
-            <strong className={remainingVacationDays < 0 ? "is-negative" : ""}>{formatAbsenceDays(remainingVacationDays)}</strong>
-          )}
+        <div className="person-absence-summary-top">
+          <div className="person-absence-remaining">
+            <span>Verbleibende Urlaubstage {year}</span>
+            {remainingVacationDays === null ? (
+              <strong>Jahresurlaub nicht hinterlegt</strong>
+            ) : (
+              <strong className={remainingVacationDays < 0 ? "is-negative" : ""}>{formatAbsenceDays(remainingVacationDays)}</strong>
+            )}
+          </div>
+          <label className="person-vacation-carryover-field">
+            <span>Resturlaub</span>
+            <div>
+              <input
+                disabled={!canManageCarryover || isLoading || isSavingCarryover}
+                inputMode="numeric"
+                type="text"
+                value={carryoverDraft}
+                onBlur={() => void saveVacationCarryover()}
+                onChange={(event) => {
+                  setCarryoverDraft(event.target.value);
+                  if (error?.startsWith("Resturlaub")) {
+                    setError(null);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setCarryoverDraft(String(vacationCarryoverDays));
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <small>Tage</small>
+            </div>
+          </label>
         </div>
         <div className="person-absence-type-summary" aria-label={`Fehlzeiten ${year}`}>
           {PERSON_ABSENCE_TYPES.map((type) => (
@@ -1996,6 +2073,24 @@ function parseOptionalDecimal(value: string): number | null {
     return null;
   }
   return Number(normalized);
+}
+
+function parseVacationCarryoverDays(value: string): { ok: true; value: number } | { ok: false; error: string } {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) {
+    return { ok: true, value: 0 };
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    return { ok: false, error: "Resturlaub muss eine ganze Zahl sein." };
+  }
+  if (parsed < 0) {
+    return { ok: false, error: "Resturlaub darf nicht negativ sein." };
+  }
+  if (parsed > 365) {
+    return { ok: false, error: "Resturlaub darf maximal 365 Tage betragen." };
+  }
+  return { ok: true, value: parsed };
 }
 
 function normalizeAnnualVacationDays(value: number | null): number | null {

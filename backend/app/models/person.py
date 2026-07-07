@@ -56,3 +56,8 @@ class Person(TimestampMixin, Base):
         back_populates="person",
         cascade="all, delete-orphan",
     )
+    vacation_carryovers = relationship(
+        "PersonVacationCarryover",
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )

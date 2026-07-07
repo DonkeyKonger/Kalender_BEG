@@ -26,3 +26,11 @@ export type AbsenceCreate = {
 };
 
 export type AbsenceUpdate = Partial<AbsenceCreate>;
+
+export type VacationCarryover = {
+  person_id: number;
+  year: number;
+  carryover_days: number;
+};
+
+export type VacationCarryoverUpdate = VacationCarryover;

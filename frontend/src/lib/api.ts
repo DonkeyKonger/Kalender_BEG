@@ -1,4 +1,4 @@
-import type { Absence, AbsenceCreate, AbsenceUpdate } from "../types/absence";
+import type { Absence, AbsenceCreate, AbsenceUpdate, VacationCarryover, VacationCarryoverUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
@@ -1035,6 +1035,21 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<Absence[]>(`/absences${suffix}`);
+  },
+
+  async vacationCarryover(params: { personId: number; year: number }): Promise<VacationCarryover> {
+    const search = new URLSearchParams({
+      person_id: String(params.personId),
+      year: String(params.year),
+    });
+    return request<VacationCarryover>(`/absences/vacation-carryover?${search.toString()}`);
+  },
+
+  async updateVacationCarryover(payload: VacationCarryoverUpdate): Promise<VacationCarryover> {
+    return request<VacationCarryover>("/absences/vacation-carryover", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
   },
 
   async createAbsence(payload: AbsenceCreate): Promise<Absence> {
