@@ -946,6 +946,69 @@ def test_legacy_duplicate_measurement_entries_use_latest_cell_value():
     assert checked_totals[item.id] == Decimal("5.00")
 
 
+def test_office_can_review_and_bill_unsubmitted_measurement_batch():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.01.05.10",
+        description="Kabelrinne liefern und montieren",
+        list_quantity=Decimal("0.00"),
+        unit="m",
+        minutes_per_unit=Decimal("19.80"),
+        list_minutes_total=Decimal("0.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    review_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="draft",
+    )
+    review_entry = SiteMeasurementEntry(
+        measurement_batch=review_batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("2.00"),
+        area_or_comment="EG",
+        status="saved",
+    )
+    billing_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=2,
+        title="Aufmaß 2",
+        status="draft",
+    )
+    billing_entry = SiteMeasurementEntry(
+        measurement_batch=billing_batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("3.00"),
+        area_or_comment="OG",
+        status="saved",
+    )
+    db.add_all([item, review_batch, review_entry, billing_batch, billing_entry])
+    db.commit()
+
+    service = MeasurementService(db)
+    reviewed = service.set_site_batch_reviewed(site_id=site.id, batch_id=review_batch.id)
+    billed = service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=billing_batch.id,
+        billing_status="billed",
+    )
+
+    assert reviewed.status == "reviewed"
+    assert billed.status == "billed"
+    assert db.get(SiteMeasurementEntry, review_entry.id).status == "reviewed"
+    assert db.get(SiteMeasurementEntry, billing_entry.id).status == "billed"
+
+
 def test_site_measurement_billing_status_and_entry_update():
     from datetime import date
 
@@ -997,9 +1060,6 @@ def test_site_measurement_billing_status_and_entry_update():
 
     service = MeasurementService(db)
     batch = service.create_mobile_batch(assignment_id=assignment.id, current_user=user)
-    with pytest.raises(HTTPException) as draft_review:
-        service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="billed")
-    assert draft_review.value.status_code == 409
 
     service.create_mobile_entry(
         assignment_id=assignment.id,
@@ -1027,13 +1087,6 @@ def test_site_measurement_billing_status_and_entry_update():
         current_user=user,
         payload=MeasurementEntryCreate(area_or_comment="Dach", quantity=Decimal("5.00")),
     )
-    with pytest.raises(HTTPException) as submitted_billing:
-        service.set_site_batch_billing_status(
-            site_id=site.id,
-            batch_id=submitted.id,
-            billing_status="billed",
-        )
-    assert submitted_billing.value.status_code == 409
     reviewed = service.set_site_batch_reviewed(site_id=site.id, batch_id=submitted.id)
     billed = service.set_site_batch_billing_status(
         site_id=site.id,

@@ -1415,20 +1415,6 @@ class MeasurementService:
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft":
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe können noch nicht abgeschlossen werden.",
-            )
-        if normalized_status == "billed" and not (
-            batch.status == "reviewed"
-            or batch.status == "customer_signed"
-            or batch.customer_signed_at is not None
-        ):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Aufmaße müssen vor dem Abschluss durch den Projektleiter geprüft werden.",
-            )
 
         batch.status = normalized_status
         for entry in _current_measurement_entries(list(batch.entries)):
@@ -1444,11 +1430,6 @@ class MeasurementService:
     ) -> MobileMeasurementBatchRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft":
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe müssen zuerst zur Prüfung gesendet werden.",
-            )
         if batch.status in {"billed", "approved", "closed"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,

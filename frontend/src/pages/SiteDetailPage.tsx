@@ -58,6 +58,9 @@ const VALUED_MEASUREMENT_BATCH_STATUSES = new Set([
   "completed",
   "finalized",
 ]);
+const MEASUREMENT_BATCH_BEFORE_SUBMITTED_STATUSES = new Set(["draft"]);
+const MEASUREMENT_BATCH_REVIEWED_STATUSES = new Set(["reviewed", "checked"]);
+const MEASUREMENT_BATCH_BILLED_STATUSES = new Set(["billed", "approved", "closed", "completed", "finalized"]);
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 56;
 const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
@@ -3562,6 +3565,7 @@ function MeasurementReviewPanel({
     const isDraft = selectedBatch.status === "draft";
     const isReviewed = isMeasurementBatchReviewed(selectedBatch.status);
     const isCustomerSigned = isCustomerSignedMeasurementBatch(selectedBatch);
+    const showUnsubmittedWarning = isMeasurementBatchBeforeSubmitted(selectedBatch.status);
     const canEditRows = !isDraft;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
     const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
@@ -3604,29 +3608,30 @@ function MeasurementReviewPanel({
               Auf Monteurstand zurücksetzen
             </button>
             <span className="measurement-review-action-divider" aria-hidden="true" />
-            {!isDraft ? (
-              isBilled ? (
-                <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
-                  Wieder auf Eingereicht setzen
+            {isBilled ? (
+              <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
+                Wieder auf Eingereicht setzen
+              </button>
+            ) : (
+              <>
+                {!isReviewed && !isCustomerSigned ? (
+                  <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
+                    Prüfung abschließen
+                  </button>
+                ) : null}
+                <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
+                  Aufmaß abschließen
                 </button>
-              ) : (
-                <>
-                  {isMeasurementBatchReviewRequired(selectedBatch) ? (
-                    <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
-                      Prüfung abschließen
-                    </button>
-                  ) : null}
-                  {(isReviewed || isCustomerSigned) ? (
-                    <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
-                      Aufmaß abschließen
-                    </button>
-                  ) : null}
-                </>
-              )
-            ) : null}
+              </>
+            )}
           </div>
         </div>
 
+        {showUnsubmittedWarning ? (
+          <div className="measurement-review-unsubmitted-warning" role="note">
+            Dieses Aufmaß wurde vom Monteur noch nicht zur Prüfung eingereicht. Eine Prüfung oder ein Abschluss durch das Büro ist trotzdem möglich. Bitte vor dem Fortfahren fachlich kontrollieren.
+          </div>
+        ) : null}
         {reviewMessage ? <div className="project-record-empty-state is-success">{reviewMessage}</div> : null}
         {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
         {inlineError ? <div className="project-record-empty-state is-error"><strong>{inlineError}</strong></div> : null}
@@ -5967,7 +5972,7 @@ function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {
 }
 
 function isMeasurementBatchBilled(status: string): boolean {
-  return status === "billed" || status === "approved";
+  return MEASUREMENT_BATCH_BILLED_STATUSES.has(status.toLowerCase());
 }
 
 function isMeasurementBatchPdfExportable(status: string): boolean {
@@ -5975,7 +5980,11 @@ function isMeasurementBatchPdfExportable(status: string): boolean {
 }
 
 function isMeasurementBatchReviewed(status: string): boolean {
-  return status === "reviewed";
+  return MEASUREMENT_BATCH_REVIEWED_STATUSES.has(status.toLowerCase());
+}
+
+function isMeasurementBatchBeforeSubmitted(status: string): boolean {
+  return MEASUREMENT_BATCH_BEFORE_SUBMITTED_STATUSES.has(status.toLowerCase());
 }
 
 function isMeasurementBatchReviewRequired(batch: MobileMeasurementBatch): boolean {

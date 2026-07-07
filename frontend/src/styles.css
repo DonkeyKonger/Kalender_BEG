@@ -21598,6 +21598,18 @@ button.person-chip:focus-visible {
   margin: 8px 18px 0;
 }
 
+.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning {
+  margin: 8px 18px 0;
+  border: 1px solid #f3d08a;
+  border-radius: 6px;
+  background: #fff7e6;
+  color: #8a4b10;
+  padding: 9px 11px;
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
 .measurement-review-detail.is-table-view .project-record-empty-state.is-error {
   border-color: rgb(180 35 24 / 24%);
   background: #fff1ef;
