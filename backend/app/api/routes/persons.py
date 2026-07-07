@@ -14,7 +14,13 @@ from app.schemas.person import (
     PersonRemoveResponse,
     PersonUpdate,
 )
+from app.schemas.person_hours_account import (
+    PersonHoursAccountRead,
+    PersonHoursManualAdjustmentCreate,
+    PersonHoursPayoutCreate,
+)
 from app.services.geo_service import search_geocoding_candidates
+from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.person_service import PersonService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
@@ -22,6 +28,7 @@ router = APIRouter(prefix="/persons", tags=["persons"])
 CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
+CAN_HOURS_ACCOUNT_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 
 
 @router.get("", response_model=list[PersonRead])
@@ -62,6 +69,45 @@ def search_person_geocode(
         )
         for candidate in search_geocoding_candidates(q, limit=limit)
     ]
+
+
+@router.get("/{person_id}/hours-account", response_model=PersonHoursAccountRead)
+def get_person_hours_account(
+    person_id: int,
+    _user=Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> PersonHoursAccountRead:
+    return PersonHoursAccountService(db).get_account(person_id=person_id)
+
+
+@router.post("/{person_id}/hours-account/manual-adjustment", response_model=PersonHoursAccountRead)
+def create_person_hours_manual_adjustment(
+    person_id: int,
+    payload: PersonHoursManualAdjustmentCreate,
+    current_user=Depends(CAN_HOURS_ACCOUNT_WRITE),
+    db: Session = Depends(get_db),
+) -> PersonHoursAccountRead:
+    return PersonHoursAccountService(db).create_manual_adjustment(
+        person_id=person_id,
+        hours_delta=payload.hours_delta,
+        note=payload.note,
+        current_user=current_user,
+    )
+
+
+@router.post("/{person_id}/hours-account/payout", response_model=PersonHoursAccountRead)
+def create_person_hours_payout(
+    person_id: int,
+    payload: PersonHoursPayoutCreate,
+    current_user=Depends(CAN_HOURS_ACCOUNT_WRITE),
+    db: Session = Depends(get_db),
+) -> PersonHoursAccountRead:
+    return PersonHoursAccountService(db).create_payout(
+        person_id=person_id,
+        hours=payload.hours,
+        note=payload.note,
+        current_user=current_user,
+    )
 
 
 @router.get("/{person_id}/removal-plan", response_model=PersonRemovePlan)

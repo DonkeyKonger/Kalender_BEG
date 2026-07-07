@@ -1,0 +1,51 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class PersonHoursAccountEntryRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    person_id: int
+    entry_type: str
+    minutes_delta: int
+    balance_after_minutes: int
+    note: str
+    iso_year: int | None = None
+    iso_week: int | None = None
+    weekly_actual_minutes: int | None = None
+    weekly_required_minutes: int | None = None
+    created_by_user_id: int | None = None
+    created_by_name: str | None = None
+    created_at: datetime
+
+
+class PersonHoursAccountRead(BaseModel):
+    person_id: int
+    current_balance_minutes: int
+    entries: list[PersonHoursAccountEntryRead]
+
+
+class PersonHoursManualAdjustmentCreate(BaseModel):
+    hours_delta: float = Field(ge=-500, le=500)
+    note: str = Field(min_length=1, max_length=500)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Grund ist Pflicht.")
+        return cleaned
+
+
+class PersonHoursPayoutCreate(BaseModel):
+    hours: float = Field(gt=0, le=500)
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("note")
+    @classmethod
+    def clean_optional_note(cls, value: str | None) -> str | None:
+        cleaned = value.strip() if isinstance(value, str) else None
+        return cleaned or None

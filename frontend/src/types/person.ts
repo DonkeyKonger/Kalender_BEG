@@ -155,3 +155,37 @@ export type PersonRemoveResponse = {
   action: "deleted" | "deactivated";
   person: Person | null;
 };
+
+export type PersonHoursAccountEntryType = "weekly_balance" | "manual_adjustment" | "payout" | string;
+
+export type PersonHoursAccountEntry = {
+  id: number;
+  person_id: number;
+  entry_type: PersonHoursAccountEntryType;
+  minutes_delta: number;
+  balance_after_minutes: number;
+  note: string;
+  iso_year: number | null;
+  iso_week: number | null;
+  weekly_actual_minutes: number | null;
+  weekly_required_minutes: number | null;
+  created_by_user_id: number | null;
+  created_by_name: string | null;
+  created_at: string;
+};
+
+export type PersonHoursAccount = {
+  person_id: number;
+  current_balance_minutes: number;
+  entries: PersonHoursAccountEntry[];
+};
+
+export type PersonHoursManualAdjustmentPayload = {
+  hours_delta: number;
+  note: string;
+};
+
+export type PersonHoursPayoutPayload = {
+  hours: number;
+  note?: string | null;
+};

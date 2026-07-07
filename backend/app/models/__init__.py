@@ -7,6 +7,7 @@ from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
+from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.project_folder import ProjectFolder
 from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
@@ -44,6 +45,7 @@ __all__ = [
     "ExtraWorkTicketPhoto",
     "GpsPoint",
     "Person",
+    "PersonHoursAccountEntry",
     "PlanningCellMark",
     "PendingPlanPushNotification",
     "ProjectFolder",

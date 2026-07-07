@@ -13,6 +13,7 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
+from app.services.person_hours_account_service import PersonHoursAccountService
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
 OPEN_TIME_REVIEW_STATUS = "open"
@@ -402,6 +403,12 @@ class TimeEntryService:
         else:
             review.reviewed_by_user_id = current_user.id
             review.reviewed_at = now
+        if hasattr(self.db, "flush"):
+            self.db.flush()
+        PersonHoursAccountService(self.db).book_weekly_review_balance(
+            review=review,
+            current_user=current_user,
+        )
         self.db.commit()
         self.db.refresh(review)
         return review

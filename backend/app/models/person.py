@@ -51,3 +51,8 @@ class Person(TimestampMixin, Base):
     users = relationship("User", back_populates="person")
     assignments = relationship("Assignment", back_populates="person")
     absences = relationship("Absence", back_populates="person")
+    hours_account_entries = relationship(
+        "PersonHoursAccountEntry",
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )

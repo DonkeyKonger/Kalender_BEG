@@ -19,7 +19,7 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -28,7 +28,7 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
-import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonLocationStatus, PersonType } from "../types/person";
+import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursAccountEntry, PersonLocationStatus, PersonType } from "../types/person";
 import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
@@ -69,8 +69,8 @@ const personDetailActions: Array<{
     key: "timeAccount",
     label: "Stundenkonto",
     title: "Stundenkonto",
-    description: "Das Stundenkonto für diesen Monteur wird hier später nachverfolgbar dargestellt.",
-    preview: "Stundenkonto und Überstunden werden vorbereitet.",
+    description: "Stundenkonto und Überstunden werden nachvollziehbar geführt.",
+    preview: "Stundenkonto und Überstunden.",
     icon: Clock,
   },
   {
@@ -127,6 +127,7 @@ const emptyPerson: PersonCreate = {
 export function PersonsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "project_manager";
+  const canManageHoursAccount = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const canRemove = canEdit;
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});
@@ -645,6 +646,7 @@ export function PersonsPage() {
               person={selectedPerson}
               activeAction={activePersonAction}
               canEdit={canEdit}
+              canManageHoursAccount={canManageHoursAccount}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
               onInformationSave={(values) => updatePersonInformation(selectedPerson, values)}
@@ -663,6 +665,7 @@ function PersonReadView({
   person,
   activeAction,
   canEdit,
+  canManageHoursAccount,
   isSaving,
   onActionChange,
   onInformationSave,
@@ -673,6 +676,7 @@ function PersonReadView({
   person: Person;
   activeAction: PersonDetailActionKey | null;
   canEdit: boolean;
+  canManageHoursAccount: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
   onInformationSave: (values: Partial<PersonCreate>) => Promise<boolean>;
@@ -861,6 +865,8 @@ function PersonReadView({
         <PersonDetailSubpage title={action.title} onBack={() => onActionChange(null)}>
           {action.key === "absence" ? (
             <PersonAbsenceOverviewPanel person={person} />
+          ) : action.key === "timeAccount" ? (
+            <PersonHoursAccountPanel canManage={canManageHoursAccount} person={person} />
           ) : (
             <PersonDetailPlaceholderPanel action={action} person={person} />
           )}
@@ -1275,6 +1281,195 @@ function PersonAbsenceOverviewPanel({ person }: { person: Person }) {
         ) : (
           <div className="person-absence-state">Keine Abwesenheiten im Jahr {year} hinterlegt.</div>
         )}
+      </section>
+    </div>
+  );
+}
+
+function PersonHoursAccountPanel({ person, canManage }: { person: Person; canManage: boolean }) {
+  const [account, setAccount] = useState<PersonHoursAccount | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [activeForm, setActiveForm] = useState<"manual" | "payout" | null>(null);
+  const [hoursInput, setHoursInput] = useState("");
+  const [noteInput, setNoteInput] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHoursAccount() {
+      setIsLoading(true);
+      setError(null);
+      setMessage(null);
+      try {
+        const loadedAccount = await api.personHoursAccount(person.id);
+        if (!cancelled) {
+          setAccount(loadedAccount);
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setAccount(null);
+          setError(readApiError(requestError, "Stundenkonto konnte nicht geladen werden."));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+    void loadHoursAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [person.id]);
+
+  function openForm(mode: "manual" | "payout") {
+    setActiveForm(mode);
+    setHoursInput("");
+    setNoteInput(mode === "payout" ? defaultPayoutNote() : "");
+    setError(null);
+    setMessage(null);
+  }
+
+  function closeForm() {
+    setActiveForm(null);
+    setHoursInput("");
+    setNoteInput("");
+  }
+
+  async function submitHoursAccountForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeForm || isSaving) {
+      return;
+    }
+    const parsedHours = parseHoursAccountInput(hoursInput);
+    if (!parsedHours.ok) {
+      setError(parsedHours.error);
+      return;
+    }
+    const note = noteInput.trim();
+    if (activeForm === "manual" && !note) {
+      setError("Grund / Notiz ist Pflicht.");
+      return;
+    }
+    if (activeForm === "manual" && parsedHours.value === 0) {
+      setError("Die Korrektur muss größer oder kleiner als 0 sein.");
+      return;
+    }
+    if (activeForm === "payout" && parsedHours.value <= 0) {
+      setError("Auszahlung muss größer als 0 Stunden sein.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const updatedAccount = activeForm === "manual"
+        ? await api.createPersonHoursManualAdjustment(person.id, { hours_delta: parsedHours.value, note })
+        : await api.createPersonHoursPayout(person.id, { hours: parsedHours.value, note: note || null });
+      setAccount(updatedAccount);
+      setMessage(activeForm === "manual" ? "Manuelle Korrektur gebucht." : "Auszahlung gebucht.");
+      closeForm();
+    } catch (requestError) {
+      setError(readApiError(requestError, "Buchung konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const balanceMinutes = account?.current_balance_minutes ?? 0;
+  const balanceTone = balanceMinutes < 0 ? "is-negative" : balanceMinutes > 0 ? "is-positive" : "is-neutral";
+
+  return (
+    <div className="person-hours-account">
+      <section className={`person-hours-balance-card ${balanceTone}`}>
+        <div>
+          <span>Aktueller Stand</span>
+          <strong>{formatHoursAccountMinutes(balanceMinutes)}</strong>
+        </div>
+        {canManage ? (
+          <div className="person-hours-account-actions">
+            <button
+              aria-label="Manuelle Korrektur buchen"
+              className="person-hours-icon-button"
+              disabled={isLoading || isSaving}
+              type="button"
+              onClick={() => openForm("manual")}
+            >
+              <Pencil aria-hidden="true" size={14} />
+            </button>
+            <button disabled={isLoading || isSaving} type="button" onClick={() => openForm("payout")}>
+              Stunden auszahlen
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      {activeForm ? (
+        <form className="person-hours-account-form" onSubmit={(event) => void submitHoursAccountForm(event)}>
+          <div className="person-hours-account-form-heading">
+            <strong>{activeForm === "manual" ? "Manuelle Korrektur" : "Auszahlung buchen"}</strong>
+            <span>{activeForm === "manual" ? "Manuelle Korrektur nur für Büro-Notfälle verwenden." : "Auszahlungen werden als eigene Buchung im Log gespeichert."}</span>
+          </div>
+          <label>
+            <span>{activeForm === "manual" ? "Stundenänderung" : "Stunden"}</span>
+            <input
+              autoFocus
+              disabled={isSaving}
+              inputMode="decimal"
+              placeholder={activeForm === "manual" ? "+5 oder -2,5" : "20"}
+              value={hoursInput}
+              onChange={(event) => setHoursInput(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>{activeForm === "manual" ? "Grund / Notiz" : "Zeitraum / Notiz"}</span>
+            <textarea
+              disabled={isSaving}
+              placeholder={activeForm === "manual" ? "z. B. Startwert Altbestand übernommen" : "z. B. Auszahlung Juli 2026"}
+              value={noteInput}
+              onChange={(event) => setNoteInput(event.target.value)}
+            />
+          </label>
+          <div className="person-hours-account-form-actions">
+            <button disabled={isSaving} type="button" onClick={closeForm}>Abbrechen</button>
+            <button disabled={isSaving} type="submit">{isSaving ? "Speichert..." : "Buchen"}</button>
+          </div>
+        </form>
+      ) : null}
+
+      {message ? <div className="person-hours-account-state is-success">{message}</div> : null}
+      {error ? <div className="person-hours-account-state is-error">{error}</div> : null}
+      {isLoading ? <div className="person-hours-account-state">Stundenkonto wird geladen...</div> : null}
+
+      <section className="person-hours-log-section">
+        <div className="person-hours-log-heading">
+          <h4>Ereignislog</h4>
+          <span>{account?.entries.length ?? 0} {(account?.entries.length ?? 0) === 1 ? "Buchung" : "Buchungen"}</span>
+        </div>
+        {account && account.entries.length > 0 ? (
+          <div className="person-hours-log-list">
+            {account.entries.map((entry) => (
+              <article className="person-hours-log-entry" key={entry.id}>
+                <div className="person-hours-log-entry-main">
+                  <span>{formatHoursAccountDate(entry.created_at)}</span>
+                  <strong>{hoursAccountEntryTitle(entry)}</strong>
+                  <p>{hoursAccountEntryDescription(entry)}</p>
+                  {entry.created_by_name ? <small>Gebucht von {entry.created_by_name}</small> : null}
+                </div>
+                <div className="person-hours-log-entry-values">
+                  <strong className={entry.minutes_delta < 0 ? "is-negative" : entry.minutes_delta > 0 ? "is-positive" : ""}>
+                    {formatHoursAccountMinutes(entry.minutes_delta)}
+                  </strong>
+                  <span>Saldo {formatHoursAccountMinutes(entry.balance_after_minutes)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : !isLoading && !error ? (
+          <div className="person-hours-account-state">Noch keine Buchungen vorhanden.</div>
+        ) : null}
       </section>
     </div>
   );
@@ -1829,6 +2024,73 @@ function formatWeeklyHours(value: number | null | undefined): string {
     return "-";
   }
   return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(value)} Std.`;
+}
+
+function parseHoursAccountInput(value: string): { ok: true; value: number } | { ok: false; error: string } {
+  const normalized = value.trim().replace(",", ".").replace(/^\+/, "");
+  if (!normalized) {
+    return { ok: false, error: "Bitte Stunden eintragen." };
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return { ok: false, error: "Bitte eine gültige Stundenanzahl eintragen." };
+  }
+  return { ok: true, value: parsed };
+}
+
+function formatHoursAccountMinutes(minutes: number): string {
+  const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
+  const hours = Math.abs(minutes) / 60;
+  return `${sign}${new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  }).format(hours)} h`;
+}
+
+function formatHoursAccountDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
+  if (entry.entry_type === "weekly_balance") {
+    return entry.iso_year && entry.iso_week
+      ? `Wochenabschluss KW ${entry.iso_week} / ${entry.iso_year}`
+      : "Wochenabschluss";
+  }
+  if (entry.entry_type === "manual_adjustment") {
+    return "Manuelle Korrektur";
+  }
+  if (entry.entry_type === "payout") {
+    return "Auszahlung";
+  }
+  return "Buchung";
+}
+
+function hoursAccountEntryDescription(entry: PersonHoursAccountEntry): string {
+  if (
+    entry.entry_type === "weekly_balance"
+    && entry.weekly_actual_minutes !== null
+    && entry.weekly_required_minutes !== null
+  ) {
+    return `Ist ${formatHoursAccountMinutes(entry.weekly_actual_minutes).replace(/^\+/, "")} / Soll ${formatHoursAccountMinutes(entry.weekly_required_minutes).replace(/^\+/, "")} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
+  }
+  if (entry.entry_type === "payout") {
+    return `${entry.note}: ${formatHoursAccountMinutes(entry.minutes_delta)}`;
+  }
+  return entry.note;
+}
+
+function defaultPayoutNote(): string {
+  const now = new Date();
+  const month = new Intl.DateTimeFormat("de-DE", { month: "long" }).format(now);
+  return `Auszahlung ${month} ${now.getFullYear()}`;
 }
 
 function summarizeAbsencesByType(absences: Absence[], year: number): Record<AbsenceType, number> {

@@ -1,9 +1,9 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.models import Base
@@ -11,8 +11,10 @@ from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, AbsenceType, PersonType, SiteStatus, UserRole
 from app.models.person import Person
+from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
+from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.time_entry_service import TimeEntryService
 
@@ -333,6 +335,75 @@ def test_mark_weekly_review_updates_existing_person_week_status():
     assert review.reviewed_by_user_id == 8
     assert review.reviewed_at is not None
     assert commits == [True]
+
+
+def test_mark_weekly_review_books_hours_account_once():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        weekly_hours=40,
+    )
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.flush()
+    monday = date.fromisocalendar(2026, 24, 1)
+    friday_entry = WorkTimeEntry(
+        person=person,
+        work_date=monday + timedelta(days=4),
+        work_minutes=660,
+        break_minutes=0,
+        travel_minutes=0,
+    )
+    db.add_all([
+        WorkTimeEntry(person=person, work_date=monday, work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=1), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=2), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=3), work_minutes=480, break_minutes=0, travel_minutes=0),
+        friday_entry,
+    ])
+    db.commit()
+
+    service = TimeEntryService(db)
+    first_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+    second_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    assert first_review.id == second_review.id
+    assert len(account_entries) == 1
+    assert account_entries[0].entry_type == "weekly_balance"
+    assert account_entries[0].minutes_delta == 180
+    assert account_entries[0].balance_after_minutes == 180
+    assert account_entries[0].weekly_actual_minutes == 2580
+    assert account_entries[0].weekly_required_minutes == 2400
+    assert account_entries[0].iso_year == 2026
+    assert account_entries[0].iso_week == 24
+
+    friday_entry.work_minutes = 600
+    third_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+    corrected_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
+    assert third_review.id == first_review.id
+    assert len(corrected_entries) == 2
+    assert corrected_entries[1].minutes_delta == -60
+    assert corrected_entries[1].balance_after_minutes == 120
 
 
 def test_monteur_cannot_mark_weekly_review():
