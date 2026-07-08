@@ -5,6 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.absence import Absence
+from app.models.enums import AbsenceStatus
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
@@ -17,6 +19,7 @@ HOURS_ACCOUNT_WEEKLY = "weekly_balance"
 HOURS_ACCOUNT_MANUAL = "manual_adjustment"
 HOURS_ACCOUNT_PAYOUT = "payout"
 OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung."
+ABSENCE_DAY_CREDIT_MINUTES = 8 * 60
 
 
 class PersonHoursAccountService:
@@ -182,13 +185,56 @@ class PersonHoursAccountService:
     def _actual_week_minutes(self, *, person_id: int, iso_year: int, iso_week: int) -> int:
         start = date.fromisocalendar(iso_year, iso_week, 1)
         end = start + timedelta(days=6)
-        entries = self.db.scalars(
-            select(WorkTimeEntry)
-            .where(WorkTimeEntry.person_id == person_id)
-            .where(WorkTimeEntry.work_date >= start)
-            .where(WorkTimeEntry.work_date <= end)
+        entries = list(
+            self.db.scalars(
+                select(WorkTimeEntry)
+                .where(WorkTimeEntry.person_id == person_id)
+                .where(WorkTimeEntry.work_date >= start)
+                .where(WorkTimeEntry.work_date <= end)
+            )
         )
-        return sum(effective_weekly_work_minutes(entry) for entry in entries)
+        work_minutes_by_date: dict[date, int] = {}
+        for entry in entries:
+            work_minutes_by_date[entry.work_date] = (
+                work_minutes_by_date.get(entry.work_date, 0) + effective_weekly_work_minutes(entry)
+            )
+        return sum(work_minutes_by_date.values()) + self._absence_credit_minutes(
+            person_id=person_id,
+            start=start,
+            end=end,
+            work_minutes_by_date=work_minutes_by_date,
+        )
+
+    def _absence_credit_minutes(
+        self,
+        *,
+        person_id: int,
+        start: date,
+        end: date,
+        work_minutes_by_date: dict[date, int],
+    ) -> int:
+        absences = list(
+            self.db.scalars(
+                select(Absence)
+                .where(Absence.person_id == person_id)
+                .where(Absence.status == AbsenceStatus.ACTIVE)
+                .where(Absence.start_date <= end)
+                .where(Absence.end_date >= start)
+            )
+        )
+        absence_dates: set[date] = set()
+        for absence in absences:
+            cursor = max(absence.start_date, start)
+            last_day = min(absence.end_date, end)
+            while cursor <= last_day:
+                if cursor.weekday() < 5:
+                    absence_dates.add(cursor)
+                cursor += timedelta(days=1)
+
+        return sum(
+            max(0, ABSENCE_DAY_CREDIT_MINUTES - work_minutes_by_date.get(absence_date, 0))
+            for absence_date in absence_dates
+        )
 
     def _get_person(self, person_id: int) -> Person:
         person = self.db.get(Person, person_id)
