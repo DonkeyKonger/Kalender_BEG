@@ -1457,6 +1457,10 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
 
   const balanceMinutes = account?.current_balance_minutes ?? 0;
   const balanceTone = balanceMinutes < 0 ? "is-negative" : balanceMinutes > 0 ? "is-positive" : "is-neutral";
+  const overtimeAbsenceMinutesByWeek = useMemo(
+    () => summarizeHoursAccountOvertimeAbsenceMinutes(account?.entries ?? []),
+    [account?.entries],
+  );
 
   return (
     <div className="person-hours-account">
@@ -1530,7 +1534,7 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
                 <div className="person-hours-log-entry-main">
                   <span>{formatHoursAccountDate(entry.created_at)}</span>
                   <strong>{hoursAccountEntryTitle(entry)}</strong>
-                  <p>{hoursAccountEntryDescription(entry)}</p>
+                  <p>{hoursAccountEntryDescription(entry, overtimeAbsenceMinutesByWeek)}</p>
                   {entry.created_by_name ? <small>Gebucht von {entry.created_by_name}</small> : null}
                 </div>
                 <div className="person-hours-log-entry-values">
@@ -2169,21 +2173,55 @@ function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
   return "Buchung";
 }
 
-function hoursAccountEntryDescription(entry: PersonHoursAccountEntry): string {
+function hoursAccountEntryDescription(
+  entry: PersonHoursAccountEntry,
+  overtimeAbsenceMinutesByWeek: ReadonlyMap<string, number>,
+): string {
   if (
     entry.entry_type === "weekly_balance"
     && entry.weekly_actual_minutes !== null
     && entry.weekly_required_minutes !== null
   ) {
-    if (entry.minutes_delta === 0) {
+    const weekKey = hoursAccountWeekKey(entry);
+    const overtimeAbsenceMinutes = weekKey ? overtimeAbsenceMinutesByWeek.get(weekKey) ?? 0 : 0;
+    if (entry.minutes_delta === 0 && overtimeAbsenceMinutes === 0) {
       return "Sollzeit erreicht - keine Stundenkonto-Abweichung";
     }
-    return `Ist ${formatHoursAccountMinutes(entry.weekly_actual_minutes).replace(/^\+/, "")} / Soll ${formatHoursAccountMinutes(entry.weekly_required_minutes).replace(/^\+/, "")} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
+    const weeklyDescription = `Ist ${formatHoursAccountMinutes(entry.weekly_actual_minutes).replace(/^\+/, "")} / Soll ${formatHoursAccountMinutes(entry.weekly_required_minutes).replace(/^\+/, "")} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
+    if (overtimeAbsenceMinutes !== 0) {
+      return `${weeklyDescription} · Überstundenabbau ${formatHoursAccountMinutes(overtimeAbsenceMinutes)}`;
+    }
+    return weeklyDescription;
+  }
+  if (entry.entry_type === "overtime_absence") {
+    return `Überstundenabbau: ${formatHoursAccountMinutes(entry.minutes_delta)}`;
   }
   if (entry.entry_type === "payout") {
     return `${entry.note}: ${formatHoursAccountMinutes(entry.minutes_delta)}`;
   }
   return entry.note;
+}
+
+function summarizeHoursAccountOvertimeAbsenceMinutes(entries: PersonHoursAccountEntry[]): Map<string, number> {
+  const minutesByWeek = new Map<string, number>();
+  entries.forEach((entry) => {
+    if (entry.entry_type !== "overtime_absence") {
+      return;
+    }
+    const weekKey = hoursAccountWeekKey(entry);
+    if (!weekKey) {
+      return;
+    }
+    minutesByWeek.set(weekKey, (minutesByWeek.get(weekKey) ?? 0) + entry.minutes_delta);
+  });
+  return minutesByWeek;
+}
+
+function hoursAccountWeekKey(entry: Pick<PersonHoursAccountEntry, "person_id" | "iso_year" | "iso_week">): string | null {
+  if (entry.iso_year === null || entry.iso_week === null) {
+    return null;
+  }
+  return `${entry.person_id}-${entry.iso_year}-${entry.iso_week}`;
 }
 
 function defaultPayoutNote(): string {
