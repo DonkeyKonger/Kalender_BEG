@@ -21738,6 +21738,7 @@ button.person-chip:focus-visible {
 .site-detail-page.is-measurement-review-workspace .project-record-toolbar {
   display: grid;
   align-items: start;
+  justify-items: stretch;
   gap: 7px;
   margin: 18px 0 12px;
   border: 1px solid var(--figma-border);
@@ -21772,12 +21773,15 @@ button.person-chip:focus-visible {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
   gap: 12px;
 }
 
 .measurement-review-header-row > .secondary-action {
   flex: 0 0 auto;
   width: auto;
+  margin-left: auto;
 }
 
 .measurement-review-package-row,
