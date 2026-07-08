@@ -1468,13 +1468,11 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
         {canManage ? (
           <div className="person-hours-account-actions">
             <button
-              aria-label="Manuelle Korrektur buchen"
-              className="person-hours-icon-button"
               disabled={isLoading || isSaving}
               type="button"
               onClick={() => openForm("manual")}
             >
-              <Pencil aria-hidden="true" size={14} />
+              Manuelle Korrektur
             </button>
             <button disabled={isLoading || isSaving} type="button" onClick={() => openForm("payout")}>
               Stunden auszahlen
