@@ -2175,6 +2175,9 @@ function hoursAccountEntryDescription(entry: PersonHoursAccountEntry): string {
     && entry.weekly_actual_minutes !== null
     && entry.weekly_required_minutes !== null
   ) {
+    if (entry.minutes_delta === 0) {
+      return "Sollzeit erreicht - keine Stundenkonto-Abweichung";
+    }
     return `Ist ${formatHoursAccountMinutes(entry.weekly_actual_minutes).replace(/^\+/, "")} / Soll ${formatHoursAccountMinutes(entry.weekly_required_minutes).replace(/^\+/, "")} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
   }
   if (entry.entry_type === "payout") {

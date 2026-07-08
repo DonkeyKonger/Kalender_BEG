@@ -127,7 +127,29 @@ class PersonHoursAccountService:
         )
         minutes_delta = target_delta - booked_delta
         if minutes_delta == 0:
-            return None
+            if target_delta != 0 or self._has_week_entry(
+                person_id=review.person_id,
+                iso_year=review.iso_year,
+                iso_week=review.iso_week,
+                entry_type=HOURS_ACCOUNT_WEEKLY,
+            ):
+                return None
+            note = (
+                f"KW {review.iso_week:02d} / {review.iso_year} geprüft: "
+                "Sollzeit erreicht - keine Stundenkonto-Abweichung"
+            )
+            return self._append_entry(
+                person_id=review.person_id,
+                entry_type=HOURS_ACCOUNT_WEEKLY,
+                minutes_delta=0,
+                note=note,
+                current_user=current_user,
+                iso_year=review.iso_year,
+                iso_week=review.iso_week,
+                weekly_review_id=review.id,
+                weekly_actual_minutes=actual_minutes,
+                weekly_required_minutes=required_minutes,
+            )
         note = (
             f"KW {review.iso_week:02d} / {review.iso_year} geprüft: "
             f"Ist {format_minutes_as_hours(actual_minutes)} h / "
@@ -216,6 +238,23 @@ class PersonHoursAccountService:
             .where(PersonHoursAccountEntry.person_id == person_id)
         )
         return int(value or 0)
+
+    def _has_week_entry(
+        self,
+        *,
+        person_id: int,
+        iso_year: int,
+        iso_week: int,
+        entry_type: str,
+    ) -> bool:
+        value = self.db.scalar(
+            select(func.count(PersonHoursAccountEntry.id))
+            .where(PersonHoursAccountEntry.person_id == person_id)
+            .where(PersonHoursAccountEntry.entry_type == entry_type)
+            .where(PersonHoursAccountEntry.iso_year == iso_year)
+            .where(PersonHoursAccountEntry.iso_week == iso_week)
+        )
+        return bool(value)
 
     def _booked_week_delta(
         self,

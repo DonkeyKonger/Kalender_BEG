@@ -423,7 +423,7 @@ def test_mark_weekly_review_books_hours_account_once():
         current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert first_review.id == second_review.id
     assert len(account_entries) == 1
     assert account_entries[0].entry_type == "weekly_balance"
@@ -446,6 +446,54 @@ def test_mark_weekly_review_books_hours_account_once():
     assert len(corrected_entries) == 2
     assert corrected_entries[1].minutes_delta == -60
     assert corrected_entries[1].balance_after_minutes == 120
+
+
+def test_mark_weekly_review_books_zero_hours_account_entry_once():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        weekly_hours=40,
+    )
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.flush()
+    monday = date.fromisocalendar(2026, 25, 1)
+    db.add_all([
+        WorkTimeEntry(person=person, work_date=monday, work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=1), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=2), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=3), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=4), work_minutes=480, break_minutes=0, travel_minutes=0),
+    ])
+    db.commit()
+
+    service = TimeEntryService(db)
+    first_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=25,
+        current_user=user,
+    )
+    second_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=25,
+        current_user=user,
+    )
+
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
+    assert first_review.id == second_review.id
+    assert len(account_entries) == 1
+    assert account_entries[0].entry_type == "weekly_balance"
+    assert account_entries[0].minutes_delta == 0
+    assert account_entries[0].balance_after_minutes == 0
+    assert account_entries[0].weekly_actual_minutes == 2400
+    assert account_entries[0].weekly_required_minutes == 2400
+    assert "Sollzeit erreicht" in account_entries[0].note
 
 
 def test_mark_weekly_review_counts_absence_days_in_hours_account():
@@ -483,7 +531,7 @@ def test_mark_weekly_review_counts_absence_days_in_hours_account():
         current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert len(account_entries) == 1
     assert account_entries[0].entry_type == "weekly_balance"
     assert account_entries[0].weekly_actual_minutes == 2220
@@ -525,7 +573,7 @@ def test_mark_weekly_review_tops_up_absence_day_without_double_counting():
         current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert len(account_entries) == 1
     assert account_entries[0].weekly_actual_minutes == 960
     assert account_entries[0].weekly_required_minutes == 2400
@@ -575,14 +623,19 @@ def test_mark_weekly_review_books_overtime_absence_without_weekly_minus():
         current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert first_review.id == second_review.id
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "overtime_absence"
-    assert account_entries[0].minutes_delta == -480
-    assert account_entries[0].balance_after_minutes == -480
-    assert account_entries[0].weekly_actual_minutes is None
-    assert account_entries[0].weekly_required_minutes is None
+    assert len(account_entries) == 2
+    assert account_entries[0].entry_type == "weekly_balance"
+    assert account_entries[0].minutes_delta == 0
+    assert account_entries[0].balance_after_minutes == 0
+    assert account_entries[0].weekly_actual_minutes == 2400
+    assert account_entries[0].weekly_required_minutes == 2400
+    assert account_entries[1].entry_type == "overtime_absence"
+    assert account_entries[1].minutes_delta == -480
+    assert account_entries[1].balance_after_minutes == -480
+    assert account_entries[1].weekly_actual_minutes is None
+    assert account_entries[1].weekly_required_minutes is None
 
 
 def test_mark_weekly_review_books_multiple_overtime_absence_days():
@@ -620,11 +673,14 @@ def test_mark_weekly_review_books_multiple_overtime_absence_days():
         current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "overtime_absence"
-    assert account_entries[0].minutes_delta == -960
-    assert account_entries[0].balance_after_minutes == -960
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
+    assert len(account_entries) == 2
+    assert account_entries[0].entry_type == "weekly_balance"
+    assert account_entries[0].minutes_delta == 0
+    assert account_entries[0].balance_after_minutes == 0
+    assert account_entries[1].entry_type == "overtime_absence"
+    assert account_entries[1].minutes_delta == -960
+    assert account_entries[1].balance_after_minutes == -960
 
 
 def test_monteur_cannot_mark_weekly_review():
