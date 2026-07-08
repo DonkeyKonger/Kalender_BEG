@@ -2709,37 +2709,55 @@ button.entity-card:focus-visible,
 }
 
 .person-absence-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 64px;
   gap: 10px;
   align-items: center;
   border-bottom: 1px solid #e5edf6;
-  border-left: 3px solid #94a3b8;
-  padding: 8px 10px;
+  padding: 8px 10px 8px 13px;
 }
 
 .person-absence-row:last-child {
   border-bottom: 0;
 }
 
+.person-absence-row::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: #94a3b8;
+  content: "";
+}
+
 .person-absence-row.is-vacation {
-  border-left-color: #16a34a;
+  --person-absence-row-color: #16a34a;
 }
 
 .person-absence-row.is-sick {
-  border-left-color: #dc2626;
+  --person-absence-row-color: #dc2626;
 }
 
 .person-absence-row.is-school {
-  border-left-color: #2563eb;
+  --person-absence-row-color: #2563eb;
 }
 
 .person-absence-row.is-free {
-  border-left-color: #7c3aed;
+  --person-absence-row-color: #7c3aed;
 }
 
 .person-absence-row.is-other {
-  border-left-color: #64748b;
+  --person-absence-row-color: #64748b;
+}
+
+.person-absence-row.is-vacation::before,
+.person-absence-row.is-sick::before,
+.person-absence-row.is-school::before,
+.person-absence-row.is-free::before,
+.person-absence-row.is-other::before {
+  background: var(--person-absence-row-color);
 }
 
 .person-absence-row > div {
@@ -11409,6 +11427,8 @@ button.person-chip:focus-visible {
 
 .measurement-status.is-old-offer {
   min-height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
   background: #e2e8f0;
   color: #475569;
   font-size: 0.72rem;
