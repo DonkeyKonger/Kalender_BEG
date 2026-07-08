@@ -2209,7 +2209,8 @@ function hoursAccountEntryDescriptionLines(
 
 function weeklyBalanceDetailParts(entry: PersonHoursAccountEntry, overtimeAbsenceImpactMinutes: number): string[] {
   const absenceBreakdown = entry.weekly_absence_breakdown ?? [];
-  const hasSpecialDetails = absenceBreakdown.some((item) => item.minutes > 0) || overtimeAbsenceImpactMinutes !== 0;
+  const visibleAbsenceBreakdown = absenceBreakdown.filter((item) => item.absence_type !== "free");
+  const hasSpecialDetails = visibleAbsenceBreakdown.some((item) => item.minutes > 0) || overtimeAbsenceImpactMinutes !== 0;
   if (!hasSpecialDetails) {
     return [];
   }
@@ -2217,7 +2218,7 @@ function weeklyBalanceDetailParts(entry: PersonHoursAccountEntry, overtimeAbsenc
   if (entry.weekly_work_minutes !== null) {
     detailParts.push(`Arbeitsstunden ${formatHoursAccountMinutesUnsigned(entry.weekly_work_minutes)}`);
   }
-  absenceBreakdown.forEach((item) => {
+  visibleAbsenceBreakdown.forEach((item) => {
     if (item.minutes <= 0) {
       return;
     }
@@ -2237,7 +2238,14 @@ function weeklyOvertimeAbsenceImpactMinutes(
     return entry.weekly_overtime_absence_minutes === 0 ? 0 : -entry.weekly_overtime_absence_minutes;
   }
   const weekKey = hoursAccountWeekKey(entry);
-  return weekKey ? overtimeAbsenceMinutesByWeek.get(weekKey) ?? 0 : 0;
+  const legacyOvertimeAbsenceMinutes = weekKey ? overtimeAbsenceMinutesByWeek.get(weekKey) ?? 0 : 0;
+  if (legacyOvertimeAbsenceMinutes !== 0) {
+    return legacyOvertimeAbsenceMinutes;
+  }
+  const legacyBreakdownOvertimeMinutes = (entry.weekly_absence_breakdown ?? [])
+    .filter((item) => item.absence_type === "free")
+    .reduce((sum, item) => sum + Math.max(0, item.minutes), 0);
+  return legacyBreakdownOvertimeMinutes > 0 ? -legacyBreakdownOvertimeMinutes : 0;
 }
 
 function hoursAccountAbsenceTypeLabel(absenceType: string): string {

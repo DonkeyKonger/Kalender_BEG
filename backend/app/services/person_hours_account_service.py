@@ -318,7 +318,7 @@ class PersonHoursAccountService:
             end=end,
             work_minutes_by_date=work_minutes_by_date,
         )
-        absence_credit_minutes = sum(absence_minutes_by_type.values())
+        absence_credit_minutes = sum(absence_minutes_by_type.values()) + overtime_absence_minutes
         return WeeklyHoursBreakdown(
             work_minutes=work_minutes,
             actual_minutes=work_minutes + absence_credit_minutes,
@@ -365,9 +365,10 @@ class PersonHoursAccountService:
             absence_type = primary_absence_type(absence_types)
             if absence_type is None:
                 continue
-            minutes_by_type[absence_type.value] += credit_minutes
             if AbsenceType.FREE in absence_types:
                 overtime_absence_minutes += credit_minutes
+                continue
+            minutes_by_type[absence_type.value] += credit_minutes
         return dict(minutes_by_type), overtime_absence_minutes
 
     def _get_person(self, person_id: int) -> Person:
@@ -386,11 +387,11 @@ class PersonHoursAccountService:
 
 
 def effective_weekly_work_minutes(entry: WorkTimeEntry) -> int:
-    if entry.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
-        return 0
     corrected_minutes = effective_corrected_work_minutes(entry)
     if corrected_minutes is not None:
         return round_minutes_to_quarter_hour(corrected_minutes + (entry.travel_minutes or 0))
+    if entry.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+        return 0
     return round_minutes_to_quarter_hour((entry.work_minutes or 0) + (entry.travel_minutes or 0))
 
 
