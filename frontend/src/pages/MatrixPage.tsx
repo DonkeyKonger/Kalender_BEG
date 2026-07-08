@@ -87,7 +87,7 @@ type AssignmentResizeState = {
   previewEndDate: string;
   rowY: number;
 };
-type PlanningAbsenceItem = { absence: Absence };
+type PlanningAbsenceItem = { absence: Absence; personLabel: string; personName: string };
 type CellTypingPreview = { siteId: number; date: string; text: string };
 type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
 type UpdatedMatrixSiteCells = { site_id: number; cells: MatrixCell[] };
@@ -2547,7 +2547,7 @@ type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<str
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
   const absencePlanning = useMemo(() => {
-    const itemsByDate = buildAbsencePlanningItemsByDate(props.absences, props.matrix.days);
+    const itemsByDate = buildAbsencePlanningItemsByDate(props.absences, props.matrix.days, props.peopleById);
     const rowCount = Math.max(
       1,
       ...Array.from(itemsByDate.values()).map((items) => {
@@ -2558,7 +2558,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
       }),
     );
     return { itemsByDate, rowCount };
-  }, [props.absences, props.matrix.days]);
+  }, [props.absences, props.matrix.days, props.peopleById]);
   const rowStyle = { "--absence-rows": absencePlanning.rowCount } as CSSProperties;
 
   return (
@@ -2611,7 +2611,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
                       props.onDeleteAbsence(item.absence, date);
                     }}
                   >
-                    <span>{absencePersonLabel(person)}</span>
+                    <span>{item.personLabel}</span>
                   </button>
                 );
               })}
@@ -3803,7 +3803,11 @@ function activeAbsencesForPersonOnDay(absences: Absence[], personId: number, dat
   return activeAbsencesForDay(absences, date).filter((absence) => absence.person_id === personId);
 }
 
-function buildAbsencePlanningItemsByDate(absences: Absence[], days: MatrixDay[]): Map<string, PlanningAbsenceItem[]> {
+function buildAbsencePlanningItemsByDate(
+  absences: Absence[],
+  days: MatrixDay[],
+  peopleById: ReadonlyMap<number, Person>,
+): Map<string, PlanningAbsenceItem[]> {
   const bestAbsencesByDate = new Map<string, Map<number, Absence>>();
   days.forEach((day) => bestAbsencesByDate.set(day.date, new Map()));
 
@@ -3828,8 +3832,15 @@ function buildAbsencePlanningItemsByDate(absences: Absence[], days: MatrixDay[])
 
   return new Map(days.map((day) => {
     const items = Array.from(bestAbsencesByDate.get(day.date)?.values() ?? [])
-      .map((absence) => ({ absence }))
-      .sort((left, right) => comparePlanningAbsences(left.absence, right.absence));
+      .map((absence) => {
+        const person = peopleById.get(absence.person_id);
+        return {
+          absence,
+          personLabel: absencePersonLabel(person),
+          personName: person?.display_name ?? "Person",
+        };
+      })
+      .sort(comparePlanningAbsenceItems);
     return [day.date, items];
   }));
 }
@@ -3890,6 +3901,13 @@ function comparePlanningAbsences(left: Absence, right: Absence): number {
     || left.end_date.localeCompare(right.end_date)
     || left.person_id - right.person_id
     || left.id - right.id;
+}
+
+function comparePlanningAbsenceItems(left: PlanningAbsenceItem, right: PlanningAbsenceItem): number {
+  return left.personLabel.localeCompare(right.personLabel, "de-DE")
+    || left.personName.localeCompare(right.personName, "de-DE")
+    || left.absence.person_id - right.absence.person_id
+    || comparePlanningAbsences(left.absence, right.absence);
 }
 
 function formatAbsenceDateRange(absence: Absence): string {
