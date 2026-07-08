@@ -130,7 +130,7 @@ class PersonHoursAccountService:
         required_minutes: int,
     ) -> PersonHoursAccountEntry | None:
         weekly_delta = weekly_breakdown.actual_minutes - required_minutes
-        target_delta = weekly_delta - weekly_breakdown.overtime_absence_minutes
+        target_delta = weekly_delta
         booked_delta = self._booked_weekly_closure_delta(
             person_id=review.person_id,
             iso_year=review.iso_year,
@@ -318,7 +318,7 @@ class PersonHoursAccountService:
             end=end,
             work_minutes_by_date=work_minutes_by_date,
         )
-        absence_credit_minutes = sum(absence_minutes_by_type.values()) + overtime_absence_minutes
+        absence_credit_minutes = sum(absence_minutes_by_type.values()) - overtime_absence_minutes
         return WeeklyHoursBreakdown(
             work_minutes=work_minutes,
             actual_minutes=work_minutes + absence_credit_minutes,

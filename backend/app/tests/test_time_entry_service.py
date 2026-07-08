@@ -586,7 +586,7 @@ def test_mark_weekly_review_tops_up_absence_day_without_double_counting():
     assert account_entries[0].minutes_delta == -1440
 
 
-def test_mark_weekly_review_books_overtime_absence_without_weekly_minus():
+def test_mark_weekly_review_books_overtime_absence_as_negative_effective_actual():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -633,10 +633,10 @@ def test_mark_weekly_review_books_overtime_absence_without_weekly_minus():
     assert first_review.id == second_review.id
     assert len(account_entries) == 1
     assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == -480
-    assert account_entries[0].balance_after_minutes == -480
+    assert account_entries[0].minutes_delta == -960
+    assert account_entries[0].balance_after_minutes == -960
     assert account_entries[0].weekly_work_minutes == 1920
-    assert account_entries[0].weekly_actual_minutes == 2400
+    assert account_entries[0].weekly_actual_minutes == 1440
     assert account_entries[0].weekly_required_minutes == 2400
     assert account_entries[0].weekly_overtime_absence_minutes == 480
     assert account_entries[0].weekly_absence_breakdown == []
@@ -680,10 +680,10 @@ def test_mark_weekly_review_books_multiple_overtime_absence_days():
     account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert len(account_entries) == 1
     assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == -960
-    assert account_entries[0].balance_after_minutes == -960
+    assert account_entries[0].minutes_delta == -1920
+    assert account_entries[0].balance_after_minutes == -1920
     assert account_entries[0].weekly_work_minutes == 1440
-    assert account_entries[0].weekly_actual_minutes == 2400
+    assert account_entries[0].weekly_actual_minutes == 480
     assert account_entries[0].weekly_required_minutes == 2400
     assert account_entries[0].weekly_overtime_absence_minutes == 960
     assert account_entries[0].weekly_absence_breakdown == []
@@ -750,14 +750,14 @@ def test_mark_weekly_review_logs_corrected_office_hours_without_overtime_absence
     assert len(account_entries) == 1
     assert account_entries[0].entry_type == "weekly_balance"
     assert account_entries[0].weekly_work_minutes == 1320
-    assert account_entries[0].weekly_actual_minutes == 2760
+    assert account_entries[0].weekly_actual_minutes == 840
     assert account_entries[0].weekly_required_minutes == 2400
     assert account_entries[0].weekly_overtime_absence_minutes == 960
     assert account_entries[0].weekly_absence_breakdown == [{"absence_type": "vacation", "minutes": 480}]
-    assert account_entries[0].minutes_delta == -600
+    assert account_entries[0].minutes_delta == -1560
 
 
-def test_mark_weekly_review_does_not_duplicate_legacy_overtime_absence_entry():
+def test_mark_weekly_review_corrects_legacy_overtime_absence_balance():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -816,8 +816,12 @@ def test_mark_weekly_review_does_not_duplicate_legacy_overtime_absence_entry():
     )
 
     account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 2
-    assert [entry.entry_type for entry in account_entries] == ["weekly_balance", "overtime_absence"]
+    assert len(account_entries) == 3
+    assert [entry.entry_type for entry in account_entries] == ["weekly_balance", "overtime_absence", "weekly_balance"]
+    assert account_entries[2].minutes_delta == -480
+    assert account_entries[2].balance_after_minutes == -960
+    assert account_entries[2].weekly_actual_minutes == 1440
+    assert account_entries[2].weekly_overtime_absence_minutes == 480
 
 
 def test_monteur_cannot_mark_weekly_review():

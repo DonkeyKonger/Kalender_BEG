@@ -2191,11 +2191,11 @@ function hoursAccountEntryDescriptionLines(
   ) {
     const overtimeAbsenceImpactMinutes = weeklyOvertimeAbsenceImpactMinutes(entry, overtimeAbsenceMinutesByWeek);
     const detailParts = weeklyBalanceDetailParts(entry, overtimeAbsenceImpactMinutes);
-    if (entry.weekly_actual_minutes === entry.weekly_required_minutes && overtimeAbsenceImpactMinutes === 0 && detailParts.length === 0) {
+    const accountEffectiveActualMinutes = entry.weekly_required_minutes + entry.minutes_delta;
+    if (accountEffectiveActualMinutes === entry.weekly_required_minutes && overtimeAbsenceImpactMinutes === 0 && detailParts.length === 0) {
       return ["Sollzeit erreicht - keine Stundenkonto-Abweichung"];
     }
-    const weeklyDeltaMinutes = entry.weekly_actual_minutes - entry.weekly_required_minutes;
-    const weeklyDescription = `Ist ${formatHoursAccountMinutesUnsigned(entry.weekly_actual_minutes)} / Soll ${formatHoursAccountMinutesUnsigned(entry.weekly_required_minutes)} -> ${formatHoursAccountMinutes(weeklyDeltaMinutes)}`;
+    const weeklyDescription = `Ist ${formatHoursAccountMinutesUnsigned(accountEffectiveActualMinutes)} / Soll ${formatHoursAccountMinutesUnsigned(entry.weekly_required_minutes)} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
     return detailParts.length > 0 ? [detailParts.join(" / "), weeklyDescription] : [weeklyDescription];
   }
   if (entry.entry_type === "overtime_absence") {
