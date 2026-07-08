@@ -276,7 +276,11 @@ class MeasurementPdfService:
                     SiteMeasurementBatchPhoto.uploaded_by
                 ).selectinload(User.person),
             )
-            .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
+            .where(
+                SiteMeasurementBatch.id == batch_id,
+                SiteMeasurementBatch.site_id == site_id,
+                SiteMeasurementBatch.deleted_at.is_(None),
+            )
         )
         if batch is None or batch.site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")

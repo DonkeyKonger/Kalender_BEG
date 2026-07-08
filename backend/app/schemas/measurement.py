@@ -180,6 +180,9 @@ class MobileMeasurementBatchRead(BaseModel):
     customer_email_signature_present: bool | None = None
     worker_signed_at: datetime | None
     worker_signature_name: str | None
+    deleted_at: datetime | None = None
+    deleted_by_user_id: int | None = None
+    deleted_by_name: str | None = None
     is_locked_for_worker: bool = False
     created_at: datetime
     updated_at: datetime

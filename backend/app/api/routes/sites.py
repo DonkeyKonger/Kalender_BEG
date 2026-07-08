@@ -553,6 +553,7 @@ def list_measurement_batches(
     site_id: int,
     measurement_base_id: int | None = Query(default=None),
     active_only: bool = Query(default=False),
+    archived_only: bool = Query(default=False),
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[MobileMeasurementBatchRead]:
@@ -560,6 +561,7 @@ def list_measurement_batches(
         site_id,
         measurement_base_id=measurement_base_id,
         active_only=active_only,
+        archived_only=archived_only,
     )
 
 
@@ -679,6 +681,22 @@ def reset_measurement_batch_to_submitted(
     db: Session = Depends(get_db),
 ) -> list[MobileMeasurementItemRead]:
     return MeasurementService(db).reset_site_batch_to_submitted(
+        site_id=site_id,
+        batch_id=batch_id,
+    )
+
+
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/restore",
+    response_model=MobileMeasurementBatchRead,
+)
+def restore_measurement_batch(
+    site_id: int,
+    batch_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).restore_site_batch(
         site_id=site_id,
         batch_id=batch_id,
     )

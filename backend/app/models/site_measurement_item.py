@@ -104,6 +104,10 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     worker_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_signature_name: Mapped[str | None] = mapped_column(String(160))
     worker_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    deleted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
     site = relationship("Site", back_populates="measurement_batches")
     measurement_base = relationship("SiteMeasurementBase", back_populates="batches")
@@ -128,6 +132,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     )
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
+    deleted_by = relationship("User", foreign_keys=[deleted_by_user_id])
 
 
 class SiteMeasurementAreaRow(TimestampMixin, Base):

@@ -165,6 +165,7 @@ export function SiteDetailPage() {
   const [measurementBatchesLoading, setMeasurementBatchesLoading] = useState(false);
   const [measurementBatchesLoaded, setMeasurementBatchesLoaded] = useState(false);
   const [measurementBatchesError, setMeasurementBatchesError] = useState<string | null>(null);
+  const [measurementArchiveMode, setMeasurementArchiveMode] = useState(false);
   const [selectedMeasurementBatch, setSelectedMeasurementBatch] = useState<MobileMeasurementBatch | null>(null);
   const [measurementBatchItems, setMeasurementBatchItems] = useState<MobileMeasurementItem[]>([]);
   const [measurementWorkerHeadCount, setMeasurementWorkerHeadCount] = useState(0);
@@ -457,7 +458,7 @@ export function SiteDetailPage() {
     }
 
     void loadMeasurementBatches();
-  }, [activeTab, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
+  }, [activeTab, measurementArchiveMode, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
 
   useEffect(() => {
     if (
@@ -503,14 +504,14 @@ export function SiteDetailPage() {
     void loadExtraWorkTickets();
   }, [activeTab, extraWorkLoaded, extraWorkLoading, site]);
 
-  async function loadMeasurementBatches(): Promise<void> {
+  async function loadMeasurementBatches(archivedOnly = measurementArchiveMode): Promise<void> {
     if (!site) {
       return;
     }
     setMeasurementBatchesLoading(true);
     setMeasurementBatchesError(null);
     try {
-      setMeasurementBatches(await api.siteMeasurementBatches(site.id));
+      setMeasurementBatches(await api.siteMeasurementBatches(site.id, { archivedOnly }));
       setMeasurementBatchesLoaded(true);
     } catch (requestError) {
       setMeasurementBatchesError(readApiError(requestError, "Aufmaßpakete konnten nicht geladen werden."));
@@ -606,10 +607,7 @@ export function SiteDetailPage() {
       return;
     }
     const displayTitle = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title);
-    if (!window.confirm(`${displayTitle} wirklich löschen?`)) {
-      return;
-    }
-    if (!window.confirm("Endgültig löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.")) {
+    if (!window.confirm(`${displayTitle} wirklich löschen? Das Aufmaß wird ins Archiv verschoben und kann wiederhergestellt werden.`)) {
       return;
     }
 
@@ -630,6 +628,31 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage(`${displayTitle} wurde gelöscht.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaß konnte nicht gelöscht werden."));
+      throw requestError;
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
+  async function restoreMeasurementBatch(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || measurementReviewActionLoading) {
+      return;
+    }
+    const displayTitle = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title);
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      await api.restoreSiteMeasurementBatch(site.id, batch.id);
+      setMeasurementBatches((current) => current.filter((entry) => entry.id !== batch.id));
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementTimeAnalysisError(null);
+      setMeasurementReviewMessage(`${displayTitle} wurde wiederhergestellt.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Aufmaß konnte nicht wiederhergestellt werden."));
       throw requestError;
     } finally {
       setMeasurementReviewActionLoading(false);
@@ -1205,6 +1228,9 @@ export function SiteDetailPage() {
             setSelectedMeasurementBatch(null);
             setMeasurementReviewMessage(null);
             setMeasurementReviewError(null);
+            if (subtab !== "review") {
+              setMeasurementArchiveMode(false);
+            }
           }}
           bases={measurementBases}
           timesheet={measurementTimesheet}
@@ -1245,9 +1271,21 @@ export function SiteDetailPage() {
           reviewMessage={measurementReviewMessage}
           reviewError={measurementReviewError}
           reviewActionLoading={measurementReviewActionLoading}
+          archiveMode={measurementArchiveMode}
           onRetryBatches={() => {
             setMeasurementBatchesLoaded(false);
             setMeasurementBatchesError(null);
+          }}
+          onToggleArchive={() => {
+            const nextArchiveMode = !measurementArchiveMode;
+            setMeasurementArchiveMode(nextArchiveMode);
+            setMeasurementBatches([]);
+            setMeasurementBatchesLoaded(false);
+            setMeasurementBatchesError(null);
+            setSelectedMeasurementBatch(null);
+            setMeasurementBatchItems([]);
+            setMeasurementReviewMessage(null);
+            setMeasurementReviewError(null);
           }}
           onSelectBatch={(batch) => void selectMeasurementBatch(batch)}
           onBackToBatchList={() => {
@@ -1260,6 +1298,7 @@ export function SiteDetailPage() {
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
           onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
           onDeleteBatch={deleteMeasurementBatch}
+          onRestoreBatch={restoreMeasurementBatch}
           onUpdateEntry={updateMeasurementEntry}
           onCreateEntry={createMeasurementEntry}
           onCreateFreeItem={createMeasurementFreeItem}
@@ -2158,13 +2197,16 @@ function MeasurementTab({
   reviewMessage,
   reviewError,
   reviewActionLoading,
+  archiveMode,
   onRetryBatches,
+  onToggleArchive,
   onSelectBatch,
   onBackToBatchList,
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
   onDeleteBatch,
+  onRestoreBatch,
   onUpdateEntry,
   onCreateEntry,
   onCreateFreeItem,
@@ -2205,13 +2247,16 @@ function MeasurementTab({
   reviewMessage: string | null;
   reviewError: string | null;
   reviewActionLoading: boolean;
+  archiveMode: boolean;
   onRetryBatches: () => void;
+  onToggleArchive: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
+  onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
@@ -2388,13 +2433,16 @@ function MeasurementTab({
           reviewMessage={reviewMessage}
           reviewError={reviewError}
           reviewActionLoading={reviewActionLoading}
+          archiveMode={archiveMode}
           onRetryBatches={onRetryBatches}
+          onToggleArchive={onToggleArchive}
           onSelectBatch={onSelectBatch}
           onBackToBatchList={onBackToBatchList}
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onMarkReviewed={onMarkReviewed}
           onDeleteBatch={onDeleteBatch}
+          onRestoreBatch={onRestoreBatch}
           onUpdateEntry={onUpdateEntry}
           onCreateEntry={onCreateEntry}
           onCreateFreeItem={onCreateFreeItem}
@@ -3330,13 +3378,16 @@ function MeasurementReviewPanel({
   reviewMessage,
   reviewError,
   reviewActionLoading,
+  archiveMode,
   onRetryBatches,
+  onToggleArchive,
   onSelectBatch,
   onBackToBatchList,
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
   onDeleteBatch,
+  onRestoreBatch,
   onUpdateEntry,
   onCreateEntry,
   onCreateFreeItem,
@@ -3354,13 +3405,16 @@ function MeasurementReviewPanel({
   reviewMessage: string | null;
   reviewError: string | null;
   reviewActionLoading: boolean;
+  archiveMode: boolean;
   onRetryBatches: () => void;
+  onToggleArchive: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
+  onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
@@ -3374,6 +3428,7 @@ function MeasurementReviewPanel({
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
+  const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -3559,7 +3614,21 @@ function MeasurementReviewPanel({
     }
   }
 
-  if (selectedBatch) {
+  async function restoreBatch(batch: MobileMeasurementBatch): Promise<void> {
+    if (restoringBatchId !== null || reviewActionLoading) {
+      return;
+    }
+    setRestoringBatchId(batch.id);
+    try {
+      await onRestoreBatch(batch);
+    } catch {
+      // The parent handler already surfaces the API error.
+    } finally {
+      setRestoringBatchId(null);
+    }
+  }
+
+  if (selectedBatch && !archiveMode) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
@@ -3661,9 +3730,16 @@ function MeasurementReviewPanel({
     <>
       <div className="project-record-toolbar">
         <div>
-          <h2><Ruler aria-hidden="true" size={18} />Prüfung</h2>
-          <p>Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen.</p>
+          <h2><Ruler aria-hidden="true" size={18} />{archiveMode ? "Archivierte Aufmaße" : "Prüfung"}</h2>
+          <p>
+            {archiveMode
+              ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
+              : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
+          </p>
         </div>
+        <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
+          {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
+        </button>
       </div>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
       {batchesError ? (
@@ -3673,7 +3749,9 @@ function MeasurementReviewPanel({
         </div>
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length === 0 ? (
-        <div className="project-record-empty-state">Noch keine Aufmaßpakete vorhanden.</div>
+        <div className="project-record-empty-state">
+          {archiveMode ? "Keine archivierten Aufmaße vorhanden." : "Noch keine Aufmaßpakete vorhanden."}
+        </div>
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
         <div className="measurement-review-list">
@@ -3686,6 +3764,47 @@ function MeasurementReviewPanel({
             const isExportingOriginalPdf = pdfExportingAction === originalPdfKey;
             const isExportingPdf = isExportingCheckedPdf || isExportingOriginalPdf;
             const statusBadge = getMeasurementBatchStatusBadge(batch);
+            if (archiveMode) {
+              return (
+                <div
+                  key={batch.id}
+                  className="measurement-review-card is-archive"
+                >
+                  <div className="measurement-review-card-controls">
+                    <span className={statusBadge.className}>
+                      <span className="measurement-review-status-label">{statusBadge.label}</span>
+                    </span>
+                  </div>
+                  <div className="measurement-review-card-open">
+                    <div className="measurement-review-card-main">
+                      <div className="measurement-review-card-title-row">
+                        <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
+                        {batch.offer_name ? <span className="measurement-status is-old-offer">{batch.offer_name}</span> : null}
+                      </div>
+                      <small className="measurement-review-submitter-status">
+                        {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
+                        {batch.submitted_at ? ` · Eingereicht ${formatDateTime(batch.submitted_at)}` : ""}
+                      </small>
+                      <small className="measurement-review-submitter-status">
+                        Gelöscht {batch.deleted_at ? formatDateTime(batch.deleted_at) : "ohne Datum"}
+                        {batch.deleted_by_name ? ` · von ${batch.deleted_by_name}` : " · ohne Benutzer"}
+                      </small>
+                    </div>
+                    <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
+                  </div>
+                  <div className="measurement-review-pdf-actions">
+                    <button
+                      type="button"
+                      className="measurement-review-pdf-action"
+                      disabled={reviewActionLoading || restoringBatchId !== null}
+                      onClick={() => void restoreBatch(batch)}
+                    >
+                      {restoringBatchId === batch.id ? "Stellt wieder her..." : "Wiederherstellen"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div
                 key={batch.id}

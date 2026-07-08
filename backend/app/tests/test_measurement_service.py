@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Base
 from app.models.audit_log import AuditLog
-from app.models.enums import SiteLocationStatus, SiteStatus
+from app.models.enums import SiteLocationStatus, SiteStatus, UserRole
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
@@ -17,6 +17,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
+from app.models.user import User
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -1886,3 +1887,44 @@ def test_site_measurement_batches_include_customer_email_status():
 
     assert read_batch.customer_email_sent_at is not None
     assert read_batch.customer_email_signature_present is False
+
+
+def test_site_measurement_batch_delete_archives_and_restore_reactivates():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Aufmaß 1",
+        status="reviewed",
+        submitted_by=user,
+        submitted_at=datetime(2026, 7, 8, 8, 0, tzinfo=timezone.utc),
+    )
+    db.add_all([user, batch])
+    db.commit()
+
+    service = MeasurementService(db)
+    service.delete_site_batch(site_id=site.id, batch_id=batch.id, current_user=user)
+
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    assert stored_batch is not None
+    assert stored_batch.deleted_at is not None
+    assert stored_batch.deleted_by_user_id == user.id
+    assert service.list_site_batches(site.id) == []
+    [archived_batch] = service.list_site_batches(site.id, archived_only=True)
+    assert archived_batch.id == batch.id
+    assert archived_batch.status == "reviewed"
+    assert archived_batch.deleted_at is not None
+    assert archived_batch.deleted_by_user_id == user.id
+    assert archived_batch.deleted_by_name == "Büro"
+
+    restored_batch = service.restore_site_batch(site_id=site.id, batch_id=batch.id)
+
+    assert restored_batch.id == batch.id
+    assert restored_batch.deleted_at is None
+    assert restored_batch.deleted_by_user_id is None
+    assert [active_batch.id for active_batch in service.list_site_batches(site.id)] == [batch.id]
+    assert service.list_site_batches(site.id, archived_only=True) == []

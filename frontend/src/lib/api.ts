@@ -898,13 +898,19 @@ export const api = {
     return request<MeasurementTimeAnalysis>(`/sites/${siteId}/measurement-time-analysis`);
   },
 
-  async siteMeasurementBatches(siteId: number, params: { measurementBaseId?: number | null; activeOnly?: boolean } = {}): Promise<MobileMeasurementBatch[]> {
+  async siteMeasurementBatches(
+    siteId: number,
+    params: { measurementBaseId?: number | null; activeOnly?: boolean; archivedOnly?: boolean } = {},
+  ): Promise<MobileMeasurementBatch[]> {
     const search = new URLSearchParams();
     if (params.measurementBaseId !== null && params.measurementBaseId !== undefined) {
       search.set("measurement_base_id", String(params.measurementBaseId));
     }
     if (params.activeOnly) {
       search.set("active_only", "true");
+    }
+    if (params.archivedOnly) {
+      search.set("archived_only", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<MobileMeasurementBatch[]>(`/sites/${siteId}/measurement-batches${suffix}`);
@@ -964,6 +970,12 @@ export const api = {
   async deleteSiteMeasurementBatch(siteId: number, batchId: number): Promise<void> {
     await request<void>(`/sites/${siteId}/measurement-batches/${batchId}`, {
       method: "DELETE",
+    });
+  },
+
+  async restoreSiteMeasurementBatch(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/restore`, {
+      method: "POST",
     });
   },
 

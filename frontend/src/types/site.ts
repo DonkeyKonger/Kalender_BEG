@@ -303,6 +303,9 @@ export type MobileMeasurementBatch = {
   customer_email_signature_present: boolean | null;
   worker_signed_at: string | null;
   worker_signature_name: string | null;
+  deleted_at: string | null;
+  deleted_by_user_id: number | null;
+  deleted_by_name: string | null;
   is_locked_for_worker: boolean;
   created_at: string;
   updated_at: string;

@@ -192,7 +192,11 @@ class ExtraWorkEmailService:
         batch = self.db.scalar(
             select(SiteMeasurementBatch)
             .options(selectinload(SiteMeasurementBatch.site))
-            .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
+            .where(
+                SiteMeasurementBatch.id == batch_id,
+                SiteMeasurementBatch.site_id == site_id,
+                SiteMeasurementBatch.deleted_at.is_(None),
+            )
         )
         if batch is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")

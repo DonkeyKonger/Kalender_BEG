@@ -232,6 +232,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 )
                 .where(SiteMeasurementBatch.site_id == assignment.site_id)
+                .where(SiteMeasurementBatch.deleted_at.is_(None))
                 .order_by(
                     SiteMeasurementBatch.created_at.desc(),
                     SiteMeasurementBatch.id.desc(),
@@ -1013,10 +1014,11 @@ class MeasurementService:
         site_id: int,
         measurement_base_id: int | None = None,
         active_only: bool = False,
+        archived_only: bool = False,
     ) -> list[MobileMeasurementBatchRead]:
         self._get_site(site_id)
         active_base_id = self._get_active_measurement_base_id(site_id)
-        if active_only:
+        if active_only and not archived_only:
             measurement_base_id = active_base_id
             if measurement_base_id is None:
                 return []
@@ -1028,10 +1030,16 @@ class MeasurementService:
                 ),
                 selectinload(SiteMeasurementBatch.free_items),
                 selectinload(SiteMeasurementBatch.measurement_base),
+                selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.deleted_by).selectinload(User.person),
             )
             .where(SiteMeasurementBatch.site_id == site_id)
         )
+        if archived_only:
+            statement = statement.where(SiteMeasurementBatch.deleted_at.is_not(None))
+        else:
+            statement = statement.where(SiteMeasurementBatch.deleted_at.is_(None))
         if measurement_base_id is not None:
             statement = statement.where(SiteMeasurementBatch.measurement_base_id == measurement_base_id)
         batches = list(
@@ -1091,18 +1099,34 @@ class MeasurementService:
     def delete_site_batch(self, *, site_id: int, batch_id: int, current_user: User) -> None:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        photos = list(batch.photos)
-        storage_service = ProjectStorageService() if photos else None
-        for photo in photos:
-            if storage_service is None:
-                continue
-            storage_service.delete_file_from_folder(
-                drive_id=photo.external_drive_id,
-                folder_item_id=self._get_photo_folder_item_id(photo, current_user),
-                item_id=photo.external_item_id,
-            )
-        self.db.delete(batch)
+        batch.deleted_at = datetime.now(timezone.utc)
+        batch.deleted_by_user_id = current_user.id
         self.db.commit()
+
+    def restore_site_batch(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+    ) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, include_deleted=True)
+        if batch.deleted_at is None:
+            return self._build_mobile_batch(
+                batch,
+                active_base_id=self._get_active_measurement_base_id(site_id),
+                photo_count=self._photo_count_for_batch(batch.id),
+            )
+        batch.deleted_at = None
+        batch.deleted_by_user_id = None
+        batch.deleted_by = None
+        self.db.commit()
+        self.db.refresh(batch)
+        return self._build_mobile_batch(
+            batch,
+            active_base_id=self._get_active_measurement_base_id(site_id),
+            photo_count=self._photo_count_for_batch(batch.id),
+        )
 
     def get_site_measurement_timesheet(self, site_id: int) -> MeasurementTimesheetRead:
         self._get_site(site_id)
@@ -1135,6 +1159,7 @@ class MeasurementService:
                 .where(
                     SiteMeasurementBatch.site_id == site_id,
                     SiteMeasurementBatch.measurement_base_id == active_base_id,
+                    SiteMeasurementBatch.deleted_at.is_(None),
                 )
                 .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
@@ -1265,6 +1290,7 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.measurement_base),
                 )
                 .where(SiteMeasurementBatch.site_id == site_id)
+                .where(SiteMeasurementBatch.deleted_at.is_(None))
                 .where(SiteMeasurementBatch.status != "draft")
             ).all()
         )
@@ -1591,6 +1617,7 @@ class MeasurementService:
             )
             .where(
                 SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
+                SiteMeasurementBatch.deleted_at.is_(None),
                 or_(
                     SiteMeasurementBatch.status.in_(("submitted", "rejected")),
                     SiteMeasurementBatch.customer_signed_at.is_not(None),
@@ -2007,8 +2034,14 @@ class MeasurementService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
         return assignment
 
-    def _get_batch_for_site(self, batch_id: int, site_id: int) -> SiteMeasurementBatch:
-        batch = self.db.scalar(
+    def _get_batch_for_site(
+        self,
+        batch_id: int,
+        site_id: int,
+        *,
+        include_deleted: bool = False,
+    ) -> SiteMeasurementBatch:
+        statement = (
             select(SiteMeasurementBatch)
             .options(
                 selectinload(SiteMeasurementBatch.entries).selectinload(
@@ -2019,8 +2052,15 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.photos),
                 selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.deleted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.measurement_base),
             )
             .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
+        )
+        if not include_deleted:
+            statement = statement.where(SiteMeasurementBatch.deleted_at.is_(None))
+        batch = self.db.scalar(
+            statement
         )
         if batch is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
@@ -2063,7 +2103,10 @@ class MeasurementService:
             )
         ) or 0
         result.batch_count = self.db.scalar(
-            select(func.count(SiteMeasurementBatch.id)).where(SiteMeasurementBatch.measurement_base_id == base.id)
+            select(func.count(SiteMeasurementBatch.id)).where(
+                SiteMeasurementBatch.measurement_base_id == base.id,
+                SiteMeasurementBatch.deleted_at.is_(None),
+            )
         ) or 0
         return result
 
@@ -2129,6 +2172,9 @@ class MeasurementService:
             ),
             worker_signed_at=batch.worker_signed_at,
             worker_signature_name=batch.worker_signature_name,
+            deleted_at=batch.deleted_at,
+            deleted_by_user_id=batch.deleted_by_user_id,
+            deleted_by_name=self._format_user_display_name(batch.deleted_by),
             is_locked_for_worker=batch.customer_signed_at is not None,
             created_at=batch.created_at,
             updated_at=batch.updated_at,
