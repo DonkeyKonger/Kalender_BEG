@@ -490,6 +490,101 @@ def test_mark_weekly_review_tops_up_absence_day_without_double_counting():
     assert account_entries[0].minutes_delta == -1440
 
 
+def test_mark_weekly_review_books_overtime_absence_without_weekly_minus():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        weekly_hours=40,
+    )
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.flush()
+    monday = date.fromisocalendar(2026, 30, 1)
+    db.add_all([
+        WorkTimeEntry(person=person, work_date=monday, work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=2), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=3), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=4), work_minutes=480, break_minutes=0, travel_minutes=0),
+        Absence(
+            person=person,
+            absence_type=AbsenceType.FREE,
+            start_date=monday + timedelta(days=1),
+            end_date=monday + timedelta(days=1),
+            status=AbsenceStatus.ACTIVE,
+        ),
+    ])
+    db.commit()
+
+    service = TimeEntryService(db)
+    first_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=30,
+        current_user=user,
+    )
+    second_review = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=30,
+        current_user=user,
+    )
+
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    assert first_review.id == second_review.id
+    assert len(account_entries) == 1
+    assert account_entries[0].entry_type == "overtime_absence"
+    assert account_entries[0].minutes_delta == -480
+    assert account_entries[0].balance_after_minutes == -480
+    assert account_entries[0].weekly_actual_minutes is None
+    assert account_entries[0].weekly_required_minutes is None
+
+
+def test_mark_weekly_review_books_multiple_overtime_absence_days():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        weekly_hours=40,
+    )
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.flush()
+    monday = date.fromisocalendar(2026, 31, 1)
+    db.add_all([
+        WorkTimeEntry(person=person, work_date=monday, work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=3), work_minutes=480, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=monday + timedelta(days=4), work_minutes=480, break_minutes=0, travel_minutes=0),
+        Absence(
+            person=person,
+            absence_type=AbsenceType.FREE,
+            start_date=monday + timedelta(days=1),
+            end_date=monday + timedelta(days=2),
+            status=AbsenceStatus.ACTIVE,
+        ),
+    ])
+    db.commit()
+
+    TimeEntryService(db).mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=31,
+        current_user=user,
+    )
+
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    assert len(account_entries) == 1
+    assert account_entries[0].entry_type == "overtime_absence"
+    assert account_entries[0].minutes_delta == -960
+    assert account_entries[0].balance_after_minutes == -960
+
+
 def test_monteur_cannot_mark_weekly_review():
     current_user = SimpleNamespace(id=9, role=UserRole.MONTEUR)
 

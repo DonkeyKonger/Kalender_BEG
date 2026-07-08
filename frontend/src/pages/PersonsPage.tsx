@@ -2163,6 +2163,9 @@ function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
   if (entry.entry_type === "payout") {
     return "Auszahlung";
   }
+  if (entry.entry_type === "overtime_absence") {
+    return "Überstunden abgebaut";
+  }
   return "Buchung";
 }
 

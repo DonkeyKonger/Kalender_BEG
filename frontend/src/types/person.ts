@@ -156,7 +156,8 @@ export type PersonRemoveResponse = {
   person: Person | null;
 };
 
-export type PersonHoursAccountEntryType = "weekly_balance" | "manual_adjustment" | "payout" | string;
+export type PersonHoursAccountEntryType =
+  "weekly_balance" | "manual_adjustment" | "payout" | "overtime_absence" | string;
 
 export type PersonHoursAccountEntry = {
   id: number;
