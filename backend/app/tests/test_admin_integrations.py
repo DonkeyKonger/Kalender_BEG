@@ -103,6 +103,7 @@ def test_vehicle_latest_positions_are_visible_for_project_manager_and_office(mon
             id=3,
             role=role,
             is_active=True,
+            office_page_permissions=["map"] if role == UserRole.OFFICE else [],
         )
         client = TestClient(app)
 

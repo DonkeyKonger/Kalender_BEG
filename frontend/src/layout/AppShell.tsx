@@ -4,6 +4,7 @@ import type { FocusEvent, KeyboardEvent, PointerEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { canAccessMainPage, canShowNavItem } from "../auth/permissions";
 import { navigationItems } from "../config/navigation";
 import { api } from "../lib/api";
 import type { UserRole } from "../types/auth";
@@ -22,12 +23,12 @@ export function AppShell() {
   const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
   const lastDashboardMessageCountRef = useRef<number | null>(null);
   const lastDashboardMessageSignatureRef = useRef<string | null>(null);
-  const visibleItems = navigationItems.filter((item) => user && item.roles.includes(user.role));
+  const visibleItems = navigationItems.filter((item) => user && canShowNavItem(user, item));
   const showUserTopbar = location.pathname === "/";
   const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
 
   useEffect(() => {
-    if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role)) {
+    if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role) || !canAccessMainPage(user, "overview")) {
       lastDashboardMessageCountRef.current = null;
       lastDashboardMessageSignatureRef.current = null;
       setDashboardMessageCount((current) => (current === 0 ? current : 0));
@@ -87,7 +88,7 @@ export function AppShell() {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, user?.office_page_permissions]);
 
   function handleSidebarPointerEnter() {
     lastSidebarInputRef.current = "pointer";

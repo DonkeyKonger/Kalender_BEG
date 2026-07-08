@@ -38,6 +38,7 @@ class UserService:
             role=payload.role,
             is_active=payload.is_active,
             must_change_password=True,
+            office_page_permissions=payload.office_page_permissions,
             person_id=payload.person_id,
         )
         self.users.add(user)
@@ -72,6 +73,8 @@ class UserService:
         if "person_id" in values:
             self._ensure_person_exists(values["person_id"])
             user.person_id = values["person_id"]
+        if "office_page_permissions" in values and values["office_page_permissions"] is not None:
+            user.office_page_permissions = values["office_page_permissions"]
 
         self.db.commit()
         self.db.refresh(user)

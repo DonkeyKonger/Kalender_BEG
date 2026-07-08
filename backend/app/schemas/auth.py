@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app.core.office_permissions import normalize_office_page_permissions as normalize_permissions
 from app.models.enums import UserRole
 
 
@@ -25,6 +26,12 @@ class CurrentUserResponse(BaseModel):
     role: UserRole
     is_active: bool
     must_change_password: bool
+    office_page_permissions: list[str] = Field(default_factory=list)
     person_id: int | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("office_page_permissions", mode="before")
+    @classmethod
+    def normalize_office_page_permissions(cls, value) -> list[str]:
+        return normalize_permissions(value or [])

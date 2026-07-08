@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.office_permissions import OFFICE_PAGE_PERMISSION_SET, office_user_can_access
 from app.core.security import decode_access_token
 from app.models.enums import UserRole
 from app.models.user import User
@@ -47,6 +48,23 @@ def require_roles(*roles: UserRole) -> Callable[[User], User]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Keine Berechtigung fuer diese Aktion.",
+            )
+        return current_user
+
+    return dependency
+
+
+def require_office_page(page_key: str, *additional_page_keys: str, roles: tuple[UserRole, ...]) -> Callable[[User], User]:
+    page_keys = (page_key, *additional_page_keys)
+    invalid = [key for key in page_keys if key not in OFFICE_PAGE_PERMISSION_SET]
+    if invalid:
+        raise ValueError(f"Unknown office page permission: {invalid[0]}")
+
+    def dependency(current_user: User = Depends(require_roles(*roles))) -> User:
+        if not office_user_can_access(current_user, *page_keys):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Keine Berechtigung für diese Seite.",
             )
         return current_user
 

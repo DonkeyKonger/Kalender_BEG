@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -25,9 +25,15 @@ from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["time-entries"])
 
-CAN_ACCESS = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
-CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
-CAN_REVIEW = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_ACCESS = require_office_page(
+    "payroll",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
+)
+CAN_WRITE = require_office_page(
+    "payroll",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
+)
+CAN_REVIEW = require_office_page("payroll", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 
 
 @router.get("", response_model=list[TimeEntryRead])

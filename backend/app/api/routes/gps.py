@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.gps_point import GpsPoint
@@ -13,7 +13,7 @@ from app.services.gps_service import GpsPresenceService
 router = APIRouter(prefix="/gps", tags=["gps"])
 
 CAN_SEND_GPS = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
-CAN_READ_GPS = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_READ_GPS = require_office_page("map", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 
 
 @router.post("/location-points", response_model=GpsLocationPointRead, status_code=status.HTTP_201_CREATED)

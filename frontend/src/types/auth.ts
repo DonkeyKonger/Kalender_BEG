@@ -1,4 +1,14 @@
 export type UserRole = "admin" | "project_manager" | "office" | "monteur";
+export type OfficePagePermission =
+  | "overview"
+  | "calendar"
+  | "absences"
+  | "sites"
+  | "map"
+  | "payroll"
+  | "customers"
+  | "employees"
+  | "export";
 
 export type CurrentUser = {
   id: number;
@@ -7,6 +17,7 @@ export type CurrentUser = {
   role: UserRole;
   is_active: boolean;
   must_change_password: boolean;
+  office_page_permissions: OfficePagePermission[];
   person_id: number | null;
 };
 

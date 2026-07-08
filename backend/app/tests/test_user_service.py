@@ -2,9 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
+from app.core.office_permissions import office_user_can_access
 from app.core.security import verify_password
 from app.models.enums import UserRole
+from app.schemas.auth import CurrentUserResponse
 from app.schemas.user import UserCreate, UserPasswordReset, UserUpdate
 from app.services.user_service import UserService
 
@@ -33,12 +36,17 @@ class FakeUsers:
     def __init__(self, *, by_id=None, by_username=None):
         self.by_id = by_id
         self.by_username = by_username
+        self.added = None
 
     def get_by_id(self, user_id):
         return self.by_id if self.by_id and self.by_id.id == user_id else None
 
     def get_by_username(self, username):
         return self.by_username if self.by_username and self.by_username.username == username else None
+
+    def add(self, user):
+        self.added = user
+        return user
 
 
 class FakePeople:
@@ -52,6 +60,100 @@ def service_with(*, user=None, username_user=None):
     service.users = FakeUsers(by_id=user, by_username=username_user)
     service.people = FakePeople()
     return service
+
+
+def test_office_page_permission_helper_only_restricts_office_users():
+    admin = SimpleNamespace(role=UserRole.ADMIN, office_page_permissions=[])
+    project_manager = SimpleNamespace(role=UserRole.PROJECT_MANAGER, office_page_permissions=[])
+    monteur = SimpleNamespace(role=UserRole.MONTEUR, office_page_permissions=[])
+    office = SimpleNamespace(role=UserRole.OFFICE, office_page_permissions=["payroll", "employees"])
+
+    assert office_user_can_access(admin, "customers") is True
+    assert office_user_can_access(project_manager, "customers") is True
+    assert office_user_can_access(monteur, "customers") is True
+    assert office_user_can_access(office, "payroll") is True
+    assert office_user_can_access(office, "customers") is False
+
+
+def test_office_page_permissions_are_validated_and_normalized():
+    payload = UserCreate(
+        username="office",
+        display_name="Büro",
+        password="secret",
+        role=UserRole.OFFICE,
+        office_page_permissions=["employees", "payroll", "employees"],
+    )
+
+    assert payload.office_page_permissions == ["payroll", "employees"]
+
+    with pytest.raises(ValidationError):
+        UserCreate(
+            username="office",
+            display_name="Büro",
+            password="secret",
+            role=UserRole.OFFICE,
+            office_page_permissions=["unknown"],
+        )
+
+
+def test_current_user_response_includes_office_page_permissions():
+    response = CurrentUserResponse.model_validate(
+        SimpleNamespace(
+            id=4,
+            username="office",
+            display_name="Büro",
+            role=UserRole.OFFICE,
+            is_active=True,
+            must_change_password=False,
+            office_page_permissions=["payroll"],
+            person_id=None,
+        )
+    )
+
+    assert response.office_page_permissions == ["payroll"]
+
+
+def test_create_user_stores_office_page_permissions():
+    db = RecordingDb()
+    service = service_with()
+    service.db = db
+
+    user = service.create_user(
+        UserCreate(
+            username="office",
+            display_name="Büro",
+            password="secret",
+            role=UserRole.OFFICE,
+            office_page_permissions=["payroll", "employees"],
+        )
+    )
+
+    assert db.committed is True
+    assert db.refreshed is user
+    assert user.office_page_permissions == ["payroll", "employees"]
+
+
+def test_update_user_stores_office_page_permissions():
+    user = SimpleNamespace(
+        id=2,
+        username="office",
+        role=UserRole.OFFICE,
+        is_active=True,
+        office_page_permissions=[],
+    )
+    db = RecordingDb()
+    service = service_with(user=user)
+    service.db = db
+
+    service.update_user(
+        2,
+        UserUpdate(office_page_permissions=["customers", "payroll"]),
+        current_user_id=1,
+    )
+
+    assert db.committed is True
+    assert db.refreshed is user
+    assert user.office_page_permissions == ["payroll", "customers"]
 
 
 def test_admin_cannot_disable_self():

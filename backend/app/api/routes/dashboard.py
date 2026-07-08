@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
@@ -13,7 +13,7 @@ from app.services.measurement_service import MeasurementService
 from app.services.weather_service import WeatherService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-CAN_READ_DASHBOARD = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_READ_DASHBOARD = require_office_page("overview", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 
 
 @router.get("/weather", response_model=WeatherSummary)

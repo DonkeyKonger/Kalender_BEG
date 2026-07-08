@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { useAuth } from "./auth/AuthContext";
+import { canAccessMainPage, firstAccessiblePath } from "./auth/permissions";
 import { AppShell } from "./layout/AppShell";
 import { AbsencesPage } from "./pages/AbsencesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
@@ -41,9 +42,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route index element={<HomeRoute />} />
-          <Route
-            element={<ProtectedRoute roles={["admin", "project_manager", "office"]} />}
-          >
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="calendar" />}>
             <Route
               path="matrix"
               element={
@@ -52,6 +51,8 @@ export function App() {
                 </Suspense>
               }
             />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="payroll" />}>
             <Route
               path="time-entries"
               element={
@@ -60,15 +61,9 @@ export function App() {
                 </Suspense>
               }
             />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="sites" />}>
             <Route path="sites" element={<SitesPage />} />
-            <Route
-              path="site-map"
-              element={
-                <Suspense fallback={<div className="empty-state">Baustellenkarte wird geladen...</div>}>
-                  <SiteMapPage />
-                </Suspense>
-              }
-            />
             <Route
               path="sites/:siteId"
               element={
@@ -77,15 +72,34 @@ export function App() {
                 </Suspense>
               }
             />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="map" />}>
+            <Route
+              path="site-map"
+              element={
+                <Suspense fallback={<div className="empty-state">Baustellenkarte wird geladen...</div>}>
+                  <SiteMapPage />
+                </Suspense>
+              }
+            />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="absences" />}>
             <Route path="absences" element={<AbsencesPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="export" />}>
             <Route path="exports" element={<ExportsPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]} />}>
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="customers" />}>
             <Route path="customers" element={<CustomersPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="employees" />}>
             <Route path="persons" element={<PersonsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["office"]} />}>
+            <Route path="no-office-pages" element={<NoOfficePages />} />
           </Route>
           <Route element={<ProtectedRoute roles={["monteur"]} />}>
             <Route path="me/assignments" element={<MyAssignmentsPage />} />
@@ -110,5 +124,18 @@ function HomeRoute() {
   if (user?.role === "monteur") {
     return <Navigate to="/me/assignments" replace />;
   }
+  if (user?.role === "office" && !canAccessMainPage(user, "overview")) {
+    const fallbackPath = firstAccessiblePath(user);
+    return fallbackPath ? <Navigate to={fallbackPath} replace /> : <NoOfficePages />;
+  }
   return <DashboardPage />;
+}
+
+function NoOfficePages() {
+  return (
+    <div className="empty-state">
+      <strong>Für diesen Benutzer wurden noch keine Seiten freigeschaltet.</strong>
+      <span>Bitte wenden Sie sich an einen Administrator.</span>
+    </div>
+  );
 }

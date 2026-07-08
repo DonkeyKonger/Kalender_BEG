@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
@@ -68,8 +68,16 @@ from app.services.site_service import SiteService
 router = APIRouter(prefix="/sites", tags=["sites"])
 logger = logging.getLogger(__name__)
 
-CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
-CAN_FOLDER_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR)
+CAN_READ = require_office_page(
+    "sites",
+    "calendar",
+    "map",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
+CAN_FOLDER_READ = require_office_page(
+    "sites",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
+)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 

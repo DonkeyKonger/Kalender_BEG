@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.customer import CustomerCreate, CustomerRead, CustomerRemoveResponse, CustomerUpdate
@@ -9,7 +9,7 @@ from app.services.customer_service import CustomerService
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
-CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_READ = require_office_page("customers", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 

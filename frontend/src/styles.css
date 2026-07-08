@@ -12439,6 +12439,48 @@ button.person-chip:focus-visible {
   box-shadow: none;
 }
 
+.admin-users-page .office-page-permissions {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  border: 1px solid #d7e1ee;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.admin-users-page .office-page-permissions-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-users-page .office-page-permissions-heading strong {
+  color: #172033;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.admin-users-page .office-page-permissions-heading span {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.admin-users-page .office-page-permissions-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.admin-users-page .office-page-permissions-list .checkbox-field {
+  min-height: 24px;
+}
+
+@media (max-width: 560px) {
+  .admin-users-page .office-page-permissions-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 .checkbox-field {
   display: inline-flex !important;
   align-items: center;

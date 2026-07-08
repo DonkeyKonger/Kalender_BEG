@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -20,7 +20,7 @@ from app.services.assignment_service import AssignmentMutationResult, Assignment
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
 
-CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_READ = require_office_page("calendar", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 
 

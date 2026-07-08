@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -12,9 +12,16 @@ from app.services.absence_service import AbsenceService
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
-CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_READ = require_office_page(
+    "absences",
+    "employees",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
-CAN_CARRYOVER_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_CARRYOVER_WRITE = require_office_page(
+    "employees",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
 
 
 @router.get("", response_model=list[AbsenceRead])

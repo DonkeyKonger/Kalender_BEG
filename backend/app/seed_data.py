@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.office_permissions import DEFAULT_EXISTING_OFFICE_PAGE_PERMISSIONS
 from app.core.security import hash_password
 from app.models.absence import Absence
 from app.models.assignment import Assignment
@@ -84,6 +85,8 @@ def get_or_create_user(
 
     user = get_one(db, User, username=username)
     if user is not None:
+        if role == UserRole.OFFICE and not (user.office_page_permissions or []):
+            user.office_page_permissions = DEFAULT_EXISTING_OFFICE_PAGE_PERMISSIONS.copy()
         return user
 
     user = User(
@@ -92,6 +95,7 @@ def get_or_create_user(
         password_hash=hash_password(settings.seed_default_password),
         role=role,
         is_active=True,
+        office_page_permissions=DEFAULT_EXISTING_OFFICE_PAGE_PERMISSIONS.copy() if role == UserRole.OFFICE else [],
         person_id=person.id if person else None,
     )
     db.add(user)

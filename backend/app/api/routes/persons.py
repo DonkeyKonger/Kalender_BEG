@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.person import (
@@ -25,10 +25,21 @@ from app.services.person_service import PersonService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
 
-CAN_READ = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_READ = require_office_page(
+    "employees",
+    "payroll",
+    "calendar",
+    "absences",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
+CAN_MAP_READ = require_office_page("map", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 CAN_ADMIN = require_roles(UserRole.ADMIN)
-CAN_HOURS_ACCOUNT_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_HOURS_ACCOUNT_WRITE = require_office_page(
+    "employees",
+    "payroll",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
 
 
 @router.get("", response_model=list[PersonRead])
@@ -43,7 +54,7 @@ def list_persons(
 
 @router.get("/map", response_model=PersonMapResponse)
 def person_map(
-    _user=Depends(CAN_READ),
+    _user=Depends(CAN_MAP_READ),
     db: Session = Depends(get_db),
 ) -> PersonMapResponse:
     return PersonService(db).person_map()

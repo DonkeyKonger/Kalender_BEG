@@ -5,8 +5,9 @@ import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { RoleBadge, StatusBadge, roleLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
+import { officePagePermissionOptions } from "../config/officePagePermissions";
 import { ApiError, api } from "../lib/api";
-import type { UserRole } from "../types/auth";
+import type { OfficePagePermission, UserRole } from "../types/auth";
 import type { Person } from "../types/person";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 
@@ -17,10 +18,14 @@ type EditableUser = {
   role: UserRole;
   is_active: boolean;
   person_id: number | null;
+  office_page_permissions: OfficePagePermission[];
   reset_password: string;
 };
 
-type UserBaseDraft = Pick<AdminUserCreate, "username" | "display_name" | "role" | "is_active" | "person_id">;
+type UserBaseDraft = Pick<
+  AdminUserCreate,
+  "username" | "display_name" | "role" | "is_active" | "person_id" | "office_page_permissions"
+>;
 type DrawerState = { mode: "new" } | { mode: "edit"; userId: number } | null;
 
 const emptyCreateForm: AdminUserCreate = {
@@ -30,6 +35,7 @@ const emptyCreateForm: AdminUserCreate = {
   role: "monteur",
   is_active: true,
   person_id: null,
+  office_page_permissions: [],
 };
 
 export function AdminUsersPage() {
@@ -118,6 +124,7 @@ export function AdminUsersPage() {
         role: draft.role,
         is_active: draft.is_active,
         person_id: draft.person_id,
+        office_page_permissions: draft.office_page_permissions,
       };
       const updated = await api.updateUser(userId, payload);
       replaceUser(updated);
@@ -430,13 +437,39 @@ function UserBaseFields({
           {personOptions(people)}
         </select>
       </label>
-      <label className="checkbox-field">
-        <input checked={draft.is_active} type="checkbox" onChange={(event) => onChange({ is_active: event.target.checked })} />
-        <span>Aktiv</span>
-      </label>
-    </div>
-  );
-}
+          <label className="checkbox-field">
+            <input checked={draft.is_active} type="checkbox" onChange={(event) => onChange({ is_active: event.target.checked })} />
+            <span>Aktiv</span>
+          </label>
+          {draft.role === "office" ? (
+            <section className="office-page-permissions">
+              <div className="office-page-permissions-heading">
+                <strong>Sichtbare Hauptseiten</strong>
+                <span>Legt fest, welche Hauptseiten dieser Büro-Nutzer öffnen darf.</span>
+              </div>
+              <div className="office-page-permissions-list">
+                {officePagePermissionOptions.map((option) => (
+                  <label className="checkbox-field" key={option.key}>
+                    <input
+                      checked={draft.office_page_permissions.includes(option.key)}
+                      type="checkbox"
+                      onChange={(event) => onChange({
+                        office_page_permissions: toggleOfficePagePermission(
+                          draft.office_page_permissions,
+                          option.key,
+                          event.target.checked,
+                        ),
+                      })}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      );
+    }
 
 function toEditableUsers(users: AdminUser[]): Record<string, EditableUser> {
   return Object.fromEntries(users.map((user) => [String(user.id), toEditableUser(user)]));
@@ -450,6 +483,7 @@ function toEditableUser(user: AdminUser): EditableUser {
     role: user.role,
     is_active: user.is_active,
     person_id: user.person_id,
+    office_page_permissions: user.office_page_permissions ?? [],
     reset_password: "",
   };
 }
@@ -510,6 +544,22 @@ function userSearchText(user: AdminUser, peopleById: Map<number, Person>): strin
 
 function parsePersonId(value: string): number | null {
   return value ? Number(value) : null;
+}
+
+function toggleOfficePagePermission(
+  currentPermissions: OfficePagePermission[],
+  permission: OfficePagePermission,
+  checked: boolean,
+): OfficePagePermission[] {
+  const currentSet = new Set(currentPermissions);
+  if (checked) {
+    currentSet.add(permission);
+  } else {
+    currentSet.delete(permission);
+  }
+  return officePagePermissionOptions
+    .map((option) => option.key)
+    .filter((option) => currentSet.has(option));
 }
 
 function readApiError(error: unknown, fallback: string): string {

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_roles
+from app.api.dependencies import require_office_page
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.services.pdf_export_service import PdfExportService
@@ -13,7 +13,7 @@ from app.services.time_entry_xlsx_export_service import TimeEntryXlsxExportServi
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
-CAN_EXPORT = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+CAN_EXPORT = require_office_page("export", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
 
 
 @router.get("/daily-plan")

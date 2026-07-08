@@ -1,13 +1,16 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "./AuthContext";
-import type { UserRole } from "../types/auth";
+import { canAccessMainPage, firstAccessiblePath } from "./permissions";
+import type { OfficePagePermission, UserRole } from "../types/auth";
 
 export function ProtectedRoute({
   roles,
+  officePermission,
   allowPasswordChange = false,
 }: {
   roles?: UserRole[];
+  officePermission?: OfficePagePermission;
   allowPasswordChange?: boolean;
 }) {
   const { user, status } = useAuth();
@@ -26,7 +29,11 @@ export function ProtectedRoute({
   }
 
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={firstAccessiblePath(user) ?? "/no-office-pages"} replace />;
+  }
+
+  if (officePermission && !canAccessMainPage(user, officePermission)) {
+    return <Navigate to={firstAccessiblePath(user) ?? "/no-office-pages"} replace />;
   }
 
   return <Outlet />;
