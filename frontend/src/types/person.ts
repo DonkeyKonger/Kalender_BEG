@@ -1,4 +1,5 @@
 import type { UserRole } from "./auth";
+import type { AbsenceType } from "./matrix";
 
 export type PersonType = "internal" | "external" | "external_temp";
 export type PersonEmploymentStatus = "active" | "paused" | "departed";
@@ -159,6 +160,11 @@ export type PersonRemoveResponse = {
 export type PersonHoursAccountEntryType =
   "weekly_balance" | "manual_adjustment" | "payout" | "overtime_absence" | string;
 
+export type PersonHoursAbsenceBreakdownItem = {
+  absence_type: AbsenceType | string;
+  minutes: number;
+};
+
 export type PersonHoursAccountEntry = {
   id: number;
   person_id: number;
@@ -168,8 +174,11 @@ export type PersonHoursAccountEntry = {
   note: string;
   iso_year: number | null;
   iso_week: number | null;
+  weekly_work_minutes: number | null;
   weekly_actual_minutes: number | null;
   weekly_required_minutes: number | null;
+  weekly_overtime_absence_minutes: number | null;
+  weekly_absence_breakdown: PersonHoursAbsenceBreakdownItem[];
   created_by_user_id: number | null;
   created_by_name: string | null;
   created_at: string;

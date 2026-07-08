@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -27,8 +27,11 @@ class PersonHoursAccountEntry(TimestampMixin, Base):
         ForeignKey("time_entry_weekly_reviews.id", ondelete="SET NULL"),
         index=True,
     )
+    weekly_work_minutes: Mapped[int | None] = mapped_column(Integer)
     weekly_actual_minutes: Mapped[int | None] = mapped_column(Integer)
     weekly_required_minutes: Mapped[int | None] = mapped_column(Integer)
+    weekly_overtime_absence_minutes: Mapped[int | None] = mapped_column(Integer)
+    weekly_absence_breakdown: Mapped[list[dict] | None] = mapped_column(JSON)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         index=True,

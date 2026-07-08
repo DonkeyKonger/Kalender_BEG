@@ -1,3 +1,5 @@
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -21,6 +23,21 @@ HOURS_ACCOUNT_PAYOUT = "payout"
 HOURS_ACCOUNT_OVERTIME_ABSENCE = "overtime_absence"
 OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung."
 ABSENCE_DAY_CREDIT_MINUTES = 8 * 60
+ABSENCE_BREAKDOWN_ORDER = (
+    AbsenceType.FREE,
+    AbsenceType.VACATION,
+    AbsenceType.SICK,
+    AbsenceType.SCHOOL,
+    AbsenceType.OTHER,
+)
+
+
+@dataclass(frozen=True)
+class WeeklyHoursBreakdown:
+    work_minutes: int
+    actual_minutes: int
+    absence_minutes_by_type: dict[str, int]
+    overtime_absence_minutes: int
 
 
 class PersonHoursAccountService:
@@ -92,51 +109,46 @@ class PersonHoursAccountService:
         if weekly_hours is None:
             return None
         required_minutes = hours_to_minutes(weekly_hours)
-        actual_minutes, overtime_absence_minutes = self._weekly_actual_minutes(
+        weekly_breakdown = self._weekly_actual_minutes(
             person_id=review.person_id,
             iso_year=review.iso_year,
             iso_week=review.iso_week,
         )
-        weekly_entry = self._book_weekly_balance(
+        return self._book_weekly_balance(
             review=review,
             current_user=current_user,
-            actual_minutes=actual_minutes,
+            weekly_breakdown=weekly_breakdown,
             required_minutes=required_minutes,
         )
-        overtime_entry = self._book_overtime_absence(
-            review=review,
-            current_user=current_user,
-            overtime_absence_minutes=overtime_absence_minutes,
-        )
-        return weekly_entry or overtime_entry
 
     def _book_weekly_balance(
         self,
         *,
         review: TimeEntryWeeklyReview,
         current_user: User,
-        actual_minutes: int,
+        weekly_breakdown: WeeklyHoursBreakdown,
         required_minutes: int,
     ) -> PersonHoursAccountEntry | None:
-        target_delta = actual_minutes - required_minutes
-        booked_delta = self._booked_week_delta(
+        weekly_delta = weekly_breakdown.actual_minutes - required_minutes
+        target_delta = weekly_delta - weekly_breakdown.overtime_absence_minutes
+        booked_delta = self._booked_weekly_closure_delta(
             person_id=review.person_id,
             iso_year=review.iso_year,
             iso_week=review.iso_week,
-            entry_type=HOURS_ACCOUNT_WEEKLY,
         )
         minutes_delta = target_delta - booked_delta
         if minutes_delta == 0:
-            if target_delta != 0 or self._has_week_entry(
+            if target_delta != 0 or self._has_weekly_closure_entry(
                 person_id=review.person_id,
                 iso_year=review.iso_year,
                 iso_week=review.iso_week,
-                entry_type=HOURS_ACCOUNT_WEEKLY,
             ):
                 return None
-            note = (
-                f"KW {review.iso_week:02d} / {review.iso_year} geprüft: "
-                "Sollzeit erreicht - keine Stundenkonto-Abweichung"
+            note = self._weekly_balance_note(
+                review=review,
+                actual_minutes=weekly_breakdown.actual_minutes,
+                required_minutes=required_minutes,
+                overtime_absence_minutes=weekly_breakdown.overtime_absence_minutes,
             )
             return self._append_entry(
                 person_id=review.person_id,
@@ -147,13 +159,17 @@ class PersonHoursAccountService:
                 iso_year=review.iso_year,
                 iso_week=review.iso_week,
                 weekly_review_id=review.id,
-                weekly_actual_minutes=actual_minutes,
+                weekly_work_minutes=weekly_breakdown.work_minutes,
+                weekly_actual_minutes=weekly_breakdown.actual_minutes,
                 weekly_required_minutes=required_minutes,
+                weekly_overtime_absence_minutes=weekly_breakdown.overtime_absence_minutes,
+                weekly_absence_breakdown=weekly_absence_breakdown_payload(weekly_breakdown.absence_minutes_by_type),
             )
-        note = (
-            f"KW {review.iso_week:02d} / {review.iso_year} geprüft: "
-            f"Ist {format_minutes_as_hours(actual_minutes)} h / "
-            f"Soll {format_minutes_as_hours(required_minutes)} h"
+        note = self._weekly_balance_note(
+            review=review,
+            actual_minutes=weekly_breakdown.actual_minutes,
+            required_minutes=required_minutes,
+            overtime_absence_minutes=weekly_breakdown.overtime_absence_minutes,
         )
         return self._append_entry(
             person_id=review.person_id,
@@ -164,40 +180,11 @@ class PersonHoursAccountService:
             iso_year=review.iso_year,
             iso_week=review.iso_week,
             weekly_review_id=review.id,
-            weekly_actual_minutes=actual_minutes,
+            weekly_work_minutes=weekly_breakdown.work_minutes,
+            weekly_actual_minutes=weekly_breakdown.actual_minutes,
             weekly_required_minutes=required_minutes,
-        )
-
-    def _book_overtime_absence(
-        self,
-        *,
-        review: TimeEntryWeeklyReview,
-        current_user: User,
-        overtime_absence_minutes: int,
-    ) -> PersonHoursAccountEntry | None:
-        target_delta = -overtime_absence_minutes
-        booked_delta = self._booked_week_delta(
-            person_id=review.person_id,
-            iso_year=review.iso_year,
-            iso_week=review.iso_week,
-            entry_type=HOURS_ACCOUNT_OVERTIME_ABSENCE,
-        )
-        minutes_delta = target_delta - booked_delta
-        if minutes_delta == 0:
-            return None
-        note = (
-            f"Überstundenabbau KW {review.iso_week:02d} / {review.iso_year}: "
-            f"{format_minutes_as_hours(overtime_absence_minutes)} h"
-        )
-        return self._append_entry(
-            person_id=review.person_id,
-            entry_type=HOURS_ACCOUNT_OVERTIME_ABSENCE,
-            minutes_delta=minutes_delta,
-            note=note,
-            current_user=current_user,
-            iso_year=review.iso_year,
-            iso_week=review.iso_week,
-            weekly_review_id=review.id,
+            weekly_overtime_absence_minutes=weekly_breakdown.overtime_absence_minutes,
+            weekly_absence_breakdown=weekly_absence_breakdown_payload(weekly_breakdown.absence_minutes_by_type),
         )
 
     def _append_entry(
@@ -211,8 +198,11 @@ class PersonHoursAccountService:
         iso_year: int | None = None,
         iso_week: int | None = None,
         weekly_review_id: int | None = None,
+        weekly_work_minutes: int | None = None,
         weekly_actual_minutes: int | None = None,
         weekly_required_minutes: int | None = None,
+        weekly_overtime_absence_minutes: int | None = None,
+        weekly_absence_breakdown: list[dict[str, int | str]] | None = None,
     ) -> PersonHoursAccountEntry:
         balance_after = self._current_balance_minutes(person_id) + minutes_delta
         entry = PersonHoursAccountEntry(
@@ -224,8 +214,11 @@ class PersonHoursAccountService:
             iso_year=iso_year,
             iso_week=iso_week,
             weekly_review_id=weekly_review_id,
+            weekly_work_minutes=weekly_work_minutes,
             weekly_actual_minutes=weekly_actual_minutes,
             weekly_required_minutes=weekly_required_minutes,
+            weekly_overtime_absence_minutes=weekly_overtime_absence_minutes,
+            weekly_absence_breakdown=weekly_absence_breakdown,
             created_by_user_id=current_user.id,
         )
         self.db.add(entry)
@@ -239,35 +232,54 @@ class PersonHoursAccountService:
         )
         return int(value or 0)
 
-    def _has_week_entry(
+    def _weekly_balance_note(
+        self,
+        *,
+        review: TimeEntryWeeklyReview,
+        actual_minutes: int,
+        required_minutes: int,
+        overtime_absence_minutes: int,
+    ) -> str:
+        weekly_delta = actual_minutes - required_minutes
+        if weekly_delta == 0 and overtime_absence_minutes == 0:
+            detail = "Sollzeit erreicht - keine Stundenkonto-Abweichung"
+        else:
+            detail = (
+                f"Ist {format_minutes_as_hours(actual_minutes)} h / "
+                f"Soll {format_minutes_as_hours(required_minutes)} h -> "
+                f"{format_minutes_as_hours(weekly_delta)} h"
+            )
+            if overtime_absence_minutes:
+                detail = f"{detail}; Überstundenabbau -{format_minutes_as_hours(overtime_absence_minutes)} h"
+        return f"KW {review.iso_week:02d} / {review.iso_year} geprüft: {detail}"
+
+    def _has_weekly_closure_entry(
         self,
         *,
         person_id: int,
         iso_year: int,
         iso_week: int,
-        entry_type: str,
     ) -> bool:
         value = self.db.scalar(
             select(func.count(PersonHoursAccountEntry.id))
             .where(PersonHoursAccountEntry.person_id == person_id)
-            .where(PersonHoursAccountEntry.entry_type == entry_type)
+            .where(PersonHoursAccountEntry.entry_type.in_([HOURS_ACCOUNT_WEEKLY, HOURS_ACCOUNT_OVERTIME_ABSENCE]))
             .where(PersonHoursAccountEntry.iso_year == iso_year)
             .where(PersonHoursAccountEntry.iso_week == iso_week)
         )
         return bool(value)
 
-    def _booked_week_delta(
+    def _booked_weekly_closure_delta(
         self,
         *,
         person_id: int,
         iso_year: int,
         iso_week: int,
-        entry_type: str,
     ) -> int:
         value = self.db.scalar(
             select(func.coalesce(func.sum(PersonHoursAccountEntry.minutes_delta), 0))
             .where(PersonHoursAccountEntry.person_id == person_id)
-            .where(PersonHoursAccountEntry.entry_type == entry_type)
+            .where(PersonHoursAccountEntry.entry_type.in_([HOURS_ACCOUNT_WEEKLY, HOURS_ACCOUNT_OVERTIME_ABSENCE]))
             .where(PersonHoursAccountEntry.iso_year == iso_year)
             .where(PersonHoursAccountEntry.iso_week == iso_week)
         )
@@ -283,7 +295,7 @@ class PersonHoursAccountService:
             )
         )
 
-    def _weekly_actual_minutes(self, *, person_id: int, iso_year: int, iso_week: int) -> tuple[int, int]:
+    def _weekly_actual_minutes(self, *, person_id: int, iso_year: int, iso_week: int) -> WeeklyHoursBreakdown:
         start = date.fromisocalendar(iso_year, iso_week, 1)
         end = start + timedelta(days=6)
         entries = list(
@@ -299,13 +311,20 @@ class PersonHoursAccountService:
             work_minutes_by_date[entry.work_date] = (
                 work_minutes_by_date.get(entry.work_date, 0) + effective_weekly_work_minutes(entry)
             )
-        absence_credit_minutes, overtime_absence_minutes = self._absence_week_minutes(
+        work_minutes = sum(work_minutes_by_date.values())
+        absence_minutes_by_type, overtime_absence_minutes = self._absence_week_minutes(
             person_id=person_id,
             start=start,
             end=end,
             work_minutes_by_date=work_minutes_by_date,
         )
-        return sum(work_minutes_by_date.values()) + absence_credit_minutes, overtime_absence_minutes
+        absence_credit_minutes = sum(absence_minutes_by_type.values())
+        return WeeklyHoursBreakdown(
+            work_minutes=work_minutes,
+            actual_minutes=work_minutes + absence_credit_minutes,
+            absence_minutes_by_type=absence_minutes_by_type,
+            overtime_absence_minutes=overtime_absence_minutes,
+        )
 
     def _absence_week_minutes(
         self,
@@ -314,7 +333,7 @@ class PersonHoursAccountService:
         start: date,
         end: date,
         work_minutes_by_date: dict[date, int],
-    ) -> tuple[int, int]:
+    ) -> tuple[dict[str, int], int]:
         absences = list(
             self.db.scalars(
                 select(Absence)
@@ -324,26 +343,32 @@ class PersonHoursAccountService:
                 .where(Absence.end_date >= start)
             )
         )
-        absence_dates: set[date] = set()
-        overtime_absence_dates: set[date] = set()
+        absence_types_by_date: dict[date, set[AbsenceType]] = {}
         for absence in absences:
             cursor = max(absence.start_date, start)
             last_day = min(absence.end_date, end)
             while cursor <= last_day:
                 if cursor.weekday() < 5:
-                    absence_dates.add(cursor)
-                    if absence.absence_type == AbsenceType.FREE:
-                        overtime_absence_dates.add(cursor)
+                    absence_types_by_date.setdefault(cursor, set()).add(absence.absence_type)
                 cursor += timedelta(days=1)
 
         credit_by_date = {
             absence_date: max(0, ABSENCE_DAY_CREDIT_MINUTES - work_minutes_by_date.get(absence_date, 0))
-            for absence_date in absence_dates
+            for absence_date in absence_types_by_date
         }
-        return (
-            sum(credit_by_date.values()),
-            sum(credit_by_date.get(absence_date, 0) for absence_date in overtime_absence_dates),
-        )
+        minutes_by_type: dict[str, int] = defaultdict(int)
+        overtime_absence_minutes = 0
+        for absence_date, credit_minutes in credit_by_date.items():
+            if credit_minutes <= 0:
+                continue
+            absence_types = absence_types_by_date.get(absence_date, set())
+            absence_type = primary_absence_type(absence_types)
+            if absence_type is None:
+                continue
+            minutes_by_type[absence_type.value] += credit_minutes
+            if AbsenceType.FREE in absence_types:
+                overtime_absence_minutes += credit_minutes
+        return dict(minutes_by_type), overtime_absence_minutes
 
     def _get_person(self, person_id: int) -> Person:
         person = self.db.get(Person, person_id)
@@ -399,6 +424,27 @@ def hours_to_minutes(hours: float) -> int:
 
 def format_minutes_as_hours(minutes: int) -> str:
     return str((Decimal(minutes) / Decimal("60")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)).replace(".", ",")
+
+
+def primary_absence_type(absence_types: set[AbsenceType]) -> AbsenceType | None:
+    for absence_type in ABSENCE_BREAKDOWN_ORDER:
+        if absence_type in absence_types:
+            return absence_type
+    return next(iter(absence_types), None)
+
+
+def weekly_absence_breakdown_payload(absence_minutes_by_type: dict[str, int]) -> list[dict[str, int | str]]:
+    payload: list[dict[str, int | str]] = []
+    known_types = {absence_type.value for absence_type in ABSENCE_BREAKDOWN_ORDER}
+    for absence_type in ABSENCE_BREAKDOWN_ORDER:
+        minutes = absence_minutes_by_type.get(absence_type.value, 0)
+        if minutes > 0:
+            payload.append({"absence_type": absence_type.value, "minutes": minutes})
+    for absence_type in sorted(set(absence_minutes_by_type) - known_types):
+        minutes = absence_minutes_by_type.get(absence_type, 0)
+        if minutes > 0:
+            payload.append({"absence_type": absence_type, "minutes": minutes})
+    return payload
 
 
 def clean_required_text(value: str, message: str) -> str:

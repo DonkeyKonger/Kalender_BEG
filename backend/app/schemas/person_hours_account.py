@@ -3,6 +3,11 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 
+class PersonHoursAbsenceBreakdownItem(BaseModel):
+    absence_type: str
+    minutes: int
+
+
 class PersonHoursAccountEntryRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -14,11 +19,19 @@ class PersonHoursAccountEntryRead(BaseModel):
     note: str
     iso_year: int | None = None
     iso_week: int | None = None
+    weekly_work_minutes: int | None = None
     weekly_actual_minutes: int | None = None
     weekly_required_minutes: int | None = None
+    weekly_overtime_absence_minutes: int | None = None
+    weekly_absence_breakdown: list[PersonHoursAbsenceBreakdownItem] = Field(default_factory=list)
     created_by_user_id: int | None = None
     created_by_name: str | None = None
     created_at: datetime
+
+    @field_validator("weekly_absence_breakdown", mode="before")
+    @classmethod
+    def normalize_weekly_absence_breakdown(cls, value):
+        return value or []
 
 
 class PersonHoursAccountRead(BaseModel):
