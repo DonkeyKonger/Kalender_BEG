@@ -21725,6 +21725,19 @@ button.person-chip:focus-visible {
   line-height: 1.45;
 }
 
+.measurement-review-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.measurement-review-header-row > .secondary-action {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .measurement-review-package-row,
 .measurement-review-toolbar-row {
   display: flex;

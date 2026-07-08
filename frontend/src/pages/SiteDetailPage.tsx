@@ -3729,17 +3729,17 @@ function MeasurementReviewPanel({
   return (
     <>
       <div className="project-record-toolbar">
-        <div>
+        <div className="measurement-review-header-row">
           <h2><Ruler aria-hidden="true" size={18} />{archiveMode ? "Archivierte Aufmaße" : "Prüfung"}</h2>
-          <p>
-            {archiveMode
-              ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
-              : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
-          </p>
+          <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
+            {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
+          </button>
         </div>
-        <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
-          {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
-        </button>
+        <p>
+          {archiveMode
+            ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
+            : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
+        </p>
       </div>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
       {batchesError ? (
