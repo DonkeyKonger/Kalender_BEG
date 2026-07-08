@@ -24,6 +24,10 @@ TERMINAL_TIME_REVIEW_STATUSES = {
     "clarification",
     "auto_closed_by_deadline",
 }
+WEEKLY_REVIEW_STATUS_REVIEWED = "reviewed"
+WEEKLY_REVIEW_STATUS_RESET = "reset"
+
+
 class TimeEntryService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -396,11 +400,13 @@ class TimeEntryService:
                 person_id=person_id,
                 iso_year=iso_year,
                 iso_week=iso_week,
+                status=WEEKLY_REVIEW_STATUS_REVIEWED,
                 reviewed_by_user_id=current_user.id,
                 reviewed_at=now,
             )
             self.db.add(review)
         else:
+            review.status = WEEKLY_REVIEW_STATUS_REVIEWED
             review.reviewed_by_user_id = current_user.id
             review.reviewed_at = now
         if hasattr(self.db, "flush"):
@@ -409,6 +415,33 @@ class TimeEntryService:
             review=review,
             current_user=current_user,
         )
+        self.db.commit()
+        self.db.refresh(review)
+        return review
+
+    def reset_weekly_review(
+        self,
+        *,
+        person_id: int,
+        iso_year: int,
+        iso_week: int,
+        current_user: User,
+    ) -> TimeEntryWeeklyReview:
+        self._ensure_can_review_time(current_user)
+        self._ensure_person_exists(person_id)
+        self._ensure_valid_iso_week(iso_year, iso_week)
+        statement = (
+            select(TimeEntryWeeklyReview)
+            .where(TimeEntryWeeklyReview.person_id == person_id)
+            .where(TimeEntryWeeklyReview.iso_year == iso_year)
+            .where(TimeEntryWeeklyReview.iso_week == iso_week)
+        )
+        review = self.db.scalar(statement)
+        if review is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Monteurwoche ist nicht geprüft.")
+        if review.status != WEEKLY_REVIEW_STATUS_REVIEWED:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurwoche ist nicht als geprüft markiert.")
+        review.status = WEEKLY_REVIEW_STATUS_RESET
         self.db.commit()
         self.db.refresh(review)
         return review

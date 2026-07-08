@@ -95,6 +95,7 @@ type TimeReviewWorkerSummary = {
   submittedMinutes: number;
   absenceType: AbsenceType | null;
   isReviewed: boolean;
+  isReset: boolean;
   entries: TimeEntry[];
 };
 type TimeReviewCheckState = "ok" | "warning" | "unknown";
@@ -231,6 +232,7 @@ export function TimeEntriesPage() {
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
+  const [reviewWeekStatusMenuPersonId, setReviewWeekStatusMenuPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
@@ -242,11 +244,33 @@ export function TimeEntriesPage() {
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
+  const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
   const timeReviewRenderCountRef = useRef(0);
   timeReviewRenderCountRef.current += 1;
+
+  useEffect(() => {
+    if (reviewWeekStatusMenuPersonId === null) {
+      return undefined;
+    }
+    function closeStatusMenuOnOutsideClick(event: MouseEvent) {
+      if (
+        event.target instanceof Node
+        && reviewWeekStatusMenuRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setReviewWeekStatusMenuPersonId(null);
+    }
+    document.addEventListener("mousedown", closeStatusMenuOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeStatusMenuOnOutsideClick);
+  }, [reviewWeekStatusMenuPersonId]);
+
+  useEffect(() => {
+    setReviewWeekStatusMenuPersonId(null);
+  }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
     void loadPeople();
@@ -329,17 +353,21 @@ export function TimeEntriesPage() {
   );
   const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
-    () => new Set(reviewWeeklyReviews.map((review) => review.person_id)),
+    () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReviewed).map((review) => review.person_id)),
+    [reviewWeeklyReviews],
+  );
+  const resetWorkerIds = useMemo(
+    () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReset).map((review) => review.person_id)),
     [reviewWeeklyReviews],
   );
   const timeReviewWorkers = useMemo(() => {
     const perfStart = timeReviewPerfNow();
-    const result = buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds);
+    const result = buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds, resetWorkerIds);
     recordTimeReviewPerfCalculation(timeReviewPerfRef, "worker summaries", perfStart, {
       details: `${people.length} Personen · ${reviewAllEntries.length} Einträge · ${reviewAbsences.length} Abwesenheiten · ${result.length} Monteure`,
     });
     return result;
-  }, [people, reviewAbsences, reviewAllEntries, reviewEntries, reviewedWorkerIds]);
+  }, [people, reviewAbsences, reviewAllEntries, reviewEntries, resetWorkerIds, reviewedWorkerIds]);
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
     [selectedReviewPersonId, timeReviewWorkers],
@@ -1216,23 +1244,35 @@ export function TimeEntriesPage() {
         isoWeek: selectedReviewWeek.week,
       });
       setReviewWeeklyReviews((current) => {
-        const withoutCurrent = current.filter((review) => !(
-          review.person_id === weeklyReview.person_id
-          && review.iso_year === weeklyReview.iso_year
-          && review.iso_week === weeklyReview.iso_week
-        ));
-        return [...withoutCurrent, weeklyReview];
+        return upsertWeeklyReview(current, weeklyReview);
       });
       setReviewWeekCompletionReviews((current) => {
-        const withoutCurrent = current.filter((review) => !(
-          review.person_id === weeklyReview.person_id
-          && review.iso_year === weeklyReview.iso_year
-          && review.iso_week === weeklyReview.iso_week
-        ));
-        return [...withoutCurrent, weeklyReview];
+        return upsertWeeklyReview(current, weeklyReview);
       });
     } catch (requestError) {
       setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht als geprüft markiert werden."));
+    } finally {
+      setMarkingReviewWeekPersonId(null);
+    }
+  }
+
+  async function resetSelectedReviewWeekReview(): Promise<void> {
+    if (!canManageTimeEntries || !selectedReviewWorker || !selectedReviewWorker.isReviewed || markingReviewWeekPersonId !== null) {
+      return;
+    }
+    setReviewWeekStatusMenuPersonId(null);
+    setMarkingReviewWeekPersonId(selectedReviewWorker.personId);
+    setReviewActionError(null);
+    try {
+      const weeklyReview = await api.resetTimeEntryWeeklyReview({
+        personId: selectedReviewWorker.personId,
+        isoYear: selectedReviewWeek.year,
+        isoWeek: selectedReviewWeek.week,
+      });
+      setReviewWeeklyReviews((current) => upsertWeeklyReview(current, weeklyReview));
+      setReviewWeekCompletionReviews((current) => upsertWeeklyReview(current, weeklyReview));
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht zurückgesetzt werden."));
     } finally {
       setMarkingReviewWeekPersonId(null);
     }
@@ -1349,6 +1389,7 @@ export function TimeEntriesPage() {
                       "time-review-worker-bubble",
                       selectedReviewWorker?.personId === worker.personId ? "is-active" : "",
                       worker.isReviewed ? "is-reviewed" : "",
+                      worker.isReset ? "is-reset" : "",
                       worker.submittedMinutes <= 0 ? "has-no-submissions" : "",
                       worker.absenceType ? `has-absence-${worker.absenceType}` : "",
                     ].filter(Boolean).join(" ")}
@@ -1363,6 +1404,9 @@ export function TimeEntriesPage() {
                         : "Keine Meldung"}
                     </small>
                     {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
+                    {worker.isReset && !worker.isReviewed && (
+                      <span className="time-review-worker-check" aria-label="zurückgesetzt" style={{ color: "#b45309" }}>!</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1376,7 +1420,59 @@ export function TimeEntriesPage() {
                     <h3>{selectedReviewWorker.personName}</h3>
                   </div>
                   <div className="time-review-worker-detail-status">
-                    {selectedReviewWorker.isReviewed ? <StatusBadge tone="active">Geprüft</StatusBadge> : <StatusBadge tone="warning">Offen</StatusBadge>}
+                    {selectedReviewWorker.isReviewed ? (
+                      <div
+                        ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
+                        style={{ display: "inline-flex", position: "relative" }}
+                      >
+                        <button
+                          aria-expanded={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId}
+                          aria-haspopup="menu"
+                          className="status-badge status-badge-active"
+                          disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                          style={{
+                            appearance: "none",
+                            border: 0,
+                            cursor: !canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId ? "not-allowed" : "pointer",
+                            font: "inherit",
+                          }}
+                          type="button"
+                          onClick={() => setReviewWeekStatusMenuPersonId((current) => (
+                            current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
+                          ))}
+                        >
+                          Geprüft
+                        </button>
+                        {reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
+                          <div
+                            className="time-review-day-move-popover"
+                            role="menu"
+                            aria-label="Lohnprüfstatus Aktionen"
+                            style={{
+                              minWidth: "132px",
+                              position: "absolute",
+                              right: 0,
+                              top: "calc(100% + 4px)",
+                              zIndex: 100,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={markingReviewWeekPersonId === selectedReviewWorker.personId}
+                              style={{ background: "#fff8eb", color: "#9a5b00" }}
+                              onClick={() => void resetSelectedReviewWeekReview()}
+                            >
+                              {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedReviewWorker.isReset ? (
+                      <StatusBadge tone="warning">Zurückgesetzt</StatusBadge>
+                    ) : (
+                      <StatusBadge tone="warning">Offen</StatusBadge>
+                    )}
                   </div>
                 </div>
                 {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
@@ -2497,7 +2593,7 @@ function buildCompletedReviewWeekKeys(reviews: TimeEntryWeeklyReview[], workerId
   const workerIdSet = new Set(workerIds);
   const reviewedWorkersByWeek = new Map<string, Set<number>>();
   reviews.forEach((review) => {
-    if (!workerIdSet.has(review.person_id)) {
+    if (!workerIdSet.has(review.person_id) || !isWeeklyReviewReviewed(review)) {
       return;
     }
     const key = reviewWeekKey({ year: review.iso_year, week: review.iso_week });
@@ -2511,6 +2607,23 @@ function buildCompletedReviewWeekKeys(reviews: TimeEntryWeeklyReview[], workerId
     }
   });
   return result;
+}
+
+function isWeeklyReviewReviewed(review: TimeEntryWeeklyReview): boolean {
+  return review.status === "reviewed";
+}
+
+function isWeeklyReviewReset(review: TimeEntryWeeklyReview): boolean {
+  return review.status === "reset";
+}
+
+function upsertWeeklyReview(current: TimeEntryWeeklyReview[], next: TimeEntryWeeklyReview): TimeEntryWeeklyReview[] {
+  const withoutCurrent = current.filter((review) => !(
+    review.person_id === next.person_id
+    && review.iso_year === next.iso_year
+    && review.iso_week === next.iso_week
+  ));
+  return [...withoutCurrent, next];
 }
 
 function reviewWeekKey(selection: CalendarWeekSelection): string {
@@ -2693,6 +2806,7 @@ function buildTimeReviewWorkerSummaries(
   openEntries: TimeEntry[],
   absences: Absence[],
   reviewedWorkerIds: Set<number>,
+  resetWorkerIds: Set<number>,
 ): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
@@ -2712,6 +2826,7 @@ function buildTimeReviewWorkerSummaries(
         submittedMinutes: 0,
         absenceType: absenceTypeByPersonId.get(person.id) ?? null,
         isReviewed: false,
+        isReset: false,
         entries: [],
       });
     });
@@ -2743,6 +2858,7 @@ function buildTimeReviewWorkerSummaries(
         submittedMinutes,
         absenceType: absenceTypeByPersonId.get(summary.personId) ?? null,
         isReviewed: reviewedWorkerIds.has(summary.personId),
+        isReset: resetWorkerIds.has(summary.personId),
         entries: summary.entries.slice().sort(compareTimeReviewWorkerEntries),
       };
     })

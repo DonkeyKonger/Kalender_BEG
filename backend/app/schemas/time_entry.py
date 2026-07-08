@@ -166,6 +166,7 @@ class TimeEntryWeeklyReviewRead(BaseModel):
     person_id: int
     iso_year: int
     iso_week: int
+    status: str = "reviewed"
     reviewed_by_user_id: int | None = None
     reviewed_at: datetime
     created_at: datetime

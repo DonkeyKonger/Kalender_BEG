@@ -304,6 +304,7 @@ def test_mark_weekly_review_creates_person_week_status():
     assert review.person_id == 4
     assert review.iso_year == 2026
     assert review.iso_week == 24
+    assert review.status == "reviewed"
     assert review.reviewed_by_user_id == 7
     assert review.reviewed_at is not None
     assert added == [review]
@@ -332,9 +333,50 @@ def test_mark_weekly_review_updates_existing_person_week_status():
     review = item.mark_weekly_review(person_id=4, iso_year=2026, iso_week=24, current_user=current_user)
 
     assert review is existing
+    assert review.status == "reviewed"
     assert review.reviewed_by_user_id == 8
     assert review.reviewed_at is not None
     assert commits == [True]
+
+
+def test_reset_weekly_review_marks_person_week_as_reset():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.commit()
+
+    service = TimeEntryService(db)
+    reviewed = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+    reset = service.reset_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+    assert reset.id == reviewed.id
+    assert reset.status == "reset"
+
+    reviewed_again = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        current_user=user,
+    )
+
+    assert reviewed_again.id == reviewed.id
+    assert reviewed_again.status == "reviewed"
 
 
 def test_mark_weekly_review_books_hours_account_once():

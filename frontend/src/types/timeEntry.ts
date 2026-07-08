@@ -118,6 +118,7 @@ export type TimeEntryWeeklyReview = {
   person_id: number;
   iso_year: number;
   iso_week: number;
+  status: "reviewed" | "reset" | string;
   reviewed_by_user_id: number | null;
   reviewed_at: string;
   created_at: string;

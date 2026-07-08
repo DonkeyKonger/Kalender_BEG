@@ -694,6 +694,17 @@ export const api = {
     });
   },
 
+  async resetTimeEntryWeeklyReview(payload: { personId: number; isoYear: number; isoWeek: number }): Promise<TimeEntryWeeklyReview> {
+    return request<TimeEntryWeeklyReview>("/time-entries/weekly-reviews/reset", {
+      method: "POST",
+      body: JSON.stringify({
+        person_id: payload.personId,
+        iso_year: payload.isoYear,
+        iso_week: payload.isoWeek,
+      }),
+    });
+  },
+
 
   async siteSummaries(params: { includeClosed?: boolean } = {}): Promise<SiteSummary[]> {
     const search = new URLSearchParams();

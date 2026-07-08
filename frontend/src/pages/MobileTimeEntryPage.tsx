@@ -217,6 +217,7 @@ export function MobileTimeEntryPage() {
   const reviewedWeekKeys = useMemo(
     () => new Set(
       weeklyReviews
+        .filter(isWeeklyReviewReviewed)
         .filter((review) => personId === null || review.person_id === personId)
         .map((review) => isoWeekKey(review.iso_year, review.iso_week)),
     ),
@@ -1655,6 +1656,10 @@ function parseApiOverlapConflict(error: unknown, siteById: Map<number, MobileTim
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isWeeklyReviewReviewed(review: TimeEntryWeeklyReview): boolean {
+  return review.status === "reviewed";
 }
 
 function classNames(...values: Array<string | false | null | undefined>): string {

@@ -261,6 +261,20 @@ def mark_time_entry_weekly_review(
     )
 
 
+@router.post("/weekly-reviews/reset", response_model=TimeEntryWeeklyReviewRead)
+def reset_time_entry_weekly_review(
+    payload: TimeEntryWeeklyReviewCreate,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryWeeklyReviewRead:
+    return TimeEntryService(db).reset_weekly_review(
+        person_id=payload.person_id,
+        iso_year=payload.iso_year,
+        iso_week=payload.iso_week,
+        current_user=current_user,
+    )
+
+
 def time_entry_read(
     entry: WorkTimeEntry,
     gps_service: GpsPresenceService | None = None,
