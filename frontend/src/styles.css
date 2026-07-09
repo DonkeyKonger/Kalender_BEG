@@ -21739,12 +21739,11 @@ button.person-chip:focus-visible {
   display: grid;
   align-items: start;
   justify-items: stretch;
-  gap: 7px;
   margin: 18px 0 12px;
   border: 1px solid var(--figma-border);
   border-radius: 2px;
   background: var(--figma-surface);
-  padding: 16px 18px;
+  padding: 16px 12px 16px 18px;
   box-shadow: none;
 }
 
@@ -21768,20 +21767,53 @@ button.person-chip:focus-visible {
   line-height: 1.45;
 }
 
-.measurement-review-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+.site-detail-page.is-measurement-review-workspace .measurement-review-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   width: 100%;
   min-width: 0;
   gap: 12px;
 }
 
-.measurement-review-header-row > .secondary-action {
-  flex: 0 0 auto;
-  width: auto;
+.site-detail-page.is-measurement-review-workspace .measurement-review-header-copy {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.site-detail-page.is-measurement-review-workspace .measurement-review-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  justify-self: end;
+  min-width: 0;
   margin-left: auto;
+}
+
+.site-detail-page.is-measurement-review-workspace .measurement-review-header-actions > .secondary-action {
+  width: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .site-detail-page.is-measurement-review-workspace .project-record-toolbar {
+    padding: 14px;
+  }
+
+  .site-detail-page.is-measurement-review-workspace .measurement-review-header-row {
+    grid-template-columns: 1fr;
+  }
+
+  .site-detail-page.is-measurement-review-workspace .measurement-review-header-actions {
+    justify-self: end;
+    max-width: 100%;
+    margin-left: 0;
+  }
+
+  .site-detail-page.is-measurement-review-workspace .measurement-review-header-actions > .secondary-action {
+    max-width: 100%;
+    white-space: normal;
+  }
 }
 
 .measurement-review-package-row,
