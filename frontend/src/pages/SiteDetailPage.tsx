@@ -4607,7 +4607,7 @@ function MeasurementTimeAnalysisPanel({
                   <th>Soll Gesamt</th>
                   <th>Ist Monteure</th>
                   <th>Abweichung</th>
-                  <th>Verbrauch</th>
+                  <th>Ist/Soll-Quote</th>
                 </tr>
               </thead>
               <tbody>
