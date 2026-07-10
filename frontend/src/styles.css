@@ -21772,30 +21772,30 @@ button.person-chip:focus-visible {
   line-height: 1.45;
 }
 
-.site-detail-page.is-measurement-review-workspace .measurement-review-header-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+.site-detail-page .project-record-toolbar.measurement-review-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   width: 100%;
   min-width: 0;
-  gap: 12px;
+  gap: 16px;
 }
 
-.site-detail-page.is-measurement-review-workspace .measurement-review-header-copy {
+.site-detail-page .measurement-review-toolbar .measurement-review-header-copy {
   display: grid;
   min-width: 0;
   gap: 7px;
 }
 
-.site-detail-page.is-measurement-review-workspace .measurement-review-header-actions {
+.site-detail-page .measurement-review-toolbar .measurement-review-header-actions {
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
-  justify-self: end;
   min-width: 0;
   margin-left: auto;
 }
 
-.site-detail-page.is-measurement-review-workspace .measurement-review-header-actions > .secondary-action {
+.site-detail-page .measurement-review-toolbar .measurement-review-header-actions > .secondary-action {
   width: auto;
   white-space: nowrap;
 }
@@ -21805,17 +21805,18 @@ button.person-chip:focus-visible {
     padding: 14px;
   }
 
-  .site-detail-page.is-measurement-review-workspace .measurement-review-header-row {
-    grid-template-columns: 1fr;
+  .site-detail-page .project-record-toolbar.measurement-review-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .site-detail-page.is-measurement-review-workspace .measurement-review-header-actions {
-    justify-self: end;
+  .site-detail-page .measurement-review-toolbar .measurement-review-header-actions {
+    align-self: flex-end;
     max-width: 100%;
     margin-left: 0;
   }
 
-  .site-detail-page.is-measurement-review-workspace .measurement-review-header-actions > .secondary-action {
+  .site-detail-page .measurement-review-toolbar .measurement-review-header-actions > .secondary-action {
     max-width: 100%;
     white-space: normal;
   }

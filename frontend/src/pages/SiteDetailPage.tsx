@@ -3728,23 +3728,21 @@ function MeasurementReviewPanel({
 
   return (
     <>
-      <div className="project-record-toolbar">
-        <div className="measurement-review-header-row">
-          <div className="measurement-review-header-copy">
-            <h2><Ruler aria-hidden="true" size={18} />{archiveMode ? "Archivierte Aufmaße" : "Prüfung"}</h2>
-            <p>
-              {archiveMode
-                ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
-                : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
-            </p>
-          </div>
-          <div className="measurement-review-header-actions">
-            <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
-              {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
-            </button>
-          </div>
+      <header className="project-record-toolbar measurement-review-toolbar">
+        <div className="measurement-review-header-copy">
+          <h2><Ruler aria-hidden="true" size={18} />{archiveMode ? "Archivierte Aufmaße" : "Prüfung"}</h2>
+          <p>
+            {archiveMode
+              ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
+              : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
+          </p>
         </div>
-      </div>
+        <div className="measurement-review-header-actions">
+          <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
+            {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
+          </button>
+        </div>
+      </header>
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
       {batchesError ? (
         <div className="project-record-empty-state is-error">
