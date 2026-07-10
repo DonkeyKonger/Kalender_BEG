@@ -19,7 +19,7 @@ import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors"
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -4566,6 +4566,8 @@ function MeasurementTimeAnalysisPanel({
   error: string | null;
   onRetry: () => void;
 }) {
+  const displayRows = analysis ? getMeasurementTimeAnalysisRowsNewestFirst(analysis.rows) : [];
+
   return (
     <div className="measurement-time-analysis-panel">
       <div className="project-record-toolbar">
@@ -4611,7 +4613,7 @@ function MeasurementTimeAnalysisPanel({
                 </tr>
               </thead>
               <tbody>
-                {analysis.rows.map((row) => (
+                {displayRows.map((row) => (
                   <tr key={row.measurement_batch_id}>
                     <td>
                       <strong>{`Aufmaß ${row.measurement_number}`}</strong>
@@ -6183,6 +6185,34 @@ function siteTimeCreditClassName(minutes: number | null): string {
 
 function signedMeasurementDurationClassName(minutes: number | null): string {
   return `measurement-signed-duration ${siteTimeCreditClassName(minutes)}`;
+}
+
+function getMeasurementTimeAnalysisRowsNewestFirst(rows: MeasurementTimeAnalysisRow[]): MeasurementTimeAnalysisRow[] {
+  return [...rows].sort(compareMeasurementTimeAnalysisRowsNewestFirst);
+}
+
+function compareMeasurementTimeAnalysisRowsNewestFirst(
+  left: MeasurementTimeAnalysisRow,
+  right: MeasurementTimeAnalysisRow,
+): number {
+  const rightTime = getMeasurementTimeAnalysisRowSortTime(right);
+  const leftTime = getMeasurementTimeAnalysisRowSortTime(left);
+  if (rightTime !== leftTime) {
+    return rightTime - leftTime;
+  }
+  if (right.measurement_number !== left.measurement_number) {
+    return right.measurement_number - left.measurement_number;
+  }
+  return right.measurement_batch_id - left.measurement_batch_id;
+}
+
+function getMeasurementTimeAnalysisRowSortTime(row: MeasurementTimeAnalysisRow): number {
+  const value = row.analysis_at ?? row.period_end ?? row.period_start;
+  if (!value) {
+    return 0;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function formatMeasurementAnalysisPeriod(start: string | null, end: string | null): string {
