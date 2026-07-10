@@ -181,8 +181,16 @@ button:disabled {
   align-items: center;
 }
 
+.sidebar-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .brand-copy,
-.nav-label {
+.nav-label,
+.sidebar-logout-label {
   min-width: 0;
 }
 
@@ -202,6 +210,37 @@ button:disabled {
 
 .sidebar .brand-subtitle {
   color: #b9c8dc;
+}
+
+.sidebar-logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid rgb(220 232 247 / 20%);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 8%);
+  color: #dce8f7;
+  padding: 7px 9px;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.sidebar-logout-button:hover,
+.sidebar-logout-button:focus-visible {
+  border-color: rgb(220 232 247 / 34%);
+  background: rgb(42 116 191 / 42%);
+  color: #ffffff;
+  outline: none;
+}
+
+.sidebar-logout-button svg {
+  flex: 0 0 auto;
+}
+
+.sidebar-logout-label {
+  white-space: nowrap;
 }
 
 .nav-list {
@@ -440,15 +479,23 @@ button:disabled {
     transform: translate3d(0, 0, 0);
   }
 
+  .sidebar-brand-header {
+    display: grid;
+    gap: 9px;
+    pointer-events: none;
+    width: 224px;
+  }
+
   .brand-block {
     justify-content: flex-start;
     gap: 10px;
     pointer-events: none;
-    width: 240px;
+    width: 224px;
   }
 
   .brand-copy,
-  .nav-label {
+  .nav-label,
+  .sidebar-logout-label {
     overflow: hidden;
     opacity: 0;
     pointer-events: none;
@@ -467,6 +514,13 @@ button:disabled {
 
   .sidebar.is-pointer-expanded .nav-label,
   .sidebar.is-keyboard-expanded .nav-label {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .sidebar.is-pointer-expanded .sidebar-logout-label,
+  .sidebar.is-keyboard-expanded .sidebar-logout-label {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
@@ -492,7 +546,19 @@ button:disabled {
     padding: 8px 10px;
   }
 
-  .nav-list a svg {
+  .sidebar-logout-button {
+    justify-content: flex-start;
+    width: 224px;
+    min-height: 36px;
+    clip-path: inset(0 172px 0 0);
+    contain: layout paint;
+    overflow: hidden;
+    pointer-events: auto;
+    padding: 8px 10px;
+  }
+
+  .nav-list a svg,
+  .sidebar-logout-button svg {
     flex: 0 0 20px;
     width: 20px;
     height: 20px;
@@ -500,6 +566,11 @@ button:disabled {
 
   .sidebar.is-pointer-expanded .nav-list a,
   .sidebar.is-keyboard-expanded .nav-list a {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .sidebar.is-pointer-expanded .sidebar-logout-button,
+  .sidebar.is-keyboard-expanded .sidebar-logout-button {
     clip-path: inset(0 0 0 0);
   }
 

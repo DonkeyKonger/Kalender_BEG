@@ -25,7 +25,6 @@ export function AppShell() {
   const lastDashboardMessageSignatureRef = useRef<string | null>(null);
   const visibleItems = navigationItems.filter((item) => user && canShowNavItem(user, item));
   const showUserTopbar = location.pathname === "/";
-  const showProjectManagerMobileLogout = showUserTopbar && user?.role === "project_manager";
 
   useEffect(() => {
     if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role) || !canAccessMainPage(user, "overview")) {
@@ -157,14 +156,26 @@ export function AppShell() {
         onPointerEnter={handleSidebarPointerEnter}
         onPointerLeave={handleSidebarPointerLeave}
       >
-        <div className="brand-block">
-          <span className="brand-mark brand-logo-mark">
-            <img src="/beg-logo.png" alt="BEG Logo" />
-          </span>
-          <div className="brand-copy">
-            <p className="brand-name">Kalender Baustellen</p>
-            <p className="brand-subtitle">Einsatzplanung</p>
+        <div className="sidebar-brand-header">
+          <div className="brand-block">
+            <span className="brand-mark brand-logo-mark">
+              <img src="/beg-logo.png" alt="BEG Logo" />
+            </span>
+            <div className="brand-copy">
+              <p className="brand-name">Kalender Baustellen</p>
+              <p className="brand-subtitle">Einsatzplanung</p>
+            </div>
           </div>
+          <button
+            type="button"
+            className="sidebar-logout-button"
+            title="Abmelden"
+            aria-label="Abmelden"
+            onClick={() => void logout()}
+          >
+            <LogOut aria-hidden="true" size={18} />
+            <span className="sidebar-logout-label">Abmelden</span>
+          </button>
         </div>
 
         <nav className="nav-list">
@@ -200,8 +211,8 @@ export function AppShell() {
           </header>
         ) : null}
 
-        {showProjectManagerMobileLogout ? (
-          <div className="mobile-appshell-actions" aria-label="Mobile Projektleiteraktionen">
+        {user ? (
+          <div className="mobile-appshell-actions" aria-label="Mobile App-Aktionen">
             <span className="mobile-appshell-user">Angemeldet als {user?.display_name}</span>
             <button className="icon-button" type="button" onClick={() => void logout()}>
               <LogOut aria-hidden="true" size={17} />
