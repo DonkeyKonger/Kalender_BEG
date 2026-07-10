@@ -4588,7 +4588,12 @@ function MeasurementTimeAnalysisPanel({
           <div className="measurement-evaluation-grid">
             <div><span>Soll gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.planned_minutes))}</strong></div>
             <div><span>Ist gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.actual_minutes))}</strong></div>
-            <div><span>Abweichung</span><strong>{formatSignedMeasurementDuration(getMeasurementNumericValue(analysis.totals.deviation_minutes))}</strong></div>
+            <div>
+              <span>Abweichung</span>
+              <strong className={signedMeasurementDurationClassName(getMeasurementNumericValue(analysis.totals.deviation_minutes))}>
+                {formatSignedMeasurementDuration(getMeasurementNumericValue(analysis.totals.deviation_minutes))}
+              </strong>
+            </div>
           </div>
           <div className="measurement-table-wrap measurement-time-analysis-table-wrap">
             <table className="measurement-table measurement-time-analysis-table">
@@ -4622,7 +4627,11 @@ function MeasurementTimeAnalysisPanel({
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.extra_work_minutes))}</td>
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.planned_minutes))}</td>
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.actual_minutes))}</td>
-                    <td className="measurement-timesheet-number">{formatSignedMeasurementDuration(getMeasurementNumericValue(row.deviation_minutes))}</td>
+                    <td className="measurement-timesheet-number">
+                      <span className={signedMeasurementDurationClassName(getMeasurementNumericValue(row.deviation_minutes))}>
+                        {formatSignedMeasurementDuration(getMeasurementNumericValue(row.deviation_minutes))}
+                      </span>
+                    </td>
                     <td className="measurement-timesheet-number">{row.consumption_percent !== null ? formatMeasurementPercent(row.consumption_percent) : "-"}</td>
                   </tr>
                 ))}
@@ -4840,9 +4849,9 @@ function SiteWorkTimesPanel({
                     : "Keine Stunden erfasst"}
                 </strong>
               </div>
-              <div className={["site-times-summary-row", "site-times-credit-row", siteTimeCreditClassName(hourCreditMinutes)].join(" ")}>
+              <div className="site-times-summary-row site-times-credit-row">
                 <span>Stundenguthaben</span>
-                <strong className={siteTimeCreditClassName(hourCreditMinutes)}>
+                <strong className={signedMeasurementDurationClassName(hourCreditMinutes)}>
                   {hourCreditMinutes !== null
                     ? formatSignedMeasurementDuration(hourCreditMinutes)
                     : "-"}
@@ -6170,6 +6179,10 @@ function siteTimeCreditClassName(minutes: number | null): string {
     return "is-neutral";
   }
   return minutes > 0 ? "is-positive" : "is-negative";
+}
+
+function signedMeasurementDurationClassName(minutes: number | null): string {
+  return `measurement-signed-duration ${siteTimeCreditClassName(minutes)}`;
 }
 
 function formatMeasurementAnalysisPeriod(start: string | null, end: string | null): string {

@@ -1372,6 +1372,11 @@ def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted
         Decimal("1200"),
         Decimal("8100"),
     ]
+    assert [row.deviation_minutes for row in analysis.rows] == [
+        Decimal("-1380"),
+        Decimal("0"),
+        Decimal("-5640"),
+    ]
     assert [ticket.display_number for ticket in analysis.rows[0].extra_work_tickets] == [
         "8007.SZ01",
         "8007.SZ02",
@@ -1381,6 +1386,111 @@ def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted
         "8007.SZ03",
         "8007.SZ04",
     ]
+
+
+def test_measurement_time_analysis_counts_external_planned_people_like_execution_progress():
+    from app.models.assignment import Assignment
+    from app.models.enums import PersonType
+    from app.models.person import Person
+    from app.models.site_measurement_item import SiteMeasurementEntry
+    from app.models.work_time_entry import WorkTimeEntry
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    work_date = date(2026, 8, 14)
+    internal = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    external_one = Person(
+        first_name="Eva",
+        last_name="Extern",
+        display_name="Eva Extern",
+        short_code="EE",
+        person_type=PersonType.EXTERNAL,
+    )
+    external_two = Person(
+        first_name="Tom",
+        last_name="Temp",
+        display_name="Tom Temp",
+        short_code="TT",
+        person_type=PersonType.EXTERNAL_TEMP,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1",
+        description="Montage",
+        list_quantity=Decimal("0"),
+        unit="Std",
+        minutes_per_unit=Decimal("60"),
+        list_minutes_total=Decimal("0"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([internal, external_one, external_two, item])
+    db.flush()
+
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Hauptauftrag",
+        status="submitted",
+        submitted_at=datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc),
+    )
+    db.add(batch)
+    db.flush()
+    db.add_all(
+        [
+            SiteMeasurementEntry(
+                measurement_batch=batch,
+                measurement_item=item,
+                site=site,
+                quantity=Decimal("32"),
+                area_or_comment="KW33",
+                status="submitted",
+            ),
+            WorkTimeEntry(
+                person=internal,
+                site=site,
+                work_date=work_date,
+                work_minutes=8 * 60,
+                break_minutes=0,
+                travel_minutes=0,
+                status="reviewed",
+                time_review_status="manually_approved",
+            ),
+            Assignment(
+                site=site,
+                person=external_one,
+                start_date=work_date,
+                end_date=work_date,
+            ),
+            Assignment(
+                site=site,
+                person=external_two,
+                start_date=work_date,
+                end_date=work_date,
+            ),
+        ]
+    )
+    db.commit()
+
+    analysis = MeasurementService(db).get_site_measurement_time_analysis(site.id)
+
+    assert analysis.rows[0].planned_minutes == Decimal("1920")
+    assert analysis.rows[0].actual_minutes == Decimal("1440")
+    assert analysis.rows[0].deviation_minutes == Decimal("480")
+    assert analysis.rows[0].consumption_percent == 75
+    assert analysis.totals.planned_minutes == Decimal("1920")
+    assert analysis.totals.actual_minutes == Decimal("1440")
+    assert analysis.totals.deviation_minutes == Decimal("480")
+    assert analysis.totals.consumption_percent == 75
 
 
 def test_dashboard_submissions_for_project_manager_are_scoped_to_assigned_sites():

@@ -11617,6 +11617,21 @@ button.person-chip:focus-visible {
   margin-top: 3px;
 }
 
+.measurement-signed-duration.is-positive {
+  color: #0f7a3d;
+  font-weight: 850;
+}
+
+.measurement-signed-duration.is-negative {
+  color: #b42318;
+  font-weight: 850;
+}
+
+.measurement-signed-duration.is-neutral {
+  color: inherit;
+  font-weight: inherit;
+}
+
 .measurement-time-analysis-extra-work-cell {
   overflow: visible;
   position: relative;
@@ -11860,16 +11875,6 @@ button.person-chip:focus-visible {
   margin-top: 16px;
   border-top: 1px solid #edf2f7;
   background: #ffffff;
-}
-
-.site-times-credit-row.is-negative {
-  border-top-color: #f3d7d7;
-  background: #fff9f8;
-}
-
-.site-times-credit-row.is-positive {
-  border-top-color: #d9f2e1;
-  background: #f8fffb;
 }
 
 .site-times-credit-row span {

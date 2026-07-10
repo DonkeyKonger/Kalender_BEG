@@ -1316,9 +1316,11 @@ class MeasurementService:
                 .order_by(WorkTimeEntry.work_date, WorkTimeEntry.id)
             ).all()
         )
+        time_entry_service = TimeEntryService(self.db)
         relevant_work_entries = [
             entry for entry in work_entries if TimeEntryService.is_project_mounting_time_relevant(entry)
         ]
+        project_mounting_contexts = time_entry_service.project_mounting_contexts(relevant_work_entries)
 
         previous_boundary: datetime | None = None
         row_payloads: list[dict[str, object]] = []
@@ -1330,6 +1332,7 @@ class MeasurementService:
                 relevant_work_entries,
                 period_start=previous_boundary,
                 period_end=boundary,
+                project_mounting_contexts=project_mounting_contexts,
             )
             row_payloads.append(
                 {
@@ -1379,7 +1382,7 @@ class MeasurementService:
             extra_work_minutes = payload["extra_work_minutes"]
             planned_minutes = measurement_minutes + extra_work_minutes
             actual_minutes = payload["actual_minutes"]
-            deviation_minutes = actual_minutes - planned_minutes
+            deviation_minutes = planned_minutes - actual_minutes
             planned_total += planned_minutes
             actual_total += actual_minutes
             rows.append(
@@ -1405,7 +1408,7 @@ class MeasurementService:
                 )
             )
 
-        deviation_total = actual_total - planned_total
+        deviation_total = planned_total - actual_total
         return MeasurementTimeAnalysisRead(
             site_id=site_id,
             totals=MeasurementTimeAnalysisTotalsRead(
@@ -2533,7 +2536,14 @@ class MeasurementService:
         return value.astimezone(MEASUREMENT_ARCHIVE_TIMEZONE).replace(tzinfo=None)
 
     @staticmethod
-    def _entry_work_minutes(entry: WorkTimeEntry) -> Decimal:
+    def _entry_work_minutes(
+        entry: WorkTimeEntry,
+        project_mounting_contexts: dict[int, dict[str, object]] | None = None,
+    ) -> Decimal:
+        if entry.id is not None and project_mounting_contexts:
+            context = project_mounting_contexts.get(entry.id)
+            if context is not None and context.get("work_minutes") is not None:
+                return Decimal(str(context["work_minutes"] or 0))
         minutes = TimeEntryService.project_mounting_work_minutes(entry)
         return Decimal(str(minutes or 0))
 
@@ -2543,10 +2553,14 @@ class MeasurementService:
         *,
         period_start: datetime | None,
         period_end: datetime | None,
+        project_mounting_contexts: dict[int, dict[str, object]] | None = None,
     ) -> Decimal:
         total = Decimal("0")
         for entry in entries:
-            entry_minutes = self._entry_work_minutes(entry)
+            entry_minutes = self._entry_work_minutes(
+                entry,
+                project_mounting_contexts=project_mounting_contexts,
+            )
             if entry_minutes <= 0:
                 continue
             ratio = self._work_entry_overlap_ratio(entry, period_start=period_start, period_end=period_end)
