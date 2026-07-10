@@ -1,12 +1,12 @@
-import { AlertTriangle, BriefcaseBusiness, CalendarClock, Clock, CloudSun, Inbox } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { api, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
+import { api, type DashboardNote, type DashboardNotePayload, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { MeasurementDashboardSubmission } from "../types/site";
+import type { MeasurementDashboardSubmission, SiteSummary } from "../types/site";
 import type { WeatherSummary } from "../types/weather";
 
 type DateRange = {
@@ -85,9 +85,24 @@ type DashboardData = {
   nextWeekNeeds: StaffingNeed[];
 };
 
+type DashboardNoteMode = "open" | "completed";
+
+type DashboardNoteDraft = {
+  text: string;
+  due_date: string;
+  site_id: string;
+  employee_id: string;
+};
+
 const MAX_PREVIEW_ITEMS = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
 const FREE_WORKER_ALL_KEY = "__all__";
+const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
+  text: "",
+  due_date: "",
+  site_id: "",
+  employee_id: "",
+};
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -97,6 +112,17 @@ export function DashboardPage() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
+  const [dashboardNotes, setDashboardNotes] = useState<DashboardNote[]>([]);
+  const [dashboardNoteSites, setDashboardNoteSites] = useState<SiteSummary[]>([]);
+  const [dashboardNotePeople, setDashboardNotePeople] = useState<Person[]>([]);
+  const [dashboardNotesLoading, setDashboardNotesLoading] = useState(false);
+  const [dashboardNoteMode, setDashboardNoteMode] = useState<DashboardNoteMode>("open");
+  const [dashboardNoteFormOpen, setDashboardNoteFormOpen] = useState(false);
+  const [editingDashboardNoteId, setEditingDashboardNoteId] = useState<number | null>(null);
+  const [dashboardNoteDraft, setDashboardNoteDraft] = useState<DashboardNoteDraft>(EMPTY_DASHBOARD_NOTE_DRAFT);
+  const [dashboardNoteSaving, setDashboardNoteSaving] = useState(false);
+  const [dashboardNoteError, setDashboardNoteError] = useState<string | null>(null);
+  const [dashboardNoteBusyId, setDashboardNoteBusyId] = useState<number | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
   const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
   const freeSummaryRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +183,46 @@ export function DashboardPage() {
     range.weekEnd,
     user?.role,
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (user?.role === "monteur") {
+      return undefined;
+    }
+
+    async function loadDashboardNotes() {
+      setDashboardNotesLoading(true);
+      setDashboardNoteError(null);
+      try {
+        const [notes, sites, people] = await Promise.all([
+          api.dashboardNotes(),
+          api.siteSummaries({ includeClosed: true }),
+          api.persons({ isActive: true }),
+        ]);
+        if (!active) {
+          return;
+        }
+        setDashboardNotes(notes);
+        setDashboardNoteSites(sites);
+        setDashboardNotePeople(people);
+      } catch {
+        if (active) {
+          setDashboardNoteError("Notizen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setDashboardNotesLoading(false);
+        }
+      }
+    }
+
+    void loadDashboardNotes();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.role]);
 
   useEffect(() => {
     function handleDashboardMessagesUpdated(event: Event) {
@@ -238,6 +304,15 @@ export function DashboardPage() {
   const dashboard = dashboardOverview;
   const workerSummaryGroups = dashboard?.workerSummaryGroups ?? [];
   const workerSummaryCount = dashboard?.totalWorkerSummaryPeople ?? 0;
+  const visibleDashboardNotes = useMemo(
+    () => sortDashboardNotes(
+      dashboardNotes.filter((note) => dashboardNoteMode === "completed" ? note.completed : !note.completed),
+      dashboardNoteMode,
+    ),
+    [dashboardNoteMode, dashboardNotes],
+  );
+  const openDashboardNoteCount = dashboardNotes.filter((note) => !note.completed).length;
+  const completedDashboardNoteCount = dashboardNotes.filter((note) => note.completed).length;
   const allSummaryWorkers = workerSummaryGroups.flatMap((group) => (
     group.people.map((person) => ({
       ...person,
@@ -262,6 +337,100 @@ export function DashboardPage() {
       setMeasurementMessages(previousMessages);
     } finally {
       setDismissingMessageKey(null);
+    }
+  }
+
+  function openDashboardNoteCreateForm(): void {
+    setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
+    setEditingDashboardNoteId(null);
+    setDashboardNoteFormOpen(true);
+    setDashboardNoteError(null);
+  }
+
+  function editDashboardNote(note: DashboardNote): void {
+    setDashboardNoteDraft({
+      text: note.text,
+      due_date: note.due_date ?? "",
+      site_id: note.site_id === null ? "" : String(note.site_id),
+      employee_id: note.employee_id === null ? "" : String(note.employee_id),
+    });
+    setEditingDashboardNoteId(note.id);
+    setDashboardNoteFormOpen(true);
+    setDashboardNoteError(null);
+  }
+
+  function cancelDashboardNoteForm(): void {
+    setDashboardNoteFormOpen(false);
+    setEditingDashboardNoteId(null);
+    setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
+    setDashboardNoteError(null);
+  }
+
+  function updateDashboardNoteDraft(field: keyof DashboardNoteDraft, value: string): void {
+    setDashboardNoteDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveDashboardNote(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (dashboardNoteSaving) {
+      return;
+    }
+    const payload = dashboardNotePayloadFromDraft(dashboardNoteDraft);
+    if (!payload.text) {
+      setDashboardNoteError("Bitte einen Notiztext eingeben.");
+      return;
+    }
+    setDashboardNoteSaving(true);
+    setDashboardNoteError(null);
+    try {
+      const savedNote = editingDashboardNoteId === null
+        ? await api.createDashboardNote(payload)
+        : await api.updateDashboardNote(editingDashboardNoteId, payload);
+      setDashboardNotes((current) => upsertDashboardNote(current, savedNote));
+      setDashboardNoteFormOpen(false);
+      setEditingDashboardNoteId(null);
+      setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
+    } catch {
+      setDashboardNoteError("Notiz konnte nicht gespeichert werden.");
+    } finally {
+      setDashboardNoteSaving(false);
+    }
+  }
+
+  async function toggleDashboardNoteCompleted(note: DashboardNote): Promise<void> {
+    if (dashboardNoteBusyId !== null) {
+      return;
+    }
+    setDashboardNoteBusyId(note.id);
+    setDashboardNoteError(null);
+    try {
+      const updatedNote = await api.updateDashboardNote(note.id, { completed: !note.completed });
+      setDashboardNotes((current) => upsertDashboardNote(current, updatedNote));
+    } catch {
+      setDashboardNoteError("Notiz konnte nicht aktualisiert werden.");
+    } finally {
+      setDashboardNoteBusyId(null);
+    }
+  }
+
+  async function deleteDashboardNote(note: DashboardNote): Promise<void> {
+    if (dashboardNoteBusyId !== null) {
+      return;
+    }
+    const previousNotes = dashboardNotes;
+    setDashboardNoteBusyId(note.id);
+    setDashboardNoteError(null);
+    setDashboardNotes((current) => current.filter((entry) => entry.id !== note.id));
+    try {
+      await api.deleteDashboardNote(note.id);
+      if (editingDashboardNoteId === note.id) {
+        cancelDashboardNoteForm();
+      }
+    } catch {
+      setDashboardNotes(previousNotes);
+      setDashboardNoteError("Notiz konnte nicht gelöscht werden.");
+    } finally {
+      setDashboardNoteBusyId(null);
     }
   }
 
@@ -443,26 +612,39 @@ export function DashboardPage() {
               <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
             </DashboardCard>
 
-            <DashboardCard title="Morgen / Woche vorbereiten" icon={<CalendarClock aria-hidden="true" size={20} />}>
-              <div className="dashboard-prep-summary">
-                <div>
-                  <span>Morgen</span>
-                  <strong>{dashboard.tomorrowAssignedCount}</strong>
-                  <small>Baustellen besetzt</small>
-                </div>
-                <div>
-                  <span>Personalbedarf</span>
-                  <strong>{dashboard.tomorrowOpenNeeds.length}</strong>
-                  <small>morgen offen</small>
-                </div>
-                <div>
-                  <span>Konflikte</span>
-                  <strong>{dashboard.tomorrowConflicts.length}</strong>
-                  <small>morgen erkannt</small>
-                </div>
-              </div>
-              <DashboardNeedSection title="Diese Woche" needs={dashboard.currentWeekNeeds} />
-              <DashboardNeedSection title="Folgewoche" needs={dashboard.nextWeekNeeds} />
+            <DashboardCard
+              title="Notizen"
+              icon={<ClipboardList aria-hidden="true" size={20} />}
+              actions={(
+                <button type="button" className="dashboard-note-add-button" onClick={openDashboardNoteCreateForm}>
+                  <Plus aria-hidden="true" size={15} />
+                  Notiz hinzufügen
+                </button>
+              )}
+            >
+              <DashboardNotesPanel
+                busyNoteId={dashboardNoteBusyId}
+                completedCount={completedDashboardNoteCount}
+                draft={dashboardNoteDraft}
+                editingNoteId={editingDashboardNoteId}
+                error={dashboardNoteError}
+                formOpen={dashboardNoteFormOpen}
+                loading={dashboardNotesLoading}
+                mode={dashboardNoteMode}
+                notes={visibleDashboardNotes}
+                openCount={openDashboardNoteCount}
+                people={dashboardNotePeople}
+                saving={dashboardNoteSaving}
+                sites={dashboardNoteSites}
+                today={range.today}
+                onCancel={cancelDashboardNoteForm}
+                onDelete={(note) => void deleteDashboardNote(note)}
+                onDraftChange={updateDashboardNoteDraft}
+                onEdit={editDashboardNote}
+                onModeChange={setDashboardNoteMode}
+                onSubmit={(event) => void saveDashboardNote(event)}
+                onToggle={(note) => void toggleDashboardNoteCompleted(note)}
+              />
             </DashboardCard>
           </div>
         </>
@@ -506,6 +688,7 @@ function DashboardCard({
   className,
   meta,
   badge,
+  actions,
 }: {
   title: string;
   icon: ReactNode;
@@ -513,6 +696,7 @@ function DashboardCard({
   className?: string;
   meta?: ReactNode;
   badge?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
     <article className={["dashboard-card", className ?? ""].filter(Boolean).join(" ")}>
@@ -522,9 +706,213 @@ function DashboardCard({
           <h2>{title}</h2>
           {meta ? <p>{meta}</p> : null}
         </div>
-        {badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
+        {actions ? <div className="dashboard-card-actions">{actions}</div> : null}
+        {!actions && badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
       </div>
       {children}
+    </article>
+  );
+}
+
+function DashboardNotesPanel({
+  notes,
+  mode,
+  openCount,
+  completedCount,
+  loading,
+  error,
+  formOpen,
+  draft,
+  editingNoteId,
+  saving,
+  busyNoteId,
+  sites,
+  people,
+  today,
+  onModeChange,
+  onDraftChange,
+  onSubmit,
+  onCancel,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  notes: DashboardNote[];
+  mode: DashboardNoteMode;
+  openCount: number;
+  completedCount: number;
+  loading: boolean;
+  error: string | null;
+  formOpen: boolean;
+  draft: DashboardNoteDraft;
+  editingNoteId: number | null;
+  saving: boolean;
+  busyNoteId: number | null;
+  sites: SiteSummary[];
+  people: Person[];
+  today: string;
+  onModeChange: (mode: DashboardNoteMode) => void;
+  onDraftChange: (field: keyof DashboardNoteDraft, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onCancel: () => void;
+  onToggle: (note: DashboardNote) => void;
+  onEdit: (note: DashboardNote) => void;
+  onDelete: (note: DashboardNote) => void;
+}) {
+  return (
+    <div className="dashboard-notes">
+      <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
+        <button
+          type="button"
+          className={mode === "open" ? "is-active" : ""}
+          aria-selected={mode === "open"}
+          role="tab"
+          onClick={() => onModeChange("open")}
+        >
+          Noch offen <span>{openCount}</span>
+        </button>
+        <button
+          type="button"
+          className={mode === "completed" ? "is-active" : ""}
+          aria-selected={mode === "completed"}
+          role="tab"
+          onClick={() => onModeChange("completed")}
+        >
+          Erledigt <span>{completedCount}</span>
+        </button>
+      </div>
+
+      {error ? <p className="dashboard-note-error">{error}</p> : null}
+
+      {formOpen ? (
+        <form className="dashboard-note-form" onSubmit={onSubmit}>
+          <label className="dashboard-note-field dashboard-note-field-wide">
+            <span>Text</span>
+            <textarea
+              required
+              rows={3}
+              value={draft.text}
+              onChange={(event) => onDraftChange("text", event.target.value)}
+            />
+          </label>
+          <div className="dashboard-note-form-grid">
+            <label className="dashboard-note-field">
+              <span>Fällig am</span>
+              <input
+                type="date"
+                value={draft.due_date}
+                onChange={(event) => onDraftChange("due_date", event.target.value)}
+              />
+            </label>
+            <label className="dashboard-note-field">
+              <span>Baustelle</span>
+              <select
+                value={draft.site_id}
+                onChange={(event) => onDraftChange("site_id", event.target.value)}
+              >
+                <option value="">Keine Zuordnung</option>
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {formatDashboardNoteSiteOption(site)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="dashboard-note-field">
+              <span>Monteur</span>
+              <select
+                value={draft.employee_id}
+                onChange={(event) => onDraftChange("employee_id", event.target.value)}
+              >
+                <option value="">Keine Zuordnung</option>
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="dashboard-note-form-actions">
+            <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
+              <X aria-hidden="true" size={14} />
+              Abbrechen
+            </button>
+            <button type="submit" className="dashboard-note-form-button is-primary" disabled={saving}>
+              {editingNoteId === null ? "Anlegen" : "Speichern"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {loading ? (
+        <p className="dashboard-empty-text">Notizen werden geladen...</p>
+      ) : notes.length > 0 ? (
+        <div className="dashboard-note-list">
+          {notes.map((note) => (
+            <DashboardNoteRow
+              busy={busyNoteId === note.id}
+              key={note.id}
+              note={note}
+              today={today}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyDashboardText text={mode === "open" ? "Keine offenen Notizen." : "Keine erledigten Notizen."} />
+      )}
+    </div>
+  );
+}
+
+function DashboardNoteRow({
+  note,
+  busy,
+  today,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  note: DashboardNote;
+  busy: boolean;
+  today: string;
+  onToggle: (note: DashboardNote) => void;
+  onEdit: (note: DashboardNote) => void;
+  onDelete: (note: DashboardNote) => void;
+}) {
+  const dueState = getDashboardNoteDueState(note, today);
+  return (
+    <article className={`dashboard-note-row${note.completed ? " is-completed" : ""}${dueState !== "none" ? ` is-${dueState}` : ""}`}>
+      <button
+        type="button"
+        className={`dashboard-note-checkbox${note.completed ? " is-checked" : ""}`}
+        aria-label={note.completed ? "Notiz wieder öffnen" : "Notiz als erledigt markieren"}
+        disabled={busy}
+        onClick={() => onToggle(note)}
+      >
+        {note.completed ? <Check aria-hidden="true" size={13} /> : null}
+      </button>
+      <div className="dashboard-note-body">
+        <strong>{note.text}</strong>
+        <div className="dashboard-note-meta">
+          <span className={`dashboard-note-due is-${dueState}`}>
+            {formatDashboardNoteDueLabel(note, today)}
+          </span>
+          {note.site ? <span>Baustelle: {formatDashboardNoteSiteOption(note.site)}</span> : null}
+          {note.employee ? <span>Monteur: {note.employee.display_name}</span> : null}
+        </div>
+      </div>
+      <div className="dashboard-note-row-actions">
+        <button type="button" title="Notiz bearbeiten" aria-label="Notiz bearbeiten" disabled={busy} onClick={() => onEdit(note)}>
+          <Pencil aria-hidden="true" size={14} />
+        </button>
+        <button type="button" title="Notiz löschen" aria-label="Notiz löschen" disabled={busy} onClick={() => onDelete(note)}>
+          <Trash2 aria-hidden="true" size={14} />
+        </button>
+      </div>
     </article>
   );
 }
@@ -557,24 +945,6 @@ function DashboardConflictList({ conflicts, needs }: { conflicts: DashboardConfl
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function DashboardNeedSection({ title, needs }: { title: string; needs: StaffingNeed[] }) {
-  return (
-    <div className="dashboard-need-section">
-      <h3>{title}</h3>
-      {needs.length > 0 ? (
-        <ul>
-          {needs.slice(0, 4).map((need) => (
-            <li key={title + need.date + need.siteName + need.siteNumber}>
-              <span className="dashboard-alert-dot signal-orange" aria-hidden="true" />
-              {formatShortDate(need.date)} · {need.siteName} unbesetzt
-            </li>
-          ))}
-        </ul>
-      ) : <p>Keine offenen Personalbedarfe.</p>}
     </div>
   );
 }
@@ -624,6 +994,92 @@ function formatWorkerSummaryBadgeLabel(group: WorkerSummaryGroup): string {
 function formatTodayAssignedMeta(sites: AssignedSiteSummary[]): string {
   const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
   return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
+}
+
+function dashboardNotePayloadFromDraft(draft: DashboardNoteDraft): DashboardNotePayload {
+  return {
+    text: draft.text.trim(),
+    due_date: draft.due_date || null,
+    site_id: parseOptionalDashboardNoteId(draft.site_id),
+    employee_id: parseOptionalDashboardNoteId(draft.employee_id),
+  };
+}
+
+function parseOptionalDashboardNoteId(value: string): number | null {
+  return value ? Number(value) : null;
+}
+
+function upsertDashboardNote(notes: DashboardNote[], note: DashboardNote): DashboardNote[] {
+  const existingIndex = notes.findIndex((entry) => entry.id === note.id);
+  if (existingIndex === -1) {
+    return [...notes, note];
+  }
+  return notes.map((entry) => entry.id === note.id ? note : entry);
+}
+
+function sortDashboardNotes(notes: DashboardNote[], mode: DashboardNoteMode): DashboardNote[] {
+  return notes.slice().sort((first, second) => {
+    if (mode === "completed") {
+      return compareNullableDateTimeDesc(first.completed_at ?? first.updated_at, second.completed_at ?? second.updated_at)
+        || second.id - first.id;
+    }
+    if (first.due_date === null && second.due_date !== null) {
+      return 1;
+    }
+    if (second.due_date === null && first.due_date !== null) {
+      return -1;
+    }
+    if (first.due_date !== null && second.due_date !== null) {
+      return first.due_date.localeCompare(second.due_date) || compareNullableDateTimeDesc(first.updated_at, second.updated_at);
+    }
+    return compareNullableDateTimeDesc(first.updated_at, second.updated_at) || second.id - first.id;
+  });
+}
+
+function compareNullableDateTimeDesc(first: string | null, second: string | null): number {
+  if (first === null && second !== null) {
+    return 1;
+  }
+  if (second === null && first !== null) {
+    return -1;
+  }
+  if (first === null || second === null) {
+    return 0;
+  }
+  return new Date(second).getTime() - new Date(first).getTime();
+}
+
+function getDashboardNoteDueState(note: DashboardNote, today: string): "none" | "today" | "overdue" {
+  if (note.completed || !note.due_date) {
+    return "none";
+  }
+  if (note.due_date < today) {
+    return "overdue";
+  }
+  if (note.due_date === today) {
+    return "today";
+  }
+  return "none";
+}
+
+function formatDashboardNoteDueLabel(note: DashboardNote, today: string): string {
+  if (note.completed) {
+    return note.completed_at ? `Erledigt ${formatDashboardDateTime(note.completed_at)}` : "Erledigt";
+  }
+  if (!note.due_date) {
+    return "Ohne Fälligkeitsdatum";
+  }
+  if (note.due_date < today) {
+    return `Überfällig seit ${formatShortDate(note.due_date)}`;
+  }
+  if (note.due_date === today) {
+    return "Heute fällig";
+  }
+  return `Fällig ${formatShortDate(note.due_date)}`;
+}
+
+function formatDashboardNoteSiteOption(site: SiteSummary | NonNullable<DashboardNote["site"]>): string {
+  return site.site_number ? `${site.site_number} · ${site.name}` : site.name;
 }
 
 function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {

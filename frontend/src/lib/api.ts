@@ -82,6 +82,40 @@ export type DashboardMessagesSummary = {
   latest_messages: MeasurementDashboardSubmission[];
 };
 
+export type DashboardNote = {
+  id: number;
+  text: string;
+  due_date: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  site_id: number | null;
+  employee_id: number | null;
+  created_by_user_id: number | null;
+  site: {
+    id: number;
+    site_number: string | null;
+    name: string;
+  } | null;
+  employee: {
+    id: number;
+    display_name: string;
+    short_code: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DashboardNotePayload = {
+  text: string;
+  due_date?: string | null;
+  site_id?: number | null;
+  employee_id?: number | null;
+};
+
+export type DashboardNoteUpdatePayload = Partial<DashboardNotePayload> & {
+  completed?: boolean;
+};
+
 export type DashboardOverviewAssignedSite = {
   site: MatrixSite;
   managerLabel: string;
@@ -416,6 +450,33 @@ export const api = {
     await request<void>(`/dashboard/messages/${encodeURIComponent(messageKey)}/dismiss`, {
       method: "POST",
     });
+  },
+
+  async dashboardNotes(params: { completed?: boolean | null } = {}): Promise<DashboardNote[]> {
+    const search = new URLSearchParams();
+    if (params.completed !== null && params.completed !== undefined) {
+      search.set("completed", String(params.completed));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<DashboardNote[]>(`/dashboard/notes${suffix}`);
+  },
+
+  async createDashboardNote(payload: DashboardNotePayload): Promise<DashboardNote> {
+    return request<DashboardNote>("/dashboard/notes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateDashboardNote(noteId: number, payload: DashboardNoteUpdatePayload): Promise<DashboardNote> {
+    return request<DashboardNote>(`/dashboard/notes/${noteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteDashboardNote(noteId: number): Promise<void> {
+    await request<void>(`/dashboard/notes/${noteId}`, { method: "DELETE" });
   },
 
   async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {
