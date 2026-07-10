@@ -520,7 +520,7 @@ export function DashboardPage() {
 
       {dashboard && !loading && (
         <>
-          <div className="dashboard-main-grid">
+          <div className="dashboard-main-grid dashboard-main-grid-primary">
             <DashboardCard
               title="Heute besetzte Baustellen"
               icon={<BriefcaseBusiness aria-hidden="true" size={20} />}
@@ -605,16 +605,11 @@ export function DashboardPage() {
                 </div>
               )}
             </DashboardCard>
-          </div>
-
-          <div className="dashboard-main-grid">
-            <DashboardCard title="Prüfen / Konflikte" icon={<AlertTriangle aria-hidden="true" size={20} />}>
-              <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
-            </DashboardCard>
 
             <DashboardCard
               title="Notizen"
               icon={<ClipboardList aria-hidden="true" size={20} />}
+              className="dashboard-card-notes"
               actions={(
                 <button type="button" className="dashboard-note-add-button" onClick={openDashboardNoteCreateForm}>
                   <Plus aria-hidden="true" size={15} />
@@ -645,6 +640,12 @@ export function DashboardPage() {
                 onSubmit={(event) => void saveDashboardNote(event)}
                 onToggle={(note) => void toggleDashboardNoteCompleted(note)}
               />
+            </DashboardCard>
+          </div>
+
+          <div className="dashboard-main-grid dashboard-main-grid-secondary">
+            <DashboardCard title="Prüfen / Konflikte" icon={<AlertTriangle aria-hidden="true" size={20} />}>
+              <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
             </DashboardCard>
           </div>
         </>

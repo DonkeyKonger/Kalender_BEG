@@ -17174,8 +17174,16 @@ button.person-chip:focus-visible {
 
 .dashboard-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.38fr);
+  align-items: stretch;
   gap: 12px;
+}
+
+.dashboard-main-grid-primary {
+  grid-template-columns: minmax(360px, 1.35fr) minmax(260px, 0.48fr) minmax(280px, 0.52fr);
+}
+
+.dashboard-main-grid-secondary {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .dashboard-card {
@@ -17249,23 +17257,27 @@ button.person-chip:focus-visible {
   min-width: 0;
 }
 
-.dashboard-card-messages .dashboard-card-header {
+.dashboard-card-messages .dashboard-card-header,
+.dashboard-card-notes .dashboard-card-header {
   min-height: 36px;
   gap: 7px;
   padding: 7px 10px;
 }
 
-.dashboard-card-messages .dashboard-card-header > span:first-child {
+.dashboard-card-messages .dashboard-card-header > span:first-child,
+.dashboard-card-notes .dashboard-card-header > span:first-child {
   width: 18px;
   height: 18px;
 }
 
-.dashboard-card-messages .dashboard-card-header svg {
+.dashboard-card-messages .dashboard-card-header svg,
+.dashboard-card-notes .dashboard-card-header svg {
   width: 17px;
   height: 17px;
 }
 
-.dashboard-card-messages h2 {
+.dashboard-card-messages h2,
+.dashboard-card-notes h2 {
   font-size: 0.78rem;
   letter-spacing: 0.055em;
 }
@@ -17275,6 +17287,19 @@ button.person-chip:focus-visible {
   height: 22px;
   padding: 0 7px;
   font-size: 0.78rem;
+}
+
+.dashboard-card-messages,
+.dashboard-card-notes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dashboard-card-messages > .dashboard-alert-list,
+.dashboard-card-notes > .dashboard-notes {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dashboard-card > .dashboard-empty-text,
@@ -17312,6 +17337,8 @@ button.person-chip:focus-visible {
 .dashboard-card-messages .dashboard-alert-list {
   gap: 7px;
   padding: 9px;
+  max-height: clamp(210px, 32vh, 380px);
+  overflow-y: auto;
 }
 
 .dashboard-site-group-list {
@@ -17692,8 +17719,15 @@ button.person-chip:focus-visible {
 
 .dashboard-notes {
   display: grid;
+  align-content: start;
   gap: 9px;
   padding: 10px;
+}
+
+.dashboard-card-notes .dashboard-note-list {
+  max-height: clamp(210px, 32vh, 380px);
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .dashboard-note-tabs {
