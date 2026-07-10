@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
-from app.models.enums import UserRole
+from app.models.enums import SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -129,3 +129,57 @@ def test_dashboard_notes_are_scoped_to_owner():
     assert delete_error.value.status_code == 404
 
     assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
+
+
+def test_dashboard_note_site_options_are_user_scoped_open_and_sorted_by_site_number():
+    db = db_session()
+    manager = Person(first_name="Chris", last_name="Erichsen", display_name="Chris Erichsen", short_code="CE")
+    other_manager = Person(first_name="Sandro", last_name="König", display_name="Sandro König", short_code="SK")
+    db.add_all([manager, other_manager])
+    db.flush()
+
+    user = User(
+        username="christopher",
+        display_name="Christopher",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+        person_id=manager.id,
+    )
+    db.add(user)
+    db.add_all(
+        [
+            Site(site_number="4400", name="Daimler Bremen", status=SiteStatus.ACTIVE, project_manager_person_id=manager.id),
+            Site(site_number="1001", name="Büsum", status=SiteStatus.PAUSED, project_manager_person_id=manager.id),
+            Site(site_number="2940", name="GEWOBA Bremerhaven", status=SiteStatus.PLANNED, project_manager_person_id=manager.id),
+            Site(site_number="4661", name="Fischhalle Cuxhaven", status=SiteStatus.COMPLETED, project_manager_person_id=manager.id),
+            Site(site_number="5000", name="Gelöscht", status=SiteStatus.DELETED, project_manager_person_id=manager.id),
+            Site(site_number="1000", name="Andere Leitung", status=SiteStatus.ACTIVE, project_manager_person_id=other_manager.id),
+            Site(site_number="9999", name="Ohne Leitung", status=SiteStatus.ACTIVE),
+        ]
+    )
+    db.commit()
+
+    sites = DashboardNoteService(db).list_site_options(user=user)
+
+    assert [site.site_number for site in sites] == ["1001", "2940", "4400"]
+
+
+def test_dashboard_note_site_options_are_empty_without_user_person():
+    db = db_session()
+    user = User(
+        username="office",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all(
+        [
+            user,
+            Site(site_number="1001", name="Büsum", status=SiteStatus.ACTIVE),
+        ]
+    )
+    db.commit()
+
+    assert DashboardNoteService(db).list_site_options(user=user) == []

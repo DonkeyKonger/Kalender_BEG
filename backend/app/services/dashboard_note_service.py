@@ -1,13 +1,19 @@
+import re
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.enums import SiteStatus
 from app.models.dashboard_note import DashboardNote
 from app.models.person import Person
 from app.models.site import Site
+from app.models.user import User
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteUpdate
+
+
+DASHBOARD_NOTE_SITE_STATUSES = (SiteStatus.ACTIVE, SiteStatus.PAUSED, SiteStatus.PLANNED)
 
 
 class DashboardNoteService:
@@ -33,6 +39,20 @@ class DashboardNoteService:
             DashboardNote.id.desc(),
         )
         return list(self.db.scalars(statement))
+
+    def list_site_options(self, *, user: User) -> list[Site]:
+        if user.person_id is None:
+            return []
+
+        statement = (
+            select(Site)
+            .options(selectinload(Site.project_manager))
+            .where(
+                Site.project_manager_person_id == user.person_id,
+                Site.status.in_(DASHBOARD_NOTE_SITE_STATUSES),
+            )
+        )
+        return sorted(self.db.scalars(statement), key=site_number_sort_key)
 
     def create_note(self, payload: DashboardNoteCreate, user_id: int) -> DashboardNote:
         values = clean_note_values(payload.model_dump())
@@ -103,3 +123,13 @@ def clean_note_values(values: dict, *, partial: bool = False) -> dict:
     if "text" in cleaned and not cleaned.get("text"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Notiztext darf nicht leer sein.")
     return cleaned
+
+
+def site_number_sort_key(site: Site) -> tuple[bool, tuple[tuple[int, int | str], ...], str, int]:
+    site_number = (site.site_number or "").strip()
+    parts = tuple(
+        (0, int(part)) if part.isdigit() else (1, part.casefold())
+        for part in re.split(r"(\d+)", site_number)
+        if part
+    )
+    return (not site_number, parts, site.name.casefold(), site.id)

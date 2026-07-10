@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteRead, DashboardNoteUpdate
 from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
+from app.schemas.site import SiteSummary
 from app.schemas.weather import WeatherSummary
 from app.services.dashboard_note_service import DashboardNoteService
 from app.services.dashboard_service import DashboardService
@@ -70,6 +71,15 @@ def create_dashboard_note(
 ) -> DashboardNoteRead:
     note = DashboardNoteService(db).create_note(payload, user_id=user.id)
     return DashboardNoteRead.model_validate(note)
+
+
+@router.get("/notes/site-options", response_model=list[SiteSummary])
+def list_dashboard_note_site_options(
+    user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> list[SiteSummary]:
+    sites = DashboardNoteService(db).list_site_options(user=user)
+    return [SiteSummary.model_validate(site) for site in sites]
 
 
 @router.patch("/notes/{note_id}", response_model=DashboardNoteRead)

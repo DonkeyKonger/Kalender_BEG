@@ -197,7 +197,7 @@ export function DashboardPage() {
       try {
         const [notes, sites, people] = await Promise.all([
           api.dashboardNotes(),
-          api.siteSummaries({ includeClosed: true }),
+          api.dashboardNoteSiteOptions(),
           api.persons({ isActive: true }),
         ]);
         if (!active) {

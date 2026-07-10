@@ -461,6 +461,10 @@ export const api = {
     return request<DashboardNote[]>(`/dashboard/notes${suffix}`);
   },
 
+  async dashboardNoteSiteOptions(): Promise<SiteSummary[]> {
+    return request<SiteSummary[]>("/dashboard/notes/site-options");
+  },
+
   async createDashboardNote(payload: DashboardNotePayload): Promise<DashboardNote> {
     return request<DashboardNote>("/dashboard/notes", {
       method: "POST",
