@@ -42,7 +42,7 @@ class DashboardNoteRead(BaseModel):
     completed_at: datetime | None = None
     site_id: int | None = None
     employee_id: int | None = None
-    created_by_user_id: int | None = None
+    created_by_user_id: int
     site: DashboardNoteSiteRead | None = None
     employee: DashboardNoteEmployeeRead | None = None
     created_at: datetime

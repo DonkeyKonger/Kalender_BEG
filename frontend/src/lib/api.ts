@@ -90,7 +90,7 @@ export type DashboardNote = {
   completed_at: string | null;
   site_id: number | null;
   employee_id: number | null;
-  created_by_user_id: number | null;
+  created_by_user_id: number;
   site: {
     id: number;
     site_number: string | null;

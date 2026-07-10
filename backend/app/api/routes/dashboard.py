@@ -55,10 +55,10 @@ def get_dashboard_overview(
 @router.get("/notes", response_model=list[DashboardNoteRead])
 def list_dashboard_notes(
     completed: bool | None = Query(default=None),
-    _user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> list[DashboardNoteRead]:
-    notes = DashboardNoteService(db).list_notes(completed=completed)
+    notes = DashboardNoteService(db).list_notes(user_id=user.id, completed=completed)
     return [DashboardNoteRead.model_validate(note) for note in notes]
 
 
@@ -76,10 +76,10 @@ def create_dashboard_note(
 def update_dashboard_note(
     note_id: int,
     payload: DashboardNoteUpdate,
-    _user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> DashboardNoteRead:
-    note = DashboardNoteService(db).update_note(note_id, payload)
+    note = DashboardNoteService(db).update_note(note_id, payload, user_id=user.id)
     return DashboardNoteRead.model_validate(note)
 
 

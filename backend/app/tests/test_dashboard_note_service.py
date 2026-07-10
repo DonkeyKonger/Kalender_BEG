@@ -68,16 +68,17 @@ def test_dashboard_note_lifecycle_with_assignments_and_soft_delete():
     assert note.employee_id == person.id
     assert note.created_by_user_id == user.id
 
-    completed = service.update_note(note.id, DashboardNoteUpdate(completed=True))
+    completed = service.update_note(note.id, DashboardNoteUpdate(completed=True), user_id=user.id)
 
     assert completed.completed is True
     assert completed.completed_at is not None
-    assert service.list_notes(completed=False) == []
-    assert [entry.id for entry in service.list_notes(completed=True)] == [note.id]
+    assert service.list_notes(user_id=user.id, completed=False) == []
+    assert [entry.id for entry in service.list_notes(user_id=user.id, completed=True)] == [note.id]
 
     reopened = service.update_note(
         note.id,
         DashboardNoteUpdate(completed=False, due_date=None, site_id=None, employee_id=None),
+        user_id=user.id,
     )
 
     assert reopened.completed is False
@@ -88,4 +89,43 @@ def test_dashboard_note_lifecycle_with_assignments_and_soft_delete():
 
     service.delete_note(note.id, user_id=user.id)
 
-    assert service.list_notes() == []
+    assert service.list_notes(user_id=user.id) == []
+
+
+def test_dashboard_notes_are_scoped_to_owner():
+    db = db_session()
+    owner = User(
+        username="christopher",
+        display_name="Christopher",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    other_user = User(
+        username="office",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([owner, other_user])
+    db.commit()
+
+    service = DashboardNoteService(db)
+    note = service.create_note(
+        DashboardNoteCreate(text="Nur meine Notiz"),
+        user_id=owner.id,
+    )
+
+    assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
+    assert service.list_notes(user_id=other_user.id) == []
+
+    with pytest.raises(HTTPException) as update_error:
+        service.update_note(note.id, DashboardNoteUpdate(completed=True), user_id=other_user.id)
+    assert update_error.value.status_code == 404
+
+    with pytest.raises(HTTPException) as delete_error:
+        service.delete_note(note.id, user_id=other_user.id)
+    assert delete_error.value.status_code == 404
+
+    assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
