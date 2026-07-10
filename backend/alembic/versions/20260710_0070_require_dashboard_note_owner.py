@@ -30,28 +30,24 @@ def upgrade() -> None:
 
     fallback_user_id = None
     if "users" in tables:
-        users = sa.table(
-            "users",
-            sa.column("id", sa.Integer()),
-            sa.column("role", sa.String()),
-            sa.column("is_active", sa.Boolean()),
-        )
         fallback_user_id = connection.scalar(
-            sa.select(users.c.id)
-            .where(users.c.role == "admin", users.c.is_active.is_(True))
-            .order_by(users.c.id)
-            .limit(1)
+            sa.text(
+                "SELECT id FROM users "
+                "WHERE role = 'admin' AND is_active IS TRUE "
+                "ORDER BY id LIMIT 1"
+            )
         )
         if fallback_user_id is None:
             fallback_user_id = connection.scalar(
-                sa.select(users.c.id)
-                .where(users.c.is_active.is_(True))
-                .order_by(users.c.id)
-                .limit(1)
+                sa.text(
+                    "SELECT id FROM users "
+                    "WHERE is_active IS TRUE "
+                    "ORDER BY id LIMIT 1"
+                )
             )
         if fallback_user_id is None:
             fallback_user_id = connection.scalar(
-                sa.select(users.c.id).order_by(users.c.id).limit(1)
+                sa.text("SELECT id FROM users ORDER BY id LIMIT 1")
             )
 
     if fallback_user_id is None:
