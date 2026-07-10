@@ -204,10 +204,6 @@ export function AppShell() {
               <p className="topbar-label">Angemeldet als</p>
               <p className="topbar-user">{user?.display_name}</p>
             </div>
-            <button className="icon-button" type="button" onClick={() => void logout()}>
-              <LogOut aria-hidden="true" size={18} />
-              <span>Abmelden</span>
-            </button>
           </header>
         ) : null}
 
