@@ -3770,10 +3770,11 @@ function MeasurementReviewPanel({
               return (
                 <div
                   key={batch.id}
-                  className="measurement-review-card is-archive"
+                  className="measurement-review-card has-delete-action is-archive"
                 >
                   <div className="measurement-review-card-controls">
-                    <span className={statusBadge.className}>
+                    <span className={`${statusBadge.className} has-delete-control`}>
+                      <span className="measurement-review-status-spacer" aria-hidden="true" />
                       <span className="measurement-review-status-label">{statusBadge.label}</span>
                     </span>
                   </div>

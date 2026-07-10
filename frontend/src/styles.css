@@ -11315,6 +11315,11 @@ button.person-chip:focus-visible {
   color: #aeb8c6;
 }
 
+.measurement-review-status-badge.has-delete-control .measurement-review-status-spacer {
+  display: block;
+  min-height: 26px;
+}
+
 .measurement-review-status-badge.has-delete-control .measurement-review-status-label {
   display: inline-flex;
   align-items: center;
