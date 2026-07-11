@@ -10750,6 +10750,75 @@ button.person-chip:focus-visible {
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.09);
 }
 
+.miscellaneous-page {
+  gap: 14px;
+}
+
+.miscellaneous-page-header {
+  padding-bottom: 2px;
+}
+
+.miscellaneous-subtab-bar {
+  justify-content: flex-start;
+}
+
+.miscellaneous-page .miscellaneous-subtabs {
+  display: flex;
+  width: auto;
+  border-radius: 0;
+  background: #ffffff;
+  gap: 8px;
+  padding: 0;
+}
+
+.miscellaneous-page .miscellaneous-subtabs button {
+  min-height: 30px;
+  border-radius: 0;
+  background: #edf2f7;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 750;
+  padding: 7px 12px;
+}
+
+.miscellaneous-page .miscellaneous-subtabs button:hover,
+.miscellaneous-page .miscellaneous-subtabs button:focus-visible {
+  background: #e2e8f0;
+  color: #334155;
+  outline: none;
+}
+
+.miscellaneous-page .miscellaneous-subtabs button.is-active {
+  background: #172033;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.miscellaneous-placeholder-panel {
+  display: grid;
+  min-height: 180px;
+  align-content: start;
+  gap: 6px;
+  border: 1px solid #d8e2ee;
+  border-radius: 0;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.miscellaneous-placeholder-panel h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.miscellaneous-placeholder-panel p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
 .mobile-measurement-table-wrap,
 .measurement-review-table-wrap {
   overflow-x: auto;

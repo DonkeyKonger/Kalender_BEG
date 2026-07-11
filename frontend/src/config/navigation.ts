@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Home,
   MapPinned,
+  MoreHorizontal,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -77,6 +78,13 @@ export const navigationItems: NavigationItem[] = [
     icon: Download,
     roles: ["admin", "project_manager", "office"],
     officePermission: "export",
+  },
+  {
+    label: "Sonstige",
+    path: "/sonstige",
+    icon: MoreHorizontal,
+    roles: ["admin"],
+    adminOnly: true,
   },
   {
     label: "Benutzer (admin)",

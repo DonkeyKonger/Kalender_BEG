@@ -12,6 +12,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage, PasswordChangePage } from "./pages/LoginPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
+import { MiscellaneousPage } from "./pages/MiscellaneousPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import { SitesPage } from "./pages/SitesPage";
@@ -90,6 +91,7 @@ export function App() {
             <Route path="exports" element={<ExportsPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]} />}>
+            <Route path="sonstige" element={<MiscellaneousPage />} />
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="customers" />}>
