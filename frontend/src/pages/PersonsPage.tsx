@@ -1068,10 +1068,10 @@ function PersonSignaturePermissionSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const label = value ? "Sofort erlaubt" : "Erst nach Prüfung";
+  const label = value ? "Sofort erlaubt" : "Erst nach Freigabe";
   const options = [
     { value: true, label: "Sofort erlaubt" },
-    { value: false, label: "Erst nach Prüfung" },
+    { value: false, label: "Erst nach Freigabe" },
   ];
 
   useEffect(() => {
