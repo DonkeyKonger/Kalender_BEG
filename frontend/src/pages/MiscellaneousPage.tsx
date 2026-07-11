@@ -66,24 +66,22 @@ export function MiscellaneousPage() {
         </div>
       </header>
 
-      <div className="project-record-subtab-bar miscellaneous-subtab-bar">
-        <div className="project-record-subtabs miscellaneous-subtabs" role="tablist" aria-label="Sonstige Bereiche">
-          {miscellaneousTabs.map((tab) => {
-            const isActive = tab.key === activeTabKey;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={isActive ? "is-active" : undefined}
-                onClick={() => setActiveTabKey(tab.key)}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="project-record-tabs miscellaneous-tabs" role="tablist" aria-label="Sonstige Bereiche">
+        {miscellaneousTabs.map((tab) => {
+          const isActive = tab.key === activeTabKey;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={isActive ? "is-active" : undefined}
+              onClick={() => setActiveTabKey(tab.key)}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab.key === "toolsMaterial" ? (

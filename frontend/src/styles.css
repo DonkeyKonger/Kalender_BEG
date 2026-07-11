@@ -10758,39 +10758,38 @@ button.person-chip:focus-visible {
   padding-bottom: 2px;
 }
 
-.miscellaneous-subtab-bar {
-  justify-content: flex-start;
-}
-
-.miscellaneous-page .miscellaneous-subtabs {
+.miscellaneous-page .miscellaneous-tabs {
   display: flex;
-  width: auto;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #d8e2ee;
   border-radius: 0;
   background: #ffffff;
-  gap: 8px;
-  padding: 0;
+  gap: 0;
+  padding: 0 18px;
 }
 
-.miscellaneous-page .miscellaneous-subtabs button {
-  min-height: 30px;
+.miscellaneous-page .miscellaneous-tabs button {
   border-radius: 0;
-  background: #edf2f7;
-  color: #475569;
-  font-size: 0.8rem;
-  font-weight: 750;
-  padding: 7px 12px;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #52627a;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 11px 15px 10px;
 }
 
-.miscellaneous-page .miscellaneous-subtabs button:hover,
-.miscellaneous-page .miscellaneous-subtabs button:focus-visible {
-  background: #e2e8f0;
+.miscellaneous-page .miscellaneous-tabs button:hover,
+.miscellaneous-page .miscellaneous-tabs button:focus-visible {
+  background: #f3f7fb;
   color: #334155;
   outline: none;
 }
 
-.miscellaneous-page .miscellaneous-subtabs button.is-active {
-  background: #172033;
-  color: #ffffff;
+.miscellaneous-page .miscellaneous-tabs button.is-active {
+  border-bottom-color: #2563eb;
+  background: #eff6ff;
+  color: #1e40af;
   box-shadow: none;
 }
 
