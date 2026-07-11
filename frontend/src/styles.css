@@ -10819,6 +10819,215 @@ button.person-chip:focus-visible {
   font-weight: 650;
 }
 
+.miscellaneous-tools-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 0;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.miscellaneous-tools-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.miscellaneous-tools-header h2,
+.miscellaneous-tools-header p {
+  margin: 0;
+}
+
+.miscellaneous-tools-header h2 {
+  color: #172033;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.miscellaneous-tools-header p {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.miscellaneous-tools-header .icon-button {
+  flex: 0 0 auto;
+}
+
+.miscellaneous-tools-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.miscellaneous-tools-search {
+  width: min(420px, 100%);
+}
+
+.miscellaneous-tools-table-wrap {
+  max-height: calc(100vh - 310px);
+  min-height: 180px;
+  overflow: auto;
+  border: 1px solid #d8e2ee;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.miscellaneous-tools-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #172033;
+  font-size: 0.8rem;
+}
+
+.miscellaneous-tools-table th,
+.miscellaneous-tools-table td {
+  max-width: 220px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.miscellaneous-tools-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.miscellaneous-tools-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.miscellaneous-tools-table td:nth-child(2) {
+  min-width: 180px;
+}
+
+.miscellaneous-tools-table td:nth-child(9) {
+  min-width: 240px;
+}
+
+.miscellaneous-tools-row {
+  cursor: pointer;
+}
+
+.miscellaneous-tools-row:hover,
+.miscellaneous-tools-row:focus {
+  background: #f8fafc;
+  outline: none;
+}
+
+.miscellaneous-tools-remarks span {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miscellaneous-tools-empty {
+  height: 96px;
+  color: #64748b;
+  font-weight: 700;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.tool-material-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-material-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tool-material-form-grid input,
+.tool-material-form-grid select,
+.tool-material-form-grid textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
+  padding: 8px 9px;
+}
+
+.tool-material-form-grid input,
+.tool-material-form-grid select {
+  min-height: 34px;
+}
+
+.tool-material-form-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.tool-material-form-grid input:focus,
+.tool-material-form-grid select:focus,
+.tool-material-form-grid textarea:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.tool-material-form-wide {
+  grid-column: 1 / -1;
+}
+
+.miscellaneous-tools-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.miscellaneous-tools-drawer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .miscellaneous-tools-header,
+  .miscellaneous-tools-toolbar,
+  .miscellaneous-tools-drawer-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tool-material-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .miscellaneous-tools-drawer-actions {
+    justify-content: stretch;
+  }
+}
+
 .mobile-measurement-table-wrap,
 .measurement-review-table-wrap {
   overflow-x: auto;

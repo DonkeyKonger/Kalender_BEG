@@ -9,6 +9,7 @@ import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccoun
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -499,6 +500,34 @@ export const api = {
 
   async vehicleLatestPositions(): Promise<VehicleLatestPositionItem[]> {
     return request<VehicleLatestPositionItem[]>("/vehicles/latest-positions");
+  },
+
+  async toolMaterialItems(params: { search?: string } = {}): Promise<ToolMaterialItem[]> {
+    const search = new URLSearchParams();
+    const cleanedSearch = params.search?.trim();
+    if (cleanedSearch) {
+      search.set("search", cleanedSearch);
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<ToolMaterialItem[]>(`/admin/tool-material-items${suffix}`);
+  },
+
+  async createToolMaterialItem(payload: ToolMaterialItemCreate): Promise<ToolMaterialItem> {
+    return request<ToolMaterialItem>("/admin/tool-material-items", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateToolMaterialItem(itemId: number, payload: ToolMaterialItemUpdate): Promise<ToolMaterialItem> {
+    return request<ToolMaterialItem>(`/admin/tool-material-items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteToolMaterialItem(itemId: number): Promise<void> {
+    await request<void>(`/admin/tool-material-items/${itemId}`, { method: "DELETE" });
   },
 
   async searchPersonAddress(query: string): Promise<PersonGeocodeSearchResult[]> {
