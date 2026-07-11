@@ -11889,11 +11889,22 @@ button.person-chip:focus-visible {
   margin-top: 1px;
 }
 
+.site-times-balance-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 .site-times-summary-list {
   display: grid;
   border: 0;
   border-radius: 0;
   background: #ffffff;
+}
+
+.site-times-comparison-list {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .site-times-summary-row {
@@ -11948,7 +11959,7 @@ button.person-chip:focus-visible {
 }
 
 .site-times-credit-row {
-  margin-top: 16px;
+  margin-top: auto;
   border-top: 1px solid #edf2f7;
   background: #ffffff;
 }
