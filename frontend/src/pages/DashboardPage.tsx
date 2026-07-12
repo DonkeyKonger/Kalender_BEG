@@ -313,6 +313,7 @@ export function DashboardPage() {
   );
   const openDashboardNoteCount = dashboardNotes.filter((note) => !note.completed).length;
   const completedDashboardNoteCount = dashboardNotes.filter((note) => note.completed).length;
+  const dashboardGreeting = formatDashboardGreeting(user?.display_name || user?.username || "");
   const allSummaryWorkers = workerSummaryGroups.flatMap((group) => (
     group.people.map((person) => ({
       ...person,
@@ -453,7 +454,7 @@ export function DashboardPage() {
     <section className="dashboard-page page-stack">
       <header className="dashboard-hero">
         <div className="dashboard-hero-main">
-          <p className="eyebrow">Tagesstart</p>
+          <p className="eyebrow dashboard-greeting">{dashboardGreeting}</p>
           <h1>{formatFullDate(range.today)}</h1>
           <p>Heute, morgen und die nächsten beiden Wochen auf einen Blick.</p>
         </div>
@@ -1635,6 +1636,11 @@ function formatFullDate(value: string): string {
     month: "2-digit",
     year: "numeric",
   }).format(parseDateKey(value));
+}
+
+function formatDashboardGreeting(name: string): string {
+  const cleanedName = name.trim();
+  return cleanedName ? `Hallo ${cleanedName}` : "Hallo";
 }
 
 function formatShortDate(value: string): string {

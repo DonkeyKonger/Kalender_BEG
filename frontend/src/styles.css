@@ -17201,6 +17201,10 @@ button.person-chip:focus-visible {
   color: #8bb2df;
 }
 
+.dashboard-hero .dashboard-greeting {
+  text-transform: none;
+}
+
 .dashboard-weather,
 .dashboard-free-summary {
   display: grid;
