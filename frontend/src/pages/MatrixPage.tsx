@@ -28,6 +28,7 @@ import {
   formatDayNumber,
   getDefaultPlanningRange,
   getIsoWeekInfo,
+  getIsoWeekStartDate,
   getLowerSaxonyPublicHolidayMap,
   isWeekendDate,
   toDateInputValue,
@@ -110,6 +111,10 @@ type AssignmentCollisionCheck = {
   startDate: string;
   targetSiteId: number;
 };
+type CurrentWeekResetRequest = {
+  id: number;
+  weekStart: string;
+};
 
 type UndoItem = {
   siteId: number;
@@ -126,7 +131,8 @@ const MATRIX_BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 
 export function MatrixPage() {
   const { user } = useAuth();
-  const defaultRange = useMemo(() => getDefaultPlanningRange(), []);
+  const [planningReferenceDate, setPlanningReferenceDate] = useState(() => new Date());
+  const defaultRange = useMemo(() => getDefaultPlanningRange(planningReferenceDate), [planningReferenceDate]);
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -171,7 +177,15 @@ export function MatrixPage() {
   const hasDeferredMatrixRefreshRef = useRef(false);
   const isApplyingWeekSnapRef = useRef(false);
   const hasLoadedPeopleRef = useRef(false);
-  const today = useMemo(() => toDateInputValue(new Date()), []);
+  const matrixContextVersionRef = useRef(0);
+  const matrixDataContextVersionRef = useRef(-1);
+  const matrixLoadRequestIdRef = useRef(0);
+  const weekResetSequenceRef = useRef(0);
+  const today = toDateInputValue(planningReferenceDate);
+  const [currentWeekResetRequest, setCurrentWeekResetRequest] = useState<CurrentWeekResetRequest>(() => ({
+    id: 0,
+    weekStart: getIsoWeekStartDate(planningReferenceDate),
+  }));
   const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
@@ -265,7 +279,16 @@ export function MatrixPage() {
     ];
   }, [draftEntries, people, personSearchSeed]);
 
+  const invalidateMatrixDataContext = useCallback(() => {
+    matrixContextVersionRef.current += 1;
+    matrixLoadRequestIdRef.current += 1;
+    matrixVersionRef.current = null;
+    hasDeferredMatrixRefreshRef.current = false;
+  }, []);
+
   const loadMatrix = useCallback(async () => {
+    const contextVersion = matrixContextVersionRef.current;
+    const requestId = ++matrixLoadRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -288,6 +311,10 @@ export function MatrixPage() {
           projectManagerPersonId,
         }),
       ]);
+      if (contextVersion !== matrixContextVersionRef.current || requestId !== matrixLoadRequestIdRef.current) {
+        return;
+      }
+      matrixDataContextVersionRef.current = contextVersion;
       setMatrix(matrixData);
       matrixVersionRef.current = versionData.version;
       setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
@@ -297,13 +324,19 @@ export function MatrixPage() {
       }
       setAbsences(absenceData);
     } catch (requestError) {
+      if (contextVersion !== matrixContextVersionRef.current || requestId !== matrixLoadRequestIdRef.current) {
+        return;
+      }
       setError(readApiError(requestError, "Matrixdaten konnten nicht geladen werden."));
     } finally {
-      setIsLoading(false);
+      if (contextVersion === matrixContextVersionRef.current && requestId === matrixLoadRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
 
   const refreshMatrixOnly = useCallback(async () => {
+    const contextVersion = matrixContextVersionRef.current;
     const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
     const matrixData = await api.matrix({
       start: activeRange.start,
@@ -312,16 +345,25 @@ export function MatrixPage() {
       yearView: isYearView,
       projectManagerPersonId,
     });
+    if (contextVersion !== matrixContextVersionRef.current) {
+      return;
+    }
+    matrixDataContextVersionRef.current = contextVersion;
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
   }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
 
   const refreshAbsencesOnly = useCallback(async () => {
+    const contextVersion = matrixContextVersionRef.current;
     const absenceData = await api.absences({ start: activeRange.start, end: activeRange.end });
+    if (contextVersion !== matrixContextVersionRef.current) {
+      return;
+    }
     setAbsences(absenceData);
   }, [activeRange.end, activeRange.start]);
 
   const syncMatrixVersionSilently = useCallback(async () => {
+    const contextVersion = matrixContextVersionRef.current;
     const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
     try {
       const versionData = await api.matrixVersion({
@@ -330,13 +372,19 @@ export function MatrixPage() {
         yearView: isYearView,
         projectManagerPersonId,
       });
+      if (contextVersion !== matrixContextVersionRef.current) {
+        return;
+      }
       matrixVersionRef.current = versionData.version;
     } catch {
       // Hintergrund-Sync darf den Nutzer nicht stören.
     }
   }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
 
-  const refreshMatrixInBackground = useCallback(async (nextVersion: string) => {
+  const refreshMatrixInBackground = useCallback(async (nextVersion: string, contextVersion: number) => {
+    if (contextVersion !== matrixContextVersionRef.current) {
+      return;
+    }
     const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
     const matrixScroll = matrixScrollRef.current;
     const scrollSnapshot = matrixScroll
@@ -353,11 +401,18 @@ export function MatrixPage() {
       }),
       api.absences({ start: activeRange.start, end: activeRange.end }),
     ]);
+    if (contextVersion !== matrixContextVersionRef.current) {
+      return;
+    }
+    matrixDataContextVersionRef.current = contextVersion;
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
     setAbsences(absenceData);
     matrixVersionRef.current = nextVersion;
     window.requestAnimationFrame(() => {
+      if (contextVersion !== matrixContextVersionRef.current) {
+        return;
+      }
       if (scrollSnapshot && matrixScrollRef.current) {
         matrixScrollRef.current.scrollLeft = scrollSnapshot.left;
         matrixScrollRef.current.scrollTop = scrollSnapshot.top;
@@ -374,6 +429,7 @@ export function MatrixPage() {
       hasDeferredMatrixRefreshRef.current = true;
       return;
     }
+    const contextVersion = matrixContextVersionRef.current;
     isCheckingMatrixVersionRef.current = true;
     try {
       const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
@@ -383,12 +439,15 @@ export function MatrixPage() {
         yearView: isYearView,
         projectManagerPersonId,
       });
+      if (contextVersion !== matrixContextVersionRef.current) {
+        return;
+      }
       if (matrixVersionRef.current === null) {
         matrixVersionRef.current = versionData.version;
         return;
       }
       if (versionData.version !== matrixVersionRef.current) {
-        await refreshMatrixInBackground(versionData.version);
+        await refreshMatrixInBackground(versionData.version, contextVersion);
       }
       hasDeferredMatrixRefreshRef.current = false;
     } catch {
@@ -465,6 +524,13 @@ export function MatrixPage() {
   }, []);
 
   const updateProjectManagerFilter = useCallback((nextFilter: string) => {
+    if (nextFilter === projectManagerFilter) {
+      return;
+    }
+    const currentDate = new Date();
+    weekResetSequenceRef.current += 1;
+    invalidateMatrixDataContext();
+    setIsLoading(true);
     rangeScrollKeyRef.current = null;
     interactionWeekSnapKeyRef.current = null;
     clearScheduledMatrixRangeScroll();
@@ -473,8 +539,13 @@ export function MatrixPage() {
       initialScrollSnapResetTimeoutRef.current = null;
     }
     isApplyingWeekSnapRef.current = false;
+    setPlanningReferenceDate(currentDate);
+    setCurrentWeekResetRequest({
+      id: weekResetSequenceRef.current,
+      weekStart: getIsoWeekStartDate(currentDate),
+    });
     setProjectManagerFilter(nextFilter);
-  }, [clearScheduledMatrixRangeScroll]);
+  }, [clearScheduledMatrixRangeScroll, invalidateMatrixDataContext, projectManagerFilter]);
 
   useEffect(() => {
     if (!matrix || didSetInitialProjectManagerFilter.current) {
@@ -490,6 +561,9 @@ export function MatrixPage() {
     if (!matrix || !matrixScrollRef.current) {
       return;
     }
+    if (matrixDataContextVersionRef.current !== matrixContextVersionRef.current) {
+      return;
+    }
     const firstDay = matrix.days[0]?.date ?? "";
     const lastDay = matrix.days.at(-1)?.date ?? "";
     if (firstDay !== activeRange.start || lastDay !== activeRange.end) {
@@ -502,6 +576,7 @@ export function MatrixPage() {
       isCompactView ? "compact" : "normal",
       activeRange.start,
       activeRange.end,
+      currentWeekResetRequest.id,
       matrix.days.length,
       firstDay,
       lastDay,
@@ -523,11 +598,11 @@ export function MatrixPage() {
       return;
     }
 
-    if (!matrix.days.some((day) => day.date === today)) {
+    if (!matrix.days.some((day) => day.date === currentWeekResetRequest.weekStart)) {
       return;
     }
 
-    const desiredScrollLeft = matrixScrollOffsetForDate(matrix.days, matrixWeekStartDate(today), isCompactView);
+    const desiredScrollLeft = matrixScrollOffsetForDate(matrix.days, currentWeekResetRequest.weekStart, isCompactView);
     const expectedTableWidth = matrixNumericTableWidth(matrix.days, isCompactView);
     let attempt = 0;
     const applyScroll = () => {
@@ -578,11 +653,12 @@ export function MatrixPage() {
     activeRange.end,
     activeRange.start,
     clearScheduledMatrixRangeScroll,
+    currentWeekResetRequest.id,
+    currentWeekResetRequest.weekStart,
     isCompactView,
     isYearView,
     matrix,
     projectManagerFilter,
-    today,
   ]);
 
   useEffect(() => {
@@ -777,6 +853,11 @@ export function MatrixPage() {
     updateAssignmentDrag(null);
     updateAssignmentResize(null);
     setIsSiteCreateDrawerOpen(false);
+    invalidateMatrixDataContext();
+    setIsLoading(true);
+    rangeScrollKeyRef.current = null;
+    interactionWeekSnapKeyRef.current = null;
+    clearScheduledMatrixRangeScroll();
     setIsYearView(value);
   }
 
@@ -3360,12 +3441,7 @@ function matrixDateAtScrollOffset(days: MatrixResponse["days"], scrollLeft: numb
 }
 
 function matrixWeekStartDate(dateValue: string): string {
-  const [year, month, day] = dateValue.split("-");
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  const weekday = date.getDay();
-  const mondayOffset = weekday === 0 ? 6 : weekday - 1;
-  date.setDate(date.getDate() - mondayOffset);
-  return toDateInputValue(date);
+  return getIsoWeekStartDate(dateValue);
 }
 
 function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: number, isCompactView: boolean): number {

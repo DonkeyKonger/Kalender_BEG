@@ -724,6 +724,7 @@ button:disabled {
   max-width: 100%;
   max-height: calc(100vh - 178px);
   overflow: auto;
+  overflow-anchor: none;
   scrollbar-gutter: stable;
   scroll-padding-left: var(--fixed-columns-width, 552px);
   border: 1px solid #cbd7e6;

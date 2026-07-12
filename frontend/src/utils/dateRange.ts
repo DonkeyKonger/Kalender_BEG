@@ -54,6 +54,15 @@ export function getIsoWeekInfo(value: string): IsoWeekInfo {
   return { isoYear, week };
 }
 
+export function getIsoWeekStartDate(referenceDate: Date | string = new Date()): string {
+  const parsedDate = typeof referenceDate === "string"
+    ? parseDate(referenceDate)
+    : new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const isoWeekday = parsedDate.getDay() || 7;
+  parsedDate.setDate(parsedDate.getDate() - isoWeekday + 1);
+  return toDateInputValue(parsedDate);
+}
+
 export function getEasterSunday(year: number): Date {
   const a = year % 19;
   const b = Math.floor(year / 100);
