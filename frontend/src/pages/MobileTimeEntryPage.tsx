@@ -1596,17 +1596,6 @@ function formatSiteMeta(site: MobileTimeSiteOption): string {
   return [site.site_number, site.location].filter(Boolean).join(" · ");
 }
 
-function getIsoWeek(value: Date): { week: number; year: number } {
-  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return {
-    week: Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7),
-    year: date.getUTCFullYear(),
-  };
-}
-
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     return error.message || fallback;

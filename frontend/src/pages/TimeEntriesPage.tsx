@@ -17,7 +17,7 @@ import {
 import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
-import { calendarPersonCode, type Person } from "../types/person";
+import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
@@ -2700,10 +2700,6 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatCount(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 function formatSubmittedHours(minutes: number): string {
   return formatDecimalHoursValue(minutes / 60);
 }
@@ -4048,16 +4044,6 @@ function gpsStatusTone(status: TimeEntryGpsStatus): StatusBadgeTone {
 
 function comparePeople(left: Person, right: Person): number {
   return left.display_name.localeCompare(right.display_name, "de");
-}
-
-function personSearchText(person: Person): string {
-  return [
-    person.display_name,
-    person.first_name,
-    person.last_name,
-    person.short_code,
-    calendarPersonCode(person),
-  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function readApiError(error: unknown, fallback: string): string {

@@ -3229,8 +3229,6 @@ const DAY_COLUMN_WIDTH = 124;
 const COMPACT_DAY_COLUMN_WIDTH = 88;
 const WEEKEND_DAY_COLUMN_WIDTH = 70;
 const COMPACT_WEEKEND_DAY_COLUMN_WIDTH = 53;
-const EDITOR_POPUP_HEIGHT = 560;
-const EDITOR_POPUP_WIDTH = 390;
 const ABSENCE_EDITOR_POPUP_HEIGHT = 420;
 const ABSENCE_EDITOR_POPUP_WIDTH = 360;
 const ASSIGNMENT_AUTOCOMPLETE_HEIGHT = 240;
@@ -3293,21 +3291,6 @@ function isKeyboardEventFromFormControl(event: MatrixKeyboardEvent): boolean {
     return false;
   }
   return Boolean(target.closest("input, textarea, select, button, a, [contenteditable='true'], .matrix-cell-editor-popup, .absence-cell-editor-popup"));
-}
-
-function editorPopupPosition(anchor: EditorAnchor): { left: number; top: number } {
-  const gap = 6;
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const preferredLeft = anchor.left;
-  const left = Math.max(8, Math.min(preferredLeft, viewportWidth - EDITOR_POPUP_WIDTH - 8));
-  const belowTop = anchor.bottom + gap;
-  const aboveTop = anchor.top - EDITOR_POPUP_HEIGHT - gap;
-  const top = belowTop + EDITOR_POPUP_HEIGHT > viewportHeight
-    ? Math.max(8, aboveTop)
-    : belowTop;
-
-  return { left, top };
 }
 
 function absenceEditorPopupPosition(anchor: EditorAnchor): { left: number; top: number } {

@@ -78,10 +78,11 @@ class MatrixService:
         visible_sites = (
             all_visible_sites
             if project_manager_person_id is None
-            else self.sites.list(
-                include_closed=include_closed,
-                project_manager_person_id=project_manager_person_id,
-            )
+            else [
+                site
+                for site in all_visible_sites
+                if site.project_manager_person_id == project_manager_person_id
+            ]
         )
         site_ids = {site.id for site in visible_sites}
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]

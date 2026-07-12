@@ -1650,14 +1650,3 @@ function formatShortDate(value: string): string {
     month: "2-digit",
   }).format(parseDateKey(value));
 }
-
-function getAbsenceLabel(value: string): string {
-  const labels: Record<string, string> = {
-    vacation: "Urlaub",
-    sick: "Krank",
-    school: "Schule",
-    free: "Überstunden",
-    other: "Sonstiges",
-  };
-  return labels[value] ?? value;
-}

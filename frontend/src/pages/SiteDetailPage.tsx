@@ -2,7 +2,7 @@ import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as Fi
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { AddressSearch } from "../components/AddressSearch";
@@ -115,7 +115,6 @@ export function SiteDetailPage() {
   const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const siteDetailReturnTo = (location.state as { returnTo?: string } | null)?.returnTo;
   const siteDetailBackPath = siteDetailReturnTo === "matrix" ? "/matrix" : "/sites";
@@ -6067,11 +6066,6 @@ function formatExtraWorkTicketPdfFilename(site: Site, ticket: MobileExtraWorkTic
 
 function sanitizeDownloadPart(value: string): string {
   return value.trim().replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "ohne_nummer";
-}
-
-function formatIsoDateOnly(value: string): string {
-  const dateKey = value.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? formatDateOnly(dateKey) : value;
 }
 
 function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {

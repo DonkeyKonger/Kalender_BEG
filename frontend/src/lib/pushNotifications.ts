@@ -4,10 +4,6 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { api, getApiBaseUrl } from "./api";
 import type { CurrentUser } from "../types/auth";
 
-type PushRegistrationToken = {
-  value: string;
-};
-
 type PushNotificationAction = {
   notification: {
     data?: Record<string, unknown>;
