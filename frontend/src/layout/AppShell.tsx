@@ -1,7 +1,7 @@
 import { LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, PointerEvent } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canAccessMainPage, canShowNavItem } from "../auth/permissions";
@@ -17,14 +17,12 @@ const DASHBOARD_MESSAGE_ROLES: UserRole[] = ["admin", "project_manager", "office
 
 export function AppShell() {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const [sidebarMode, setSidebarMode] = useState<"collapsed" | "pointer" | "keyboard">("collapsed");
   const [dashboardMessageCount, setDashboardMessageCount] = useState(0);
   const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
   const lastDashboardMessageCountRef = useRef<number | null>(null);
   const lastDashboardMessageSignatureRef = useRef<string | null>(null);
   const visibleItems = navigationItems.filter((item) => user && canShowNavItem(user, item));
-  const showUserTopbar = location.pathname === "/";
 
   useEffect(() => {
     if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role) || !canAccessMainPage(user, "overview")) {
@@ -198,15 +196,6 @@ export function AppShell() {
       </aside>
 
       <div className="app-main">
-        {showUserTopbar ? (
-          <header className="topbar">
-            <div>
-              <p className="topbar-label">Angemeldet als</p>
-              <p className="topbar-user">{user?.display_name}</p>
-            </div>
-          </header>
-        ) : null}
-
         {user ? (
           <div className="mobile-appshell-actions" aria-label="Mobile App-Aktionen">
             <span className="mobile-appshell-user">Angemeldet als {user?.display_name}</span>
