@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteRead, DashboardNoteUpdate
 from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
+from app.schemas.person import PersonRead
 from app.schemas.site import SiteSummary
 from app.schemas.weather import WeatherSummary
 from app.services.dashboard_note_service import DashboardNoteService
@@ -80,6 +81,15 @@ def list_dashboard_note_site_options(
 ) -> list[SiteSummary]:
     sites = DashboardNoteService(db).list_site_options()
     return [SiteSummary.model_validate(site) for site in sites]
+
+
+@router.get("/notes/employee-options", response_model=list[PersonRead])
+def list_dashboard_note_employee_options(
+    _user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> list[PersonRead]:
+    people = DashboardNoteService(db).list_employee_options()
+    return [PersonRead.model_validate(person) for person in people]
 
 
 @router.patch("/notes/{note_id}", response_model=DashboardNoteRead)

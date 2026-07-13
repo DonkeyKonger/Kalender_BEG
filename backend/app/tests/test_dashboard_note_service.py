@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
-from app.models.enums import SiteStatus, UserRole
+from app.models.enums import PersonType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -183,3 +183,152 @@ def test_dashboard_note_site_options_do_not_require_a_user_person_assignment():
     db.commit()
 
     assert [site.site_number for site in DashboardNoteService(db).list_site_options()] == ["1001"]
+
+
+def test_dashboard_note_employee_options_filter_and_sort_assignable_people():
+    db = db_session()
+    external = Person(
+        first_name="Anna",
+        last_name="Alpha",
+        display_name="Anna Alpha",
+        short_code="AA",
+        person_type=PersonType.EXTERNAL,
+        is_active=True,
+    )
+    worker_without_user = Person(
+        first_name="Berta",
+        last_name="Bauer",
+        display_name="Berta Bauer",
+        short_code="BB",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    worker_with_user = Person(
+        first_name="Max",
+        last_name="Zorn",
+        display_name="Max Zorn",
+        short_code="MZ",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    project_manager = Person(
+        first_name="Paula",
+        last_name="Leitung",
+        display_name="Paula Leitung",
+        short_code="PL",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    disabled_worker = Person(
+        first_name="Dieter",
+        last_name="Konto",
+        display_name="Dieter Konto",
+        short_code="DK",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    inactive_worker = Person(
+        first_name="Ines",
+        last_name="Inaktiv",
+        display_name="Ines Inaktiv",
+        short_code="II",
+        person_type=PersonType.INTERNAL,
+        is_active=False,
+    )
+    deleted_worker = Person(
+        first_name="Dora",
+        last_name="Gelöscht",
+        display_name="Dora Gelöscht",
+        short_code="DG",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+        deleted_at=datetime.now(timezone.utc),
+    )
+    db.add_all([
+        external,
+        worker_without_user,
+        worker_with_user,
+        project_manager,
+        disabled_worker,
+        inactive_worker,
+        deleted_worker,
+    ])
+    db.flush()
+    db.add_all([
+        User(
+            username="max.worker",
+            display_name="Max Zorn",
+            password_hash="x",
+            role=UserRole.MONTEUR,
+            is_active=True,
+            person_id=worker_with_user.id,
+        ),
+        User(
+            username="paula.manager",
+            display_name="Paula Leitung",
+            password_hash="x",
+            role=UserRole.PROJECT_MANAGER,
+            is_active=True,
+            person_id=project_manager.id,
+        ),
+        User(
+            username="dieter.disabled",
+            display_name="Dieter Konto",
+            password_hash="x",
+            role=UserRole.MONTEUR,
+            is_active=False,
+            person_id=disabled_worker.id,
+        ),
+    ])
+    db.commit()
+
+    people = DashboardNoteService(db).list_employee_options()
+
+    assert [person.display_name for person in people] == [
+        "Anna Alpha",
+        "Berta Bauer",
+        "Max Zorn",
+    ]
+
+
+def test_dashboard_note_update_keeps_unchanged_deleted_employee_assignment():
+    db = db_session()
+    employee = Person(
+        first_name="Alt",
+        last_name="Monteur",
+        display_name="Alt Monteur",
+        short_code="AM",
+    )
+    owner = User(
+        username="owner",
+        display_name="Owner",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([employee, owner])
+    db.commit()
+
+    service = DashboardNoteService(db)
+    note = service.create_note(
+        DashboardNoteCreate(text="Historische Zuordnung", employee_id=employee.id),
+        user_id=owner.id,
+    )
+    employee.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    updated = service.update_note(
+        note.id,
+        DashboardNoteUpdate(text="Weiterhin zugeordnet", employee_id=employee.id),
+        user_id=owner.id,
+    )
+
+    assert updated.employee_id == employee.id
+    assert updated.text == "Weiterhin zugeordnet"
+
+    with pytest.raises(HTTPException) as error:
+        service.create_note(
+            DashboardNoteCreate(text="Neue Zuordnung", employee_id=employee.id),
+            user_id=owner.id,
+        )
+    assert error.value.status_code == 400

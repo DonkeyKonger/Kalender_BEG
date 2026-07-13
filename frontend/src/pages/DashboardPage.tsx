@@ -129,6 +129,8 @@ export function DashboardPage() {
   const [dashboardNoteSitesLoading, setDashboardNoteSitesLoading] = useState(false);
   const [dashboardNoteSitesError, setDashboardNoteSitesError] = useState<string | null>(null);
   const [dashboardNotePeople, setDashboardNotePeople] = useState<Person[]>([]);
+  const [dashboardNotePeopleLoading, setDashboardNotePeopleLoading] = useState(false);
+  const [dashboardNotePeopleError, setDashboardNotePeopleError] = useState<string | null>(null);
   const [dashboardNotesLoading, setDashboardNotesLoading] = useState(false);
   const [dashboardNoteMode, setDashboardNoteMode] = useState<DashboardNoteMode>("open");
   const [dashboardNoteFormOpen, setDashboardNoteFormOpen] = useState(false);
@@ -209,15 +211,11 @@ export function DashboardPage() {
       setDashboardNotesLoading(true);
       setDashboardNoteError(null);
       try {
-        const [notes, people] = await Promise.all([
-          api.dashboardNotes(),
-          api.persons({ isActive: true }),
-        ]);
+        const notes = await api.dashboardNotes();
         if (!active) {
           return;
         }
         setDashboardNotes(notes);
-        setDashboardNotePeople(people);
       } catch {
         if (active) {
           setDashboardNoteError("Notizen konnten nicht geladen werden.");
@@ -225,6 +223,26 @@ export function DashboardPage() {
       } finally {
         if (active) {
           setDashboardNotesLoading(false);
+        }
+      }
+    }
+
+    async function loadDashboardNotePeople() {
+      setDashboardNotePeopleLoading(true);
+      setDashboardNotePeopleError(null);
+      try {
+        const people = await api.dashboardNoteEmployeeOptions();
+        if (active) {
+          setDashboardNotePeople(people.slice().sort(compareDashboardNotePeople));
+        }
+      } catch {
+        if (active) {
+          setDashboardNotePeople([]);
+          setDashboardNotePeopleError("Mitarbeiter konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setDashboardNotePeopleLoading(false);
         }
       }
     }
@@ -250,6 +268,7 @@ export function DashboardPage() {
     }
 
     void loadDashboardNotes();
+    void loadDashboardNotePeople();
     void loadDashboardNoteSites();
 
     return () => {
@@ -663,6 +682,8 @@ export function DashboardPage() {
                 notes={visibleDashboardNotes}
                 openCount={openDashboardNoteCount}
                 people={dashboardNotePeople}
+                peopleError={dashboardNotePeopleError}
+                peopleLoading={dashboardNotePeopleLoading}
                 saving={dashboardNoteSaving}
                 sites={dashboardNoteSites}
                 sitesError={dashboardNoteSitesError}
@@ -771,6 +792,8 @@ function DashboardNotesPanel({
   sitesError,
   sitesLoading,
   people,
+  peopleError,
+  peopleLoading,
   today,
   onModeChange,
   onDraftChange,
@@ -795,6 +818,8 @@ function DashboardNotesPanel({
   sitesError: string | null;
   sitesLoading: boolean;
   people: Person[];
+  peopleError: string | null;
+  peopleLoading: boolean;
   today: string;
   onModeChange: (mode: DashboardNoteMode) => void;
   onDraftChange: (field: keyof DashboardNoteDraft, value: string) => void;
@@ -804,9 +829,11 @@ function DashboardNotesPanel({
   onEdit: (note: DashboardNote) => void;
   onDelete: (note: DashboardNote) => void;
 }) {
-  const editingSite = editingNoteId === null
+  const editingNote = editingNoteId === null
     ? null
-    : notes.find((note) => note.id === editingNoteId)?.site ?? null;
+    : notes.find((note) => note.id === editingNoteId) ?? null;
+  const editingSite = editingNote?.site ?? null;
+  const editingEmployee = editingNote?.employee ?? null;
   const siteOptions = editingSite && !sites.some((site) => site.id === editingSite.id)
     ? [...sites, editingSite].sort(compareDashboardNoteSites)
     : sites;
@@ -867,20 +894,18 @@ function DashboardNotesPanel({
                 onChange={(value) => onDraftChange("site_id", value)}
               />
             </div>
-            <label className="dashboard-note-field">
-              <span>Monteur</span>
-              <select
+            <div className="dashboard-note-field">
+              <span id="dashboard-note-employee-label">Monteur</span>
+              <DashboardNoteEmployeeSelect
+                error={peopleError}
+                historicalEmployee={editingEmployee}
+                labelId="dashboard-note-employee-label"
+                loading={peopleLoading}
+                people={people}
                 value={draft.employee_id}
-                onChange={(event) => onDraftChange("employee_id", event.target.value)}
-              >
-                <option value="">Keine Zuordnung</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.display_name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => onDraftChange("employee_id", value)}
+              />
+            </div>
           </div>
           <div className="dashboard-note-form-actions">
             <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
@@ -919,7 +944,13 @@ function DashboardNotesPanel({
 
 type DashboardNoteSiteOption = SiteSummary | NonNullable<DashboardNote["site"]>;
 
-type DashboardNoteSitePopupPosition = {
+type DashboardNotePickerOption = {
+  value: string;
+  label: string;
+  searchText: string;
+};
+
+type DashboardNotePickerPopupPosition = {
   left: number;
   maxHeight: number;
   top: number;
@@ -941,6 +972,117 @@ function DashboardNoteSiteSelect({
   labelId: string;
   onChange: (value: string) => void;
 }) {
+  const options = useMemo(() => sites.map((site) => ({
+    value: String(site.id),
+    label: formatDashboardNoteSiteOption(site),
+    searchText: `${site.site_number ?? ""} ${site.name}`,
+  })), [sites]);
+
+  return (
+    <DashboardNotePicker
+      emptyText="Keine Baustelle gefunden"
+      error={error}
+      errorText="Baustellen konnten nicht geladen werden."
+      labelId={labelId}
+      listLabel="Baustelle auswählen"
+      loading={loading}
+      loadingText="Baustellen werden geladen..."
+      options={options}
+      searchLabel="Baustelle suchen"
+      searchPlaceholder="Baustelle suchen…"
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+function DashboardNoteEmployeeSelect({
+  value,
+  people,
+  historicalEmployee,
+  loading,
+  error,
+  labelId,
+  onChange,
+}: {
+  value: string;
+  people: Person[];
+  historicalEmployee: DashboardNote["employee"];
+  loading: boolean;
+  error: string | null;
+  labelId: string;
+  onChange: (value: string) => void;
+}) {
+  const options = useMemo(() => {
+    const activeOptions = people.map((person) => ({
+      value: String(person.id),
+      label: person.display_name,
+      searchText: [
+        person.first_name,
+        person.last_name,
+        person.display_name,
+        `${person.last_name} ${person.first_name}`,
+        person.short_code,
+      ].join(" "),
+    }));
+    if (!historicalEmployee || activeOptions.some((option) => option.value === String(historicalEmployee.id))) {
+      return activeOptions;
+    }
+    return [
+      ...activeOptions,
+      {
+        value: String(historicalEmployee.id),
+        label: `${historicalEmployee.display_name}${!loading && !error ? " (nicht mehr aktiv)" : ""}`,
+        searchText: `${historicalEmployee.display_name} ${historicalEmployee.short_code}`,
+      },
+    ];
+  }, [error, historicalEmployee, loading, people]);
+
+  return (
+    <DashboardNotePicker
+      emptyText="Kein Mitarbeiter gefunden"
+      error={error}
+      errorText="Mitarbeiter konnten nicht geladen werden."
+      labelId={labelId}
+      listLabel="Monteur auswählen"
+      loading={loading}
+      loadingText="Mitarbeiter werden geladen..."
+      options={options}
+      searchLabel="Monteur suchen"
+      searchPlaceholder="Monteur suchen…"
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+function DashboardNotePicker({
+  value,
+  options,
+  loading,
+  error,
+  labelId,
+  listLabel,
+  searchLabel,
+  searchPlaceholder,
+  loadingText,
+  errorText,
+  emptyText,
+  onChange,
+}: {
+  value: string;
+  options: DashboardNotePickerOption[];
+  loading: boolean;
+  error: string | null;
+  labelId: string;
+  listLabel: string;
+  searchLabel: string;
+  searchPlaceholder: string;
+  loadingText: string;
+  errorText: string;
+  emptyText: string;
+  onChange: (value: string) => void;
+}) {
   const popupId = useId();
   const listboxId = `${popupId}-listbox`;
   const statusId = `${popupId}-status`;
@@ -949,19 +1091,18 @@ function DashboardNoteSiteSelect({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [popupPosition, setPopupPosition] = useState<DashboardNoteSitePopupPosition | null>(null);
-  const selectedSite = sites.find((site) => String(site.id) === value) ?? null;
-  const selectedLabel = selectedSite ? formatDashboardNoteSiteOption(selectedSite) : "Keine Zuordnung";
+  const [popupPosition, setPopupPosition] = useState<DashboardNotePickerPopupPosition | null>(null);
+  const selectedOption = options.find((option) => option.value === value) ?? null;
+  const selectedLabel = selectedOption?.label ?? "Keine Zuordnung";
   const normalizedQuery = query.trim().toLocaleLowerCase("de-DE");
-  const filteredSites = useMemo(() => {
+  const filteredOptions = useMemo(() => {
     if (!normalizedQuery) {
-      return sites;
+      return options;
     }
-    return sites.filter((site) => {
-      const siteNumber = site.site_number ?? "";
-      return `${siteNumber} ${site.name}`.toLocaleLowerCase("de-DE").includes(normalizedQuery);
-    });
-  }, [normalizedQuery, sites]);
+    return options.filter((option) => (
+      option.searchText.toLocaleLowerCase("de-DE").includes(normalizedQuery)
+    ));
+  }, [normalizedQuery, options]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -970,7 +1111,7 @@ function DashboardNoteSiteSelect({
 
     const updatePosition = () => {
       if (triggerRef.current) {
-        setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+        setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
       }
     };
     const handlePointerDown = (event: PointerEvent) => {
@@ -1012,20 +1153,20 @@ function DashboardNoteSiteSelect({
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
-  const selectSite = (siteId: string) => {
-    onChange(siteId);
+  const selectOption = (optionValue: string) => {
+    onChange(optionValue);
     closeAndFocusTrigger();
   };
 
   return (
-    <div className="dashboard-note-site-select">
+    <div className="dashboard-note-picker">
       <button
         aria-controls={isOpen ? listboxId : undefined}
         aria-describedby={loading || error ? statusId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-labelledby={labelId}
-        className={`dashboard-note-site-trigger${isOpen ? " is-open" : ""}`}
+        className={`dashboard-note-picker-trigger${isOpen ? " is-open" : ""}`}
         ref={triggerRef}
         role="combobox"
         title={selectedLabel}
@@ -1037,7 +1178,7 @@ function DashboardNoteSiteSelect({
             return;
           }
           if (triggerRef.current) {
-            setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+            setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
           }
           setQuery("");
           setIsOpen(true);
@@ -1046,13 +1187,13 @@ function DashboardNoteSiteSelect({
           if (!isOpen && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
             if (triggerRef.current) {
-              setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+              setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
             }
             setIsOpen(true);
           }
         }}
       >
-        <span className="dashboard-note-site-trigger-label">{selectedLabel}</span>
+        <span className="dashboard-note-picker-trigger-label">{selectedLabel}</span>
         <ChevronDown aria-hidden="true" size={15} />
       </button>
 
@@ -1062,68 +1203,67 @@ function DashboardNoteSiteSelect({
           id={statusId}
           role="status"
         >
-          {error ?? "Baustellen werden geladen..."}
+          {error ?? loadingText}
         </small>
       ) : null}
 
       {isOpen && popupPosition && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="dashboard-note-site-popup"
+              className="dashboard-note-picker-popup"
               ref={popupRef}
               style={popupPosition}
             >
-              <div className="dashboard-note-site-search">
+              <div className="dashboard-note-picker-search">
                 <Search aria-hidden="true" size={14} />
                 <input
-                  aria-label="Baustelle suchen"
+                  aria-label={searchLabel}
                   autoComplete="off"
-                  placeholder="Baustelle suchen…"
+                  placeholder={searchPlaceholder}
                   ref={searchRef}
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </div>
-              <div aria-label="Baustelle auswählen" className="dashboard-note-site-options" id={listboxId} role="listbox">
+              <div aria-label={listLabel} className="dashboard-note-picker-options" id={listboxId} role="listbox">
                 <button
                   aria-selected={value === ""}
-                  className={`dashboard-note-site-option${value === "" ? " is-selected" : ""}`}
+                  className={`dashboard-note-picker-option${value === "" ? " is-selected" : ""}`}
                   role="option"
                   type="button"
-                  onClick={() => selectSite("")}
+                  onClick={() => selectOption("")}
                 >
-                  <span className="dashboard-note-site-option-check" aria-hidden="true">
+                  <span className="dashboard-note-picker-option-check" aria-hidden="true">
                     {value === "" ? <Check size={13} /> : null}
                   </span>
                   <span>Keine Zuordnung</span>
                 </button>
-                {loading ? <p className="dashboard-note-site-option-status">Baustellen werden geladen...</p> : null}
-                {error ? <p className="dashboard-note-site-option-status is-error">Baustellen konnten nicht geladen werden.</p> : null}
+                {loading ? <p className="dashboard-note-picker-option-status">{loadingText}</p> : null}
+                {error ? <p className="dashboard-note-picker-option-status is-error">{errorText}</p> : null}
                 {!loading && !error
-                  ? filteredSites.map((site) => {
-                      const siteId = String(site.id);
-                      const isSelected = value === siteId;
+                  ? filteredOptions.map((option) => {
+                      const isSelected = value === option.value;
                       return (
                         <button
                           aria-selected={isSelected}
-                          className={`dashboard-note-site-option${isSelected ? " is-selected" : ""}`}
-                          key={site.id}
+                          className={`dashboard-note-picker-option${isSelected ? " is-selected" : ""}`}
+                          key={option.value}
                           role="option"
-                          title={formatDashboardNoteSiteOption(site)}
+                          title={option.label}
                           type="button"
-                          onClick={() => selectSite(siteId)}
+                          onClick={() => selectOption(option.value)}
                         >
-                          <span className="dashboard-note-site-option-check" aria-hidden="true">
+                          <span className="dashboard-note-picker-option-check" aria-hidden="true">
                             {isSelected ? <Check size={13} /> : null}
                           </span>
-                          <span>{formatDashboardNoteSiteOption(site)}</span>
+                          <span>{option.label}</span>
                         </button>
                       );
                     })
                   : null}
-                {!loading && !error && filteredSites.length === 0
-                  ? <p className="dashboard-note-site-option-status">Keine Baustelle gefunden</p>
+                {!loading && !error && filteredOptions.length === 0
+                  ? <p className="dashboard-note-picker-option-status">{emptyText}</p>
                   : null}
               </div>
             </div>,
@@ -1134,7 +1274,7 @@ function DashboardNoteSiteSelect({
   );
 }
 
-function getDashboardNoteSitePopupPosition(trigger: HTMLElement): DashboardNoteSitePopupPosition {
+function getDashboardNotePickerPopupPosition(trigger: HTMLElement): DashboardNotePickerPopupPosition {
   const gap = 5;
   const margin = 8;
   const preferredHeight = 330;
@@ -1479,6 +1619,13 @@ function compareDashboardNoteSites(
 ): number {
   return compareSiteNumbers(first.site_number, second.site_number)
     || first.name.localeCompare(second.name, "de", { sensitivity: "base" })
+    || first.id - second.id;
+}
+
+function compareDashboardNotePeople(first: Person, second: Person): number {
+  return first.last_name.localeCompare(second.last_name, "de", { sensitivity: "base" })
+    || first.first_name.localeCompare(second.first_name, "de", { sensitivity: "base" })
+    || first.display_name.localeCompare(second.display_name, "de", { sensitivity: "base" })
     || first.id - second.id;
 }
 
