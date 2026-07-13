@@ -17495,27 +17495,27 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-section--sites {
-  --dashboard-section-background: #f4f8ff;
-  --dashboard-section-border: #c8d9f0;
-  --dashboard-section-accent: #1d5c99;
+  --dashboard-section-background: #f9fbfd;
+  --dashboard-section-border: #d8e0e8;
+  --dashboard-section-accent: #536b82;
 }
 
 .dashboard-section--messages {
-  --dashboard-section-background: #f3faf5;
-  --dashboard-section-border: #c7e4cf;
-  --dashboard-section-accent: #287a3e;
+  --dashboard-section-background: #fafcfb;
+  --dashboard-section-border: #d8e2dc;
+  --dashboard-section-accent: #58705f;
 }
 
 .dashboard-section--notes {
-  --dashboard-section-background: #fffaf0;
-  --dashboard-section-border: #eed9a8;
-  --dashboard-section-accent: #9a6500;
+  --dashboard-section-background: #fdfcf9;
+  --dashboard-section-border: #e4dfd5;
+  --dashboard-section-accent: #786a51;
 }
 
 .dashboard-section--conflicts {
-  --dashboard-section-background: #f8f5ff;
-  --dashboard-section-border: #d8cff0;
-  --dashboard-section-accent: #6650a8;
+  --dashboard-section-background: #fbfafc;
+  --dashboard-section-border: #dedbe3;
+  --dashboard-section-accent: #6b6576;
 }
 
 .dashboard-section--sites,
