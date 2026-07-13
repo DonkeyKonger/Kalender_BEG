@@ -687,7 +687,6 @@ export function DashboardPage() {
               ) : (
                 <div className="dashboard-message-box">
                   <strong>Keine neuen Meldungen</strong>
-                  <p>Basisversion. Vorgesehen sind spaeter Monteurmeldungen, Bestellungen, Aufmasse und Rueckfragen.</p>
                 </div>
               )}
             </DashboardCard>
