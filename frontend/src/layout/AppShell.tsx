@@ -6,9 +6,8 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canAccessMainPage, canShowNavItem } from "../auth/permissions";
 import { navigationItems } from "../config/navigation";
-import { api } from "../lib/api";
+import { api, type DashboardMessage } from "../lib/api";
 import type { UserRole } from "../types/auth";
-import type { MeasurementDashboardSubmission } from "../types/site";
 
 const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
 const DASHBOARD_MESSAGES_EVENT_LIMIT = 6;
@@ -214,7 +213,7 @@ export function AppShell() {
   );
 }
 
-function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]): string {
+function dashboardMessagesSignature(messages: DashboardMessage[]): string {
   return messages
     .map((message) => [
       message.message_key,
@@ -228,6 +227,10 @@ function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]):
       message.site_number,
       message.submitted_by_name,
       message.customer_signature_name,
+      message.note_id,
+      message.note_preview,
+      message.note_due_date,
+      message.note_created_at,
     ].join("|"))
     .join(";");
 }

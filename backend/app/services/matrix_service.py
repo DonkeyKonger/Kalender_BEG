@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from hashlib import sha1
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.absence import Absence
@@ -215,7 +215,10 @@ class MatrixService:
         )
         if user_id is not None and site_ids:
             note_statement = note_statement.where(
-                DashboardNote.created_by_user_id == user_id,
+                or_(
+                    DashboardNote.created_by_user_id == user_id,
+                    DashboardNote.shared_with_user_id == user_id,
+                ),
                 DashboardNote.site_id.in_(site_ids),
             )
         else:
@@ -364,7 +367,10 @@ class MatrixService:
         statement = (
             select(DashboardNote.site_id, func.count(DashboardNote.id))
             .where(
-                DashboardNote.created_by_user_id == user_id,
+                or_(
+                    DashboardNote.created_by_user_id == user_id,
+                    DashboardNote.shared_with_user_id == user_id,
+                ),
                 DashboardNote.site_id.in_(site_ids),
                 DashboardNote.completed.is_(False),
                 DashboardNote.deleted_at.is_(None),

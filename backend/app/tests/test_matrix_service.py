@@ -122,6 +122,13 @@ def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version(
         DashboardNote(text="Offen 1", site_id=first_site.id, created_by_user_id=owner.id, completed=False),
         DashboardNote(text="Offen 2", site_id=first_site.id, created_by_user_id=owner.id, completed=False),
         DashboardNote(text="Offen 3", site_id=second_site.id, created_by_user_id=owner.id, completed=False),
+        DashboardNote(
+            text="Geteilt",
+            site_id=first_site.id,
+            created_by_user_id=owner.id,
+            shared_with_user_id=other_user.id,
+            completed=False,
+        ),
         DashboardNote(text="Erledigt", site_id=first_site.id, created_by_user_id=owner.id, completed=True),
         DashboardNote(text="Fremd", site_id=first_site.id, created_by_user_id=other_user.id, completed=False),
         DashboardNote(text="Ohne Baustelle", created_by_user_id=owner.id, completed=False),
@@ -145,7 +152,19 @@ def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version(
     )
     counts = {row.site.id: row.site.open_note_count for row in result.rows}
 
-    assert counts == {first_site.id: 2, second_site.id: 1}
+    assert counts == {first_site.id: 3, second_site.id: 1}
+
+    recipient_result = service.get_matrix(
+        start=date(2026, 7, 13),
+        end=date(2026, 7, 13),
+        include_weekends=True,
+        user_id=other_user.id,
+    )
+    recipient_counts = {
+        row.site.id: row.site.open_note_count
+        for row in recipient_result.rows
+    }
+    assert recipient_counts == {first_site.id: 2, second_site.id: 0}
 
     version_before = service.get_version(
         start=date(2026, 7, 13),
@@ -168,7 +187,7 @@ def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version(
         user_id=owner.id,
     ).version
 
-    assert updated_counts == {first_site.id: 1, second_site.id: 1}
+    assert updated_counts == {first_site.id: 2, second_site.id: 1}
     assert version_after != version_before
 
 

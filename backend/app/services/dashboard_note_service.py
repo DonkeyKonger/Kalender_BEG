@@ -2,13 +2,14 @@ import re
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.dashboard_note import DashboardNote
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
 from app.models.site import Site
+from app.models.user import User
 from app.repositories.site_repository import SiteRepository
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteUpdate
 from app.services.person_service import PersonService
@@ -29,9 +30,12 @@ class DashboardNoteService:
     ) -> list[DashboardNote]:
         statement = (
             select(DashboardNote)
-            .options(selectinload(DashboardNote.site), selectinload(DashboardNote.employee))
+            .options(*dashboard_note_load_options())
             .where(
-                DashboardNote.created_by_user_id == user_id,
+                or_(
+                    DashboardNote.created_by_user_id == user_id,
+                    DashboardNote.shared_with_user_id == user_id,
+                ),
                 DashboardNote.deleted_at.is_(None),
             )
         )
@@ -61,58 +65,150 @@ class DashboardNoteService:
             key=employee_name_sort_key,
         )
 
+    def list_share_user_options(self, *, current_user_id: int) -> list[User]:
+        users = self.db.scalars(
+            select(User)
+            .options(selectinload(User.person))
+            .where(
+                User.id != current_user_id,
+                User.is_active.is_(True),
+                User.role.in_((UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)),
+            )
+        ).all()
+        return sorted(
+            (
+                user
+                for user in users
+                if user.person is None
+                or (user.person.is_active and user.person.deleted_at is None)
+            ),
+            key=share_user_name_sort_key,
+        )
+
+    def get_note(self, note_id: int, *, user_id: int) -> DashboardNote:
+        note = self._get_visible_note(note_id, user_id=user_id)
+        if note is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Notiz nicht gefunden.")
+        return note
+
     def create_note(self, payload: DashboardNoteCreate, user_id: int) -> DashboardNote:
         values = clean_note_values(payload.model_dump())
         self._ensure_references_exist(values.get("site_id"), values.get("employee_id"))
+        self._ensure_share_user(
+            values.get("shared_with_user_id"),
+            owner_user_id=user_id,
+        )
+        if values.get("shared_with_user_id") is not None:
+            values["share_revision"] = 1
+            values["shared_at"] = datetime.now(timezone.utc)
         note = DashboardNote(**values, created_by_user_id=user_id)
         self.db.add(note)
         self.db.commit()
         self.db.refresh(note)
-        return self._get_note(note.id, user_id=user_id) or note
+        return self._get_visible_note(note.id, user_id=user_id) or note
 
     def update_note(self, note_id: int, payload: DashboardNoteUpdate, *, user_id: int) -> DashboardNote:
-        note = self._get_note(note_id, user_id=user_id)
+        note = self._get_visible_note(note_id, user_id=user_id)
         if note is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Notiz nicht gefunden.")
 
         values = clean_note_values(payload.model_dump(exclude_unset=True), partial=True)
+        share_value_provided = "shared_with_user_id" in values
+        if share_value_provided and note.created_by_user_id != user_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Nur der Ersteller darf die Bürofreigabe ändern.",
+            )
         self._ensure_references_exist(
             values.get("site_id"),
             values.get("employee_id"),
             existing_employee_id=note.employee_id,
         )
+        if share_value_provided and values.get("shared_with_user_id") != note.shared_with_user_id:
+            self._ensure_share_user(
+                values.get("shared_with_user_id"),
+                owner_user_id=note.created_by_user_id,
+            )
         completed_changed = "completed" in values and values["completed"] != note.completed
+        shared_user_changed = (
+            share_value_provided
+            and values.get("shared_with_user_id") != note.shared_with_user_id
+        )
 
         for field, value in values.items():
-            if field == "completed":
+            if field in {"completed", "shared_with_user_id"}:
                 continue
             setattr(note, field, value)
         if completed_changed:
             note.completed = values["completed"]
             note.completed_at = datetime.now(timezone.utc) if note.completed else None
+        if shared_user_changed:
+            note.shared_with_user_id = values.get("shared_with_user_id")
+            note.share_revision += 1
+            note.shared_at = (
+                datetime.now(timezone.utc)
+                if note.shared_with_user_id is not None
+                else None
+            )
 
         self.db.commit()
         self.db.refresh(note)
-        return self._get_note(note.id, user_id=user_id) or note
+        return self._get_visible_note(note.id, user_id=user_id) or note
 
     def delete_note(self, note_id: int, user_id: int) -> None:
-        note = self._get_note(note_id, user_id=user_id)
+        note = self._get_visible_note(note_id, user_id=user_id)
         if note is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Notiz nicht gefunden.")
+        if note.created_by_user_id != user_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Nur der Ersteller darf die Notiz löschen.",
+            )
         note.deleted_at = datetime.now(timezone.utc)
         note.deleted_by_user_id = user_id
         self.db.commit()
 
-    def _get_note(self, note_id: int, *, user_id: int) -> DashboardNote | None:
+    def _get_visible_note(self, note_id: int, *, user_id: int) -> DashboardNote | None:
         return self.db.scalar(
             select(DashboardNote)
-            .options(selectinload(DashboardNote.site), selectinload(DashboardNote.employee))
+            .options(*dashboard_note_load_options())
             .where(
                 DashboardNote.id == note_id,
-                DashboardNote.created_by_user_id == user_id,
+                or_(
+                    DashboardNote.created_by_user_id == user_id,
+                    DashboardNote.shared_with_user_id == user_id,
+                ),
                 DashboardNote.deleted_at.is_(None),
             )
         )
+
+    def _ensure_share_user(
+        self,
+        shared_user_id: int | None,
+        *,
+        owner_user_id: int,
+    ) -> None:
+        if shared_user_id is None:
+            return
+        if shared_user_id == owner_user_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Die Notiz kann nicht mit dem Ersteller selbst geteilt werden.",
+            )
+        shared_user = self.db.get(User, shared_user_id)
+        if (
+            shared_user is None
+            or not shared_user.is_active
+            or shared_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE}
+            or (
+                shared_user.person is not None
+                and (not shared_user.person.is_active or shared_user.person.deleted_at is not None)
+            )
+        ):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Büronutzer nicht gefunden oder nicht zuordenbar.",
+            )
 
     def _ensure_references_exist(
         self,
@@ -173,4 +269,27 @@ def employee_name_sort_key(person: Person) -> tuple[str, str, str, int]:
         person.first_name.casefold(),
         person.display_name.casefold(),
         person.id,
+    )
+
+
+def share_user_name_sort_key(user: User) -> tuple[str, str, str, int]:
+    if user.person is not None:
+        return (
+            user.person.last_name.casefold(),
+            user.person.first_name.casefold(),
+            user.display_name.casefold(),
+            user.id,
+        )
+    name_parts = user.display_name.strip().split()
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[-1] if len(name_parts) > 1 else first_name
+    return (last_name.casefold(), first_name.casefold(), user.display_name.casefold(), user.id)
+
+
+def dashboard_note_load_options() -> tuple:
+    return (
+        selectinload(DashboardNote.site),
+        selectinload(DashboardNote.employee),
+        selectinload(DashboardNote.created_by),
+        selectinload(DashboardNote.shared_with),
     )

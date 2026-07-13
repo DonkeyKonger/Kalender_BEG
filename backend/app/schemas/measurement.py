@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -325,9 +325,32 @@ class MeasurementDashboardSubmissionRead(BaseModel):
     position_count: int
 
 
+class DashboardMessageRead(BaseModel):
+    message_key: str
+    message_type: str
+    title: str
+    status: str
+    event_at: datetime | None = None
+    batch_id: int | None = None
+    extra_work_ticket_id: int | None = None
+    note_id: int | None = None
+    site_id: int | None = None
+    site_name: str | None = None
+    site_number: str | None = None
+    submitted_by_name: str | None = None
+    submitted_at: datetime | None = None
+    customer_signature_name: str | None = None
+    customer_signed_at: datetime | None = None
+    entry_count: int = 0
+    position_count: int = 0
+    note_preview: str | None = None
+    note_due_date: date | None = None
+    note_created_at: datetime | None = None
+
+
 class DashboardMessagesSummaryRead(BaseModel):
     open_count: int
-    latest_messages: list[MeasurementDashboardSubmissionRead]
+    latest_messages: list[DashboardMessageRead]
 
 
 class MeasurementImportResponse(BaseModel):

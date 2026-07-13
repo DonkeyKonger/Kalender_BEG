@@ -18110,6 +18110,21 @@ button.person-chip:focus-visible {
   text-decoration: none;
 }
 
+.dashboard-message-link.is-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.dashboard-message-link.is-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .dashboard-message-row {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
@@ -18154,6 +18169,17 @@ button.person-chip:focus-visible {
   font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.32;
+}
+
+.dashboard-message-row .dashboard-message-preview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #53627a;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .dashboard-message-row .dashboard-message-meta {
@@ -18466,6 +18492,14 @@ button.person-chip:focus-visible {
   background: #fbfdff;
 }
 
+.dashboard-note-picker-trigger:disabled,
+.dashboard-note-picker-trigger:disabled:hover {
+  border-color: #d8e0ea;
+  background: #f5f7fa;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .dashboard-note-picker-trigger:focus-visible,
 .dashboard-note-picker-trigger.is-open {
   border-color: #8aa8cf;
@@ -18750,6 +18784,14 @@ button.person-chip:focus-visible {
   opacity: 0.55;
 }
 
+.dashboard-note-share-field {
+  min-width: 0;
+}
+
+.dashboard-note-detail-modal {
+  width: min(620px, calc(100vw - 48px));
+}
+
 /* Compact sizing is intentionally limited to the dashboard notes card. */
 .dashboard-card-notes .dashboard-card-header {
   min-height: 32px;
@@ -18827,6 +18869,17 @@ button.person-chip:focus-visible {
 .dashboard-card-notes .dashboard-note-field,
 .dashboard-card-notes .dashboard-note-picker {
   gap: 3px;
+}
+
+.dashboard-card-notes .dashboard-note-share-field {
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 6px;
+}
+
+.dashboard-card-notes .dashboard-note-share-field > .dashboard-note-picker,
+.dashboard-card-notes .dashboard-note-share-field > .dashboard-note-field-status {
+  grid-column: 2;
 }
 
 .dashboard-card-notes .dashboard-note-field > span,

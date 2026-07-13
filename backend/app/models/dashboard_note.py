@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -17,6 +17,13 @@ class DashboardNote(TimestampMixin, Base):
             "deleted_at",
             "site_id",
         ),
+        Index(
+            "ix_dashboard_notes_shared_open_site",
+            "shared_with_user_id",
+            "completed",
+            "deleted_at",
+            "site_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -27,10 +34,16 @@ class DashboardNote(TimestampMixin, Base):
     site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), index=True)
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), index=True)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    shared_with_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    share_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    shared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     deleted_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     site = relationship("Site")
     employee = relationship("Person")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
+    shared_with = relationship("User", foreign_keys=[shared_with_user_id])
     deleted_by = relationship("User", foreign_keys=[deleted_by_user_id])

@@ -1,14 +1,15 @@
 import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { DashboardNoteEmployeeSelect, DashboardNoteSiteSelect } from "../components/DashboardNotePickers";
-import { api, type DashboardNote, type DashboardNotePayload, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
+import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect, DashboardNoteSiteSelect } from "../components/DashboardNotePickers";
+import { api, type DashboardMessage, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { MeasurementDashboardSubmission, SiteSummary } from "../types/site";
+import type { SiteSummary } from "../types/site";
 import type { WeatherSummary } from "../types/weather";
 
 type DateRange = {
@@ -104,6 +105,7 @@ type DashboardNoteDraft = {
   due_date: string;
   site_id: string;
   employee_id: string;
+  shared_with_user_id: string;
 };
 
 const MAX_PREVIEW_ITEMS = 6;
@@ -115,6 +117,7 @@ const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
   due_date: "",
   site_id: "",
   employee_id: "",
+  shared_with_user_id: "",
 };
 
 export function DashboardPage() {
@@ -127,7 +130,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
-  const [measurementMessages, setMeasurementMessages] = useState<MeasurementDashboardSubmission[]>([]);
+  const [dashboardMessages, setDashboardMessages] = useState<DashboardMessage[]>([]);
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
   const [dashboardNotes, setDashboardNotes] = useState<DashboardNote[]>([]);
   const [dashboardNoteSites, setDashboardNoteSites] = useState<SiteSummary[]>([]);
@@ -136,6 +139,9 @@ export function DashboardPage() {
   const [dashboardNotePeople, setDashboardNotePeople] = useState<Person[]>([]);
   const [dashboardNotePeopleLoading, setDashboardNotePeopleLoading] = useState(false);
   const [dashboardNotePeopleError, setDashboardNotePeopleError] = useState<string | null>(null);
+  const [dashboardNoteShareUsers, setDashboardNoteShareUsers] = useState<DashboardNoteUser[]>([]);
+  const [dashboardNoteShareUsersLoading, setDashboardNoteShareUsersLoading] = useState(false);
+  const [dashboardNoteShareUsersError, setDashboardNoteShareUsersError] = useState<string | null>(null);
   const [dashboardNotesLoading, setDashboardNotesLoading] = useState(false);
   const [dashboardNoteMode, setDashboardNoteMode] = useState<DashboardNoteMode>("open");
   const [dashboardNoteFormOpen, setDashboardNoteFormOpen] = useState(false);
@@ -145,6 +151,7 @@ export function DashboardPage() {
   const [dashboardNoteError, setDashboardNoteError] = useState<string | null>(null);
   const [dashboardNoteBusyId, setDashboardNoteBusyId] = useState<number | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
+  const [openedDashboardMessageNote, setOpenedDashboardMessageNote] = useState<DashboardNote | null>(null);
   const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
   const freeSummaryRef = useRef<HTMLDivElement | null>(null);
 
@@ -171,13 +178,13 @@ export function DashboardPage() {
             nextWeekStart: range.nextWeekStart,
             nextWeekEnd: range.nextWeekEnd,
           }),
-          api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as MeasurementDashboardSubmission[]),
+          api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as DashboardMessage[]),
         ]);
         if (!active) {
           return;
         }
         setDashboardOverview(overviewData);
-        setMeasurementMessages(measurementData);
+        setDashboardMessages(measurementData);
       } catch {
         if (!active) {
           return;
@@ -274,14 +281,35 @@ export function DashboardPage() {
       }
     }
 
+    async function loadDashboardNoteShareUsers() {
+      setDashboardNoteShareUsersLoading(true);
+      setDashboardNoteShareUsersError(null);
+      try {
+        const users = await api.dashboardNoteShareUserOptions();
+        if (active) {
+          setDashboardNoteShareUsers(users);
+        }
+      } catch {
+        if (active) {
+          setDashboardNoteShareUsers([]);
+          setDashboardNoteShareUsersError("Büronutzer konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setDashboardNoteShareUsersLoading(false);
+        }
+      }
+    }
+
     void loadDashboardNotes();
     void loadDashboardNotePeople();
     void loadDashboardNoteSites();
+    void loadDashboardNoteShareUsers();
 
     return () => {
       active = false;
     };
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     if (dashboardNoteSiteFilterId === null || loading || !dashboardOverview) {
@@ -296,9 +324,9 @@ export function DashboardPage() {
 
   useEffect(() => {
     function handleDashboardMessagesUpdated(event: Event) {
-      const messages = (event as CustomEvent<MeasurementDashboardSubmission[]>).detail;
+      const messages = (event as CustomEvent<DashboardMessage[]>).detail;
       if (Array.isArray(messages)) {
-        setMeasurementMessages((current) => (
+        setDashboardMessages((current) => (
           dashboardMessagesSignature(current) === dashboardMessagesSignature(messages)
             ? current
             : messages
@@ -406,17 +434,38 @@ export function DashboardPage() {
     setOpenFreeWorkerKey((current) => current === key ? null : key);
   }
 
-  async function dismissMeasurementMessage(message: MeasurementDashboardSubmission): Promise<void> {
+  async function dismissDashboardMessage(message: DashboardMessage): Promise<void> {
     if (dismissingMessageKey) {
       return;
     }
-    const previousMessages = measurementMessages;
+    const previousMessages = dashboardMessages;
     setDismissingMessageKey(message.message_key);
-    setMeasurementMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
+    setDashboardMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
     try {
       await api.dismissDashboardMessage(message.message_key);
     } catch {
-      setMeasurementMessages(previousMessages);
+      setDashboardMessages(previousMessages);
+    } finally {
+      setDismissingMessageKey(null);
+    }
+  }
+
+  async function openSharedDashboardNoteMessage(message: DashboardMessage): Promise<void> {
+    if (message.note_id === null || dismissingMessageKey !== null) {
+      return;
+    }
+    setDismissingMessageKey(message.message_key);
+    setDashboardNoteError(null);
+    try {
+      const note = await api.dashboardNote(message.note_id);
+      setDashboardNotes((current) => upsertDashboardNote(current, note));
+      setOpenedDashboardMessageNote(note);
+      await api.dismissDashboardMessage(message.message_key);
+      setDashboardMessages((current) => (
+        current.filter((entry) => entry.message_key !== message.message_key)
+      ));
+    } catch {
+      setDashboardNoteError("Die geteilte Notiz konnte nicht geöffnet werden.");
     } finally {
       setDismissingMessageKey(null);
     }
@@ -435,6 +484,7 @@ export function DashboardPage() {
       due_date: note.due_date ?? "",
       site_id: note.site_id === null ? "" : String(note.site_id),
       employee_id: note.employee_id === null ? "" : String(note.employee_id),
+      shared_with_user_id: note.shared_with_user_id === null ? "" : String(note.shared_with_user_id),
     });
     setEditingDashboardNoteId(note.id);
     setDashboardNoteFormOpen(true);
@@ -463,7 +513,11 @@ export function DashboardPage() {
     if (dashboardNoteSaving) {
       return;
     }
-    const payload = dashboardNotePayloadFromDraft(dashboardNoteDraft);
+    const editingNote = editingDashboardNoteId === null
+      ? null
+      : dashboardNotes.find((note) => note.id === editingDashboardNoteId) ?? null;
+    const canManageShare = editingNote === null || editingNote.created_by_user_id === user?.id;
+    const payload = dashboardNotePayloadFromDraft(dashboardNoteDraft, canManageShare);
     if (!payload.text) {
       setDashboardNoteError("Bitte einen Notiztext eingeben.");
       return;
@@ -494,6 +548,7 @@ export function DashboardPage() {
     try {
       const updatedNote = await api.updateDashboardNote(note.id, { completed: !note.completed });
       setDashboardNotes((current) => upsertDashboardNote(current, updatedNote));
+      setOpenedDashboardMessageNote((current) => current?.id === note.id ? updatedNote : current);
     } catch {
       setDashboardNoteError("Notiz konnte nicht aktualisiert werden.");
     } finally {
@@ -511,6 +566,7 @@ export function DashboardPage() {
     setDashboardNotes((current) => current.filter((entry) => entry.id !== note.id));
     try {
       await api.deleteDashboardNote(note.id);
+      setOpenedDashboardMessageNote((current) => current?.id === note.id ? null : current);
       if (editingDashboardNoteId === note.id) {
         cancelDashboardNoteForm();
       }
@@ -641,40 +697,54 @@ export function DashboardPage() {
             <DashboardCard
               title="Eingang / Meldungen"
               icon={<Inbox aria-hidden="true" size={20} />}
-              badge={measurementMessages.length > 0 ? String(measurementMessages.length) : undefined}
+              badge={dashboardMessages.length > 0 ? String(dashboardMessages.length) : undefined}
               className="dashboard-card-messages dashboard-section--messages"
             >
-              {measurementMessages.length > 0 ? (
+              {dashboardMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
-                  {measurementMessages.map((message) => {
-                    const metaItems = getMeasurementDashboardMessageMetaItems(message);
+                  {dashboardMessages.map((message) => {
+                    const metaItems = getDashboardMessageMetaItems(message);
+                    const messageContent = (
+                      <div className="dashboard-message-content">
+                        <strong>{formatDashboardMessageTitle(message)}</strong>
+                        {message.note_preview ? (
+                          <span className="dashboard-message-preview">{message.note_preview}</span>
+                        ) : null}
+                        <span className="dashboard-message-meta">
+                          <Clock aria-hidden="true" size={13} />
+                          {metaItems.map((item, index) => (
+                            <span className="dashboard-message-meta-part" key={item.key}>
+                              {index > 0 ? <span className="dashboard-message-meta-separator" aria-hidden="true">·</span> : null}
+                              {item.label}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                    );
                     return (
                       <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
                         <span className="dashboard-message-accent" aria-hidden="true" />
                         <div className="dashboard-message-stack">
-                          <Link
-                            className="dashboard-message-link"
-                            to={getDashboardMessageLink(message)}
-                          >
-                            <div className="dashboard-message-content">
-                              <strong>{formatMeasurementDashboardMessageTitle(message)}</strong>
-                              <span className="dashboard-message-meta">
-                                <Clock aria-hidden="true" size={13} />
-                                {metaItems.map((item, index) => (
-                                  <span className="dashboard-message-meta-part" key={item.key}>
-                                    {index > 0 ? <span className="dashboard-message-meta-separator" aria-hidden="true">·</span> : null}
-                                    {item.label}
-                                  </span>
-                                ))}
-                              </span>
-                            </div>
-                          </Link>
+                          {message.message_type === "dashboard_note_shared" ? (
+                            <button
+                              className="dashboard-message-link is-button"
+                              disabled={dismissingMessageKey === message.message_key}
+                              type="button"
+                              onClick={() => void openSharedDashboardNoteMessage(message)}
+                            >
+                              {messageContent}
+                            </button>
+                          ) : (
+                            <Link className="dashboard-message-link" to={getDashboardMessageLink(message)}>
+                              {messageContent}
+                            </Link>
+                          )}
                           <button
                             type="button"
                             className="dashboard-message-read-button"
                             aria-label="Meldung als gelesen markieren"
                             disabled={dismissingMessageKey === message.message_key}
-                            onClick={() => void dismissMeasurementMessage(message)}
+                            onClick={() => void dismissDashboardMessage(message)}
                           >
                             Als gelesen markieren
                           </button>
@@ -683,7 +753,7 @@ export function DashboardPage() {
                     );
                   })}
                   <p className="dashboard-message-unread-note">
-                    {measurementMessages.length} ungelesene {measurementMessages.length === 1 ? "Meldung" : "Meldungen"} — bitte prüfen.
+                    {dashboardMessages.length} ungelesene {dashboardMessages.length === 1 ? "Meldung" : "Meldungen"} — bitte prüfen.
                   </p>
                 </div>
               ) : (
@@ -718,12 +788,16 @@ export function DashboardPage() {
                 people={dashboardNotePeople}
                 peopleError={dashboardNotePeopleError}
                 peopleLoading={dashboardNotePeopleLoading}
+                shareUsers={dashboardNoteShareUsers}
+                shareUsersError={dashboardNoteShareUsersError}
+                shareUsersLoading={dashboardNoteShareUsersLoading}
                 saving={dashboardNoteSaving}
                 siteFilterLabel={dashboardNoteSiteFilterLabel}
                 sites={dashboardNoteSites}
                 sitesError={dashboardNoteSitesError}
                 sitesLoading={dashboardNoteSitesLoading}
                 today={range.today}
+                currentUserId={user?.id ?? null}
                 onCancel={cancelDashboardNoteForm}
                 onClearSiteFilter={clearDashboardNoteSiteFilter}
                 onDelete={(note) => void deleteDashboardNote(note)}
@@ -745,6 +819,25 @@ export function DashboardPage() {
               <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
             </DashboardCard>
           </div>
+
+          {openedDashboardMessageNote ? (
+            <DashboardNoteDetailModal
+              busy={dashboardNoteBusyId === openedDashboardMessageNote.id}
+              currentUserId={user?.id ?? null}
+              note={openedDashboardMessageNote}
+              today={range.today}
+              onClose={() => setOpenedDashboardMessageNote(null)}
+              onDelete={(note) => void deleteDashboardNote(note)}
+              onEdit={(note) => {
+                setOpenedDashboardMessageNote(null);
+                editDashboardNote(note);
+                window.requestAnimationFrame(() => {
+                  document.getElementById("dashboard-notes")?.scrollIntoView({ block: "start" });
+                });
+              }}
+              onToggle={(note) => void toggleDashboardNoteCompleted(note)}
+            />
+          ) : null}
         </>
       )}
     </section>
@@ -830,8 +923,12 @@ function DashboardNotesPanel({
   people,
   peopleError,
   peopleLoading,
+  shareUsers,
+  shareUsersError,
+  shareUsersLoading,
   siteFilterLabel,
   today,
+  currentUserId,
   onModeChange,
   onDraftChange,
   onSubmit,
@@ -858,8 +955,12 @@ function DashboardNotesPanel({
   people: Person[];
   peopleError: string | null;
   peopleLoading: boolean;
+  shareUsers: DashboardNoteUser[];
+  shareUsersError: string | null;
+  shareUsersLoading: boolean;
   siteFilterLabel: string | null;
   today: string;
+  currentUserId: number | null;
   onModeChange: (mode: DashboardNoteMode) => void;
   onDraftChange: (field: keyof DashboardNoteDraft, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -874,6 +975,8 @@ function DashboardNotesPanel({
     : notes.find((note) => note.id === editingNoteId) ?? null;
   const editingSite = editingNote?.site ?? null;
   const editingEmployee = editingNote?.employee ?? null;
+  const editingShareUser = editingNote?.shared_with ?? null;
+  const canManageShare = editingNote === null || editingNote.created_by_user_id === currentUserId;
   const siteOptions = editingSite && !sites.some((site) => site.id === editingSite.id)
     ? [...sites, editingSite].sort(compareDashboardNoteSites)
     : sites;
@@ -954,6 +1057,24 @@ function DashboardNotesPanel({
               />
             </div>
           </div>
+          <div className="dashboard-note-field dashboard-note-share-field">
+            <span id="dashboard-note-share-user-label">Büro anpingen</span>
+            <DashboardNoteShareUserSelect
+              disabled={!canManageShare}
+              error={shareUsersError}
+              historicalUser={editingShareUser}
+              labelId="dashboard-note-share-user-label"
+              loading={shareUsersLoading}
+              users={shareUsers}
+              value={draft.shared_with_user_id}
+              onChange={(value) => onDraftChange("shared_with_user_id", value)}
+            />
+            {!canManageShare ? (
+              <small className="dashboard-note-field-status">
+                Nur der Ersteller kann die Bürofreigabe ändern.
+              </small>
+            ) : null}
+          </div>
           <div className="dashboard-note-form-actions">
             <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
               <X aria-hidden="true" size={14} />
@@ -976,6 +1097,7 @@ function DashboardNotesPanel({
               key={note.id}
               note={note}
               today={today}
+              canDelete={note.created_by_user_id === currentUserId}
               onDelete={onDelete}
               onEdit={onEdit}
               onToggle={onToggle}
@@ -996,6 +1118,7 @@ function DashboardNoteRow({
   onToggle,
   onEdit,
   onDelete,
+  canDelete,
 }: {
   note: DashboardNote;
   busy: boolean;
@@ -1003,6 +1126,7 @@ function DashboardNoteRow({
   onToggle: (note: DashboardNote) => void;
   onEdit: (note: DashboardNote) => void;
   onDelete: (note: DashboardNote) => void;
+  canDelete: boolean;
 }) {
   const dueState = getDashboardNoteDueState(note, today);
   return (
@@ -1024,17 +1148,114 @@ function DashboardNoteRow({
           </span>
           {note.site ? <span>Baustelle: {formatDashboardNoteSiteOption(note.site)}</span> : null}
           {note.employee ? <span>Monteur: {note.employee.display_name}</span> : null}
+          {note.shared_with ? <span>Büro: {note.shared_with.display_name}</span> : null}
         </div>
       </div>
       <div className="dashboard-note-row-actions">
         <button type="button" title="Notiz bearbeiten" aria-label="Notiz bearbeiten" disabled={busy} onClick={() => onEdit(note)}>
           <Pencil aria-hidden="true" size={14} />
         </button>
-        <button type="button" title="Notiz löschen" aria-label="Notiz löschen" disabled={busy} onClick={() => onDelete(note)}>
-          <Trash2 aria-hidden="true" size={14} />
-        </button>
+        {canDelete ? (
+          <button type="button" title="Notiz löschen" aria-label="Notiz löschen" disabled={busy} onClick={() => onDelete(note)}>
+            <Trash2 aria-hidden="true" size={14} />
+          </button>
+        ) : null}
       </div>
     </article>
+  );
+}
+
+function DashboardNoteDetailModal({
+  note,
+  busy,
+  currentUserId,
+  today,
+  onClose,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  note: DashboardNote;
+  busy: boolean;
+  currentUserId: number | null;
+  today: string;
+  onClose: () => void;
+  onToggle: (note: DashboardNote) => void;
+  onEdit: (note: DashboardNote) => void;
+  onDelete: (note: DashboardNote) => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = `dashboard-note-detail-title-${note.id}`;
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="matrix-notes-modal-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="matrix-notes-modal dashboard-note-detail-modal"
+        role="dialog"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header className="matrix-notes-modal-header">
+          <div>
+            <h2 id={titleId}>Notiz</h2>
+            <p>{note.site ? formatDashboardNoteSiteOption(note.site) : "Allgemeine Notiz"}</p>
+          </div>
+          <button
+            aria-label="Notiz schließen"
+            ref={closeButtonRef}
+            title="Schließen"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" size={17} />
+          </button>
+        </header>
+        <div className="matrix-notes-modal-body">
+          <div className="dashboard-note-list">
+            <DashboardNoteRow
+              busy={busy}
+              canDelete={note.created_by_user_id === currentUserId}
+              note={note}
+              today={today}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              onToggle={onToggle}
+            />
+          </div>
+        </div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 
@@ -1225,13 +1446,20 @@ function formatTodayAssignedMeta(sites: AssignedSiteSummary[]): string {
   return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
 }
 
-function dashboardNotePayloadFromDraft(draft: DashboardNoteDraft): DashboardNotePayload {
-  return {
+function dashboardNotePayloadFromDraft(
+  draft: DashboardNoteDraft,
+  includeShareUser: boolean,
+): DashboardNotePayload {
+  const payload: DashboardNotePayload = {
     text: draft.text.trim(),
     due_date: draft.due_date || null,
     site_id: parseOptionalDashboardNoteId(draft.site_id),
     employee_id: parseOptionalDashboardNoteId(draft.employee_id),
   };
+  if (includeShareUser) {
+    payload.shared_with_user_id = parseOptionalDashboardNoteId(draft.shared_with_user_id);
+  }
+  return payload;
 }
 
 function parseOptionalDashboardNoteId(value: string): number | null {
@@ -1352,7 +1580,7 @@ function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
 }
 
-function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]): string {
+function dashboardMessagesSignature(messages: DashboardMessage[]): string {
   return messages
     .map((message) => [
       message.message_key,
@@ -1366,25 +1594,52 @@ function dashboardMessagesSignature(messages: MeasurementDashboardSubmission[]):
       message.site_number,
       message.submitted_by_name,
       message.customer_signature_name,
+      message.note_id,
+      message.note_preview,
+      message.note_due_date,
+      message.note_created_at,
     ].join("|"))
     .join(";");
 }
 
-function formatMeasurementDashboardMessageTitle(message: MeasurementDashboardSubmission): string {
+function formatDashboardMessageTitle(message: DashboardMessage): string {
+  if (message.message_type === "dashboard_note_shared") {
+    return message.title;
+  }
   if (message.message_type === "measurement_customer_signed") {
     return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Bitte prüfen.`;
   }
   return `${message.title} für ${message.site_name} wurde zur Prüfung eingereicht.`;
 }
 
-function getDashboardMessageLink(message: MeasurementDashboardSubmission): string {
+function getDashboardMessageLink(message: DashboardMessage): string {
+  if (message.site_id === null) {
+    return "/";
+  }
   if (message.message_type === "extra_work_submitted") {
     return `/sites/${message.site_id}?tab=extra-work`;
   }
   return `/sites/${message.site_id}?tab=measurement&measurementSubtab=review`;
 }
 
-function getMeasurementDashboardMessageMetaItems(message: MeasurementDashboardSubmission): DashboardMessageMetaItem[] {
+function getDashboardMessageMetaItems(message: DashboardMessage): DashboardMessageMetaItem[] {
+  if (message.message_type === "dashboard_note_shared") {
+    const createdAt = message.note_created_at ?? message.submitted_at;
+    const items: DashboardMessageMetaItem[] = [{
+      key: "created",
+      label: createdAt ? `Erstellt ${formatDashboardDateTime(createdAt)}` : "Erstellungszeit unbekannt",
+    }];
+    if (message.note_due_date) {
+      items.push({ key: "due", label: `Fällig ${formatShortDate(message.note_due_date)}` });
+    }
+    items.push({
+      key: "site",
+      label: message.site_name
+        ? `Baustelle ${message.site_number ? `${message.site_number} · ` : ""}${message.site_name}`
+        : "Allgemeine Notiz",
+    });
+    return items;
+  }
   const eventAt = message.event_at ?? message.customer_signed_at ?? message.submitted_at;
   const timeLabel = eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt";
   const items: DashboardMessageMetaItem[] = [{ key: "time", label: timeLabel }];

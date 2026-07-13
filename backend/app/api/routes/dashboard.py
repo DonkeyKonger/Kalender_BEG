@@ -6,12 +6,18 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import require_office_page
 from app.core.database import get_db
 from app.models.enums import UserRole
-from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteRead, DashboardNoteUpdate
+from app.schemas.dashboard_note import (
+    DashboardNoteCreate,
+    DashboardNoteRead,
+    DashboardNoteUpdate,
+    DashboardNoteUserRead,
+)
 from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
 from app.schemas.person import PersonRead
 from app.schemas.site import SiteSummary
 from app.schemas.weather import WeatherSummary
 from app.services.dashboard_note_service import DashboardNoteService
+from app.services.dashboard_message_service import DashboardMessageService
 from app.services.dashboard_service import DashboardService
 from app.services.measurement_service import MeasurementService
 from app.services.weather_service import WeatherService
@@ -102,6 +108,25 @@ def list_dashboard_note_employee_options(
     return [PersonRead.model_validate(person) for person in people]
 
 
+@router.get("/notes/share-user-options", response_model=list[DashboardNoteUserRead])
+def list_dashboard_note_share_user_options(
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
+    db: Session = Depends(get_db),
+) -> list[DashboardNoteUserRead]:
+    users = DashboardNoteService(db).list_share_user_options(current_user_id=user.id)
+    return [DashboardNoteUserRead.model_validate(option) for option in users]
+
+
+@router.get("/notes/{note_id}", response_model=DashboardNoteRead)
+def get_dashboard_note(
+    note_id: int,
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
+    db: Session = Depends(get_db),
+) -> DashboardNoteRead:
+    note = DashboardNoteService(db).get_note(note_id, user_id=user.id)
+    return DashboardNoteRead.model_validate(note)
+
+
 @router.patch("/notes/{note_id}", response_model=DashboardNoteRead)
 def update_dashboard_note(
     note_id: int,
@@ -129,7 +154,7 @@ def get_dashboard_messages_summary(
     user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> DashboardMessagesSummaryRead:
-    return MeasurementService(db).get_dashboard_messages_summary(limit=limit, current_user=user)
+    return DashboardMessageService(db).get_summary(limit=limit, current_user=user)
 
 
 @router.post("/messages/{message_key}/dismiss", status_code=status.HTTP_204_NO_CONTENT)
@@ -138,5 +163,5 @@ def dismiss_dashboard_message(
     user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> Response:
-    MeasurementService(db).dismiss_dashboard_message(message_key=message_key, current_user=user)
+    DashboardMessageService(db).dismiss_message(message_key=message_key, current_user=user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

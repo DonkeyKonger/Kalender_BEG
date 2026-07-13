@@ -4,9 +4,9 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { DashboardNoteEmployeeSelect } from "../components/DashboardNotePickers";
+import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect } from "../components/DashboardNotePickers";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
-import { ApiError, api, type DashboardNote, type DashboardNotePayload } from "../lib/api";
+import { ApiError, api, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser } from "../lib/api";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
@@ -122,6 +122,7 @@ type MatrixNoteDraft = {
   text: string;
   dueDate: string;
   employeeId: string;
+  sharedWithUserId: string;
 };
 
 type UndoItem = {
@@ -140,6 +141,7 @@ const EMPTY_MATRIX_NOTE_DRAFT: MatrixNoteDraft = {
   text: "",
   dueDate: "",
   employeeId: "",
+  sharedWithUserId: "",
 };
 
 export function MatrixPage() {
@@ -2060,6 +2062,7 @@ export function MatrixPage() {
 
           {matrixNoteSite ? (
             <MatrixSiteNotesModal
+              currentUserId={user?.id ?? null}
               key={matrixNoteSite.id}
               people={people}
               site={matrixNoteSite}
@@ -2126,6 +2129,7 @@ export function MatrixPage() {
 }
 
 type MatrixSiteNotesModalProps = {
+  currentUserId: number | null;
   people: Person[];
   site: MatrixRow["site"];
   today: string;
@@ -2135,6 +2139,7 @@ type MatrixSiteNotesModalProps = {
 };
 
 function MatrixSiteNotesModal({
+  currentUserId,
   people,
   site,
   today,
@@ -2152,6 +2157,9 @@ function MatrixSiteNotesModal({
   const [draft, setDraft] = useState<MatrixNoteDraft>(EMPTY_MATRIX_NOTE_DRAFT);
   const [isSaving, setIsSaving] = useState(false);
   const [busyNoteId, setBusyNoteId] = useState<number | null>(null);
+  const [shareUsers, setShareUsers] = useState<DashboardNoteUser[]>([]);
+  const [shareUsersLoading, setShareUsersLoading] = useState(true);
+  const [shareUsersError, setShareUsersError] = useState<string | null>(null);
   const openCount = notes.filter((note) => !note.completed).length;
   const completedCount = notes.filter((note) => note.completed).length;
   const visibleNotes = useMemo(() => sortMatrixSiteNotes(
@@ -2161,8 +2169,10 @@ function MatrixSiteNotesModal({
   const editingNote = editingNoteId === null
     ? null
     : notes.find((note) => note.id === editingNoteId) ?? null;
+  const canManageShare = editingNote === null || editingNote.created_by_user_id === currentUserId;
   const titleId = `matrix-site-notes-title-${site.id}`;
   const employeeLabelId = `matrix-site-notes-employee-${site.id}`;
+  const shareUserLabelId = `matrix-site-notes-share-user-${site.id}`;
 
   useEffect(() => {
     let active = true;
@@ -2183,6 +2193,25 @@ function MatrixSiteNotesModal({
       .finally(() => {
         if (active) {
           setIsLoading(false);
+        }
+      });
+    setShareUsersLoading(true);
+    setShareUsersError(null);
+    void api.dashboardNoteShareUserOptions()
+      .then((loadedUsers) => {
+        if (active) {
+          setShareUsers(loadedUsers);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setShareUsers([]);
+          setShareUsersError("Büronutzer konnten nicht geladen werden.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setShareUsersLoading(false);
         }
       });
     return () => {
@@ -2225,6 +2254,7 @@ function MatrixSiteNotesModal({
       text: note.text,
       dueDate: note.due_date ?? "",
       employeeId: note.employee_id === null ? "" : String(note.employee_id),
+      sharedWithUserId: note.shared_with_user_id === null ? "" : String(note.shared_with_user_id),
     });
     setEditingNoteId(note.id);
     setIsFormOpen(true);
@@ -2249,6 +2279,11 @@ function MatrixSiteNotesModal({
       site_id: site.id,
       employee_id: draft.employeeId ? Number(draft.employeeId) : null,
     };
+    if (canManageShare) {
+      payload.shared_with_user_id = draft.sharedWithUserId
+        ? Number(draft.sharedWithUserId)
+        : null;
+    }
     if (!payload.text) {
       setError("Bitte einen Notiztext eingeben.");
       return;
@@ -2417,6 +2452,27 @@ function MatrixSiteNotesModal({
                   />
                 </div>
               </div>
+              <div className="dashboard-note-field dashboard-note-share-field">
+                <span id={shareUserLabelId}>Büro anpingen</span>
+                <DashboardNoteShareUserSelect
+                  disabled={!canManageShare}
+                  error={shareUsersError}
+                  historicalUser={editingNote?.shared_with ?? null}
+                  labelId={shareUserLabelId}
+                  loading={shareUsersLoading}
+                  users={shareUsers}
+                  value={draft.sharedWithUserId}
+                  onChange={(value) => setDraft((current) => ({
+                    ...current,
+                    sharedWithUserId: value,
+                  }))}
+                />
+                {!canManageShare ? (
+                  <small className="dashboard-note-field-status">
+                    Nur der Ersteller kann die Bürofreigabe ändern.
+                  </small>
+                ) : null}
+              </div>
               <p className="matrix-notes-fixed-site">Baustelle: <strong>{formatMatrixNoteSiteLabel(site)}</strong></p>
               <div className="dashboard-note-form-actions">
                 <button className="dashboard-note-form-button" type="button" onClick={closeForm}>
@@ -2438,6 +2494,7 @@ function MatrixSiteNotesModal({
                 {visibleNotes.map((note) => (
                   <MatrixSiteNoteRow
                     busy={busyNoteId === note.id}
+                    canDelete={note.created_by_user_id === currentUserId}
                     key={note.id}
                     note={note}
                     today={today}
@@ -2463,6 +2520,7 @@ function MatrixSiteNotesModal({
 function MatrixSiteNoteRow({
   note,
   busy,
+  canDelete,
   today,
   onToggle,
   onEdit,
@@ -2470,6 +2528,7 @@ function MatrixSiteNoteRow({
 }: {
   note: DashboardNote;
   busy: boolean;
+  canDelete: boolean;
   today: string;
   onToggle: () => void;
   onEdit: () => void;
@@ -2494,15 +2553,18 @@ function MatrixSiteNoteRow({
             {formatMatrixSiteNoteDueLabel(note, today)}
           </span>
           {note.employee ? <span>Monteur: {note.employee.display_name}</span> : null}
+          {note.shared_with ? <span>Büro: {note.shared_with.display_name}</span> : null}
         </div>
       </div>
       <div className="dashboard-note-row-actions">
         <button aria-label="Notiz bearbeiten" disabled={busy} title="Notiz bearbeiten" type="button" onClick={onEdit}>
           <Pencil aria-hidden="true" size={14} />
         </button>
-        <button aria-label="Notiz löschen" disabled={busy} title="Notiz löschen" type="button" onClick={onDelete}>
-          <Trash2 aria-hidden="true" size={14} />
-        </button>
+        {canDelete ? (
+          <button aria-label="Notiz löschen" disabled={busy} title="Notiz löschen" type="button" onClick={onDelete}>
+            <Trash2 aria-hidden="true" size={14} />
+          </button>
+        ) : null}
       </div>
     </article>
   );

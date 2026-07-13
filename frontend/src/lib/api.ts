@@ -80,7 +80,37 @@ export type VehicleLatestPositionItem = {
 
 export type DashboardMessagesSummary = {
   open_count: number;
-  latest_messages: MeasurementDashboardSubmission[];
+  latest_messages: DashboardMessage[];
+};
+
+export type DashboardMessage = {
+  message_key: string;
+  message_type: string;
+  title: string;
+  status: string;
+  event_at: string | null;
+  batch_id: number | null;
+  extra_work_ticket_id: number | null;
+  note_id: number | null;
+  site_id: number | null;
+  site_name: string | null;
+  site_number: string | null;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+  customer_signature_name: string | null;
+  customer_signed_at: string | null;
+  entry_count: number;
+  position_count: number;
+  note_preview: string | null;
+  note_due_date: string | null;
+  note_created_at: string | null;
+};
+
+export type DashboardNoteUser = {
+  id: number;
+  username: string;
+  display_name: string;
+  role: "admin" | "project_manager" | "office";
 };
 
 export type DashboardNote = {
@@ -92,6 +122,9 @@ export type DashboardNote = {
   site_id: number | null;
   employee_id: number | null;
   created_by_user_id: number;
+  shared_with_user_id: number | null;
+  share_revision: number;
+  shared_at: string | null;
   site: {
     id: number;
     site_number: string | null;
@@ -102,6 +135,8 @@ export type DashboardNote = {
     display_name: string;
     short_code: string;
   } | null;
+  created_by: DashboardNoteUser;
+  shared_with: DashboardNoteUser | null;
   created_at: string;
   updated_at: string;
 };
@@ -111,6 +146,7 @@ export type DashboardNotePayload = {
   due_date?: string | null;
   site_id?: number | null;
   employee_id?: number | null;
+  shared_with_user_id?: number | null;
 };
 
 export type DashboardNoteUpdatePayload = Partial<DashboardNotePayload> & {
@@ -465,8 +501,16 @@ export const api = {
     return request<DashboardNote[]>(`/dashboard/notes${suffix}`);
   },
 
+  async dashboardNote(noteId: number): Promise<DashboardNote> {
+    return request<DashboardNote>(`/dashboard/notes/${noteId}`);
+  },
+
   async dashboardNoteSiteOptions(): Promise<SiteSummary[]> {
     return request<SiteSummary[]>("/dashboard/notes/site-options");
+  },
+
+  async dashboardNoteShareUserOptions(): Promise<DashboardNoteUser[]> {
+    return request<DashboardNoteUser[]>("/dashboard/notes/share-user-options");
   },
 
   async createDashboardNote(payload: DashboardNotePayload): Promise<DashboardNote> {

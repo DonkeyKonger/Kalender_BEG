@@ -12,6 +12,7 @@ from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteUpdate
+from app.services.dashboard_message_service import DashboardMessageService
 from app.services.dashboard_note_service import DashboardNoteService, clean_note_values
 
 
@@ -129,6 +130,201 @@ def test_dashboard_notes_are_scoped_to_owner():
     assert delete_error.value.status_code == 404
 
     assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
+
+
+def test_dashboard_note_can_be_shared_without_copy_and_recipient_permissions_are_enforced():
+    db = db_session()
+    owner = User(
+        username="owner",
+        display_name="Christopher Erichsen",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    recipient = User(
+        username="recipient",
+        display_name="Thomas Wolf",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    next_recipient = User(
+        username="next",
+        display_name="Klara Engel",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    unrelated = User(
+        username="unrelated",
+        display_name="Unbeteiligte Person",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([owner, recipient, next_recipient, unrelated])
+    db.commit()
+
+    service = DashboardNoteService(db)
+    note = service.create_note(
+        DashboardNoteCreate(
+            text="Gemeinsam prüfen",
+            shared_with_user_id=recipient.id,
+        ),
+        user_id=owner.id,
+    )
+
+    assert note.shared_with_user_id == recipient.id
+    assert note.share_revision == 1
+    assert note.shared_at is not None
+    assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
+    assert [entry.id for entry in service.list_notes(user_id=recipient.id)] == [note.id]
+    assert service.list_notes(user_id=unrelated.id) == []
+
+    recipient_update = service.update_note(
+        note.id,
+        DashboardNoteUpdate(text="Von beiden bearbeitet", completed=True),
+        user_id=recipient.id,
+    )
+    assert recipient_update.text == "Von beiden bearbeitet"
+    assert recipient_update.completed is True
+
+    with pytest.raises(HTTPException) as share_error:
+        service.update_note(
+            note.id,
+            DashboardNoteUpdate(shared_with_user_id=None),
+            user_id=recipient.id,
+        )
+    assert share_error.value.status_code == 403
+
+    with pytest.raises(HTTPException) as delete_error:
+        service.delete_note(note.id, user_id=recipient.id)
+    assert delete_error.value.status_code == 403
+
+    changed_share = service.update_note(
+        note.id,
+        DashboardNoteUpdate(shared_with_user_id=next_recipient.id),
+        user_id=owner.id,
+    )
+    assert changed_share.share_revision == 2
+    assert service.list_notes(user_id=recipient.id) == []
+    assert [entry.id for entry in service.list_notes(user_id=next_recipient.id)] == [note.id]
+
+    unchanged_share = service.update_note(
+        note.id,
+        DashboardNoteUpdate(text="Ohne neue Freigabe", shared_with_user_id=next_recipient.id),
+        user_id=owner.id,
+    )
+    assert unchanged_share.share_revision == 2
+
+
+def test_dashboard_note_share_messages_are_idempotent_and_use_existing_read_state():
+    db = db_session()
+    owner = User(
+        username="owner",
+        display_name="Christopher Erichsen",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    recipient = User(
+        username="recipient",
+        display_name="Thomas Wolf",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([owner, recipient])
+    db.commit()
+
+    notes = DashboardNoteService(db)
+    note = notes.create_note(
+        DashboardNoteCreate(
+            text="Materialfreigabe abstimmen",
+            due_date=date(2026, 7, 15),
+            shared_with_user_id=recipient.id,
+        ),
+        user_id=owner.id,
+    )
+    messages = DashboardMessageService(db)
+
+    first_summary = messages.get_summary(limit=6, current_user=recipient)
+    assert first_summary.open_count == 1
+    assert len(first_summary.latest_messages) == 1
+    first_message = first_summary.latest_messages[0]
+    assert first_message.message_key == f"dashboard_note_shared:{note.id}:1"
+    assert first_message.note_id == note.id
+    assert first_message.title == "Neue Notiz von Christopher Erichsen"
+    assert first_message.note_preview == "Materialfreigabe abstimmen"
+
+    messages.dismiss_message(message_key=first_message.message_key, current_user=recipient)
+    assert messages.get_summary(limit=6, current_user=recipient).open_count == 0
+
+    notes.update_note(
+        note.id,
+        DashboardNoteUpdate(text="Normal bearbeitet", shared_with_user_id=recipient.id),
+        user_id=owner.id,
+    )
+    assert messages.get_summary(limit=6, current_user=recipient).open_count == 0
+
+    notes.update_note(
+        note.id,
+        DashboardNoteUpdate(shared_with_user_id=None),
+        user_id=owner.id,
+    )
+    notes.update_note(
+        note.id,
+        DashboardNoteUpdate(shared_with_user_id=recipient.id),
+        user_id=owner.id,
+    )
+    second_summary = messages.get_summary(limit=6, current_user=recipient)
+    assert second_summary.open_count == 1
+    assert second_summary.latest_messages[0].message_key == f"dashboard_note_shared:{note.id}:3"
+
+
+def test_dashboard_note_share_user_options_filter_self_workers_and_inactive_users():
+    db = db_session()
+    current = User(
+        username="current",
+        display_name="Christopher Erichsen",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    office = User(
+        username="office",
+        display_name="Anna Bauer",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    admin = User(
+        username="admin",
+        display_name="Karla Zorn",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    worker = User(
+        username="worker",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        is_active=True,
+    )
+    inactive = User(
+        username="inactive",
+        display_name="Ines Inaktiv",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=False,
+    )
+    db.add_all([current, office, admin, worker, inactive])
+    db.commit()
+
+    options = DashboardNoteService(db).list_share_user_options(current_user_id=current.id)
+
+    assert [user.display_name for user in options] == ["Anna Bauer", "Karla Zorn"]
 
 
 def test_dashboard_notes_can_be_filtered_by_site_without_losing_owner_scope():

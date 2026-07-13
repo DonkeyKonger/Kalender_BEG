@@ -26,6 +26,7 @@ from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.measurement import (
     CustomerSignatureCreate,
+    DashboardMessageRead,
     DashboardMessagesSummaryRead,
     MeasurementBaseRead,
     MeasurementBaseUpdate,
@@ -1690,7 +1691,13 @@ class MeasurementService:
     ) -> DashboardMessagesSummaryRead:
         return DashboardMessagesSummaryRead(
             open_count=self.count_dashboard_submissions(current_user=current_user),
-            latest_messages=self.list_dashboard_submissions(limit=limit, current_user=current_user),
+            latest_messages=[
+                DashboardMessageRead.model_validate(message.model_dump())
+                for message in self.list_dashboard_submissions(
+                    limit=limit,
+                    current_user=current_user,
+                )
+            ],
         )
 
     def count_dashboard_submissions(self, *, current_user: User | None = None) -> int:

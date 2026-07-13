@@ -2,7 +2,7 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { DashboardNote } from "../lib/api";
+import type { DashboardNote, DashboardNoteUser } from "../lib/api";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 
@@ -123,6 +123,64 @@ export function DashboardNoteEmployeeSelect({
   );
 }
 
+export function DashboardNoteShareUserSelect({
+  value,
+  users,
+  historicalUser,
+  loading,
+  error,
+  disabled = false,
+  labelId,
+  onChange,
+}: {
+  value: string;
+  users: DashboardNoteUser[];
+  historicalUser: DashboardNote["shared_with"];
+  loading: boolean;
+  error: string | null;
+  disabled?: boolean;
+  labelId: string;
+  onChange: (value: string) => void;
+}) {
+  const options = useMemo(() => {
+    const activeOptions = users.map((user) => ({
+      value: String(user.id),
+      label: user.display_name,
+      searchText: `${user.display_name} ${user.username}`,
+    }));
+    if (!historicalUser || activeOptions.some((option) => option.value === String(historicalUser.id))) {
+      return activeOptions;
+    }
+    return [
+      ...activeOptions,
+      {
+        value: String(historicalUser.id),
+        label: historicalUser.display_name,
+        searchText: `${historicalUser.display_name} ${historicalUser.username}`,
+      },
+    ];
+  }, [historicalUser, users]);
+
+  return (
+    <DashboardNotePicker
+      disabled={disabled}
+      emptyOptionLabel="Niemand"
+      emptyText="Kein Büronutzer gefunden"
+      error={error}
+      errorText="Büronutzer konnten nicht geladen werden."
+      labelId={labelId}
+      listLabel="Büronutzer auswählen"
+      loading={loading}
+      loadingText="Büronutzer werden geladen..."
+      options={options}
+      searchLabel="Büronutzer suchen"
+      searchPlaceholder="Büronutzer suchen…"
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
 function DashboardNotePicker({
   value,
   options,
@@ -135,6 +193,8 @@ function DashboardNotePicker({
   loadingText,
   errorText,
   emptyText,
+  emptyOptionLabel = "Keine Zuordnung",
+  disabled = false,
   onChange,
 }: {
   value: string;
@@ -148,6 +208,8 @@ function DashboardNotePicker({
   loadingText: string;
   errorText: string;
   emptyText: string;
+  emptyOptionLabel?: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   const popupId = useId();
@@ -160,7 +222,7 @@ function DashboardNotePicker({
   const [query, setQuery] = useState("");
   const [popupPosition, setPopupPosition] = useState<DashboardNotePickerPopupPosition | null>(null);
   const selectedOption = options.find((option) => option.value === value) ?? null;
-  const selectedLabel = selectedOption?.label ?? "Keine Zuordnung";
+  const selectedLabel = selectedOption?.label ?? emptyOptionLabel;
   const normalizedQuery = query.trim().toLocaleLowerCase("de-DE");
   const filteredOptions = useMemo(() => {
     if (!normalizedQuery) {
@@ -234,6 +296,7 @@ function DashboardNotePicker({
         aria-haspopup="listbox"
         aria-labelledby={labelId}
         className={`dashboard-note-picker-trigger${isOpen ? " is-open" : ""}`}
+        disabled={disabled}
         ref={triggerRef}
         role="combobox"
         title={selectedLabel}
@@ -304,7 +367,7 @@ function DashboardNotePicker({
                   <span className="dashboard-note-picker-option-check" aria-hidden="true">
                     {value === "" ? <Check size={13} /> : null}
                   </span>
-                  <span>Keine Zuordnung</span>
+                  <span>{emptyOptionLabel}</span>
                 </button>
                 {loading ? <p className="dashboard-note-picker-option-status">{loadingText}</p> : null}
                 {error ? <p className="dashboard-note-picker-option-status is-error">{errorText}</p> : null}
