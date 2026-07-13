@@ -66,6 +66,16 @@ type DashboardConflict = {
   date: string;
 };
 
+type DashboardDateRangeGroup<T> = {
+  item: T;
+  startDate: string;
+  endDate: string;
+};
+
+type DashboardAlertListItem =
+  | { kind: "conflict"; range: DashboardDateRangeGroup<DashboardConflict> }
+  | { kind: "need"; range: DashboardDateRangeGroup<StaffingNeed> };
+
 type DashboardMessageMetaItem = {
   key: string;
   label: string;
@@ -1191,35 +1201,143 @@ function DashboardNoteRow({
 }
 
 function DashboardConflictList({ conflicts, needs }: { conflicts: DashboardConflict[]; needs: StaffingNeed[] }) {
-  const visibleConflicts = conflicts.slice(0, MAX_PREVIEW_ITEMS);
-  const visibleNeeds = needs.slice(0, MAX_PREVIEW_ITEMS);
+  const visibleItems: DashboardAlertListItem[] = [
+    ...groupDashboardConflicts(conflicts)
+      .slice(0, MAX_PREVIEW_ITEMS)
+      .map((range) => ({ kind: "conflict" as const, range })),
+    ...groupDashboardStaffingNeeds(needs)
+      .slice(0, MAX_PREVIEW_ITEMS)
+      .map((range) => ({ kind: "need" as const, range })),
+  ].sort(compareDashboardAlertListItems);
 
-  if (visibleConflicts.length === 0 && visibleNeeds.length === 0) {
+  if (visibleItems.length === 0) {
     return <EmptyDashboardText text="Keine harten Konflikte oder offenen Personalbedarfe im nahen Zeitraum erkannt." />;
   }
 
   return (
     <div className="dashboard-alert-list">
-      {visibleConflicts.map((conflict) => (
-        <div className="dashboard-alert-row" key={conflict.key}>
-          <span className="dashboard-alert-dot signal-red" aria-hidden="true" />
-          <div>
-            <strong>{conflict.title}</strong>
-            <span>{formatShortDate(conflict.date)} · {conflict.detail}</span>
+      {visibleItems.map((alert) => {
+        if (alert.kind === "conflict") {
+          const { item, startDate, endDate } = alert.range;
+          return (
+            <div className="dashboard-alert-row" key={`conflict:${item.key}:${startDate}:${endDate}`}>
+              <span className="dashboard-alert-dot signal-red" aria-hidden="true" />
+              <div>
+                <strong>{item.title}</strong>
+                <span>{formatDashboardDateRange(startDate, endDate)} · {item.detail}</span>
+              </div>
+            </div>
+          );
+        }
+        const { item, startDate, endDate } = alert.range;
+        return (
+          <div
+            className="dashboard-alert-row"
+            key={`need:${item.siteNumber ?? ""}:${item.siteName}:${item.managerLabel}:${startDate}:${endDate}`}
+          >
+            <span className="dashboard-alert-dot signal-orange" aria-hidden="true" />
+            <div>
+              <strong>{formatDashboardDateRange(startDate, endDate)}: {item.siteName}</strong>
+              <span>{item.managerLabel} · orange markiert, noch unbesetzt</span>
+            </div>
           </div>
-        </div>
-      ))}
-      {visibleNeeds.map((need) => (
-        <div className="dashboard-alert-row" key={need.date + need.siteName + need.siteNumber}>
-          <span className="dashboard-alert-dot signal-orange" aria-hidden="true" />
-          <div>
-            <strong>{formatShortDate(need.date)}: {need.siteName}</strong>
-            <span>{need.managerLabel} · orange markiert, noch unbesetzt</span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
+}
+
+function groupDashboardConflicts(conflicts: DashboardConflict[]): DashboardDateRangeGroup<DashboardConflict>[] {
+  return groupConsecutiveDashboardEntries(conflicts, (conflict) => [
+    conflict.key.replace(/\d{4}-\d{2}-\d{2}/g, ""),
+    conflict.title,
+    conflict.detail,
+    conflict.severity,
+  ].join("\u001f"));
+}
+
+function groupDashboardStaffingNeeds(needs: StaffingNeed[]): DashboardDateRangeGroup<StaffingNeed>[] {
+  return groupConsecutiveDashboardEntries(needs, (need) => [
+    need.siteNumber ?? "",
+    need.siteName,
+    need.managerLabel,
+    "orange-unassigned",
+  ].join("\u001f"));
+}
+
+function groupConsecutiveDashboardEntries<T extends { date: string }>(
+  entries: T[],
+  getGroupKey: (entry: T) => string,
+): DashboardDateRangeGroup<T>[] {
+  const groups: DashboardDateRangeGroup<T>[] = [];
+  const latestGroupByKey = new Map<string, DashboardDateRangeGroup<T>>();
+  entries
+    .slice()
+    .sort((first, second) => first.date.localeCompare(second.date))
+    .forEach((entry) => {
+      const groupKey = getGroupKey(entry);
+      const latestGroup = latestGroupByKey.get(groupKey);
+      if (latestGroup && areDashboardDatesContinuous(latestGroup.endDate, entry.date)) {
+        latestGroup.endDate = entry.date;
+        return;
+      }
+      const nextGroup = {
+        item: entry,
+        startDate: entry.date,
+        endDate: entry.date,
+      };
+      groups.push(nextGroup);
+      latestGroupByKey.set(groupKey, nextGroup);
+    });
+  return groups.sort((first, second) => first.startDate.localeCompare(second.startDate));
+}
+
+function areDashboardDatesContinuous(previousDate: string, nextDate: string): boolean {
+  const previousDay = isoDateToUtcDay(previousDate);
+  const nextDay = isoDateToUtcDay(nextDate);
+  if (previousDay === null || nextDay === null || nextDay <= previousDay) {
+    return false;
+  }
+  for (let day = previousDay + 1; day < nextDay; day += 1) {
+    const weekday = new Date(day * 86_400_000).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isoDateToUtcDay(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return timestamp / 86_400_000;
+}
+
+function compareDashboardAlertListItems(first: DashboardAlertListItem, second: DashboardAlertListItem): number {
+  return first.range.startDate.localeCompare(second.range.startDate)
+    || first.range.endDate.localeCompare(second.range.endDate)
+    || first.kind.localeCompare(second.kind);
+}
+
+function formatDashboardDateRange(startDate: string, endDate: string): string {
+  if (startDate === endDate) {
+    return formatShortDate(startDate);
+  }
+  return `${formatShortDate(startDate)} – ${formatShortDate(endDate)}`;
 }
 
 function EmptyDashboardText({ text }: { text: string }) {
