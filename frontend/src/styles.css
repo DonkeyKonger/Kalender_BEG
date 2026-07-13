@@ -17494,6 +17494,57 @@ button.person-chip:focus-visible {
   box-shadow: none;
 }
 
+.dashboard-section--sites {
+  --dashboard-section-background: #f4f8ff;
+  --dashboard-section-border: #c8d9f0;
+  --dashboard-section-accent: #1d5c99;
+}
+
+.dashboard-section--messages {
+  --dashboard-section-background: #f3faf5;
+  --dashboard-section-border: #c7e4cf;
+  --dashboard-section-accent: #287a3e;
+}
+
+.dashboard-section--notes {
+  --dashboard-section-background: #fffaf0;
+  --dashboard-section-border: #eed9a8;
+  --dashboard-section-accent: #9a6500;
+}
+
+.dashboard-section--conflicts {
+  --dashboard-section-background: #f8f5ff;
+  --dashboard-section-border: #d8cff0;
+  --dashboard-section-accent: #6650a8;
+}
+
+.dashboard-section--sites,
+.dashboard-section--messages,
+.dashboard-section--notes,
+.dashboard-section--conflicts {
+  border-color: var(--dashboard-section-border);
+  background: var(--dashboard-section-background);
+}
+
+.dashboard-section--sites .dashboard-card-header,
+.dashboard-section--messages .dashboard-card-header,
+.dashboard-section--notes .dashboard-card-header,
+.dashboard-section--conflicts .dashboard-card-header {
+  border-bottom-color: var(--dashboard-section-border);
+  background: var(--dashboard-section-background);
+}
+
+.dashboard-section--sites .dashboard-card-header > span:first-child,
+.dashboard-section--messages .dashboard-card-header > span:first-child,
+.dashboard-section--notes .dashboard-card-header > span:first-child,
+.dashboard-section--conflicts .dashboard-card-header > span:first-child,
+.dashboard-card.dashboard-section--sites h2,
+.dashboard-card.dashboard-section--messages h2,
+.dashboard-card.dashboard-section--notes h2,
+.dashboard-card.dashboard-section--conflicts h2 {
+  color: var(--dashboard-section-accent);
+}
+
 .dashboard-card-header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

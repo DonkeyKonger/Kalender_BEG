@@ -548,7 +548,7 @@ export function DashboardPage() {
               title="Heute besetzte Baustellen"
               icon={<BriefcaseBusiness aria-hidden="true" size={20} />}
               meta={formatTodayAssignedMeta(dashboard.todayAssignedSites)}
-              className="dashboard-card-large"
+              className="dashboard-card-large dashboard-section--sites"
             >
               {dashboard.todayAssignedSites.length > 0 ? (
                 <div className="dashboard-site-group-list">
@@ -577,7 +577,7 @@ export function DashboardPage() {
               title="Eingang / Meldungen"
               icon={<Inbox aria-hidden="true" size={20} />}
               badge={measurementMessages.length > 0 ? String(measurementMessages.length) : undefined}
-              className="dashboard-card-messages"
+              className="dashboard-card-messages dashboard-section--messages"
             >
               {measurementMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
@@ -632,7 +632,7 @@ export function DashboardPage() {
             <DashboardCard
               title="Notizen"
               icon={<ClipboardList aria-hidden="true" size={20} />}
-              className="dashboard-card-notes"
+              className="dashboard-card-notes dashboard-section--notes"
               actions={(
                 <button type="button" className="dashboard-note-add-button" onClick={openDashboardNoteCreateForm}>
                   <Plus aria-hidden="true" size={15} />
@@ -669,7 +669,11 @@ export function DashboardPage() {
           </div>
 
           <div className="dashboard-main-grid dashboard-main-grid-secondary">
-            <DashboardCard title="Prüfen / Konflikte" icon={<AlertTriangle aria-hidden="true" size={20} />}>
+            <DashboardCard
+              title="Prüfen / Konflikte"
+              icon={<AlertTriangle aria-hidden="true" size={20} />}
+              className="dashboard-section--conflicts"
+            >
               <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
             </DashboardCard>
           </div>
