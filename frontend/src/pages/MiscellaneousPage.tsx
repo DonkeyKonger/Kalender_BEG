@@ -272,7 +272,7 @@ function ToolMaterialList() {
           <h2>Werkzeuge und Material</h2>
           <p>Zentrale Bestands- und Zuordnungsliste.</p>
         </div>
-        <button className="icon-button" type="button" onClick={openCreateDrawer}>
+        <button className="icon-button secondary miscellaneous-tools-add-button" type="button" onClick={openCreateDrawer}>
           <Plus aria-hidden="true" size={17} />
           <span>Eintrag hinzufügen</span>
         </button>

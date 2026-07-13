@@ -10857,6 +10857,12 @@ button.person-chip:focus-visible {
   flex: 0 0 auto;
 }
 
+.miscellaneous-tools-add-button {
+  min-height: 32px;
+  border-radius: 0;
+  padding: 7px 10px;
+}
+
 .miscellaneous-tools-toolbar {
   display: flex;
   align-items: center;
