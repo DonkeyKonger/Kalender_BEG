@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from hashlib import sha1
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.absence import Absence
@@ -50,7 +50,6 @@ class MatrixService:
         include_closed: bool = False,
         year_view: bool = False,
         project_manager_person_id: int | None = None,
-        user_id: int | None = None,
     ) -> MatrixResponse:
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
@@ -87,7 +86,7 @@ class MatrixService:
             ]
         )
         site_ids = {site.id for site in visible_sites}
-        open_note_counts = self._open_note_counts_by_site(site_ids=site_ids, user_id=user_id)
+        open_note_counts = self._open_note_counts_by_site(site_ids=site_ids)
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
         marks = self._list_marks(site_ids=site_ids, start=start, end=end)
         person_ids = {assignment.person_id for assignment in assignments}
@@ -126,7 +125,6 @@ class MatrixService:
         include_closed: bool = False,
         year_view: bool = False,
         project_manager_person_id: int | None = None,
-        user_id: int | None = None,
     ) -> MatrixVersionResponse:
         self._validate_range(start=start, end=end, year_view=year_view)
         visible_sites = (
@@ -213,12 +211,8 @@ class MatrixService:
             DashboardNote.completed.is_(False),
             DashboardNote.deleted_at.is_(None),
         )
-        if user_id is not None and site_ids:
+        if site_ids:
             note_statement = note_statement.where(
-                or_(
-                    DashboardNote.created_by_user_id == user_id,
-                    DashboardNote.shared_with_user_id == user_id,
-                ),
                 DashboardNote.site_id.in_(site_ids),
             )
         else:
@@ -360,17 +354,12 @@ class MatrixService:
         self,
         *,
         site_ids: set[int],
-        user_id: int | None,
     ) -> dict[int, int]:
-        if user_id is None or not site_ids:
+        if not site_ids:
             return {}
         statement = (
             select(DashboardNote.site_id, func.count(DashboardNote.id))
             .where(
-                or_(
-                    DashboardNote.created_by_user_id == user_id,
-                    DashboardNote.shared_with_user_id == user_id,
-                ),
                 DashboardNote.site_id.in_(site_ids),
                 DashboardNote.completed.is_(False),
                 DashboardNote.deleted_at.is_(None),

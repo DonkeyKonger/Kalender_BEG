@@ -52,6 +52,33 @@ class DashboardNoteService:
         )
         return list(self.db.scalars(statement))
 
+    def list_site_notes(
+        self,
+        *,
+        site_id: int,
+        completed: bool | None = None,
+    ) -> list[DashboardNote]:
+        if self.sites.get(site_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
+        statement = (
+            select(DashboardNote)
+            .options(*dashboard_note_load_options())
+            .where(
+                DashboardNote.site_id == site_id,
+                DashboardNote.deleted_at.is_(None),
+            )
+        )
+        if completed is not None:
+            statement = statement.where(DashboardNote.completed.is_(completed))
+        statement = statement.order_by(
+            DashboardNote.completed.asc(),
+            DashboardNote.due_date.is_(None),
+            DashboardNote.due_date.asc(),
+            DashboardNote.updated_at.desc(),
+            DashboardNote.id.desc(),
+        )
+        return list(self.db.scalars(statement))
+
     def list_site_options(self) -> list[Site]:
         return sorted(self.sites.list_summary(), key=site_number_sort_key)
 

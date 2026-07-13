@@ -1677,6 +1677,18 @@ export const api = {
     return request<MatrixVersionResponse>(`/matrix/version?${search.toString()}`);
   },
 
+  async matrixSiteNotes(
+    siteId: number,
+    params: { completed?: boolean | null } = {},
+  ): Promise<DashboardNote[]> {
+    const search = new URLSearchParams();
+    if (params.completed !== null && params.completed !== undefined) {
+      search.set("completed", String(params.completed));
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<DashboardNote[]>(`/matrix/sites/${siteId}/notes${suffix}`);
+  },
+
   async patchMatrixCell(params: {
     siteId: number;
     date: string;

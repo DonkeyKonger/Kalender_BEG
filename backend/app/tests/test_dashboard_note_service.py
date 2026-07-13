@@ -368,6 +368,87 @@ def test_dashboard_notes_can_be_filtered_by_site_without_losing_owner_scope():
     ] == [first_note.id]
 
 
+def test_matrix_site_notes_include_all_site_authors_without_changing_personal_scope():
+    db = db_session()
+    first_site = Site(site_number="8018", name="Hochschule Osnabrück")
+    second_site = Site(site_number="4700", name="Neubau Stephanitorhöfe")
+    owner = User(
+        username="christopher",
+        display_name="Christopher",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    other_user = User(
+        username="office",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([first_site, second_site, owner, other_user])
+    db.commit()
+
+    service = DashboardNoteService(db)
+    owner_site_note = service.create_note(
+        DashboardNoteCreate(text="CE Baustellennotiz", site_id=first_site.id),
+        user_id=owner.id,
+    )
+    other_site_note = service.create_note(
+        DashboardNoteCreate(text="TW Baustellennotiz", site_id=first_site.id),
+        user_id=other_user.id,
+    )
+    private_note = service.create_note(
+        DashboardNoteCreate(text="CE Privatnotiz"),
+        user_id=owner.id,
+    )
+    completed_site_note = service.create_note(
+        DashboardNoteCreate(text="CE erledigt", site_id=first_site.id),
+        user_id=owner.id,
+    )
+    service.update_note(
+        completed_site_note.id,
+        DashboardNoteUpdate(completed=True),
+        user_id=owner.id,
+    )
+    second_site_note = service.create_note(
+        DashboardNoteCreate(text="Andere Baustelle", site_id=second_site.id),
+        user_id=other_user.id,
+    )
+    deleted_site_note = service.create_note(
+        DashboardNoteCreate(text="Gelöschte Baustellennotiz", site_id=first_site.id),
+        user_id=owner.id,
+    )
+    deleted_site_note.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    assert {note.id for note in service.list_notes(user_id=owner.id)} == {
+        owner_site_note.id,
+        private_note.id,
+        completed_site_note.id,
+    }
+    assert {note.id for note in service.list_notes(user_id=other_user.id)} == {
+        other_site_note.id,
+        second_site_note.id,
+    }
+    assert {
+        note.id
+        for note in service.list_site_notes(site_id=first_site.id, completed=False)
+    } == {owner_site_note.id, other_site_note.id}
+    assert {
+        note.id
+        for note in service.list_site_notes(site_id=first_site.id, completed=True)
+    } == {completed_site_note.id}
+    assert {
+        note.id
+        for note in service.list_site_notes(site_id=first_site.id)
+    } == {owner_site_note.id, other_site_note.id, completed_site_note.id}
+
+    with pytest.raises(HTTPException) as missing_site_error:
+        service.list_site_notes(site_id=999_999)
+    assert missing_site_error.value.status_code == 404
+
+
 def test_dashboard_note_site_options_use_all_open_sites_and_sort_by_site_number():
     db = db_session()
     manager = Person(first_name="Chris", last_name="Erichsen", display_name="Chris Erichsen", short_code="CE")

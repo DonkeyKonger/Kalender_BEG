@@ -41,6 +41,7 @@ def matrix_service():
     service.assignments = FakeAssignments()
     service.absences = FakeAbsences()
     service._list_marks = lambda *, site_ids, start, end: {}
+    service._open_note_counts_by_site = lambda *, site_ids: {}
     return service
 
 
@@ -92,7 +93,7 @@ def test_matrix_project_manager_filter_reuses_loaded_sites():
     assert [row.site.id for row in result.rows] == [1, 3]
 
 
-def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version():
+def test_matrix_aggregates_all_open_site_notes_and_updates_version():
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -148,28 +149,14 @@ def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version(
         start=date(2026, 7, 13),
         end=date(2026, 7, 13),
         include_weekends=True,
-        user_id=owner.id,
     )
     counts = {row.site.id: row.site.open_note_count for row in result.rows}
 
-    assert counts == {first_site.id: 3, second_site.id: 1}
-
-    recipient_result = service.get_matrix(
-        start=date(2026, 7, 13),
-        end=date(2026, 7, 13),
-        include_weekends=True,
-        user_id=other_user.id,
-    )
-    recipient_counts = {
-        row.site.id: row.site.open_note_count
-        for row in recipient_result.rows
-    }
-    assert recipient_counts == {first_site.id: 2, second_site.id: 0}
+    assert counts == {first_site.id: 4, second_site.id: 1}
 
     version_before = service.get_version(
         start=date(2026, 7, 13),
         end=date(2026, 7, 13),
-        user_id=owner.id,
     ).version
     notes[0].completed = True
     db.commit()
@@ -178,16 +165,14 @@ def test_matrix_aggregates_open_site_notes_for_current_user_and_updates_version(
         start=date(2026, 7, 13),
         end=date(2026, 7, 13),
         include_weekends=True,
-        user_id=owner.id,
     )
     updated_counts = {row.site.id: row.site.open_note_count for row in updated_result.rows}
     version_after = service.get_version(
         start=date(2026, 7, 13),
         end=date(2026, 7, 13),
-        user_id=owner.id,
     ).version
 
-    assert updated_counts == {first_site.id: 2, second_site.id: 1}
+    assert updated_counts == {first_site.id: 3, second_site.id: 1}
     assert version_after != version_before
 
 

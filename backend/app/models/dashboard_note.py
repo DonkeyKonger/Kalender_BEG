@@ -11,6 +11,12 @@ class DashboardNote(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_dashboard_notes_completed_due", "completed", "due_date"),
         Index(
+            "ix_dashboard_notes_site_open",
+            "site_id",
+            "completed",
+            "deleted_at",
+        ),
+        Index(
             "ix_dashboard_notes_owner_open_site",
             "created_by_user_id",
             "completed",

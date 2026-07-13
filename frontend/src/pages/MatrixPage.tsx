@@ -1986,7 +1986,7 @@ export function MatrixPage() {
     const requestUserId = matrixNotePreviewUserIdRef.current;
     let request = matrixNotePreviewRequestsRef.current.get(site.id);
     if (!request) {
-      request = api.dashboardNotes({ completed: false, siteId: site.id })
+      request = api.matrixSiteNotes(site.id, { completed: false })
         .then((notes) => notes.filter((note) => !note.completed));
       matrixNotePreviewRequestsRef.current.set(site.id, request);
     }
@@ -2354,7 +2354,7 @@ function MatrixSiteNotesModal({
     let active = true;
     setIsLoading(true);
     setError(null);
-    void api.dashboardNotes({ siteId: site.id })
+    void api.matrixSiteNotes(site.id)
       .then((loadedNotes) => {
         if (active) {
           setNotes(loadedNotes);
@@ -2673,6 +2673,7 @@ function MatrixSiteNotesModal({
                   <MatrixSiteNoteRow
                     busy={busyNoteId === note.id}
                     canDelete={note.created_by_user_id === currentUserId}
+                    canEdit={note.created_by_user_id === currentUserId || note.shared_with_user_id === currentUserId}
                     key={note.id}
                     note={note}
                     today={today}
@@ -2699,6 +2700,7 @@ function MatrixSiteNoteRow({
   note,
   busy,
   canDelete,
+  canEdit,
   today,
   onToggle,
   onEdit,
@@ -2707,6 +2709,7 @@ function MatrixSiteNoteRow({
   note: DashboardNote;
   busy: boolean;
   canDelete: boolean;
+  canEdit: boolean;
   today: string;
   onToggle: () => void;
   onEdit: () => void;
@@ -2718,7 +2721,8 @@ function MatrixSiteNoteRow({
       <button
         aria-label={note.completed ? "Notiz wieder öffnen" : "Notiz als erledigt markieren"}
         className={`dashboard-note-checkbox${note.completed ? " is-checked" : ""}`}
-        disabled={busy}
+        disabled={busy || !canEdit}
+        title={!canEdit ? "Nur der Ersteller oder der angepingte Büronutzer darf den Status ändern." : undefined}
         type="button"
         onClick={onToggle}
       >
@@ -2735,9 +2739,11 @@ function MatrixSiteNoteRow({
         </div>
       </div>
       <div className="dashboard-note-row-actions">
-        <button aria-label="Notiz bearbeiten" disabled={busy} title="Notiz bearbeiten" type="button" onClick={onEdit}>
-          <Pencil aria-hidden="true" size={14} />
-        </button>
+        {canEdit ? (
+          <button aria-label="Notiz bearbeiten" disabled={busy} title="Notiz bearbeiten" type="button" onClick={onEdit}>
+            <Pencil aria-hidden="true" size={14} />
+          </button>
+        ) : null}
         {canDelete ? (
           <button aria-label="Notiz löschen" disabled={busy} title="Notiz löschen" type="button" onClick={onDelete}>
             <Trash2 aria-hidden="true" size={14} />

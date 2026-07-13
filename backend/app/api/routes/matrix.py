@@ -7,6 +7,7 @@ from app.api.dependencies import require_office_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.dashboard_note import DashboardNoteRead
 from app.schemas.matrix import (
     MatrixCellMarkPatch,
     MatrixCellPatch,
@@ -15,6 +16,7 @@ from app.schemas.matrix import (
     MatrixResponse,
     MatrixVersionResponse,
 )
+from app.services.dashboard_note_service import DashboardNoteService
 from app.services.matrix_mutation_service import MatrixMutationService
 from app.services.matrix_service import MatrixService
 
@@ -32,7 +34,7 @@ def get_matrix(
     include_closed: bool = False,
     year_view: bool = False,
     project_manager_person_id: int | None = None,
-    current_user: User = Depends(CAN_READ),
+    _current_user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> MatrixResponse:
     return MatrixService(db).get_matrix(
@@ -42,7 +44,6 @@ def get_matrix(
         include_closed=include_closed,
         year_view=year_view,
         project_manager_person_id=project_manager_person_id,
-        user_id=current_user.id,
     )
 
 
@@ -53,7 +54,7 @@ def get_matrix_version(
     include_closed: bool = False,
     year_view: bool = False,
     project_manager_person_id: int | None = None,
-    current_user: User = Depends(CAN_READ),
+    _current_user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> MatrixVersionResponse:
     return MatrixService(db).get_version(
@@ -62,8 +63,21 @@ def get_matrix_version(
         include_closed=include_closed,
         year_view=year_view,
         project_manager_person_id=project_manager_person_id,
-        user_id=current_user.id,
     )
+
+
+@router.get("/sites/{site_id}/notes", response_model=list[DashboardNoteRead])
+def list_matrix_site_notes(
+    site_id: int,
+    completed: bool | None = None,
+    _current_user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[DashboardNoteRead]:
+    notes = DashboardNoteService(db).list_site_notes(
+        site_id=site_id,
+        completed=completed,
+    )
+    return [DashboardNoteRead.model_validate(note) for note in notes]
 
 
 @router.patch("/cell", response_model=MatrixMutationResponse)
