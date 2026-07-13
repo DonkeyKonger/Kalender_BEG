@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
@@ -166,7 +166,7 @@ export function MatrixPage() {
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
   const assignmentResizeRef = useRef<AssignmentResizeState | null>(null);
-  const projectManagerFilterUserIdRef = useRef(user?.id ?? null);
+  const initializedProjectManagerFilterUserIdRef = useRef<number | null>(null);
   const rangeScrollKeyRef = useRef<string | null>(null);
   const interactionWeekSnapKeyRef = useRef<string | null>(null);
   const rangeScrollFrameRef = useRef<number | null>(null);
@@ -187,9 +187,7 @@ export function MatrixPage() {
     id: 0,
     weekStart: getIsoWeekStartDate(planningReferenceDate),
   }));
-  const [projectManagerFilter, setProjectManagerFilter] = useState<string>(() => (
-    initialMatrixProjectManagerFilter(user)
-  ));
+  const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
@@ -550,13 +548,19 @@ export function MatrixPage() {
     setProjectManagerFilter(nextFilter);
   }, [clearScheduledMatrixRangeScroll, invalidateMatrixDataContext, projectManagerFilter]);
 
-  useEffect(() => {
-    if (!user || projectManagerFilterUserIdRef.current === user.id) {
+  const selectProjectManagerFilter = useCallback((nextFilter: string) => {
+    initializedProjectManagerFilterUserIdRef.current = user?.id ?? null;
+    updateProjectManagerFilter(nextFilter);
+  }, [updateProjectManagerFilter, user?.id]);
+
+  useLayoutEffect(() => {
+    if (!user || !matrix || initializedProjectManagerFilterUserIdRef.current === user.id) {
       return;
     }
-    projectManagerFilterUserIdRef.current = user.id;
-    updateProjectManagerFilter(initialMatrixProjectManagerFilter(user));
-  }, [updateProjectManagerFilter, user]);
+    const initialFilter = resolveInitialMatrixProjectManagerFilter(user, matrix.project_managers, people);
+    initializedProjectManagerFilterUserIdRef.current = user.id;
+    updateProjectManagerFilter(initialFilter);
+  }, [matrix, people, updateProjectManagerFilter, user]);
 
   const scheduleScrollToCurrentWeek = useCallback(() => {
     if (!matrix || !matrixScrollRef.current) {
@@ -1912,7 +1916,7 @@ export function MatrixPage() {
               <button
                 className={projectManagerFilter === "all" ? "is-active" : ""}
                 type="button"
-                onClick={() => updateProjectManagerFilter("all")}
+                onClick={() => selectProjectManagerFilter("all")}
               >
                 Alle
               </button>
@@ -1921,7 +1925,7 @@ export function MatrixPage() {
                   className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
                   key={manager.id}
                   type="button"
-                  onClick={() => updateProjectManagerFilter(String(manager.id))}
+                  onClick={() => selectProjectManagerFilter(String(manager.id))}
                 >
                   {compactProjectManagerFilterLabel(manager)}
                 </button>
@@ -3459,10 +3463,54 @@ function formatMatrixOpenNoteBadgeLabel(siteName: string, count: number): string
   return `${count} ${count === 1 ? "offene Notiz" : "offene Notizen"} für ${siteName} anzeigen`;
 }
 
-function initialMatrixProjectManagerFilter(user: CurrentUser | null): string {
-  return user?.role === "project_manager" && user.person_id !== null
-    ? String(user.person_id)
-    : "all";
+function resolveInitialMatrixProjectManagerFilter(
+  user: CurrentUser,
+  projectManagers: MatrixPerson[],
+  people: Person[],
+): string {
+  if (user.role !== "project_manager") {
+    return "all";
+  }
+  if (user.person_id !== null && projectManagers.some((manager) => manager.id === user.person_id)) {
+    return String(user.person_id);
+  }
+
+  const linkedPerson = user.person_id === null
+    ? null
+    : people.find((person) => person.id === user.person_id) ?? null;
+  const identityCandidates = [
+    linkedPerson?.short_code,
+    linkedPerson ? calendarPersonCode(linkedPerson) : null,
+    linkedPerson?.display_name,
+    user.display_name,
+    user.username,
+  ];
+  for (const identityCandidate of identityCandidates) {
+    const identity = normalizeProjectManagerIdentity(identityCandidate);
+    if (!identity) {
+      continue;
+    }
+    const matchingManagers = projectManagers.filter((manager) => (
+      projectManagerIdentityValues(manager).some((value) => normalizeProjectManagerIdentity(value) === identity)
+    ));
+    if (matchingManagers.length === 1) {
+      return String(matchingManagers[0].id);
+    }
+  }
+  return "all";
+}
+
+function projectManagerIdentityValues(manager: MatrixPerson): string[] {
+  const calendarCode = calendarPersonCode(manager);
+  return [manager.short_code, calendarCode, compactCodeFromText(calendarCode), manager.display_name];
+}
+
+function normalizeProjectManagerIdentity(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("de-DE")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function getYearPlanningRange(referenceDate: string): PlanningRange {
