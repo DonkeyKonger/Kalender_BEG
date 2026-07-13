@@ -18884,9 +18884,21 @@ button.person-chip:focus-visible {
   }
 
   .dashboard-section--notes > .dashboard-notes {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: hidden;
+  }
+
+  .dashboard-section--notes .dashboard-note-list {
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding-bottom: 2px;
   }
 }
 
