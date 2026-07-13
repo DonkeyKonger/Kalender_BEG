@@ -3,12 +3,102 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 import app.services.mobile_assignment_service as mobile_assignment_module
+from app.models import Base
+from app.models.assignment import Assignment
 from app.models.enums import AssignmentType, SiteStatus, UserRole
+from app.models.person import Person
 from app.models.site import Site
+from app.models.user import User
 from app.schemas.mobile import MobileSelfPlanRequest
 from app.services.mobile_assignment_service import MobileAssignmentService
+
+
+def db_session() -> Session:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return Session(engine)
+
+
+def test_mobile_assignment_history_includes_closed_sites_and_only_own_person():
+    db = db_session()
+    worker = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    other_worker = Person(first_name="Erika", last_name="Extern", display_name="Erika Extern", short_code="EE")
+    current_user = User(
+        username="max.monteur",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        is_active=True,
+        person=worker,
+    )
+    active_site = Site(site_number="1001", name="Aktive Baustelle", status=SiteStatus.ACTIVE)
+    completed_site = Site(site_number="1002", name="Abgeschlossene Baustelle", status=SiteStatus.COMPLETED)
+    deleted_site = Site(site_number="1003", name="Archivierte Baustelle", status=SiteStatus.DELETED)
+    db.add_all([worker, other_worker, current_user, active_site, completed_site, deleted_site])
+    db.flush()
+    db.add_all([
+        Assignment(
+            site_id=active_site.id,
+            person_id=worker.id,
+            start_date=date(2026, 7, 10),
+            end_date=date(2026, 7, 13),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=completed_site.id,
+            person_id=worker.id,
+            start_date=date(2025, 8, 1),
+            end_date=date(2025, 8, 4),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=deleted_site.id,
+            person_id=worker.id,
+            start_date=date(2026, 1, 12),
+            end_date=date(2026, 1, 12),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=active_site.id,
+            person_id=worker.id,
+            start_date=date(2025, 7, 1),
+            end_date=date(2025, 7, 12),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=active_site.id,
+            person_id=other_worker.id,
+            start_date=date(2026, 5, 1),
+            end_date=date(2026, 5, 2),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+    ])
+    db.commit()
+
+    response = MobileAssignmentService(db).list_own_assignments(
+        current_user=current_user,
+        start=date(2025, 7, 13),
+        end=date(2026, 7, 13),
+        allow_history=True,
+    )
+
+    assert response.start_date == date(2025, 7, 13)
+    assert response.end_date == date(2026, 7, 13)
+    assert {assignment.site.name for assignment in response.assignments} == {
+        "Aktive Baustelle",
+        "Abgeschlossene Baustelle",
+        "Archivierte Baustelle",
+    }
+    assert {assignment.person.id for assignment in response.assignments} == {worker.id}
 
 
 def test_mobile_active_sites_are_readable_for_assigned_monteur():

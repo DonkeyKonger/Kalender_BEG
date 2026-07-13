@@ -12,7 +12,7 @@ import {
   UserCircle,
   UserRound,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -34,7 +34,7 @@ import { canUsePushNotifications, initializePushNotifications } from "../lib/pus
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 
-const CACHE_KEY = "kb_mobile_assignments_cache_v1";
+const CACHE_KEY_PREFIX = "kb_mobile_assignments_cache_v2";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_DAY_WINDOW = 7;
@@ -92,37 +92,58 @@ export function MyAssignmentsPage() {
   const [isTogglingPushNotifications, setIsTogglingPushNotifications] = useState(false);
   const [pushNotificationMessage, setPushNotificationMessage] = useState<string | null>(null);
   const [pushNotificationMessageTone, setPushNotificationMessageTone] = useState<"info" | "error">("info");
+  const assignmentLoadRequestIdRef = useRef(0);
 
   const range = useMemo(() => getRange(mode), [mode]);
+  const assignmentCacheKey = useMemo(
+    () => getAssignmentsCacheKey(user?.id ?? null, mode),
+    [mode, user?.id],
+  );
 
   const loadAssignments = useCallback(async () => {
+    const requestId = ++assignmentLoadRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     setIsFromCache(false);
     try {
-      const response = await api.myAssignments(range);
+      const response = mode === "year"
+        ? await api.myAssignmentHistory(range)
+        : await api.myAssignments(range);
+      if (requestId !== assignmentLoadRequestIdRef.current) {
+        return;
+      }
       const timestamp = new Date().toISOString();
       const cachePayload: CachePayload = { loadedAt: timestamp, mode, data: response };
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cachePayload));
+      writeCache(assignmentCacheKey, cachePayload);
       setData(response);
       setLoadedAt(timestamp);
     } catch (requestError) {
-      const cached = readCache();
+      if (requestId !== assignmentLoadRequestIdRef.current) {
+        return;
+      }
+      const cached = readCache(assignmentCacheKey, mode);
       if (cached) {
         setData(cached.data);
         setLoadedAt(cached.loadedAt);
         setIsFromCache(true);
         setError("Offline-Anzeige: zuletzt geladene Einsätze werden angezeigt.");
       } else {
+        setData(null);
+        setLoadedAt(null);
         setError(readApiError(requestError, "Einsätze konnten nicht geladen werden."));
       }
     } finally {
-      setIsLoading(false);
+      if (requestId === assignmentLoadRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [mode, range]);
+  }, [assignmentCacheKey, mode, range]);
 
   useEffect(() => {
     void loadAssignments();
+    return () => {
+      assignmentLoadRequestIdRef.current += 1;
+    };
   }, [loadAssignments]);
 
   const refreshAndroidGpsStatus = useCallback(async () => {
@@ -366,6 +387,19 @@ export function MyAssignmentsPage() {
     await logout();
   }
 
+  function selectAssignmentMode(nextMode: MobileViewMode): void {
+    if (nextMode === mode) {
+      return;
+    }
+    assignmentLoadRequestIdRef.current += 1;
+    setIsLoading(true);
+    setError(null);
+    setIsFromCache(false);
+    setData(null);
+    setLoadedAt(null);
+    setMode(nextMode);
+  }
+
   async function openSelfPlanSheet(workDate: string, label: string): Promise<void> {
     setSelfPlanSheet({ workDate, label });
     setSelfPlanError(null);
@@ -402,7 +436,7 @@ export function MyAssignmentsPage() {
           current ?? { start_date: range.start, end_date: range.end, assignments: [] },
           assignment,
         );
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ loadedAt: timestamp, mode, data: nextData }));
+        writeCache(assignmentCacheKey, { loadedAt: timestamp, mode, data: nextData });
         return nextData;
       });
       setLoadedAt(timestamp);
@@ -459,14 +493,14 @@ export function MyAssignmentsPage() {
           <button
             className={mode === "two_weeks" ? "active" : ""}
             type="button"
-            onClick={() => setMode("two_weeks")}
+            onClick={() => selectAssignmentMode("two_weeks")}
           >
             14 Tage
           </button>
           <button
             className={mode === "year" ? "active" : ""}
             type="button"
-            onClick={() => setMode("year")}
+            onClick={() => selectAssignmentMode("year")}
           >
             Jahr
           </button>
@@ -928,14 +962,15 @@ function DayListCard({ date, assignments }: { date: string; assignments: DailyAs
 }
 
 function AssignmentRangeCard({ group }: { group: AssignmentRangeGroup }) {
+  const site = group.assignment.site;
   return (
     <Link className="assignment-card assignment-card-link mobile-range-card" to={`/me/assignments/${group.assignment.id}`} state={{ assignment: group.assignment }}>
       <div>
         <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatRangeLabel(group.start, group.end)}</p>
-        <h3>{group.assignment.site.name}</h3>
-        <p className="muted-text">{[group.assignment.site.site_number, group.assignment.site.customer].filter(Boolean).join(" · ")}</p>
+        <h3>{site.name}</h3>
+        <p className="muted-text">{[site.site_number, site.location || site.address, site.customer].filter(Boolean).join(" · ")}</p>
       </div>
-      <SiteStatusBadge status={group.assignment.site.status} />
+      <SiteStatusBadge status={site.status} />
     </Link>
   );
 }
@@ -1109,9 +1144,15 @@ type AssignmentRangeGroup = {
 
 function getRange(mode: MobileViewMode): { start: string; end: string } {
   const today = startOfToday();
+  if (mode === "year") {
+    return {
+      start: toIsoDate(addCalendarMonths(today, -12)),
+      end: toIsoDate(today),
+    };
+  }
   return {
     start: toIsoDate(today),
-    end: toIsoDate(addDays(today, mode === "year" ? 365 : 13)),
+    end: toIsoDate(addDays(today, 13)),
   };
 }
 
@@ -1146,15 +1187,51 @@ function groupDailyAssignments(entries: DailyAssignment[]): Map<string, DailyAss
 function groupAssignmentsForLongView(assignments: MobileAssignment[], start: string, end: string): AssignmentRangeGroup[] {
   const startDate = parseIsoDate(start);
   const endDate = parseIsoDate(end);
-  return assignments
+  const candidates = assignments
     .map((assignment) => ({
-      key: String(assignment.id),
       assignment,
       start: toIsoDate(maxDate(parseIsoDate(assignment.start_date), startDate)),
       end: toIsoDate(minDate(parseIsoDate(assignment.end_date), endDate)),
     }))
     .filter((group) => group.start <= group.end)
-    .sort((left, right) => left.start.localeCompare(right.start));
+    .sort((left, right) => (
+      left.assignment.site.id - right.assignment.site.id
+      || left.start.localeCompare(right.start)
+      || left.end.localeCompare(right.end)
+      || left.assignment.id - right.assignment.id
+    ));
+  const groups: AssignmentRangeGroup[] = [];
+
+  for (const candidate of candidates) {
+    const previous = groups.at(-1);
+    if (
+      !previous
+      || previous.assignment.site.id !== candidate.assignment.site.id
+      || candidate.start > toIsoDate(addDays(parseIsoDate(previous.end), 1))
+    ) {
+      groups.push({
+        key: `${candidate.assignment.site.id}:${candidate.start}:${candidate.end}:${candidate.assignment.id}`,
+        ...candidate,
+      });
+      continue;
+    }
+    previous.key = `${previous.key}:${candidate.assignment.id}`;
+    if (candidate.end > previous.end) {
+      previous.end = candidate.end;
+      previous.assignment = candidate.assignment;
+    }
+  }
+
+  return groups.sort((left, right) => (
+    right.end.localeCompare(left.end)
+    || right.start.localeCompare(left.start)
+    || (left.assignment.site.site_number ?? "").localeCompare(
+      right.assignment.site.site_number ?? "",
+      "de",
+      { numeric: true, sensitivity: "base" },
+    )
+    || left.assignment.site.name.localeCompare(right.assignment.site.name, "de", { sensitivity: "base" })
+  ));
 }
 
 function getDayRange(start: string, count: number): string[] {
@@ -1175,12 +1252,42 @@ function isWeekendDay(date: string): boolean {
   return day === 0 || day === 6;
 }
 
-function readCache(): CachePayload | null {
+function getAssignmentsCacheKey(userId: number | null, mode: MobileViewMode): string | null {
+  return userId === null ? null : `${CACHE_KEY_PREFIX}:${userId}:${mode}`;
+}
+
+function readCache(cacheKey: string | null, mode: MobileViewMode): CachePayload | null {
+  if (cacheKey === null) {
+    return null;
+  }
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) as CachePayload : null;
+    const raw = localStorage.getItem(cacheKey);
+    if (!raw) {
+      return null;
+    }
+    const cached = JSON.parse(raw) as Partial<CachePayload>;
+    if (
+      cached.mode !== mode
+      || typeof cached.loadedAt !== "string"
+      || !cached.data
+      || !Array.isArray(cached.data.assignments)
+    ) {
+      return null;
+    }
+    return cached as CachePayload;
   } catch {
     return null;
+  }
+}
+
+function writeCache(cacheKey: string | null, payload: CachePayload): void {
+  if (cacheKey === null) {
+    return;
+  }
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(payload));
+  } catch {
+    // Der Online-Stand bleibt nutzbar, auch wenn der Browser keinen Cache schreiben kann.
   }
 }
 
@@ -1220,6 +1327,16 @@ function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function addCalendarMonths(date: Date, months: number): Date {
+  const target = new Date(date);
+  const day = target.getDate();
+  target.setDate(1);
+  target.setMonth(target.getMonth() + months);
+  const lastDayOfTargetMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDayOfTargetMonth));
+  return target;
 }
 
 function maxDate(left: Date, right: Date): Date {
