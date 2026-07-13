@@ -18690,6 +18690,47 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
+@media (min-width: 1101px) {
+  .dashboard-main-grid-primary {
+    height: clamp(440px, 50vh, 540px);
+    min-height: 0;
+  }
+
+  .dashboard-main-grid-secondary {
+    height: clamp(250px, 30vh, 330px);
+    min-height: 0;
+  }
+
+  .dashboard-main-grid > .dashboard-card {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-section--sites,
+  .dashboard-section--conflicts {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-section--sites > .dashboard-site-group-list,
+  .dashboard-section--messages > .dashboard-alert-list,
+  .dashboard-section--conflicts > .dashboard-alert-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .dashboard-section--notes > .dashboard-notes {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 @media (max-width: 1100px) {
   .dashboard-hero,
   .dashboard-main-grid,
