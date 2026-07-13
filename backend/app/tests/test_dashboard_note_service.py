@@ -131,6 +131,47 @@ def test_dashboard_notes_are_scoped_to_owner():
     assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
 
 
+def test_dashboard_notes_can_be_filtered_by_site_without_losing_owner_scope():
+    db = db_session()
+    first_site = Site(site_number="8018", name="Hochschule Osnabrück")
+    second_site = Site(site_number="4700", name="Neubau Stephanitorhöfe")
+    owner = User(
+        username="christopher",
+        display_name="Christopher",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    other_user = User(
+        username="office",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        is_active=True,
+    )
+    db.add_all([first_site, second_site, owner, other_user])
+    db.commit()
+
+    service = DashboardNoteService(db)
+    first_note = service.create_note(
+        DashboardNoteCreate(text="Erste Notiz", site_id=first_site.id),
+        user_id=owner.id,
+    )
+    service.create_note(
+        DashboardNoteCreate(text="Andere Baustelle", site_id=second_site.id),
+        user_id=owner.id,
+    )
+    service.create_note(
+        DashboardNoteCreate(text="Fremde Notiz", site_id=first_site.id),
+        user_id=other_user.id,
+    )
+
+    assert [
+        entry.id
+        for entry in service.list_notes(user_id=owner.id, site_id=first_site.id)
+    ] == [first_note.id]
+
+
 def test_dashboard_note_site_options_use_all_open_sites_and_sort_by_site_number():
     db = db_session()
     manager = Person(first_name="Chris", last_name="Erichsen", display_name="Chris Erichsen", short_code="CE")

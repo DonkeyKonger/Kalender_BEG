@@ -453,10 +453,13 @@ export const api = {
     });
   },
 
-  async dashboardNotes(params: { completed?: boolean | null } = {}): Promise<DashboardNote[]> {
+  async dashboardNotes(params: { completed?: boolean | null; siteId?: number | null } = {}): Promise<DashboardNote[]> {
     const search = new URLSearchParams();
     if (params.completed !== null && params.completed !== undefined) {
       search.set("completed", String(params.completed));
+    }
+    if (params.siteId !== null && params.siteId !== undefined) {
+      search.set("site_id", String(params.siteId));
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<DashboardNote[]>(`/dashboard/notes${suffix}`);

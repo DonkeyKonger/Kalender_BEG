@@ -1,11 +1,12 @@
-import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { DashboardNoteEmployeeSelect } from "../components/DashboardNotePickers";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, type DashboardNote, type DashboardNotePayload } from "../lib/api";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
@@ -116,6 +117,12 @@ type CurrentWeekResetRequest = {
   id: number;
   weekStart: string;
 };
+type MatrixNoteMode = "open" | "completed";
+type MatrixNoteDraft = {
+  text: string;
+  dueDate: string;
+  employeeId: string;
+};
 
 type UndoItem = {
   siteId: number;
@@ -129,6 +136,11 @@ const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
 const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
 const MATRIX_BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
+const EMPTY_MATRIX_NOTE_DRAFT: MatrixNoteDraft = {
+  text: "",
+  dueDate: "",
+  employeeId: "",
+};
 
 export function MatrixPage() {
   const { user } = useAuth();
@@ -199,6 +211,7 @@ export function MatrixPage() {
   const [isSavingAbsence, setIsSavingAbsence] = useState(false);
   const [isSiteCreateDrawerOpen, setIsSiteCreateDrawerOpen] = useState(false);
   const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
+  const [matrixNoteSite, setMatrixNoteSite] = useState<MatrixRow["site"] | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const matrixIsEditable = isEditable && !isYearView;
   const hasPendingMatrixSave = useMemo(
@@ -215,6 +228,7 @@ export function MatrixPage() {
     || assignmentDrag
     || assignmentResize
     || isSiteCreateDrawerOpen
+    || matrixNoteSite
     || isSavingAbsence
     || savingInfoSiteId !== null
     || savingStatusSiteId !== null
@@ -1888,6 +1902,34 @@ export function MatrixPage() {
     setIsSiteCreateDrawerOpen(true);
   }
 
+  const openMatrixSiteNotes = useCallback((site: MatrixRow["site"]): void => {
+    setMatrixNoteSite(site);
+  }, []);
+
+  const closeMatrixSiteNotes = useCallback((): void => {
+    setMatrixNoteSite(null);
+  }, []);
+
+  const updateMatrixSiteOpenNoteCount = useCallback((siteId: number, openNoteCount: number): void => {
+    setMatrix((current) => {
+      if (!current || !current.rows.some((row) => (
+        row.site.id === siteId && row.site.open_note_count !== openNoteCount
+      ))) {
+        return current;
+      }
+      return {
+        ...current,
+        rows: current.rows.map((row) => row.site.id === siteId
+          ? { ...row, site: { ...row.site, open_note_count: openNoteCount } }
+          : row),
+      };
+    });
+  }, []);
+
+  const handleMatrixNotesMutated = useCallback((): void => {
+    void syncMatrixVersionSilently();
+  }, [syncMatrixVersionSilently]);
+
   const projectManagerOptions = useMemo(() => {
     if (!matrix) {
       return [];
@@ -1995,6 +2037,7 @@ export function MatrixPage() {
             onCellMouseEnter={extendCellSelection}
             onCellMouseUp={finishCellSelection}
             onOpenAbsenceCell={openAbsenceCell}
+            onOpenSiteNotes={openMatrixSiteNotes}
             saveStatus={saveStatus}
             savingInfoSiteId={savingInfoSiteId}
             savingStatusSiteId={savingStatusSiteId}
@@ -2014,6 +2057,18 @@ export function MatrixPage() {
               void refreshMatrixOnly();
             }}
           />
+
+          {matrixNoteSite ? (
+            <MatrixSiteNotesModal
+              key={matrixNoteSite.id}
+              people={people}
+              site={matrixNoteSite}
+              today={today}
+              onClose={closeMatrixSiteNotes}
+              onMutationCommitted={handleMatrixNotesMutated}
+              onOpenCountChange={updateMatrixSiteOpenNoteCount}
+            />
+          ) : null}
 
           {editorAnchor && assignmentSuggestions.length > 0 && (
             <AssignmentAutocompleteDropdown
@@ -2067,6 +2122,389 @@ export function MatrixPage() {
         </>
       )}
     </section>
+  );
+}
+
+type MatrixSiteNotesModalProps = {
+  people: Person[];
+  site: MatrixRow["site"];
+  today: string;
+  onClose: () => void;
+  onMutationCommitted: () => void;
+  onOpenCountChange: (siteId: number, count: number) => void;
+};
+
+function MatrixSiteNotesModal({
+  people,
+  site,
+  today,
+  onClose,
+  onMutationCommitted,
+  onOpenCountChange,
+}: MatrixSiteNotesModalProps) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [notes, setNotes] = useState<DashboardNote[]>([]);
+  const [mode, setMode] = useState<MatrixNoteMode>("open");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [draft, setDraft] = useState<MatrixNoteDraft>(EMPTY_MATRIX_NOTE_DRAFT);
+  const [isSaving, setIsSaving] = useState(false);
+  const [busyNoteId, setBusyNoteId] = useState<number | null>(null);
+  const openCount = notes.filter((note) => !note.completed).length;
+  const completedCount = notes.filter((note) => note.completed).length;
+  const visibleNotes = useMemo(() => sortMatrixSiteNotes(
+    notes.filter((note) => mode === "open" ? !note.completed : note.completed),
+    mode,
+  ), [mode, notes]);
+  const editingNote = editingNoteId === null
+    ? null
+    : notes.find((note) => note.id === editingNoteId) ?? null;
+  const titleId = `matrix-site-notes-title-${site.id}`;
+  const employeeLabelId = `matrix-site-notes-employee-${site.id}`;
+
+  useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+    setError(null);
+    void api.dashboardNotes({ siteId: site.id })
+      .then((loadedNotes) => {
+        if (active) {
+          setNotes(loadedNotes);
+          onOpenCountChange(site.id, loadedNotes.filter((note) => !note.completed).length);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setError("Notizen konnten nicht geladen werden.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [onOpenCountChange, site.id]);
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [onClose]);
+
+  function applyNotes(nextNotes: DashboardNote[]): void {
+    setNotes(nextNotes);
+    onOpenCountChange(site.id, nextNotes.filter((note) => !note.completed).length);
+  }
+
+  function openCreateForm(): void {
+    setMode("open");
+    setDraft(EMPTY_MATRIX_NOTE_DRAFT);
+    setEditingNoteId(null);
+    setIsFormOpen(true);
+    setError(null);
+  }
+
+  function openEditForm(note: DashboardNote): void {
+    setDraft({
+      text: note.text,
+      dueDate: note.due_date ?? "",
+      employeeId: note.employee_id === null ? "" : String(note.employee_id),
+    });
+    setEditingNoteId(note.id);
+    setIsFormOpen(true);
+    setError(null);
+  }
+
+  function closeForm(): void {
+    setDraft(EMPTY_MATRIX_NOTE_DRAFT);
+    setEditingNoteId(null);
+    setIsFormOpen(false);
+    setError(null);
+  }
+
+  async function saveNote(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (isSaving) {
+      return;
+    }
+    const payload: DashboardNotePayload = {
+      text: draft.text.trim(),
+      due_date: draft.dueDate || null,
+      site_id: site.id,
+      employee_id: draft.employeeId ? Number(draft.employeeId) : null,
+    };
+    if (!payload.text) {
+      setError("Bitte einen Notiztext eingeben.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const savedNote = editingNoteId === null
+        ? await api.createDashboardNote(payload)
+        : await api.updateDashboardNote(editingNoteId, payload);
+      applyNotes(upsertMatrixSiteNote(notes, savedNote));
+      onMutationCommitted();
+      closeForm();
+    } catch (requestError) {
+      setError(readApiError(requestError, "Notiz konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function toggleNoteCompleted(note: DashboardNote): Promise<void> {
+    if (busyNoteId !== null) {
+      return;
+    }
+    setBusyNoteId(note.id);
+    setError(null);
+    try {
+      const updatedNote = await api.updateDashboardNote(note.id, { completed: !note.completed });
+      applyNotes(upsertMatrixSiteNote(notes, updatedNote));
+      onMutationCommitted();
+      if (editingNoteId === note.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(readApiError(requestError, "Notiz konnte nicht aktualisiert werden."));
+    } finally {
+      setBusyNoteId(null);
+    }
+  }
+
+  async function deleteNote(note: DashboardNote): Promise<void> {
+    if (busyNoteId !== null) {
+      return;
+    }
+    const previousNotes = notes;
+    setBusyNoteId(note.id);
+    setError(null);
+    applyNotes(notes.filter((entry) => entry.id !== note.id));
+    try {
+      await api.deleteDashboardNote(note.id);
+      onMutationCommitted();
+      if (editingNoteId === note.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      applyNotes(previousNotes);
+      setError(readApiError(requestError, "Notiz konnte nicht gelöscht werden."));
+    } finally {
+      setBusyNoteId(null);
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="matrix-notes-modal-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="matrix-notes-modal"
+        role="dialog"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header className="matrix-notes-modal-header">
+          <div>
+            <h2 id={titleId}>Notizen</h2>
+            <p>{formatMatrixNoteSiteLabel(site)}</p>
+          </div>
+          <button
+            aria-label="Notizen schließen"
+            ref={closeButtonRef}
+            title="Schließen"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" size={17} />
+          </button>
+        </header>
+
+        <div className="matrix-notes-modal-body">
+          <div className="matrix-notes-modal-toolbar">
+            <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
+              <button
+                aria-selected={mode === "open"}
+                className={mode === "open" ? "is-active" : ""}
+                role="tab"
+                type="button"
+                onClick={() => setMode("open")}
+              >
+                Noch offen <span>{openCount}</span>
+              </button>
+              <button
+                aria-selected={mode === "completed"}
+                className={mode === "completed" ? "is-active" : ""}
+                role="tab"
+                type="button"
+                onClick={() => setMode("completed")}
+              >
+                Erledigt <span>{completedCount}</span>
+              </button>
+            </div>
+            <button
+              className="dashboard-note-add-button"
+              disabled={isFormOpen}
+              type="button"
+              onClick={openCreateForm}
+            >
+              <Plus aria-hidden="true" size={14} />
+              Notiz hinzufügen
+            </button>
+          </div>
+
+          {error ? <p className="dashboard-note-error">{error}</p> : null}
+
+          {isFormOpen ? (
+            <form className="dashboard-note-form matrix-notes-form" onSubmit={(event) => void saveNote(event)}>
+              <label className="dashboard-note-field dashboard-note-field-wide">
+                <span>Text</span>
+                <textarea
+                  autoFocus
+                  required
+                  rows={3}
+                  value={draft.text}
+                  onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))}
+                />
+              </label>
+              <div className="matrix-notes-form-grid">
+                <label className="dashboard-note-field">
+                  <span>Fällig am</span>
+                  <input
+                    type="date"
+                    value={draft.dueDate}
+                    onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+                  />
+                </label>
+                <div className="dashboard-note-field">
+                  <span id={employeeLabelId}>Monteur</span>
+                  <DashboardNoteEmployeeSelect
+                    error={null}
+                    historicalEmployee={editingNote?.employee ?? null}
+                    labelId={employeeLabelId}
+                    loading={false}
+                    people={people}
+                    value={draft.employeeId}
+                    onChange={(value) => setDraft((current) => ({ ...current, employeeId: value }))}
+                  />
+                </div>
+              </div>
+              <p className="matrix-notes-fixed-site">Baustelle: <strong>{formatMatrixNoteSiteLabel(site)}</strong></p>
+              <div className="dashboard-note-form-actions">
+                <button className="dashboard-note-form-button" type="button" onClick={closeForm}>
+                  <X aria-hidden="true" size={14} />
+                  Abbrechen
+                </button>
+                <button className="dashboard-note-form-button is-primary" disabled={isSaving} type="submit">
+                  {isSaving ? "Speichert..." : editingNoteId === null ? "Anlegen" : "Speichern"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          <div className="matrix-notes-list-region">
+            {isLoading ? (
+              <p className="matrix-notes-empty">Notizen werden geladen...</p>
+            ) : visibleNotes.length > 0 ? (
+              <div className="dashboard-note-list matrix-notes-list">
+                {visibleNotes.map((note) => (
+                  <MatrixSiteNoteRow
+                    busy={busyNoteId === note.id}
+                    key={note.id}
+                    note={note}
+                    today={today}
+                    onDelete={() => void deleteNote(note)}
+                    onEdit={() => openEditForm(note)}
+                    onToggle={() => void toggleNoteCompleted(note)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="matrix-notes-empty">
+                {mode === "open" ? "Keine offenen Notizen." : "Keine erledigten Notizen."}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+function MatrixSiteNoteRow({
+  note,
+  busy,
+  today,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  note: DashboardNote;
+  busy: boolean;
+  today: string;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const dueState = getMatrixSiteNoteDueState(note, today);
+  return (
+    <article className={`dashboard-note-row${note.completed ? " is-completed" : ""}${dueState !== "none" ? ` is-${dueState}` : ""}`}>
+      <button
+        aria-label={note.completed ? "Notiz wieder öffnen" : "Notiz als erledigt markieren"}
+        className={`dashboard-note-checkbox${note.completed ? " is-checked" : ""}`}
+        disabled={busy}
+        type="button"
+        onClick={onToggle}
+      >
+        {note.completed ? <Check aria-hidden="true" size={13} /> : null}
+      </button>
+      <div className="dashboard-note-body">
+        <strong>{note.text}</strong>
+        <div className="dashboard-note-meta">
+          <span className={`dashboard-note-due is-${dueState}`}>
+            {formatMatrixSiteNoteDueLabel(note, today)}
+          </span>
+          {note.employee ? <span>Monteur: {note.employee.display_name}</span> : null}
+        </div>
+      </div>
+      <div className="dashboard-note-row-actions">
+        <button aria-label="Notiz bearbeiten" disabled={busy} title="Notiz bearbeiten" type="button" onClick={onEdit}>
+          <Pencil aria-hidden="true" size={14} />
+        </button>
+        <button aria-label="Notiz löschen" disabled={busy} title="Notiz löschen" type="button" onClick={onDelete}>
+          <Trash2 aria-hidden="true" size={14} />
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -2522,6 +2960,7 @@ type MatrixTableProps = {
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onOpenAbsenceCell: (date: string, anchor: EditorAnchor) => void;
+  onOpenSiteNotes: (site: MatrixRow["site"]) => void;
   saveStatus: Record<CellKey, SaveStatus>;
   savingInfoSiteId: number | null;
   savingStatusSiteId: number | null;
@@ -2868,18 +3307,18 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           onChange={(status) => props.onStatusChange(row.site.id, status)}
         />
         {row.site.open_note_count > 0 ? (
-          <Link
+          <button
             aria-label={formatMatrixOpenNoteBadgeLabel(row.site.name, row.site.open_note_count)}
             className="matrix-open-note-badge"
             title={formatMatrixOpenNoteBadgeLabel(row.site.name, row.site.open_note_count)}
-            to={{
-              pathname: "/",
-              search: `?noteSiteId=${row.site.id}`,
-              hash: "#dashboard-notes",
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onOpenSiteNotes(row.site);
             }}
           >
             {formatMatrixOpenNoteBadgeCount(row.site.open_note_count)}
-          </Link>
+          </button>
         ) : null}
       </td>
       {row.cells.map((cell, cellIndex) => {
@@ -3461,6 +3900,79 @@ function formatMatrixOpenNoteBadgeCount(count: number): string {
 
 function formatMatrixOpenNoteBadgeLabel(siteName: string, count: number): string {
   return `${count} ${count === 1 ? "offene Notiz" : "offene Notizen"} für ${siteName} anzeigen`;
+}
+
+function formatMatrixNoteSiteLabel(site: MatrixRow["site"]): string {
+  return site.site_number ? `${site.site_number} · ${site.name}` : site.name;
+}
+
+function upsertMatrixSiteNote(notes: DashboardNote[], note: DashboardNote): DashboardNote[] {
+  return notes.some((entry) => entry.id === note.id)
+    ? notes.map((entry) => entry.id === note.id ? note : entry)
+    : [...notes, note];
+}
+
+function sortMatrixSiteNotes(notes: DashboardNote[], mode: MatrixNoteMode): DashboardNote[] {
+  return notes.slice().sort((first, second) => {
+    if (mode === "completed") {
+      return compareNullableMatrixNoteDateTimeDesc(
+        first.completed_at ?? first.updated_at,
+        second.completed_at ?? second.updated_at,
+      ) || second.id - first.id;
+    }
+    if (first.due_date === null && second.due_date !== null) {
+      return 1;
+    }
+    if (second.due_date === null && first.due_date !== null) {
+      return -1;
+    }
+    if (first.due_date !== null && second.due_date !== null) {
+      return first.due_date.localeCompare(second.due_date)
+        || compareNullableMatrixNoteDateTimeDesc(first.updated_at, second.updated_at);
+    }
+    return compareNullableMatrixNoteDateTimeDesc(first.updated_at, second.updated_at) || second.id - first.id;
+  });
+}
+
+function compareNullableMatrixNoteDateTimeDesc(first: string | null, second: string | null): number {
+  if (first === null && second !== null) {
+    return 1;
+  }
+  if (second === null && first !== null) {
+    return -1;
+  }
+  if (first === null || second === null) {
+    return 0;
+  }
+  return new Date(second).getTime() - new Date(first).getTime();
+}
+
+function getMatrixSiteNoteDueState(note: DashboardNote, today: string): "none" | "today" | "overdue" {
+  if (note.completed || note.due_date === null) {
+    return "none";
+  }
+  if (note.due_date < today) {
+    return "overdue";
+  }
+  return note.due_date === today ? "today" : "none";
+}
+
+function formatMatrixSiteNoteDueLabel(note: DashboardNote, today: string): string {
+  if (note.completed) {
+    return note.completed_at
+      ? `Erledigt ${new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(note.completed_at))}`
+      : "Erledigt";
+  }
+  if (note.due_date === null) {
+    return "Ohne Fälligkeitsdatum";
+  }
+  if (note.due_date < today) {
+    return `Überfällig seit ${formatShortDate(note.due_date)}`;
+  }
+  if (note.due_date === today) {
+    return "Heute fällig";
+  }
+  return `Fällig ${formatShortDate(note.due_date)}`;
 }
 
 function resolveInitialMatrixProjectManagerFilter(

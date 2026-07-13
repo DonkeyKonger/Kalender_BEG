@@ -20,7 +20,13 @@ class DashboardNoteService:
         self.people = PersonService(db)
         self.sites = SiteRepository(db)
 
-    def list_notes(self, *, user_id: int, completed: bool | None = None) -> list[DashboardNote]:
+    def list_notes(
+        self,
+        *,
+        user_id: int,
+        completed: bool | None = None,
+        site_id: int | None = None,
+    ) -> list[DashboardNote]:
         statement = (
             select(DashboardNote)
             .options(selectinload(DashboardNote.site), selectinload(DashboardNote.employee))
@@ -31,6 +37,8 @@ class DashboardNoteService:
         )
         if completed is not None:
             statement = statement.where(DashboardNote.completed.is_(completed))
+        if site_id is not None:
+            statement = statement.where(DashboardNote.site_id == site_id)
         statement = statement.order_by(
             DashboardNote.completed.asc(),
             DashboardNote.due_date.is_(None),

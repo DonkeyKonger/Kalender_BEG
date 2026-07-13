@@ -903,6 +903,8 @@ button:disabled {
   background: #b42318;
   box-shadow: 0 1px 4px rgb(79 20 15 / 24%);
   color: #fff;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 9px;
   font-weight: 900;
   line-height: 1;
@@ -915,6 +917,163 @@ button:disabled {
   background: #951d14;
   outline: 2px solid rgb(180 35 24 / 22%);
   outline-offset: 1px;
+}
+
+.matrix-notes-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 24%);
+  padding: 24px;
+}
+
+.matrix-notes-modal {
+  display: flex;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 64px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd7e6;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: 0 20px 52px rgb(15 23 42 / 22%);
+  color: #172033;
+}
+
+.matrix-notes-modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #dbe5f0;
+  background: #f8fbff;
+  padding: 14px 16px 12px;
+}
+
+.matrix-notes-modal-header h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.matrix-notes-modal-header p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.matrix-notes-modal-header > button {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #cbd7e6;
+  border-radius: 0;
+  background: #ffffff;
+  color: #5f6f86;
+  cursor: pointer;
+  padding: 0;
+}
+
+.matrix-notes-modal-header > button:hover,
+.matrix-notes-modal-header > button:focus-visible {
+  border-color: #9fb8d6;
+  background: #eef4fb;
+  color: #172033;
+  outline: none;
+}
+
+.matrix-notes-modal-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.matrix-notes-modal-toolbar {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.matrix-notes-modal-toolbar .dashboard-note-tabs {
+  max-width: 430px;
+}
+
+.matrix-notes-modal-toolbar .dashboard-note-add-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.matrix-notes-form {
+  flex: 0 0 auto;
+}
+
+.matrix-notes-form-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(260px, 1fr);
+  gap: 8px;
+}
+
+.matrix-notes-fixed-site {
+  margin: 0;
+  border: 1px solid #e3d7b9;
+  background: #fffdf7;
+  color: #61573f;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+}
+
+.matrix-notes-list-region {
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.matrix-notes-list {
+  align-content: start;
+}
+
+.matrix-notes-empty {
+  margin: 0;
+  border: 1px dashed #d5deea;
+  background: #fafcff;
+  color: #68768a;
+  padding: 18px 12px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .matrix-notes-modal-backdrop {
+    padding: 12px;
+  }
+
+  .matrix-notes-modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .matrix-notes-modal-toolbar,
+  .matrix-notes-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .matrix-notes-modal-toolbar .dashboard-note-add-button {
+    justify-self: end;
+  }
 }
 
 .matrix-status-chip,

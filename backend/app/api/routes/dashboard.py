@@ -18,6 +18,11 @@ from app.services.weather_service import WeatherService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 CAN_READ_DASHBOARD = require_office_page("overview", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
+CAN_READ_DASHBOARD_NOTES = require_office_page(
+    "overview",
+    "calendar",
+    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
+)
 
 
 @router.get("/weather", response_model=WeatherSummary)
@@ -57,17 +62,22 @@ def get_dashboard_overview(
 @router.get("/notes", response_model=list[DashboardNoteRead])
 def list_dashboard_notes(
     completed: bool | None = Query(default=None),
-    user=Depends(CAN_READ_DASHBOARD),
+    site_id: int | None = Query(default=None, gt=0),
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> list[DashboardNoteRead]:
-    notes = DashboardNoteService(db).list_notes(user_id=user.id, completed=completed)
+    notes = DashboardNoteService(db).list_notes(
+        user_id=user.id,
+        completed=completed,
+        site_id=site_id,
+    )
     return [DashboardNoteRead.model_validate(note) for note in notes]
 
 
 @router.post("/notes", response_model=DashboardNoteRead, status_code=status.HTTP_201_CREATED)
 def create_dashboard_note(
     payload: DashboardNoteCreate,
-    user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> DashboardNoteRead:
     note = DashboardNoteService(db).create_note(payload, user_id=user.id)
@@ -76,7 +86,7 @@ def create_dashboard_note(
 
 @router.get("/notes/site-options", response_model=list[SiteSummary])
 def list_dashboard_note_site_options(
-    _user=Depends(CAN_READ_DASHBOARD),
+    _user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> list[SiteSummary]:
     sites = DashboardNoteService(db).list_site_options()
@@ -85,7 +95,7 @@ def list_dashboard_note_site_options(
 
 @router.get("/notes/employee-options", response_model=list[PersonRead])
 def list_dashboard_note_employee_options(
-    _user=Depends(CAN_READ_DASHBOARD),
+    _user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> list[PersonRead]:
     people = DashboardNoteService(db).list_employee_options()
@@ -96,7 +106,7 @@ def list_dashboard_note_employee_options(
 def update_dashboard_note(
     note_id: int,
     payload: DashboardNoteUpdate,
-    user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> DashboardNoteRead:
     note = DashboardNoteService(db).update_note(note_id, payload, user_id=user.id)
@@ -106,7 +116,7 @@ def update_dashboard_note(
 @router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_dashboard_note(
     note_id: int,
-    user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_DASHBOARD_NOTES),
     db: Session = Depends(get_db),
 ) -> Response:
     DashboardNoteService(db).delete_note(note_id, user_id=user.id)
