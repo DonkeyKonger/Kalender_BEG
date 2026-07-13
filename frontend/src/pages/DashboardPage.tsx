@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { api, type DashboardNote, type DashboardNotePayload, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
+import { compareSiteNumbers } from "../lib/siteSorting";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
 import type { MeasurementDashboardSubmission, SiteSummary } from "../types/site";
@@ -114,6 +115,8 @@ export function DashboardPage() {
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
   const [dashboardNotes, setDashboardNotes] = useState<DashboardNote[]>([]);
   const [dashboardNoteSites, setDashboardNoteSites] = useState<SiteSummary[]>([]);
+  const [dashboardNoteSitesLoading, setDashboardNoteSitesLoading] = useState(false);
+  const [dashboardNoteSitesError, setDashboardNoteSitesError] = useState<string | null>(null);
   const [dashboardNotePeople, setDashboardNotePeople] = useState<Person[]>([]);
   const [dashboardNotesLoading, setDashboardNotesLoading] = useState(false);
   const [dashboardNoteMode, setDashboardNoteMode] = useState<DashboardNoteMode>("open");
@@ -195,16 +198,14 @@ export function DashboardPage() {
       setDashboardNotesLoading(true);
       setDashboardNoteError(null);
       try {
-        const [notes, sites, people] = await Promise.all([
+        const [notes, people] = await Promise.all([
           api.dashboardNotes(),
-          api.dashboardNoteSiteOptions(),
           api.persons({ isActive: true }),
         ]);
         if (!active) {
           return;
         }
         setDashboardNotes(notes);
-        setDashboardNoteSites(sites);
         setDashboardNotePeople(people);
       } catch {
         if (active) {
@@ -217,7 +218,28 @@ export function DashboardPage() {
       }
     }
 
+    async function loadDashboardNoteSites() {
+      setDashboardNoteSitesLoading(true);
+      setDashboardNoteSitesError(null);
+      try {
+        const sites = await api.dashboardNoteSiteOptions();
+        if (active) {
+          setDashboardNoteSites(sites.slice().sort(compareDashboardNoteSites));
+        }
+      } catch {
+        if (active) {
+          setDashboardNoteSites([]);
+          setDashboardNoteSitesError("Baustellen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setDashboardNoteSitesLoading(false);
+        }
+      }
+    }
+
     void loadDashboardNotes();
+    void loadDashboardNoteSites();
 
     return () => {
       active = false;
@@ -632,6 +654,8 @@ export function DashboardPage() {
                 people={dashboardNotePeople}
                 saving={dashboardNoteSaving}
                 sites={dashboardNoteSites}
+                sitesError={dashboardNoteSitesError}
+                sitesLoading={dashboardNoteSitesLoading}
                 today={range.today}
                 onCancel={cancelDashboardNoteForm}
                 onDelete={(note) => void deleteDashboardNote(note)}
@@ -729,6 +753,8 @@ function DashboardNotesPanel({
   saving,
   busyNoteId,
   sites,
+  sitesError,
+  sitesLoading,
   people,
   today,
   onModeChange,
@@ -751,6 +777,8 @@ function DashboardNotesPanel({
   saving: boolean;
   busyNoteId: number | null;
   sites: SiteSummary[];
+  sitesError: string | null;
+  sitesLoading: boolean;
   people: Person[];
   today: string;
   onModeChange: (mode: DashboardNoteMode) => void;
@@ -761,6 +789,13 @@ function DashboardNotesPanel({
   onEdit: (note: DashboardNote) => void;
   onDelete: (note: DashboardNote) => void;
 }) {
+  const editingSite = editingNoteId === null
+    ? null
+    : notes.find((note) => note.id === editingNoteId)?.site ?? null;
+  const siteOptions = editingSite && !sites.some((site) => site.id === editingSite.id)
+    ? [...sites, editingSite].sort(compareDashboardNoteSites)
+    : sites;
+
   return (
     <div className="dashboard-notes">
       <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
@@ -809,16 +844,28 @@ function DashboardNotesPanel({
             <label className="dashboard-note-field">
               <span>Baustelle</span>
               <select
+                aria-describedby={sitesLoading || sitesError ? "dashboard-note-sites-status" : undefined}
                 value={draft.site_id}
                 onChange={(event) => onDraftChange("site_id", event.target.value)}
               >
                 <option value="">Keine Zuordnung</option>
-                {sites.map((site) => (
+                {sitesLoading ? <option disabled>Baustellen werden geladen...</option> : null}
+                {!sitesLoading && !sitesError && siteOptions.length === 0 ? <option disabled>Keine Baustellen verfügbar</option> : null}
+                {siteOptions.map((site) => (
                   <option key={site.id} value={site.id}>
                     {formatDashboardNoteSiteOption(site)}
                   </option>
                 ))}
               </select>
+              {sitesLoading || sitesError ? (
+                <small
+                  className={`dashboard-note-field-status${sitesError ? " is-error" : ""}`}
+                  id="dashboard-note-sites-status"
+                  role="status"
+                >
+                  {sitesError ?? "Baustellen werden geladen..."}
+                </small>
+              ) : null}
             </label>
             <label className="dashboard-note-field">
               <span>Monteur</span>
@@ -1084,6 +1131,15 @@ function formatDashboardNoteSiteOption(site: SiteSummary | NonNullable<Dashboard
   return site.site_number ? `${site.site_number} · ${site.name}` : site.name;
 }
 
+function compareDashboardNoteSites(
+  first: SiteSummary | NonNullable<DashboardNote["site"]>,
+  second: SiteSummary | NonNullable<DashboardNote["site"]>,
+): number {
+  return compareSiteNumbers(first.site_number, second.site_number)
+    || first.name.localeCompare(second.name, "de", { sensitivity: "base" })
+    || first.id - second.id;
+}
+
 function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   const workerCount = siteSummary.internalCount + siteSummary.externalCount;
   const workerLabel = formatCount(workerCount, "Monteur", "Monteure");
@@ -1286,29 +1342,6 @@ function formatWorkerSummaryGroupDetail(person: DashboardOverviewPerson, group: 
     return person.detail || "kein Einsatz heute";
   }
   return person.detail ? `${group.manager.label} · ${person.detail}` : group.manager.label;
-}
-
-function compareSiteNumbers(left: string | null, right: string | null): number {
-  const leftNumber = parseSiteNumber(left);
-  const rightNumber = parseSiteNumber(right);
-  if (leftNumber !== null && rightNumber !== null) {
-    return leftNumber - rightNumber;
-  }
-  if (leftNumber !== null) {
-    return -1;
-  }
-  if (rightNumber !== null) {
-    return 1;
-  }
-  return (left ?? "").localeCompare(right ?? "", "de");
-}
-
-function parseSiteNumber(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-  const matches = value.match(/\d+/g);
-  return matches?.length ? Number(matches[matches.length - 1]) : null;
 }
 
 function groupFreeWorkersByLastManager(workers: Person[], lastManagerByPersonId: Map<number, ManagerSummary>): FreeWorkerGroup[] {

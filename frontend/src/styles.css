@@ -18112,6 +18112,17 @@ button.person-chip:focus-visible {
   text-transform: uppercase;
 }
 
+.dashboard-note-field-status {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.dashboard-note-field-status.is-error {
+  color: #b42318;
+}
+
 .dashboard-note-field textarea,
 .dashboard-note-field input,
 .dashboard-note-field select {

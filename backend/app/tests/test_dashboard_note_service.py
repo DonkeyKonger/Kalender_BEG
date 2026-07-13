@@ -131,7 +131,7 @@ def test_dashboard_notes_are_scoped_to_owner():
     assert [entry.id for entry in service.list_notes(user_id=owner.id)] == [note.id]
 
 
-def test_dashboard_note_site_options_are_user_scoped_open_and_sorted_by_site_number():
+def test_dashboard_note_site_options_use_all_open_sites_and_sort_by_site_number():
     db = db_session()
     manager = Person(first_name="Chris", last_name="Erichsen", display_name="Chris Erichsen", short_code="CE")
     other_manager = Person(first_name="Sandro", last_name="König", display_name="Sandro König", short_code="SK")
@@ -160,12 +160,12 @@ def test_dashboard_note_site_options_are_user_scoped_open_and_sorted_by_site_num
     )
     db.commit()
 
-    sites = DashboardNoteService(db).list_site_options(user=user)
+    sites = DashboardNoteService(db).list_site_options()
 
-    assert [site.site_number for site in sites] == ["1001", "2940", "4400"]
+    assert [site.site_number for site in sites] == ["1000", "1001", "2940", "4400", "9999"]
 
 
-def test_dashboard_note_site_options_are_empty_without_user_person():
+def test_dashboard_note_site_options_do_not_require_a_user_person_assignment():
     db = db_session()
     user = User(
         username="office",
@@ -182,4 +182,4 @@ def test_dashboard_note_site_options_are_empty_without_user_person():
     )
     db.commit()
 
-    assert DashboardNoteService(db).list_site_options(user=user) == []
+    assert [site.site_number for site in DashboardNoteService(db).list_site_options()] == ["1001"]

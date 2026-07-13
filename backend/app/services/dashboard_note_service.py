@@ -5,20 +5,17 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.enums import SiteStatus
 from app.models.dashboard_note import DashboardNote
 from app.models.person import Person
 from app.models.site import Site
-from app.models.user import User
+from app.repositories.site_repository import SiteRepository
 from app.schemas.dashboard_note import DashboardNoteCreate, DashboardNoteUpdate
-
-
-DASHBOARD_NOTE_SITE_STATUSES = (SiteStatus.ACTIVE, SiteStatus.PAUSED, SiteStatus.PLANNED)
 
 
 class DashboardNoteService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.sites = SiteRepository(db)
 
     def list_notes(self, *, user_id: int, completed: bool | None = None) -> list[DashboardNote]:
         statement = (
@@ -40,19 +37,8 @@ class DashboardNoteService:
         )
         return list(self.db.scalars(statement))
 
-    def list_site_options(self, *, user: User) -> list[Site]:
-        if user.person_id is None:
-            return []
-
-        statement = (
-            select(Site)
-            .options(selectinload(Site.project_manager))
-            .where(
-                Site.project_manager_person_id == user.person_id,
-                Site.status.in_(DASHBOARD_NOTE_SITE_STATUSES),
-            )
-        )
-        return sorted(self.db.scalars(statement), key=site_number_sort_key)
+    def list_site_options(self) -> list[Site]:
+        return sorted(self.sites.list_summary(), key=site_number_sort_key)
 
     def create_note(self, payload: DashboardNoteCreate, user_id: int) -> DashboardNote:
         values = clean_note_values(payload.model_dump())

@@ -75,10 +75,10 @@ def create_dashboard_note(
 
 @router.get("/notes/site-options", response_model=list[SiteSummary])
 def list_dashboard_note_site_options(
-    user=Depends(CAN_READ_DASHBOARD),
+    _user=Depends(CAN_READ_DASHBOARD),
     db: Session = Depends(get_db),
 ) -> list[SiteSummary]:
-    sites = DashboardNoteService(db).list_site_options(user=user)
+    sites = DashboardNoteService(db).list_site_options()
     return [SiteSummary.model_validate(site) for site in sites]
 
 
