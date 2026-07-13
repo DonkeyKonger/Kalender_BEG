@@ -768,7 +768,13 @@ export function DashboardPage() {
               icon={<ClipboardList aria-hidden="true" size={20} />}
               className="dashboard-card-notes dashboard-section--notes"
               actions={(
-                <button type="button" className="dashboard-note-add-button" onClick={openDashboardNoteCreateForm}>
+                <button
+                  aria-controls="dashboard-note-editor"
+                  aria-expanded={dashboardNoteFormOpen}
+                  type="button"
+                  className="dashboard-note-add-button"
+                  onClick={openDashboardNoteCreateForm}
+                >
                   <Plus aria-hidden="true" size={15} />
                   Notiz hinzufügen
                 </button>
@@ -980,134 +986,183 @@ function DashboardNotesPanel({
   const siteOptions = editingSite && !sites.some((site) => site.id === editingSite.id)
     ? [...sites, editingSite].sort(compareDashboardNoteSites)
     : sites;
+  const editorTextRef = useRef<HTMLTextAreaElement | null>(null);
+  const onCancelRef = useRef(onCancel);
+
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
+
+  useEffect(() => {
+    if (!formOpen) {
+      return undefined;
+    }
+    const focusFrame = window.requestAnimationFrame(() => editorTextRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        onCancelRef.current();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [formOpen]);
 
   return (
-    <div className="dashboard-notes" id="dashboard-notes">
-      <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
-        <button
-          type="button"
-          className={mode === "open" ? "is-active" : ""}
-          aria-selected={mode === "open"}
-          role="tab"
-          onClick={() => onModeChange("open")}
-        >
-          Noch offen <span>{openCount}</span>
-        </button>
-        <button
-          type="button"
-          className={mode === "completed" ? "is-active" : ""}
-          aria-selected={mode === "completed"}
-          role="tab"
-          onClick={() => onModeChange("completed")}
-        >
-          Erledigt <span>{completedCount}</span>
-        </button>
+    <>
+      <div className="dashboard-notes" id="dashboard-notes">
+        <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
+          <button
+            type="button"
+            className={mode === "open" ? "is-active" : ""}
+            aria-selected={mode === "open"}
+            role="tab"
+            onClick={() => onModeChange("open")}
+          >
+            Noch offen <span>{openCount}</span>
+          </button>
+          <button
+            type="button"
+            className={mode === "completed" ? "is-active" : ""}
+            aria-selected={mode === "completed"}
+            role="tab"
+            onClick={() => onModeChange("completed")}
+          >
+            Erledigt <span>{completedCount}</span>
+          </button>
+        </div>
+
+        {siteFilterLabel ? (
+          <div className="dashboard-note-site-filter">
+            <span>Baustelle: <strong>{siteFilterLabel}</strong></span>
+            <button type="button" onClick={onClearSiteFilter}>Alle Notizen anzeigen</button>
+          </div>
+        ) : null}
+
+        {!formOpen && error ? <p className="dashboard-note-error">{error}</p> : null}
+
+        {loading ? (
+          <p className="dashboard-empty-text">Notizen werden geladen...</p>
+        ) : notes.length > 0 ? (
+          <div className="dashboard-note-list">
+            {notes.map((note) => (
+              <DashboardNoteRow
+                busy={busyNoteId === note.id}
+                key={note.id}
+                note={note}
+                today={today}
+                canDelete={note.created_by_user_id === currentUserId}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                onToggle={onToggle}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyDashboardText text={mode === "open" ? "Keine offenen Notizen." : "Keine erledigten Notizen."} />
+        )}
       </div>
 
-      {siteFilterLabel ? (
-        <div className="dashboard-note-site-filter">
-          <span>Baustelle: <strong>{siteFilterLabel}</strong></span>
-          <button type="button" onClick={onClearSiteFilter}>Alle Notizen anzeigen</button>
-        </div>
-      ) : null}
-
-      {error ? <p className="dashboard-note-error">{error}</p> : null}
-
       {formOpen ? (
-        <form className="dashboard-note-form" onSubmit={onSubmit}>
-          <label className="dashboard-note-field dashboard-note-field-wide">
-            <span>Text</span>
-            <textarea
-              required
-              rows={3}
-              value={draft.text}
-              onChange={(event) => onDraftChange("text", event.target.value)}
-            />
-          </label>
-          <div className="dashboard-note-form-grid">
-            <label className="dashboard-note-field">
-              <span>Fällig am</span>
-              <input
-                type="date"
-                value={draft.due_date}
-                onChange={(event) => onDraftChange("due_date", event.target.value)}
+        <section
+          aria-labelledby="dashboard-note-editor-title"
+          className="dashboard-note-editor"
+          id="dashboard-note-editor"
+        >
+          <header className="dashboard-note-editor-header">
+            <div>
+              <span>Notizen</span>
+              <h3 id="dashboard-note-editor-title">
+                {editingNoteId === null ? "Notiz erstellen" : "Notiz bearbeiten"}
+              </h3>
+            </div>
+            <button aria-label="Notizeditor schließen" type="button" onClick={onCancel}>
+              <X aria-hidden="true" size={16} />
+            </button>
+          </header>
+
+          <form className="dashboard-note-form dashboard-note-editor-form" onSubmit={onSubmit}>
+            {error ? <p className="dashboard-note-error">{error}</p> : null}
+
+            <label className="dashboard-note-field dashboard-note-field-wide">
+              <span>Text</span>
+              <textarea
+                ref={editorTextRef}
+                required
+                rows={5}
+                value={draft.text}
+                onChange={(event) => onDraftChange("text", event.target.value)}
               />
             </label>
-            <div className="dashboard-note-field">
-              <span id="dashboard-note-site-label">Baustelle</span>
-              <DashboardNoteSiteSelect
-                error={sitesError}
-                labelId="dashboard-note-site-label"
-                loading={sitesLoading}
-                sites={siteOptions}
-                value={draft.site_id}
-                onChange={(value) => onDraftChange("site_id", value)}
-              />
-            </div>
-            <div className="dashboard-note-field">
-              <span id="dashboard-note-employee-label">Monteur</span>
-              <DashboardNoteEmployeeSelect
-                error={peopleError}
-                historicalEmployee={editingEmployee}
-                labelId="dashboard-note-employee-label"
-                loading={peopleLoading}
-                people={people}
-                value={draft.employee_id}
-                onChange={(value) => onDraftChange("employee_id", value)}
-              />
-            </div>
-          </div>
-          <div className="dashboard-note-field dashboard-note-share-field">
-            <span id="dashboard-note-share-user-label">Büro anpingen</span>
-            <DashboardNoteShareUserSelect
-              disabled={!canManageShare}
-              error={shareUsersError}
-              historicalUser={editingShareUser}
-              labelId="dashboard-note-share-user-label"
-              loading={shareUsersLoading}
-              users={shareUsers}
-              value={draft.shared_with_user_id}
-              onChange={(value) => onDraftChange("shared_with_user_id", value)}
-            />
-            {!canManageShare ? (
-              <small className="dashboard-note-field-status">
-                Nur der Ersteller kann die Bürofreigabe ändern.
-              </small>
-            ) : null}
-          </div>
-          <div className="dashboard-note-form-actions">
-            <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
-              <X aria-hidden="true" size={14} />
-              Abbrechen
-            </button>
-            <button type="submit" className="dashboard-note-form-button is-primary" disabled={saving}>
-              {editingNoteId === null ? "Anlegen" : "Speichern"}
-            </button>
-          </div>
-        </form>
-      ) : null}
 
-      {loading ? (
-        <p className="dashboard-empty-text">Notizen werden geladen...</p>
-      ) : notes.length > 0 ? (
-        <div className="dashboard-note-list">
-          {notes.map((note) => (
-            <DashboardNoteRow
-              busy={busyNoteId === note.id}
-              key={note.id}
-              note={note}
-              today={today}
-              canDelete={note.created_by_user_id === currentUserId}
-              onDelete={onDelete}
-              onEdit={onEdit}
-              onToggle={onToggle}
-            />
-          ))}
-        </div>
-      ) : (
-        <EmptyDashboardText text={mode === "open" ? "Keine offenen Notizen." : "Keine erledigten Notizen."} />
-      )}
-    </div>
+            <div className="dashboard-note-form-grid dashboard-note-editor-fields">
+              <label className="dashboard-note-field">
+                <span>Fällig am</span>
+                <input
+                  type="date"
+                  value={draft.due_date}
+                  onChange={(event) => onDraftChange("due_date", event.target.value)}
+                />
+              </label>
+              <div className="dashboard-note-field">
+                <span id="dashboard-note-site-label">Baustelle</span>
+                <DashboardNoteSiteSelect
+                  error={sitesError}
+                  labelId="dashboard-note-site-label"
+                  loading={sitesLoading}
+                  sites={siteOptions}
+                  value={draft.site_id}
+                  onChange={(value) => onDraftChange("site_id", value)}
+                />
+              </div>
+              <div className="dashboard-note-field">
+                <span id="dashboard-note-employee-label">Monteur</span>
+                <DashboardNoteEmployeeSelect
+                  error={peopleError}
+                  historicalEmployee={editingEmployee}
+                  labelId="dashboard-note-employee-label"
+                  loading={peopleLoading}
+                  people={people}
+                  value={draft.employee_id}
+                  onChange={(value) => onDraftChange("employee_id", value)}
+                />
+              </div>
+              <div className="dashboard-note-field dashboard-note-share-field">
+                <span id="dashboard-note-share-user-label">Büro anpingen</span>
+                <DashboardNoteShareUserSelect
+                  disabled={!canManageShare}
+                  error={shareUsersError}
+                  historicalUser={editingShareUser}
+                  labelId="dashboard-note-share-user-label"
+                  loading={shareUsersLoading}
+                  users={shareUsers}
+                  value={draft.shared_with_user_id}
+                  onChange={(value) => onDraftChange("shared_with_user_id", value)}
+                />
+                {!canManageShare ? (
+                  <small className="dashboard-note-field-status">
+                    Nur der Ersteller kann die Bürofreigabe ändern.
+                  </small>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="dashboard-note-form-actions">
+              <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
+                <X aria-hidden="true" size={14} />
+                Abbrechen
+              </button>
+              <button type="submit" className="dashboard-note-form-button is-primary" disabled={saving}>
+                {saving ? "Speichert..." : editingNoteId === null ? "Anlegen" : "Speichern"}
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+    </>
   );
 }
 

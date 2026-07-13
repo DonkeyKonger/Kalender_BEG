@@ -18860,6 +18860,170 @@ button.person-chip:focus-visible {
   width: min(620px, calc(100vw - 48px));
 }
 
+.dashboard-card-notes {
+  position: relative;
+}
+
+.dashboard-note-editor {
+  position: fixed;
+  z-index: 2200;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  width: min(520px, calc(100vw - 32px));
+  min-width: 0;
+  flex-direction: column;
+  border: 1px solid var(--dashboard-section-border, #d8dee8);
+  border-radius: 0;
+  background: #fbfcfe;
+  box-shadow: -14px 14px 34px rgb(28 45 70 / 16%);
+  animation: dashboard-note-editor-enter 150ms ease-out;
+}
+
+.dashboard-note-editor-header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--dashboard-section-border, #d8dee8);
+  background: var(--dashboard-section-background, #f8fafc);
+  padding: 8px 12px;
+}
+
+.dashboard-note-editor-header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dashboard-note-editor-header span {
+  color: var(--dashboard-section-accent, #65738a);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.dashboard-note-editor-header h3 {
+  margin: 0;
+  color: #26364d;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.dashboard-note-editor-header button {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #c8d6e6;
+  border-radius: 0;
+  background: #ffffff;
+  color: #52637a;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dashboard-note-editor-header button:hover,
+.dashboard-note-editor-header button:focus-visible {
+  border-color: #9fb8d6;
+  background: #f3f7fb;
+  color: #1f3657;
+  outline: none;
+}
+
+.dashboard-card-notes .dashboard-note-form.dashboard-note-editor-form {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  border: 0;
+  background: transparent;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.dashboard-card-notes .dashboard-note-form-grid.dashboard-note-editor-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-picker {
+  gap: 5px;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-share-field {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  column-gap: 0;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-share-field > .dashboard-note-picker,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-share-field > .dashboard-note-field-status {
+  grid-column: auto;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field > span,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field-status {
+  font-size: 0.68rem;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field textarea,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field input,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-picker-trigger {
+  font-size: 0.8rem;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field textarea {
+  height: 118px;
+  min-height: 118px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-field input,
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-picker-trigger {
+  min-height: 34px;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-form-actions {
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  border-top: 1px solid #dce3ee;
+  padding-top: 12px;
+}
+
+.dashboard-card-notes .dashboard-note-editor .dashboard-note-form-button {
+  min-height: 30px;
+  padding: 5px 11px;
+  font-size: 0.75rem;
+}
+
+@keyframes dashboard-note-editor-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-note-editor {
+    animation: none;
+  }
+}
+
 /* Compact sizing is intentionally limited to the dashboard notes card. */
 .dashboard-card-notes .dashboard-card-header {
   min-height: 32px;
@@ -19154,6 +19318,21 @@ button.person-chip:focus-visible {
     overflow: hidden;
   }
 
+  .dashboard-main-grid > .dashboard-card.dashboard-card-notes {
+    z-index: 30;
+    overflow: visible;
+  }
+
+  .dashboard-note-editor {
+    position: absolute;
+    top: -1px;
+    right: calc(100% - 1px);
+    bottom: -1px;
+    width: calc(92.3077% + 13px);
+    min-width: 360px;
+    max-width: 560px;
+  }
+
   .dashboard-section--sites,
   .dashboard-section--conflicts {
     display: flex;
@@ -19207,6 +19386,20 @@ button.person-chip:focus-visible {
 }
 
 @media (max-width: 700px) {
+  .dashboard-note-editor {
+    inset: 8px;
+    width: auto;
+  }
+
+  .dashboard-card-notes .dashboard-note-form-grid.dashboard-note-editor-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-card-notes .dashboard-note-editor .dashboard-note-field textarea {
+    height: 96px;
+    min-height: 96px;
+  }
+
   .dashboard-note-form-grid,
   .dashboard-note-row {
     grid-template-columns: 1fr;
