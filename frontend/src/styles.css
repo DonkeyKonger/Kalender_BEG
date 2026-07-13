@@ -18750,6 +18750,173 @@ button.person-chip:focus-visible {
   opacity: 0.55;
 }
 
+/* Compact sizing is intentionally limited to the dashboard notes card. */
+.dashboard-card-notes .dashboard-card-header {
+  min-height: 32px;
+  gap: 6px;
+  padding: 5px 8px;
+}
+
+.dashboard-card-notes .dashboard-card-header > span:first-child {
+  width: 16px;
+  height: 16px;
+}
+
+.dashboard-card-notes .dashboard-card-header > span:first-child svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dashboard-card-notes h2 {
+  font-size: 0.74rem;
+}
+
+.dashboard-card-notes .dashboard-note-add-button {
+  min-height: 26px;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 0.72rem;
+}
+
+.dashboard-card-notes .dashboard-note-add-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dashboard-card-notes > .dashboard-notes {
+  gap: 6px;
+  padding: 7px 8px 8px;
+}
+
+.dashboard-card-notes .dashboard-note-tabs button {
+  min-height: 27px;
+  gap: 4px;
+  font-size: 0.72rem;
+}
+
+.dashboard-card-notes .dashboard-note-tabs span {
+  min-width: 18px;
+  height: 18px;
+  font-size: 0.64rem;
+}
+
+.dashboard-card-notes .dashboard-note-site-filter {
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: 0.69rem;
+}
+
+.dashboard-card-notes .dashboard-note-site-filter button {
+  padding: 3px 6px;
+}
+
+.dashboard-card-notes .dashboard-note-error {
+  padding: 5px 7px;
+  font-size: 0.71rem;
+}
+
+.dashboard-card-notes .dashboard-note-form {
+  gap: 6px;
+  padding: 7px;
+}
+
+.dashboard-card-notes .dashboard-note-form-grid {
+  gap: 6px;
+}
+
+.dashboard-card-notes .dashboard-note-field,
+.dashboard-card-notes .dashboard-note-picker {
+  gap: 3px;
+}
+
+.dashboard-card-notes .dashboard-note-field > span,
+.dashboard-card-notes .dashboard-note-field-status {
+  font-size: 0.65rem;
+}
+
+.dashboard-card-notes .dashboard-note-field textarea,
+.dashboard-card-notes .dashboard-note-field input,
+.dashboard-card-notes .dashboard-note-field select {
+  font-size: 0.76rem;
+  padding: 5px 7px;
+}
+
+.dashboard-card-notes .dashboard-note-field textarea {
+  height: 52px;
+  min-height: 52px;
+  line-height: 1.25;
+}
+
+.dashboard-card-notes .dashboard-note-field input,
+.dashboard-card-notes .dashboard-note-field select,
+.dashboard-card-notes .dashboard-note-picker-trigger {
+  min-height: 29px;
+}
+
+.dashboard-card-notes .dashboard-note-picker-trigger {
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: 0.76rem;
+}
+
+.dashboard-card-notes .dashboard-note-picker-trigger-label {
+  font-size: 0.76rem;
+}
+
+.dashboard-card-notes .dashboard-note-form-actions {
+  gap: 5px;
+}
+
+.dashboard-card-notes .dashboard-note-form-button {
+  min-height: 26px;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.dashboard-card-notes .dashboard-note-list {
+  gap: 5px;
+}
+
+.dashboard-card-notes .dashboard-note-row {
+  gap: 7px;
+  padding: 6px;
+}
+
+.dashboard-card-notes .dashboard-note-checkbox {
+  width: 19px;
+  height: 19px;
+}
+
+.dashboard-card-notes .dashboard-note-body {
+  gap: 3px;
+}
+
+.dashboard-card-notes .dashboard-note-body strong {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.dashboard-card-notes .dashboard-note-meta {
+  gap: 3px 6px;
+  font-size: 0.67rem;
+  line-height: 1.3;
+}
+
+.dashboard-card-notes .dashboard-note-row-actions {
+  gap: 3px;
+}
+
+.dashboard-card-notes .dashboard-note-row-actions button {
+  width: 24px;
+  height: 24px;
+}
+
+.dashboard-card-notes .dashboard-note-row-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
 .dashboard-quick-bar {
   display: grid;
   grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1fr);
