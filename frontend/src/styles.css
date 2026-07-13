@@ -17952,6 +17952,8 @@ button.person-chip:focus-visible {
 }
 
 .dashboard-card-messages .dashboard-alert-list {
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 7px;
   padding: 9px;
   max-height: clamp(210px, 32vh, 380px);
