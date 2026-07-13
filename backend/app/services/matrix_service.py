@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
+from app.models.dashboard_note import DashboardNote
 from app.models.enums import AbsenceStatus
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
@@ -49,6 +50,7 @@ class MatrixService:
         include_closed: bool = False,
         year_view: bool = False,
         project_manager_person_id: int | None = None,
+        user_id: int | None = None,
     ) -> MatrixResponse:
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
@@ -85,6 +87,7 @@ class MatrixService:
             ]
         )
         site_ids = {site.id for site in visible_sites}
+        open_note_counts = self._open_note_counts_by_site(site_ids=site_ids, user_id=user_id)
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
         marks = self._list_marks(site_ids=site_ids, start=start, end=end)
         person_ids = {assignment.person_id for assignment in assignments}
@@ -97,7 +100,14 @@ class MatrixService:
         absences_by_date = self._index_absences_by_date(absences, visible_days)
 
         rows = [
-            self._build_row(site, visible_days, assignments_by_site_date, absences_by_date, marks)
+            self._build_row(
+                site,
+                visible_days,
+                assignments_by_site_date,
+                absences_by_date,
+                marks,
+                open_note_count=open_note_counts.get(site.id, 0),
+            )
             for site in visible_sites
         ]
         return MatrixResponse(
@@ -116,6 +126,7 @@ class MatrixService:
         include_closed: bool = False,
         year_view: bool = False,
         project_manager_person_id: int | None = None,
+        user_id: int | None = None,
     ) -> MatrixVersionResponse:
         self._validate_range(start=start, end=end, year_view=year_view)
         visible_sites = (
@@ -195,6 +206,22 @@ class MatrixService:
             site_statement = site_statement.where(False)
         site_latest, site_count = self.db.execute(site_statement).one()
 
+        note_statement = select(
+            func.max(DashboardNote.updated_at),
+            func.count(DashboardNote.id),
+        ).where(
+            DashboardNote.completed.is_(False),
+            DashboardNote.deleted_at.is_(None),
+        )
+        if user_id is not None and site_ids:
+            note_statement = note_statement.where(
+                DashboardNote.created_by_user_id == user_id,
+                DashboardNote.site_id.in_(site_ids),
+            )
+        else:
+            note_statement = note_statement.where(False)
+        note_latest, note_count = self.db.execute(note_statement).one()
+
         audit_latest = self.db.scalar(
             select(func.max(AuditLog.created_at)).where(
                 AuditLog.entity_type.in_(
@@ -208,6 +235,7 @@ class MatrixService:
             person_latest,
             mark_latest,
             site_latest,
+            note_latest,
             audit_latest,
         )
         version_source = "|".join(
@@ -227,6 +255,8 @@ class MatrixService:
                 str(mark_count or 0),
                 datetime_token(site_latest),
                 str(site_count or 0),
+                datetime_token(note_latest),
+                str(note_count or 0),
                 datetime_token(audit_latest),
             ]
         )
@@ -265,6 +295,8 @@ class MatrixService:
         assignments_by_site_date: dict[tuple[int, date], list[Assignment]],
         absences_by_date: dict[date, list[Absence]],
         marks,
+        *,
+        open_note_count: int = 0,
     ) -> MatrixRow:
         cells = self._build_cells(
             days=days,
@@ -288,6 +320,7 @@ class MatrixService:
                 status=site.status,
                 info=site.info,
                 color=site.color,
+                open_note_count=open_note_count,
             ),
             cells=cells,
         )
@@ -319,6 +352,30 @@ class MatrixService:
                 )
             )
         return cells
+
+    def _open_note_counts_by_site(
+        self,
+        *,
+        site_ids: set[int],
+        user_id: int | None,
+    ) -> dict[int, int]:
+        if user_id is None or not site_ids:
+            return {}
+        statement = (
+            select(DashboardNote.site_id, func.count(DashboardNote.id))
+            .where(
+                DashboardNote.created_by_user_id == user_id,
+                DashboardNote.site_id.in_(site_ids),
+                DashboardNote.completed.is_(False),
+                DashboardNote.deleted_at.is_(None),
+            )
+            .group_by(DashboardNote.site_id)
+        )
+        return {
+            site_id: count
+            for site_id, count in self.db.execute(statement)
+            if site_id is not None
+        }
 
     def _index_assignments_by_site_date(
         self,

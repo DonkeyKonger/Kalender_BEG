@@ -10,6 +10,13 @@ class DashboardNote(TimestampMixin, Base):
     __tablename__ = "dashboard_notes"
     __table_args__ = (
         Index("ix_dashboard_notes_completed_due", "completed", "due_date"),
+        Index(
+            "ix_dashboard_notes_owner_open_site",
+            "created_by_user_id",
+            "completed",
+            "deleted_at",
+            "site_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

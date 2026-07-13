@@ -2857,12 +2857,26 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           onSave={() => props.onInfoSave(row.site.id)}
         />
       </td>
-      <td className="sticky-col status-col">
+      <td className="sticky-col status-col matrix-status-cell">
         <MatrixStatusPicker
           disabled={!props.isEditable || props.savingStatusSiteId === row.site.id}
           status={row.site.status}
           onChange={(status) => props.onStatusChange(row.site.id, status)}
         />
+        {row.site.open_note_count > 0 ? (
+          <Link
+            aria-label={formatMatrixOpenNoteBadgeLabel(row.site.name, row.site.open_note_count)}
+            className="matrix-open-note-badge"
+            title={formatMatrixOpenNoteBadgeLabel(row.site.name, row.site.open_note_count)}
+            to={{
+              pathname: "/",
+              search: `?noteSiteId=${row.site.id}`,
+              hash: "#dashboard-notes",
+            }}
+          >
+            {formatMatrixOpenNoteBadgeCount(row.site.open_note_count)}
+          </Link>
+        ) : null}
       </td>
       {row.cells.map((cell, cellIndex) => {
         const key = cellKey(row.site.id, cell.date);
@@ -3435,6 +3449,14 @@ function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: numbe
 
 function matrixCompactPreferenceKey(userId: number): string {
   return `kb_matrix_compact_view_${userId}`;
+}
+
+function formatMatrixOpenNoteBadgeCount(count: number): string {
+  return count > 9 ? "9+" : String(count);
+}
+
+function formatMatrixOpenNoteBadgeLabel(siteName: string, count: number): string {
+  return `${count} ${count === 1 ? "offene Notiz" : "offene Notizen"} für ${siteName} anzeigen`;
 }
 
 function initialMatrixProjectManagerFilter(user: CurrentUser | null): string {

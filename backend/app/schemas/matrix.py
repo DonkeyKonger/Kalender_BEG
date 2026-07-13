@@ -59,6 +59,7 @@ class MatrixSite(BaseModel):
     status: SiteStatus
     info: str | None = None
     color: str | None = None
+    open_note_count: int = 0
 
     model_config = {"from_attributes": True}
 

@@ -1,7 +1,7 @@
 import { AlertTriangle, BriefcaseBusiness, Check, ChevronDown, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { api, type DashboardNote, type DashboardNotePayload, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
@@ -109,6 +109,7 @@ type DashboardNoteDraft = {
 const MAX_PREVIEW_ITEMS = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
 const FREE_WORKER_ALL_KEY = "__all__";
+const DASHBOARD_NOTE_SITE_FILTER_PARAM = "noteSiteId";
 const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
   text: "",
   due_date: "",
@@ -118,6 +119,10 @@ const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dashboardNoteSiteFilterId = parseDashboardNoteSiteFilterId(
+    searchParams.get(DASHBOARD_NOTE_SITE_FILTER_PARAM),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
@@ -277,6 +282,17 @@ export function DashboardPage() {
   }, [user?.role]);
 
   useEffect(() => {
+    if (dashboardNoteSiteFilterId === null || loading || !dashboardOverview) {
+      return undefined;
+    }
+    setDashboardNoteMode("open");
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById("dashboard-notes")?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [dashboardNoteSiteFilterId, dashboardOverview, loading]);
+
+  useEffect(() => {
     function handleDashboardMessagesUpdated(event: Event) {
       const messages = (event as CustomEvent<MeasurementDashboardSubmission[]>).detail;
       if (Array.isArray(messages)) {
@@ -356,15 +372,26 @@ export function DashboardPage() {
   const dashboard = dashboardOverview;
   const workerSummaryGroups = dashboard?.workerSummaryGroups ?? [];
   const workerSummaryCount = dashboard?.totalWorkerSummaryPeople ?? 0;
+  const siteFilteredDashboardNotes = useMemo(
+    () => dashboardNoteSiteFilterId === null
+      ? dashboardNotes
+      : dashboardNotes.filter((note) => note.site_id === dashboardNoteSiteFilterId),
+    [dashboardNoteSiteFilterId, dashboardNotes],
+  );
   const visibleDashboardNotes = useMemo(
     () => sortDashboardNotes(
-      dashboardNotes.filter((note) => dashboardNoteMode === "completed" ? note.completed : !note.completed),
+      siteFilteredDashboardNotes.filter((note) => dashboardNoteMode === "completed" ? note.completed : !note.completed),
       dashboardNoteMode,
     ),
-    [dashboardNoteMode, dashboardNotes],
+    [dashboardNoteMode, siteFilteredDashboardNotes],
   );
-  const openDashboardNoteCount = dashboardNotes.filter((note) => !note.completed).length;
-  const completedDashboardNoteCount = dashboardNotes.filter((note) => note.completed).length;
+  const openDashboardNoteCount = siteFilteredDashboardNotes.filter((note) => !note.completed).length;
+  const completedDashboardNoteCount = siteFilteredDashboardNotes.filter((note) => note.completed).length;
+  const dashboardNoteSiteFilterLabel = dashboardNoteSiteFilterId === null
+    ? null
+    : dashboardNoteSites.find((site) => site.id === dashboardNoteSiteFilterId)?.name
+      ?? dashboardNotes.find((note) => note.site_id === dashboardNoteSiteFilterId)?.site?.name
+      ?? `Baustelle ${dashboardNoteSiteFilterId}`;
   const dashboardGreeting = formatDashboardGreeting(user?.display_name || user?.username || "");
   const allSummaryWorkers = workerSummaryGroups.flatMap((group) => (
     group.people.map((person) => ({
@@ -421,6 +448,12 @@ export function DashboardPage() {
 
   function updateDashboardNoteDraft(field: keyof DashboardNoteDraft, value: string): void {
     setDashboardNoteDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearDashboardNoteSiteFilter(): void {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete(DASHBOARD_NOTE_SITE_FILTER_PARAM);
+    setSearchParams(nextSearchParams, { replace: true });
   }
 
   async function saveDashboardNote(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -685,11 +718,13 @@ export function DashboardPage() {
                 peopleError={dashboardNotePeopleError}
                 peopleLoading={dashboardNotePeopleLoading}
                 saving={dashboardNoteSaving}
+                siteFilterLabel={dashboardNoteSiteFilterLabel}
                 sites={dashboardNoteSites}
                 sitesError={dashboardNoteSitesError}
                 sitesLoading={dashboardNoteSitesLoading}
                 today={range.today}
                 onCancel={cancelDashboardNoteForm}
+                onClearSiteFilter={clearDashboardNoteSiteFilter}
                 onDelete={(note) => void deleteDashboardNote(note)}
                 onDraftChange={updateDashboardNoteDraft}
                 onEdit={editDashboardNote}
@@ -794,11 +829,13 @@ function DashboardNotesPanel({
   people,
   peopleError,
   peopleLoading,
+  siteFilterLabel,
   today,
   onModeChange,
   onDraftChange,
   onSubmit,
   onCancel,
+  onClearSiteFilter,
   onToggle,
   onEdit,
   onDelete,
@@ -820,11 +857,13 @@ function DashboardNotesPanel({
   people: Person[];
   peopleError: string | null;
   peopleLoading: boolean;
+  siteFilterLabel: string | null;
   today: string;
   onModeChange: (mode: DashboardNoteMode) => void;
   onDraftChange: (field: keyof DashboardNoteDraft, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
+  onClearSiteFilter: () => void;
   onToggle: (note: DashboardNote) => void;
   onEdit: (note: DashboardNote) => void;
   onDelete: (note: DashboardNote) => void;
@@ -839,7 +878,7 @@ function DashboardNotesPanel({
     : sites;
 
   return (
-    <div className="dashboard-notes">
+    <div className="dashboard-notes" id="dashboard-notes">
       <div className="dashboard-note-tabs" role="tablist" aria-label="Notizansicht">
         <button
           type="button"
@@ -860,6 +899,13 @@ function DashboardNotesPanel({
           Erledigt <span>{completedCount}</span>
         </button>
       </div>
+
+      {siteFilterLabel ? (
+        <div className="dashboard-note-site-filter">
+          <span>Baustelle: <strong>{siteFilterLabel}</strong></span>
+          <button type="button" onClick={onClearSiteFilter}>Alle Notizen anzeigen</button>
+        </div>
+      ) : null}
 
       {error ? <p className="dashboard-note-error">{error}</p> : null}
 
@@ -1627,6 +1673,14 @@ function compareDashboardNotePeople(first: Person, second: Person): number {
     || first.first_name.localeCompare(second.first_name, "de", { sensitivity: "base" })
     || first.display_name.localeCompare(second.display_name, "de", { sensitivity: "base" })
     || first.id - second.id;
+}
+
+function parseDashboardNoteSiteFilterId(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const siteId = Number(value);
+  return Number.isSafeInteger(siteId) && siteId > 0 ? siteId : null;
 }
 
 function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {

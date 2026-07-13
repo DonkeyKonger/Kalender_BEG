@@ -68,6 +68,7 @@ export type MatrixSite = {
   status: SiteStatus;
   info: string | null;
   color: string | null;
+  open_note_count: number;
 };
 
 export type MatrixRow = {

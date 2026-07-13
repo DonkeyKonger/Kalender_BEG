@@ -32,7 +32,7 @@ def get_matrix(
     include_closed: bool = False,
     year_view: bool = False,
     project_manager_person_id: int | None = None,
-    _user=Depends(CAN_READ),
+    current_user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> MatrixResponse:
     return MatrixService(db).get_matrix(
@@ -42,6 +42,7 @@ def get_matrix(
         include_closed=include_closed,
         year_view=year_view,
         project_manager_person_id=project_manager_person_id,
+        user_id=current_user.id,
     )
 
 
@@ -52,7 +53,7 @@ def get_matrix_version(
     include_closed: bool = False,
     year_view: bool = False,
     project_manager_person_id: int | None = None,
-    _user=Depends(CAN_READ),
+    current_user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> MatrixVersionResponse:
     return MatrixService(db).get_version(
@@ -61,6 +62,7 @@ def get_matrix_version(
         include_closed=include_closed,
         year_view=year_view,
         project_manager_person_id=project_manager_person_id,
+        user_id=current_user.id,
     )
 
 

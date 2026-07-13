@@ -885,6 +885,38 @@ button:disabled {
   justify-content: center;
 }
 
+.matrix-status-cell {
+  overflow: visible;
+}
+
+.matrix-open-note-badge {
+  position: absolute;
+  z-index: 6;
+  top: 3px;
+  right: -9px;
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #b42318;
+  box-shadow: 0 1px 4px rgb(79 20 15 / 24%);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0 3px;
+  text-decoration: none;
+}
+
+.matrix-open-note-badge:hover,
+.matrix-open-note-badge:focus-visible {
+  background: #951d14;
+  outline: 2px solid rgb(180 35 24 / 22%);
+  outline-offset: 1px;
+}
+
 .matrix-status-chip,
 .matrix-status-menu-item {
   display: inline-flex;
@@ -4725,6 +4757,14 @@ button.person-chip:focus-visible {
 .matrix-page.is-compact .matrix-status-dot {
   width: 4px;
   height: 4px;
+}
+
+.matrix-page.is-compact .matrix-open-note-badge {
+  top: 2px;
+  right: -8px;
+  min-width: 17px;
+  height: 17px;
+  font-size: 8px;
 }
 
 .matrix-page.is-compact .day-col strong {
@@ -18123,6 +18163,44 @@ button.person-chip:focus-visible {
   color: #42506a;
   font-size: 0.68rem;
   font-weight: 900;
+}
+
+.dashboard-note-site-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #e3d7b9;
+  background: #fffdf7;
+  color: #61573f;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+}
+
+.dashboard-note-site-filter span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-note-site-filter button {
+  flex: 0 0 auto;
+  border: 1px solid #d8c9a5;
+  border-radius: 0;
+  background: #fff;
+  color: #67552c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 4px 7px;
+}
+
+.dashboard-note-site-filter button:hover,
+.dashboard-note-site-filter button:focus-visible {
+  border-color: #bda873;
+  background: #fffaf0;
+  outline: none;
 }
 
 .dashboard-note-error {
