@@ -132,6 +132,20 @@ type MatrixNotePreviewState = {
   site: MatrixRow["site"];
   status: "loading" | "ready" | "error";
 };
+type MatrixNoteCacheEntry = {
+  loadedAt: number;
+  notes: DashboardNote[];
+};
+type MatrixNoteInteractionContext = {
+  cacheRef: RefObject<Map<number, MatrixNoteCacheEntry>>;
+  currentUserId: number | null;
+  onModalOpenChange: (siteId: number, isOpen: boolean) => void;
+  onMutationCommitted: () => void;
+  people: Person[];
+  requestsRef: RefObject<Map<number, Promise<DashboardNote[]>>>;
+  today: string;
+  userIdRef: RefObject<number | null>;
+};
 type MatrixNoteDraft = {
   text: string;
   dueDate: string;
@@ -151,6 +165,9 @@ const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
 const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
 const MATRIX_BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
+const MATRIX_NOTE_CACHE_TTL_MS = 30_000;
+const MATRIX_NOTE_HOVER_OPEN_DELAY_MS = 200;
+const MATRIX_NOTE_HOVER_CLOSE_DELAY_MS = 140;
 const EMPTY_MATRIX_NOTE_DRAFT: MatrixNoteDraft = {
   text: "",
   dueDate: "",
@@ -202,10 +219,10 @@ export function MatrixPage() {
   const rangeScrollFallbackTimeoutRef = useRef<number | null>(null);
   const initialScrollSnapResetTimeoutRef = useRef<number | null>(null);
   const matrixVersionRef = useRef<string | null>(null);
-  const matrixNotePreviewCacheRef = useRef<Map<number, DashboardNote[]>>(new Map());
+  const matrixNotePreviewCacheRef = useRef<Map<number, MatrixNoteCacheEntry>>(new Map());
   const matrixNotePreviewRequestsRef = useRef<Map<number, Promise<DashboardNote[]>>>(new Map());
-  const matrixNotePreviewCloseTimeoutRef = useRef<number | null>(null);
   const matrixNotePreviewUserIdRef = useRef<number | null>(user?.id ?? null);
+  const matrixNoteModalSiteIdsRef = useRef<Set<number>>(new Set());
   const isCheckingMatrixVersionRef = useRef(false);
   const hasDeferredMatrixRefreshRef = useRef(false);
   const isApplyingWeekSnapRef = useRef(false);
@@ -219,7 +236,9 @@ export function MatrixPage() {
     id: 0,
     weekStart: getIsoWeekStartDate(planningReferenceDate),
   }));
-  const [projectManagerFilter, setProjectManagerFilter] = useState("all");
+  const [projectManagerFilter, setProjectManagerFilter] = useState(() => (
+    initialMatrixProjectManagerFilterFromUser(user)
+  ));
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
@@ -231,8 +250,6 @@ export function MatrixPage() {
   const [isSavingAbsence, setIsSavingAbsence] = useState(false);
   const [isSiteCreateDrawerOpen, setIsSiteCreateDrawerOpen] = useState(false);
   const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
-  const [matrixNoteSite, setMatrixNoteSite] = useState<MatrixRow["site"] | null>(null);
-  const [matrixNotePreview, setMatrixNotePreview] = useState<MatrixNotePreviewState | null>(null);
   const isEditable = user ? canEditMatrix(user.role) : false;
   const matrixIsEditable = isEditable && !isYearView;
   const hasPendingMatrixSave = useMemo(
@@ -249,7 +266,6 @@ export function MatrixPage() {
     || assignmentDrag
     || assignmentResize
     || isSiteCreateDrawerOpen
-    || matrixNoteSite
     || isSavingAbsence
     || savingInfoSiteId !== null
     || savingStatusSiteId !== null
@@ -461,7 +477,7 @@ export function MatrixPage() {
     if (!matrix || isCheckingMatrixVersionRef.current) {
       return;
     }
-    if (isMatrixInteractionActive || autosaveRef.current !== null) {
+    if (isMatrixInteractionActive || matrixNoteModalSiteIdsRef.current.size > 0 || autosaveRef.current !== null) {
       hasDeferredMatrixRefreshRef.current = true;
       return;
     }
@@ -505,18 +521,12 @@ export function MatrixPage() {
     void loadMatrix();
   }, [loadMatrix]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     matrixNotePreviewUserIdRef.current = user?.id ?? null;
     matrixNotePreviewCacheRef.current.clear();
     matrixNotePreviewRequestsRef.current.clear();
-    setMatrixNotePreview(null);
+    matrixNoteModalSiteIdsRef.current.clear();
   }, [user?.id]);
-
-  useEffect(() => () => {
-    if (matrixNotePreviewCloseTimeoutRef.current !== null) {
-      window.clearTimeout(matrixNotePreviewCloseTimeoutRef.current);
-    }
-  }, []);
 
   useEffect(() => {
     if (!matrix) {
@@ -549,6 +559,18 @@ export function MatrixPage() {
     hasDeferredMatrixRefreshRef.current = false;
     void checkMatrixVersionInBackground();
   }, [checkMatrixVersionInBackground, isMatrixInteractionActive]);
+
+  const handleMatrixNotesModalOpenChange = useCallback((siteId: number, isOpen: boolean): void => {
+    if (isOpen) {
+      matrixNoteModalSiteIdsRef.current.add(siteId);
+    } else {
+      matrixNoteModalSiteIdsRef.current.delete(siteId);
+    }
+    if (matrixNoteModalSiteIdsRef.current.size === 0 && hasDeferredMatrixRefreshRef.current) {
+      hasDeferredMatrixRefreshRef.current = false;
+      void checkMatrixVersionInBackground();
+    }
+  }, [checkMatrixVersionInBackground]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -1936,114 +1958,26 @@ export function MatrixPage() {
     setIsSiteCreateDrawerOpen(true);
   }
 
-  const cancelMatrixNotePreviewClose = useCallback((): void => {
-    if (matrixNotePreviewCloseTimeoutRef.current === null) {
-      return;
-    }
-    window.clearTimeout(matrixNotePreviewCloseTimeoutRef.current);
-    matrixNotePreviewCloseTimeoutRef.current = null;
-  }, []);
-
-  const closeMatrixNotePreview = useCallback((): void => {
-    cancelMatrixNotePreviewClose();
-    setMatrixNotePreview(null);
-  }, [cancelMatrixNotePreviewClose]);
-
-  const scheduleMatrixNotePreviewClose = useCallback((): void => {
-    cancelMatrixNotePreviewClose();
-    matrixNotePreviewCloseTimeoutRef.current = window.setTimeout(() => {
-      matrixNotePreviewCloseTimeoutRef.current = null;
-      setMatrixNotePreview(null);
-    }, 140);
-  }, [cancelMatrixNotePreviewClose]);
-
-  const cacheMatrixSiteNotes = useCallback((siteId: number, notes: DashboardNote[]): void => {
-    const openNotes = notes.filter((note) => !note.completed);
-    matrixNotePreviewCacheRef.current.set(siteId, openNotes);
-    setMatrixNotePreview((current) => current?.site.id === siteId
-      ? { ...current, notes: openNotes, status: "ready" }
-      : current);
-  }, []);
-
-  const showMatrixNotePreview = useCallback((site: MatrixRow["site"], anchorElement: HTMLElement): void => {
-    cancelMatrixNotePreviewClose();
-    const bounds = anchorElement.getBoundingClientRect();
-    const anchor: MatrixNotePreviewAnchor = {
-      bottom: bounds.bottom,
-      height: bounds.height,
-      left: bounds.left,
-      right: bounds.right,
-      top: bounds.top,
-      width: bounds.width,
-    };
-    const cachedNotes = matrixNotePreviewCacheRef.current.get(site.id);
-    if (cachedNotes !== undefined) {
-      setMatrixNotePreview({ anchor, notes: cachedNotes, site, status: "ready" });
-      return;
-    }
-
-    setMatrixNotePreview({ anchor, notes: [], site, status: "loading" });
-    const requestUserId = matrixNotePreviewUserIdRef.current;
-    let request = matrixNotePreviewRequestsRef.current.get(site.id);
-    if (!request) {
-      request = api.matrixSiteNotes(site.id, { completed: false })
-        .then((notes) => notes.filter((note) => !note.completed));
-      matrixNotePreviewRequestsRef.current.set(site.id, request);
-    }
-    const activeRequest = request;
-    void activeRequest
-      .then((notes) => {
-        if (matrixNotePreviewUserIdRef.current !== requestUserId) {
-          return;
-        }
-        matrixNotePreviewCacheRef.current.set(site.id, notes);
-        setMatrixNotePreview((current) => current?.site.id === site.id
-          ? { ...current, notes, status: "ready" }
-          : current);
-      })
-      .catch(() => {
-        if (matrixNotePreviewUserIdRef.current !== requestUserId) {
-          return;
-        }
-        setMatrixNotePreview((current) => current?.site.id === site.id
-          ? { ...current, notes: [], status: "error" }
-          : current);
-      })
-      .finally(() => {
-        if (matrixNotePreviewRequestsRef.current.get(site.id) === activeRequest) {
-          matrixNotePreviewRequestsRef.current.delete(site.id);
-        }
-      });
-  }, [cancelMatrixNotePreviewClose]);
-
-  const openMatrixSiteNotes = useCallback((site: MatrixRow["site"]): void => {
-    closeMatrixNotePreview();
-    setMatrixNoteSite(site);
-  }, [closeMatrixNotePreview]);
-
-  const closeMatrixSiteNotes = useCallback((): void => {
-    setMatrixNoteSite(null);
-  }, []);
-
-  const updateMatrixSiteOpenNoteCount = useCallback((siteId: number, openNoteCount: number): void => {
-    setMatrix((current) => {
-      if (!current || !current.rows.some((row) => (
-        row.site.id === siteId && row.site.open_note_count !== openNoteCount
-      ))) {
-        return current;
-      }
-      return {
-        ...current,
-        rows: current.rows.map((row) => row.site.id === siteId
-          ? { ...row, site: { ...row.site, open_note_count: openNoteCount } }
-          : row),
-      };
-    });
-  }, []);
-
   const handleMatrixNotesMutated = useCallback((): void => {
     void syncMatrixVersionSilently();
   }, [syncMatrixVersionSilently]);
+
+  const matrixNoteInteractionContext = useMemo<MatrixNoteInteractionContext>(() => ({
+    cacheRef: matrixNotePreviewCacheRef,
+    currentUserId: user?.id ?? null,
+    onModalOpenChange: handleMatrixNotesModalOpenChange,
+    onMutationCommitted: handleMatrixNotesMutated,
+    people,
+    requestsRef: matrixNotePreviewRequestsRef,
+    today,
+    userIdRef: matrixNotePreviewUserIdRef,
+  }), [
+    handleMatrixNotesModalOpenChange,
+    handleMatrixNotesMutated,
+    people,
+    today,
+    user?.id,
+  ]);
 
   const projectManagerOptions = useMemo(() => {
     if (!matrix) {
@@ -2133,6 +2067,7 @@ export function MatrixPage() {
             assignmentResizeRange={assignmentResizeRange}
             matrix={matrix}
             matrixScrollRef={matrixScrollRef}
+            noteInteractionContext={matrixNoteInteractionContext}
             peopleById={peopleById}
             onDeleteAbsence={deleteAbsenceDayFromPlanning}
             onDeleteAssignment={deleteAssignmentFromCell}
@@ -2152,9 +2087,6 @@ export function MatrixPage() {
             onCellMouseEnter={extendCellSelection}
             onCellMouseUp={finishCellSelection}
             onOpenAbsenceCell={openAbsenceCell}
-            onOpenSiteNotes={openMatrixSiteNotes}
-            onLeaveSiteNotePreview={scheduleMatrixNotePreviewClose}
-            onShowSiteNotePreview={showMatrixNotePreview}
             saveStatus={saveStatus}
             savingInfoSiteId={savingInfoSiteId}
             savingStatusSiteId={savingStatusSiteId}
@@ -2174,29 +2106,6 @@ export function MatrixPage() {
               void refreshMatrixOnly();
             }}
           />
-
-          {matrixNotePreview ? (
-            <MatrixNoteHoverPreview
-              preview={matrixNotePreview}
-              today={today}
-              onPointerEnter={cancelMatrixNotePreviewClose}
-              onPointerLeave={scheduleMatrixNotePreviewClose}
-            />
-          ) : null}
-
-          {matrixNoteSite ? (
-            <MatrixSiteNotesModal
-              currentUserId={user?.id ?? null}
-              key={matrixNoteSite.id}
-              people={people}
-              site={matrixNoteSite}
-              today={today}
-              onClose={closeMatrixSiteNotes}
-              onMutationCommitted={handleMatrixNotesMutated}
-              onNotesChange={cacheMatrixSiteNotes}
-              onOpenCountChange={updateMatrixSiteOpenNoteCount}
-            />
-          ) : null}
 
           {editorAnchor && assignmentSuggestions.length > 0 && (
             <AssignmentAutocompleteDropdown
@@ -2253,6 +2162,201 @@ export function MatrixPage() {
   );
 }
 
+function MatrixNoteBadge({
+  interactionContext,
+  site,
+}: {
+  interactionContext: MatrixNoteInteractionContext;
+  site: MatrixRow["site"];
+}) {
+  const [openNoteCount, setOpenNoteCount] = useState(site.open_note_count);
+  const [preview, setPreview] = useState<MatrixNotePreviewState | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const hoverOpenTimeoutRef = useRef<number | null>(null);
+  const hoverCloseTimeoutRef = useRef<number | null>(null);
+  const hoverGenerationRef = useRef(0);
+  const previewOpenRef = useRef(false);
+  const modalOpenRef = useRef(false);
+  const modalOpenChangeRef = useRef(interactionContext.onModalOpenChange);
+
+  useEffect(() => {
+    modalOpenChangeRef.current = interactionContext.onModalOpenChange;
+  }, [interactionContext.onModalOpenChange]);
+
+  useLayoutEffect(() => {
+    setOpenNoteCount(site.open_note_count);
+    const cached = interactionContext.cacheRef.current.get(site.id);
+    if (cached && cached.notes.filter((note) => !note.completed).length !== site.open_note_count) {
+      interactionContext.cacheRef.current.delete(site.id);
+    }
+  }, [interactionContext.cacheRef, site.id, site.open_note_count]);
+
+  const clearHoverOpenTimer = useCallback((): void => {
+    if (hoverOpenTimeoutRef.current !== null) {
+      window.clearTimeout(hoverOpenTimeoutRef.current);
+      hoverOpenTimeoutRef.current = null;
+    }
+  }, []);
+
+  const cancelPreviewClose = useCallback((): void => {
+    if (hoverCloseTimeoutRef.current !== null) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+  }, []);
+
+  const closePreviewNow = useCallback((): void => {
+    clearHoverOpenTimer();
+    cancelPreviewClose();
+    hoverGenerationRef.current += 1;
+    previewOpenRef.current = false;
+    setPreview(null);
+  }, [cancelPreviewClose, clearHoverOpenTimer]);
+
+  const schedulePreviewClose = useCallback((): void => {
+    clearHoverOpenTimer();
+    if (!previewOpenRef.current) {
+      hoverGenerationRef.current += 1;
+      return;
+    }
+    cancelPreviewClose();
+    hoverCloseTimeoutRef.current = window.setTimeout(() => {
+      hoverCloseTimeoutRef.current = null;
+      hoverGenerationRef.current += 1;
+      previewOpenRef.current = false;
+      setPreview(null);
+    }, MATRIX_NOTE_HOVER_CLOSE_DELAY_MS);
+  }, [cancelPreviewClose, clearHoverOpenTimer]);
+
+  const loadNotes = useCallback((): Promise<DashboardNote[]> => (
+    loadMatrixSiteNotesCached(site.id, interactionContext)
+  ), [interactionContext, site.id]);
+
+  const schedulePreviewOpen = useCallback((anchorElement: HTMLElement): void => {
+    cancelPreviewClose();
+    if (previewOpenRef.current) {
+      return;
+    }
+    clearHoverOpenTimer();
+    const generation = ++hoverGenerationRef.current;
+    hoverOpenTimeoutRef.current = window.setTimeout(() => {
+      hoverOpenTimeoutRef.current = null;
+      if (hoverGenerationRef.current !== generation || !anchorElement.isConnected) {
+        return;
+      }
+      const bounds = anchorElement.getBoundingClientRect();
+      const anchor: MatrixNotePreviewAnchor = {
+        bottom: bounds.bottom,
+        height: bounds.height,
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        width: bounds.width,
+      };
+      const cached = readFreshMatrixSiteNoteCache(site.id, interactionContext.cacheRef);
+      previewOpenRef.current = true;
+      setPreview({
+        anchor,
+        notes: cached ?? [],
+        site,
+        status: cached ? "ready" : "loading",
+      });
+      if (cached) {
+        return;
+      }
+      void loadNotes()
+        .then((notes) => {
+          if (hoverGenerationRef.current === generation && previewOpenRef.current) {
+            setPreview({ anchor, notes, site, status: "ready" });
+          }
+        })
+        .catch(() => {
+          if (hoverGenerationRef.current === generation && previewOpenRef.current) {
+            setPreview({ anchor, notes: [], site, status: "error" });
+          }
+        });
+    }, MATRIX_NOTE_HOVER_OPEN_DELAY_MS);
+  }, [cancelPreviewClose, clearHoverOpenTimer, interactionContext.cacheRef, loadNotes, site]);
+
+  const openModal = useCallback((): void => {
+    closePreviewNow();
+    modalOpenRef.current = true;
+    setIsModalOpen(true);
+    modalOpenChangeRef.current(site.id, true);
+  }, [closePreviewNow, site.id]);
+
+  const closeModal = useCallback((): void => {
+    modalOpenRef.current = false;
+    setIsModalOpen(false);
+    modalOpenChangeRef.current(site.id, false);
+  }, [site.id]);
+
+  const handleNotesChange = useCallback((siteId: number, notes: DashboardNote[]): void => {
+    writeMatrixSiteNoteCache(siteId, notes, interactionContext.cacheRef);
+    if (previewOpenRef.current) {
+      setPreview((current) => current ? { ...current, notes, status: "ready" } : current);
+    }
+  }, [interactionContext.cacheRef]);
+
+  const handleOpenCountChange = useCallback((_siteId: number, count: number): void => {
+    setOpenNoteCount(count);
+  }, []);
+
+  useEffect(() => () => {
+    clearHoverOpenTimer();
+    cancelPreviewClose();
+    hoverGenerationRef.current += 1;
+    if (modalOpenRef.current) {
+      modalOpenChangeRef.current(site.id, false);
+    }
+  }, [cancelPreviewClose, clearHoverOpenTimer, site.id]);
+
+  return (
+    <>
+      {openNoteCount > 0 ? (
+        <button
+          aria-label={formatMatrixOpenNoteBadgeLabel(site.name, openNoteCount)}
+          className="matrix-open-note-badge"
+          type="button"
+          onBlur={schedulePreviewClose}
+          onClick={(event) => {
+            event.stopPropagation();
+            openModal();
+          }}
+          onFocus={(event) => schedulePreviewOpen(event.currentTarget)}
+          onPointerEnter={(event) => schedulePreviewOpen(event.currentTarget)}
+          onPointerLeave={schedulePreviewClose}
+        >
+          {formatMatrixOpenNoteBadgeCount(openNoteCount)}
+        </button>
+      ) : null}
+
+      {preview ? (
+        <MatrixNoteHoverPreview
+          preview={preview}
+          today={interactionContext.today}
+          onPointerEnter={cancelPreviewClose}
+          onPointerLeave={schedulePreviewClose}
+        />
+      ) : null}
+
+      {isModalOpen ? (
+        <MatrixSiteNotesModal
+          currentUserId={interactionContext.currentUserId}
+          loadNotes={loadNotes}
+          people={interactionContext.people}
+          site={site}
+          today={interactionContext.today}
+          onClose={closeModal}
+          onMutationCommitted={interactionContext.onMutationCommitted}
+          onNotesChange={handleNotesChange}
+          onOpenCountChange={handleOpenCountChange}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function MatrixNoteHoverPreview({
   preview,
   today,
@@ -2267,7 +2371,10 @@ function MatrixNoteHoverPreview({
   if (typeof document === "undefined") {
     return null;
   }
-  const visibleNotes = sortMatrixSiteNotes(preview.notes, "open");
+  const visibleNotes = sortMatrixSiteNotes(
+    preview.notes.filter((note) => !note.completed),
+    "open",
+  );
   return createPortal(
     <section
       aria-label={`Offene Notizen für ${formatMatrixNoteSiteLabel(preview.site)}`}
@@ -2304,6 +2411,7 @@ function MatrixNoteHoverPreview({
 
 type MatrixSiteNotesModalProps = {
   currentUserId: number | null;
+  loadNotes: () => Promise<DashboardNote[]>;
   people: Person[];
   site: MatrixRow["site"];
   today: string;
@@ -2315,6 +2423,7 @@ type MatrixSiteNotesModalProps = {
 
 function MatrixSiteNotesModal({
   currentUserId,
+  loadNotes,
   people,
   site,
   today,
@@ -2335,7 +2444,9 @@ function MatrixSiteNotesModal({
   const [busyNoteId, setBusyNoteId] = useState<number | null>(null);
   const [shareUsers, setShareUsers] = useState<DashboardNoteUser[]>([]);
   const [shareUsersLoading, setShareUsersLoading] = useState(true);
+  const [shareUsersLoaded, setShareUsersLoaded] = useState(false);
   const [shareUsersError, setShareUsersError] = useState<string | null>(null);
+  const shareUsersRequestRef = useRef<Promise<DashboardNoteUser[]> | null>(null);
   const openCount = notes.filter((note) => !note.completed).length;
   const completedCount = notes.filter((note) => note.completed).length;
   const visibleNotes = useMemo(() => sortMatrixSiteNotes(
@@ -2354,7 +2465,7 @@ function MatrixSiteNotesModal({
     let active = true;
     setIsLoading(true);
     setError(null);
-    void api.matrixSiteNotes(site.id)
+    void loadNotes()
       .then((loadedNotes) => {
         if (active) {
           setNotes(loadedNotes);
@@ -2372,12 +2483,25 @@ function MatrixSiteNotesModal({
           setIsLoading(false);
         }
       });
+    return () => {
+      active = false;
+    };
+  }, [loadNotes, onNotesChange, onOpenCountChange, site.id]);
+
+  useEffect(() => {
+    if (!isFormOpen || shareUsersLoaded) {
+      return undefined;
+    }
+    let active = true;
     setShareUsersLoading(true);
     setShareUsersError(null);
-    void api.dashboardNoteShareUserOptions()
+    const request = shareUsersRequestRef.current ?? api.dashboardNoteShareUserOptions();
+    shareUsersRequestRef.current = request;
+    void request
       .then((loadedUsers) => {
         if (active) {
           setShareUsers(loadedUsers);
+          setShareUsersLoaded(true);
         }
       })
       .catch(() => {
@@ -2387,6 +2511,9 @@ function MatrixSiteNotesModal({
         }
       })
       .finally(() => {
+        if (shareUsersRequestRef.current === request) {
+          shareUsersRequestRef.current = null;
+        }
         if (active) {
           setShareUsersLoading(false);
         }
@@ -2394,7 +2521,7 @@ function MatrixSiteNotesModal({
     return () => {
       active = false;
     };
-  }, [onNotesChange, onOpenCountChange, site.id]);
+  }, [isFormOpen, shareUsersLoaded]);
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -3188,6 +3315,7 @@ type MatrixTableProps = {
   assignmentResizeRange: CellRange | null;
   matrix: MatrixResponse;
   matrixScrollRef: RefObject<HTMLDivElement | null>;
+  noteInteractionContext: MatrixNoteInteractionContext;
   peopleById: Map<number, Person>;
   onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
@@ -3206,9 +3334,6 @@ type MatrixTableProps = {
   onCellMouseEnter: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onCellMouseUp: (row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) => void;
   onOpenAbsenceCell: (date: string, anchor: EditorAnchor) => void;
-  onOpenSiteNotes: (site: MatrixRow["site"]) => void;
-  onLeaveSiteNotePreview: () => void;
-  onShowSiteNotePreview: (site: MatrixRow["site"], anchorElement: HTMLElement) => void;
   saveStatus: Record<CellKey, SaveStatus>;
   savingInfoSiteId: number | null;
   savingStatusSiteId: number | null;
@@ -3554,23 +3679,11 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
           status={row.site.status}
           onChange={(status) => props.onStatusChange(row.site.id, status)}
         />
-        {row.site.open_note_count > 0 ? (
-          <button
-            aria-label={formatMatrixOpenNoteBadgeLabel(row.site.name, row.site.open_note_count)}
-            className="matrix-open-note-badge"
-            type="button"
-            onBlur={props.onLeaveSiteNotePreview}
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onOpenSiteNotes(row.site);
-            }}
-            onFocus={(event) => props.onShowSiteNotePreview(row.site, event.currentTarget)}
-            onPointerEnter={(event) => props.onShowSiteNotePreview(row.site, event.currentTarget)}
-            onPointerLeave={props.onLeaveSiteNotePreview}
-          >
-            {formatMatrixOpenNoteBadgeCount(row.site.open_note_count)}
-          </button>
-        ) : null}
+        <MatrixNoteBadge
+          interactionContext={props.noteInteractionContext}
+          key={`${props.noteInteractionContext.currentUserId ?? "anonymous"}-${row.site.id}`}
+          site={row.site}
+        />
       </td>
       {row.cells.map((cell, cellIndex) => {
         const key = cellKey(row.site.id, cell.date);
@@ -4190,6 +4303,58 @@ function formatMatrixNoteSiteLabel(site: MatrixRow["site"]): string {
   return site.site_number ? `${site.site_number} · ${site.name}` : site.name;
 }
 
+function readFreshMatrixSiteNoteCache(
+  siteId: number,
+  cacheRef: RefObject<Map<number, MatrixNoteCacheEntry>>,
+): DashboardNote[] | null {
+  const cached = cacheRef.current.get(siteId);
+  if (!cached) {
+    return null;
+  }
+  if (Date.now() - cached.loadedAt > MATRIX_NOTE_CACHE_TTL_MS) {
+    cacheRef.current.delete(siteId);
+    return null;
+  }
+  return cached.notes;
+}
+
+function writeMatrixSiteNoteCache(
+  siteId: number,
+  notes: DashboardNote[],
+  cacheRef: RefObject<Map<number, MatrixNoteCacheEntry>>,
+): void {
+  cacheRef.current.set(siteId, { loadedAt: Date.now(), notes });
+}
+
+function loadMatrixSiteNotesCached(
+  siteId: number,
+  interactionContext: MatrixNoteInteractionContext,
+): Promise<DashboardNote[]> {
+  const cached = readFreshMatrixSiteNoteCache(siteId, interactionContext.cacheRef);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+  const pending = interactionContext.requestsRef.current.get(siteId);
+  if (pending) {
+    return pending;
+  }
+  const requestUserId = interactionContext.userIdRef.current;
+  const request = api.matrixSiteNotes(siteId)
+    .then((notes) => {
+      if (interactionContext.userIdRef.current === requestUserId) {
+        writeMatrixSiteNoteCache(siteId, notes, interactionContext.cacheRef);
+      }
+      return notes;
+    })
+    .finally(() => {
+      if (interactionContext.requestsRef.current.get(siteId) === request) {
+        interactionContext.requestsRef.current.delete(siteId);
+      }
+    });
+  interactionContext.requestsRef.current.set(siteId, request);
+  return request;
+}
+
 function formatMatrixNotePreviewDueLabel(note: DashboardNote, today: string): string {
   if (note.due_date === null) {
     return "Keine Fälligkeit";
@@ -4313,6 +4478,12 @@ function resolveInitialMatrixProjectManagerFilter(
     }
   }
   return "all";
+}
+
+function initialMatrixProjectManagerFilterFromUser(user: CurrentUser | null): string {
+  return user?.role === "project_manager" && user.person_id !== null
+    ? String(user.person_id)
+    : "all";
 }
 
 function projectManagerIdentityValues(manager: MatrixPerson): string[] {

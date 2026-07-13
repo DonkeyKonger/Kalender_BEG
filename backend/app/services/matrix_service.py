@@ -206,7 +206,7 @@ class MatrixService:
 
         note_statement = select(
             func.max(DashboardNote.updated_at),
-            func.count(DashboardNote.id),
+            func.count(),
         ).where(
             DashboardNote.completed.is_(False),
             DashboardNote.deleted_at.is_(None),
@@ -358,7 +358,7 @@ class MatrixService:
         if not site_ids:
             return {}
         statement = (
-            select(DashboardNote.site_id, func.count(DashboardNote.id))
+            select(DashboardNote.site_id, func.count())
             .where(
                 DashboardNote.site_id.in_(site_ids),
                 DashboardNote.completed.is_(False),

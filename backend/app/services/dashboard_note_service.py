@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.dashboard_note import DashboardNote
-from app.models.enums import PersonType, UserRole
+from app.models.enums import PersonType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -58,11 +58,17 @@ class DashboardNoteService:
         site_id: int,
         completed: bool | None = None,
     ) -> list[DashboardNote]:
-        if self.sites.get(site_id) is None:
+        site_exists = self.db.scalar(
+            select(Site.id).where(
+                Site.id == site_id,
+                Site.status != SiteStatus.DELETED,
+            )
+        )
+        if site_exists is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         statement = (
             select(DashboardNote)
-            .options(*dashboard_note_load_options())
+            .options(*matrix_site_note_load_options())
             .where(
                 DashboardNote.site_id == site_id,
                 DashboardNote.deleted_at.is_(None),
@@ -319,4 +325,27 @@ def dashboard_note_load_options() -> tuple:
         selectinload(DashboardNote.employee),
         selectinload(DashboardNote.created_by),
         selectinload(DashboardNote.shared_with),
+    )
+
+
+def matrix_site_note_load_options() -> tuple:
+    return (
+        joinedload(DashboardNote.site).load_only(Site.id, Site.site_number, Site.name),
+        joinedload(DashboardNote.employee).load_only(
+            Person.id,
+            Person.display_name,
+            Person.short_code,
+        ),
+        joinedload(DashboardNote.created_by).load_only(
+            User.id,
+            User.username,
+            User.display_name,
+            User.role,
+        ),
+        joinedload(DashboardNote.shared_with).load_only(
+            User.id,
+            User.username,
+            User.display_name,
+            User.role,
+        ),
     )

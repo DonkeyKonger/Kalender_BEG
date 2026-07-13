@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -119,6 +119,8 @@ def test_matrix_aggregates_all_open_site_notes_and_updates_version():
     second_site = Site(site_number="1002", name="Zweite Baustelle", status=SiteStatus.ACTIVE)
     db.add_all([owner, other_user, first_site, second_site])
     db.flush()
+    first_site_id = first_site.id
+    second_site_id = second_site.id
     notes = [
         DashboardNote(text="Offen 1", site_id=first_site.id, created_by_user_id=owner.id, completed=False),
         DashboardNote(text="Offen 2", site_id=first_site.id, created_by_user_id=owner.id, completed=False),
@@ -145,6 +147,23 @@ def test_matrix_aggregates_all_open_site_notes_and_updates_version():
     db.commit()
 
     service = MatrixService(db)
+    note_count_statements: list[str] = []
+
+    def record_note_count(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            note_count_statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_note_count)
+    try:
+        direct_counts = service._open_note_counts_by_site(
+            site_ids={first_site_id, second_site_id},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record_note_count)
+
+    assert direct_counts == {first_site_id: 4, second_site_id: 1}
+    assert len(note_count_statements) == 1
+
     result = service.get_matrix(
         start=date(2026, 7, 13),
         end=date(2026, 7, 13),

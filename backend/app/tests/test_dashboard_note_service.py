@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -447,6 +447,49 @@ def test_matrix_site_notes_include_all_site_authors_without_changing_personal_sc
     with pytest.raises(HTTPException) as missing_site_error:
         service.list_site_notes(site_id=999_999)
     assert missing_site_error.value.status_code == 404
+
+
+def test_matrix_site_notes_load_in_two_service_queries():
+    db = db_session()
+    site = Site(site_number="8018", name="Hochschule Osnabrück")
+    owner = User(
+        username="christopher",
+        display_name="Christopher",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    employee = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    db.add_all([site, owner, employee])
+    db.commit()
+    DashboardNoteService(db).create_note(
+        DashboardNoteCreate(
+            text="Material prüfen",
+            site_id=site.id,
+            employee_id=employee.id,
+        ),
+        user_id=owner.id,
+    )
+    statements: list[str] = []
+
+    def record_statement(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        notes = DashboardNoteService(db).list_site_notes(site_id=site.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+
+    assert [note.text for note in notes] == ["Material prüfen"]
+    assert len(statements) == 2
 
 
 def test_dashboard_note_site_options_use_all_open_sites_and_sort_by_site_number():
