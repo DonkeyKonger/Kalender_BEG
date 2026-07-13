@@ -1,5 +1,6 @@
-import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AlertTriangle, BriefcaseBusiness, Check, ChevronDown, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -845,32 +846,17 @@ function DashboardNotesPanel({
                 onChange={(event) => onDraftChange("due_date", event.target.value)}
               />
             </label>
-            <label className="dashboard-note-field">
-              <span>Baustelle</span>
-              <select
-                aria-describedby={sitesLoading || sitesError ? "dashboard-note-sites-status" : undefined}
+            <div className="dashboard-note-field">
+              <span id="dashboard-note-site-label">Baustelle</span>
+              <DashboardNoteSiteSelect
+                error={sitesError}
+                labelId="dashboard-note-site-label"
+                loading={sitesLoading}
+                sites={siteOptions}
                 value={draft.site_id}
-                onChange={(event) => onDraftChange("site_id", event.target.value)}
-              >
-                <option value="">Keine Zuordnung</option>
-                {sitesLoading ? <option disabled>Baustellen werden geladen...</option> : null}
-                {!sitesLoading && !sitesError && siteOptions.length === 0 ? <option disabled>Keine Baustellen verfügbar</option> : null}
-                {siteOptions.map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {formatDashboardNoteSiteOption(site)}
-                  </option>
-                ))}
-              </select>
-              {sitesLoading || sitesError ? (
-                <small
-                  className={`dashboard-note-field-status${sitesError ? " is-error" : ""}`}
-                  id="dashboard-note-sites-status"
-                  role="status"
-                >
-                  {sitesError ?? "Baustellen werden geladen..."}
-                </small>
-              ) : null}
-            </label>
+                onChange={(value) => onDraftChange("site_id", value)}
+              />
+            </div>
             <label className="dashboard-note-field">
               <span>Monteur</span>
               <select
@@ -919,6 +905,240 @@ function DashboardNotesPanel({
       )}
     </div>
   );
+}
+
+type DashboardNoteSiteOption = SiteSummary | NonNullable<DashboardNote["site"]>;
+
+type DashboardNoteSitePopupPosition = {
+  left: number;
+  maxHeight: number;
+  top: number;
+  width: number;
+};
+
+function DashboardNoteSiteSelect({
+  value,
+  sites,
+  loading,
+  error,
+  labelId,
+  onChange,
+}: {
+  value: string;
+  sites: DashboardNoteSiteOption[];
+  loading: boolean;
+  error: string | null;
+  labelId: string;
+  onChange: (value: string) => void;
+}) {
+  const popupId = useId();
+  const listboxId = `${popupId}-listbox`;
+  const statusId = `${popupId}-status`;
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [popupPosition, setPopupPosition] = useState<DashboardNoteSitePopupPosition | null>(null);
+  const selectedSite = sites.find((site) => String(site.id) === value) ?? null;
+  const selectedLabel = selectedSite ? formatDashboardNoteSiteOption(selectedSite) : "Keine Zuordnung";
+  const normalizedQuery = query.trim().toLocaleLowerCase("de-DE");
+  const filteredSites = useMemo(() => {
+    if (!normalizedQuery) {
+      return sites;
+    }
+    return sites.filter((site) => {
+      const siteNumber = site.site_number ?? "";
+      return `${siteNumber} ${site.name}`.toLocaleLowerCase("de-DE").includes(normalizedQuery);
+    });
+  }, [normalizedQuery, sites]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      if (triggerRef.current) {
+        setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || triggerRef.current?.contains(target) || popupRef.current?.contains(target)) {
+        return;
+      }
+      setIsOpen(false);
+      setQuery("");
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      setIsOpen(false);
+      setQuery("");
+      triggerRef.current?.focus();
+    };
+
+    updatePosition();
+    const focusFrame = window.requestAnimationFrame(() => searchRef.current?.focus());
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
+  const closeAndFocusTrigger = () => {
+    setIsOpen(false);
+    setQuery("");
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const selectSite = (siteId: string) => {
+    onChange(siteId);
+    closeAndFocusTrigger();
+  };
+
+  return (
+    <div className="dashboard-note-site-select">
+      <button
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-describedby={loading || error ? statusId : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-labelledby={labelId}
+        className={`dashboard-note-site-trigger${isOpen ? " is-open" : ""}`}
+        ref={triggerRef}
+        role="combobox"
+        title={selectedLabel}
+        type="button"
+        onClick={() => {
+          if (isOpen) {
+            setIsOpen(false);
+            setQuery("");
+            return;
+          }
+          if (triggerRef.current) {
+            setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+          }
+          setQuery("");
+          setIsOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (!isOpen && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            if (triggerRef.current) {
+              setPopupPosition(getDashboardNoteSitePopupPosition(triggerRef.current));
+            }
+            setIsOpen(true);
+          }
+        }}
+      >
+        <span className="dashboard-note-site-trigger-label">{selectedLabel}</span>
+        <ChevronDown aria-hidden="true" size={15} />
+      </button>
+
+      {loading || error ? (
+        <small
+          className={`dashboard-note-field-status${error ? " is-error" : ""}`}
+          id={statusId}
+          role="status"
+        >
+          {error ?? "Baustellen werden geladen..."}
+        </small>
+      ) : null}
+
+      {isOpen && popupPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="dashboard-note-site-popup"
+              ref={popupRef}
+              style={popupPosition}
+            >
+              <div className="dashboard-note-site-search">
+                <Search aria-hidden="true" size={14} />
+                <input
+                  aria-label="Baustelle suchen"
+                  autoComplete="off"
+                  placeholder="Baustelle suchen…"
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </div>
+              <div aria-label="Baustelle auswählen" className="dashboard-note-site-options" id={listboxId} role="listbox">
+                <button
+                  aria-selected={value === ""}
+                  className={`dashboard-note-site-option${value === "" ? " is-selected" : ""}`}
+                  role="option"
+                  type="button"
+                  onClick={() => selectSite("")}
+                >
+                  <span className="dashboard-note-site-option-check" aria-hidden="true">
+                    {value === "" ? <Check size={13} /> : null}
+                  </span>
+                  <span>Keine Zuordnung</span>
+                </button>
+                {loading ? <p className="dashboard-note-site-option-status">Baustellen werden geladen...</p> : null}
+                {error ? <p className="dashboard-note-site-option-status is-error">Baustellen konnten nicht geladen werden.</p> : null}
+                {!loading && !error
+                  ? filteredSites.map((site) => {
+                      const siteId = String(site.id);
+                      const isSelected = value === siteId;
+                      return (
+                        <button
+                          aria-selected={isSelected}
+                          className={`dashboard-note-site-option${isSelected ? " is-selected" : ""}`}
+                          key={site.id}
+                          role="option"
+                          title={formatDashboardNoteSiteOption(site)}
+                          type="button"
+                          onClick={() => selectSite(siteId)}
+                        >
+                          <span className="dashboard-note-site-option-check" aria-hidden="true">
+                            {isSelected ? <Check size={13} /> : null}
+                          </span>
+                          <span>{formatDashboardNoteSiteOption(site)}</span>
+                        </button>
+                      );
+                    })
+                  : null}
+                {!loading && !error && filteredSites.length === 0
+                  ? <p className="dashboard-note-site-option-status">Keine Baustelle gefunden</p>
+                  : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function getDashboardNoteSitePopupPosition(trigger: HTMLElement): DashboardNoteSitePopupPosition {
+  const gap = 5;
+  const margin = 8;
+  const preferredHeight = 330;
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.min(Math.max(rect.width, 320), window.innerWidth - margin * 2);
+  const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+  const availableBelow = window.innerHeight - rect.bottom - gap - margin;
+  const availableAbove = rect.top - gap - margin;
+  const openAbove = availableBelow < 180 && availableAbove > availableBelow;
+  const availableHeight = openAbove ? availableAbove : availableBelow;
+  const maxHeight = Math.max(120, Math.min(preferredHeight, availableHeight));
+  const top = openAbove ? Math.max(margin, rect.top - gap - maxHeight) : rect.bottom + gap;
+
+  return { left, maxHeight, top, width };
 }
 
 function DashboardNoteRow({
