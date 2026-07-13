@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
+from importlib import resources
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -21,6 +23,13 @@ PROJECT_FOLDER_STATUS_CREATED = "created"
 PROJECT_FOLDER_STATUS_ERROR = "error"
 PROJECT_FOLDER_ARCHIVE_FOLDER_NAME = "Archiv"
 MAX_PROJECT_FOLDER_NAME_LENGTH = 120
+MATERIAL_ORDER_FOLDER_KEY = "lagerbestellungen"
+MATERIAL_ORDER_TEMPLATE_FILENAME = "Materialschein_Formular_Master.pdf"
+MATERIAL_ORDER_TEMPLATE_RESOURCE = (
+    "templates/project_folders/Materialschein_Formular_Master.pdf"
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ProjectStorageService:
@@ -255,6 +264,16 @@ class ProjectStorageService:
                         "web_url": created.get("webUrl"),
                     }
                 )
+                if template.get("folder_key") == MATERIAL_ORDER_FOLDER_KEY:
+                    material_order_folder_id = _folder_id_or_raise(created)
+                    try:
+                        self._ensure_material_order_template(material_order_folder_id)
+                    except Exception:
+                        LOGGER.exception(
+                            "Material order template upload failed for site %s in folder %s.",
+                            site_id,
+                            material_order_folder_id,
+                        )
         except HTTPException as error:
             return {
                 "status": PROJECT_FOLDER_STATUS_ERROR,
@@ -530,6 +549,33 @@ class ProjectStorageService:
             content=content,
             content_type=content_type,
         )
+
+    def _ensure_material_order_template(self, folder_item_id: str) -> None:
+        existing_items = self.list_folder_children(
+            drive_id=self.config.ms_project_drive_id,
+            folder_item_id=folder_item_id,
+        )
+        expected_name = MATERIAL_ORDER_TEMPLATE_FILENAME.casefold()
+        if any(
+            not item.get("is_folder")
+            and str(item.get("name") or "").casefold() == expected_name
+            for item in existing_items
+        ):
+            return
+
+        content = resources.files("app").joinpath(MATERIAL_ORDER_TEMPLATE_RESOURCE).read_bytes()
+        encoded_filename = quote(MATERIAL_ORDER_TEMPLATE_FILENAME, safe="")
+        try:
+            self.graph_client.put_content(
+                f"/drives/{self.config.ms_project_drive_id}/items/{folder_item_id}:/{encoded_filename}:/content"
+                "?@microsoft.graph.conflictBehavior=fail",
+                content,
+                content_type="application/pdf",
+            )
+        except MicrosoftGraphRequestError as error:
+            if _is_name_conflict(error):
+                return
+            raise _safe_graph_files_exception(error) from error
 
     def _resolve_site_folder(
         self,
@@ -813,6 +859,14 @@ def _safe_graph_files_exception(error: MicrosoftGraphRequestError) -> HTTPExcept
     if error.error_message_short:
         message = f"{message} {error.error_message_short}"
     return HTTPException(status_code, message[:240])
+
+
+def _is_name_conflict(error: MicrosoftGraphRequestError) -> bool:
+    error_code = (error.error_code or "").casefold()
+    return error.status_code in {409, 412} and error_code in {
+        "itemalreadyexists",
+        "namealreadyexists",
+    }
 
 
 def _failed_step(diagnostics: dict[str, Any]) -> str:

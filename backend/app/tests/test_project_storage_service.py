@@ -1,3 +1,4 @@
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -153,6 +154,10 @@ class FakeGraphClient:
             }
         if path.startswith("/drives/drive-1/items/") and path.endswith(
             "/children?$select=id,name,webUrl,folder,parentReference"
+        ):
+            return {"value": []}
+        if path.startswith("/drives/drive-1/items/") and path.endswith(
+            "/children?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
         ):
             return {"value": []}
         raise AssertionError(f"unexpected get path: {path}")
@@ -386,7 +391,102 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
     assert graph.posts[2][1]["name"] == "01_Angebote"
     assert graph.posts[4][1]["name"] == "03_Aufträge"
     assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert len(graph.puts) == 1
+    upload_path, upload_content, upload_content_type = graph.puts[0]
+    assert upload_path == (
+        "/drives/drive-1/items/folder-15:/Materialschein_Formular_Master.pdf:/content"
+        "?@microsoft.graph.conflictBehavior=fail"
+    )
+    assert len(upload_content) == 548881
+    assert hashlib.sha256(upload_content).hexdigest() == (
+        "b39bfc26d8a644dff0492289f8909d1436a57236ccbddea9d2430216b1fdfe28"
+    )
+    assert upload_content_type == "application/pdf"
     assert "super-secret-value" not in str(result)
+
+
+def test_create_project_folder_for_site_keeps_existing_material_order_template():
+    class ExistingMaterialTemplateGraphClient(FakeGraphClient):
+        def get(self, path):
+            if path == (
+                "/drives/drive-1/items/folder-15/children"
+                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+            ):
+                return {
+                    "value": [
+                        {
+                            "id": "material-template-1",
+                            "name": "Materialschein_Formular_Master.pdf",
+                            "file": {"mimeType": "application/pdf"},
+                        }
+                    ]
+                }
+            return super().get(path)
+
+    graph = ExistingMaterialTemplateGraphClient()
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=graph,
+    ).create_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
+    )
+
+    assert result["status"] == "created"
+    assert len(result["subfolders"]) == 15
+    assert graph.puts == []
+
+
+def test_create_project_folder_for_site_tolerates_concurrent_material_template_upload():
+    class ConcurrentMaterialTemplateGraphClient(FakeGraphClient):
+        def put_content(self, path, content, content_type=None):
+            raise MicrosoftGraphRequestError(
+                409,
+                "Microsoft Graph request failed with status 409.",
+                error_code="nameAlreadyExists",
+            )
+
+    result = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=ConcurrentMaterialTemplateGraphClient(),
+    ).create_project_folder_for_site(
+        site_id=42,
+        site_number="8007",
+        site_name="Schüchtermann Klinik",
+        project_manager_name="Keno Erichsen",
+    )
+
+    assert result["status"] == "created"
+    assert len(result["subfolders"]) == 15
+
+
+def test_create_project_folder_for_site_logs_material_template_upload_failure(caplog):
+    class FailingMaterialTemplateGraphClient(FakeGraphClient):
+        def put_content(self, path, content, content_type=None):
+            raise MicrosoftGraphRequestError(
+                503,
+                "Microsoft Graph request failed with status 503.",
+                error_code="serviceNotAvailable",
+            )
+
+    graph = FailingMaterialTemplateGraphClient()
+    with caplog.at_level("ERROR", logger="app.services.project_storage_service"):
+        result = ProjectStorageService(
+            config=enabled_config(ms_graph_create_project_folders_enabled=True),
+            graph_client=graph,
+        ).create_project_folder_for_site(
+            site_id=42,
+            site_number="8007",
+            site_name="Schüchtermann Klinik",
+            project_manager_name="Keno Erichsen",
+        )
+
+    assert result["status"] == "created"
+    assert len(result["subfolders"]) == 15
+    assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert "Material order template upload failed for site 42" in caplog.text
 
 
 def test_sync_project_folder_for_site_moves_existing_flat_folder_to_project_manager_folder():
