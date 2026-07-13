@@ -919,6 +919,74 @@ button:disabled {
   outline-offset: 1px;
 }
 
+.matrix-note-hover-preview {
+  position: fixed;
+  z-index: 2390;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #7f1d17;
+  border-radius: 0;
+  background: #a52820;
+  box-shadow: 0 12px 28px rgb(79 20 15 / 30%);
+  color: #fff;
+  padding: 7px 9px;
+  scrollbar-color: rgb(255 255 255 / 48%) transparent;
+}
+
+.matrix-note-hover-preview-title {
+  margin: 0;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(255 255 255 / 28%);
+  color: #fff4f2;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  padding: 1px 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-note-hover-preview-list {
+  display: grid;
+}
+
+.matrix-note-hover-preview-item {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 7px 0;
+}
+
+.matrix-note-hover-preview-item + .matrix-note-hover-preview-item {
+  border-top: 1px solid rgb(255 255 255 / 22%);
+}
+
+.matrix-note-hover-preview-item strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.73rem;
+  font-weight: 800;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-height: 1.32;
+}
+
+.matrix-note-hover-preview-item span {
+  color: #ffe3df;
+  font-size: 0.65rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.matrix-note-hover-preview-state {
+  margin: 0;
+  color: #fff1ef;
+  font-size: 0.7rem;
+  font-weight: 750;
+  padding: 8px 0 3px;
+}
+
 .matrix-notes-modal-backdrop {
   position: fixed;
   inset: 0;
