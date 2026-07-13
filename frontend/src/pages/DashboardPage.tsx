@@ -236,9 +236,11 @@ export function DashboardPage() {
       setDashboardNotePeopleLoading(true);
       setDashboardNotePeopleError(null);
       try {
-        const people = await api.dashboardNoteEmployeeOptions();
+        const people = await api.persons({ isActive: true });
         if (active) {
-          setDashboardNotePeople(people.slice().sort(compareDashboardNotePeople));
+          setDashboardNotePeople(
+            people.filter(isAssignableDashboardNotePerson).sort(compareDashboardNotePeople),
+          );
         }
       } catch {
         if (active) {
@@ -1672,6 +1674,17 @@ function compareDashboardNotePeople(first: Person, second: Person): number {
     || first.first_name.localeCompare(second.first_name, "de", { sensitivity: "base" })
     || first.display_name.localeCompare(second.display_name, "de", { sensitivity: "base" })
     || first.id - second.id;
+}
+
+function isAssignableDashboardNotePerson(person: Person): boolean {
+  if (!person.is_active || person.deleted_at !== null) {
+    return false;
+  }
+  if (person.person_type !== "internal") {
+    return true;
+  }
+  const activeUserRoles = person.user_roles ?? [];
+  return activeUserRoles.length === 0 || activeUserRoles.includes("monteur");
 }
 
 function parseDashboardNoteSiteFilterId(value: string | null): number | null {

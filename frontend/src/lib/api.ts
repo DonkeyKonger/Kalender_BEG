@@ -466,10 +466,6 @@ export const api = {
     return request<SiteSummary[]>("/dashboard/notes/site-options");
   },
 
-  async dashboardNoteEmployeeOptions(): Promise<Person[]> {
-    return request<Person[]>("/dashboard/notes/employee-options");
-  },
-
   async createDashboardNote(payload: DashboardNotePayload): Promise<DashboardNote> {
     return request<DashboardNote>("/dashboard/notes", {
       method: "POST",
