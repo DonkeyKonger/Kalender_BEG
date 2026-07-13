@@ -9,6 +9,7 @@ import { ApiError, api } from "../lib/api";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
+import type { CurrentUser } from "../types/auth";
 import type {
   MatrixAssignment,
   MatrixCell,
@@ -165,7 +166,7 @@ export function MatrixPage() {
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
   const assignmentResizeRef = useRef<AssignmentResizeState | null>(null);
-  const didSetInitialProjectManagerFilter = useRef(false);
+  const projectManagerFilterUserIdRef = useRef(user?.id ?? null);
   const rangeScrollKeyRef = useRef<string | null>(null);
   const interactionWeekSnapKeyRef = useRef<string | null>(null);
   const rangeScrollFrameRef = useRef<number | null>(null);
@@ -186,7 +187,9 @@ export function MatrixPage() {
     id: 0,
     weekStart: getIsoWeekStartDate(planningReferenceDate),
   }));
-  const [projectManagerFilter, setProjectManagerFilter] = useState<string>("all");
+  const [projectManagerFilter, setProjectManagerFilter] = useState<string>(() => (
+    initialMatrixProjectManagerFilter(user)
+  ));
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
@@ -548,14 +551,12 @@ export function MatrixPage() {
   }, [clearScheduledMatrixRangeScroll, invalidateMatrixDataContext, projectManagerFilter]);
 
   useEffect(() => {
-    if (!matrix || didSetInitialProjectManagerFilter.current) {
+    if (!user || projectManagerFilterUserIdRef.current === user.id) {
       return;
     }
-    didSetInitialProjectManagerFilter.current = true;
-    if (user?.person_id && matrix.project_managers.some((manager) => manager.id === user.person_id)) {
-      updateProjectManagerFilter(String(user.person_id));
-    }
-  }, [matrix, updateProjectManagerFilter, user?.person_id]);
+    projectManagerFilterUserIdRef.current = user.id;
+    updateProjectManagerFilter(initialMatrixProjectManagerFilter(user));
+  }, [updateProjectManagerFilter, user]);
 
   const scheduleScrollToCurrentWeek = useCallback(() => {
     if (!matrix || !matrixScrollRef.current) {
@@ -3434,6 +3435,12 @@ function assignmentRunWidth(cells: MatrixCell[], startIndex: number, span: numbe
 
 function matrixCompactPreferenceKey(userId: number): string {
   return `kb_matrix_compact_view_${userId}`;
+}
+
+function initialMatrixProjectManagerFilter(user: CurrentUser | null): string {
+  return user?.role === "project_manager" && user.person_id !== null
+    ? String(user.person_id)
+    : "all";
 }
 
 function getYearPlanningRange(referenceDate: string): PlanningRange {
