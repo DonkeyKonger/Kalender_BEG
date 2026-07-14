@@ -198,10 +198,12 @@ export function AppShell() {
         {user ? (
           <div className="mobile-appshell-actions" aria-label="Mobile App-Aktionen">
             <span className="mobile-appshell-user">Angemeldet als {user?.display_name}</span>
-            <button className="icon-button" type="button" onClick={() => void logout()}>
-              <LogOut aria-hidden="true" size={17} />
-              <span>Abmelden</span>
-            </button>
+            {user.role !== "monteur" ? (
+              <button className="icon-button" type="button" onClick={() => void logout()}>
+                <LogOut aria-hidden="true" size={17} />
+                <span>Abmelden</span>
+              </button>
+            ) : null}
           </div>
         ) : null}
 
