@@ -89,11 +89,10 @@ def list_my_assignment_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MobileAssignmentsResponse:
-    return MobileAssignmentService(db).list_own_assignments(
+    return MobileAssignmentService(db).list_own_assignment_history(
         current_user=current_user,
         start=start,
         end=end,
-        allow_history=True,
     )
 
 

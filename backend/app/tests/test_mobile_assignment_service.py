@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 import app.services.mobile_assignment_service as mobile_assignment_module
+from app.api.routes.me import list_my_assignment_history, list_my_assignments
 from app.models import Base
 from app.models.assignment import Assignment
 from app.models.enums import AssignmentType, SiteStatus, UserRole
@@ -28,7 +29,7 @@ def db_session() -> Session:
     return Session(engine)
 
 
-def test_mobile_assignment_history_includes_closed_sites_and_only_own_person():
+def history_context() -> tuple[Session, User, Person, Person]:
     db = db_session()
     worker = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
     other_worker = Person(first_name="Erika", last_name="Extern", display_name="Erika Extern", short_code="EE")
@@ -40,65 +41,231 @@ def test_mobile_assignment_history_includes_closed_sites_and_only_own_person():
         is_active=True,
         person=worker,
     )
-    active_site = Site(site_number="1001", name="Aktive Baustelle", status=SiteStatus.ACTIVE)
-    completed_site = Site(site_number="1002", name="Abgeschlossene Baustelle", status=SiteStatus.COMPLETED)
-    deleted_site = Site(site_number="1003", name="Archivierte Baustelle", status=SiteStatus.DELETED)
-    db.add_all([worker, other_worker, current_user, active_site, completed_site, deleted_site])
+    db.add_all([worker, other_worker, current_user])
     db.flush()
-    db.add_all([
-        Assignment(
-            site_id=active_site.id,
-            person_id=worker.id,
-            start_date=date(2026, 7, 10),
-            end_date=date(2026, 7, 13),
-            assignment_type=AssignmentType.REGULAR,
-        ),
-        Assignment(
-            site_id=completed_site.id,
-            person_id=worker.id,
-            start_date=date(2025, 8, 1),
-            end_date=date(2025, 8, 4),
-            assignment_type=AssignmentType.REGULAR,
-        ),
-        Assignment(
-            site_id=deleted_site.id,
-            person_id=worker.id,
-            start_date=date(2026, 1, 12),
-            end_date=date(2026, 1, 12),
-            assignment_type=AssignmentType.REGULAR,
-        ),
-        Assignment(
-            site_id=active_site.id,
-            person_id=worker.id,
-            start_date=date(2025, 7, 1),
-            end_date=date(2025, 7, 12),
-            assignment_type=AssignmentType.REGULAR,
-        ),
-        Assignment(
-            site_id=active_site.id,
-            person_id=other_worker.id,
-            start_date=date(2026, 5, 1),
-            end_date=date(2026, 5, 2),
-            assignment_type=AssignmentType.REGULAR,
-        ),
-    ])
     db.commit()
+    return db, current_user, worker, other_worker
 
-    response = MobileAssignmentService(db).list_own_assignments(
+
+def add_history_assignment(
+    db: Session,
+    *,
+    person: Person,
+    site_number: str,
+    work_date: date,
+    end_date: date | None = None,
+    site_status: SiteStatus = SiteStatus.ACTIVE,
+) -> Assignment:
+    site = Site(
+        site_number=site_number,
+        name=f"Baustelle {site_number}",
+        status=site_status,
+    )
+    db.add(site)
+    db.flush()
+    assignment = Assignment(
+        site_id=site.id,
+        person_id=person.id,
+        start_date=work_date,
+        end_date=end_date or work_date,
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add(assignment)
+    db.commit()
+    return assignment
+
+
+def load_history(db: Session, current_user: User):
+    return MobileAssignmentService(db).list_own_assignment_history(
         current_user=current_user,
-        start=date(2025, 7, 13),
-        end=date(2026, 7, 13),
-        allow_history=True,
+        start=date(2025, 7, 14),
+        end=date(2026, 7, 14),
     )
 
-    assert response.start_date == date(2025, 7, 13)
-    assert response.end_date == date(2026, 7, 13)
-    assert {assignment.site.name for assignment in response.assignments} == {
-        "Aktive Baustelle",
-        "Abgeschlossene Baustelle",
-        "Archivierte Baustelle",
-    }
-    assert {assignment.person.id for assignment in response.assignments} == {worker.id}
+
+def test_mobile_assignment_history_includes_single_past_planmatrix_day():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="1001",
+        work_date=date(2026, 5, 12),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [assignment.id]
+
+
+def test_mobile_assignment_history_returns_multiple_entries_for_same_site():
+    db, current_user, worker, _ = history_context()
+    site = Site(site_number="1002", name="Mehrfach eingeplant", status=SiteStatus.ACTIVE)
+    db.add(site)
+    db.flush()
+    assignments = [
+        Assignment(
+            site_id=site.id,
+            person_id=worker.id,
+            start_date=work_date,
+            end_date=work_date,
+            assignment_type=AssignmentType.REGULAR,
+        )
+        for work_date in [date(2026, 2, 3), date(2026, 5, 12)]
+    ]
+    db.add_all(assignments)
+    db.commit()
+
+    response = load_history(db, current_user)
+
+    assert {item.id for item in response.assignments} == {item.id for item in assignments}
+    assert {item.site.id for item in response.assignments} == {site.id}
+
+
+@pytest.mark.parametrize(
+    "site_status",
+    [SiteStatus.COMPLETED, SiteStatus.PAUSED, SiteStatus.DELETED],
+)
+def test_mobile_assignment_history_ignores_current_site_status(site_status: SiteStatus):
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number=f"status-{site_status.value}",
+        work_date=date(2026, 1, 12),
+        site_status=site_status,
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [assignment.id]
+    assert response.assignments[0].site.status == site_status
+
+
+def test_mobile_assignment_history_excludes_other_people():
+    db, current_user, worker, other_worker = history_context()
+    own_assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="1003",
+        work_date=date(2026, 4, 7),
+    )
+    add_history_assignment(
+        db,
+        person=other_worker,
+        site_number="1004",
+        work_date=date(2026, 6, 9),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [own_assignment.id]
+    assert {item.person.id for item in response.assignments} == {worker.id}
+
+
+def test_mobile_assignment_history_excludes_deleted_planmatrix_assignment():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="1005",
+        work_date=date(2026, 3, 2),
+    )
+    db.delete(assignment)
+    db.commit()
+
+    response = load_history(db, current_user)
+
+    assert response.assignments == []
+
+
+def test_mobile_assignment_history_has_no_result_limit_for_older_entries():
+    db, current_user, worker, _ = history_context()
+    site = Site(site_number="1006", name="Langzeittest", status=SiteStatus.ACTIVE)
+    db.add(site)
+    db.flush()
+    first_date = date(2025, 8, 1)
+    assignments = [
+        Assignment(
+            site_id=site.id,
+            person_id=worker.id,
+            start_date=first_date + timedelta(days=index * 4),
+            end_date=first_date + timedelta(days=index * 4),
+            assignment_type=AssignmentType.REGULAR,
+        )
+        for index in range(80)
+    ]
+    db.add_all(assignments)
+    db.commit()
+
+    response = load_history(db, current_user)
+
+    assert len(response.assignments) == 80
+    assert response.assignments[-1].id == assignments[0].id
+    assert response.assignments[-1].start_date == first_date
+
+
+def test_mobile_assignment_history_honors_inclusive_rolling_year_boundaries():
+    db, current_user, worker, _ = history_context()
+    expected = [
+        add_history_assignment(
+            db,
+            person=worker,
+            site_number="1007",
+            work_date=date(2025, 7, 14),
+        ),
+        add_history_assignment(
+            db,
+            person=worker,
+            site_number="1008",
+            work_date=date(2026, 7, 14),
+        ),
+    ]
+    add_history_assignment(
+        db,
+        person=worker,
+        site_number="1009",
+        work_date=date(2025, 7, 13),
+    )
+    add_history_assignment(
+        db,
+        person=worker,
+        site_number="1010",
+        work_date=date(2026, 7, 15),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [expected[1].id, expected[0].id]
+    assert response.start_date == date(2025, 7, 14)
+    assert response.end_date == date(2026, 7, 14)
+
+
+def test_assignment_routes_use_different_range_limits_for_upcoming_and_history():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="1011",
+        work_date=date(2025, 8, 1),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        list_my_assignments(
+            start=date(2025, 7, 14),
+            end=date(2026, 7, 14),
+            current_user=current_user,
+            db=db,
+        )
+
+    response = list_my_assignment_history(
+        start=date(2025, 7, 14),
+        end=date(2026, 7, 14),
+        current_user=current_user,
+        db=db,
+    )
+
+    assert error.value.status_code == 400
+    assert [item.id for item in response.assignments] == [assignment.id]
 
 
 def test_mobile_active_sites_are_readable_for_assigned_monteur():

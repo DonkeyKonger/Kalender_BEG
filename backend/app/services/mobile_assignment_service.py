@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 
 from fastapi import HTTPException, status
@@ -24,6 +25,7 @@ MAX_HISTORY_DAYS = 370
 MAX_RECENT_SITES = 20
 KNOWN_SITE_LOOKBACK_MONTHS = 6
 SELF_PLANNED_NOTE = "Vom Monteur selbst nachgetragen, weil keine Planung vorhanden war."
+logger = logging.getLogger(__name__)
 
 
 class MobileAssignmentService:
@@ -36,7 +38,38 @@ class MobileAssignmentService:
         current_user: User,
         start: date,
         end: date,
-        allow_history: bool = False,
+    ) -> MobileAssignmentsResponse:
+        return self._list_own_assignments(
+            current_user=current_user,
+            start=start,
+            end=end,
+            max_days=MAX_DEFAULT_DAYS,
+            view="upcoming",
+        )
+
+    def list_own_assignment_history(
+        self,
+        *,
+        current_user: User,
+        start: date,
+        end: date,
+    ) -> MobileAssignmentsResponse:
+        return self._list_own_assignments(
+            current_user=current_user,
+            start=start,
+            end=end,
+            max_days=MAX_HISTORY_DAYS,
+            view="history",
+        )
+
+    def _list_own_assignments(
+        self,
+        *,
+        current_user: User,
+        start: date,
+        end: date,
+        max_days: int,
+        view: str,
     ) -> MobileAssignmentsResponse:
         if current_user.person_id is None:
             raise HTTPException(
@@ -46,7 +79,6 @@ class MobileAssignmentService:
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
 
-        max_days = MAX_HISTORY_DAYS if allow_history else MAX_DEFAULT_DAYS
         if (end - start).days + 1 > max_days:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -64,9 +96,25 @@ class MobileAssignmentService:
                 Assignment.start_date <= end,
                 Assignment.end_date >= start,
             )
-            .order_by(Assignment.start_date, Assignment.end_date, Assignment.id)
+            # Assignment is the authoritative Planmatrix record. Deliberately do not
+            # join against, or filter by, the current site status here: a completed,
+            # paused or archived site must retain its historical assignments.
+            .order_by(
+                Assignment.end_date.desc(),
+                Assignment.start_date.desc(),
+                Assignment.id.desc(),
+            )
         )
         assignments = list(self.db.scalars(statement))
+        logger.info(
+            "Mobile assignments loaded: view=%s user_id=%s person_id=%s start=%s end=%s count=%s",
+            view,
+            current_user.id,
+            current_user.person_id,
+            start,
+            end,
+            len(assignments),
+        )
         return MobileAssignmentsResponse(
             start_date=start,
             end_date=end,
