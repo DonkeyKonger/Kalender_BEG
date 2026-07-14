@@ -1272,12 +1272,16 @@ export const api = {
 
   async myAssignments(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
-    return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`);
+    return request<MobileAssignmentsResponse>(`/me/assignments?${search.toString()}`, {
+      cache: "no-store",
+    });
   },
 
   async myAssignmentHistory(params: { start: string; end: string }): Promise<MobileAssignmentsResponse> {
     const search = new URLSearchParams({ start: params.start, end: params.end });
-    return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`);
+    return request<MobileAssignmentsResponse>(`/me/assignments/history?${search.toString()}`, {
+      cache: "no-store",
+    });
   },
 
   async mySites(): Promise<MobileSite[]> {

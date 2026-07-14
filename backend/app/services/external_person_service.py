@@ -15,6 +15,10 @@ class ExternalPersonService:
         if not cleaned:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Externer Name fehlt.")
 
+        internal_person = self.people.find_unique_active_internal_by_identity(cleaned)
+        if internal_person is not None:
+            return internal_person
+
         existing = self.people.find_active_external_by_display_name(cleaned)
         if existing is not None:
             return existing

@@ -15,7 +15,9 @@ from app.models.enums import AssignmentType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
+from app.schemas.assignment import AssignmentCreate, AssignmentUpdate
 from app.schemas.mobile import MobileSelfPlanRequest
+from app.services.assignment_service import AssignmentService
 from app.services.mobile_assignment_service import MobileAssignmentService
 
 
@@ -119,6 +121,157 @@ def test_mobile_assignment_history_returns_multiple_entries_for_same_site():
 
     assert {item.id for item in response.assignments} == {item.id for item in assignments}
     assert {item.site.id for item in response.assignments} == {site.id}
+
+
+def test_mobile_assignment_history_includes_multiday_assignment_run():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="run-kw27",
+        work_date=date(2026, 6, 29),
+        end_date=date(2026, 7, 3),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [assignment.id]
+    assert response.assignments[0].start_date == date(2026, 6, 29)
+    assert response.assignments[0].end_date == date(2026, 7, 3)
+
+
+def test_mobile_assignment_history_includes_run_starting_before_requested_range():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="overlap-start",
+        work_date=date(2025, 7, 10),
+        end_date=date(2025, 7, 15),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [assignment.id]
+
+
+def test_mobile_assignment_history_includes_run_ending_after_requested_range():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="overlap-end",
+        work_date=date(2026, 7, 13),
+        end_date=date(2026, 7, 20),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [assignment.id]
+
+
+def test_mobile_assignment_history_uses_linked_person_id_not_visible_code():
+    db, current_user, worker, _ = history_context()
+    duplicate = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="M.Monteur",
+    )
+    db.add(duplicate)
+    db.commit()
+    own_assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="linked-id",
+        work_date=date(2026, 5, 12),
+    )
+    add_history_assignment(
+        db,
+        person=duplicate,
+        site_number="same-visible-code",
+        work_date=date(2026, 6, 29),
+        end_date=date(2026, 7, 3),
+    )
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [own_assignment.id]
+    assert {item.person.id for item in response.assignments} == {current_user.person_id}
+
+
+def test_copied_assignment_is_visible_in_mobile_history():
+    db, current_user, worker, _ = history_context()
+    site = Site(site_number="copy-target", name="Kopierter Einsatz", status=SiteStatus.ACTIVE)
+    db.add(site)
+    db.commit()
+
+    copied = AssignmentService(db).create_assignment(
+        AssignmentCreate(
+            site_id=site.id,
+            person_id=worker.id,
+            start_date=date(2026, 4, 13),
+            end_date=date(2026, 4, 17),
+        ),
+        user_id=current_user.id,
+    ).assignment
+
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [copied.id]
+
+
+def test_dragged_assignment_keeps_person_id_and_is_visible_in_mobile_history():
+    db, current_user, worker, _ = history_context()
+    source_site = Site(site_number="drag-source", name="Drag Quelle", status=SiteStatus.ACTIVE)
+    target_site = Site(site_number="drag-target", name="Drag Ziel", status=SiteStatus.ACTIVE)
+    db.add_all([source_site, target_site])
+    db.flush()
+    assignment = Assignment(
+        site_id=source_site.id,
+        person_id=worker.id,
+        start_date=date(2026, 3, 2),
+        end_date=date(2026, 3, 6),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add(assignment)
+    db.commit()
+
+    moved = AssignmentService(db).update_assignment(
+        assignment.id,
+        AssignmentUpdate(
+            site_id=target_site.id,
+            start_date=date(2026, 3, 9),
+            end_date=date(2026, 3, 13),
+        ),
+        user_id=current_user.id,
+    ).assignment
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [moved.id]
+    assert response.assignments[0].person.id == worker.id
+    assert response.assignments[0].site.id == target_site.id
+
+
+def test_resized_assignment_range_is_visible_in_mobile_history():
+    db, current_user, worker, _ = history_context()
+    assignment = add_history_assignment(
+        db,
+        person=worker,
+        site_number="resize",
+        work_date=date(2026, 2, 2),
+    )
+
+    resized = AssignmentService(db).update_assignment(
+        assignment.id,
+        AssignmentUpdate(end_date=date(2026, 2, 6)),
+        user_id=current_user.id,
+    ).assignment
+    response = load_history(db, current_user)
+
+    assert [item.id for item in response.assignments] == [resized.id]
+    assert response.assignments[0].start_date == date(2026, 2, 2)
+    assert response.assignments[0].end_date == date(2026, 2, 6)
 
 
 @pytest.mark.parametrize(

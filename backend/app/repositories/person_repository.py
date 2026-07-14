@@ -49,7 +49,45 @@ class PersonRepository:
         )
         return self.db.scalar(statement)
 
+    def find_unique_active_internal_by_identity(self, value: str) -> Person | None:
+        normalized_value = normalize_person_identity(value)
+        if not normalized_value:
+            return None
+
+        statement = (
+            select(Person)
+            .where(
+                Person.deleted_at.is_(None),
+                Person.is_active.is_(True),
+                Person.person_type == PersonType.INTERNAL,
+            )
+            .order_by(Person.id)
+        )
+        matches = [
+            person
+            for person in self.db.scalars(statement)
+            if normalized_value in person_identity_values(person)
+        ]
+        return matches[0] if len(matches) == 1 else None
+
     def add(self, person: Person) -> Person:
         self.db.add(person)
         self.db.flush()
         return person
+
+
+def normalize_person_identity(value: str | None) -> str:
+    return " ".join((value or "").split()).casefold()
+
+
+def person_identity_values(person: Person) -> set[str]:
+    calendar_code = ""
+    first_name = (person.first_name or "").strip()
+    last_name = (person.last_name or "").strip()
+    if first_name and last_name:
+        calendar_code = f"{first_name[:1]}.{last_name}"
+    return {
+        normalized
+        for value in [person.display_name, person.short_code, calendar_code]
+        if (normalized := normalize_person_identity(value))
+    }

@@ -109,6 +109,10 @@ class PersonService:
         if not display_name:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Name darf nicht leer sein.")
 
+        internal_person = self.people.find_unique_active_internal_by_identity(display_name)
+        if internal_person is not None:
+            return internal_person
+
         existing = self.people.find_active_external_by_display_name(display_name)
         if existing is not None:
             return existing
