@@ -11,6 +11,7 @@ import {
 } from "../src/lib/toolMaterialFilters.ts";
 import {
   getSuggestedToolMaterialStatus,
+  getToolMaterialStatusChange,
   getToolMaterialStatusPresentation,
   toolMaterialStatusOptions,
 } from "../src/lib/toolMaterialStatus.ts";
@@ -58,11 +59,24 @@ test("global search, combined column filters and sorting share one API query", (
 });
 
 
-test("employee assignment suggests issued or warehouse without overriding defective", () => {
+test("employee assignment always suggests issued and removal returns issued items to warehouse", () => {
   assert.equal(getSuggestedToolMaterialStatus("warehouse", "7"), "issued");
+  assert.equal(getSuggestedToolMaterialStatus("defective", "7"), "issued");
   assert.equal(getSuggestedToolMaterialStatus("issued", ""), "warehouse");
-  assert.equal(getSuggestedToolMaterialStatus("defective", "7"), "defective");
   assert.equal(getSuggestedToolMaterialStatus("defective", ""), "defective");
+});
+
+
+test("warehouse and defective status changes clear the employee immediately", () => {
+  assert.deepEqual(getToolMaterialStatusChange("issued"), { status: "issued" });
+  assert.deepEqual(getToolMaterialStatusChange("warehouse"), {
+    status: "warehouse",
+    employee_id: "",
+  });
+  assert.deepEqual(getToolMaterialStatusChange("defective"), {
+    status: "defective",
+    employee_id: "",
+  });
 });
 
 

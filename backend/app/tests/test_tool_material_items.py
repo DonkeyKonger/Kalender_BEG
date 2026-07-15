@@ -2,12 +2,18 @@ from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app.api.dependencies import get_current_user
 from app.api.routes import tool_material_items
 from app.core.database import get_db
 from app.main import create_app
-from app.models.enums import UserRole
+from app.models import Base
+from app.models.enums import PersonType, UserRole
+from app.models.person import Person
+from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import ToolMaterialFilterOptionsRead
 
 
@@ -127,6 +133,54 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
         ("delete", 7),
     ]
     app.dependency_overrides.clear()
+
+
+def test_tool_material_api_rejects_contradictory_status_and_employee():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    employee = Person(
+        first_name="Anna",
+        last_name="Bauer",
+        display_name="Anna Bauer",
+        short_code="AB",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id=1,
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/admin/tool-material-items",
+        json={
+            "beg_number": "INVALID-API",
+            "designation": "Widerspruch",
+            "employee_id": employee.id,
+            "status": "warehouse",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Lager- oder defekte Einträge dürfen keinem Mitarbeiter zugeordnet sein."
+    )
+    assert db.scalar(select(ToolMaterialItem.id)) is None
+    app.dependency_overrides.clear()
+    db.close()
 
 
 def demo_tool_material_item():

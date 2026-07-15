@@ -8,6 +8,7 @@ import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
 import {
   getSuggestedToolMaterialStatus,
+  getToolMaterialStatusChange,
   getToolMaterialStatusPresentation,
   toolMaterialStatusOptions,
 } from "../lib/toolMaterialStatus";
@@ -628,7 +629,10 @@ function ToolMaterialFields({
       </label>
       <label>
         <span>Status</span>
-        <select value={draft.status} onChange={(event) => onChange({ status: event.target.value as ToolMaterialStatus })}>
+        <select
+          value={draft.status}
+          onChange={(event) => onChange(getToolMaterialStatusChange(event.target.value as ToolMaterialStatus))}
+        >
           {toolMaterialStatusOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}

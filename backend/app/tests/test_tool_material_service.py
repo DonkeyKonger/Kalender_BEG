@@ -57,6 +57,7 @@ def tool_material_db() -> tuple[Session, dict[str, Person]]:
                 designation="Bohrmaschine",
                 item_type="GBH",
                 employee_id=people["internal"].id,
+                status=ToolMaterialStatus.ISSUED,
                 item_date=date(2026, 7, 1),
                 delivery_note="LS-001",
                 stock=3,
@@ -66,6 +67,7 @@ def tool_material_db() -> tuple[Session, dict[str, Person]]:
                 manufacturer="Bosch",
                 designation="Säge",
                 employee_id=people["external"].id,
+                status=ToolMaterialStatus.ISSUED,
                 item_date=date(2026, 7, 2),
                 delivery_note="LS-002",
                 stock=8,
@@ -75,6 +77,7 @@ def tool_material_db() -> tuple[Session, dict[str, Person]]:
                 manufacturer="Makita",
                 designation="Altgerät",
                 employee_id=people["inactive"].id,
+                status=ToolMaterialStatus.ISSUED,
                 item_date=None,
                 stock=None,
             ),
@@ -158,7 +161,7 @@ def test_filter_options_include_empty_values_and_inactive_assignments():
         for option in options["employee"]
     )
     assert any(
-        option.value == ToolMaterialStatus.WAREHOUSE.value and option.label == "Lager"
+        option.value == ToolMaterialStatus.ISSUED.value and option.label == "Ausgegeben"
         for option in options["status"]
     )
     db.close()
@@ -202,4 +205,114 @@ def test_status_filter_is_applied_server_side():
     )
 
     assert [item.beg_number for item in items] == ["DEF-1"]
+    db.close()
+
+
+def test_issued_item_can_be_created_with_employee_assignment():
+    db, people = tool_material_db()
+
+    item = ToolMaterialService(db).create_item(
+        ToolMaterialItemCreate(
+            beg_number="ASSIGN-1",
+            designation="Ausgegebenes Gerät",
+            employee_id=people["internal"].id,
+        )
+    )
+
+    assert item.status == ToolMaterialStatus.ISSUED
+    assert item.employee_id == people["internal"].id
+    db.close()
+
+
+@pytest.mark.parametrize(
+    "target_status",
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+)
+def test_changing_issued_status_clears_employee_assignment(target_status):
+    db, people = tool_material_db()
+    service = ToolMaterialService(db)
+    item = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number=f"CLEAR-{target_status.value}",
+            designation="Zuordnung entfernen",
+            employee_id=people["internal"].id,
+            status=ToolMaterialStatus.ISSUED,
+        )
+    )
+
+    updated = service.update_item(
+        item.id,
+        ToolMaterialItemUpdate(status=target_status),
+    )
+
+    assert updated.status == target_status
+    assert updated.employee_id is None
+    db.close()
+
+
+@pytest.mark.parametrize(
+    "initial_status",
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+)
+def test_assigning_employee_changes_unassigned_status_to_issued(initial_status):
+    db, people = tool_material_db()
+    service = ToolMaterialService(db)
+    item = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number=f"ISSUE-{initial_status.value}",
+            designation="Mitarbeiter zuordnen",
+            status=initial_status,
+        )
+    )
+
+    updated = service.update_item(
+        item.id,
+        ToolMaterialItemUpdate(employee_id=people["external"].id),
+    )
+
+    assert updated.status == ToolMaterialStatus.ISSUED
+    assert updated.employee_id == people["external"].id
+    db.close()
+
+
+@pytest.mark.parametrize(
+    "invalid_status",
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+)
+def test_backend_rejects_explicit_status_employee_contradictions(invalid_status):
+    db, people = tool_material_db()
+    service = ToolMaterialService(db)
+
+    with pytest.raises(HTTPException) as create_error:
+        service.create_item(
+            ToolMaterialItemCreate(
+                beg_number=f"INVALID-{invalid_status.value}",
+                designation="Widerspruch",
+                employee_id=people["internal"].id,
+                status=invalid_status,
+            )
+        )
+
+    assert create_error.value.status_code == 400
+
+    existing = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number=f"EDIT-{invalid_status.value}",
+            designation="Bearbeitung",
+            status=ToolMaterialStatus.WAREHOUSE,
+        )
+    )
+    with pytest.raises(HTTPException) as update_error:
+        service.update_item(
+            existing.id,
+            ToolMaterialItemUpdate(
+                employee_id=people["internal"].id,
+                status=invalid_status,
+            ),
+        )
+
+    assert update_error.value.status_code == 400
+    unchanged = service._get_item(existing.id)
+    assert unchanged.status == ToolMaterialStatus.WAREHOUSE
+    assert unchanged.employee_id is None
     db.close()

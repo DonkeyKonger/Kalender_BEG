@@ -205,6 +205,10 @@ class ToolMaterialService:
 
     def create_item(self, payload: ToolMaterialItemCreate) -> ToolMaterialItem:
         values = clean_tool_material_values(payload.model_dump())
+        values = enforce_status_employee_consistency(
+            values,
+            provided_fields=payload.model_fields_set,
+        )
         self._ensure_unique_beg_number(values["beg_number"])
         self._ensure_employee_exists(values.get("employee_id"))
         item = ToolMaterialItem(**values)
@@ -216,6 +220,11 @@ class ToolMaterialService:
     def update_item(self, item_id: int, payload: ToolMaterialItemUpdate) -> ToolMaterialItem:
         item = self._get_item(item_id)
         values = clean_tool_material_values(payload.model_dump(exclude_unset=True), partial=True)
+        values = enforce_status_employee_consistency(
+            values,
+            provided_fields=payload.model_fields_set,
+            current_status=item.status,
+        )
         if "beg_number" in values and values["beg_number"] is not None:
             self._ensure_unique_beg_number(values["beg_number"], excluding_item_id=item_id)
         if "employee_id" in values:
@@ -276,6 +285,48 @@ def clean_tool_material_values(values: dict, *, partial: bool = False) -> dict:
     if "designation" in cleaned and not cleaned.get("designation"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bezeichnung darf nicht leer sein.")
     return cleaned
+
+
+def enforce_status_employee_consistency(
+    values: dict,
+    *,
+    provided_fields: set[str],
+    current_status: ToolMaterialStatus | None = None,
+) -> dict:
+    normalized = dict(values)
+    status_value = normalized.get("status", current_status or ToolMaterialStatus.WAREHOUSE)
+    employee_id = normalized.get("employee_id")
+    status_was_provided = "status" in provided_fields
+    employee_was_provided = "employee_id" in provided_fields
+    unassigned_statuses = {
+        ToolMaterialStatus.WAREHOUSE,
+        ToolMaterialStatus.DEFECTIVE,
+    }
+
+    if (
+        status_was_provided
+        and employee_was_provided
+        and employee_id is not None
+        and status_value in unassigned_statuses
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Lager- oder defekte Einträge dürfen keinem Mitarbeiter zugeordnet sein.",
+        )
+
+    if status_was_provided and status_value in unassigned_statuses:
+        normalized["employee_id"] = None
+    elif employee_was_provided and employee_id is not None:
+        normalized["status"] = ToolMaterialStatus.ISSUED
+    elif (
+        employee_was_provided
+        and employee_id is None
+        and not status_was_provided
+        and current_status == ToolMaterialStatus.ISSUED
+    ):
+        normalized["status"] = ToolMaterialStatus.WAREHOUSE
+
+    return normalized
 
 
 def clean_search(value: str | None) -> str:

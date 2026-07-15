@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -9,6 +9,12 @@ from app.models.enums import ToolMaterialStatus, enum_values
 
 class ToolMaterialItem(TimestampMixin, Base):
     __tablename__ = "tool_material_items"
+    __table_args__ = (
+        CheckConstraint(
+            "status = 'issued' OR employee_id IS NULL",
+            name="ck_tool_material_items_status_employee",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     beg_number: Mapped[str | None] = mapped_column(String(120), unique=True, index=True)

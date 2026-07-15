@@ -19,14 +19,18 @@ export function getSuggestedToolMaterialStatus(
   currentStatus: ToolMaterialStatus,
   employeeId: string,
 ): ToolMaterialStatus {
-  if (currentStatus === "defective") {
-    return currentStatus;
-  }
-  if (employeeId && currentStatus === "warehouse") {
+  if (employeeId) {
     return "issued";
   }
   if (!employeeId && currentStatus === "issued") {
     return "warehouse";
   }
   return currentStatus;
+}
+
+export function getToolMaterialStatusChange(status: ToolMaterialStatus): {
+  status: ToolMaterialStatus;
+  employee_id?: "";
+} {
+  return status === "issued" ? { status } : { status, employee_id: "" };
 }
