@@ -191,7 +191,8 @@ def test_tool_material_endpoints_reject_users_without_miscellaneous_access(
     app.dependency_overrides.clear()
 
 
-def test_tool_material_api_rejects_contradictory_status_and_employee():
+@pytest.mark.parametrize("invalid_status", ["warehouse", "written_off"])
+def test_tool_material_api_rejects_contradictory_status_and_employee(invalid_status):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -226,20 +227,38 @@ def test_tool_material_api_rejects_contradictory_status_and_employee():
             "beg_number": "INVALID-API",
             "designation": "Widerspruch",
             "employee_id": employee.id,
-            "status": "warehouse",
+            "status": invalid_status,
         },
     )
 
     assert response.status_code == 400
     assert response.json()["detail"] == (
-        "Lager- oder defekte Einträge dürfen keinem Mitarbeiter zugeordnet sein."
+        "Lager- oder ausgebuchte Einträge dürfen keinem Mitarbeiter zugeordnet sein."
     )
     assert db.scalar(select(ToolMaterialItem.id)) is None
     app.dependency_overrides.clear()
     db.close()
 
 
-@pytest.mark.parametrize("target_status", ["warehouse", "defective"])
+def test_tool_material_api_rejects_removed_defective_status():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: user(UserRole.ADMIN)
+    app.dependency_overrides[get_db] = lambda: object()
+
+    response = TestClient(app).post(
+        "/api/admin/tool-material-items",
+        json={
+            "beg_number": "OLD-STATUS",
+            "designation": "Nicht mehr gültig",
+            "status": "defective",
+        },
+    )
+
+    assert response.status_code == 422
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("target_status", ["warehouse", "written_off"])
 @pytest.mark.parametrize(
     ("role", "permissions"),
     [

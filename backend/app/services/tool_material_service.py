@@ -55,7 +55,7 @@ SORT_COLUMNS = {
 STATUS_LABELS = {
     ToolMaterialStatus.ISSUED.value: "Ausgegeben",
     ToolMaterialStatus.WAREHOUSE.value: "Lager",
-    ToolMaterialStatus.DEFECTIVE.value: "Defekt",
+    ToolMaterialStatus.WRITTEN_OFF.value: "Ausgebucht",
 }
 
 
@@ -339,7 +339,7 @@ def enforce_status_employee_consistency(
     employee_was_provided = "employee_id" in provided_fields
     unassigned_statuses = {
         ToolMaterialStatus.WAREHOUSE,
-        ToolMaterialStatus.DEFECTIVE,
+        ToolMaterialStatus.WRITTEN_OFF,
     }
 
     if (
@@ -350,7 +350,7 @@ def enforce_status_employee_consistency(
     ):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Lager- oder defekte Einträge dürfen keinem Mitarbeiter zugeordnet sein.",
+            "Lager- oder ausgebuchte Einträge dürfen keinem Mitarbeiter zugeordnet sein.",
         )
 
     if status_was_provided and status_value in unassigned_statuses:

@@ -6,7 +6,7 @@ export type ToolMaterialEmployee = {
   is_active: boolean;
 };
 
-export type ToolMaterialStatus = "issued" | "warehouse" | "defective";
+export type ToolMaterialStatus = "issued" | "warehouse" | "written_off";
 
 export type ToolMaterialItem = {
   id: number;

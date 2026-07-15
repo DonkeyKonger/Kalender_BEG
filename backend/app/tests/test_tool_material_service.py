@@ -180,7 +180,7 @@ def test_all_status_values_can_be_created_and_updated():
     )
     assert item.status == ToolMaterialStatus.ISSUED
 
-    for item_status in (ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE):
+    for item_status in (ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.WRITTEN_OFF):
         item = service.update_item(
             item.id,
             ToolMaterialItemUpdate(status=item_status),
@@ -194,17 +194,23 @@ def test_status_filter_is_applied_server_side():
     service = ToolMaterialService(db)
     service.create_item(
         ToolMaterialItemCreate(
-            beg_number="DEF-1",
-            designation="Defektes Gerät",
-            status=ToolMaterialStatus.DEFECTIVE,
+            beg_number="AUSGEBUCHT-1",
+            designation="Ausgebuchtes Gerät",
+            status=ToolMaterialStatus.WRITTEN_OFF,
         )
     )
 
     items = service.list_items(
-        ToolMaterialListQuery(values_status=[ToolMaterialStatus.DEFECTIVE])
+        ToolMaterialListQuery(values_status=[ToolMaterialStatus.WRITTEN_OFF])
     )
+    status_options = service.filter_options().columns["status"]
 
-    assert [item.beg_number for item in items] == ["DEF-1"]
+    assert [item.beg_number for item in items] == ["AUSGEBUCHT-1"]
+    assert any(
+        option.value == ToolMaterialStatus.WRITTEN_OFF.value
+        and option.label == "Ausgebucht"
+        for option in status_options
+    )
     db.close()
 
 
@@ -226,7 +232,7 @@ def test_issued_item_can_be_created_with_employee_assignment():
 
 @pytest.mark.parametrize(
     "target_status",
-    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.WRITTEN_OFF],
 )
 def test_changing_issued_status_clears_employee_assignment(target_status):
     db, people = tool_material_db()
@@ -252,7 +258,7 @@ def test_changing_issued_status_clears_employee_assignment(target_status):
 
 @pytest.mark.parametrize(
     "initial_status",
-    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.WRITTEN_OFF],
 )
 def test_assigning_employee_changes_unassigned_status_to_issued(initial_status):
     db, people = tool_material_db()
@@ -277,7 +283,7 @@ def test_assigning_employee_changes_unassigned_status_to_issued(initial_status):
 
 @pytest.mark.parametrize(
     "invalid_status",
-    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE],
+    [ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.WRITTEN_OFF],
 )
 def test_backend_rejects_explicit_status_employee_contradictions(invalid_status):
     db, people = tool_material_db()

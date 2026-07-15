@@ -27,7 +27,7 @@ class PersonEmploymentStatus(StrEnum):
 class ToolMaterialStatus(StrEnum):
     ISSUED = "issued"
     WAREHOUSE = "warehouse"
-    DEFECTIVE = "defective"
+    WRITTEN_OFF = "written_off"
 
 
 class SiteStatus(StrEnum):

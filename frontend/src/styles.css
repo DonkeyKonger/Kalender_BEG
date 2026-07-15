@@ -11576,8 +11576,8 @@ button.person-chip:focus-visible {
   color: #78673f;
 }
 
-.tool-material-inline-status-trigger.is-defective,
-.tool-material-status-swatch.is-defective {
+.tool-material-inline-status-trigger.is-written-off,
+.tool-material-status-swatch.is-written-off {
   border-color: #dfc4c4;
   background: #faf3f3;
   color: #8a4d4d;

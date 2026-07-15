@@ -11,7 +11,7 @@ export const toolMaterialStatusOptions: ReadonlyArray<{
 }> = [
   { value: "issued", label: "Ausgegeben", badgeClass: "is-issued" },
   { value: "warehouse", label: "Lager", badgeClass: "is-warehouse" },
-  { value: "defective", label: "Defekt", badgeClass: "is-defective" },
+  { value: "written_off", label: "Ausgebucht", badgeClass: "is-written-off" },
 ];
 
 export function getToolMaterialStatusPresentation(status: ToolMaterialStatus) {

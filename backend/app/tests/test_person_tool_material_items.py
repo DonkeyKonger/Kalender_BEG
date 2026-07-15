@@ -85,9 +85,9 @@ def person_tool_material_db() -> tuple[Session, Person, Person]:
                 status=ToolMaterialStatus.WAREHOUSE,
             ),
             ToolMaterialItem(
-                beg_number="DEFEKT-1",
-                designation="Defektes Gerät",
-                status=ToolMaterialStatus.DEFECTIVE,
+                beg_number="AUSGEBUCHT-1",
+                designation="Ausgebuchtes Gerät",
+                status=ToolMaterialStatus.WRITTEN_OFF,
             ),
         ]
     )
@@ -104,7 +104,10 @@ def test_service_lists_only_current_person_assignments_with_natural_beg_sorting(
 
     assert [item.beg_number for item in items] == ["BEG-2", "BEG-10"]
     assert [item.designation for item in items] == ["Säge", "Bohrmaschine"]
-    assert all(item.beg_number not in {"BEG-1", "LAGER-1", "DEFEKT-1"} for item in items)
+    assert all(
+        item.beg_number not in {"BEG-1", "LAGER-1", "AUSGEBUCHT-1"}
+        for item in items
+    )
     db.close()
 
 

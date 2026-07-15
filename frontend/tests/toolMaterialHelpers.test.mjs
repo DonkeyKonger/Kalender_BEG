@@ -44,7 +44,7 @@ test("global search, combined column filters and sorting share one API query", (
     filters: {
       manufacturer: { query: "Bosch", values: ["Bosch", "Makita"] },
       item_date: { dateFrom: "2026-01-01", dateTo: "2026-12-31" },
-      status: { values: ["issued", "defective"] },
+      status: { values: ["issued", "written_off"] },
     },
     sortBy: "beg_number",
     sortDirection: "desc",
@@ -55,7 +55,7 @@ test("global search, combined column filters and sorting share one API query", (
   assert.deepEqual(params.getAll("values_manufacturer"), ["Bosch", "Makita"]);
   assert.equal(params.get("date_from"), "2026-01-01");
   assert.equal(params.get("date_to"), "2026-12-31");
-  assert.deepEqual(params.getAll("values_status"), ["issued", "defective"]);
+  assert.deepEqual(params.getAll("values_status"), ["issued", "written_off"]);
   assert.equal(params.get("sort_by"), "beg_number");
   assert.equal(params.get("sort_direction"), "desc");
 });
@@ -97,20 +97,20 @@ test("tool material table has the required columns without stock", () => {
 
 test("employee assignment always suggests issued and removal returns issued items to warehouse", () => {
   assert.equal(getSuggestedToolMaterialStatus("warehouse", "7"), "issued");
-  assert.equal(getSuggestedToolMaterialStatus("defective", "7"), "issued");
+  assert.equal(getSuggestedToolMaterialStatus("written_off", "7"), "issued");
   assert.equal(getSuggestedToolMaterialStatus("issued", ""), "warehouse");
-  assert.equal(getSuggestedToolMaterialStatus("defective", ""), "defective");
+  assert.equal(getSuggestedToolMaterialStatus("written_off", ""), "written_off");
 });
 
 
-test("warehouse and defective status changes clear the employee immediately", () => {
+test("warehouse and written-off status changes clear the employee immediately", () => {
   assert.deepEqual(getToolMaterialStatusChange("issued"), { status: "issued" });
   assert.deepEqual(getToolMaterialStatusChange("warehouse"), {
     status: "warehouse",
     employee_id: "",
   });
-  assert.deepEqual(getToolMaterialStatusChange("defective"), {
-    status: "defective",
+  assert.deepEqual(getToolMaterialStatusChange("written_off"), {
+    status: "written_off",
     employee_id: "",
   });
 });
@@ -123,14 +123,14 @@ test("inline status updates clear assignments optimistically and in the API payl
     status: "warehouse",
     employee_id: null,
   });
-  assert.deepEqual(getToolMaterialStatusUpdate("defective"), {
-    status: "defective",
+  assert.deepEqual(getToolMaterialStatusUpdate("written_off"), {
+    status: "written_off",
     employee_id: null,
   });
   assert.deepEqual(getToolMaterialStatusUpdate("issued"), { status: "issued" });
   assert.deepEqual(
-    getOptimisticToolMaterialStatusItem(item, "defective"),
-    { ...item, status: "defective", employee_id: null, employee: null },
+    getOptimisticToolMaterialStatusItem(item, "written_off"),
+    { ...item, status: "written_off", employee_id: null, employee: null },
   );
 });
 
@@ -153,7 +153,7 @@ test("inline status save returns the server item on success", async () => {
 test("inline status save preserves the previous item on failure", async () => {
   const item = toolMaterialItem();
   const saveError = new Error("Netzwerkfehler");
-  const result = await saveToolMaterialStatus(item, "defective", async () => {
+  const result = await saveToolMaterialStatus(item, "written_off", async () => {
     throw saveError;
   });
 
@@ -169,12 +169,12 @@ test("all tool material statuses have the expected Office badge presentation", (
     [
       ["issued", "Ausgegeben", "is-issued"],
       ["warehouse", "Lager", "is-warehouse"],
-      ["defective", "Defekt", "is-defective"],
+      ["written_off", "Ausgebucht", "is-written-off"],
     ],
   );
   assert.equal(getToolMaterialStatusPresentation("issued").label, "Ausgegeben");
   assert.equal(getToolMaterialStatusPresentation("warehouse").label, "Lager");
-  assert.equal(getToolMaterialStatusPresentation("defective").label, "Defekt");
+  assert.equal(getToolMaterialStatusPresentation("written_off").label, "Ausgebucht");
 });
 
 
