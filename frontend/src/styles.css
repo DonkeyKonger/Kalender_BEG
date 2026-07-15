@@ -3,6 +3,30 @@
 }
 
 :root {
+  --mobile-action-time-icon: #315f91;
+  --mobile-action-time-background: #eaf1f8;
+  --mobile-action-time-border: #9bb7d2;
+  --mobile-action-time-focus: #c3d5e6;
+  --mobile-action-vacation-icon: #846622;
+  --mobile-action-vacation-background: #f7f1df;
+  --mobile-action-vacation-border: #d8c797;
+  --mobile-action-vacation-focus: #e5d9b8;
+  --mobile-action-sickness-icon: #9b4b4b;
+  --mobile-action-sickness-background: #f8eaea;
+  --mobile-action-sickness-border: #dfb7b7;
+  --mobile-action-sickness-focus: #ebcccc;
+  --mobile-action-deployments-icon: #67558f;
+  --mobile-action-deployments-background: #f0ecf7;
+  --mobile-action-deployments-border: #c5bad9;
+  --mobile-action-deployments-focus: #d9d0e7;
+  --mobile-action-profile-icon: #35756d;
+  --mobile-action-profile-background: #e8f3f1;
+  --mobile-action-profile-border: #afd1cb;
+  --mobile-action-profile-focus: #c7e0dc;
+  --mobile-action-settings-icon: #586575;
+  --mobile-action-settings-background: #edf0f3;
+  --mobile-action-settings-border: #bdc5cd;
+  --mobile-action-settings-focus: #d3d9df;
   color: #172033;
   background: #f5f7fb;
   font-family:
@@ -5646,6 +5670,60 @@ button.person-chip:focus-visible {
   padding: 9px;
 }
 
+.app-shell.is-mobile-workspace .mobile-action-card {
+  --mobile-action-icon: #586575;
+  --mobile-action-background: #edf0f3;
+  --mobile-action-border: #bdc5cd;
+  --mobile-action-focus: #d3d9df;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--time {
+  --mobile-action-icon: var(--mobile-action-time-icon);
+  --mobile-action-background: var(--mobile-action-time-background);
+  --mobile-action-border: var(--mobile-action-time-border);
+  --mobile-action-focus: var(--mobile-action-time-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--vacation {
+  --mobile-action-icon: var(--mobile-action-vacation-icon);
+  --mobile-action-background: var(--mobile-action-vacation-background);
+  --mobile-action-border: var(--mobile-action-vacation-border);
+  --mobile-action-focus: var(--mobile-action-vacation-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--sickness {
+  --mobile-action-icon: var(--mobile-action-sickness-icon);
+  --mobile-action-background: var(--mobile-action-sickness-background);
+  --mobile-action-border: var(--mobile-action-sickness-border);
+  --mobile-action-focus: var(--mobile-action-sickness-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--deployments {
+  --mobile-action-icon: var(--mobile-action-deployments-icon);
+  --mobile-action-background: var(--mobile-action-deployments-background);
+  --mobile-action-border: var(--mobile-action-deployments-border);
+  --mobile-action-focus: var(--mobile-action-deployments-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--profile {
+  --mobile-action-icon: var(--mobile-action-profile-icon);
+  --mobile-action-background: var(--mobile-action-profile-background);
+  --mobile-action-border: var(--mobile-action-profile-border);
+  --mobile-action-focus: var(--mobile-action-profile-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card--settings {
+  --mobile-action-icon: var(--mobile-action-settings-icon);
+  --mobile-action-background: var(--mobile-action-settings-background);
+  --mobile-action-border: var(--mobile-action-settings-border);
+  --mobile-action-focus: var(--mobile-action-settings-focus);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card svg {
+  background: var(--mobile-action-background);
+  color: var(--mobile-action-icon);
+}
+
 .mobile-message-card:hover,
 .mobile-action-card:hover,
 .mobile-message-card:focus-visible,
@@ -5654,6 +5732,44 @@ button.person-chip:focus-visible {
   box-shadow: 0 15px 30px rgb(18 29 52 / 10%);
   outline: none;
   transform: translateY(-1px);
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:hover:not(:disabled) {
+  border-color: var(--mobile-action-border);
+  transform: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:focus-visible:not(:disabled) {
+  border-color: var(--mobile-action-border);
+  outline: 3px solid var(--mobile-action-focus);
+  outline-offset: 1px;
+  transform: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:active:not(:disabled) {
+  border-color: var(--mobile-action-border);
+  background: #fbfcfe;
+  box-shadow: 0 8px 18px rgb(18 29 52 / 8%);
+  transform: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:disabled {
+  border-color: #e1e6ec;
+  background: #f8fafc;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+  transform: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:disabled svg {
+  background: #edf0f3;
+  color: #8b96a3;
+}
+
+.app-shell.is-mobile-workspace .mobile-action-card:disabled strong,
+.app-shell.is-mobile-workspace .mobile-action-card:disabled small {
+  color: #8b96a3;
 }
 
 .mobile-message-card span,

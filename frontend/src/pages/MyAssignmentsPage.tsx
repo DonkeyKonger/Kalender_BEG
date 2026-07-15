@@ -684,12 +684,14 @@ export function MyAssignmentsPage() {
             <div className="mobile-action-list">
               <PlaceholderAction
                 icon={FileText}
+                tone="time"
                 title="Lohnzeit erfassen"
                 text="Arbeitszeit tagesbezogen eintragen oder ändern."
                 onOpen={() => navigate("/me/time-entry")}
               />
               <PlaceholderAction
                 icon={Plane}
+                tone="vacation"
                 title="Urlaubsantrag"
                 text="Diese Funktion ist vorbereitet und wird später aktiviert."
                 onOpen={() => setPlaceholder({
@@ -699,6 +701,7 @@ export function MyAssignmentsPage() {
               />
               <PlaceholderAction
                 icon={HeartPulse}
+                tone="sickness"
                 title="Krankmeldung"
                 text="Diese Funktion ist vorbereitet und wird später aktiviert."
                 onOpen={() => setPlaceholder({
@@ -708,12 +711,14 @@ export function MyAssignmentsPage() {
               />
               <PlaceholderAction
                 icon={CalendarClock}
+                tone="deployments"
                 title="Alle Einsätze anzeigen"
                 text="Öffnet die vollständige Einsatzliste mit 14-Tage- und Jahresansicht."
                 onOpen={() => setActiveScreen("assignments")}
               />
               <PlaceholderAction
                 icon={UserCircle}
+                tone="profile"
                 title="Persönliche Akte"
                 text="Diese persönliche Akte wird später Resturlaub, Krankheitstage und weitere Informationen anzeigen."
                 onOpen={() => setPlaceholder({
@@ -723,6 +728,7 @@ export function MyAssignmentsPage() {
               />
               <PlaceholderAction
                 icon={Settings}
+                tone="settings"
                 title="Einstellungen"
                 text="Standortprüfung und Benachrichtigungen verwalten."
                 onOpen={() => setActiveScreen("settings")}
@@ -977,17 +983,26 @@ function AssignmentRangeCard({ group }: { group: AssignmentRangeGroup }) {
 
 function PlaceholderAction({
   icon: Icon,
+  tone,
   title,
   text,
   onOpen,
+  disabled = false,
 }: {
   icon: typeof FileText;
+  tone: "time" | "vacation" | "sickness" | "deployments" | "profile" | "settings";
   title: string;
   text: string;
   onOpen: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <button className="mobile-action-card" type="button" onClick={onOpen}>
+    <button
+      className={`mobile-action-card mobile-action-card--${tone}`}
+      type="button"
+      disabled={disabled}
+      onClick={onOpen}
+    >
       <Icon aria-hidden="true" size={20} />
       <span>
         <strong>{title}</strong>
