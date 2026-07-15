@@ -21,6 +21,14 @@ export const toolMaterialColumnKeys: readonly ToolMaterialColumnKey[] = toolMate
 );
 export type ToolMaterialSortDirection = "asc" | "desc";
 
+export const defaultToolMaterialSorting: Readonly<{
+  sortBy: undefined;
+  sortDirection: ToolMaterialSortDirection;
+}> = {
+  sortBy: undefined,
+  sortDirection: "asc",
+};
+
 export type ToolMaterialColumnFilter = {
   query?: string;
   values?: string[];

@@ -150,6 +150,113 @@ def test_global_search_combines_with_column_values_and_sorting():
     db.close()
 
 
+def test_default_sort_groups_status_then_date_and_natural_beg_number():
+    db, _people = tool_material_db()
+    db.add_all(
+        [
+            ToolMaterialItem(
+                beg_number="WH-10",
+                designation="Lager zehn",
+                status=ToolMaterialStatus.WAREHOUSE,
+                item_date=date(2026, 7, 3),
+            ),
+            ToolMaterialItem(
+                beg_number="WH-2",
+                designation="Lager zwei",
+                status=ToolMaterialStatus.WAREHOUSE,
+                item_date=date(2026, 7, 3),
+            ),
+            ToolMaterialItem(
+                beg_number="WH-OHNE-DATUM",
+                designation="Lager ohne Datum",
+                status=ToolMaterialStatus.WAREHOUSE,
+                item_date=None,
+            ),
+            ToolMaterialItem(
+                beg_number="AUSGEBUCHT-1",
+                designation="Ausgebuchtes Gerät",
+                status=ToolMaterialStatus.WRITTEN_OFF,
+                item_date=date(2026, 7, 4),
+            ),
+        ]
+    )
+    db.commit()
+
+    items = ToolMaterialService(db).list_items()
+
+    assert [item.beg_number for item in items] == [
+        "WH-2",
+        "WH-10",
+        "WH-OHNE-DATUM",
+        "BEG-002",
+        "BEG-001",
+        None,
+        "AUSGEBUCHT-1",
+    ]
+    assert [item.status for item in items] == [
+        ToolMaterialStatus.WAREHOUSE,
+        ToolMaterialStatus.WAREHOUSE,
+        ToolMaterialStatus.WAREHOUSE,
+        ToolMaterialStatus.ISSUED,
+        ToolMaterialStatus.ISSUED,
+        ToolMaterialStatus.ISSUED,
+        ToolMaterialStatus.WRITTEN_OFF,
+    ]
+    db.close()
+
+
+def test_manual_sort_temporarily_overrides_default_status_grouping():
+    db, _people = tool_material_db()
+    db.add_all(
+        [
+            ToolMaterialItem(
+                beg_number="LAGER-Z",
+                designation="Zulu",
+                status=ToolMaterialStatus.WAREHOUSE,
+            ),
+            ToolMaterialItem(
+                beg_number="AUSGEBUCHT-A",
+                designation="Alpha",
+                status=ToolMaterialStatus.WRITTEN_OFF,
+            ),
+        ]
+    )
+    db.commit()
+
+    items = ToolMaterialService(db).list_items(
+        ToolMaterialListQuery(sort_by="designation", sort_direction="asc")
+    )
+
+    assert items[0].beg_number == "AUSGEBUCHT-A"
+    assert items[-1].beg_number == "LAGER-Z"
+    db.close()
+
+
+def test_status_change_repositions_item_in_default_sorting():
+    db, people = tool_material_db()
+    service = ToolMaterialService(db)
+    item = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number="MOVE-1",
+            designation="Neu einordnen",
+            employee_id=people["internal"].id,
+            status=ToolMaterialStatus.ISSUED,
+            item_date=date(2026, 7, 5),
+        )
+    )
+    assert service.list_items()[0].status == ToolMaterialStatus.ISSUED
+
+    service.update_item(
+        item.id,
+        ToolMaterialItemUpdate(status=ToolMaterialStatus.WAREHOUSE),
+    )
+
+    reordered = service.list_items()
+    assert reordered[0].id == item.id
+    assert reordered[0].status == ToolMaterialStatus.WAREHOUSE
+    db.close()
+
+
 def test_filter_options_include_empty_values_and_inactive_assignments():
     db, people = tool_material_db()
 

@@ -41,6 +41,31 @@ test("tool material panel fills the desktop viewport and scrolls only its table 
 });
 
 
+test("filter reset restores default sorting and status changes reload the ordered list", () => {
+  assert.match(pageSource, /setSortBy\(defaultToolMaterialSorting\.sortBy\)/);
+  assert.match(pageSource, /setSortDirection\(defaultToolMaterialSorting\.sortDirection\)/);
+  assert.match(pageSource, /const result = await saveToolMaterialStatus[\s\S]*await refreshItems\(\)/);
+});
+
+
+test("only written-off rows use muted text while their status control stays interactive", () => {
+  const writtenOffRule = cssRule(
+    ".miscellaneous-tools-row.is-written-off > td:not(.miscellaneous-tools-status-cell)",
+  );
+  const statusTriggerRule = cssRule(".tool-material-inline-status-trigger");
+
+  assert.match(
+    pageSource,
+    /item\.status === "written_off" \? " is-written-off" : ""/,
+  );
+  assert.match(writtenOffRule, /color:\s*#6f7b89/);
+  assert.doesNotMatch(writtenOffRule, /opacity/);
+  assert.match(statusTriggerRule, /cursor:\s*pointer/);
+  assert.match(pageSource, /className=\{`tool-material-inline-status-trigger/);
+  assert.match(pageSource, /event\.stopPropagation\(\);\s*setIsOpen/);
+});
+
+
 function cssRule(selector) {
   const start = styles.indexOf(`${selector} {`);
   assert.notEqual(start, -1, `CSS-Regel ${selector} fehlt`);

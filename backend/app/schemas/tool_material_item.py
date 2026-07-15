@@ -112,7 +112,7 @@ class ToolMaterialListQuery(BaseModel):
     date_to: date | None = None
     stock_min: int | None = Field(default=None, ge=0)
     stock_max: int | None = Field(default=None, ge=0)
-    sort_by: ToolMaterialSortField = "designation"
+    sort_by: ToolMaterialSortField | None = None
     sort_direction: Literal["asc", "desc"] = "asc"
 
 

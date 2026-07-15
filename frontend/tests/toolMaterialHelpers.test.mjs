@@ -7,6 +7,7 @@ import {
   buildToolMaterialSearchParams,
   clearAllToolMaterialFilters,
   clearToolMaterialColumnFilter,
+  defaultToolMaterialSorting,
   hasToolMaterialFilters,
   toolMaterialColumnKeys,
   toolMaterialColumns,
@@ -58,6 +59,21 @@ test("global search, combined column filters and sorting share one API query", (
   assert.deepEqual(params.getAll("values_status"), ["issued", "written_off"]);
   assert.equal(params.get("sort_by"), "beg_number");
   assert.equal(params.get("sort_direction"), "desc");
+});
+
+
+test("default sorting is server-defined and manual sorting overrides it temporarily", () => {
+  const defaultParams = buildToolMaterialSearchParams(defaultToolMaterialSorting);
+  const manualParams = buildToolMaterialSearchParams({
+    ...defaultToolMaterialSorting,
+    sortBy: "item_date",
+    sortDirection: "desc",
+  });
+
+  assert.equal(defaultParams.has("sort_by"), false);
+  assert.equal(defaultParams.has("sort_direction"), false);
+  assert.equal(manualParams.get("sort_by"), "item_date");
+  assert.equal(manualParams.get("sort_direction"), "desc");
 });
 
 

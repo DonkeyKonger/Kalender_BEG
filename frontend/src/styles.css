@@ -11658,6 +11658,10 @@ button.person-chip:focus-visible {
   cursor: pointer;
 }
 
+.miscellaneous-tools-row.is-written-off > td:not(.miscellaneous-tools-status-cell) {
+  color: #6f7b89;
+}
+
 .miscellaneous-tools-row:hover,
 .miscellaneous-tools-row:focus {
   background: #f8fafc;

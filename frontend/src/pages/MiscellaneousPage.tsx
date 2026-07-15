@@ -17,6 +17,7 @@ import {
 import {
   clearAllToolMaterialFilters,
   clearToolMaterialColumnFilter,
+  defaultToolMaterialSorting,
   hasToolMaterialFilters,
   isToolMaterialColumnFilterActive,
   toolMaterialColumns,
@@ -137,8 +138,12 @@ function ToolMaterialList() {
   const [drawer, setDrawer] = useState<ToolMaterialDrawerState>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState<ToolMaterialFilters>({});
-  const [sortBy, setSortBy] = useState<ToolMaterialColumnKey>("designation");
-  const [sortDirection, setSortDirection] = useState<ToolMaterialSortDirection>("asc");
+  const [sortBy, setSortBy] = useState<ToolMaterialColumnKey | undefined>(
+    defaultToolMaterialSorting.sortBy,
+  );
+  const [sortDirection, setSortDirection] = useState<ToolMaterialSortDirection>(
+    defaultToolMaterialSorting.sortDirection,
+  );
   const [activeFilterKey, setActiveFilterKey] = useState<ToolMaterialColumnKey | null>(null);
   const [filterOptions, setFilterOptions] = useState<ToolMaterialFilterOptions>({ columns: {} });
   const [isLoading, setIsLoading] = useState(true);
@@ -428,6 +433,8 @@ function ToolMaterialList() {
             type="button"
             onClick={() => {
               setFilters(clearAllToolMaterialFilters());
+              setSortBy(defaultToolMaterialSorting.sortBy);
+              setSortDirection(defaultToolMaterialSorting.sortDirection);
               setActiveFilterKey(null);
             }}
           >
@@ -473,7 +480,7 @@ function ToolMaterialList() {
             <tbody>
               {items.length ? items.map((item) => (
                 <tr
-                  className="miscellaneous-tools-row"
+                  className={`miscellaneous-tools-row${item.status === "written_off" ? " is-written-off" : ""}`}
                   key={item.id}
                   tabIndex={0}
                   title="Eintrag bearbeiten"

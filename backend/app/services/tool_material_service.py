@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.person import Person
-from app.models.enums import ToolMaterialStatus
+from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolMaterialStatus
 from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOption,
@@ -121,15 +121,29 @@ class ToolMaterialService:
         if filters.values_status:
             statement = statement.where(ToolMaterialItem.status.in_(filters.values_status))
 
-        sort_column = SORT_COLUMNS[filters.sort_by]
-        normalized_sort_column = func.lower(sort_column) if filters.sort_by not in {"item_date", "stock"} else sort_column
-        direction = normalized_sort_column.desc() if filters.sort_direction == "desc" else normalized_sort_column.asc()
-        statement = statement.order_by(
-            case((sort_column.is_(None), 1), else_=0),
-            direction,
-            ToolMaterialItem.id,
+        if filters.sort_by is not None:
+            sort_column = SORT_COLUMNS[filters.sort_by]
+            normalized_sort_column = (
+                func.lower(sort_column)
+                if filters.sort_by not in {"item_date", "stock"}
+                else sort_column
+            )
+            direction = (
+                normalized_sort_column.desc()
+                if filters.sort_direction == "desc"
+                else normalized_sort_column.asc()
+            )
+            statement = statement.order_by(
+                case((sort_column.is_(None), 1), else_=0),
+                direction,
+                ToolMaterialItem.id,
+            )
+            return list(self.db.scalars(statement).unique())
+
+        return sorted(
+            self.db.scalars(statement).unique(),
+            key=default_tool_material_sort_key,
         )
-        return list(self.db.scalars(statement).unique())
 
     def list_person_assignments(self, person_id: int) -> list[PersonToolMaterialRead]:
         person_exists = self.db.scalar(
@@ -324,6 +338,18 @@ def natural_beg_number_key(value: str | None) -> tuple:
         if segment
     )
     return (0, segments)
+
+
+def default_tool_material_sort_key(item: ToolMaterialItem) -> tuple:
+    status_priority = TOOL_MATERIAL_STATUS_PRIORITY.get(item.status, 99)
+    item_date_order = -item.item_date.toordinal() if item.item_date is not None else 0
+    return (
+        status_priority,
+        item.item_date is None,
+        item_date_order,
+        natural_beg_number_key(item.beg_number),
+        item.id,
+    )
 
 
 def enforce_status_employee_consistency(

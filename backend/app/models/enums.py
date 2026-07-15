@@ -30,6 +30,13 @@ class ToolMaterialStatus(StrEnum):
     WRITTEN_OFF = "written_off"
 
 
+TOOL_MATERIAL_STATUS_PRIORITY = {
+    ToolMaterialStatus.WAREHOUSE: 1,
+    ToolMaterialStatus.ISSUED: 2,
+    ToolMaterialStatus.WRITTEN_OFF: 3,
+}
+
+
 class SiteStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
