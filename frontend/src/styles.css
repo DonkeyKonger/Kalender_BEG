@@ -11160,6 +11160,17 @@ button.person-chip:focus-visible {
 
 .miscellaneous-tools-search {
   width: min(420px, 100%);
+  border-radius: 0;
+}
+
+.miscellaneous-tools-search:hover,
+.miscellaneous-tools-search:active,
+.miscellaneous-tools-search:focus-within,
+.miscellaneous-tools-search input,
+.miscellaneous-tools-search input:hover,
+.miscellaneous-tools-search input:active,
+.miscellaneous-tools-search input:focus {
+  border-radius: 0;
 }
 
 .miscellaneous-tools-table-wrap {
