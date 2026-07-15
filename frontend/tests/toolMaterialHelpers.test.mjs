@@ -8,11 +8,16 @@ import {
   clearAllToolMaterialFilters,
   clearToolMaterialColumnFilter,
   hasToolMaterialFilters,
+  toolMaterialColumnKeys,
+  toolMaterialColumns,
 } from "../src/lib/toolMaterialFilters.ts";
 import {
+  getOptimisticToolMaterialStatusItem,
   getSuggestedToolMaterialStatus,
   getToolMaterialStatusChange,
   getToolMaterialStatusPresentation,
+  getToolMaterialStatusUpdate,
+  saveToolMaterialStatus,
   toolMaterialStatusOptions,
 } from "../src/lib/toolMaterialStatus.ts";
 
@@ -20,14 +25,14 @@ import {
 test("individual and all tool material filters can be reset", () => {
   const filters = {
     manufacturer: { query: "Bosch" },
-    stock: { stockMin: "2", values: ["3"] },
+    status: { values: ["issued"] },
   };
 
   const withoutManufacturer = clearToolMaterialColumnFilter(filters, "manufacturer");
 
   assert.equal(hasToolMaterialFilters(filters), true);
   assert.equal(withoutManufacturer.manufacturer, undefined);
-  assert.deepEqual(withoutManufacturer.stock, filters.stock);
+  assert.deepEqual(withoutManufacturer.status, filters.status);
   assert.deepEqual(clearAllToolMaterialFilters(), {});
   assert.equal(hasToolMaterialFilters(clearAllToolMaterialFilters()), false);
 });
@@ -39,7 +44,6 @@ test("global search, combined column filters and sorting share one API query", (
     filters: {
       manufacturer: { query: "Bosch", values: ["Bosch", "Makita"] },
       item_date: { dateFrom: "2026-01-01", dateTo: "2026-12-31" },
-      stock: { stockMin: "1", stockMax: "8" },
       status: { values: ["issued", "defective"] },
     },
     sortBy: "beg_number",
@@ -51,11 +55,43 @@ test("global search, combined column filters and sorting share one API query", (
   assert.deepEqual(params.getAll("values_manufacturer"), ["Bosch", "Makita"]);
   assert.equal(params.get("date_from"), "2026-01-01");
   assert.equal(params.get("date_to"), "2026-12-31");
-  assert.equal(params.get("stock_min"), "1");
-  assert.equal(params.get("stock_max"), "8");
   assert.deepEqual(params.getAll("values_status"), ["issued", "defective"]);
   assert.equal(params.get("sort_by"), "beg_number");
   assert.equal(params.get("sort_direction"), "desc");
+});
+
+
+test("tool material table has the required columns without stock", () => {
+  assert.deepEqual(toolMaterialColumnKeys, [
+    "beg_number",
+    "manufacturer",
+    "designation",
+    "item_type",
+    "device_number",
+    "serial_number",
+    "employee",
+    "item_date",
+    "delivery_note",
+    "remarks",
+    "supplier",
+    "invoice_number",
+    "status",
+  ]);
+  assert.deepEqual(toolMaterialColumns.map((column) => column.label), [
+    "BEG-Nr.",
+    "Fabrikat",
+    "Bezeichnung",
+    "Typ",
+    "Gerätenummer",
+    "Seriennummer",
+    "Mitarbeiter",
+    "Datum",
+    "Lieferschein",
+    "Bemerkungen",
+    "Lieferant",
+    "RG-Nr.",
+    "Status",
+  ]);
 });
 
 
@@ -77,6 +113,53 @@ test("warehouse and defective status changes clear the employee immediately", ()
     status: "defective",
     employee_id: "",
   });
+});
+
+
+test("inline status updates clear assignments optimistically and in the API payload", () => {
+  const item = toolMaterialItem();
+
+  assert.deepEqual(getToolMaterialStatusUpdate("warehouse"), {
+    status: "warehouse",
+    employee_id: null,
+  });
+  assert.deepEqual(getToolMaterialStatusUpdate("defective"), {
+    status: "defective",
+    employee_id: null,
+  });
+  assert.deepEqual(getToolMaterialStatusUpdate("issued"), { status: "issued" });
+  assert.deepEqual(
+    getOptimisticToolMaterialStatusItem(item, "defective"),
+    { ...item, status: "defective", employee_id: null, employee: null },
+  );
+});
+
+
+test("inline status save returns the server item on success", async () => {
+  const item = toolMaterialItem();
+  const calls = [];
+  const result = await saveToolMaterialStatus(item, "warehouse", async (itemId, payload) => {
+    calls.push([itemId, payload]);
+    return { ...item, ...payload, employee: null };
+  });
+
+  assert.deepEqual(calls, [[7, { status: "warehouse", employee_id: null }]]);
+  assert.equal(result.ok, true);
+  assert.equal(result.item.status, "warehouse");
+  assert.equal(result.item.employee_id, null);
+});
+
+
+test("inline status save preserves the previous item on failure", async () => {
+  const item = toolMaterialItem();
+  const saveError = new Error("Netzwerkfehler");
+  const result = await saveToolMaterialStatus(item, "defective", async () => {
+    throw saveError;
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.item, item);
+  assert.equal(result.error, saveError);
 });
 
 
@@ -139,5 +222,34 @@ function employee(id, displayName, personType, isActive) {
     person_type: personType,
     is_active: isActive,
     deleted_at: null,
+  };
+}
+
+function toolMaterialItem() {
+  return {
+    id: 7,
+    beg_number: "BEG-7",
+    manufacturer: "Bosch",
+    designation: "Bohrmaschine",
+    item_type: null,
+    device_number: null,
+    serial_number: null,
+    employee_id: 3,
+    employee: {
+      id: 3,
+      display_name: "Max Mustermann",
+      short_code: "MM",
+      person_type: "internal",
+      is_active: true,
+    },
+    item_date: "2026-07-15",
+    delivery_note: null,
+    remarks: null,
+    supplier: null,
+    invoice_number: null,
+    stock: 1,
+    status: "issued",
+    created_at: "2026-07-15T08:00:00Z",
+    updated_at: "2026-07-15T08:00:00Z",
   };
 }

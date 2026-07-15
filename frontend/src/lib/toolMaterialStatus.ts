@@ -1,4 +1,8 @@
-import type { ToolMaterialStatus } from "../types/toolMaterial";
+import type {
+  ToolMaterialItem,
+  ToolMaterialItemUpdate,
+  ToolMaterialStatus,
+} from "../types/toolMaterial";
 
 export const toolMaterialStatusOptions: ReadonlyArray<{
   value: ToolMaterialStatus;
@@ -33,4 +37,38 @@ export function getToolMaterialStatusChange(status: ToolMaterialStatus): {
   employee_id?: "";
 } {
   return status === "issued" ? { status } : { status, employee_id: "" };
+}
+
+export function getToolMaterialStatusUpdate(status: ToolMaterialStatus): ToolMaterialItemUpdate {
+  return status === "issued" ? { status } : { status, employee_id: null };
+}
+
+export function getOptimisticToolMaterialStatusItem(
+  item: ToolMaterialItem,
+  status: ToolMaterialStatus,
+): ToolMaterialItem {
+  return {
+    ...item,
+    status,
+    ...(status === "issued" ? {} : { employee_id: null, employee: null }),
+  };
+}
+
+export type ToolMaterialStatusSaveResult =
+  | { ok: true; item: ToolMaterialItem }
+  | { ok: false; item: ToolMaterialItem; error: unknown };
+
+export async function saveToolMaterialStatus(
+  item: ToolMaterialItem,
+  status: ToolMaterialStatus,
+  updateItem: (itemId: number, payload: ToolMaterialItemUpdate) => Promise<ToolMaterialItem>,
+): Promise<ToolMaterialStatusSaveResult> {
+  try {
+    return {
+      ok: true,
+      item: await updateItem(item.id, getToolMaterialStatusUpdate(status)),
+    };
+  } catch (error) {
+    return { ok: false, item, error };
+  }
 }

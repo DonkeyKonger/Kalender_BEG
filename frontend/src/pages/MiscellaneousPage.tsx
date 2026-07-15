@@ -1,4 +1,4 @@
-import { ArrowDownAZ, ArrowUpAZ, ListFilter, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -7,9 +7,11 @@ import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
 import {
+  getOptimisticToolMaterialStatusItem,
   getSuggestedToolMaterialStatus,
   getToolMaterialStatusChange,
   getToolMaterialStatusPresentation,
+  saveToolMaterialStatus,
   toolMaterialStatusOptions,
 } from "../lib/toolMaterialStatus";
 import {
@@ -17,6 +19,8 @@ import {
   clearToolMaterialColumnFilter,
   hasToolMaterialFilters,
   isToolMaterialColumnFilterActive,
+  toolMaterialColumns,
+  type ToolMaterialColumn,
   type ToolMaterialColumnFilter,
   type ToolMaterialColumnKey,
   type ToolMaterialFilters,
@@ -51,12 +55,6 @@ type ToolMaterialDraft = {
   status: ToolMaterialStatus;
 };
 
-type ToolMaterialColumn = {
-  key: ToolMaterialColumnKey;
-  label: string;
-  type: "text" | "date" | "number" | "enum";
-};
-
 const miscellaneousTabs: MiscellaneousTab[] = [
   { key: "workerEvaluation", label: "Monteurauswertung" },
   { key: "vehicles", label: "Fahrzeuge" },
@@ -80,23 +78,6 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
   status: "warehouse",
 };
 
-const toolMaterialColumns: ToolMaterialColumn[] = [
-  { key: "beg_number", label: "BEG-Nr.", type: "text" },
-  { key: "manufacturer", label: "Fabrikat", type: "text" },
-  { key: "designation", label: "Bezeichnung", type: "text" },
-  { key: "item_type", label: "Typ", type: "text" },
-  { key: "device_number", label: "Gerätenummer", type: "text" },
-  { key: "serial_number", label: "Seriennummer", type: "text" },
-  { key: "employee", label: "Mitarbeiter", type: "text" },
-  { key: "item_date", label: "Datum", type: "date" },
-  { key: "delivery_note", label: "Lieferschein", type: "text" },
-  { key: "remarks", label: "Bemerkungen", type: "text" },
-  { key: "supplier", label: "Lieferant", type: "text" },
-  { key: "invoice_number", label: "RG-Nr.", type: "text" },
-  { key: "stock", label: "Bestand", type: "number" },
-  { key: "status", label: "Status", type: "enum" },
-];
-
 export function MiscellaneousPage() {
   const [activeTabKey, setActiveTabKey] = useState<MiscellaneousTabKey>("workerEvaluation");
   const activeTab = useMemo(
@@ -105,7 +86,7 @@ export function MiscellaneousPage() {
   );
 
   return (
-    <section className="miscellaneous-page page-stack">
+    <section className={`miscellaneous-page page-stack${activeTab.key === "toolsMaterial" ? " has-tools-material" : ""}`}>
       <header className="page-header miscellaneous-page-header">
         <div>
           <h1>Sonstige</h1>
@@ -165,6 +146,8 @@ function ToolMaterialList() {
   const [peopleLoading, setPeopleLoading] = useState(true);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
+  const [savingStatusItemId, setSavingStatusItemId] = useState<number | null>(null);
+  const savingStatusItemIdRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -352,6 +335,49 @@ function ToolMaterialList() {
     }
   }
 
+  async function changeStatus(item: ToolMaterialItem, nextStatus: ToolMaterialStatus) {
+    if (item.status === nextStatus || savingStatusItemIdRef.current !== null) {
+      return;
+    }
+    const previousDraft = drafts[item.id] ?? toToolMaterialDraft(item);
+    const optimisticItem = getOptimisticToolMaterialStatusItem(item, nextStatus);
+    savingStatusItemIdRef.current = item.id;
+    setSavingStatusItemId(item.id);
+    setError(null);
+    setItems((current) => current.map((currentItem) => (
+      currentItem.id === item.id ? optimisticItem : currentItem
+    )));
+    setDrafts((current) => ({ ...current, [item.id]: toToolMaterialDraft(optimisticItem) }));
+
+    const result = await saveToolMaterialStatus(item, nextStatus, api.updateToolMaterialItem);
+    if (!result.ok) {
+      setItems((current) => current.map((currentItem) => (
+        currentItem.id === item.id ? result.item : currentItem
+      )));
+      setDrafts((current) => ({ ...current, [item.id]: previousDraft }));
+      setError(readApiError(result.error, "Status konnte nicht gespeichert werden."));
+      savingStatusItemIdRef.current = null;
+      setSavingStatusItemId(null);
+      return;
+    }
+
+    setItems((current) => current.map((currentItem) => (
+      currentItem.id === item.id ? result.item : currentItem
+    )));
+    setDrafts((current) => ({ ...current, [item.id]: toToolMaterialDraft(result.item) }));
+    try {
+      await refreshItems();
+    } catch (requestError) {
+      setError(readApiError(
+        requestError,
+        "Der Status wurde gespeichert, die Tabelle konnte aber nicht neu geladen werden.",
+      ));
+    } finally {
+      savingStatusItemIdRef.current = null;
+      setSavingStatusItemId(null);
+    }
+  }
+
   function updateDraft(itemId: number, values: Partial<ToolMaterialDraft>) {
     setDrafts((current) => ({
       ...current,
@@ -417,6 +443,14 @@ function ToolMaterialList() {
       {hasLoadedItems && (
         <div className="miscellaneous-tools-table-wrap">
           <table className="miscellaneous-tools-table">
+            <colgroup>
+              {toolMaterialColumns.map((column) => (
+                <col
+                  className={`tool-material-col-${column.key.replaceAll("_", "-")}`}
+                  key={column.key}
+                />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 {toolMaterialColumns.map((column) => (
@@ -451,24 +485,30 @@ function ToolMaterialList() {
                     }
                   }}
                 >
-                  <td><strong>{item.beg_number ?? ""}</strong></td>
-                  <td>{item.manufacturer ?? ""}</td>
-                  <td><strong>{item.designation}</strong></td>
-                  <td>{item.item_type ?? ""}</td>
-                  <td>{item.device_number ?? ""}</td>
-                  <td>{item.serial_number ?? ""}</td>
-                  <td>{item.employee?.display_name ?? ""}</td>
-                  <td>{formatDate(item.item_date)}</td>
-                  <td>{item.delivery_note ?? ""}</td>
+                  <td title={item.beg_number ?? undefined}><strong>{item.beg_number ?? ""}</strong></td>
+                  <td title={item.manufacturer ?? undefined}>{item.manufacturer ?? ""}</td>
+                  <td title={item.designation}><strong>{item.designation}</strong></td>
+                  <td title={item.item_type ?? undefined}>{item.item_type ?? ""}</td>
+                  <td title={item.device_number ?? undefined}>{item.device_number ?? ""}</td>
+                  <td title={item.serial_number ?? undefined}>{item.serial_number ?? ""}</td>
+                  <td title={item.employee?.display_name}>{item.employee?.display_name ?? ""}</td>
+                  <td title={formatDate(item.item_date)}>{formatDate(item.item_date)}</td>
+                  <td title={item.delivery_note ?? undefined}>{item.delivery_note ?? ""}</td>
                   <td className="miscellaneous-tools-remarks"><span title={item.remarks ?? undefined}>{item.remarks ?? ""}</span></td>
-                  <td>{item.supplier ?? ""}</td>
-                  <td>{item.invoice_number ?? ""}</td>
-                  <td>{item.stock ?? ""}</td>
-                  <td><ToolMaterialStatusBadge status={item.status} /></td>
+                  <td title={item.supplier ?? undefined}>{item.supplier ?? ""}</td>
+                  <td title={item.invoice_number ?? undefined}>{item.invoice_number ?? ""}</td>
+                  <td className="miscellaneous-tools-status-cell">
+                    <ToolMaterialInlineStatusSelect
+                      disabled={savingStatusItemId !== null}
+                      item={item}
+                      saving={savingStatusItemId === item.id}
+                      onChange={(status) => changeStatus(item, status)}
+                    />
+                  </td>
                 </tr>
               )) : (
                 <tr>
-                  <td className="miscellaneous-tools-empty" colSpan={14}>
+                  <td className="miscellaneous-tools-empty" colSpan={toolMaterialColumns.length}>
                     {searchTerm.trim() || filtersActive ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
                   </td>
                 </tr>
@@ -624,10 +664,6 @@ function ToolMaterialFields({
         <input value={draft.invoice_number} onChange={(event) => onChange({ invoice_number: event.target.value })} />
       </label>
       <label>
-        <span>Bestand</span>
-        <input min="0" step="1" type="number" value={draft.stock} onChange={(event) => onChange({ stock: event.target.value })} />
-      </label>
-      <label>
         <span>Status</span>
         <select
           value={draft.status}
@@ -683,13 +719,138 @@ function ToolMaterialEmployeeSelect({
   );
 }
 
-export function ToolMaterialStatusBadge({ status }: { status: ToolMaterialStatus }) {
-  const presentation = getToolMaterialStatusPresentation(status);
+function ToolMaterialInlineStatusSelect({
+  disabled,
+  item,
+  saving,
+  onChange,
+}: {
+  disabled: boolean;
+  item: ToolMaterialItem;
+  saving: boolean;
+  onChange: (status: ToolMaterialStatus) => Promise<void>;
+}) {
+  const popupId = useId();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{
+    bottom?: number;
+    left: number;
+    top?: number;
+    width: number;
+  } | null>(null);
+  const presentation = getToolMaterialStatusPresentation(item.status);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    const updatePosition = () => {
+      if (triggerRef.current) {
+        setPosition(getToolMaterialStatusPopupPosition(triggerRef.current));
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || triggerRef.current?.contains(target) || popupRef.current?.contains(target)) {
+        return;
+      }
+      setIsOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    updatePosition();
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
   return (
-    <span className={`tool-material-status-badge ${presentation.badgeClass}`}>
-      {presentation.label}
-    </span>
+    <div className="tool-material-inline-status">
+      <button
+        aria-controls={isOpen ? popupId : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={`Status für ${item.designation}: ${presentation.label}`}
+        className={`tool-material-inline-status-trigger ${presentation.badgeClass}`}
+        disabled={disabled}
+        ref={triggerRef}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((current) => !current);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <span>{presentation.label}</span>
+        {saving ? (
+          <LoaderCircle aria-label="Status wird gespeichert" className="tool-material-status-spinner" size={12} />
+        ) : (
+          <ChevronDown aria-hidden="true" size={12} />
+        )}
+      </button>
+      {isOpen && position && typeof document !== "undefined" ? createPortal(
+        <div
+          aria-label={`Status für ${item.designation} auswählen`}
+          className="tool-material-inline-status-popup"
+          id={popupId}
+          ref={popupRef}
+          role="listbox"
+          style={position}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {toolMaterialStatusOptions.map((option) => (
+            <button
+              aria-selected={option.value === item.status}
+              className={option.value === item.status ? "is-selected" : undefined}
+              key={option.value}
+              role="option"
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                void onChange(option.value);
+              }}
+            >
+              <span className={`tool-material-status-swatch ${option.badgeClass}`} />
+              <span>{option.label}</span>
+              {option.value === item.status ? <Check aria-hidden="true" size={13} /> : null}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
+    </div>
   );
+}
+
+function getToolMaterialStatusPopupPosition(trigger: HTMLElement) {
+  const margin = 8;
+  const gap = 4;
+  const width = 142;
+  const popupHeight = 106;
+  const rect = trigger.getBoundingClientRect();
+  const openAbove = window.innerHeight - rect.bottom - gap - margin < popupHeight
+    && rect.top > popupHeight;
+  const horizontalPosition = {
+    left: Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin)),
+    width,
+  };
+  return openAbove
+    ? { ...horizontalPosition, bottom: window.innerHeight - rect.top + gap }
+    : { ...horizontalPosition, top: rect.bottom + gap };
 }
 
 function ToolMaterialFilterHeader({
@@ -845,29 +1006,6 @@ function ToolMaterialFilterHeader({
                   type="date"
                   value={filter?.dateTo ?? ""}
                   onChange={(event) => onChange({ ...filter, dateTo: event.target.value })}
-                />
-              </label>
-            </div>
-          ) : null}
-
-          {column.type === "number" ? (
-            <div className="tool-material-filter-range">
-              <label>
-                <span>Minimum</span>
-                <input
-                  min="0"
-                  type="number"
-                  value={filter?.stockMin ?? ""}
-                  onChange={(event) => onChange({ ...filter, stockMin: event.target.value })}
-                />
-              </label>
-              <label>
-                <span>Maximum</span>
-                <input
-                  min="0"
-                  type="number"
-                  value={filter?.stockMax ?? ""}
-                  onChange={(event) => onChange({ ...filter, stockMax: event.target.value })}
                 />
               </label>
             </div>

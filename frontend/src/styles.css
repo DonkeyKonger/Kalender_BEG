@@ -11160,7 +11160,9 @@ button.person-chip:focus-visible {
 }
 
 .miscellaneous-tools-panel {
-  display: grid;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
   gap: 12px;
   border: 1px solid #d8e2ee;
   border-radius: 0;
@@ -11247,7 +11249,7 @@ button.person-chip:focus-visible {
 }
 
 .miscellaneous-tools-table-wrap {
-  max-height: calc(100vh - 310px);
+  flex: 1 1 auto;
   min-height: 180px;
   overflow: auto;
   border: 1px solid #d8e2ee;
@@ -11256,19 +11258,65 @@ button.person-chip:focus-visible {
 }
 
 .miscellaneous-tools-table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
   color: #172033;
   font-size: 0.8rem;
 }
 
+.tool-material-col-beg-number {
+  width: 5%;
+}
+
+.tool-material-col-manufacturer {
+  width: 5.5%;
+}
+
+.tool-material-col-designation {
+  width: 10.5%;
+}
+
+.tool-material-col-item-type {
+  width: 8%;
+}
+
+.tool-material-col-device-number,
+.tool-material-col-serial-number,
+.tool-material-col-delivery-note {
+  width: 7.5%;
+}
+
+.tool-material-col-employee {
+  width: 8.5%;
+}
+
+.tool-material-col-item-date {
+  width: 5.5%;
+}
+
+.tool-material-col-remarks {
+  width: 11.5%;
+}
+
+.tool-material-col-supplier {
+  width: 6%;
+}
+
+.tool-material-col-invoice-number {
+  width: 8%;
+}
+
+.tool-material-col-status {
+  width: 9%;
+}
+
 .miscellaneous-tools-table th,
 .miscellaneous-tools-table td {
-  max-width: 220px;
+  min-width: 0;
   border-bottom: 1px solid #e2e8f0;
-  padding: 8px 10px;
+  padding: 8px 6px;
   text-align: left;
   vertical-align: top;
   white-space: nowrap;
@@ -11295,7 +11343,7 @@ button.person-chip:focus-visible {
   min-height: 34px;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -11303,9 +11351,16 @@ button.person-chip:focus-visible {
   cursor: pointer;
   font: inherit;
   font-weight: inherit;
-  padding: 8px 10px;
+  padding: 8px 6px;
   text-align: left;
   text-transform: inherit;
+  white-space: nowrap;
+}
+
+.tool-material-filter-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -11466,47 +11521,137 @@ button.person-chip:focus-visible {
   text-overflow: ellipsis;
 }
 
-.miscellaneous-tools-table td:nth-child(3) {
-  min-width: 180px;
+.miscellaneous-tools-status-cell {
+  overflow: visible !important;
+  padding: 5px 4px !important;
+  vertical-align: middle !important;
 }
 
-.miscellaneous-tools-table td:nth-child(10) {
-  min-width: 240px;
+.tool-material-inline-status {
+  min-width: 0;
+  width: 100%;
 }
 
-.miscellaneous-tools-table td:last-child {
-  min-width: 96px;
-}
-
-.tool-material-status-badge {
+.tool-material-inline-status-trigger {
   display: inline-flex;
-  min-height: 22px;
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
   align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  overflow: hidden;
   border: 1px solid transparent;
   border-radius: 0;
-  font-size: 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.67rem;
   font-weight: 800;
   line-height: 1;
-  padding: 5px 7px;
+  padding: 5px;
   white-space: nowrap;
 }
 
-.tool-material-status-badge.is-issued {
+.tool-material-inline-status-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-material-inline-status-trigger svg {
+  flex: 0 0 auto;
+}
+
+.tool-material-inline-status-trigger.is-issued,
+.tool-material-status-swatch.is-issued {
   border-color: #c5d8ca;
   background: #f2f7f3;
   color: #426b4c;
 }
 
-.tool-material-status-badge.is-warehouse {
+.tool-material-inline-status-trigger.is-warehouse,
+.tool-material-status-swatch.is-warehouse {
   border-color: #ddd3b9;
   background: #faf8f1;
   color: #78673f;
 }
 
-.tool-material-status-badge.is-defective {
+.tool-material-inline-status-trigger.is-defective,
+.tool-material-status-swatch.is-defective {
   border-color: #dfc4c4;
   background: #faf3f3;
   color: #8a4d4d;
+}
+
+.tool-material-inline-status-trigger:hover:not(:disabled),
+.tool-material-inline-status-trigger:focus-visible,
+.tool-material-inline-status-trigger[aria-expanded="true"] {
+  outline: 1px solid #8aa8cf;
+  outline-offset: 1px;
+}
+
+.tool-material-inline-status-trigger:disabled {
+  cursor: wait;
+}
+
+.tool-material-status-spinner {
+  animation: tool-material-status-spin 800ms linear infinite;
+}
+
+.tool-material-inline-status-popup {
+  position: fixed;
+  z-index: 2850;
+  display: grid;
+  gap: 2px;
+  border: 1px solid #aebfd4;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgb(30 50 80 / 18%);
+  padding: 4px;
+}
+
+.tool-material-inline-status-popup button {
+  display: grid;
+  min-height: 30px;
+  grid-template-columns: 12px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 750;
+  padding: 5px 6px;
+  text-align: left;
+}
+
+.tool-material-inline-status-popup button:hover,
+.tool-material-inline-status-popup button:focus-visible,
+.tool-material-inline-status-popup button.is-selected {
+  border-color: #c8d5e5;
+  background: #f2f6fb;
+  color: #1f4f84;
+  outline: none;
+}
+
+.tool-material-inline-status-popup button svg {
+  justify-self: end;
+}
+
+.tool-material-status-swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid transparent;
+}
+
+@keyframes tool-material-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .miscellaneous-tools-row {
@@ -11521,10 +11666,28 @@ button.person-chip:focus-visible {
 
 .miscellaneous-tools-remarks span {
   display: block;
-  max-width: 320px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .miscellaneous-page.has-tools-material {
+    display: flex;
+    height: calc(100dvh - 48px);
+    min-height: 560px;
+    flex-direction: column;
+  }
+
+  .miscellaneous-page.has-tools-material > .miscellaneous-page-header,
+  .miscellaneous-page.has-tools-material > .miscellaneous-tabs {
+    flex: 0 0 auto;
+  }
+
+  .miscellaneous-page.has-tools-material > .miscellaneous-tools-panel {
+    flex: 1 1 0;
+  }
 }
 
 .miscellaneous-tools-empty {

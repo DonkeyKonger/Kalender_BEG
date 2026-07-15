@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ from app.api.routes import tool_material_items
 from app.core.database import get_db
 from app.main import create_app
 from app.models import Base
-from app.models.enums import PersonType, UserRole
+from app.models.enums import PersonType, ToolMaterialStatus, UserRole
 from app.models.person import Person
 from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import ToolMaterialFilterOptionsRead
@@ -179,6 +180,57 @@ def test_tool_material_api_rejects_contradictory_status_and_employee():
         "Lager- oder defekte Einträge dürfen keinem Mitarbeiter zugeordnet sein."
     )
     assert db.scalar(select(ToolMaterialItem.id)) is None
+    app.dependency_overrides.clear()
+    db.close()
+
+
+@pytest.mark.parametrize("target_status", ["warehouse", "defective"])
+def test_tool_material_api_status_change_clears_employee_assignment(target_status):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    employee = Person(
+        first_name="Anna",
+        last_name="Bauer",
+        display_name="Anna Bauer",
+        short_code="AB",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+    )
+    item = ToolMaterialItem(
+        beg_number=f"INLINE-{target_status}",
+        designation="Status direkt ändern",
+        employee=employee,
+        status=ToolMaterialStatus.ISSUED,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id=1,
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    app.dependency_overrides[get_db] = lambda: db
+    response = TestClient(app).patch(
+        f"/api/admin/tool-material-items/{item.id}",
+        json={"status": target_status},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == target_status
+    assert response.json()["employee_id"] is None
+    assert response.json()["employee"] is None
+    db.expire_all()
+    stored_item = db.get(ToolMaterialItem, item.id)
+    assert stored_item is not None
+    assert stored_item.employee_id is None
     app.dependency_overrides.clear()
     db.close()
 
