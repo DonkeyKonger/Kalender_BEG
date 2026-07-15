@@ -17,9 +17,10 @@ export type DashboardNotePickerOption = {
 };
 
 type DashboardNotePickerPopupPosition = {
+  bottom?: number;
   left: number;
   maxHeight: number;
-  top: number;
+  top?: number;
   width: number;
 };
 
@@ -196,6 +197,8 @@ export function DashboardNotePicker({
   errorText,
   emptyText,
   emptyOptionLabel = "Keine Zuordnung",
+  includeEmptyOption = true,
+  searchable = true,
   disabled = false,
   onChange,
 }: {
@@ -205,12 +208,14 @@ export function DashboardNotePicker({
   error: string | null;
   labelId: string;
   listLabel: string;
-  searchLabel: string;
-  searchPlaceholder: string;
+  searchLabel?: string;
+  searchPlaceholder?: string;
   loadingText: string;
   errorText: string;
   emptyText: string;
   emptyOptionLabel?: string;
+  includeEmptyOption?: boolean;
+  searchable?: boolean;
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
@@ -225,7 +230,13 @@ export function DashboardNotePicker({
   const [popupPosition, setPopupPosition] = useState<DashboardNotePickerPopupPosition | null>(null);
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const selectedLabel = selectedOption?.label ?? emptyOptionLabel;
-  const filteredOptions = useMemo(() => filterPickerOptions(options, query), [options, query]);
+  const filteredOptions = useMemo(
+    () => searchable ? filterPickerOptions(options, query) : options,
+    [options, query, searchable],
+  );
+  const popupPreferredHeight = searchable
+    ? 330
+    : Math.min(330, (options.length + (includeEmptyOption ? 1 : 0)) * 34 + 2);
 
   useEffect(() => {
     if (!isOpen) {
@@ -234,7 +245,7 @@ export function DashboardNotePicker({
 
     const updatePosition = () => {
       if (triggerRef.current) {
-        setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
+        setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
       }
     };
     const handlePointerDown = (event: PointerEvent) => {
@@ -256,7 +267,19 @@ export function DashboardNotePicker({
     };
 
     updatePosition();
-    const focusFrame = window.requestAnimationFrame(() => searchRef.current?.focus());
+    const focusFrame = window.requestAnimationFrame(() => {
+      if (searchable) {
+        searchRef.current?.focus();
+        return;
+      }
+      const selected = popupRef.current?.querySelector<HTMLButtonElement>(
+        '.dashboard-note-picker-option[aria-selected="true"]',
+      );
+      const first = popupRef.current?.querySelector<HTMLButtonElement>(
+        ".dashboard-note-picker-option",
+      );
+      (selected ?? first)?.focus();
+    });
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", updatePosition);
@@ -268,7 +291,7 @@ export function DashboardNotePicker({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, popupPreferredHeight, searchable]);
 
   const closeAndFocusTrigger = () => {
     setIsOpen(false);
@@ -302,7 +325,7 @@ export function DashboardNotePicker({
             return;
           }
           if (triggerRef.current) {
-            setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
+            setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
           }
           setQuery("");
           setIsOpen(true);
@@ -311,7 +334,7 @@ export function DashboardNotePicker({
           if (!isOpen && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
             if (triggerRef.current) {
-              setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current));
+              setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
             }
             setIsOpen(true);
           }
@@ -334,35 +357,83 @@ export function DashboardNotePicker({
       {isOpen && popupPosition && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="dashboard-note-picker-popup"
+              className={`dashboard-note-picker-popup${searchable ? "" : " is-searchless"}`}
               ref={popupRef}
               style={popupPosition}
+              onKeyDown={(event) => {
+                if (
+                  (event.key === "Enter" || event.key === " ")
+                  && event.target instanceof HTMLButtonElement
+                  && event.target.classList.contains("dashboard-note-picker-option")
+                ) {
+                  event.preventDefault();
+                  event.target.click();
+                  return;
+                }
+                if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                  return;
+                }
+                if (
+                  event.target === searchRef.current
+                  && event.key !== "ArrowDown"
+                  && event.key !== "ArrowUp"
+                ) {
+                  return;
+                }
+                const optionButtons = Array.from(
+                  popupRef.current?.querySelectorAll<HTMLButtonElement>(
+                    ".dashboard-note-picker-option:not(:disabled)",
+                  ) ?? [],
+                );
+                if (optionButtons.length === 0) {
+                  return;
+                }
+                event.preventDefault();
+                const currentIndex = optionButtons.indexOf(document.activeElement as HTMLButtonElement);
+                let nextIndex = currentIndex;
+                if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = optionButtons.length - 1;
+                } else if (event.key === "ArrowDown") {
+                  nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % optionButtons.length;
+                } else {
+                  nextIndex = currentIndex < 0
+                    ? optionButtons.length - 1
+                    : (currentIndex - 1 + optionButtons.length) % optionButtons.length;
+                }
+                optionButtons[nextIndex]?.focus();
+              }}
             >
-              <div className="dashboard-note-picker-search">
-                <Search aria-hidden="true" size={14} />
-                <input
-                  aria-label={searchLabel}
-                  autoComplete="off"
-                  placeholder={searchPlaceholder}
-                  ref={searchRef}
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </div>
+              {searchable ? (
+                <div className="dashboard-note-picker-search">
+                  <Search aria-hidden="true" size={14} />
+                  <input
+                    aria-label={searchLabel}
+                    autoComplete="off"
+                    placeholder={searchPlaceholder}
+                    ref={searchRef}
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </div>
+              ) : null}
               <div aria-label={listLabel} className="dashboard-note-picker-options" id={listboxId} role="listbox">
-                <button
-                  aria-selected={value === ""}
-                  className={`dashboard-note-picker-option${value === "" ? " is-selected" : ""}`}
-                  role="option"
-                  type="button"
-                  onClick={() => selectOption("")}
-                >
-                  <span className="dashboard-note-picker-option-check" aria-hidden="true">
-                    {value === "" ? <Check size={13} /> : null}
-                  </span>
-                  <span>{emptyOptionLabel}</span>
-                </button>
+                {includeEmptyOption ? (
+                  <button
+                    aria-selected={value === ""}
+                    className={`dashboard-note-picker-option${value === "" ? " is-selected" : ""}`}
+                    role="option"
+                    type="button"
+                    onClick={() => selectOption("")}
+                  >
+                    <span className="dashboard-note-picker-option-check" aria-hidden="true">
+                      {value === "" ? <Check size={13} /> : null}
+                    </span>
+                    <span>{emptyOptionLabel}</span>
+                  </button>
+                ) : null}
                 {loading ? <p className="dashboard-note-picker-option-status">{loadingText}</p> : null}
                 {error ? <p className="dashboard-note-picker-option-status is-error">{errorText}</p> : null}
                 {!loading && !error
@@ -401,21 +472,29 @@ export function DashboardNotePicker({
   );
 }
 
-function getDashboardNotePickerPopupPosition(trigger: HTMLElement): DashboardNotePickerPopupPosition {
+function getDashboardNotePickerPopupPosition(
+  trigger: HTMLElement,
+  preferredHeight = 330,
+): DashboardNotePickerPopupPosition {
   const gap = 5;
   const margin = 8;
-  const preferredHeight = 330;
   const rect = trigger.getBoundingClientRect();
   const width = Math.min(Math.max(rect.width, 320), window.innerWidth - margin * 2);
   const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
   const availableBelow = window.innerHeight - rect.bottom - gap - margin;
   const availableAbove = rect.top - gap - margin;
-  const openAbove = availableBelow < 180 && availableAbove > availableBelow;
+  const openAbove = availableBelow < preferredHeight && availableAbove > availableBelow;
   const availableHeight = openAbove ? availableAbove : availableBelow;
   const maxHeight = Math.max(120, Math.min(preferredHeight, availableHeight));
-  const top = openAbove ? Math.max(margin, rect.top - gap - maxHeight) : rect.bottom + gap;
-
-  return { left, maxHeight, top, width };
+  if (openAbove) {
+    return {
+      bottom: Math.max(margin, window.innerHeight - rect.top + gap),
+      left,
+      maxHeight,
+      width,
+    };
+  }
+  return { left, maxHeight, top: rect.bottom + gap, width };
 }
 
 function formatDashboardNoteSiteOption(site: DashboardNoteSiteOption): string {

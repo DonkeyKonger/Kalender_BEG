@@ -19611,6 +19611,10 @@ button.person-chip:focus-visible {
   overflow: hidden;
 }
 
+.dashboard-note-picker-popup.is-searchless {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .dashboard-note-picker-search {
   display: flex;
   align-items: center;

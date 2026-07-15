@@ -747,28 +747,59 @@ function ToolMaterialFields({
         <span>RG-Nr.</span>
         <input value={draft.invoice_number} onChange={(event) => onChange({ invoice_number: event.target.value })} />
       </label>
-      <label>
-        <span>Kategorie</span>
-        <select
-          value={draft.category}
-          onChange={(event) => onChange({ category: event.target.value as ToolMaterialCategory })}
-        >
-          {toolMaterialCategoryOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Status</span>
-        <select
-          value={draft.status}
-          onChange={(event) => onChange(getToolMaterialStatusChange(event.target.value as ToolMaterialStatus))}
-        >
-          {toolMaterialStatusOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
+      <ToolMaterialFixedSelect
+        label="Kategorie"
+        options={toolMaterialCategoryOptions}
+        value={draft.category}
+        onChange={(value) => onChange({ category: value as ToolMaterialCategory })}
+      />
+      <ToolMaterialFixedSelect
+        label="Status"
+        options={toolMaterialStatusOptions}
+        value={draft.status}
+        onChange={(value) => onChange(getToolMaterialStatusChange(value as ToolMaterialStatus))}
+      />
+    </div>
+  );
+}
+
+function ToolMaterialFixedSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  const labelId = useId();
+  const pickerOptions = useMemo(
+    () => options.map((option) => ({
+      value: option.value,
+      label: option.label,
+      searchText: option.label,
+    })),
+    [options],
+  );
+  return (
+    <div className="tool-material-field">
+      <span id={labelId}>{label}</span>
+      <DashboardNotePicker
+        emptyText="Keine Option verfügbar"
+        error={null}
+        errorText="Optionen konnten nicht geladen werden."
+        includeEmptyOption={false}
+        labelId={labelId}
+        listLabel={`${label} auswählen`}
+        loading={false}
+        loadingText="Optionen werden geladen..."
+        options={pickerOptions}
+        searchable={false}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }

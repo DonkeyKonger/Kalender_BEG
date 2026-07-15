@@ -42,7 +42,7 @@ test("tool material categories use stable keys and an unknown-category fallback"
 
 
 test("desktop tool form persists category without adding a desktop table column", () => {
-  assert.match(toolFormSource, /<span>Kategorie<\/span>[\s\S]*toolMaterialCategoryOptions\.map/);
+  assert.match(toolFormSource, /<ToolMaterialFixedSelect\s+label="Kategorie"\s+options=\{toolMaterialCategoryOptions\}/);
   assert.match(toolFormSource, /category:\s*draft\.category/);
   assert.doesNotMatch(toolFormSource, /tool-material-col-category/);
 });
