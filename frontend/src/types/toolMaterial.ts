@@ -2,10 +2,13 @@ export type ToolMaterialEmployee = {
   id: number;
   display_name: string;
   short_code: string;
+  person_type: "internal" | "external" | "external_temp";
+  is_active: boolean;
 };
 
 export type ToolMaterialItem = {
   id: number;
+  beg_number: string | null;
   manufacturer: string | null;
   designation: string;
   item_type: string | null;
@@ -24,6 +27,7 @@ export type ToolMaterialItem = {
 };
 
 export type ToolMaterialItemCreate = {
+  beg_number: string;
   manufacturer?: string | null;
   designation: string;
   item_type?: string | null;
@@ -39,3 +43,12 @@ export type ToolMaterialItemCreate = {
 };
 
 export type ToolMaterialItemUpdate = Partial<ToolMaterialItemCreate>;
+
+export type ToolMaterialFilterOption = {
+  value: string;
+  label: string;
+};
+
+export type ToolMaterialFilterOptions = {
+  columns: Record<string, ToolMaterialFilterOption[]>;
+};

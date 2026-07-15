@@ -1,17 +1,19 @@
 import { Check, ChevronDown, Search } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { DashboardNote, DashboardNoteUser } from "../lib/api";
+import { filterPickerOptions } from "../lib/pickerSearch";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 
 type DashboardNoteSiteOption = SiteSummary | NonNullable<DashboardNote["site"]>;
 
-type DashboardNotePickerOption = {
+export type DashboardNotePickerOption = {
   value: string;
   label: string;
   searchText: string;
+  groupLabel?: string;
 };
 
 type DashboardNotePickerPopupPosition = {
@@ -181,7 +183,7 @@ export function DashboardNoteShareUserSelect({
   );
 }
 
-function DashboardNotePicker({
+export function DashboardNotePicker({
   value,
   options,
   loading,
@@ -223,15 +225,7 @@ function DashboardNotePicker({
   const [popupPosition, setPopupPosition] = useState<DashboardNotePickerPopupPosition | null>(null);
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const selectedLabel = selectedOption?.label ?? emptyOptionLabel;
-  const normalizedQuery = query.trim().toLocaleLowerCase("de-DE");
-  const filteredOptions = useMemo(() => {
-    if (!normalizedQuery) {
-      return options;
-    }
-    return options.filter((option) => (
-      option.searchText.toLocaleLowerCase("de-DE").includes(normalizedQuery)
-    ));
-  }, [normalizedQuery, options]);
+  const filteredOptions = useMemo(() => filterPickerOptions(options, query), [options, query]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -372,23 +366,26 @@ function DashboardNotePicker({
                 {loading ? <p className="dashboard-note-picker-option-status">{loadingText}</p> : null}
                 {error ? <p className="dashboard-note-picker-option-status is-error">{errorText}</p> : null}
                 {!loading && !error
-                  ? filteredOptions.map((option) => {
+                  ? filteredOptions.map((option, index) => {
                       const isSelected = value === option.value;
+                      const showGroup = option.groupLabel && option.groupLabel !== filteredOptions[index - 1]?.groupLabel;
                       return (
-                        <button
-                          aria-selected={isSelected}
-                          className={`dashboard-note-picker-option${isSelected ? " is-selected" : ""}`}
-                          key={option.value}
-                          role="option"
-                          title={option.label}
-                          type="button"
-                          onClick={() => selectOption(option.value)}
-                        >
-                          <span className="dashboard-note-picker-option-check" aria-hidden="true">
-                            {isSelected ? <Check size={13} /> : null}
-                          </span>
-                          <span>{option.label}</span>
-                        </button>
+                        <Fragment key={option.value}>
+                          {showGroup ? <div className="dashboard-note-picker-group">{option.groupLabel}</div> : null}
+                          <button
+                            aria-selected={isSelected}
+                            className={`dashboard-note-picker-option${isSelected ? " is-selected" : ""}`}
+                            role="option"
+                            title={option.label}
+                            type="button"
+                            onClick={() => selectOption(option.value)}
+                          >
+                            <span className="dashboard-note-picker-option-check" aria-hidden="true">
+                              {isSelected ? <Check size={13} /> : null}
+                            </span>
+                            <span>{option.label}</span>
+                          </button>
+                        </Fragment>
                       );
                     })
                   : null}

@@ -1,9 +1,17 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_admin
 from app.core.database import get_db
-from app.schemas.tool_material_item import ToolMaterialItemCreate, ToolMaterialItemRead, ToolMaterialItemUpdate
+from app.schemas.tool_material_item import (
+    ToolMaterialFilterOptionsRead,
+    ToolMaterialItemCreate,
+    ToolMaterialItemRead,
+    ToolMaterialItemUpdate,
+    ToolMaterialListQuery,
+)
 from app.services.tool_material_service import ToolMaterialService
 
 router = APIRouter(prefix="/admin/tool-material-items", tags=["tool-material-items"])
@@ -11,12 +19,20 @@ router = APIRouter(prefix="/admin/tool-material-items", tags=["tool-material-ite
 
 @router.get("", response_model=list[ToolMaterialItemRead])
 def list_tool_material_items(
-    search: str | None = Query(default=None, max_length=200),
+    query: Annotated[ToolMaterialListQuery, Query()],
     _admin=Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> list[ToolMaterialItemRead]:
     service = ToolMaterialService(db)
-    return [ToolMaterialItemRead.model_validate(item) for item in service.list_items(search=search)]
+    return [ToolMaterialItemRead.model_validate(item) for item in service.list_items(query)]
+
+
+@router.get("/filter-options", response_model=ToolMaterialFilterOptionsRead)
+def list_tool_material_filter_options(
+    _admin=Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ToolMaterialFilterOptionsRead:
+    return ToolMaterialService(db).filter_options()
 
 
 @router.post("", response_model=ToolMaterialItemRead, status_code=status.HTTP_201_CREATED)

@@ -1,10 +1,23 @@
-import { Plus, Save, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowDownAZ, ArrowUpAZ, ListFilter, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
+import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
+import {
+  clearAllToolMaterialFilters,
+  clearToolMaterialColumnFilter,
+  hasToolMaterialFilters,
+  isToolMaterialColumnFilterActive,
+  type ToolMaterialColumnFilter,
+  type ToolMaterialColumnKey,
+  type ToolMaterialFilters,
+  type ToolMaterialSortDirection,
+} from "../lib/toolMaterialFilters";
 import type { Person } from "../types/person";
-import type { ToolMaterialItem, ToolMaterialItemCreate } from "../types/toolMaterial";
+import type { ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate } from "../types/toolMaterial";
 
 type MiscellaneousTabKey = "workerEvaluation" | "vehicles" | "toolsMaterial";
 
@@ -16,6 +29,7 @@ type MiscellaneousTab = {
 type ToolMaterialDrawerState = { mode: "new" } | { mode: "edit"; itemId: number } | null;
 
 type ToolMaterialDraft = {
+  beg_number: string;
   manufacturer: string;
   designation: string;
   item_type: string;
@@ -30,6 +44,12 @@ type ToolMaterialDraft = {
   stock: string;
 };
 
+type ToolMaterialColumn = {
+  key: ToolMaterialColumnKey;
+  label: string;
+  type: "text" | "date" | "number";
+};
+
 const miscellaneousTabs: MiscellaneousTab[] = [
   { key: "workerEvaluation", label: "Monteurauswertung" },
   { key: "vehicles", label: "Fahrzeuge" },
@@ -37,6 +57,7 @@ const miscellaneousTabs: MiscellaneousTab[] = [
 ];
 
 const emptyToolMaterialDraft: ToolMaterialDraft = {
+  beg_number: "",
   manufacturer: "",
   designation: "",
   item_type: "",
@@ -50,6 +71,22 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
   invoice_number: "",
   stock: "",
 };
+
+const toolMaterialColumns: ToolMaterialColumn[] = [
+  { key: "beg_number", label: "BEG-Nr.", type: "text" },
+  { key: "manufacturer", label: "Fabrikat", type: "text" },
+  { key: "designation", label: "Bezeichnung", type: "text" },
+  { key: "item_type", label: "Typ", type: "text" },
+  { key: "device_number", label: "Gerätenummer", type: "text" },
+  { key: "serial_number", label: "Seriennummer", type: "text" },
+  { key: "employee", label: "Mitarbeiter", type: "text" },
+  { key: "item_date", label: "Datum", type: "date" },
+  { key: "delivery_note", label: "Lieferschein", type: "text" },
+  { key: "remarks", label: "Bemerkungen", type: "text" },
+  { key: "supplier", label: "Lieferant", type: "text" },
+  { key: "invoice_number", label: "RG-Nr.", type: "text" },
+  { key: "stock", label: "Bestand", type: "number" },
+];
 
 export function MiscellaneousPage() {
   const [activeTabKey, setActiveTabKey] = useState<MiscellaneousTabKey>("workerEvaluation");
@@ -109,25 +146,59 @@ function ToolMaterialList() {
   const [createDraft, setCreateDraft] = useState<ToolMaterialDraft>(emptyToolMaterialDraft);
   const [drawer, setDrawer] = useState<ToolMaterialDrawerState>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState<ToolMaterialFilters>({});
+  const [sortBy, setSortBy] = useState<ToolMaterialColumnKey>("designation");
+  const [sortDirection, setSortDirection] = useState<ToolMaterialSortDirection>("asc");
+  const [activeFilterKey, setActiveFilterKey] = useState<ToolMaterialColumnKey | null>(null);
+  const [filterOptions, setFilterOptions] = useState<ToolMaterialFilterOptions>({ columns: {} });
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedItems, setHasLoadedItems] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(true);
+  const [peopleError, setPeopleError] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     async function loadPeople() {
+      setPeopleLoading(true);
+      setPeopleError(null);
       try {
-        const loadedPeople = await api.persons({ isActive: true });
+        const loadedPeople = await api.persons({ isActive: null });
         if (active) {
-          setPeople([...loadedPeople].sort(comparePeople));
+          setPeople(loadedPeople);
         }
       } catch (requestError) {
         if (active) {
-          setError(readApiError(requestError, "Mitarbeiter konnten nicht geladen werden."));
+          setPeopleError(readApiError(requestError, "Mitarbeiter konnten nicht geladen werden."));
+        }
+      } finally {
+        if (active) {
+          setPeopleLoading(false);
         }
       }
     }
     void loadPeople();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadFilterOptions() {
+      try {
+        const loadedOptions = await api.toolMaterialFilterOptions();
+        if (active) {
+          setFilterOptions(loadedOptions);
+        }
+      } catch (requestError) {
+        if (active) {
+          setError(readApiError(requestError, "Filterwerte konnten nicht geladen werden."));
+        }
+      }
+    }
+    void loadFilterOptions();
     return () => {
       active = false;
     };
@@ -140,10 +211,16 @@ function ToolMaterialList() {
         setIsLoading(true);
         setError(null);
         try {
-          const loadedItems = await api.toolMaterialItems({ search: searchTerm });
+          const loadedItems = await api.toolMaterialItems({
+            search: searchTerm,
+            filters,
+            sortBy,
+            sortDirection,
+          });
           if (active) {
             setItems(loadedItems);
             setDrafts(toToolMaterialDrafts(loadedItems));
+            setHasLoadedItems(true);
           }
         } catch (requestError) {
           if (active) {
@@ -161,12 +238,16 @@ function ToolMaterialList() {
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [searchTerm]);
+  }, [filters, searchTerm, sortBy, sortDirection]);
 
   async function refreshItems() {
-    const loadedItems = await api.toolMaterialItems({ search: searchTerm });
+    const [loadedItems, loadedOptions] = await Promise.all([
+      api.toolMaterialItems({ search: searchTerm, filters, sortBy, sortDirection }),
+      api.toolMaterialFilterOptions(),
+    ]);
     setItems(loadedItems);
     setDrafts(toToolMaterialDrafts(loadedItems));
+    setFilterOptions(loadedOptions);
   }
 
   const selectedItem = drawer?.mode === "edit"
@@ -195,6 +276,10 @@ function ToolMaterialList() {
 
   async function createItem() {
     const payload = toToolMaterialPayload(createDraft);
+    if (!payload.beg_number.trim()) {
+      setError("BEG-Nr. darf nicht leer sein.");
+      return;
+    }
     if (!payload.designation.trim()) {
       setError("Bezeichnung darf nicht leer sein.");
       return;
@@ -265,6 +350,21 @@ function ToolMaterialList() {
     }));
   }
 
+  function updateColumnFilter(key: ToolMaterialColumnKey, nextFilter: ToolMaterialColumnFilter) {
+    setFilters((current) => ({ ...current, [key]: nextFilter }));
+  }
+
+  function resetColumnFilter(key: ToolMaterialColumnKey) {
+    setFilters((current) => clearToolMaterialColumnFilter(current, key));
+  }
+
+  function updateSort(key: ToolMaterialColumnKey, direction: ToolMaterialSortDirection) {
+    setSortBy(key);
+    setSortDirection(direction);
+  }
+
+  const filtersActive = hasToolMaterialFilters(filters);
+
   return (
     <section className="miscellaneous-tools-panel" role="tabpanel" aria-label="Werkzeuge und Material">
       <header className="miscellaneous-tools-header">
@@ -287,28 +387,44 @@ function ToolMaterialList() {
             onChange={(event) => setSearchTerm(event.target.value)}
           />
         </label>
+        {filtersActive ? (
+          <button
+            className="miscellaneous-tools-reset-filters"
+            type="button"
+            onClick={() => {
+              setFilters(clearAllToolMaterialFilters());
+              setActiveFilterKey(null);
+            }}
+          >
+            <RotateCcw aria-hidden="true" size={14} />
+            <span>Alle Filter zurücksetzen</span>
+          </button>
+        ) : null}
       </div>
 
       {error && <p className="form-error">{error}</p>}
-      {isLoading && <div className="matrix-state">Werkzeuge und Material werden geladen...</div>}
+      {isLoading && !hasLoadedItems && <div className="matrix-state">Werkzeuge und Material werden geladen...</div>}
 
-      {!isLoading && (
+      {hasLoadedItems && (
         <div className="miscellaneous-tools-table-wrap">
           <table className="miscellaneous-tools-table">
             <thead>
               <tr>
-                <th>Fabrikat</th>
-                <th>Bezeichnung</th>
-                <th>Typ</th>
-                <th>Gerätenummer</th>
-                <th>Seriennummer</th>
-                <th>Mitarbeiter</th>
-                <th>Datum</th>
-                <th>Lieferschein</th>
-                <th>Bemerkungen</th>
-                <th>Lieferant</th>
-                <th>RG-Nr.</th>
-                <th>Bestand</th>
+                {toolMaterialColumns.map((column) => (
+                  <ToolMaterialFilterHeader
+                    column={column}
+                    filter={filters[column.key]}
+                    isOpen={activeFilterKey === column.key}
+                    isSorted={sortBy === column.key}
+                    key={column.key}
+                    options={filterOptions.columns[column.key] ?? []}
+                    sortDirection={sortDirection}
+                    onChange={(nextFilter) => updateColumnFilter(column.key, nextFilter)}
+                    onOpenChange={(open) => setActiveFilterKey(open ? column.key : null)}
+                    onReset={() => resetColumnFilter(column.key)}
+                    onSort={(direction) => updateSort(column.key, direction)}
+                  />
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -326,6 +442,7 @@ function ToolMaterialList() {
                     }
                   }}
                 >
+                  <td><strong>{item.beg_number ?? ""}</strong></td>
                   <td>{item.manufacturer ?? ""}</td>
                   <td><strong>{item.designation}</strong></td>
                   <td>{item.item_type ?? ""}</td>
@@ -341,8 +458,8 @@ function ToolMaterialList() {
                 </tr>
               )) : (
                 <tr>
-                  <td className="miscellaneous-tools-empty" colSpan={12}>
-                    {searchTerm.trim() ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
+                  <td className="miscellaneous-tools-empty" colSpan={13}>
+                    {searchTerm.trim() || filtersActive ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
                   </td>
                 </tr>
               )}
@@ -365,7 +482,11 @@ function ToolMaterialList() {
       >
         <ToolMaterialFields
           draft={createDraft}
+          historicalEmployee={null}
           people={people}
+          peopleError={peopleError}
+          peopleLoading={peopleLoading}
+          requireBegNumber
           onChange={(values) => setCreateDraft((current) => ({ ...current, ...values }))}
         />
       </EntityDetailDrawer>
@@ -401,7 +522,11 @@ function ToolMaterialList() {
         {selectedItem && selectedDraft && (
           <ToolMaterialFields
             draft={selectedDraft}
+            historicalEmployee={selectedItem.employee}
             people={people}
+            peopleError={peopleError}
+            peopleLoading={peopleLoading}
+            requireBegNumber={false}
             onChange={(values) => updateDraft(selectedItem.id, values)}
           />
         )}
@@ -412,15 +537,31 @@ function ToolMaterialList() {
 
 function ToolMaterialFields({
   draft,
+  historicalEmployee,
   people,
+  peopleError,
+  peopleLoading,
+  requireBegNumber,
   onChange,
 }: {
   draft: ToolMaterialDraft;
+  historicalEmployee: ToolMaterialEmployee | null;
   people: Person[];
+  peopleError: string | null;
+  peopleLoading: boolean;
+  requireBegNumber: boolean;
   onChange: (values: Partial<ToolMaterialDraft>) => void;
 }) {
   return (
     <div className="tool-material-form-grid">
+      <label>
+        <span>BEG-Nr.</span>
+        <input
+          required={requireBegNumber}
+          value={draft.beg_number}
+          onChange={(event) => onChange({ beg_number: event.target.value })}
+        />
+      </label>
       <label>
         <span>Fabrikat</span>
         <input value={draft.manufacturer} onChange={(event) => onChange({ manufacturer: event.target.value })} />
@@ -441,15 +582,14 @@ function ToolMaterialFields({
         <span>Seriennummer</span>
         <input value={draft.serial_number} onChange={(event) => onChange({ serial_number: event.target.value })} />
       </label>
-      <label>
-        <span>Mitarbeiter</span>
-        <select value={draft.employee_id} onChange={(event) => onChange({ employee_id: event.target.value })}>
-          <option value="">Keine Zuordnung</option>
-          {people.map((person) => (
-            <option key={person.id} value={person.id}>{person.display_name}</option>
-          ))}
-        </select>
-      </label>
+      <ToolMaterialEmployeeSelect
+        error={peopleError}
+        historicalEmployee={historicalEmployee}
+        loading={peopleLoading}
+        people={people}
+        value={draft.employee_id}
+        onChange={(value) => onChange({ employee_id: value })}
+      />
       <label>
         <span>Datum</span>
         <input type="date" value={draft.item_date} onChange={(event) => onChange({ item_date: event.target.value })} />
@@ -478,8 +618,281 @@ function ToolMaterialFields({
   );
 }
 
+function ToolMaterialEmployeeSelect({
+  value,
+  people,
+  historicalEmployee,
+  loading,
+  error,
+  onChange,
+}: {
+  value: string;
+  people: Person[];
+  historicalEmployee: ToolMaterialEmployee | null;
+  loading: boolean;
+  error: string | null;
+  onChange: (value: string) => void;
+}) {
+  const labelId = useId();
+  const options = useMemo(
+    () => buildToolMaterialEmployeeOptions(people, historicalEmployee),
+    [historicalEmployee, people],
+  );
+  return (
+    <div className="tool-material-field">
+      <span id={labelId}>Mitarbeiter</span>
+      <DashboardNotePicker
+        emptyText="Kein Mitarbeiter gefunden"
+        error={error}
+        errorText="Mitarbeiter konnten nicht geladen werden."
+        labelId={labelId}
+        listLabel="Mitarbeiter auswählen"
+        loading={loading}
+        loadingText="Mitarbeiter werden geladen..."
+        options={options}
+        searchLabel="Mitarbeiter suchen"
+        searchPlaceholder="Mitarbeiter suchen"
+        value={value}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function ToolMaterialFilterHeader({
+  column,
+  filter,
+  options,
+  isOpen,
+  isSorted,
+  sortDirection,
+  onChange,
+  onReset,
+  onSort,
+  onOpenChange,
+}: {
+  column: ToolMaterialColumn;
+  filter: ToolMaterialColumnFilter | undefined;
+  options: ToolMaterialFilterOption[];
+  isOpen: boolean;
+  isSorted: boolean;
+  sortDirection: ToolMaterialSortDirection;
+  onChange: (filter: ToolMaterialColumnFilter) => void;
+  onReset: () => void;
+  onSort: (direction: ToolMaterialSortDirection) => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{
+    bottom?: number;
+    left: number;
+    maxHeight: number;
+    top?: number;
+    width: number;
+  } | null>(null);
+  const activeFilter = isToolMaterialColumnFilterActive(filter);
+  const query = filter?.query ?? "";
+  const visibleOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("de-DE");
+    if (!normalizedQuery) {
+      return options;
+    }
+    return options.filter((option) => option.label.toLocaleLowerCase("de-DE").includes(normalizedQuery));
+  }, [options, query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    const updatePosition = () => {
+      if (triggerRef.current) {
+        setPosition(getToolMaterialFilterPopupPosition(triggerRef.current));
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || triggerRef.current?.contains(target) || popupRef.current?.contains(target)) {
+        return;
+      }
+      onOpenChange(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false);
+        triggerRef.current?.focus();
+      }
+    };
+    updatePosition();
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen, onOpenChange]);
+
+  function toggleValue(value: string) {
+    const selectedValues = filter?.values ?? [];
+    const values = selectedValues.includes(value)
+      ? selectedValues.filter((selectedValue) => selectedValue !== value)
+      : [...selectedValues, value];
+    onChange({ ...filter, values });
+  }
+
+  return (
+    <th>
+      <button
+        aria-expanded={isOpen}
+        aria-label={`${column.label} filtern und sortieren`}
+        className={`tool-material-filter-trigger${activeFilter || isSorted ? " is-active" : ""}`}
+        ref={triggerRef}
+        type="button"
+        onClick={() => onOpenChange(!isOpen)}
+      >
+        <span>{column.label}</span>
+        <ListFilter aria-hidden="true" size={13} />
+      </button>
+      {isOpen && position && typeof document !== "undefined" ? createPortal(
+        <div
+          className="tool-material-filter-popup"
+          ref={popupRef}
+          role="dialog"
+          style={position}
+        >
+          <div className="tool-material-filter-sort-actions">
+            <button
+              className={isSorted && sortDirection === "asc" ? "is-active" : undefined}
+              type="button"
+              onClick={() => onSort("asc")}
+            >
+              <ArrowDownAZ aria-hidden="true" size={14} />
+              <span>Aufsteigend</span>
+            </button>
+            <button
+              className={isSorted && sortDirection === "desc" ? "is-active" : undefined}
+              type="button"
+              onClick={() => onSort("desc")}
+            >
+              <ArrowUpAZ aria-hidden="true" size={14} />
+              <span>Absteigend</span>
+            </button>
+          </div>
+
+          {column.type === "text" ? (
+            <label className="tool-material-filter-input">
+              <span>Textsuche</span>
+              <input
+                autoFocus
+                placeholder={`${column.label} durchsuchen`}
+                type="search"
+                value={query}
+                onChange={(event) => onChange({ ...filter, query: event.target.value })}
+              />
+            </label>
+          ) : null}
+
+          {column.type === "date" ? (
+            <div className="tool-material-filter-range">
+              <label>
+                <span>Von</span>
+                <input
+                  type="date"
+                  value={filter?.dateFrom ?? ""}
+                  onChange={(event) => onChange({ ...filter, dateFrom: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Bis</span>
+                <input
+                  type="date"
+                  value={filter?.dateTo ?? ""}
+                  onChange={(event) => onChange({ ...filter, dateTo: event.target.value })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {column.type === "number" ? (
+            <div className="tool-material-filter-range">
+              <label>
+                <span>Minimum</span>
+                <input
+                  min="0"
+                  type="number"
+                  value={filter?.stockMin ?? ""}
+                  onChange={(event) => onChange({ ...filter, stockMin: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>Maximum</span>
+                <input
+                  min="0"
+                  type="number"
+                  value={filter?.stockMax ?? ""}
+                  onChange={(event) => onChange({ ...filter, stockMax: event.target.value })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          <div className="tool-material-filter-values" role="group" aria-label={`Werte für ${column.label}`}>
+            <span className="tool-material-filter-values-title">Vorhandene Werte</span>
+            {visibleOptions.length ? visibleOptions.map((option) => (
+              <label key={option.value}>
+                <input
+                  checked={(filter?.values ?? []).includes(option.value)}
+                  type="checkbox"
+                  onChange={() => toggleValue(option.value)}
+                />
+                <span title={option.label}>{option.label}</span>
+              </label>
+            )) : <p>Keine Werte gefunden.</p>}
+          </div>
+
+          <button
+            className="tool-material-filter-reset"
+            disabled={!activeFilter}
+            type="button"
+            onClick={onReset}
+          >
+            <RotateCcw aria-hidden="true" size={13} />
+            <span>Filter zurücksetzen</span>
+          </button>
+        </div>,
+        document.body,
+      ) : null}
+    </th>
+  );
+}
+
+function getToolMaterialFilterPopupPosition(trigger: HTMLElement) {
+  const margin = 8;
+  const gap = 4;
+  const width = Math.min(290, window.innerWidth - margin * 2);
+  const preferredHeight = 430;
+  const rect = trigger.getBoundingClientRect();
+  const availableBelow = window.innerHeight - rect.bottom - gap - margin;
+  const availableAbove = rect.top - gap - margin;
+  const openAbove = availableBelow < 220 && availableAbove > availableBelow;
+  const maxHeight = Math.max(180, Math.min(preferredHeight, openAbove ? availableAbove : availableBelow));
+  const horizontalPosition = {
+    left: Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin)),
+    maxHeight,
+    width,
+  };
+  return openAbove
+    ? { ...horizontalPosition, bottom: window.innerHeight - rect.top + gap }
+    : { ...horizontalPosition, top: rect.bottom + gap };
+}
+
 function toToolMaterialDraft(item: ToolMaterialItem): ToolMaterialDraft {
   return {
+    beg_number: item.beg_number ?? "",
     manufacturer: item.manufacturer ?? "",
     designation: item.designation,
     item_type: item.item_type ?? "",
@@ -501,6 +914,7 @@ function toToolMaterialDrafts(items: ToolMaterialItem[]): Record<number, ToolMat
 
 function toToolMaterialPayload(draft: ToolMaterialDraft): ToolMaterialItemCreate {
   return {
+    beg_number: draft.beg_number.trim(),
     manufacturer: optionalText(draft.manufacturer),
     designation: draft.designation.trim(),
     item_type: optionalText(draft.item_type),
@@ -526,10 +940,6 @@ function optionalInteger(value: string): number | null {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
-}
-
-function comparePeople(left: Person, right: Person): number {
-  return left.display_name.localeCompare(right.display_name, "de");
 }
 
 function formatDate(value: string | null): string {

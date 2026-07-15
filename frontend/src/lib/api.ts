@@ -9,8 +9,9 @@ import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccoun
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
-import type { ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate } from "../types/toolMaterial";
+import type { ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
+import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -549,14 +550,14 @@ export const api = {
     return request<VehicleLatestPositionItem[]>("/vehicles/latest-positions");
   },
 
-  async toolMaterialItems(params: { search?: string } = {}): Promise<ToolMaterialItem[]> {
-    const search = new URLSearchParams();
-    const cleanedSearch = params.search?.trim();
-    if (cleanedSearch) {
-      search.set("search", cleanedSearch);
-    }
+  async toolMaterialItems(params: ToolMaterialListParams = {}): Promise<ToolMaterialItem[]> {
+    const search = buildToolMaterialSearchParams(params);
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<ToolMaterialItem[]>(`/admin/tool-material-items${suffix}`);
+  },
+
+  async toolMaterialFilterOptions(): Promise<ToolMaterialFilterOptions> {
+    return request<ToolMaterialFilterOptions>("/admin/tool-material-items/filter-options");
   },
 
   async createToolMaterialItem(payload: ToolMaterialItemCreate): Promise<ToolMaterialItem> {

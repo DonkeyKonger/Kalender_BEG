@@ -10,6 +10,7 @@ class ToolMaterialItem(TimestampMixin, Base):
     __tablename__ = "tool_material_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    beg_number: Mapped[str | None] = mapped_column(String(120), unique=True, index=True)
     manufacturer: Mapped[str | None] = mapped_column(String(200), index=True)
     designation: Mapped[str] = mapped_column(String(240), nullable=False, index=True)
     item_type: Mapped[str | None] = mapped_column(String(160), index=True)

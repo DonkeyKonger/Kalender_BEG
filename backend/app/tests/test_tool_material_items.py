@@ -8,6 +8,7 @@ from app.api.routes import tool_material_items
 from app.core.database import get_db
 from app.main import create_app
 from app.models.enums import UserRole
+from app.schemas.tool_material_item import ToolMaterialFilterOptionsRead
 
 
 def test_tool_material_items_require_admin_role():
@@ -34,9 +35,24 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
         def __init__(self, _db):
             pass
 
-        def list_items(self, search=None):
-            calls.append(("list", search))
+        def list_items(self, query=None):
+            calls.append((
+                "list",
+                (
+                    query.search,
+                    query.filter_manufacturer,
+                    query.values_manufacturer,
+                    query.date_from,
+                    query.stock_min,
+                    query.sort_by,
+                    query.sort_direction,
+                ),
+            ))
             return [item]
+
+        def filter_options(self):
+            calls.append(("filter-options", None))
+            return ToolMaterialFilterOptionsRead(columns={})
 
         def create_item(self, payload):
             calls.append(("create", payload.designation))
@@ -59,18 +75,45 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
     app.dependency_overrides[get_db] = lambda: object()
     client = TestClient(app)
 
-    list_response = client.get("/api/admin/tool-material-items?search=bosch")
-    create_response = client.post("/api/admin/tool-material-items", json={"designation": "Bohrmaschine"})
+    list_response = client.get(
+        "/api/admin/tool-material-items"
+        "?search=bosch"
+        "&filter_manufacturer=Bosch"
+        "&values_manufacturer=Bosch"
+        "&values_manufacturer=Makita"
+        "&date_from=2026-01-01"
+        "&stock_min=1"
+        "&sort_by=beg_number"
+        "&sort_direction=desc"
+    )
+    filter_options_response = client.get("/api/admin/tool-material-items/filter-options")
+    create_response = client.post(
+        "/api/admin/tool-material-items",
+        json={"beg_number": "BEG-007", "designation": "Bohrmaschine"},
+    )
     update_response = client.patch("/api/admin/tool-material-items/7", json={"designation": "Bohrmaschine 2"})
     delete_response = client.delete("/api/admin/tool-material-items/7")
 
     assert list_response.status_code == 200
+    assert filter_options_response.status_code == 200
     assert list_response.json()[0]["designation"] == "Bohrmaschine"
     assert create_response.status_code == 201
     assert update_response.status_code == 200
     assert delete_response.status_code == 204
     assert calls == [
-        ("list", "bosch"),
+        (
+            "list",
+            (
+                "bosch",
+                "Bosch",
+                ["Bosch", "Makita"],
+                date(2026, 1, 1),
+                1,
+                "beg_number",
+                "desc",
+            ),
+        ),
+        ("filter-options", None),
         ("create", "Bohrmaschine"),
         ("update", (7, "Bohrmaschine 2")),
         ("delete", 7),
@@ -82,13 +125,20 @@ def demo_tool_material_item():
     timestamp = datetime(2026, 7, 11, 10, 0, tzinfo=timezone.utc)
     return SimpleNamespace(
         id=7,
+        beg_number="BEG-007",
         manufacturer="Bosch",
         designation="Bohrmaschine",
         item_type="GBH",
         device_number="G-100",
         serial_number="S-200",
         employee_id=3,
-        employee=SimpleNamespace(id=3, display_name="Max Mustermann", short_code="MM"),
+        employee=SimpleNamespace(
+            id=3,
+            display_name="Max Mustermann",
+            short_code="MM",
+            person_type="internal",
+            is_active=True,
+        ),
         item_date=date(2026, 7, 11),
         delivery_note="LS-1",
         remarks="Test",
