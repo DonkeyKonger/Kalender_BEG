@@ -125,3 +125,20 @@ class ToolMaterialFilterOption(BaseModel):
 
 class ToolMaterialFilterOptionsRead(BaseModel):
     columns: dict[str, list[ToolMaterialFilterOption]]
+
+
+class ToolResponsibleUserRead(BaseModel):
+    id: int
+    display_name: str
+    is_active: bool
+    is_valid: bool
+    invalid_reason: str | None = None
+
+
+class ToolMaterialResponsibilityRead(BaseModel):
+    tool_responsible_user_id: int | None
+    responsible_user: ToolResponsibleUserRead | None
+
+
+class ToolMaterialResponsibilityUpdate(BaseModel):
+    tool_responsible_user_id: int | None

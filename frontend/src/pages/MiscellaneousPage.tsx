@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
 import { toolMaterialCategoryOptions } from "../lib/toolMaterialCategories";
@@ -38,7 +39,7 @@ import {
   setToolMaterialEmployeeFilterValues,
   type MiscellaneousTabKey,
 } from "../lib/toolMaterialRouting";
-import type { ToolMaterialCategory, ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialStatus } from "../types/toolMaterial";
+import type { ToolMaterialCategory, ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialResponsibility, ToolMaterialStatus, ToolResponsibleUser } from "../types/toolMaterial";
 
 type MiscellaneousTab = {
   key: MiscellaneousTabKey;
@@ -180,6 +181,8 @@ function ToolMaterialList({
   employeeFilterValues: string[];
   onEmployeeFilterChange: (values: readonly string[]) => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [items, setItems] = useState<ToolMaterialItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<number, ToolMaterialDraft>>({});
@@ -206,6 +209,12 @@ function ToolMaterialList({
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [savingStatusItemId, setSavingStatusItemId] = useState<number | null>(null);
+  const [responsibility, setResponsibility] = useState<ToolMaterialResponsibility | null>(null);
+  const [responsibilityOptions, setResponsibilityOptions] = useState<ToolResponsibleUser[]>([]);
+  const [responsibilityValue, setResponsibilityValue] = useState("");
+  const [responsibilityLoading, setResponsibilityLoading] = useState(true);
+  const [responsibilitySaving, setResponsibilitySaving] = useState(false);
+  const [responsibilityError, setResponsibilityError] = useState<string | null>(null);
   const savingStatusItemIdRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -250,6 +259,45 @@ function ToolMaterialList({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadResponsibility() {
+      setResponsibilityLoading(true);
+      setResponsibilityError(null);
+      try {
+        const [loadedResponsibility, loadedOptions] = await Promise.all([
+          api.toolMaterialResponsibility(),
+          isAdmin ? api.toolMaterialResponsibleUserOptions() : Promise.resolve([]),
+        ]);
+        if (!active) {
+          return;
+        }
+        setResponsibility(loadedResponsibility);
+        setResponsibilityOptions(loadedOptions);
+        setResponsibilityValue(
+          loadedResponsibility.tool_responsible_user_id === null
+            ? ""
+            : String(loadedResponsibility.tool_responsible_user_id),
+        );
+      } catch (requestError) {
+        if (active) {
+          setResponsibilityError(readApiError(
+            requestError,
+            "Beauftragter konnte nicht geladen werden.",
+          ));
+        }
+      } finally {
+        if (active) {
+          setResponsibilityLoading(false);
+        }
+      }
+    }
+    void loadResponsibility();
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
 
   useEffect(() => {
     let active = true;
@@ -453,6 +501,38 @@ function ToolMaterialList({
     }
   }
 
+  async function changeResponsibleUser(value: string) {
+    if (!isAdmin || responsibilitySaving || value === responsibilityValue) {
+      return;
+    }
+    const previousValue = responsibilityValue;
+    const nextUserId = value === "" ? null : Number(value);
+    if (nextUserId !== null && !Number.isInteger(nextUserId)) {
+      return;
+    }
+
+    setResponsibilityValue(value);
+    setResponsibilitySaving(true);
+    setResponsibilityError(null);
+    try {
+      const savedResponsibility = await api.updateToolMaterialResponsibility(nextUserId);
+      setResponsibility(savedResponsibility);
+      setResponsibilityValue(
+        savedResponsibility.tool_responsible_user_id === null
+          ? ""
+          : String(savedResponsibility.tool_responsible_user_id),
+      );
+    } catch (requestError) {
+      setResponsibilityValue(previousValue);
+      setResponsibilityError(readApiError(
+        requestError,
+        "Beauftragter konnte nicht gespeichert werden.",
+      ));
+    } finally {
+      setResponsibilitySaving(false);
+    }
+  }
+
   function updateDraft(itemId: number, values: Partial<ToolMaterialDraft>) {
     setDrafts((current) => ({
       ...current,
@@ -488,10 +568,22 @@ function ToolMaterialList({
           <h2>Werkzeuge und Material</h2>
           <p>Zentrale Bestands- und Zuordnungsliste.</p>
         </div>
-        <button className="icon-button secondary miscellaneous-tools-add-button" type="button" onClick={openCreateDrawer}>
-          <Plus aria-hidden="true" size={17} />
-          <span>Eintrag hinzufügen</span>
-        </button>
+        <div className="miscellaneous-tools-header-actions">
+          <ToolMaterialResponsibleUserControl
+            canEdit={isAdmin}
+            error={responsibilityError}
+            loading={responsibilityLoading}
+            options={responsibilityOptions}
+            responsibility={responsibility}
+            saving={responsibilitySaving}
+            value={responsibilityValue}
+            onChange={(value) => void changeResponsibleUser(value)}
+          />
+          <button className="icon-button secondary miscellaneous-tools-add-button" type="button" onClick={openCreateDrawer}>
+            <Plus aria-hidden="true" size={17} />
+            <span>Eintrag hinzufügen</span>
+          </button>
+        </div>
       </header>
 
       <div className="miscellaneous-tools-toolbar">
@@ -666,6 +758,100 @@ function ToolMaterialList({
         )}
       </EntityDetailDrawer>
     </section>
+  );
+}
+
+function ToolMaterialResponsibleUserControl({
+  canEdit,
+  value,
+  responsibility,
+  options,
+  loading,
+  saving,
+  error,
+  onChange,
+}: {
+  canEdit: boolean;
+  value: string;
+  responsibility: ToolMaterialResponsibility | null;
+  options: ToolResponsibleUser[];
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  onChange: (value: string) => void;
+}) {
+  const labelId = useId();
+  const pickerOptions = useMemo(() => {
+    const mappedOptions = options.map((option) => ({
+      value: String(option.id),
+      label: option.display_name,
+      searchText: option.display_name,
+    }));
+    const currentUser = responsibility?.responsible_user;
+    if (!currentUser || mappedOptions.some((option) => option.value === String(currentUser.id))) {
+      return mappedOptions;
+    }
+    return [
+      ...mappedOptions,
+      {
+        value: String(currentUser.id),
+        label: currentUser.is_valid
+          ? currentUser.display_name
+          : `${currentUser.display_name} (nicht mehr berechtigt)`,
+        searchText: currentUser.display_name,
+      },
+    ];
+  }, [options, responsibility?.responsible_user]);
+  const currentUser = responsibility?.responsible_user ?? null;
+  const readOnlyLabel = loading
+    ? "Wird geladen…"
+    : currentUser?.display_name ?? "Nicht festgelegt";
+
+  return (
+    <div className="tool-material-responsibility">
+      <span className="tool-material-responsibility-label" id={labelId}>Beauftragter</span>
+      {canEdit ? (
+        <DashboardNotePicker
+          disabled={loading || saving}
+          emptyOptionLabel="Nicht festgelegt"
+          emptyText="Kein berechtigter Büronutzer gefunden"
+          error={null}
+          errorText="Büromitarbeiter konnten nicht geladen werden."
+          labelId={labelId}
+          listLabel="Werkzeug-Beauftragten auswählen"
+          loading={loading}
+          loadingText="Beauftragter wird geladen..."
+          options={pickerOptions}
+          searchLabel="Büromitarbeiter suchen"
+          searchPlaceholder="Büromitarbeiter suchen…"
+          value={value}
+          onChange={onChange}
+        />
+      ) : (
+        <div
+          aria-labelledby={labelId}
+          className="tool-material-responsibility-readonly"
+          title={readOnlyLabel}
+        >
+          {readOnlyLabel}
+        </div>
+      )}
+      {saving ? (
+        <small aria-live="polite" className="tool-material-responsibility-status">
+          Wird gespeichert…
+        </small>
+      ) : null}
+      {currentUser && !currentUser.is_valid ? (
+        <small className="tool-material-responsibility-status is-invalid" role="alert">
+          {currentUser.invalid_reason ?? "Der Beauftragte ist nicht mehr berechtigt."} Bitte neu festlegen.
+        </small>
+      ) : null}
+      {error ? (
+        <small className="tool-material-responsibility-status is-error" role="alert">
+          {error}
+        </small>
+      ) : null}
+    </div>
   );
 }
 

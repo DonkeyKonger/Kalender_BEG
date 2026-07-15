@@ -25,6 +25,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.tool_material_item import ToolMaterialItem
+from app.models.tool_material_settings import ToolMaterialSettings
 from app.models.user import User
 from app.models.vehicle import (
     SiteVehicleAssignment,
@@ -65,6 +66,7 @@ __all__ = [
     "SiteVehicleAssignment",
     "TimeEntryWeeklyReview",
     "ToolMaterialItem",
+    "ToolMaterialSettings",
     "User",
     "UserPushDevice",
     "Vehicle",

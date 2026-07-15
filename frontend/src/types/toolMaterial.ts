@@ -72,3 +72,16 @@ export type ToolMaterialFilterOption = {
 export type ToolMaterialFilterOptions = {
   columns: Record<string, ToolMaterialFilterOption[]>;
 };
+
+export type ToolResponsibleUser = {
+  id: number;
+  display_name: string;
+  is_active: boolean;
+  is_valid: boolean;
+  invalid_reason: string | null;
+};
+
+export type ToolMaterialResponsibility = {
+  tool_responsible_user_id: number | null;
+  responsible_user: ToolResponsibleUser | null;
+};

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_admin_or_office_page
+from app.api.dependencies import require_admin, require_admin_or_office_page
 from app.core.database import get_db
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOptionsRead,
@@ -11,6 +11,12 @@ from app.schemas.tool_material_item import (
     ToolMaterialItemRead,
     ToolMaterialItemUpdate,
     ToolMaterialListQuery,
+    ToolMaterialResponsibilityRead,
+    ToolMaterialResponsibilityUpdate,
+    ToolResponsibleUserRead,
+)
+from app.services.tool_material_responsibility_service import (
+    ToolMaterialResponsibilityService,
 )
 from app.services.tool_material_service import ToolMaterialService
 
@@ -34,6 +40,33 @@ def list_tool_material_filter_options(
     db: Session = Depends(get_db),
 ) -> ToolMaterialFilterOptionsRead:
     return ToolMaterialService(db).filter_options()
+
+
+@router.get("/responsibility", response_model=ToolMaterialResponsibilityRead)
+def read_tool_material_responsibility(
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> ToolMaterialResponsibilityRead:
+    return ToolMaterialResponsibilityService(db).read_settings()
+
+
+@router.get("/responsibility/options", response_model=list[ToolResponsibleUserRead])
+def list_tool_material_responsible_user_options(
+    _admin=Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[ToolResponsibleUserRead]:
+    return ToolMaterialResponsibilityService(db).list_selectable_users()
+
+
+@router.put("/responsibility", response_model=ToolMaterialResponsibilityRead)
+def update_tool_material_responsibility(
+    payload: ToolMaterialResponsibilityUpdate,
+    _admin=Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ToolMaterialResponsibilityRead:
+    return ToolMaterialResponsibilityService(db).update_responsible_user(
+        payload.tool_responsible_user_id
+    )
 
 
 @router.post("", response_model=ToolMaterialItemRead, status_code=status.HTTP_201_CREATED)

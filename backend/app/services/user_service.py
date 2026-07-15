@@ -10,6 +10,7 @@ from app.models.enums import UserRole
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
 from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
+from app.models.tool_material_settings import ToolMaterialSettings
 from app.models.user import User
 from app.repositories.person_repository import PersonRepository
 from app.repositories.user_repository import UserRepository
@@ -137,6 +138,9 @@ class UserService:
                 "Kann nicht geloescht werden, weil der Eintrag noch verwendet wird.",
             )
 
+        settings = self.db.get(ToolMaterialSettings, 1)
+        if settings is not None and settings.tool_responsible_user_id == user.id:
+            settings.tool_responsible_user_id = None
         self.db.delete(user)
         self.db.commit()
 

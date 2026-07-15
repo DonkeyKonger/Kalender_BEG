@@ -11705,9 +11705,62 @@ button.person-chip:focus-visible {
   flex: 0 0 auto;
 }
 
+.miscellaneous-tools-header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tool-material-responsibility {
+  display: grid;
+  width: 260px;
+  min-width: 0;
+  gap: 4px;
+}
+
+.tool-material-responsibility-label {
+  color: #52627a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tool-material-responsibility-readonly {
+  min-width: 0;
+  min-height: 32px;
+  overflow: hidden;
+  border: 1px solid #d7e0ea;
+  border-radius: 0;
+  background: #f7f9fc;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-material-responsibility-status {
+  max-width: 280px;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.tool-material-responsibility-status.is-invalid,
+.tool-material-responsibility-status.is-error {
+  color: #a33b32;
+}
+
 .miscellaneous-tools-add-button {
   min-height: 32px;
   border-radius: 0;
+  margin-top: 15px;
   padding: 7px 10px;
 }
 
@@ -12295,6 +12348,19 @@ button.person-chip:focus-visible {
   .miscellaneous-tools-drawer-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .miscellaneous-tools-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tool-material-responsibility {
+    width: 100%;
+  }
+
+  .miscellaneous-tools-add-button {
+    margin-top: 0;
   }
 
   .tool-material-form-grid {
