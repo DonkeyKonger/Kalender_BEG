@@ -5,6 +5,7 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { AbsenceTypeBadge, StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
@@ -85,7 +86,7 @@ function emptyAbsence(personId = 0, date = toDateInputValue(new Date())): Absenc
 
 export function AbsencesPage() {
   const { user } = useAuth();
-  const canEdit = user?.role === "admin" || user?.role === "project_manager";
+  const canEdit = canEditMainPage(user, "absences");
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditableAbsence>>({});
   const [people, setPeople] = useState<Person[]>([]);

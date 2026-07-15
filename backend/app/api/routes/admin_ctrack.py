@@ -4,8 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_admin, require_office_page
-from app.models.enums import UserRole
+from app.api.dependencies import get_db, require_admin, require_business_page
 from app.models.user import User
 from app.services.ctrack_client import (
     CtrackClient,
@@ -17,7 +16,7 @@ from app.services.ctrack_client import (
 router = APIRouter(prefix="/admin/integrations/ctrack", tags=["admin-integrations"])
 integration_router = APIRouter(prefix="/integrations/ctrack", tags=["vehicle-integrations"])
 vehicles_router = APIRouter(prefix="/vehicles", tags=["vehicles"])
-CAN_READ_VEHICLE_POSITIONS = require_office_page("map", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
+CAN_READ_VEHICLE_POSITIONS = require_business_page("map")
 
 
 @router.get("/vehicles")

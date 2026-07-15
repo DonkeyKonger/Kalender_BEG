@@ -3,9 +3,8 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_office_page, require_roles
+from app.api.dependencies import require_business_page
 from app.core.database import get_db
-from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.dashboard_note import DashboardNoteRead
 from app.schemas.matrix import (
@@ -22,8 +21,8 @@ from app.services.matrix_service import MatrixService
 
 router = APIRouter(prefix="/matrix", tags=["matrix"])
 
-CAN_READ = require_office_page("calendar", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
-CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_READ = require_business_page("calendar")
+CAN_WRITE = require_business_page("calendar")
 
 
 @router.get("", response_model=MatrixResponse)

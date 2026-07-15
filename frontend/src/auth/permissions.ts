@@ -12,6 +12,13 @@ export function canAccessMainPage(user: CurrentUser, pageKey: OfficePagePermissi
   return (user.office_page_permissions ?? []).includes(pageKey);
 }
 
+export function canEditMainPage(user: CurrentUser | null, pageKey: OfficePagePermission): boolean {
+  if (!user || !["admin", "project_manager", "office"].includes(user.role)) {
+    return false;
+  }
+  return canAccessMainPage(user, pageKey);
+}
+
 export function canShowNavItem(user: CurrentUser, item: NavigationItem): boolean {
   if (!item.roles.includes(user.role)) {
     return false;

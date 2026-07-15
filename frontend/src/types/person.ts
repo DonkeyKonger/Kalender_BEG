@@ -35,10 +35,6 @@ export type Person = {
   updated_at: string;
 };
 
-export function canEditMatrix(role: UserRole): boolean {
-  return role === "admin" || role === "project_manager";
-}
-
 export type PersonCreate = {
   first_name: string;
   last_name: string;

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect } from "../components/DashboardNotePickers";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser } from "../lib/api";
@@ -24,7 +25,7 @@ import type {
   SiteStatus,
 } from "../types/matrix";
 import type { Person } from "../types/person";
-import { calendarPersonCode, canEditMatrix } from "../types/person";
+import { calendarPersonCode } from "../types/person";
 import {
   formatDayHeader,
   formatDayNumber,
@@ -250,7 +251,7 @@ export function MatrixPage() {
   const [isSavingAbsence, setIsSavingAbsence] = useState(false);
   const [isSiteCreateDrawerOpen, setIsSiteCreateDrawerOpen] = useState(false);
   const [siteCreateProjectManagerId, setSiteCreateProjectManagerId] = useState<number | null>(null);
-  const isEditable = user ? canEditMatrix(user.role) : false;
+  const isEditable = canEditMainPage(user, "calendar");
   const matrixIsEditable = isEditable && !isYearView;
   const hasPendingMatrixSave = useMemo(
     () => Object.values(saveStatus).some((status) => status === "dirty" || status === "saving"),

@@ -1,17 +1,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_office_page, require_roles
+from app.api.dependencies import require_business_page
 from app.core.database import get_db
-from app.models.enums import UserRole
 from app.schemas.customer import CustomerCreate, CustomerRead, CustomerRemoveResponse, CustomerUpdate
 from app.services.customer_service import CustomerService
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
-CAN_READ = require_office_page("customers", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
-CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
-CAN_ADMIN = require_roles(UserRole.ADMIN)
+CAN_READ = require_business_page("customers", "sites", "calendar")
+CAN_CREATE = require_business_page("customers", "sites", "calendar")
+CAN_WRITE = require_business_page("customers")
 
 
 @router.get("", response_model=list[CustomerRead])
@@ -27,7 +26,7 @@ def list_customers(
 @router.post("", response_model=CustomerRead, status_code=201)
 def create_customer(
     payload: CustomerCreate,
-    current_user=Depends(CAN_WRITE),
+    current_user=Depends(CAN_CREATE),
     db: Session = Depends(get_db),
 ) -> CustomerRead:
     service = CustomerService(db)
@@ -50,7 +49,7 @@ def update_customer(
 @router.post("/{customer_id}/remove", response_model=CustomerRemoveResponse)
 def remove_customer(
     customer_id: int,
-    current_user=Depends(CAN_ADMIN),
+    current_user=Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> CustomerRemoveResponse:
     service = CustomerService(db)

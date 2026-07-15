@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw } from "lucide-rea
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -236,7 +237,7 @@ export function TimeEntriesPage() {
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
-  const canManageTimeEntries = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
+  const canManageTimeEntries = canEditMainPage(user, "payroll");
   const canViewGpsVerification = user?.role === "admin";
   const visibleTimeSubtabs = canViewGpsVerification
     ? timeSubtabs

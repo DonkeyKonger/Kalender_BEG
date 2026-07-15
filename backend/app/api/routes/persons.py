@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_office_page, require_roles
+from app.api.dependencies import require_business_page, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.schemas.person import (
@@ -25,20 +25,19 @@ from app.services.person_service import PersonService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
 
-CAN_READ = require_office_page(
+CAN_READ = require_business_page(
     "employees",
     "payroll",
     "calendar",
     "absences",
-    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
 )
-CAN_MAP_READ = require_office_page("map", roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE))
-CAN_WRITE = require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+CAN_MAP_READ = require_business_page("map")
+CAN_WRITE = require_business_page("employees")
+CAN_EXTERNAL_WRITE = require_business_page("employees", "calendar")
 CAN_ADMIN = require_roles(UserRole.ADMIN)
-CAN_HOURS_ACCOUNT_WRITE = require_office_page(
+CAN_HOURS_ACCOUNT_WRITE = require_business_page(
     "employees",
     "payroll",
-    roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE),
 )
 
 
@@ -163,7 +162,7 @@ def create_person(
 @router.post("/external", response_model=PersonRead, status_code=201)
 def create_external_person(
     payload: ExternalPersonCreate,
-    current_user=Depends(CAN_WRITE),
+    current_user=Depends(CAN_EXTERNAL_WRITE),
     db: Session = Depends(get_db),
 ) -> PersonRead:
     person = PersonService(db).create_external_person(payload, current_user.id)

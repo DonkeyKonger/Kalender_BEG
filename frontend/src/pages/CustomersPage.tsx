@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -65,8 +66,8 @@ const emptyCustomer: CustomerCreate = {
 
 export function CustomersPage() {
   const { user } = useAuth();
-  const canEdit = user?.role === "admin" || user?.role === "project_manager";
-  const canRemove = user?.role === "admin";
+  const canEdit = canEditMainPage(user, "customers");
+  const canRemove = canEdit;
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [siteSummaries, setSiteSummaries] = useState<SiteSummary[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditableCustomer>>({});

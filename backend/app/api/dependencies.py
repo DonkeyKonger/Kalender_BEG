@@ -13,6 +13,7 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+BUSINESS_PAGE_ROLES = (UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
 
 
 def get_current_user(
@@ -69,6 +70,18 @@ def require_office_page(page_key: str, *additional_page_keys: str, roles: tuple[
         return current_user
 
     return dependency
+
+
+def require_business_page(
+    page_key: str,
+    *additional_page_keys: str,
+) -> Callable[[User], User]:
+    """Allow normal page operations for managers and opted-in office users."""
+    return require_office_page(
+        page_key,
+        *additional_page_keys,
+        roles=BUSINESS_PAGE_ROLES,
+    )
 
 
 def get_current_app_user(current_user: User = Depends(get_current_user)) -> User:

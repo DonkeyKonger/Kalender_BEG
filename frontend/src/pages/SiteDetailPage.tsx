@@ -5,6 +5,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react"
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { AddressSearch } from "../components/AddressSearch";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteColorSelect } from "../components/SiteColorSelect";
@@ -111,7 +112,7 @@ const emptyCustomerForProjectRecord: CustomerCreate = {
 
 export function SiteDetailPage() {
   const { user } = useAuth();
-  const canEditSite = user?.role === "admin" || user?.role === "project_manager";
+  const canEditSite = canEditMainPage(user, "sites");
   const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
   const location = useLocation();

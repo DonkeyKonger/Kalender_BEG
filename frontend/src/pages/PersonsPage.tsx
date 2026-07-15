@@ -25,6 +25,7 @@ import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
@@ -126,9 +127,9 @@ const emptyPerson: PersonCreate = {
 
 export function PersonsPage() {
   const { user } = useAuth();
-  const canEdit = user?.role === "admin" || user?.role === "project_manager";
-  const canManageHoursAccount = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
-  const canManageVacationCarryover = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
+  const canEdit = canEditMainPage(user, "employees");
+  const canManageHoursAccount = canEdit;
+  const canManageVacationCarryover = canEdit;
   const canRemove = canEdit;
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<string, EditablePerson>>({});

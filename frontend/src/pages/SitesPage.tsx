@@ -8,6 +8,7 @@ import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, siteStatusLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
+import { canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
 import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
 import { compareSiteNumbers } from "../lib/siteSorting";
@@ -73,7 +74,7 @@ export function SitesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const canEdit = user?.role === "admin" || user?.role === "project_manager";
+  const canEdit = canEditMainPage(user, "sites");
   const [sites, setSites] = useState<SiteSummary[]>([]);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
