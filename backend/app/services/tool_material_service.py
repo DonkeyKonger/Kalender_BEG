@@ -1,4 +1,5 @@
 from datetime import date
+import re
 
 from fastapi import HTTPException, status
 from sqlalchemy import String, case, cast, false, func, or_, select
@@ -15,6 +16,7 @@ from app.schemas.tool_material_item import (
     ToolMaterialItemUpdate,
     ToolMaterialListQuery,
 )
+from app.schemas.person import PersonToolMaterialRead
 
 
 EMPTY_FILTER_VALUE = "__empty__"
@@ -128,6 +130,32 @@ class ToolMaterialService:
             ToolMaterialItem.id,
         )
         return list(self.db.scalars(statement).unique())
+
+    def list_person_assignments(self, person_id: int) -> list[PersonToolMaterialRead]:
+        person_exists = self.db.scalar(
+            select(Person.id).where(
+                Person.id == person_id,
+                Person.deleted_at.is_(None),
+            )
+        )
+        if person_exists is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Mitarbeiter nicht gefunden.")
+
+        rows = self.db.execute(
+            select(
+                ToolMaterialItem.beg_number,
+                ToolMaterialItem.manufacturer,
+                ToolMaterialItem.designation,
+                ToolMaterialItem.item_date,
+            ).where(
+                ToolMaterialItem.employee_id == person_id,
+                ToolMaterialItem.status == ToolMaterialStatus.ISSUED,
+            )
+        ).mappings().all()
+        return sorted(
+            (PersonToolMaterialRead.model_validate(row) for row in rows),
+            key=lambda item: natural_beg_number_key(item.beg_number),
+        )
 
     def filter_options(self) -> ToolMaterialFilterOptionsRead:
         rows = self.db.execute(
@@ -285,6 +313,17 @@ def clean_tool_material_values(values: dict, *, partial: bool = False) -> dict:
     if "designation" in cleaned and not cleaned.get("designation"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bezeichnung darf nicht leer sein.")
     return cleaned
+
+
+def natural_beg_number_key(value: str | None) -> tuple:
+    if not value:
+        return (1, ())
+    segments = tuple(
+        (0, int(segment)) if segment.isdigit() else (1, segment.casefold())
+        for segment in re.split(r"(\d+)", value)
+        if segment
+    )
+    return (0, segments)
 
 
 def enforce_status_employee_consistency(

@@ -27,9 +27,14 @@ import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
+import {
+  formatPersonToolMaterialDate,
+  getPersonToolMaterialViewState,
+  PERSON_TOOL_MATERIAL_EMPTY_TEXT,
+} from "../lib/personToolMaterialView";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
-import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursAccountEntry, PersonLocationStatus, PersonType } from "../types/person";
+import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursAccountEntry, PersonLocationStatus, PersonToolMaterialItem, PersonType } from "../types/person";
 import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
@@ -78,7 +83,7 @@ const personDetailActions: Array<{
     key: "equipment",
     label: "Werkzeug / Material",
     title: "Werkzeug / Material",
-    description: "Ausgegebenes Werkzeug und Material je Person werden hier vorbereitet.",
+    description: "Aktuell ausgegebenes Werkzeug und Material dieser Person.",
     preview: "Ausgegebenes Werkzeug und Material.",
     icon: Wrench,
   },
@@ -872,12 +877,88 @@ function PersonReadView({
             <PersonAbsenceOverviewPanel canManageCarryover={canManageVacationCarryover} person={person} />
           ) : action.key === "timeAccount" ? (
             <PersonHoursAccountPanel canManage={canManageHoursAccount} person={person} />
+          ) : action.key === "equipment" ? (
+            <PersonToolMaterialPanel personId={person.id} />
           ) : (
             <PersonDetailPlaceholderPanel action={action} person={person} />
           )}
         </PersonDetailSubpage>
       ) : null}
     </div>
+  );
+}
+
+function PersonToolMaterialPanel({ personId }: { personId: number }) {
+  const [items, setItems] = useState<PersonToolMaterialItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setItems([]);
+    setIsLoading(true);
+    setError(null);
+    async function loadItems() {
+      try {
+        const loadedItems = await api.personToolMaterialItems(personId);
+        if (active) {
+          setItems(loadedItems);
+        }
+      } catch (requestError) {
+        if (active) {
+          setError(readApiError(requestError, "Werkzeuge und Material konnten nicht geladen werden."));
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    }
+    void loadItems();
+    return () => {
+      active = false;
+    };
+  }, [personId]);
+
+  const viewState = getPersonToolMaterialViewState({ isLoading, error, items });
+
+  return (
+    <section className="person-tool-material-panel" aria-live="polite">
+      {viewState === "loading" ? (
+        <div className="person-tool-material-state">Werkzeuge und Material werden geladen...</div>
+      ) : viewState === "error" ? (
+        <div className="person-tool-material-state is-error" role="alert">{error}</div>
+      ) : viewState === "empty" ? (
+        <div className="person-tool-material-state">{PERSON_TOOL_MATERIAL_EMPTY_TEXT}</div>
+      ) : (
+        <table className="person-tool-material-table">
+          <colgroup>
+            <col className="person-tool-material-beg-column" />
+            <col className="person-tool-material-manufacturer-column" />
+            <col />
+            <col className="person-tool-material-date-column" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>BEG-Nr.</th>
+              <th>Fabrikat</th>
+              <th>Bezeichnung</th>
+              <th>Datum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => (
+              <tr key={`${item.beg_number ?? "ohne-beg"}-${item.designation}-${index}`}>
+                <td title={item.beg_number ?? undefined}>{item.beg_number ?? "–"}</td>
+                <td title={item.manufacturer ?? undefined}>{item.manufacturer ?? "–"}</td>
+                <td title={item.designation}>{item.designation}</td>
+                <td>{formatPersonToolMaterialDate(item.item_date)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

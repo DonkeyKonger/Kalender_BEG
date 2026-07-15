@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -88,6 +88,13 @@ class PersonRead(PersonBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PersonToolMaterialRead(BaseModel):
+    beg_number: str | None = None
+    manufacturer: str | None = None
+    designation: str
+    item_date: date | None = None
 
 
 class PersonMapProjectManager(BaseModel):

@@ -62,6 +62,13 @@ export type PersonCreate = {
 
 export type PersonUpdate = Partial<PersonCreate>;
 
+export type PersonToolMaterialItem = {
+  beg_number: string | null;
+  manufacturer: string | null;
+  designation: string;
+  item_date: string | null;
+};
+
 export function getEmployeeShortName(
   person: {
     first_name?: string | null;

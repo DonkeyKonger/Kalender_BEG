@@ -2559,6 +2559,79 @@ button.entity-card:focus-visible,
   line-height: 1.42;
 }
 
+.person-tool-material-panel {
+  min-width: 0;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.person-tool-material-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #172033;
+  font-size: 0.76rem;
+}
+
+.person-tool-material-beg-column {
+  width: 21%;
+}
+
+.person-tool-material-manufacturer-column {
+  width: 23%;
+}
+
+.person-tool-material-date-column {
+  width: 92px;
+}
+
+.person-tool-material-table th,
+.person-tool-material-table td {
+  min-width: 0;
+  border-bottom: 1px solid #e4ebf3;
+  padding: 7px 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.person-tool-material-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.person-tool-material-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.person-tool-material-table td:last-child {
+  white-space: nowrap;
+}
+
+.person-tool-material-state {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 14px;
+  text-align: center;
+}
+
+.person-tool-material-state.is-error {
+  color: #9f1c12;
+}
+
 .person-hours-account {
   display: grid;
   gap: 10px;

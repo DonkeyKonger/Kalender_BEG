@@ -12,6 +12,7 @@ from app.schemas.person import (
     PersonRead,
     PersonRemovePlan,
     PersonRemoveResponse,
+    PersonToolMaterialRead,
     PersonUpdate,
 )
 from app.schemas.person_hours_account import (
@@ -22,6 +23,7 @@ from app.schemas.person_hours_account import (
 from app.services.geo_service import search_geocoding_candidates
 from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.person_service import PersonService
+from app.services.tool_material_service import ToolMaterialService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
 
@@ -33,6 +35,7 @@ CAN_READ = require_business_page(
 )
 CAN_MAP_READ = require_business_page("map")
 CAN_WRITE = require_business_page("employees")
+CAN_EMPLOYEE_READ = require_business_page("employees")
 CAN_EXTERNAL_WRITE = require_business_page("employees", "calendar")
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 CAN_HOURS_ACCOUNT_WRITE = require_business_page(
@@ -79,6 +82,15 @@ def search_person_geocode(
         )
         for candidate in search_geocoding_candidates(q, limit=limit)
     ]
+
+
+@router.get("/{person_id}/tool-material-items", response_model=list[PersonToolMaterialRead])
+def list_person_tool_material_items(
+    person_id: int,
+    _user=Depends(CAN_EMPLOYEE_READ),
+    db: Session = Depends(get_db),
+) -> list[PersonToolMaterialRead]:
+    return ToolMaterialService(db).list_person_assignments(person_id)
 
 
 @router.get("/{person_id}/hours-account", response_model=PersonHoursAccountRead)
