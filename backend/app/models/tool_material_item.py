@@ -4,7 +4,7 @@ from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Integer, String,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import ToolMaterialStatus, enum_values
+from app.models.enums import ToolMaterialCategory, ToolMaterialStatus, enum_values
 
 
 class ToolMaterialItem(TimestampMixin, Base):
@@ -30,6 +30,20 @@ class ToolMaterialItem(TimestampMixin, Base):
     supplier: Mapped[str | None] = mapped_column(String(200), index=True)
     invoice_number: Mapped[str | None] = mapped_column(String(160), index=True)
     stock: Mapped[int | None] = mapped_column(Integer)
+    category: Mapped[ToolMaterialCategory] = mapped_column(
+        Enum(
+            ToolMaterialCategory,
+            values_callable=enum_values,
+            name="ck_tool_material_items_category",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default=ToolMaterialCategory.OTHER,
+        server_default=ToolMaterialCategory.OTHER.value,
+        index=True,
+    )
     status: Mapped[ToolMaterialStatus] = mapped_column(
         Enum(
             ToolMaterialStatus,

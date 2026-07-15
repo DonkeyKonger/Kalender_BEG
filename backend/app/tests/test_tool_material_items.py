@@ -118,6 +118,10 @@ def test_tool_material_items_admin_and_opted_in_office_crud_routes(
         "/api/admin/tool-material-items",
         json={"beg_number": "BEG-008", "designation": "Ungültig", "status": "frei erfunden"},
     )
+    invalid_category_response = client.post(
+        "/api/admin/tool-material-items",
+        json={"beg_number": "BEG-009", "designation": "Ungültig", "category": "frei erfunden"},
+    )
     delete_response = client.delete("/api/admin/tool-material-items/7")
 
     assert list_response.status_code == 200
@@ -126,6 +130,7 @@ def test_tool_material_items_admin_and_opted_in_office_crud_routes(
     assert create_response.status_code == 201
     assert update_response.status_code == 200
     assert invalid_status_response.status_code == 422
+    assert invalid_category_response.status_code == 422
     assert delete_response.status_code == 204
     assert calls == [
         (

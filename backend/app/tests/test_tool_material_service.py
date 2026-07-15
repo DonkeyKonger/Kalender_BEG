@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base
-from app.models.enums import PersonType, ToolMaterialStatus
+from app.models.enums import PersonType, ToolMaterialCategory, ToolMaterialStatus
 from app.models.person import Person
 from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import (
@@ -97,7 +97,35 @@ def test_create_item_requires_and_persists_unique_beg_number():
 
     assert created.beg_number == "000-A"
     assert created.designation == "Prüfgerät"
+    assert created.category == ToolMaterialCategory.OTHER
     assert created.status == ToolMaterialStatus.WAREHOUSE
+    db.close()
+
+
+@pytest.mark.parametrize("category", list(ToolMaterialCategory))
+def test_all_tool_material_categories_can_be_created_and_updated(category):
+    db, _people = tool_material_db()
+    service = ToolMaterialService(db)
+    created = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number=f"CATEGORY-{category.value}",
+            designation="Kategorisiertes Gerät",
+            category=category,
+        )
+    )
+
+    assert created.category == category
+
+    target = (
+        ToolMaterialCategory.OTHER
+        if category != ToolMaterialCategory.OTHER
+        else ToolMaterialCategory.MATERIAL
+    )
+    updated = service.update_item(
+        created.id,
+        ToolMaterialItemUpdate(category=target),
+    )
+    assert updated.category == target
     db.close()
 
 

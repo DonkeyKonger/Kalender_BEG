@@ -1,4 +1,5 @@
 import type { AssignmentType, SiteStatus } from "./matrix";
+import type { ToolMaterialCategory } from "./toolMaterial";
 
 export type MobilePerson = {
   id: number;
@@ -37,4 +38,28 @@ export type MobileAssignmentsResponse = {
   start_date: string;
   end_date: string;
   assignments: MobileAssignment[];
+};
+
+export type MobilePersonalFileVehicle = {
+  name: string;
+  vehicle_registration: string | null;
+  fleet_number: string | null;
+};
+
+export type MobilePersonalFileTool = {
+  category: ToolMaterialCategory;
+  beg_number: string | null;
+  manufacturer: string | null;
+  designation: string;
+  item_date: string | null;
+};
+
+export type MobilePersonalFile = {
+  current_year: number;
+  remaining_vacation_days: number;
+  total_vacation_days: number;
+  sick_days: number;
+  vehicle: MobilePersonalFileVehicle | null;
+  tool_count: number;
+  tool_preview: MobilePersonalFileTool[];
 };

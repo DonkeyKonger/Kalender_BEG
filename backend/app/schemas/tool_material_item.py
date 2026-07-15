@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import PersonType, ToolMaterialStatus
+from app.models.enums import PersonType, ToolMaterialCategory, ToolMaterialStatus
 
 
 class ToolMaterialEmployeeRead(BaseModel):
@@ -30,6 +30,7 @@ class ToolMaterialItemBase(BaseModel):
     supplier: str | None = Field(default=None, max_length=200)
     invoice_number: str | None = Field(default=None, max_length=160)
     stock: int | None = Field(default=None, ge=0)
+    category: ToolMaterialCategory = ToolMaterialCategory.OTHER
     status: ToolMaterialStatus = ToolMaterialStatus.WAREHOUSE
 
 
@@ -51,6 +52,7 @@ class ToolMaterialItemUpdate(BaseModel):
     supplier: str | None = Field(default=None, max_length=200)
     invoice_number: str | None = Field(default=None, max_length=160)
     stock: int | None = Field(default=None, ge=0)
+    category: ToolMaterialCategory = ToolMaterialCategory.OTHER
     status: ToolMaterialStatus = ToolMaterialStatus.WAREHOUSE
 
 

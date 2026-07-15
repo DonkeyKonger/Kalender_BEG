@@ -27,6 +27,14 @@
   --mobile-action-settings-background: #edf0f3;
   --mobile-action-settings-border: #bdc5cd;
   --mobile-action-settings-focus: #d3d9df;
+  --mobile-personal-vacation-icon: #846622;
+  --mobile-personal-vacation-background: #f7f1df;
+  --mobile-personal-sickness-icon: #9b4b4b;
+  --mobile-personal-sickness-background: #f8eaea;
+  --mobile-personal-vehicle-icon: #315f91;
+  --mobile-personal-vehicle-background: #eaf1f8;
+  --mobile-personal-tools-icon: #35756d;
+  --mobile-personal-tools-background: #e8f3f1;
   color: #172033;
   background: #f5f7fb;
   font-family:
@@ -5799,6 +5807,371 @@ button.person-chip:focus-visible {
 .mobile-settings-list {
   display: grid;
   gap: 10px;
+}
+
+.mobile-personal-file-page {
+  width: min(100%, 720px);
+  max-width: 720px;
+  gap: 14px;
+  background: #f5f8fc;
+}
+
+.mobile-personal-file-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 2px 2px 4px;
+}
+
+.mobile-personal-file-header button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #243f5f;
+  padding: 0;
+}
+
+.mobile-personal-file-header button:hover,
+.mobile-personal-file-header button:focus-visible {
+  background: #eaf1f8;
+  outline: none;
+}
+
+.mobile-personal-file-header h1,
+.mobile-personal-file-header p {
+  margin: 0;
+}
+
+.mobile-personal-file-header h1 {
+  color: #111827;
+  font-size: 1.36rem;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.mobile-personal-file-header p {
+  margin-top: 3px;
+  color: #718097;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.mobile-personal-file-content {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-personal-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-personal-stat-card {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 156px;
+  gap: 7px;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 15px;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-stat-card > span:not(.mobile-personal-icon-tile) {
+  margin-top: 3px;
+  color: #718097;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.mobile-personal-stat-card strong {
+  color: #111827;
+  font-size: clamp(1.45rem, 7vw, 1.85rem);
+  line-height: 1.05;
+}
+
+.mobile-personal-stat-card small {
+  color: #718097;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.mobile-personal-icon-tile,
+.mobile-personal-tool-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 11px;
+}
+
+.mobile-personal-stat-card.is-vacation .mobile-personal-icon-tile {
+  background: var(--mobile-personal-vacation-background);
+  color: var(--mobile-personal-vacation-icon);
+}
+
+.mobile-personal-stat-card.is-sickness .mobile-personal-icon-tile {
+  background: var(--mobile-personal-sickness-background);
+  color: var(--mobile-personal-sickness-icon);
+}
+
+.mobile-personal-vehicle-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 104px;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 15px;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-vehicle-card .mobile-personal-icon-tile {
+  background: var(--mobile-personal-vehicle-background);
+  color: var(--mobile-personal-vehicle-icon);
+}
+
+.mobile-personal-vehicle-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mobile-personal-vehicle-card > div > span,
+.mobile-personal-vehicle-card small {
+  color: #718097;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.mobile-personal-vehicle-card strong {
+  overflow-wrap: anywhere;
+  color: #111827;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.mobile-personal-assigned-badge,
+.mobile-personal-tool-count {
+  border-radius: 999px;
+  background: var(--mobile-personal-vehicle-background);
+  color: var(--mobile-personal-vehicle-icon);
+  padding: 5px 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mobile-personal-tools-card {
+  overflow: hidden;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-tools-card > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 14px;
+}
+
+.mobile-personal-tools-card .mobile-personal-icon-tile,
+.mobile-personal-tool-icon {
+  background: var(--mobile-personal-tools-background);
+  color: var(--mobile-personal-tools-icon);
+}
+
+.mobile-personal-tools-card h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.mobile-personal-tool-count {
+  background: var(--mobile-personal-tools-background);
+  color: var(--mobile-personal-tools-icon);
+}
+
+.mobile-personal-tool-preview-list,
+.mobile-personal-tool-full-list {
+  display: grid;
+}
+
+.mobile-personal-tool-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 76px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 11px 14px;
+}
+
+.mobile-personal-tool-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mobile-personal-tool-row strong {
+  overflow-wrap: anywhere;
+  color: #111827;
+  font-size: 0.91rem;
+  line-height: 1.2;
+}
+
+.mobile-personal-tool-row small {
+  color: #718097;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.mobile-personal-tool-row.is-detailed {
+  min-height: 86px;
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 16px rgb(18 29 52 / 4%);
+}
+
+.mobile-personal-tool-full-list {
+  gap: 9px;
+}
+
+.mobile-personal-show-all {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #174877;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.mobile-personal-show-all:hover,
+.mobile-personal-show-all:focus-visible {
+  background: #f7fafc;
+  outline: none;
+}
+
+.mobile-personal-tools-empty {
+  margin: 0;
+  border-top: 1px solid #e2e8f0;
+  color: #65738a;
+  padding: 18px 14px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.mobile-personal-tools-empty.is-standalone {
+  border: 1px dashed #cbd7e6;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.mobile-personal-file-error {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  border: 1px solid #e4c8c8;
+  border-radius: 12px;
+  background: #fffafa;
+  padding: 16px;
+}
+
+.mobile-personal-file-error p {
+  margin: 0;
+  color: #8a3434;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.mobile-personal-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-left: 3px solid #9b4b4b;
+  background: #fffafa;
+  color: #7b3636;
+  padding: 9px 10px;
+  font-size: 0.76rem;
+}
+
+.mobile-personal-inline-error button {
+  border: 0;
+  background: transparent;
+  color: #174877;
+  font-weight: 850;
+  padding: 4px;
+}
+
+.mobile-personal-file-skeleton,
+.mobile-personal-tools-skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-personal-file-skeleton span,
+.mobile-personal-tools-skeleton span {
+  display: block;
+  min-height: 86px;
+  border: 1px solid #e0e7ef;
+  border-radius: 14px;
+  background: #eef2f6;
+}
+
+.mobile-personal-file-skeleton .mobile-personal-stat-grid span {
+  min-height: 156px;
+}
+
+.mobile-personal-file-skeleton .is-vehicle {
+  min-height: 104px;
+}
+
+.mobile-personal-file-skeleton .is-tools {
+  min-height: 290px;
+}
+
+@media (max-width: 350px) {
+  .mobile-personal-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-personal-vehicle-card,
+  .mobile-personal-tools-card > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .mobile-personal-assigned-badge,
+  .mobile-personal-tool-count {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
 .mobile-location-settings-card {

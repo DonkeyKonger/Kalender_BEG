@@ -4,7 +4,7 @@ from datetime import date as Date
 
 from pydantic import BaseModel
 
-from app.models.enums import AssignmentType, SiteStatus
+from app.models.enums import AssignmentType, SiteStatus, ToolMaterialCategory
 
 
 class MobilePerson(BaseModel):
@@ -49,3 +49,27 @@ class MobileAssignmentsResponse(BaseModel):
 class MobileSelfPlanRequest(BaseModel):
     site_id: int
     work_date: Date
+
+
+class MobilePersonalFileVehicle(BaseModel):
+    name: str
+    vehicle_registration: str | None = None
+    fleet_number: str | None = None
+
+
+class MobilePersonalFileTool(BaseModel):
+    category: ToolMaterialCategory
+    beg_number: str | None = None
+    manufacturer: str | None = None
+    designation: str
+    item_date: Date | None = None
+
+
+class MobilePersonalFileResponse(BaseModel):
+    current_year: int
+    remaining_vacation_days: int
+    total_vacation_days: int
+    sick_days: int
+    vehicle: MobilePersonalFileVehicle | None = None
+    tool_count: int
+    tool_preview: list[MobilePersonalFileTool]

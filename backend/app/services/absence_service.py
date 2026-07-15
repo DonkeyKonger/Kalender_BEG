@@ -1,9 +1,14 @@
+from dataclasses import dataclass
+from datetime import date, timedelta
+
 from sqlalchemy import select
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.absence import Absence
+from app.models.enums import AbsenceStatus, AbsenceType
+from app.models.person import Person
 from app.models.person_vacation_carryover import PersonVacationCarryover
 from app.repositories.absence_repository import AbsenceRepository
 from app.repositories.person_repository import PersonRepository
@@ -20,6 +25,42 @@ class AbsenceService:
 
     def list_absences(self, **filters) -> list[Absence]:
         return self.absences.list(**filters)
+
+    def get_person_year_summary(self, *, person: Person, year: int) -> "PersonYearAbsenceSummary":
+        """Return the shared workday-based absence totals for one person and year."""
+        ensure_valid_carryover_year(year)
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        absences = list(
+            self.db.scalars(
+                select(Absence).where(
+                    Absence.person_id == person.id,
+                    Absence.status == AbsenceStatus.ACTIVE,
+                    Absence.absence_type.in_((AbsenceType.VACATION, AbsenceType.SICK)),
+                    Absence.start_date <= year_end,
+                    Absence.end_date >= year_start,
+                )
+            )
+        )
+        vacation_days = sum(
+            count_absence_weekdays(absence.start_date, absence.end_date, year)
+            for absence in absences
+            if absence.absence_type == AbsenceType.VACATION
+        )
+        sick_days = sum(
+            count_absence_weekdays(absence.start_date, absence.end_date, year)
+            for absence in absences
+            if absence.absence_type == AbsenceType.SICK
+        )
+        carryover = self._find_vacation_carryover(person_id=person.id, year=year)
+        total_vacation_days = (person.annual_vacation_days or 0) + (
+            carryover.carryover_days if carryover is not None else 0
+        )
+        return PersonYearAbsenceSummary(
+            total_vacation_days=total_vacation_days,
+            remaining_vacation_days=total_vacation_days - vacation_days,
+            sick_days=sick_days,
+        )
 
     def get_vacation_carryover(self, *, person_id: int, year: int) -> PersonVacationCarryover | None:
         self._ensure_person_exists(person_id)
@@ -148,6 +189,28 @@ def clean_absence_values(values: dict) -> dict:
     if isinstance(cleaned.get("note"), str):
         cleaned["note"] = cleaned["note"].strip() or None
     return cleaned
+
+
+@dataclass(frozen=True)
+class PersonYearAbsenceSummary:
+    total_vacation_days: int
+    remaining_vacation_days: int
+    sick_days: int
+
+
+def count_absence_weekdays(start_date: date, end_date: date, year: int) -> int:
+    """Count Monday through Friday within the selected calendar year, inclusively."""
+    clipped_start = max(start_date, date(year, 1, 1))
+    clipped_end = min(end_date, date(year, 12, 31))
+    if clipped_end < clipped_start:
+        return 0
+    count = 0
+    cursor = clipped_start
+    while cursor <= clipped_end:
+        if cursor.weekday() < 5:
+            count += 1
+        cursor += timedelta(days=1)
+    return count
 
 
 def absence_snapshot(absence: Absence) -> dict:

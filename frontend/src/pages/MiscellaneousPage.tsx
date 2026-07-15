@@ -7,6 +7,7 @@ import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
+import { toolMaterialCategoryOptions } from "../lib/toolMaterialCategories";
 import {
   getOptimisticToolMaterialStatusItem,
   getSuggestedToolMaterialStatus,
@@ -37,7 +38,7 @@ import {
   setToolMaterialEmployeeFilterValues,
   type MiscellaneousTabKey,
 } from "../lib/toolMaterialRouting";
-import type { ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialStatus } from "../types/toolMaterial";
+import type { ToolMaterialCategory, ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialStatus } from "../types/toolMaterial";
 
 type MiscellaneousTab = {
   key: MiscellaneousTabKey;
@@ -60,6 +61,7 @@ type ToolMaterialDraft = {
   supplier: string;
   invoice_number: string;
   stock: string;
+  category: ToolMaterialCategory;
   status: ToolMaterialStatus;
 };
 
@@ -83,6 +85,7 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
   supplier: "",
   invoice_number: "",
   stock: "",
+  category: "other",
   status: "warehouse",
 };
 
@@ -745,6 +748,17 @@ function ToolMaterialFields({
         <input value={draft.invoice_number} onChange={(event) => onChange({ invoice_number: event.target.value })} />
       </label>
       <label>
+        <span>Kategorie</span>
+        <select
+          value={draft.category}
+          onChange={(event) => onChange({ category: event.target.value as ToolMaterialCategory })}
+        >
+          {toolMaterialCategoryOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      <label>
         <span>Status</span>
         <select
           value={draft.status}
@@ -1157,6 +1171,7 @@ function toToolMaterialDraft(item: ToolMaterialItem): ToolMaterialDraft {
     supplier: item.supplier ?? "",
     invoice_number: item.invoice_number ?? "",
     stock: item.stock === null ? "" : String(item.stock),
+    category: item.category,
     status: item.status,
   };
 }
@@ -1180,6 +1195,7 @@ function toToolMaterialPayload(draft: ToolMaterialDraft): ToolMaterialItemCreate
     supplier: optionalText(draft.supplier),
     invoice_number: optionalText(draft.invoice_number),
     stock: optionalInteger(draft.stock),
+    category: draft.category,
     status: draft.status,
   };
 }

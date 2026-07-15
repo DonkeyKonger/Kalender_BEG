@@ -8,6 +8,20 @@ export type ToolMaterialEmployee = {
 
 export type ToolMaterialStatus = "issued" | "warehouse" | "written_off";
 
+export type ToolMaterialCategory =
+  | "drilling_screwing"
+  | "grinding_cutting"
+  | "sawing"
+  | "vacuuming"
+  | "measuring"
+  | "batteries_charging"
+  | "hand_tools"
+  | "ladders_work_equipment"
+  | "testing_equipment"
+  | "vehicle_accessories"
+  | "material"
+  | "other";
+
 export type ToolMaterialItem = {
   id: number;
   beg_number: string | null;
@@ -24,6 +38,7 @@ export type ToolMaterialItem = {
   supplier: string | null;
   invoice_number: string | null;
   stock: number | null;
+  category: ToolMaterialCategory;
   status: ToolMaterialStatus;
   created_at: string;
   updated_at: string;
@@ -43,6 +58,7 @@ export type ToolMaterialItemCreate = {
   supplier?: string | null;
   invoice_number?: string | null;
   stock?: number | null;
+  category: ToolMaterialCategory;
   status: ToolMaterialStatus;
 };
 

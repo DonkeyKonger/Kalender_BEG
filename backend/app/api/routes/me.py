@@ -33,13 +33,21 @@ from app.schemas.measurement import (
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
 )
-from app.schemas.mobile import MobileAssignment, MobileAssignmentsResponse, MobileSelfPlanRequest, MobileSite
+from app.schemas.mobile import (
+    MobileAssignment,
+    MobileAssignmentsResponse,
+    MobilePersonalFileResponse,
+    MobilePersonalFileTool,
+    MobileSelfPlanRequest,
+    MobileSite,
+)
 from app.schemas.push import PushDeviceRead, PushDeviceRegister
 from app.schemas.site_email_recipient import SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate
 from app.schemas.time_entry import TimeEntryWeeklyReviewRead
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
+from app.services.mobile_personal_file_service import MobilePersonalFileService
 from app.services.push_notification_service import PushNotificationService
 from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
@@ -49,6 +57,22 @@ from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/me", tags=["me"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/personal-file", response_model=MobilePersonalFileResponse)
+def get_my_personal_file(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobilePersonalFileResponse:
+    return MobilePersonalFileService(db).get_summary(current_user=current_user)
+
+
+@router.get("/personal-file/tools", response_model=list[MobilePersonalFileTool])
+def list_my_personal_file_tools(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MobilePersonalFileTool]:
+    return MobilePersonalFileService(db).list_tools(current_user=current_user)
 
 
 @router.post("/push-devices/register", response_model=PushDeviceRead)

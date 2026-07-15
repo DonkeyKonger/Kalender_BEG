@@ -720,11 +720,8 @@ export function MyAssignmentsPage() {
                 icon={UserCircle}
                 tone="profile"
                 title="Persönliche Akte"
-                text="Diese persönliche Akte wird später Resturlaub, Krankheitstage und weitere Informationen anzeigen."
-                onOpen={() => setPlaceholder({
-                  title: "Persönliche Akte",
-                  text: "Diese persönliche Akte wird später Resturlaub, Krankheitstage, Statistiken sowie Wagen- und Werkzeugzuordnung anzeigen.",
-                })}
+                text="Resturlaub, Krankheitstage sowie Fahrzeug- und Werkzeugzuordnung anzeigen."
+                onOpen={() => navigate("/me/personal-file")}
               />
               <PlaceholderAction
                 icon={Settings}

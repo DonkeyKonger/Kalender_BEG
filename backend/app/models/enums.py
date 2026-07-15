@@ -30,6 +30,21 @@ class ToolMaterialStatus(StrEnum):
     WRITTEN_OFF = "written_off"
 
 
+class ToolMaterialCategory(StrEnum):
+    DRILLING_SCREWING = "drilling_screwing"
+    GRINDING_CUTTING = "grinding_cutting"
+    SAWING = "sawing"
+    VACUUMING = "vacuuming"
+    MEASURING = "measuring"
+    BATTERIES_CHARGING = "batteries_charging"
+    HAND_TOOLS = "hand_tools"
+    LADDERS_WORK_EQUIPMENT = "ladders_work_equipment"
+    TESTING_EQUIPMENT = "testing_equipment"
+    VEHICLE_ACCESSORIES = "vehicle_accessories"
+    MATERIAL = "material"
+    OTHER = "other"
+
+
 TOOL_MATERIAL_STATUS_PRIORITY = {
     ToolMaterialStatus.WAREHOUSE: 1,
     ToolMaterialStatus.ISSUED: 2,

@@ -67,6 +67,11 @@ class VehicleAsset(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    assigned_person_id: Mapped[int | None] = mapped_column(
+        ForeignKey("persons.id", ondelete="SET NULL"),
+        unique=True,
+        index=True,
+    )
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="ctrack", index=True)
     external_id: Mapped[str] = mapped_column(String(120), nullable=False)
     ctrack_node_id: Mapped[int | None] = mapped_column(Integer)
@@ -76,6 +81,8 @@ class VehicleAsset(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     raw_payload: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSON)
+
+    assigned_person = relationship("Person")
 
     position_logs = relationship(
         "VehiclePositionLog",
