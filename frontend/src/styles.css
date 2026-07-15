@@ -11275,7 +11275,7 @@ button.person-chip:focus-visible {
 }
 
 .tool-material-col-designation {
-  width: 10.5%;
+  width: auto;
 }
 
 .tool-material-col-item-type {
@@ -11297,7 +11297,7 @@ button.person-chip:focus-visible {
 }
 
 .tool-material-col-remarks {
-  width: 11.5%;
+  width: auto;
 }
 
 .tool-material-col-supplier {
@@ -11309,7 +11309,7 @@ button.person-chip:focus-visible {
 }
 
 .tool-material-col-status {
-  width: 9%;
+  width: 110px;
 }
 
 .miscellaneous-tools-table th,
@@ -11540,7 +11540,7 @@ button.person-chip:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 3px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid transparent;
   border-radius: 0;
   cursor: pointer;
@@ -11553,9 +11553,9 @@ button.person-chip:focus-visible {
 }
 
 .tool-material-inline-status-trigger > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .tool-material-inline-status-trigger svg {
@@ -11602,6 +11602,7 @@ button.person-chip:focus-visible {
   position: fixed;
   z-index: 2850;
   display: grid;
+  min-width: 132px;
   gap: 2px;
   border: 1px solid #aebfd4;
   border-radius: 0;

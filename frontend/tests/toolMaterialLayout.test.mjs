@@ -26,6 +26,30 @@ test("tool material table uses the available width without content-driven expans
 });
 
 
+test("status column is compact without truncating values or widening the table", () => {
+  const designationColumnRule = cssRule(".tool-material-col-designation");
+  const remarksColumnRule = cssRule(".tool-material-col-remarks");
+  const statusColumnRule = cssRule(".tool-material-col-status");
+  const statusTriggerRule = cssRule(".tool-material-inline-status-trigger");
+  const statusTextRule = cssRule(".tool-material-inline-status-trigger > span");
+  const statusPopupRule = cssRule(".tool-material-inline-status-popup");
+
+  assert.match(statusColumnRule, /width:\s*110px/);
+  assert.doesNotMatch(statusColumnRule, /%|max-content/);
+  assert.match(designationColumnRule, /width:\s*auto/);
+  assert.match(remarksColumnRule, /width:\s*auto/);
+  assert.match(statusTriggerRule, /width:\s*100%/);
+  assert.match(statusTriggerRule, /justify-content:\s*space-between/);
+  assert.match(statusTriggerRule, /overflow:\s*visible/);
+  assert.match(statusTextRule, /text-overflow:\s*clip/);
+  assert.doesNotMatch(statusTextRule, /ellipsis/);
+  assert.match(statusPopupRule, /min-width:\s*132px/);
+  assert.match(styles, /\.tool-material-inline-status-trigger:hover:not\(:disabled\)/);
+  assert.match(styles, /\.tool-material-inline-status-trigger:focus-visible/);
+  assert.match(styles, /\.tool-material-status-spinner \{[^}]*animation:/s);
+});
+
+
 test("tool material panel fills the desktop viewport and scrolls only its table area", () => {
   const panelRule = cssRule(".miscellaneous-tools-panel");
   const tableWrapRule = cssRule(".miscellaneous-tools-table-wrap");
