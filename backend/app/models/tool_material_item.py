@@ -1,9 +1,10 @@
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.enums import ToolMaterialStatus, enum_values
 
 
 class ToolMaterialItem(TimestampMixin, Base):
@@ -23,5 +24,19 @@ class ToolMaterialItem(TimestampMixin, Base):
     supplier: Mapped[str | None] = mapped_column(String(200), index=True)
     invoice_number: Mapped[str | None] = mapped_column(String(160), index=True)
     stock: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[ToolMaterialStatus] = mapped_column(
+        Enum(
+            ToolMaterialStatus,
+            values_callable=enum_values,
+            name="ck_tool_material_items_status",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default=ToolMaterialStatus.WAREHOUSE,
+        server_default=ToolMaterialStatus.WAREHOUSE.value,
+        index=True,
+    )
 
     employee = relationship("Person")

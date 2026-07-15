@@ -24,6 +24,12 @@ class PersonEmploymentStatus(StrEnum):
     DEPARTED = "departed"
 
 
+class ToolMaterialStatus(StrEnum):
+    ISSUED = "issued"
+    WAREHOUSE = "warehouse"
+    DEFECTIVE = "defective"
+
+
 class SiteStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"

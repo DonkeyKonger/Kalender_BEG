@@ -6,10 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base
-from app.models.enums import PersonType
+from app.models.enums import PersonType, ToolMaterialStatus
 from app.models.person import Person
 from app.models.tool_material_item import ToolMaterialItem
-from app.schemas.tool_material_item import ToolMaterialItemCreate, ToolMaterialListQuery
+from app.schemas.tool_material_item import (
+    ToolMaterialItemCreate,
+    ToolMaterialItemUpdate,
+    ToolMaterialListQuery,
+)
 from app.services.tool_material_service import EMPTY_FILTER_VALUE, ToolMaterialService
 
 
@@ -90,6 +94,7 @@ def test_create_item_requires_and_persists_unique_beg_number():
 
     assert created.beg_number == "000-A"
     assert created.designation == "Prüfgerät"
+    assert created.status == ToolMaterialStatus.WAREHOUSE
     db.close()
 
 
@@ -152,4 +157,49 @@ def test_filter_options_include_empty_values_and_inactive_assignments():
         option.value == str(people["inactive"].id) and option.label == "Ina Alt"
         for option in options["employee"]
     )
+    assert any(
+        option.value == ToolMaterialStatus.WAREHOUSE.value and option.label == "Lager"
+        for option in options["status"]
+    )
+    db.close()
+
+
+def test_all_status_values_can_be_created_and_updated():
+    db, _people = tool_material_db()
+    service = ToolMaterialService(db)
+
+    item = service.create_item(
+        ToolMaterialItemCreate(
+            beg_number="STATUS-1",
+            designation="Statusgerät",
+            status=ToolMaterialStatus.ISSUED,
+        )
+    )
+    assert item.status == ToolMaterialStatus.ISSUED
+
+    for item_status in (ToolMaterialStatus.WAREHOUSE, ToolMaterialStatus.DEFECTIVE):
+        item = service.update_item(
+            item.id,
+            ToolMaterialItemUpdate(status=item_status),
+        )
+        assert item.status == item_status
+    db.close()
+
+
+def test_status_filter_is_applied_server_side():
+    db, _people = tool_material_db()
+    service = ToolMaterialService(db)
+    service.create_item(
+        ToolMaterialItemCreate(
+            beg_number="DEF-1",
+            designation="Defektes Gerät",
+            status=ToolMaterialStatus.DEFECTIVE,
+        )
+    )
+
+    items = service.list_items(
+        ToolMaterialListQuery(values_status=[ToolMaterialStatus.DEFECTIVE])
+    )
+
+    assert [item.beg_number for item in items] == ["DEF-1"]
     db.close()

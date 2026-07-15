@@ -7,6 +7,11 @@ import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
 import {
+  getSuggestedToolMaterialStatus,
+  getToolMaterialStatusPresentation,
+  toolMaterialStatusOptions,
+} from "../lib/toolMaterialStatus";
+import {
   clearAllToolMaterialFilters,
   clearToolMaterialColumnFilter,
   hasToolMaterialFilters,
@@ -17,7 +22,7 @@ import {
   type ToolMaterialSortDirection,
 } from "../lib/toolMaterialFilters";
 import type { Person } from "../types/person";
-import type { ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate } from "../types/toolMaterial";
+import type { ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialStatus } from "../types/toolMaterial";
 
 type MiscellaneousTabKey = "workerEvaluation" | "vehicles" | "toolsMaterial";
 
@@ -42,12 +47,13 @@ type ToolMaterialDraft = {
   supplier: string;
   invoice_number: string;
   stock: string;
+  status: ToolMaterialStatus;
 };
 
 type ToolMaterialColumn = {
   key: ToolMaterialColumnKey;
   label: string;
-  type: "text" | "date" | "number";
+  type: "text" | "date" | "number" | "enum";
 };
 
 const miscellaneousTabs: MiscellaneousTab[] = [
@@ -70,6 +76,7 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
   supplier: "",
   invoice_number: "",
   stock: "",
+  status: "warehouse",
 };
 
 const toolMaterialColumns: ToolMaterialColumn[] = [
@@ -86,6 +93,7 @@ const toolMaterialColumns: ToolMaterialColumn[] = [
   { key: "supplier", label: "Lieferant", type: "text" },
   { key: "invoice_number", label: "RG-Nr.", type: "text" },
   { key: "stock", label: "Bestand", type: "number" },
+  { key: "status", label: "Status", type: "enum" },
 ];
 
 export function MiscellaneousPage() {
@@ -455,10 +463,11 @@ function ToolMaterialList() {
                   <td>{item.supplier ?? ""}</td>
                   <td>{item.invoice_number ?? ""}</td>
                   <td>{item.stock ?? ""}</td>
+                  <td><ToolMaterialStatusBadge status={item.status} /></td>
                 </tr>
               )) : (
                 <tr>
-                  <td className="miscellaneous-tools-empty" colSpan={13}>
+                  <td className="miscellaneous-tools-empty" colSpan={14}>
                     {searchTerm.trim() || filtersActive ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
                   </td>
                 </tr>
@@ -588,7 +597,10 @@ function ToolMaterialFields({
         loading={peopleLoading}
         people={people}
         value={draft.employee_id}
-        onChange={(value) => onChange({ employee_id: value })}
+        onChange={(value) => onChange({
+          employee_id: value,
+          status: getSuggestedToolMaterialStatus(draft.status, value),
+        })}
       />
       <label>
         <span>Datum</span>
@@ -613,6 +625,14 @@ function ToolMaterialFields({
       <label>
         <span>Bestand</span>
         <input min="0" step="1" type="number" value={draft.stock} onChange={(event) => onChange({ stock: event.target.value })} />
+      </label>
+      <label>
+        <span>Status</span>
+        <select value={draft.status} onChange={(event) => onChange({ status: event.target.value as ToolMaterialStatus })}>
+          {toolMaterialStatusOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
       </label>
     </div>
   );
@@ -656,6 +676,15 @@ function ToolMaterialEmployeeSelect({
         onChange={onChange}
       />
     </div>
+  );
+}
+
+export function ToolMaterialStatusBadge({ status }: { status: ToolMaterialStatus }) {
+  const presentation = getToolMaterialStatusPresentation(status);
+  return (
+    <span className={`tool-material-status-badge ${presentation.badgeClass}`}>
+      {presentation.label}
+    </span>
   );
 }
 
@@ -905,6 +934,7 @@ function toToolMaterialDraft(item: ToolMaterialItem): ToolMaterialDraft {
     supplier: item.supplier ?? "",
     invoice_number: item.invoice_number ?? "",
     stock: item.stock === null ? "" : String(item.stock),
+    status: item.status,
   };
 }
 
@@ -927,6 +957,7 @@ function toToolMaterialPayload(draft: ToolMaterialDraft): ToolMaterialItemCreate
     supplier: optionalText(draft.supplier),
     invoice_number: optionalText(draft.invoice_number),
     stock: optionalInteger(draft.stock),
+    status: draft.status,
   };
 }
 

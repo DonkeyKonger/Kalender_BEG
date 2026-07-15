@@ -6,6 +6,8 @@ export type ToolMaterialEmployee = {
   is_active: boolean;
 };
 
+export type ToolMaterialStatus = "issued" | "warehouse" | "defective";
+
 export type ToolMaterialItem = {
   id: number;
   beg_number: string | null;
@@ -22,6 +24,7 @@ export type ToolMaterialItem = {
   supplier: string | null;
   invoice_number: string | null;
   stock: number | null;
+  status: ToolMaterialStatus;
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +43,7 @@ export type ToolMaterialItemCreate = {
   supplier?: string | null;
   invoice_number?: string | null;
   stock?: number | null;
+  status: ToolMaterialStatus;
 };
 
 export type ToolMaterialItemUpdate = Partial<ToolMaterialItemCreate>;

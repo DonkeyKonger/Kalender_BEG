@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.person import Person
+from app.models.enums import ToolMaterialStatus
 from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOption,
@@ -46,6 +47,13 @@ SORT_COLUMNS = {
     "employee": Person.display_name,
     "item_date": ToolMaterialItem.item_date,
     "stock": ToolMaterialItem.stock,
+    "status": ToolMaterialItem.status,
+}
+
+STATUS_LABELS = {
+    ToolMaterialStatus.ISSUED.value: "Ausgegeben",
+    ToolMaterialStatus.WAREHOUSE.value: "Lager",
+    ToolMaterialStatus.DEFECTIVE.value: "Defekt",
 }
 
 
@@ -70,6 +78,7 @@ class ToolMaterialService:
                     Person.short_code.ilike(needle),
                     cast(ToolMaterialItem.item_date, String).ilike(needle),
                     cast(ToolMaterialItem.stock, String).ilike(needle),
+                    cast(ToolMaterialItem.status, String).ilike(needle),
                 )
             )
 
@@ -107,6 +116,9 @@ class ToolMaterialService:
         if filters.stock_max is not None:
             statement = statement.where(ToolMaterialItem.stock <= filters.stock_max)
 
+        if filters.values_status:
+            statement = statement.where(ToolMaterialItem.status.in_(filters.values_status))
+
         sort_column = SORT_COLUMNS[filters.sort_by]
         normalized_sort_column = func.lower(sort_column) if filters.sort_by not in {"item_date", "stock"} else sort_column
         direction = normalized_sort_column.desc() if filters.sort_direction == "desc" else normalized_sort_column.asc()
@@ -134,6 +146,7 @@ class ToolMaterialService:
                 ToolMaterialItem.supplier,
                 ToolMaterialItem.invoice_number,
                 ToolMaterialItem.stock,
+                ToolMaterialItem.status,
             ).outerjoin(ToolMaterialItem.employee)
         ).all()
         option_maps: dict[str, dict[str, str]] = {
@@ -152,6 +165,7 @@ class ToolMaterialService:
                 "supplier",
                 "invoice_number",
                 "stock",
+                "status",
             )
         }
         for row in rows:
@@ -168,6 +182,13 @@ class ToolMaterialService:
                 label=row.item_date.strftime("%d.%m.%Y") if row.item_date else None,
             )
             add_filter_option(option_maps["stock"], row.stock)
+            add_filter_option(
+                option_maps["status"],
+                row.status.value if isinstance(row.status, ToolMaterialStatus) else row.status,
+                label=STATUS_LABELS.get(
+                    row.status.value if isinstance(row.status, ToolMaterialStatus) else row.status,
+                ),
+            )
 
         return ToolMaterialFilterOptionsRead(
             columns={

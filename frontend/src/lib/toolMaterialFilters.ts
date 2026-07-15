@@ -12,6 +12,7 @@ export const toolMaterialColumnKeys = [
   "supplier",
   "invoice_number",
   "stock",
+  "status",
 ] as const;
 
 export type ToolMaterialColumnKey = (typeof toolMaterialColumnKeys)[number];

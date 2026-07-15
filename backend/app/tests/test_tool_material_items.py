@@ -44,6 +44,7 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
                     query.values_manufacturer,
                     query.date_from,
                     query.stock_min,
+                    query.values_status,
                     query.sort_by,
                     query.sort_direction,
                 ),
@@ -83,6 +84,7 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
         "&values_manufacturer=Makita"
         "&date_from=2026-01-01"
         "&stock_min=1"
+        "&values_status=issued"
         "&sort_by=beg_number"
         "&sort_direction=desc"
     )
@@ -92,6 +94,10 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
         json={"beg_number": "BEG-007", "designation": "Bohrmaschine"},
     )
     update_response = client.patch("/api/admin/tool-material-items/7", json={"designation": "Bohrmaschine 2"})
+    invalid_status_response = client.post(
+        "/api/admin/tool-material-items",
+        json={"beg_number": "BEG-008", "designation": "Ungültig", "status": "frei erfunden"},
+    )
     delete_response = client.delete("/api/admin/tool-material-items/7")
 
     assert list_response.status_code == 200
@@ -99,6 +105,7 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
     assert list_response.json()[0]["designation"] == "Bohrmaschine"
     assert create_response.status_code == 201
     assert update_response.status_code == 200
+    assert invalid_status_response.status_code == 422
     assert delete_response.status_code == 204
     assert calls == [
         (
@@ -109,6 +116,7 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
                 ["Bosch", "Makita"],
                 date(2026, 1, 1),
                 1,
+                ["issued"],
                 "beg_number",
                 "desc",
             ),
@@ -145,6 +153,7 @@ def demo_tool_material_item():
         supplier="Lieferant",
         invoice_number="RG-1",
         stock=1,
+        status="warehouse",
         created_at=timestamp,
         updated_at=timestamp,
     )

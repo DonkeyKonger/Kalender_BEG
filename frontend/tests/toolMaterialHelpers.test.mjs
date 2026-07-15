@@ -9,6 +9,11 @@ import {
   clearToolMaterialColumnFilter,
   hasToolMaterialFilters,
 } from "../src/lib/toolMaterialFilters.ts";
+import {
+  getSuggestedToolMaterialStatus,
+  getToolMaterialStatusPresentation,
+  toolMaterialStatusOptions,
+} from "../src/lib/toolMaterialStatus.ts";
 
 
 test("individual and all tool material filters can be reset", () => {
@@ -34,6 +39,7 @@ test("global search, combined column filters and sorting share one API query", (
       manufacturer: { query: "Bosch", values: ["Bosch", "Makita"] },
       item_date: { dateFrom: "2026-01-01", dateTo: "2026-12-31" },
       stock: { stockMin: "1", stockMax: "8" },
+      status: { values: ["issued", "defective"] },
     },
     sortBy: "beg_number",
     sortDirection: "desc",
@@ -46,8 +52,32 @@ test("global search, combined column filters and sorting share one API query", (
   assert.equal(params.get("date_to"), "2026-12-31");
   assert.equal(params.get("stock_min"), "1");
   assert.equal(params.get("stock_max"), "8");
+  assert.deepEqual(params.getAll("values_status"), ["issued", "defective"]);
   assert.equal(params.get("sort_by"), "beg_number");
   assert.equal(params.get("sort_direction"), "desc");
+});
+
+
+test("employee assignment suggests issued or warehouse without overriding defective", () => {
+  assert.equal(getSuggestedToolMaterialStatus("warehouse", "7"), "issued");
+  assert.equal(getSuggestedToolMaterialStatus("issued", ""), "warehouse");
+  assert.equal(getSuggestedToolMaterialStatus("defective", "7"), "defective");
+  assert.equal(getSuggestedToolMaterialStatus("defective", ""), "defective");
+});
+
+
+test("all tool material statuses have the expected Office badge presentation", () => {
+  assert.deepEqual(
+    toolMaterialStatusOptions.map(({ value, label, badgeClass }) => [value, label, badgeClass]),
+    [
+      ["issued", "Ausgegeben", "is-issued"],
+      ["warehouse", "Lager", "is-warehouse"],
+      ["defective", "Defekt", "is-defective"],
+    ],
+  );
+  assert.equal(getToolMaterialStatusPresentation("issued").label, "Ausgegeben");
+  assert.equal(getToolMaterialStatusPresentation("warehouse").label, "Lager");
+  assert.equal(getToolMaterialStatusPresentation("defective").label, "Defekt");
 });
 
 
