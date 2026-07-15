@@ -15,6 +15,7 @@ export const officePagePermissionOptions: OfficePagePermissionOption[] = [
   { key: "customers", label: "Kunden" },
   { key: "employees", label: "Mitarbeiter" },
   { key: "export", label: "Export" },
+  { key: "miscellaneous", label: "Sonstige" },
 ];
 
 export const allOfficePagePermissions = officePagePermissionOptions.map((item) => item.key);

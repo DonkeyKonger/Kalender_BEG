@@ -18,13 +18,19 @@ from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import ToolMaterialFilterOptionsRead
 
 
-def test_tool_material_items_require_admin_role():
-    app = create_app()
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+def user(role: UserRole, *permissions: str):
+    return SimpleNamespace(
         id=2,
-        role=UserRole.OFFICE,
+        role=role,
         is_active=True,
+        must_change_password=False,
+        office_page_permissions=list(permissions),
     )
+
+
+def test_tool_material_items_require_miscellaneous_opt_in_for_office():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: user(UserRole.OFFICE)
     app.dependency_overrides[get_db] = lambda: object()
     client = TestClient(app)
 
@@ -34,7 +40,18 @@ def test_tool_material_items_require_admin_role():
     app.dependency_overrides.clear()
 
 
-def test_tool_material_items_admin_crud_routes(monkeypatch):
+@pytest.mark.parametrize(
+    ("role", "permissions"),
+    [
+        (UserRole.ADMIN, ()),
+        (UserRole.OFFICE, ("miscellaneous",)),
+    ],
+)
+def test_tool_material_items_admin_and_opted_in_office_crud_routes(
+    monkeypatch,
+    role: UserRole,
+    permissions: tuple[str, ...],
+):
     calls: list[tuple[str, object]] = []
     item = demo_tool_material_item()
 
@@ -75,11 +92,7 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
 
     monkeypatch.setattr(tool_material_items, "ToolMaterialService", DemoToolMaterialService)
     app = create_app()
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
-        id=1,
-        role=UserRole.ADMIN,
-        is_active=True,
-    )
+    app.dependency_overrides[get_current_user] = lambda: user(role, *permissions)
     app.dependency_overrides[get_db] = lambda: object()
     client = TestClient(app)
 
@@ -136,6 +149,48 @@ def test_tool_material_items_admin_crud_routes(monkeypatch):
     app.dependency_overrides.clear()
 
 
+@pytest.mark.parametrize(
+    "current_user",
+    [
+        user(UserRole.OFFICE),
+        user(UserRole.PROJECT_MANAGER, "miscellaneous"),
+        user(UserRole.MONTEUR, "miscellaneous"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("get", "/api/admin/tool-material-items", None),
+        ("get", "/api/admin/tool-material-items/filter-options", None),
+        (
+            "post",
+            "/api/admin/tool-material-items",
+            {"beg_number": "DENIED", "designation": "Gesperrt"},
+        ),
+        (
+            "patch",
+            "/api/admin/tool-material-items/7",
+            {"status": "warehouse"},
+        ),
+        ("delete", "/api/admin/tool-material-items/7", None),
+    ],
+)
+def test_tool_material_endpoints_reject_users_without_miscellaneous_access(
+    current_user,
+    method: str,
+    path: str,
+    payload,
+):
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    app.dependency_overrides[get_db] = lambda: object()
+
+    response = TestClient(app).request(method, path, json=payload)
+
+    assert response.status_code == 403
+    app.dependency_overrides.clear()
+
+
 def test_tool_material_api_rejects_contradictory_status_and_employee():
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -185,7 +240,18 @@ def test_tool_material_api_rejects_contradictory_status_and_employee():
 
 
 @pytest.mark.parametrize("target_status", ["warehouse", "defective"])
-def test_tool_material_api_status_change_clears_employee_assignment(target_status):
+@pytest.mark.parametrize(
+    ("role", "permissions"),
+    [
+        (UserRole.ADMIN, ()),
+        (UserRole.OFFICE, ("miscellaneous",)),
+    ],
+)
+def test_tool_material_api_status_change_clears_employee_assignment(
+    target_status,
+    role: UserRole,
+    permissions: tuple[str, ...],
+):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -212,11 +278,7 @@ def test_tool_material_api_status_change_clears_employee_assignment(target_statu
     db.refresh(item)
 
     app = create_app()
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
-        id=1,
-        role=UserRole.ADMIN,
-        is_active=True,
-    )
+    app.dependency_overrides[get_current_user] = lambda: user(role, *permissions)
     app.dependency_overrides[get_db] = lambda: db
     response = TestClient(app).patch(
         f"/api/admin/tool-material-items/{item.id}",

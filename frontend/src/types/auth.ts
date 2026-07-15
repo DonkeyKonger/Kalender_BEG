@@ -8,7 +8,8 @@ export type OfficePagePermission =
   | "payroll"
   | "customers"
   | "employees"
-  | "export";
+  | "export"
+  | "miscellaneous";
 
 export type CurrentUser = {
   id: number;

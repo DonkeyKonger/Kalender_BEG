@@ -33,6 +33,13 @@ CAN_READ = require_business_page(
     "calendar",
     "absences",
 )
+CAN_LIST = require_business_page(
+    "employees",
+    "payroll",
+    "calendar",
+    "absences",
+    "miscellaneous",
+)
 CAN_MAP_READ = require_business_page("map")
 CAN_WRITE = require_business_page("employees")
 CAN_EMPLOYEE_READ = require_business_page("employees")
@@ -47,7 +54,7 @@ CAN_HOURS_ACCOUNT_WRITE = require_business_page(
 @router.get("", response_model=list[PersonRead])
 def list_persons(
     is_active: bool | None = None,
-    _user=Depends(CAN_READ),
+    _user=Depends(CAN_LIST),
     db: Session = Depends(get_db),
 ) -> list[PersonRead]:
     people = PersonService(db).list_people(is_active=is_active)

@@ -90,8 +90,10 @@ export function App() {
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="export" />}>
             <Route path="exports" element={<ExportsPage />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["admin"]} />}>
+          <Route element={<ProtectedRoute roles={["admin", "office"]} officePermission="miscellaneous" />}>
             <Route path="sonstige" element={<MiscellaneousPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin"]} />}>
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="customers" />}>

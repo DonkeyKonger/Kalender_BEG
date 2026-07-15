@@ -81,10 +81,10 @@ def test_office_page_permissions_are_validated_and_normalized():
         display_name="Büro",
         password="secret",
         role=UserRole.OFFICE,
-        office_page_permissions=["employees", "payroll", "employees"],
+        office_page_permissions=["miscellaneous", "employees", "payroll", "employees"],
     )
 
-    assert payload.office_page_permissions == ["payroll", "employees"]
+    assert payload.office_page_permissions == ["payroll", "employees", "miscellaneous"]
 
     with pytest.raises(ValidationError):
         UserCreate(
@@ -133,6 +133,25 @@ def test_create_user_stores_office_page_permissions():
     assert user.office_page_permissions == ["payroll", "employees"]
 
 
+@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.MONTEUR])
+def test_create_non_office_user_discards_office_page_permissions(role):
+    db = RecordingDb()
+    service = service_with()
+    service.db = db
+
+    user = service.create_user(
+        UserCreate(
+            username=f"user-{role.value}",
+            display_name="Kein Büro",
+            password="secret",
+            role=role,
+            office_page_permissions=["miscellaneous"],
+        )
+    )
+
+    assert user.office_page_permissions == []
+
+
 def test_update_user_stores_office_page_permissions():
     user = SimpleNamespace(
         id=2,
@@ -154,6 +173,79 @@ def test_update_user_stores_office_page_permissions():
     assert db.committed is True
     assert db.refreshed is user
     assert user.office_page_permissions == ["payroll", "customers"]
+
+
+def test_miscellaneous_permission_is_stored_only_for_selected_office_user():
+    selected = SimpleNamespace(
+        id=2,
+        username="selected-office",
+        role=UserRole.OFFICE,
+        is_active=True,
+        office_page_permissions=[],
+    )
+    other = SimpleNamespace(
+        id=3,
+        username="other-office",
+        role=UserRole.OFFICE,
+        is_active=True,
+        office_page_permissions=[],
+    )
+    db = RecordingDb()
+    service = service_with(user=selected)
+    service.db = db
+
+    service.update_user(
+        selected.id,
+        UserUpdate(office_page_permissions=["miscellaneous"]),
+        current_user_id=1,
+    )
+
+    assert selected.office_page_permissions == ["miscellaneous"]
+    assert other.office_page_permissions == []
+
+
+@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.MONTEUR])
+def test_update_non_office_user_discards_office_page_permissions(role):
+    user = SimpleNamespace(
+        id=2,
+        username="non-office",
+        role=role,
+        is_active=True,
+        office_page_permissions=["miscellaneous"],
+    )
+    db = RecordingDb()
+    service = service_with(user=user)
+    service.db = db
+
+    service.update_user(
+        user.id,
+        UserUpdate(office_page_permissions=["miscellaneous"]),
+        current_user_id=1,
+    )
+
+    assert user.office_page_permissions == []
+
+
+def test_changing_office_user_to_project_manager_removes_opt_ins():
+    user = SimpleNamespace(
+        id=2,
+        username="former-office",
+        role=UserRole.OFFICE,
+        is_active=True,
+        office_page_permissions=["miscellaneous"],
+    )
+    db = RecordingDb()
+    service = service_with(user=user)
+    service.db = db
+
+    service.update_user(
+        user.id,
+        UserUpdate(role=UserRole.PROJECT_MANAGER),
+        current_user_id=1,
+    )
+
+    assert user.role == UserRole.PROJECT_MANAGER
+    assert user.office_page_permissions == []
 
 
 def test_admin_cannot_disable_self():

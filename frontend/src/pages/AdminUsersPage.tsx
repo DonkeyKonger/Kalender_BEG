@@ -426,7 +426,16 @@ function UserBaseFields({
       </label>
       <label>
         <span>Rolle</span>
-        <select value={draft.role} onChange={(event) => onChange({ role: event.target.value as UserRole })}>
+        <select
+          value={draft.role}
+          onChange={(event) => {
+            const role = event.target.value as UserRole;
+            onChange({
+              role,
+              ...(role === "office" ? {} : { office_page_permissions: [] }),
+            });
+          }}
+        >
           {roleOptions()}
         </select>
       </label>

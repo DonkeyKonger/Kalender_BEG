@@ -18,6 +18,7 @@ from app.api.routes import (
     persons,
     sites,
     time_entries,
+    tool_material_items,
     users,
 )
 from app.core.database import get_db
@@ -51,6 +52,7 @@ CROSS_PAGE_READ_POLICIES = [
     (exports.CAN_EXPORT, "export"),
     (gps.CAN_READ_GPS, "map"),
     (admin_ctrack.CAN_READ_VEHICLE_POSITIONS, "map"),
+    (persons.CAN_LIST, "miscellaneous"),
 ]
 
 
@@ -100,6 +102,20 @@ def test_existing_management_roles_keep_write_access(policy, _permission: str, r
 @pytest.mark.parametrize(("policy", "_permission"), WRITE_POLICIES)
 def test_monteur_does_not_gain_business_page_write_access(policy, _permission: str):
     assert policy_status(policy, user(UserRole.MONTEUR)) == 403
+
+
+def test_miscellaneous_policy_allows_admin_and_opted_in_office_only():
+    assert policy_status(tool_material_items.CAN_MANAGE, user(UserRole.ADMIN)) == 200
+    assert policy_status(
+        tool_material_items.CAN_MANAGE,
+        user(UserRole.OFFICE, "miscellaneous"),
+    ) == 200
+    assert policy_status(tool_material_items.CAN_MANAGE, user(UserRole.OFFICE)) == 403
+    assert policy_status(
+        tool_material_items.CAN_MANAGE,
+        user(UserRole.PROJECT_MANAGER, "miscellaneous"),
+    ) == 403
+    assert policy_status(tool_material_items.CAN_MANAGE, user(UserRole.MONTEUR)) == 403
 
 
 class FakeAbsenceService:

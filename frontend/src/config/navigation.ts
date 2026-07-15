@@ -83,8 +83,8 @@ export const navigationItems: NavigationItem[] = [
     label: "Sonstige",
     path: "/sonstige",
     icon: MoreHorizontal,
-    roles: ["admin"],
-    adminOnly: true,
+    roles: ["admin", "office"],
+    officePermission: "miscellaneous",
   },
   {
     label: "Benutzer (admin)",

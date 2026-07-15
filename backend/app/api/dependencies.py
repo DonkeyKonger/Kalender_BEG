@@ -14,6 +14,7 @@ from app.repositories.user_repository import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 BUSINESS_PAGE_ROLES = (UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE)
+ADMIN_OR_OFFICE_PAGE_ROLES = (UserRole.ADMIN, UserRole.OFFICE)
 
 
 def get_current_user(
@@ -81,6 +82,18 @@ def require_business_page(
         page_key,
         *additional_page_keys,
         roles=BUSINESS_PAGE_ROLES,
+    )
+
+
+def require_admin_or_office_page(
+    page_key: str,
+    *additional_page_keys: str,
+) -> Callable[[User], User]:
+    """Allow admins and explicitly opted-in office users, but never project managers."""
+    return require_office_page(
+        page_key,
+        *additional_page_keys,
+        roles=ADMIN_OR_OFFICE_PAGE_ROLES,
     )
 
 

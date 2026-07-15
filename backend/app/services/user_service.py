@@ -38,7 +38,11 @@ class UserService:
             role=payload.role,
             is_active=payload.is_active,
             must_change_password=True,
-            office_page_permissions=payload.office_page_permissions,
+            office_page_permissions=(
+                payload.office_page_permissions
+                if payload.role == UserRole.OFFICE
+                else []
+            ),
             person_id=payload.person_id,
         )
         self.users.add(user)
@@ -49,6 +53,7 @@ class UserService:
     def update_user(self, user_id: int, payload: UserUpdate, current_user_id: int) -> User:
         user = self._get_user(user_id)
         values = payload.model_dump(exclude_unset=True)
+        previous_role = user.role
 
         if "username" in values and values["username"] is not None:
             username = clean_username(values["username"])
@@ -73,8 +78,13 @@ class UserService:
         if "person_id" in values:
             self._ensure_person_exists(values["person_id"])
             user.person_id = values["person_id"]
-        if "office_page_permissions" in values and values["office_page_permissions"] is not None:
-            user.office_page_permissions = values["office_page_permissions"]
+        if user.role == UserRole.OFFICE:
+            if "office_page_permissions" in values and values["office_page_permissions"] is not None:
+                user.office_page_permissions = values["office_page_permissions"]
+            elif previous_role != UserRole.OFFICE:
+                user.office_page_permissions = []
+        else:
+            user.office_page_permissions = []
 
         self.db.commit()
         self.db.refresh(user)
