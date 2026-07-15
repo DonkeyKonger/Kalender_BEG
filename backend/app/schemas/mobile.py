@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import date as Date
+from datetime import date as Date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.enums import AssignmentType, SiteStatus, ToolMaterialCategory
+from app.models.enums import AssignmentType, SiteStatus, ToolIssueReason, ToolMaterialCategory
 
 
 class MobilePerson(BaseModel):
@@ -58,11 +59,25 @@ class MobilePersonalFileVehicle(BaseModel):
 
 
 class MobilePersonalFileTool(BaseModel):
+    id: int
     category: ToolMaterialCategory
     beg_number: str | None = None
     manufacturer: str | None = None
     designation: str
     item_date: Date | None = None
+
+
+class MobileToolIssueReportCreate(BaseModel):
+    reason: ToolIssueReason
+    request_id: UUID
+
+
+class MobileToolIssueReportRead(BaseModel):
+    id: int
+    status: str
+    created_at: datetime
+    message: str
+    already_reported: bool = False
 
 
 class MobilePersonalFileResponse(BaseModel):

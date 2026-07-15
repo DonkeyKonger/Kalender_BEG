@@ -7,7 +7,7 @@ import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, Matrix
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursManualAdjustmentPayload, PersonHoursPayoutPayload, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonToolMaterialItem, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
-import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileTool, MobileSite } from "../types/mobile";
+import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
@@ -105,6 +105,12 @@ export type DashboardMessage = {
   note_preview: string | null;
   note_due_date: string | null;
   note_created_at: string | null;
+  message_text: string | null;
+  tool_id: number | null;
+  tool_issue_report_id: number | null;
+  tool_issue_reason: string | null;
+  target_area: string | null;
+  target_tab: string | null;
 };
 
 export type DashboardNoteUser = {
@@ -1312,6 +1318,17 @@ export const api = {
 
   async myPersonalFileTools(): Promise<MobilePersonalFileTool[]> {
     return request<MobilePersonalFileTool[]>("/me/personal-file/tools", { cache: "no-store" });
+  },
+
+  async reportMyPersonalFileTool(
+    toolId: number,
+    reason: MobileToolIssueReason,
+    requestId: string,
+  ): Promise<MobileToolIssueReport> {
+    return request<MobileToolIssueReport>(`/me/personal-file/tools/${toolId}/report`, {
+      method: "POST",
+      body: JSON.stringify({ reason, request_id: requestId }),
+    });
   },
 
   async mySites(): Promise<MobileSite[]> {

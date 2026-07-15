@@ -1,19 +1,23 @@
 import {
   ArrowLeft,
+  AlertTriangle,
   CarFront,
   ChevronRight,
   HeartPulse,
+  MoreVertical,
   Plane,
   RefreshCcw,
+  ShieldAlert,
   Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { ApiError, api } from "../lib/api";
-import type { MobilePersonalFile, MobilePersonalFileTool } from "../types/mobile";
+import type { MobilePersonalFile, MobilePersonalFileTool, MobileToolIssueReason } from "../types/mobile";
 
 
 export function MobilePersonalFilePage() {
@@ -21,6 +25,7 @@ export function MobilePersonalFilePage() {
   const [data, setData] = useState<MobilePersonalFile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const loadPersonalFile = useCallback(async () => {
@@ -60,6 +65,7 @@ export function MobilePersonalFilePage() {
 
       {data ? (
         <div className="mobile-personal-file-content" aria-busy={isLoading}>
+          {notice ? <p className="mobile-tool-report-success" role="status">{notice}</p> : null}
           {error ? <MobilePersonalFileInlineError message={error} onRetry={() => void loadPersonalFile()} /> : null}
           <div className="mobile-personal-stat-grid">
             <article className="mobile-personal-stat-card is-vacation">
@@ -97,7 +103,12 @@ export function MobilePersonalFilePage() {
             {data.tool_preview.length ? (
               <div className="mobile-personal-tool-preview-list">
                 {data.tool_preview.map((tool, index) => (
-                  <MobilePersonalToolRow key={toolKey(tool, index)} tool={tool} />
+                  <MobilePersonalToolRow
+                    key={toolKey(tool, index)}
+                    tool={tool}
+                    onAssignmentConflict={() => void loadPersonalFile()}
+                    onReported={setNotice}
+                  />
                 ))}
               </div>
             ) : (
@@ -128,6 +139,7 @@ export function MobilePersonalFileToolsPage() {
   const [items, setItems] = useState<MobilePersonalFileTool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const loadTools = useCallback(async () => {
@@ -165,9 +177,16 @@ export function MobilePersonalFileToolsPage() {
       ) : null}
       {items.length ? (
         <div className="mobile-personal-tool-full-list" aria-busy={isLoading}>
+          {notice ? <p className="mobile-tool-report-success" role="status">{notice}</p> : null}
           {error ? <MobilePersonalFileInlineError message={error} onRetry={() => void loadTools()} /> : null}
           {items.map((tool, index) => (
-            <MobilePersonalToolRow detailed key={toolKey(tool, index)} tool={tool} />
+            <MobilePersonalToolRow
+              detailed
+              key={toolKey(tool, index)}
+              tool={tool}
+              onAssignmentConflict={() => void loadTools()}
+              onReported={setNotice}
+            />
           ))}
         </div>
       ) : null}
@@ -207,9 +226,13 @@ function MobilePersonalFileHeader({
 function MobilePersonalToolRow({
   tool,
   detailed = false,
+  onAssignmentConflict,
+  onReported,
 }: {
   tool: MobilePersonalFileTool;
   detailed?: boolean;
+  onAssignmentConflict: () => void;
+  onReported: (message: string) => void;
 }) {
   return (
     <div className={`mobile-personal-tool-row${detailed ? " is-detailed" : ""}`}>
@@ -221,7 +244,113 @@ function MobilePersonalToolRow({
         <small>{formatBegNumber(tool.beg_number)}</small>
         {detailed && tool.item_date ? <small>Ausgegeben am {formatGermanDate(tool.item_date)}</small> : null}
       </div>
+      <MobileToolIssueAction
+        tool={tool}
+        onAssignmentConflict={onAssignmentConflict}
+        onReported={onReported}
+      />
     </div>
+  );
+}
+
+
+function MobileToolIssueAction({
+  tool,
+  onAssignmentConflict,
+  onReported,
+}: {
+  tool: MobilePersonalFileTool;
+  onAssignmentConflict: () => void;
+  onReported: (message: string) => void;
+}) {
+  const [stage, setStage] = useState<"closed" | "menu" | "confirm">("closed");
+  const [reason, setReason] = useState<MobileToolIssueReason | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (stage === "closed") return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) setStage("closed");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [saving, stage]);
+
+  function chooseReason(nextReason: MobileToolIssueReason) {
+    setReason(nextReason);
+    setError(null);
+    setStage("confirm");
+  }
+
+  async function submit() {
+    if (!reason || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await api.reportMyPersonalFileTool(tool.id, reason, crypto.randomUUID());
+      onReported(response.message);
+      setStage("closed");
+    } catch (requestError) {
+      setError(readApiError(requestError, "Werkzeugmeldung konnte nicht gesendet werden."));
+      if (requestError instanceof ApiError && requestError.status === 409) {
+        onAssignmentConflict();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const reasonLabel = reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+  return (
+    <>
+      <button
+        aria-label="Problem mit diesem Werkzeug melden"
+        className="mobile-tool-issue-trigger"
+        type="button"
+        onClick={() => { setError(null); setStage("menu"); }}
+      >
+        <MoreVertical aria-hidden="true" size={21} />
+      </button>
+      {stage !== "closed" ? createPortal(
+        <div className="mobile-dialog-backdrop mobile-tool-issue-backdrop" role="presentation" onClick={() => !saving && setStage("closed")}>
+          <section
+            aria-label={stage === "menu" ? "Werkzeugproblem auswählen" : reasonLabel}
+            aria-modal="true"
+            className="mobile-tool-issue-sheet"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {stage === "menu" ? (
+              <>
+                <strong>Problem melden</strong>
+                <button type="button" onClick={() => chooseReason("DEFECTIVE")}>
+                  <AlertTriangle aria-hidden="true" size={20} /><span>Maschine defekt</span>
+                </button>
+                <button type="button" onClick={() => chooseReason("STOLEN")}>
+                  <ShieldAlert aria-hidden="true" size={20} /><span>Maschine entwendet</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <h2>{reason === "DEFECTIVE" ? "Maschine defekt melden?" : "Maschine als entwendet melden?"}</h2>
+                <strong>{formatToolTitle(tool)}</strong>
+                <span>{formatBegNumber(tool.beg_number)}</span>
+                <p>Der Werkzeug-Beauftragte wird informiert.</p>
+                {error ? <p className="mobile-tool-issue-error" role="alert">{error}</p> : null}
+                <div className="mobile-tool-issue-actions">
+                  <button disabled={saving} type="button" onClick={() => setStage("closed")}>Abbrechen</button>
+                  <button className="is-primary" disabled={saving} type="button" onClick={() => void submit()}>
+                    {saving ? "Wird gesendet…" : "Meldung senden"}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>,
+        document.body,
+      ) : null}
+    </>
   );
 }
 
@@ -326,7 +455,7 @@ function formatGermanDate(value: string): string {
 
 
 function toolKey(tool: MobilePersonalFileTool, index: number): string {
-  return `${tool.beg_number ?? "without-beg"}-${tool.designation}-${index}`;
+  return String(tool.id || index);
 }
 
 

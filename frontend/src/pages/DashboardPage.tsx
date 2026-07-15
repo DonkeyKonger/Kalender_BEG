@@ -1,12 +1,13 @@
 import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect, DashboardNoteSiteSelect } from "../components/DashboardNotePickers";
 import { api, type DashboardMessage, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
 import { compareSiteNumbers } from "../lib/siteSorting";
+import { buildToolMaterialIssuePath } from "../lib/toolMaterialRouting";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
@@ -110,6 +111,7 @@ type DashboardNoteDraft = {
 
 const MAX_PREVIEW_ITEMS = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
+const DASHBOARD_MESSAGE_READ_EVENT = "dashboard-message-read";
 const FREE_WORKER_ALL_KEY = "__all__";
 const DASHBOARD_NOTE_SITE_FILTER_PARAM = "noteSiteId";
 const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
@@ -122,6 +124,7 @@ const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const dashboardNoteSiteFilterId = parseDashboardNoteSiteFilterId(
     searchParams.get(DASHBOARD_NOTE_SITE_FILTER_PARAM),
@@ -471,6 +474,25 @@ export function DashboardPage() {
     }
   }
 
+  async function openToolIssueMessage(message: DashboardMessage): Promise<void> {
+    if (message.tool_id === null || dismissingMessageKey) return;
+    setDismissingMessageKey(message.message_key);
+    try {
+      await api.dismissDashboardMessage(message.message_key);
+      setDashboardMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
+      window.dispatchEvent(new Event(DASHBOARD_MESSAGE_READ_EVENT));
+      navigate(buildToolMaterialIssuePath(message.tool_id));
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Die Werkzeugmeldung konnte nicht geöffnet werden.",
+      );
+    } finally {
+      setDismissingMessageKey(null);
+    }
+  }
+
   function openDashboardNoteCreateForm(): void {
     setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
     setEditingDashboardNoteId(null);
@@ -707,8 +729,8 @@ export function DashboardPage() {
                     const messageContent = (
                       <div className="dashboard-message-content">
                         <strong>{formatDashboardMessageTitle(message)}</strong>
-                        {message.note_preview ? (
-                          <span className="dashboard-message-preview">{message.note_preview}</span>
+                        {message.note_preview || message.message_text ? (
+                          <span className="dashboard-message-preview">{message.note_preview ?? message.message_text}</span>
                         ) : null}
                         <span className="dashboard-message-meta">
                           <Clock aria-hidden="true" size={13} />
@@ -731,6 +753,15 @@ export function DashboardPage() {
                               disabled={dismissingMessageKey === message.message_key}
                               type="button"
                               onClick={() => void openSharedDashboardNoteMessage(message)}
+                            >
+                              {messageContent}
+                            </button>
+                          ) : message.message_type === "tool_issue_reported" ? (
+                            <button
+                              className="dashboard-message-link is-button"
+                              disabled={dismissingMessageKey === message.message_key}
+                              type="button"
+                              onClick={() => void openToolIssueMessage(message)}
                             >
                               {messageContent}
                             </button>
@@ -1653,12 +1684,15 @@ function dashboardMessagesSignature(messages: DashboardMessage[]): string {
       message.note_preview,
       message.note_due_date,
       message.note_created_at,
+      message.message_text,
+      message.tool_id,
+      message.tool_issue_report_id,
     ].join("|"))
     .join(";");
 }
 
 function formatDashboardMessageTitle(message: DashboardMessage): string {
-  if (message.message_type === "dashboard_note_shared") {
+  if (message.message_type === "dashboard_note_shared" || message.message_type === "tool_issue_reported") {
     return message.title;
   }
   if (message.message_type === "measurement_customer_signed") {
@@ -1678,6 +1712,13 @@ function getDashboardMessageLink(message: DashboardMessage): string {
 }
 
 function getDashboardMessageMetaItems(message: DashboardMessage): DashboardMessageMetaItem[] {
+  if (message.message_type === "tool_issue_reported") {
+    const eventAt = message.event_at ?? message.submitted_at;
+    return [
+      { key: "time", label: eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt" },
+      { key: "reporter", label: message.submitted_by_name ?? "Monteur" },
+    ];
+  }
   if (message.message_type === "dashboard_note_shared") {
     const createdAt = message.note_created_at ?? message.submitted_at;
     const items: DashboardMessageMetaItem[] = [{

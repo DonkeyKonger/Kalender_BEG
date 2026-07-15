@@ -346,6 +346,12 @@ class DashboardMessageRead(BaseModel):
     note_preview: str | None = None
     note_due_date: date | None = None
     note_created_at: datetime | None = None
+    message_text: str | None = None
+    tool_id: int | None = None
+    tool_issue_report_id: int | None = None
+    tool_issue_reason: str | None = None
+    target_area: str | None = None
+    target_tab: str | None = None
 
 
 class DashboardMessagesSummaryRead(BaseModel):

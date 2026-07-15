@@ -1,4 +1,4 @@
-import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -33,8 +33,10 @@ import {
 import type { Person } from "../types/person";
 import {
   defaultMiscellaneousTab,
+  clearToolMaterialIdFilter,
   getMiscellaneousTab,
   getToolMaterialEmployeeFilterValues,
+  getToolMaterialIdFilter,
   normalizeToolMaterialRouteSearch,
   setToolMaterialEmployeeFilterValues,
   type MiscellaneousTabKey,
@@ -101,6 +103,10 @@ export function MiscellaneousPage() {
     () => getToolMaterialEmployeeFilterValues(new URLSearchParams(searchKey)),
     [searchKey],
   );
+  const toolIdFilter = useMemo(
+    () => getToolMaterialIdFilter(new URLSearchParams(searchKey)),
+    [searchKey],
+  );
   const activeTab = useMemo(
     () => miscellaneousTabs.find((tab) => tab.key === activeTabKey) ?? miscellaneousTabs[0],
     [activeTabKey],
@@ -125,6 +131,13 @@ export function MiscellaneousPage() {
 
   function updateEmployeeFilterUrl(values: readonly string[]) {
     setSearchParams(setToolMaterialEmployeeFilterValues(searchParams, values), { replace: true });
+  }
+
+  function resetToolMaterialRouteFilters() {
+    const next = clearToolMaterialIdFilter(
+      setToolMaterialEmployeeFilterValues(searchParams, []),
+    );
+    setSearchParams(next, { replace: true });
   }
 
   return (
@@ -156,7 +169,10 @@ export function MiscellaneousPage() {
       {activeTab.key === "toolsMaterial" ? (
         <ToolMaterialList
           employeeFilterValues={employeeFilterValues}
+          toolIdFilter={toolIdFilter}
           onEmployeeFilterChange={updateEmployeeFilterUrl}
+          onToolIdFilterClear={() => setSearchParams(clearToolMaterialIdFilter(searchParams), { replace: true })}
+          onAllRouteFiltersReset={resetToolMaterialRouteFilters}
         />
       ) : (
         <MiscellaneousPlaceholderPanel activeTab={activeTab} />
@@ -174,12 +190,28 @@ function MiscellaneousPlaceholderPanel({ activeTab }: { activeTab: Miscellaneous
   );
 }
 
+function formatToolIssueSystemNote(report: ToolMaterialItem["open_issue_reports"][number]): string {
+  const label = report.reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+  return `${label} · ${new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(report.created_at))} · ${report.reporter_last_name_snapshot}`;
+}
+
 function ToolMaterialList({
   employeeFilterValues,
+  toolIdFilter,
   onEmployeeFilterChange,
+  onToolIdFilterClear,
+  onAllRouteFiltersReset,
 }: {
   employeeFilterValues: string[];
+  toolIdFilter: number | null;
   onEmployeeFilterChange: (values: readonly string[]) => void;
+  onToolIdFilterClear: () => void;
+  onAllRouteFiltersReset: () => void;
 }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -327,6 +359,7 @@ function ToolMaterialList({
         setError(null);
         try {
           const loadedItems = await api.toolMaterialItems({
+            toolId: toolIdFilter ?? undefined,
             search: searchTerm,
             filters,
             sortBy,
@@ -353,11 +386,11 @@ function ToolMaterialList({
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [filters, searchTerm, sortBy, sortDirection]);
+  }, [filters, searchTerm, sortBy, sortDirection, toolIdFilter]);
 
   async function refreshItems() {
     const [loadedItems, loadedOptions] = await Promise.all([
-      api.toolMaterialItems({ search: searchTerm, filters, sortBy, sortDirection }),
+      api.toolMaterialItems({ toolId: toolIdFilter ?? undefined, search: searchTerm, filters, sortBy, sortDirection }),
       api.toolMaterialFilterOptions(),
     ]);
     setItems(loadedItems);
@@ -559,7 +592,7 @@ function ToolMaterialList({
     setSortDirection(direction);
   }
 
-  const filtersActive = hasToolMaterialFilters(filters);
+  const filtersActive = hasToolMaterialFilters(filters) || toolIdFilter !== null;
 
   return (
     <section className="miscellaneous-tools-panel" role="tabpanel" aria-label="Werkzeuge und Material">
@@ -595,13 +628,19 @@ function ToolMaterialList({
             onChange={(event) => setSearchTerm(event.target.value)}
           />
         </label>
+        {toolIdFilter !== null ? (
+          <button className="tool-material-id-filter" type="button" onClick={onToolIdFilterClear}>
+            <span>Werkzeug-ID {toolIdFilter}</span>
+            <X aria-hidden="true" size={13} />
+          </button>
+        ) : null}
         {filtersActive ? (
           <button
             className="miscellaneous-tools-reset-filters"
             type="button"
             onClick={() => {
               setFilters(clearAllToolMaterialFilters());
-              onEmployeeFilterChange([]);
+              onAllRouteFiltersReset();
               setSortBy(defaultToolMaterialSorting.sortBy);
               setSortDirection(defaultToolMaterialSorting.sortDirection);
               setActiveFilterKey(null);
@@ -670,7 +709,14 @@ function ToolMaterialList({
                   <td title={item.employee?.display_name}>{item.employee?.display_name ?? ""}</td>
                   <td title={formatDate(item.item_date)}>{formatDate(item.item_date)}</td>
                   <td title={item.delivery_note ?? undefined}>{item.delivery_note ?? ""}</td>
-                  <td className="miscellaneous-tools-remarks"><span title={item.remarks ?? undefined}>{item.remarks ?? ""}</span></td>
+                  <td className="miscellaneous-tools-remarks">
+                    {item.remarks ? <span title={item.remarks}>{item.remarks}</span> : null}
+                    {item.open_issue_reports.map((report) => (
+                      <strong className="tool-material-system-note" key={report.id} title={formatToolIssueSystemNote(report)}>
+                        {formatToolIssueSystemNote(report)}
+                      </strong>
+                    ))}
+                  </td>
                   <td title={item.supplier ?? undefined}>{item.supplier ?? ""}</td>
                   <td title={item.invoice_number ?? undefined}>{item.invoice_number ?? ""}</td>
                   <td className="miscellaneous-tools-status-cell">
@@ -685,7 +731,9 @@ function ToolMaterialList({
               )) : (
                 <tr>
                   <td className="miscellaneous-tools-empty" colSpan={toolMaterialColumns.length}>
-                    {searchTerm.trim() || filtersActive ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
+                    {toolIdFilter !== null
+                      ? "Das gemeldete Werkzeug ist nicht mehr verfügbar."
+                      : searchTerm.trim() || filtersActive ? "Keine Treffer gefunden." : "Noch keine Einträge vorhanden."}
                   </td>
                 </tr>
               )}

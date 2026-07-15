@@ -18,6 +18,25 @@ export function buildToolMaterialEditPath(employeeId: number): string {
   return `/sonstige?${search.toString()}`;
 }
 
+export function buildToolMaterialIssuePath(toolId: number): string {
+  const search = new URLSearchParams({
+    tab: toolMaterialTab,
+    toolId: String(toolId),
+  });
+  return `/sonstige?${search.toString()}`;
+}
+
+export function getToolMaterialIdFilter(search: URLSearchParams): number | null {
+  const value = search.get("toolId");
+  return value && /^[1-9]\d*$/.test(value) ? Number(value) : null;
+}
+
+export function clearToolMaterialIdFilter(search: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(search);
+  next.delete("toolId");
+  return next;
+}
+
 export function getMiscellaneousTab(search: URLSearchParams): MiscellaneousTabKey {
   const tab = search.get("tab");
   return tab && miscellaneousTabKeys.has(tab as MiscellaneousTabKey)
@@ -54,8 +73,12 @@ export function setToolMaterialEmployeeFilterValues(
 }
 
 export function normalizeToolMaterialRouteSearch(search: URLSearchParams): URLSearchParams {
-  return setToolMaterialEmployeeFilterValues(
+  const next = setToolMaterialEmployeeFilterValues(
     search,
     getToolMaterialEmployeeFilterValues(search),
   );
+  if (search.has("toolId") && getToolMaterialIdFilter(search) === null) {
+    next.delete("toolId");
+  }
+  return next;
 }

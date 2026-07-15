@@ -4,7 +4,7 @@ import re
 from fastapi import HTTPException, status
 from sqlalchemy import String, case, cast, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.person import Person
 from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolMaterialStatus
@@ -68,8 +68,13 @@ class ToolMaterialService:
         statement = (
             select(ToolMaterialItem)
             .outerjoin(ToolMaterialItem.employee)
-            .options(joinedload(ToolMaterialItem.employee))
+            .options(
+                joinedload(ToolMaterialItem.employee),
+                selectinload(ToolMaterialItem.issue_reports),
+            )
         )
+        if filters.tool_id is not None:
+            statement = statement.where(ToolMaterialItem.id == filters.tool_id)
         cleaned_search = clean_search(filters.search)
         if cleaned_search:
             needle = f"%{cleaned_search}%"
@@ -285,7 +290,10 @@ class ToolMaterialService:
     def _get_item(self, item_id: int) -> ToolMaterialItem:
         statement = (
             select(ToolMaterialItem)
-            .options(joinedload(ToolMaterialItem.employee))
+            .options(
+                joinedload(ToolMaterialItem.employee),
+                selectinload(ToolMaterialItem.issue_reports),
+            )
             .where(ToolMaterialItem.id == item_id)
         )
         item = self.db.scalar(statement)

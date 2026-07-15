@@ -103,6 +103,7 @@ class MobilePersonalFileService:
     def _tools(self, *, person_id: int) -> list[MobilePersonalFileTool]:
         rows = self.db.execute(
             select(
+                ToolMaterialItem.id,
                 ToolMaterialItem.category,
                 ToolMaterialItem.beg_number,
                 ToolMaterialItem.manufacturer,

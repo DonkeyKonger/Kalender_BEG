@@ -255,6 +255,7 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
     }
     assert set(tools_response.json()[0]) == {
         "category",
+        "id",
         "beg_number",
         "manufacturer",
         "designation",

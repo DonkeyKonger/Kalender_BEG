@@ -45,6 +45,15 @@ class ToolMaterialCategory(StrEnum):
     OTHER = "other"
 
 
+class ToolIssueReason(StrEnum):
+    DEFECTIVE = "DEFECTIVE"
+    STOLEN = "STOLEN"
+
+
+class ToolIssueStatus(StrEnum):
+    OPEN = "open"
+
+
 TOOL_MATERIAL_STATUS_PRIORITY = {
     ToolMaterialStatus.WAREHOUSE: 1,
     ToolMaterialStatus.ISSUED: 2,

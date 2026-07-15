@@ -3,7 +3,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import PersonType, ToolMaterialCategory, ToolMaterialStatus
+from app.models.enums import PersonType, ToolIssueReason, ToolMaterialCategory, ToolMaterialStatus
+
+
+class ToolIssueSystemNoteRead(BaseModel):
+    id: int
+    reason: ToolIssueReason
+    reporter_last_name_snapshot: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class ToolMaterialEmployeeRead(BaseModel):
@@ -61,6 +70,7 @@ class ToolMaterialItemRead(ToolMaterialItemBase):
     employee: ToolMaterialEmployeeRead | None = None
     created_at: datetime
     updated_at: datetime
+    open_issue_reports: list[ToolIssueSystemNoteRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -84,6 +94,7 @@ ToolMaterialSortField = Literal[
 
 
 class ToolMaterialListQuery(BaseModel):
+    tool_id: int | None = Field(default=None, ge=1)
     search: str | None = Field(default=None, max_length=200)
     filter_beg_number: str | None = Field(default=None, max_length=200)
     filter_manufacturer: str | None = Field(default=None, max_length=200)

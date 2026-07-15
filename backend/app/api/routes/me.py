@@ -38,6 +38,8 @@ from app.schemas.mobile import (
     MobileAssignmentsResponse,
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
+    MobileToolIssueReportCreate,
+    MobileToolIssueReportRead,
     MobileSelfPlanRequest,
     MobileSite,
 )
@@ -48,6 +50,7 @@ from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
 from app.services.mobile_personal_file_service import MobilePersonalFileService
+from app.services.tool_issue_report_service import ToolIssueReportService
 from app.services.push_notification_service import PushNotificationService
 from app.services.extra_work_service import ExtraWorkService
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
@@ -73,6 +76,24 @@ def list_my_personal_file_tools(
     db: Session = Depends(get_db),
 ) -> list[MobilePersonalFileTool]:
     return MobilePersonalFileService(db).list_tools(current_user=current_user)
+
+
+@router.post(
+    "/personal-file/tools/{tool_id}/report",
+    response_model=MobileToolIssueReportRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def report_my_personal_file_tool(
+    tool_id: int,
+    payload: MobileToolIssueReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileToolIssueReportRead:
+    return ToolIssueReportService(db).report(
+        tool_id=tool_id,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 @router.post("/push-devices/register", response_model=PushDeviceRead)

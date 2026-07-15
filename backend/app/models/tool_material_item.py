@@ -4,7 +4,7 @@ from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Integer, String,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import ToolMaterialCategory, ToolMaterialStatus, enum_values
+from app.models.enums import ToolIssueStatus, ToolMaterialCategory, ToolMaterialStatus, enum_values
 
 
 class ToolMaterialItem(TimestampMixin, Base):
@@ -60,3 +60,8 @@ class ToolMaterialItem(TimestampMixin, Base):
     )
 
     employee = relationship("Person")
+    issue_reports = relationship("ToolIssueReport", back_populates="tool")
+
+    @property
+    def open_issue_reports(self):
+        return [report for report in self.issue_reports if report.status == ToolIssueStatus.OPEN]

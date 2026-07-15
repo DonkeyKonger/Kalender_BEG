@@ -23,6 +23,7 @@ from app.services.weather_service import WeatherService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 CAN_READ_DASHBOARD = require_business_page("overview")
+CAN_READ_MESSAGES = require_business_page("overview", "miscellaneous")
 CAN_READ_DASHBOARD_NOTES = require_business_page(
     "overview",
     "calendar",
@@ -149,7 +150,7 @@ def delete_dashboard_note(
 @router.get("/messages/summary", response_model=DashboardMessagesSummaryRead)
 def get_dashboard_messages_summary(
     limit: int = Query(default=6, ge=1, le=20),
-    user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_MESSAGES),
     db: Session = Depends(get_db),
 ) -> DashboardMessagesSummaryRead:
     return DashboardMessageService(db).get_summary(limit=limit, current_user=user)
@@ -158,7 +159,7 @@ def get_dashboard_messages_summary(
 @router.post("/messages/{message_key}/dismiss", status_code=status.HTTP_204_NO_CONTENT)
 def dismiss_dashboard_message(
     message_key: str,
-    user=Depends(CAN_READ_DASHBOARD),
+    user=Depends(CAN_READ_MESSAGES),
     db: Session = Depends(get_db),
 ) -> Response:
     DashboardMessageService(db).dismiss_message(message_key=message_key, current_user=user)

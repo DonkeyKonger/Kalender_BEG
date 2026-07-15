@@ -47,11 +47,22 @@ export type MobilePersonalFileVehicle = {
 };
 
 export type MobilePersonalFileTool = {
+  id: number;
   category: ToolMaterialCategory;
   beg_number: string | null;
   manufacturer: string | null;
   designation: string;
   item_date: string | null;
+};
+
+export type MobileToolIssueReason = "DEFECTIVE" | "STOLEN";
+
+export type MobileToolIssueReport = {
+  id: number;
+  status: string;
+  created_at: string;
+  message: string;
+  already_reported: boolean;
 };
 
 export type MobilePersonalFile = {

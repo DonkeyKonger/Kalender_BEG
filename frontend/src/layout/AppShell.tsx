@@ -12,6 +12,7 @@ import type { UserRole } from "../types/auth";
 const DASHBOARD_MESSAGES_POLL_INTERVAL_MS = 60_000;
 const DASHBOARD_MESSAGES_EVENT_LIMIT = 6;
 const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
+const DASHBOARD_MESSAGE_READ_EVENT = "dashboard-message-read";
 const DASHBOARD_MESSAGE_ROLES: UserRole[] = ["admin", "project_manager", "office"];
 
 export function AppShell() {
@@ -24,7 +25,11 @@ export function AppShell() {
   const visibleItems = navigationItems.filter((item) => user && canShowNavItem(user, item));
 
   useEffect(() => {
-    if (!user || !DASHBOARD_MESSAGE_ROLES.includes(user.role) || !canAccessMainPage(user, "overview")) {
+    if (
+      !user
+      || !DASHBOARD_MESSAGE_ROLES.includes(user.role)
+      || (!canAccessMainPage(user, "overview") && !canAccessMainPage(user, "miscellaneous"))
+    ) {
       lastDashboardMessageCountRef.current = null;
       lastDashboardMessageSignatureRef.current = null;
       setDashboardMessageCount((current) => (current === 0 ? current : 0));
@@ -77,12 +82,21 @@ export function AppShell() {
         void pollDashboardMessages();
       }
     };
+    const handleMessageRead = () => {
+      setDashboardMessageCount((current) => {
+        const next = Math.max(0, current - 1);
+        lastDashboardMessageCountRef.current = next;
+        return next;
+      });
+    };
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener(DASHBOARD_MESSAGE_READ_EVENT, handleMessageRead);
 
     return () => {
       active = false;
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener(DASHBOARD_MESSAGE_READ_EVENT, handleMessageRead);
     };
   }, [user?.id, user?.role, user?.office_page_permissions]);
 
@@ -233,6 +247,9 @@ function dashboardMessagesSignature(messages: DashboardMessage[]): string {
       message.note_preview,
       message.note_due_date,
       message.note_created_at,
+      message.message_text,
+      message.tool_id,
+      message.tool_issue_report_id,
     ].join("|"))
     .join(";");
 }

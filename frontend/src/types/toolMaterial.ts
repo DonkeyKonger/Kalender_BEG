@@ -42,6 +42,14 @@ export type ToolMaterialItem = {
   status: ToolMaterialStatus;
   created_at: string;
   updated_at: string;
+  open_issue_reports: ToolIssueSystemNote[];
+};
+
+export type ToolIssueSystemNote = {
+  id: number;
+  reason: "DEFECTIVE" | "STOLEN";
+  reporter_last_name_snapshot: string;
+  created_at: string;
 };
 
 export type ToolMaterialItemCreate = {

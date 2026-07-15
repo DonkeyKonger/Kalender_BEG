@@ -39,6 +39,7 @@ export type ToolMaterialColumnFilter = {
 export type ToolMaterialFilters = Partial<Record<ToolMaterialColumnKey, ToolMaterialColumnFilter>>;
 
 export type ToolMaterialListParams = {
+  toolId?: number;
   search?: string;
   filters?: ToolMaterialFilters;
   sortBy?: ToolMaterialColumnKey;
@@ -73,6 +74,9 @@ export function clearAllToolMaterialFilters(): ToolMaterialFilters {
 
 export function buildToolMaterialSearchParams(params: ToolMaterialListParams = {}): URLSearchParams {
   const search = new URLSearchParams();
+  if (params.toolId && Number.isInteger(params.toolId) && params.toolId > 0) {
+    search.set("tool_id", String(params.toolId));
+  }
   const cleanedSearch = params.search?.trim();
   if (cleanedSearch) {
     search.set("search", cleanedSearch);

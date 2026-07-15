@@ -52,7 +52,7 @@ test("employee filter survives refresh and can be changed or removed", () => {
   assert.equal(removed.get("tab"), "toolsMaterial");
   assert.match(miscellaneousPageSource, /employee:\s*\{ values: employeeFilterValues \}/);
   assert.match(miscellaneousPageSource, /onEmployeeFilterChange\(nextFilter\.values \?\? \[\]\)/);
-  assert.match(miscellaneousPageSource, /setFilters\(clearAllToolMaterialFilters\(\)\);\s*onEmployeeFilterChange\(\[\]\)/);
+  assert.match(miscellaneousPageSource, /setFilters\(clearAllToolMaterialFilters\(\)\);\s*onAllRouteFiltersReset\(\)/);
 });
 
 
