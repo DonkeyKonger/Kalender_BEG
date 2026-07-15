@@ -20,18 +20,20 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
-import { canEditMainPage } from "../auth/permissions";
+import { canAccessMainPage, canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
 import {
   formatPersonToolMaterialDate,
   getPersonToolMaterialViewState,
   PERSON_TOOL_MATERIAL_EMPTY_TEXT,
 } from "../lib/personToolMaterialView";
+import { buildToolMaterialEditPath } from "../lib/toolMaterialRouting";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursAccountEntry, PersonLocationStatus, PersonToolMaterialItem, PersonType } from "../types/person";
@@ -132,7 +134,9 @@ const emptyPerson: PersonCreate = {
 
 export function PersonsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canEdit = canEditMainPage(user, "employees");
+  const canEditToolMaterials = Boolean(user && canAccessMainPage(user, "miscellaneous"));
   const canManageHoursAccount = canEdit;
   const canManageVacationCarryover = canEdit;
   const canRemove = canEdit;
@@ -441,6 +445,11 @@ export function PersonsPage() {
     setDrawer(null);
   }
 
+  function editPersonToolMaterials(personId: number) {
+    closeDrawer();
+    navigate(buildToolMaterialEditPath(personId));
+  }
+
   function togglePersonGroup(groupKey: string) {
     setCollapsedPersonGroupKeys((current) => {
       const next = new Set(current);
@@ -653,10 +662,12 @@ export function PersonsPage() {
               person={selectedPerson}
               activeAction={activePersonAction}
               canEdit={canEdit}
+              canEditToolMaterials={canEditToolMaterials}
               canManageHoursAccount={canManageHoursAccount}
               canManageVacationCarryover={canManageVacationCarryover}
               isSaving={savingPersonId === selectedPerson.id}
               onActionChange={setActivePersonAction}
+              onEditToolMaterials={() => editPersonToolMaterials(selectedPerson.id)}
               onInformationSave={(values) => updatePersonInformation(selectedPerson, values)}
               onNotesSave={(notes) => updatePersonNotes(selectedPerson, notes)}
               onStatusChange={(status) => updatePersonEmploymentStatus(selectedPerson, status)}
@@ -673,10 +684,12 @@ function PersonReadView({
   person,
   activeAction,
   canEdit,
+  canEditToolMaterials,
   canManageHoursAccount,
   canManageVacationCarryover,
   isSaving,
   onActionChange,
+  onEditToolMaterials,
   onInformationSave,
   onNotesSave,
   onStatusChange,
@@ -685,10 +698,12 @@ function PersonReadView({
   person: Person;
   activeAction: PersonDetailActionKey | null;
   canEdit: boolean;
+  canEditToolMaterials: boolean;
   canManageHoursAccount: boolean;
   canManageVacationCarryover: boolean;
   isSaving: boolean;
   onActionChange: (action: PersonDetailActionKey | null) => void;
+  onEditToolMaterials: () => void;
   onInformationSave: (values: Partial<PersonCreate>) => Promise<boolean>;
   onNotesSave: (notes: string | null) => Promise<boolean>;
   onStatusChange: (employmentStatus: PersonEmploymentStatus) => Promise<boolean>;
@@ -872,7 +887,20 @@ function PersonReadView({
       </div>
 
       {action ? (
-        <PersonDetailSubpage title={action.title} onBack={() => onActionChange(null)}>
+        <PersonDetailSubpage
+          actions={action.key === "equipment" && canEditToolMaterials ? (
+            <button
+              className="icon-button secondary person-tool-material-edit-button"
+              type="button"
+              onClick={onEditToolMaterials}
+            >
+              <Pencil aria-hidden="true" size={14} />
+              <span>Bearbeiten</span>
+            </button>
+          ) : undefined}
+          title={action.title}
+          onBack={() => onActionChange(null)}
+        >
           {action.key === "absence" ? (
             <PersonAbsenceOverviewPanel canManageCarryover={canManageVacationCarryover} person={person} />
           ) : action.key === "timeAccount" ? (
@@ -1226,20 +1254,25 @@ function PersonSignaturePermissionSelect({
 function PersonDetailSubpage({
   title,
   onBack,
+  actions,
   children,
 }: {
   title: string;
   onBack: () => void;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="customer-detail-subpage person-detail-subpage" aria-label={title}>
       <header className="customer-detail-subpage-header">
-        <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={16} />
-          <span>Zurück</span>
-        </button>
-        <h3>{title}</h3>
+        <div className="person-detail-subpage-heading">
+          <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" size={16} />
+            <span>Zurück</span>
+          </button>
+          <h3>{title}</h3>
+        </div>
+        {actions ? <div className="person-detail-subpage-actions">{actions}</div> : null}
       </header>
       <div className="customer-detail-subpage-body">
         {children}

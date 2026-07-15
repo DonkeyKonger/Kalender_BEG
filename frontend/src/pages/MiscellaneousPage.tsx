@@ -1,6 +1,7 @@
 import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -28,9 +29,15 @@ import {
   type ToolMaterialSortDirection,
 } from "../lib/toolMaterialFilters";
 import type { Person } from "../types/person";
+import {
+  defaultMiscellaneousTab,
+  getMiscellaneousTab,
+  getToolMaterialEmployeeFilterValues,
+  normalizeToolMaterialRouteSearch,
+  setToolMaterialEmployeeFilterValues,
+  type MiscellaneousTabKey,
+} from "../lib/toolMaterialRouting";
 import type { ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialStatus } from "../types/toolMaterial";
-
-type MiscellaneousTabKey = "workerEvaluation" | "vehicles" | "toolsMaterial";
 
 type MiscellaneousTab = {
   key: MiscellaneousTabKey;
@@ -80,11 +87,41 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
 };
 
 export function MiscellaneousPage() {
-  const [activeTabKey, setActiveTabKey] = useState<MiscellaneousTabKey>("workerEvaluation");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchKey = searchParams.toString();
+  const activeTabKey = useMemo(
+    () => getMiscellaneousTab(new URLSearchParams(searchKey)),
+    [searchKey],
+  );
+  const employeeFilterValues = useMemo(
+    () => getToolMaterialEmployeeFilterValues(new URLSearchParams(searchKey)),
+    [searchKey],
+  );
   const activeTab = useMemo(
     () => miscellaneousTabs.find((tab) => tab.key === activeTabKey) ?? miscellaneousTabs[0],
     [activeTabKey],
   );
+
+  useEffect(() => {
+    const normalized = normalizeToolMaterialRouteSearch(new URLSearchParams(searchKey));
+    if (normalized.toString() !== searchKey) {
+      setSearchParams(normalized, { replace: true });
+    }
+  }, [searchKey, setSearchParams]);
+
+  function selectTab(tabKey: MiscellaneousTabKey) {
+    const next = new URLSearchParams(searchParams);
+    if (tabKey === defaultMiscellaneousTab) {
+      next.delete("tab");
+    } else {
+      next.set("tab", tabKey);
+    }
+    setSearchParams(next);
+  }
+
+  function updateEmployeeFilterUrl(values: readonly string[]) {
+    setSearchParams(setToolMaterialEmployeeFilterValues(searchParams, values), { replace: true });
+  }
 
   return (
     <section className={`miscellaneous-page page-stack${activeTab.key === "toolsMaterial" ? " has-tools-material" : ""}`}>
@@ -104,7 +141,7 @@ export function MiscellaneousPage() {
               role="tab"
               aria-selected={isActive}
               className={isActive ? "is-active" : undefined}
-              onClick={() => setActiveTabKey(tab.key)}
+              onClick={() => selectTab(tab.key)}
             >
               {tab.label}
             </button>
@@ -113,7 +150,10 @@ export function MiscellaneousPage() {
       </div>
 
       {activeTab.key === "toolsMaterial" ? (
-        <ToolMaterialList />
+        <ToolMaterialList
+          employeeFilterValues={employeeFilterValues}
+          onEmployeeFilterChange={updateEmployeeFilterUrl}
+        />
       ) : (
         <MiscellaneousPlaceholderPanel activeTab={activeTab} />
       )}
@@ -130,14 +170,25 @@ function MiscellaneousPlaceholderPanel({ activeTab }: { activeTab: Miscellaneous
   );
 }
 
-function ToolMaterialList() {
+function ToolMaterialList({
+  employeeFilterValues,
+  onEmployeeFilterChange,
+}: {
+  employeeFilterValues: string[];
+  onEmployeeFilterChange: (values: readonly string[]) => void;
+}) {
   const [items, setItems] = useState<ToolMaterialItem[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [drafts, setDrafts] = useState<Record<number, ToolMaterialDraft>>({});
   const [createDraft, setCreateDraft] = useState<ToolMaterialDraft>(emptyToolMaterialDraft);
   const [drawer, setDrawer] = useState<ToolMaterialDrawerState>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState<ToolMaterialFilters>({});
+  const employeeFilterKey = employeeFilterValues.join(",");
+  const [filters, setFilters] = useState<ToolMaterialFilters>(() => (
+    employeeFilterValues.length
+      ? { employee: { values: employeeFilterValues } }
+      : {}
+  ));
   const [sortBy, setSortBy] = useState<ToolMaterialColumnKey | undefined>(
     defaultToolMaterialSorting.sortBy,
   );
@@ -154,6 +205,22 @@ function ToolMaterialList() {
   const [savingStatusItemId, setSavingStatusItemId] = useState<number | null>(null);
   const savingStatusItemIdRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFilters((current) => {
+      const currentValues = current.employee?.values ?? [];
+      if (currentValues.join(",") === employeeFilterKey) {
+        return current;
+      }
+      if (!employeeFilterValues.length) {
+        return clearToolMaterialColumnFilter(current, "employee");
+      }
+      return {
+        ...current,
+        employee: { ...current.employee, values: employeeFilterValues },
+      };
+    });
+  }, [employeeFilterKey, employeeFilterValues]);
 
   useEffect(() => {
     let active = true;
@@ -392,10 +459,16 @@ function ToolMaterialList() {
 
   function updateColumnFilter(key: ToolMaterialColumnKey, nextFilter: ToolMaterialColumnFilter) {
     setFilters((current) => ({ ...current, [key]: nextFilter }));
+    if (key === "employee") {
+      onEmployeeFilterChange(nextFilter.values ?? []);
+    }
   }
 
   function resetColumnFilter(key: ToolMaterialColumnKey) {
     setFilters((current) => clearToolMaterialColumnFilter(current, key));
+    if (key === "employee") {
+      onEmployeeFilterChange([]);
+    }
   }
 
   function updateSort(key: ToolMaterialColumnKey, direction: ToolMaterialSortDirection) {
@@ -433,6 +506,7 @@ function ToolMaterialList() {
             type="button"
             onClick={() => {
               setFilters(clearAllToolMaterialFilters());
+              onEmployeeFilterChange([]);
               setSortBy(defaultToolMaterialSorting.sortBy);
               setSortDirection(defaultToolMaterialSorting.sortDirection);
               setActiveFilterKey(null);

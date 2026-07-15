@@ -2527,6 +2527,23 @@ button.entity-card:focus-visible,
   min-height: 100%;
 }
 
+.person-detail-subpage .customer-detail-subpage-header {
+  justify-content: space-between;
+}
+
+.person-detail-subpage-heading,
+.person-detail-subpage-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.person-tool-material-edit-button {
+  min-height: 34px;
+  border-radius: 0;
+  padding: 8px 11px;
+}
+
 .person-detail-placeholder-panel {
   display: grid;
   gap: 7px;
