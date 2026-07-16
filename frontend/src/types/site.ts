@@ -233,8 +233,6 @@ export type MeasurementItem = {
 
 export type MeasurementItemUpdatePayload = {
   position?: string | null;
-  description?: string | null;
-  unit?: string | null;
 };
 
 

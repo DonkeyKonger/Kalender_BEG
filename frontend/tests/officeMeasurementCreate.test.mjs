@@ -22,23 +22,25 @@ test("measurement review exposes the office dialog and reuses the controlled pic
   assert.match(pageSource, /setCreateMeasurementDate\(toLocalDateKey\(new Date\(\)\)\)/);
   assert.match(pageSource, /await selectMeasurementBatch\(created\)/);
   assert.doesNotMatch(pageSource, /Angebotsgrundlage auswählen/);
-  assert.match(pageSource, /Das Aufmaß wird als Blanko-Aufmaß ohne Angebotspositionen angelegt\./);
+  assert.doesNotMatch(pageSource, /Das Aufmaß wird als Blanko-Aufmaß ohne Angebotspositionen angelegt\./);
 });
 
-test("blank office measurements render only real positions and compact controls", () => {
-  assert.match(pageSource, /selectedBatch\.position_mode === "BLANK"/);
-  assert.match(pageSource, /Noch keine Positionen in diesem Blanko-Aufmaß\./);
-  assert.match(pageSource, /Position hinzufügen/);
-  assert.match(pageSource, /Bereich \/ Ort hinzufügen/);
-  assert.match(pageSource, /const displayColumnCount = isBlankMode/);
-  assert.match(apiSource, /deleteSiteMeasurementFreeItem/);
-  assert.match(styles, /\.measurement-blank-empty-state/);
-  assert.match(styles, /\.measurement-review-table-wrap\.is-blank-mode/);
+test("office measurements reuse the standard measurement table without a blank-mode branch", () => {
+  assert.match(pageSource, /<MeasurementReviewTable\s+items=\{itemsWithEntries\}/);
+  assert.match(pageSource, /const displayColumnCount = Math\.max\(MEASUREMENT_TABLE_MIN_COLUMNS/);
+  assert.match(pageSource, />Pos\.-Nr\.<\/th>/);
+  assert.match(pageSource, />Beschreibung<\/th>/);
+  assert.match(pageSource, />Einheit<\/th>/);
+  assert.match(pageSource, />Bauteil \/ Ort<\/th>/);
+  assert.doesNotMatch(pageSource, /isBlankMode/);
+  assert.doesNotMatch(pageSource, /Noch keine Positionen in diesem Blanko-Aufmaß\./);
+  assert.doesNotMatch(apiSource, /deleteSiteMeasurementFreeItem/);
+  assert.doesNotMatch(styles, /\.measurement-blank-/);
 });
 
-test("office origin remains visible and never offers a fake worker original", () => {
-  assert.match(pageSource, /Dieses Aufmaß wurde im Büro angelegt und nicht durch einen Monteur eingereicht\./);
+test("office origin does not create a special presentation and never offers a fake worker original", () => {
+  assert.doesNotMatch(pageSource, /Dieses Aufmaß wurde im Büro angelegt und nicht durch einen Monteur eingereicht\./);
   assert.match(pageSource, /batch\.has_original_worker_submission \? \(/);
-  assert.match(styles, /\.measurement-review-origin-note/);
+  assert.doesNotMatch(styles, /\.measurement-review-origin-note/);
   assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*0/s);
 });

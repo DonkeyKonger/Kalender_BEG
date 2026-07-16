@@ -661,24 +661,6 @@ def update_measurement_batch_free_item(
     )
 
 
-@router.delete(
-    "/{site_id}/measurement-batches/{batch_id}/items/{measurement_item_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def delete_measurement_batch_free_item(
-    site_id: int,
-    batch_id: int,
-    measurement_item_id: int,
-    _user: User = Depends(CAN_WRITE),
-    db: Session = Depends(get_db),
-) -> None:
-    MeasurementService(db).delete_site_free_item(
-        site_id=site_id,
-        batch_id=batch_id,
-        measurement_item_id=measurement_item_id,
-    )
-
-
 @router.post(
     "/{site_id}/measurement-batches/{batch_id}/mark-billed",
     response_model=MobileMeasurementBatchRead,

@@ -24828,7 +24828,6 @@ button.person-chip:focus-visible {
   box-shadow: 0 0 0 2px rgb(77 122 179 / 12%);
 }
 
-.measurement-create-empty-base,
 .measurement-create-duplicate-note,
 .measurement-create-modal-form > .project-record-empty-state {
   grid-column: 1 / -1;
@@ -24837,12 +24836,6 @@ button.person-chip:focus-visible {
   padding: 8px 10px;
   font-size: 0.78rem;
   line-height: 1.4;
-}
-
-.measurement-create-empty-base {
-  border: 1px solid #d8e1ec;
-  background: #f8fafc;
-  color: #52647d;
 }
 
 .measurement-create-duplicate-note {
@@ -24870,7 +24863,6 @@ button.person-chip:focus-visible {
   }
 
   .measurement-create-field:first-child,
-  .measurement-create-empty-base,
   .measurement-create-duplicate-note,
   .measurement-create-modal-form > .project-record-empty-state {
     grid-column: 1;
@@ -25119,8 +25111,7 @@ button.person-chip:focus-visible {
   margin: 8px 18px 0;
 }
 
-.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning,
-.measurement-review-detail.is-table-view .measurement-review-origin-note {
+.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning {
   margin: 8px 18px 0;
   border-radius: 0;
   padding: 9px 11px;
@@ -25129,33 +25120,10 @@ button.person-chip:focus-visible {
   line-height: 1.4;
 }
 
-.measurement-blank-empty-state {
-  display: grid;
-  justify-items: start;
-  gap: 7px;
-  margin: 12px 18px;
-  border: 1px solid var(--ct-border-soft);
-  border-radius: 0;
-  background: #fbfcfe;
-  padding: 16px;
-  color: var(--ct-text);
-}
-
-.measurement-blank-empty-state span {
-  color: var(--ct-muted);
-  font-size: 0.84rem;
-}
-
 .measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning {
   border: 1px solid #f3d08a;
   background: #fff7e6;
   color: #8a4b10;
-}
-
-.measurement-review-detail.is-table-view .measurement-review-origin-note {
-  border: 1px solid #bfd0e3;
-  background: #f3f7fb;
-  color: #334f70;
 }
 
 .measurement-review-detail.is-table-view .project-record-empty-state.is-error {
@@ -25178,51 +25146,6 @@ button.person-chip:focus-visible {
   background: var(--ct-surface);
   box-shadow: none;
   padding-bottom: 16px;
-}
-
-.measurement-review-detail.is-table-view .measurement-review-table-wrap.is-blank-mode {
-  scrollbar-gutter: auto;
-}
-
-.measurement-blank-position-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px;
-  align-items: start;
-  gap: 3px;
-}
-
-.measurement-blank-position-delete {
-  width: 22px;
-  height: 22px;
-  border: 1px solid #c7d2e0;
-  border-radius: 0;
-  background: #fff;
-  color: #7a2631;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 900;
-  line-height: 1;
-  padding: 0;
-}
-
-.measurement-blank-position-delete:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.measurement-blank-unit-select {
-  width: 100%;
-  border-radius: 0 !important;
-  background: #fff;
-}
-
-.measurement-blank-table-actions {
-  position: sticky;
-  left: 0;
-  display: flex;
-  gap: 8px;
-  width: max-content;
-  padding: 10px 0 0;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table.measurement-table-view {

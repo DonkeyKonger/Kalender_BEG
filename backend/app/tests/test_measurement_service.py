@@ -2406,22 +2406,22 @@ def test_blank_office_measurement_manages_only_its_free_positions():
         site_id=site.id,
         batch_id=batch.id,
         current_user=office_user,
-        payload=MobileMeasurementFreeItemCreate(description="", unit="st"),
-    )
-    assert free_item.measurement_base_id is None
-    assert free_item.position == "FREI-1"
-
-    updated = service.update_site_free_item(
-        site_id=site.id,
-        batch_id=batch.id,
-        measurement_item_id=free_item.id,
-        payload=MeasurementItemUpdate(
+        payload=MobileMeasurementFreeItemCreate(
             position="A-1",
             description="Freie Leistung",
             unit="m",
         ),
     )
-    assert updated.position == "A-1"
+    assert free_item.measurement_base_id is None
+    assert free_item.position == "A-1"
+
+    updated = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(position="A-2"),
+    )
+    assert updated.position == "A-2"
     assert updated.description == "Freie Leistung"
     assert updated.unit == "m"
     assert [item.id for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id)] == [free_item.id]
@@ -2441,7 +2441,7 @@ def test_blank_office_measurement_manages_only_its_free_positions():
         mode="checked",
     )
     assert [position.description for position in positions] == ["Freie Leistung"]
-    assert [position.position for position in positions] == ["A-1"]
+    assert [position.position for position in positions] == ["A-2"]
     assert [area.label for area in areas] == ["Technikraum"]
     pdf_content, filename = MeasurementPdfService(db).build_batch_pdf(
         site_id=site.id,
@@ -2452,7 +2452,7 @@ def test_blank_office_measurement_manages_only_its_free_positions():
     assert filename.endswith(".pdf")
 
 
-def test_blank_office_measurement_blocks_incomplete_completion_and_deletes_empty_position():
+def test_blank_office_measurement_uses_the_standard_completion_workflow():
     db = db_session()
     site = create_site(db)
     office_user = User(
@@ -2474,24 +2474,12 @@ def test_blank_office_measurement_blocks_incomplete_completion_and_deletes_empty
         ),
     )
 
-    with pytest.raises(HTTPException) as empty_error:
-        service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
-    assert empty_error.value.status_code == 400
-    assert "mindestens eine Position" in empty_error.value.detail
-
-    free_item = service.create_site_free_item(
+    reviewed = service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    assert reviewed.status == "reviewed"
+    billed = service.set_site_batch_billing_status(
         site_id=site.id,
         batch_id=batch.id,
-        current_user=office_user,
-        payload=MobileMeasurementFreeItemCreate(description="", unit="st"),
+        billing_status="billed",
     )
-    with pytest.raises(HTTPException) as incomplete_error:
-        service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
-    assert "Beschreibung" in incomplete_error.value.detail
-
-    service.delete_site_free_item(
-        site_id=site.id,
-        batch_id=batch.id,
-        measurement_item_id=free_item.id,
-    )
+    assert billed.status == "billed"
     assert service.list_site_batch_items(site_id=site.id, batch_id=batch.id) == []

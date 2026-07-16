@@ -582,12 +582,10 @@ class MeasurementService:
         description = " ".join(payload.description.split())
         unit = payload.unit.strip()
         is_blank_batch = batch.position_mode == MeasurementPositionMode.BLANK.value
-        if not description and not is_blank_batch:
+        if not description:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
-        if not unit and not is_blank_batch:
+        if not unit:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
-        if is_blank_batch and unit not in {"st", "m", "psch", "std"}:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Einheit für eine freie Position.")
         if payload.quantity < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
 
@@ -629,8 +627,8 @@ class MeasurementService:
             source_project_number=None,
             source_invoice_number=None,
             source_customer_name=None,
-            source_section_key="blank" if is_blank_batch else "office_extra",
-            source_section_title="Blanko-Aufmaß" if is_blank_batch else "Büro-Zusatzposition",
+            source_section_key="office_extra",
+            source_section_title="Büro-Zusatzposition",
             position=position,
             description=description,
             list_quantity=None,
@@ -709,53 +707,9 @@ class MeasurementService:
             elif not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
-        if payload.description is not None:
-            item.description = " ".join(payload.description.split())
-        if payload.unit is not None:
-            unit = payload.unit.strip()
-            if (
-                batch.position_mode == MeasurementPositionMode.BLANK.value
-                and unit not in {"st", "m", "psch", "std"}
-            ):
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Einheit für eine freie Position.")
-            item.unit = unit
-
         self.db.commit()
         self.db.refresh(item)
         return self._build_mobile_item(item, batch.id)
-
-    def delete_site_free_item(
-        self,
-        *,
-        site_id: int,
-        batch_id: int,
-        measurement_item_id: int,
-    ) -> None:
-        self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
-        item = self.db.get(SiteMeasurementItem, measurement_item_id)
-        if (
-            batch.position_mode != MeasurementPositionMode.BLANK.value
-            or batch.status in {"billed", "approved", "closed", "completed", "finalized"}
-            or item is None
-            or item.site_id != site_id
-            or item.measurement_batch_id != batch.id
-            or not item.is_free_position
-        ):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
-        has_entries = self.db.scalar(
-            select(func.count(SiteMeasurementEntry.id)).where(
-                SiteMeasurementEntry.measurement_item_id == item.id,
-                SiteMeasurementEntry.measurement_batch_id == batch.id,
-            )
-        )
-        if has_entries:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Eine Position mit Mengen kann nicht entfernt werden.",
-            )
-        self.db.delete(item)
-        self.db.commit()
 
     def hide_item(self, *, site_id: int, measurement_item_id: int) -> MeasurementItemRead:
         self._get_site(site_id)
@@ -1668,9 +1622,6 @@ class MeasurementService:
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if normalized_status == "billed":
-            self._validate_blank_batch_for_completion(batch)
-
         batch.status = normalized_status
         for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = normalized_status
@@ -1695,8 +1646,6 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Unterschriebene Aufmaße bleiben bis zum Abschluss in der Prüfung.",
             )
-        self._validate_blank_batch_for_completion(batch)
-
         previous_status = batch.status
         notification_user_id = (
             batch.submitted_by_user_id
@@ -2604,36 +2553,6 @@ class MeasurementService:
     @staticmethod
     def _batch_has_measurement_content(batch: SiteMeasurementBatch) -> bool:
         return bool(_current_measurement_entries(list(batch.entries))) or bool(batch.area_rows)
-
-    def _validate_blank_batch_for_completion(self, batch: SiteMeasurementBatch) -> None:
-        if batch.position_mode != MeasurementPositionMode.BLANK.value:
-            return
-        items = [
-            item
-            for item in batch.free_items
-            if item.is_free_position and not item.is_hidden
-        ]
-        if not items:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Das Blanko-Aufmaß benötigt mindestens eine Position.",
-            )
-        if any(not item.description.strip() for item in items):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Bitte für jede Position eine Beschreibung eintragen.",
-            )
-        if any((item.unit or "").strip() not in {"st", "m", "psch", "std"} for item in items):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Bitte für jede Position eine gültige Einheit auswählen.",
-            )
-        entries = _current_measurement_entries(list(batch.entries))
-        if not entries or not any(entry.area_or_comment.strip() and entry.quantity > 0 for entry in entries):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Bitte mindestens einen Bereich/Ort und eine Menge eintragen.",
-            )
 
     def _next_free_measurement_position(
         self, batch: SiteMeasurementBatch, *, exclude_item_id: int | None = None
