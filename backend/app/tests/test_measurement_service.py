@@ -1235,6 +1235,15 @@ def test_site_free_item_creates_office_extra_position_with_entry():
     assert cleared.id == created.id
     assert cleared.position == "FREI-1"
 
+    with pytest.raises(HTTPException) as delete_error:
+        MeasurementService(db).delete_site_free_item(
+            site_id=site.id,
+            batch_id=batch.id,
+            measurement_item_id=created.id,
+        )
+    assert delete_error.value.status_code == 404
+    assert db.get(SiteMeasurementItem, created.id) is not None
+
 
 def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():
     from app.models.enums import PersonType
@@ -2415,16 +2424,37 @@ def test_blank_office_measurement_manages_only_its_free_positions():
     assert free_item.measurement_base_id is None
     assert free_item.position == "A-1"
 
+    second_item = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            position="B-1",
+            description="Zweite freie Leistung",
+            unit="st",
+            quantity=Decimal("3"),
+            area_or_comment="Technikraum",
+        ),
+    )
+    assert second_item.id != free_item.id
+
     updated = service.update_site_free_item(
         site_id=site.id,
         batch_id=batch.id,
         measurement_item_id=free_item.id,
-        payload=MeasurementItemUpdate(position="A-2"),
+        payload=MeasurementItemUpdate(
+            position="A-2",
+            description="Geänderte freie Leistung",
+            unit="psch",
+        ),
     )
     assert updated.position == "A-2"
-    assert updated.description == "Freie Leistung"
-    assert updated.unit == "m"
-    assert [item.id for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id)] == [free_item.id]
+    assert updated.description == "Geänderte freie Leistung"
+    assert updated.unit == "psch"
+    assert [item.id for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id)] == [
+        free_item.id,
+        second_item.id,
+    ]
 
     service.create_site_entry(
         site_id=site.id,
@@ -2440,8 +2470,11 @@ def test_blank_office_measurement_manages_only_its_free_positions():
         stored_batch,
         mode="checked",
     )
-    assert [position.description for position in positions] == ["Freie Leistung"]
-    assert [position.position for position in positions] == ["A-2"]
+    assert [position.description for position in positions] == [
+        "Geänderte freie Leistung",
+        "Zweite freie Leistung",
+    ]
+    assert [position.position for position in positions] == ["A-2", "B-1"]
     assert [area.label for area in areas] == ["Technikraum"]
     pdf_content, filename = MeasurementPdfService(db).build_batch_pdf(
         site_id=site.id,
@@ -2450,6 +2483,20 @@ def test_blank_office_measurement_manages_only_its_free_positions():
     )
     assert pdf_content.startswith(b"%PDF")
     assert filename.endswith(".pdf")
+
+    service.delete_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+    )
+    remaining = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    assert [item.id for item in remaining] == [second_item.id]
+    assert remaining[0].position == "B-1"
+    assert db.scalar(
+        select(func.count(SiteMeasurementEntry.id)).where(
+            SiteMeasurementEntry.measurement_item_id == free_item.id
+        )
+    ) == 0
 
 
 def test_blank_office_measurement_uses_the_standard_completion_workflow():

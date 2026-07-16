@@ -776,6 +776,24 @@ export function SiteDetailPage() {
     }
   }
 
+  async function deleteMeasurementFreeItem(
+    batch: MobileMeasurementBatch,
+    measurementItemId: number,
+  ): Promise<void> {
+    if (!site) {
+      return;
+    }
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      await api.deleteSiteMeasurementFreeItem(site.id, batch.id, measurementItemId);
+      setMeasurementBatchItems((current) => current.filter((item) => item.id !== measurementItemId));
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Freie Position konnte nicht gelöscht werden."));
+      throw requestError;
+    }
+  }
+
   async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -1349,6 +1367,7 @@ export function SiteDetailPage() {
           onCreateEntry={createMeasurementEntry}
           onCreateFreeItem={createMeasurementFreeItem}
           onUpdateFreeItem={updateMeasurementFreeItem}
+          onDeleteFreeItem={deleteMeasurementFreeItem}
           onResetToSubmitted={resetMeasurementBatchToSubmitted}
           onExportPdf={downloadMeasurementBatchPdf}
         />
@@ -2263,6 +2282,7 @@ function MeasurementTab({
   onCreateEntry,
   onCreateFreeItem,
   onUpdateFreeItem,
+  onDeleteFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -2319,6 +2339,7 @@ function MeasurementTab({
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
+  onDeleteFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -2511,6 +2532,7 @@ function MeasurementTab({
           onCreateEntry={onCreateEntry}
           onCreateFreeItem={onCreateFreeItem}
           onUpdateFreeItem={onUpdateFreeItem}
+          onDeleteFreeItem={onDeleteFreeItem}
           onResetToSubmitted={onResetToSubmitted}
           onExportPdf={onExportPdf}
         />
@@ -3390,6 +3412,12 @@ function getVisibleMeasurementPosition(item: MobileMeasurementItem): string {
   return item.is_free_position && isTechnicalFreeMeasurementPosition(item.position) ? "" : item.position;
 }
 
+function hasMeaningfulFreeMeasurementData(item: MobileMeasurementItem): boolean {
+  return item.entries.length > 0
+    || item.description.trim().length > 0
+    || getVisibleMeasurementPosition(item).trim().length > 0;
+}
+
 function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: MeasurementEntry[]): MobileMeasurementItem {
   const reportedQuantity = getMeasurementCellQuantity(entries);
   const minutesPerUnit = typeof item.minutes_per_unit === "number" ? item.minutes_per_unit : Number(item.minutes_per_unit);
@@ -3462,6 +3490,7 @@ function MeasurementReviewPanel({
   onCreateEntry,
   onCreateFreeItem,
   onUpdateFreeItem,
+  onDeleteFreeItem,
   onResetToSubmitted,
   onExportPdf,
 }: {
@@ -3495,6 +3524,7 @@ function MeasurementReviewPanel({
   onCreateEntry: (batch: MobileMeasurementBatch, measurementItemId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
+  onDeleteFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number) => Promise<void>;
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
@@ -3781,6 +3811,10 @@ function MeasurementReviewPanel({
 
   if (selectedBatch && !archiveMode) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
+    const isFreePositionOnlyBatch = selectedBatch.position_mode === "BLANK";
+    const tableItems = isFreePositionOnlyBatch
+      ? batchItems.filter(hasMeaningfulFreeMeasurementData)
+      : itemsWithEntries;
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
     const isReviewed = isMeasurementBatchReviewed(selectedBatch.status);
@@ -3858,13 +3892,14 @@ function MeasurementReviewPanel({
         {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
         {inlineError ? <div className="project-record-empty-state is-error"><strong>{inlineError}</strong></div> : null}
         {batchItemsLoading ? <div className="matrix-state">Aufmaßzeilen werden geladen...</div> : null}
-        {!batchItemsLoading && itemsWithEntries.length === 0 ? (
+        {!batchItemsLoading && !isFreePositionOnlyBatch && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
         ) : null}
         {!batchItemsLoading ? (
           <MeasurementReviewTable
-            items={itemsWithEntries}
-            positionSuggestions={batchItems}
+            items={tableItems}
+            positionSuggestions={isFreePositionOnlyBatch ? tableItems : batchItems}
+            freePositionOnly={isFreePositionOnlyBatch}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
             savingEntryId={savingEntryId}
@@ -3873,6 +3908,7 @@ function MeasurementReviewPanel({
             onCellCreate={(item, areaLabel, quantity) => onCreateEntry(selectedBatch, item.id, { area_or_comment: areaLabel, quantity })}
             onFreeItemCreate={(payload) => onCreateFreeItem(selectedBatch, payload)}
             onFreeItemUpdate={(item, payload) => onUpdateFreeItem(selectedBatch, item.id, payload)}
+            onFreeItemDelete={(item) => onDeleteFreeItem(selectedBatch, item.id)}
           />
         ) : null}
       </div>
@@ -4174,6 +4210,7 @@ function MeasurementReviewPanel({
 function MeasurementReviewTable({
   items,
   positionSuggestions,
+  freePositionOnly,
   canEditRows,
   reviewActionLoading,
   savingEntryId,
@@ -4182,9 +4219,11 @@ function MeasurementReviewTable({
   onCellCreate,
   onFreeItemCreate,
   onFreeItemUpdate,
+  onFreeItemDelete,
 }: {
   items: MobileMeasurementItem[];
   positionSuggestions: MobileMeasurementItem[];
+  freePositionOnly: boolean;
   canEditRows: boolean;
   reviewActionLoading: boolean;
   savingEntryId: number | null;
@@ -4193,6 +4232,7 @@ function MeasurementReviewTable({
   onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
   onFreeItemCreate: (payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onFreeItemUpdate: (item: MobileMeasurementItem, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
+  onFreeItemDelete: (item: MobileMeasurementItem) => Promise<void>;
 }) {
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
@@ -4205,8 +4245,12 @@ function MeasurementReviewTable({
   const [savingPositionItemId, setSavingPositionItemId] = useState<number | null>(null);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
-  const displayColumnCount = Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
-  const fillerColumnCount = Math.max(0, displayColumnCount - items.length - 1);
+  const displayColumnCount = freePositionOnly
+    ? items.length + 1
+    : Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
+  const fillerColumnCount = freePositionOnly
+    ? 0
+    : Math.max(0, displayColumnCount - items.length - 1);
   const displayColumns: Array<
     | { key: string; kind: "item"; item: MobileMeasurementItem }
     | { key: string; kind: "placeholder"; index: number }
@@ -4503,6 +4547,50 @@ function MeasurementReviewTable({
     }
   }
 
+  async function saveFreeItemTextDraft(
+    item: MobileMeasurementItem,
+    field: "description" | "unit",
+    input: HTMLInputElement | HTMLTextAreaElement,
+  ): Promise<void> {
+    const currentValue = field === "description" ? item.description : (item.unit ?? "");
+    const nextValue = field === "description"
+      ? input.value.trim().replace(/\s+/g, " ")
+      : normalizeMeasurementUnitDisplay(input.value);
+    if (nextValue === currentValue || savingPositionItemId === item.id) {
+      input.value = currentValue;
+      return;
+    }
+    if (!nextValue) {
+      input.value = currentValue;
+      return;
+    }
+
+    setSavingPositionItemId(item.id);
+    try {
+      const updatedItem = await onFreeItemUpdate(item, { [field]: nextValue });
+      input.value = field === "description" ? updatedItem.description : (updatedItem.unit ?? "");
+    } catch {
+      input.value = currentValue;
+    } finally {
+      setSavingPositionItemId(null);
+    }
+  }
+
+  async function deleteFreeItem(item: MobileMeasurementItem): Promise<void> {
+    if (savingPositionItemId === item.id) {
+      return;
+    }
+    if (!window.confirm(`Freie Position ${getVisibleMeasurementPosition(item) || item.description} wirklich löschen?`)) {
+      return;
+    }
+    setSavingPositionItemId(item.id);
+    try {
+      await onFreeItemDelete(item);
+    } finally {
+      setSavingPositionItemId(null);
+    }
+  }
+
   function saveExistingQuantityDraft(entry: MobileMeasurementItem["entries"][number], input: HTMLInputElement): void {
     onDraftSave(entry, {
       area_or_comment: entry.area_or_comment,
@@ -4527,26 +4615,41 @@ function MeasurementReviewTable({
                 const visiblePosition = getVisibleMeasurementPosition(column.item);
                 if (column.item.is_free_position) {
                   const isSavingPosition = savingPositionItemId === column.item.id;
+                  const positionInput = (
+                    <input
+                      key={`${column.item.id}-${column.item.updated_at}-${visiblePosition}`}
+                      className="measurement-placeholder-header-input is-free-position"
+                      defaultValue={visiblePosition}
+                      disabled={!canEditRows || reviewActionLoading || isSavingPosition}
+                      aria-label={`Positionsnummer für manuelle Position ${column.item.description}`}
+                      placeholder="Pos."
+                      onBlur={(event) => void saveFreeItemPositionDraft(column.item, event.currentTarget)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void saveFreeItemPositionDraft(column.item, event.currentTarget);
+                        }
+                        if (event.key === "Escape") {
+                          event.currentTarget.value = visiblePosition;
+                        }
+                      }}
+                    />
+                  );
                   return (
               <th className="measurement-matrix-position-heading" key={column.key} scope="col">
-                <input
-                  key={`${column.item.id}-${column.item.updated_at}-${visiblePosition}`}
-                  className="measurement-placeholder-header-input is-free-position"
-                  defaultValue={visiblePosition}
-                  disabled={!canEditRows || reviewActionLoading || isSavingPosition}
-                  aria-label={`Positionsnummer für manuelle Position ${column.item.description}`}
-                  placeholder="Pos."
-                  onBlur={(event) => void saveFreeItemPositionDraft(column.item, event.currentTarget)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void saveFreeItemPositionDraft(column.item, event.currentTarget);
-                    }
-                    if (event.key === "Escape") {
-                      event.currentTarget.value = visiblePosition;
-                    }
-                  }}
-                />
+                {freePositionOnly ? (
+                  <div className="measurement-free-position-head">
+                    {positionInput}
+                    <button
+                      aria-label={`Freie Position ${visiblePosition || column.item.description} löschen`}
+                      className="measurement-free-position-delete"
+                      disabled={!canEditRows || reviewActionLoading || isSavingPosition}
+                      title="Freie Position löschen"
+                      type="button"
+                      onClick={() => void deleteFreeItem(column.item)}
+                    >×</button>
+                  </div>
+                ) : positionInput}
               </th>
                   );
                 }
@@ -4633,6 +4736,21 @@ function MeasurementReviewTable({
             <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
+                if (freePositionOnly && column.item.is_free_position) {
+                  return (
+                    <th className="measurement-matrix-description-heading" key={column.key} scope="col">
+                      <textarea
+                        className="measurement-placeholder-header-input is-description"
+                        defaultValue={column.item.description}
+                        disabled={!canEditRows || reviewActionLoading || savingPositionItemId === column.item.id}
+                        aria-label={`Beschreibung für freie Position ${getVisibleMeasurementPosition(column.item) || column.item.id}`}
+                        placeholder="Beschreibung"
+                        rows={2}
+                        onBlur={(event) => void saveFreeItemTextDraft(column.item, "description", event.currentTarget)}
+                      />
+                    </th>
+                  );
+                }
                 return (
               <th className="measurement-matrix-description-heading" key={column.key} scope="col" title={column.item.description}><span>{column.item.description}</span></th>
                 );
@@ -4661,6 +4779,20 @@ function MeasurementReviewTable({
             <th className="measurement-matrix-axis" scope="row">Einheit</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
+                if (freePositionOnly && column.item.is_free_position) {
+                  return (
+                    <th className="measurement-matrix-unit-heading" key={column.key} scope="col">
+                      <input
+                        className="measurement-placeholder-header-input"
+                        defaultValue={normalizeMeasurementUnitDisplay(column.item.unit)}
+                        disabled={!canEditRows || reviewActionLoading || savingPositionItemId === column.item.id}
+                        aria-label={`Einheit für freie Position ${getVisibleMeasurementPosition(column.item) || column.item.id}`}
+                        placeholder="Einheit"
+                        onBlur={(event) => void saveFreeItemTextDraft(column.item, "unit", event.currentTarget)}
+                      />
+                    </th>
+                  );
+                }
                 return (
               <th className="measurement-matrix-unit-heading" key={column.key} scope="col">{normalizeMeasurementUnitDisplay(column.item.unit) || "-"}</th>
                 );

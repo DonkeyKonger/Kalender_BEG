@@ -1126,6 +1126,16 @@ export const api = {
     });
   },
 
+  async deleteSiteMeasurementFreeItem(
+    siteId: number,
+    batchId: number,
+    measurementItemId: number,
+  ): Promise<void> {
+    return request<void>(`/sites/${siteId}/measurement-batches/${batchId}/items/${measurementItemId}`, {
+      method: "DELETE",
+    });
+  },
+
   async markSiteMeasurementBatchBilled(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-billed`, {
       method: "POST",

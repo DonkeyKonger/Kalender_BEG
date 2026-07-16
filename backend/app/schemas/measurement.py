@@ -61,8 +61,10 @@ class MeasurementItemRead(BaseModel):
 
 class MeasurementItemUpdate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, min_length=1, max_length=2000)
+    unit: str | None = Field(default=None, min_length=1, max_length=40)
 
-    @field_validator("position", mode="before")
+    @field_validator("position", "description", "unit", mode="before")
     @classmethod
     def strip_position(cls, value: object) -> object:
         if isinstance(value, str):

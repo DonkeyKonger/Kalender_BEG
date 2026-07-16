@@ -707,9 +707,42 @@ class MeasurementService:
             elif not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
+        if payload.description is not None:
+            description = " ".join(payload.description.split())
+            if not description:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
+            item.description = description
+        if payload.unit is not None:
+            unit = payload.unit.strip()
+            if not unit:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
+            item.unit = unit
+
         self.db.commit()
         self.db.refresh(item)
         return self._build_mobile_item(item, batch.id)
+
+    def delete_site_free_item(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        measurement_item_id: int,
+    ) -> None:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        item = self.db.get(SiteMeasurementItem, measurement_item_id)
+        if (
+            batch.position_mode != MeasurementPositionMode.BLANK.value
+            or item is None
+            or item.site_id != site_id
+            or item.measurement_batch_id != batch.id
+            or item.is_hidden
+            or not item.is_free_position
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
+        self.db.delete(item)
+        self.db.commit()
 
     def hide_item(self, *, site_id: int, measurement_item_id: int) -> MeasurementItemRead:
         self._get_site(site_id)

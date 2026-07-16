@@ -25326,6 +25326,39 @@ button.person-chip:focus-visible {
   outline: none;
 }
 
+.measurement-review-detail.is-table-view .measurement-free-position-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  align-items: start;
+  gap: 3px;
+}
+
+.measurement-review-detail.is-table-view .measurement-free-position-delete {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #c7d2e0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #8f3038;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0;
+}
+
+.measurement-review-detail.is-table-view .measurement-free-position-delete:hover,
+.measurement-review-detail.is-table-view .measurement-free-position-delete:focus-visible {
+  border-color: #a66b70;
+  background: #fff6f6;
+  outline: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-free-position-delete:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .measurement-review-detail.is-table-view .measurement-area-input {
   width: 100%;
   min-height: 20px;
