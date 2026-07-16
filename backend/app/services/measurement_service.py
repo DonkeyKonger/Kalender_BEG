@@ -582,9 +582,9 @@ class MeasurementService:
         description = " ".join(payload.description.split())
         unit = payload.unit.strip()
         is_blank_batch = batch.position_mode == MeasurementPositionMode.BLANK.value
-        if not description:
+        if not description and not is_blank_batch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
-        if not unit:
+        if not unit and not is_blank_batch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
         if payload.quantity < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
@@ -709,12 +709,12 @@ class MeasurementService:
 
         if payload.description is not None:
             description = " ".join(payload.description.split())
-            if not description:
+            if not description and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
             item.description = description
         if payload.unit is not None:
             unit = payload.unit.strip()
-            if not unit:
+            if not unit and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
             item.unit = unit
 

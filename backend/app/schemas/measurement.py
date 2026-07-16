@@ -61,8 +61,8 @@ class MeasurementItemRead(BaseModel):
 
 class MeasurementItemUpdate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
-    description: str | None = Field(default=None, min_length=1, max_length=2000)
-    unit: str | None = Field(default=None, min_length=1, max_length=40)
+    description: str | None = Field(default=None, max_length=2000)
+    unit: str | None = Field(default=None, max_length=40)
 
     @field_validator("position", "description", "unit", mode="before")
     @classmethod
@@ -74,8 +74,8 @@ class MeasurementItemUpdate(BaseModel):
 
 class MobileMeasurementFreeItemCreate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
-    description: str = Field(min_length=1, max_length=2000)
-    unit: str = Field(min_length=1, max_length=40)
+    description: str = Field(default="", max_length=2000)
+    unit: str = Field(default="", max_length=40)
     quantity: Decimal = Field(default=Decimal("0"), ge=0)
     area_or_comment: str | None = Field(default=None, max_length=1000)
 

@@ -2530,3 +2530,40 @@ def test_blank_office_measurement_uses_the_standard_completion_workflow():
     )
     assert billed.status == "billed"
     assert service.list_site_batch_items(site_id=site.id, batch_id=batch.id) == []
+
+
+def test_blank_office_position_is_persisted_from_its_first_header_value():
+    db = db_session()
+    site = create_site(db)
+    office_user = User(
+        username="office-first-position-value",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add(office_user)
+    db.commit()
+    service = MeasurementService(db)
+    batch = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=OfficeMeasurementBatchCreate(
+            area_location="Flur",
+            measurement_date=date(2026, 7, 16),
+            request_id="office-first-position-value-request",
+        ),
+    )
+
+    created = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(position="1.01.20", description="", unit=""),
+    )
+
+    assert created.id is not None
+    assert created.position == "1.01.20"
+    assert created.description == ""
+    assert created.unit == ""
+    reloaded = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    assert [item.id for item in reloaded] == [created.id]

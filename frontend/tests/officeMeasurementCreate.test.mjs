@@ -28,7 +28,7 @@ test("measurement review exposes the office dialog and reuses the controlled pic
 test("office measurements reuse the standard measurement table with a compact free-position data mode", () => {
   assert.match(pageSource, /<MeasurementReviewTable\s+items=\{tableItems\}/);
   assert.match(pageSource, /freePositionOnly=\{isFreePositionOnlyBatch\}/);
-  assert.match(pageSource, /const displayColumnCount = freePositionOnly\s*\? items\.length \+ 1/);
+  assert.match(pageSource, /const displayColumnCount = freePositionOnly\s*\? items\.length \+ freeInputColumnCount/);
   assert.match(pageSource, /const fillerColumnCount = freePositionOnly\s*\? 0/);
   assert.match(pageSource, />Pos\.-Nr\.<\/th>/);
   assert.match(pageSource, />Beschreibung<\/th>/);
@@ -47,6 +47,34 @@ test("saved blank positions remain fully editable and deletable through the shar
   assert.match(pageSource, /onFreeItemDelete\(item\)/);
   assert.match(apiSource, /deleteSiteMeasurementFreeItem/);
   assert.match(styles, /\.measurement-review-detail\.is-table-view \.measurement-free-position-delete/);
+});
+
+test("office-created measurements hide the worker warning and progress steps only for their origin", () => {
+  assert.match(pageSource, /const isOfficeCreatedBatch = selectedBatch\.origin === "OFFICE"/);
+  assert.match(pageSource, /!isOfficeCreatedBatch && showUnsubmittedWarning/);
+  assert.match(pageSource, /\{!isOfficeCreatedBatch \? \(\s*<>\s*<span className="measurement-review-action-divider"/);
+  assert.match(pageSource, /measurement-review-filter-group/);
+});
+
+test("blank measurements expose ten lazy free columns and append one after the last used slot", () => {
+  assert.match(pageSource, /const MEASUREMENT_FREE_INPUT_MIN_COLUMNS = 10/);
+  assert.match(pageSource, /Math\.max\(MEASUREMENT_FREE_INPUT_MIN_COLUMNS - items\.length, highestActiveFreeColumnIndex \+ 1, 1\)/);
+  assert.match(pageSource, /Array\.from\(\{ length: freeInputColumnCount \}/);
+  assert.match(pageSource, /createFreeItemFromHeaderDraft/);
+  assert.match(pageSource, /await onFreeItemCreate\(\{ position: position \|\| null, description, unit, quantity: 0 \}\)/);
+  assert.match(pageSource, /\|\| \(item\.unit \?\? ""\)\.trim\(\)\.length > 0/);
+});
+
+test("blank position suggestions reuse the loaded project timesheet and stay free positions", () => {
+  assert.match(pageSource, /projectPositionSuggestions/);
+  assert.match(pageSource, /position: row\.position_number/);
+  assert.match(pageSource, /linkedItem: null/);
+  assert.match(pageSource, /item\.position\.toLocaleLowerCase\("de-DE"\)\.includes\(query\)/);
+  assert.match(pageSource, /left\.position\.localeCompare\(right\.position, "de-DE", \{ numeric: true/);
+  assert.match(pageSource, /if \(freePositionOnly\) \{\s*setSuggestionState\(null\);\s*if \(existingItem\)/s);
+  assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
+  assert.match(pageSource, /description: suggestion\.description/);
+  assert.match(pageSource, /closeSuggestionOnOutsidePointer/);
 });
 
 test("office origin does not create a special presentation and never offers a fake worker original", () => {

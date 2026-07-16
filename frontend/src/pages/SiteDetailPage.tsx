@@ -49,6 +49,7 @@ type ProjectFolderNavigationLevel = {
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
+const MEASUREMENT_FREE_INPUT_MIN_COLUMNS = 10;
 const VALUED_MEASUREMENT_BATCH_STATUSES = new Set([
   "reviewed",
   "checked",
@@ -381,7 +382,7 @@ export function SiteDetailPage() {
     if (
       !site
       || activeTab !== "measurement"
-      || measurementSubtab !== "timesheet"
+      || (measurementSubtab !== "timesheet" && measurementSubtab !== "review")
       || measurementLoaded
       || measurementLoading
     ) {
@@ -2351,6 +2352,16 @@ function MeasurementTab({
     () => selectableBases.find((base) => base.status === "active" && base.released_to_mobile) ?? selectableBases[0] ?? null,
     [selectableBases],
   );
+  const projectPositionSuggestions = useMemo<MeasurementPositionSuggestion[]>(
+    () => (timesheet?.rows ?? []).map((row) => ({
+      id: row.position_id,
+      position: row.position_number,
+      description: row.description,
+      unit: row.unit,
+      linkedItem: null,
+    })),
+    [timesheet?.rows],
+  );
   const suggestedBaseName = useMemo(() => getSuggestedMeasurementSheetName(siteNumber, bases.length + 1), [bases.length, siteNumber]);
   const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBase ? "append_existing" : "create_new");
   const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBase?.id ?? null);
@@ -2503,6 +2514,7 @@ function MeasurementTab({
       {activeSubtab === "review" ? (
         <MeasurementReviewPanel
           siteNumber={siteNumber}
+          projectPositionSuggestions={projectPositionSuggestions}
           canCreateBatch={canCreateBatch}
           batches={batches}
           measurementWorkers={measurementWorkers}
@@ -3288,6 +3300,14 @@ type MeasurementManualColumnDraft = {
 
 const MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY = "office-extra-column";
 
+type MeasurementPositionSuggestion = {
+  id: number;
+  position: string;
+  description: string;
+  unit: string | null;
+  linkedItem: MobileMeasurementItem | null;
+};
+
 type MeasurementSuggestionState = {
   columnKey: string;
   query: string;
@@ -3415,6 +3435,7 @@ function getVisibleMeasurementPosition(item: MobileMeasurementItem): string {
 function hasMeaningfulFreeMeasurementData(item: MobileMeasurementItem): boolean {
   return item.entries.length > 0
     || item.description.trim().length > 0
+    || (item.unit ?? "").trim().length > 0
     || getVisibleMeasurementPosition(item).trim().length > 0;
 }
 
@@ -3461,6 +3482,7 @@ function addMeasurementEntryToItems(items: MobileMeasurementItem[], createdEntry
 
 function MeasurementReviewPanel({
   siteNumber,
+  projectPositionSuggestions,
   canCreateBatch,
   batches,
   measurementWorkers,
@@ -3495,6 +3517,7 @@ function MeasurementReviewPanel({
   onExportPdf,
 }: {
   siteNumber: string | null;
+  projectPositionSuggestions: MeasurementPositionSuggestion[];
   canCreateBatch: boolean;
   batches: MobileMeasurementBatch[];
   measurementWorkers: MeasurementWorkerOption[];
@@ -3812,6 +3835,7 @@ function MeasurementReviewPanel({
   if (selectedBatch && !archiveMode) {
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isFreePositionOnlyBatch = selectedBatch.position_mode === "BLANK";
+    const isOfficeCreatedBatch = selectedBatch.origin === "OFFICE";
     const tableItems = isFreePositionOnlyBatch
       ? batchItems.filter(hasMeaningfulFreeMeasurementData)
       : itemsWithEntries;
@@ -3836,13 +3860,17 @@ function MeasurementReviewPanel({
         <div className="measurement-table-toolbar measurement-review-toolbar-row">
           <div className="measurement-review-toolbar-left">
             <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
-            <span className="measurement-review-action-divider" aria-hidden="true" />
-            <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
-              <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Eingereicht</span>
-              <span className={isReviewed ? "is-active" : ""}>Geprüft</span>
-              <span className={isCustomerSigned && !isBilled ? "is-active" : ""}>Unterschrieben</span>
-              <span className={isBilled ? "is-active" : ""}>Abgeschlossen</span>
-            </div>
+            {!isOfficeCreatedBatch ? (
+              <>
+                <span className="measurement-review-action-divider" aria-hidden="true" />
+                <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
+                  <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Eingereicht</span>
+                  <span className={isReviewed ? "is-active" : ""}>Geprüft</span>
+                  <span className={isCustomerSigned && !isBilled ? "is-active" : ""}>Unterschrieben</span>
+                  <span className={isBilled ? "is-active" : ""}>Abgeschlossen</span>
+                </div>
+              </>
+            ) : null}
           </div>
           <div className="measurement-review-actions">
             <button
@@ -3883,7 +3911,7 @@ function MeasurementReviewPanel({
           </div>
         </div>
 
-        {showUnsubmittedWarning ? (
+        {!isOfficeCreatedBatch && showUnsubmittedWarning ? (
           <div className="measurement-review-unsubmitted-warning" role="note">
             Dieses Aufmaß wurde noch nicht zur Prüfung eingereicht. Eine Prüfung oder ein Abschluss ist trotzdem möglich. Bitte vor dem Fortfahren fachlich kontrollieren.
           </div>
@@ -3898,7 +3926,15 @@ function MeasurementReviewPanel({
         {!batchItemsLoading ? (
           <MeasurementReviewTable
             items={tableItems}
-            positionSuggestions={isFreePositionOnlyBatch ? tableItems : batchItems}
+            positionSuggestions={isFreePositionOnlyBatch
+              ? projectPositionSuggestions
+              : batchItems.map((item) => ({
+                  id: item.id,
+                  position: getVisibleMeasurementPosition(item),
+                  description: item.description,
+                  unit: item.unit,
+                  linkedItem: item,
+                }))}
             freePositionOnly={isFreePositionOnlyBatch}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
@@ -4222,7 +4258,7 @@ function MeasurementReviewTable({
   onFreeItemDelete,
 }: {
   items: MobileMeasurementItem[];
-  positionSuggestions: MobileMeasurementItem[];
+  positionSuggestions: MeasurementPositionSuggestion[];
   freePositionOnly: boolean;
   canEditRows: boolean;
   reviewActionLoading: boolean;
@@ -4245,8 +4281,23 @@ function MeasurementReviewTable({
   const [savingPositionItemId, setSavingPositionItemId] = useState<number | null>(null);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+  const activeManualColumnIndexes = useMemo(() => Object.entries(manualColumnDrafts)
+    .filter(([columnKey, draft]) => (
+      columnKey.startsWith(`${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-`)
+      && Boolean(draft.position.trim() || draft.description.trim() || draft.unit.trim())
+    ))
+    .map(([columnKey]) => Number(columnKey.slice(MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY.length + 1)))
+    .filter(Number.isFinite), [manualColumnDrafts]);
+  const activeQuantityColumnIndexes = useMemo(() => Object.entries(manualColumnTotals)
+    .filter(([columnKey, total]) => columnKey.startsWith(`${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-`) && total > 0)
+    .map(([columnKey]) => Number(columnKey.slice(MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY.length + 1)))
+    .filter(Number.isFinite), [manualColumnTotals]);
+  const highestActiveFreeColumnIndex = Math.max(0, ...activeManualColumnIndexes, ...activeQuantityColumnIndexes);
+  const freeInputColumnCount = freePositionOnly
+    ? Math.max(MEASUREMENT_FREE_INPUT_MIN_COLUMNS - items.length, highestActiveFreeColumnIndex + 1, 1)
+    : 1;
   const displayColumnCount = freePositionOnly
-    ? items.length + 1
+    ? items.length + freeInputColumnCount
     : Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
   const fillerColumnCount = freePositionOnly
     ? 0
@@ -4257,6 +4308,16 @@ function MeasurementReviewTable({
     | { key: string; kind: "office-extra"; index: number }
   > = useMemo(() => {
     const itemColumns = items.map((item) => ({ key: `item-${item.id}`, kind: "item" as const, item }));
+    if (freePositionOnly) {
+      return [
+        ...itemColumns,
+        ...Array.from({ length: freeInputColumnCount }, (_, index) => ({
+          key: `${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-${index + 1}`,
+          kind: "office-extra" as const,
+          index: index + 1,
+        })),
+      ];
+    }
     return [
       ...itemColumns,
       ...Array.from({ length: fillerColumnCount }, (_, index) => ({
@@ -4270,7 +4331,7 @@ function MeasurementReviewTable({
         index: fillerColumnCount + 1,
       },
     ];
-  }, [items, fillerColumnCount]);
+  }, [items, fillerColumnCount, freeInputColumnCount, freePositionOnly]);
   const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = useMemo(() => {
     const placeholderCount = Math.max(0, MEASUREMENT_TABLE_MIN_AREA_ROWS - areaRows.length);
     const placeholderAreaRows = Array.from({ length: placeholderCount }, (_, index) => ({
@@ -4304,11 +4365,12 @@ function MeasurementReviewTable({
     }
     const query = suggestionState.query.trim().toLocaleLowerCase("de-DE");
     return positionSuggestions
-      .filter((item) => !actualItemIds.has(item.id))
+      .filter((item) => item.linkedItem === null || !actualItemIds.has(item.linkedItem.id))
       .filter((item) => (
         item.position.toLocaleLowerCase("de-DE").includes(query)
         || item.description.toLocaleLowerCase("de-DE").includes(query)
       ))
+      .sort((left, right) => left.position.localeCompare(right.position, "de-DE", { numeric: true, sensitivity: "base" }))
       .slice(0, 8);
   }, [actualItemIds, positionSuggestions, suggestionState]);
   const tableStyle = useMemo(() => ({
@@ -4333,6 +4395,23 @@ function MeasurementReviewTable({
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!suggestionState) {
+      return undefined;
+    }
+    const closeSuggestionOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      const anchor = target instanceof Element
+        ? target.closest<HTMLElement>("[data-position-suggestion-column]")
+        : null;
+      if (anchor?.dataset.positionSuggestionColumn !== suggestionState.columnKey) {
+        setSuggestionState(null);
+      }
+    };
+    document.addEventListener("pointerdown", closeSuggestionOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeSuggestionOnOutsidePointer);
+  }, [suggestionState]);
 
   function getAreaLabel(area: MeasurementMatrixAreaRow): string {
     return areaLabelDraftsRef.current[area.key] ?? area.label;
@@ -4379,7 +4458,7 @@ function MeasurementReviewTable({
     if (!linkedItemId || actualItemIds.has(linkedItemId)) {
       return null;
     }
-    return positionSuggestions.find((item) => item.id === linkedItemId) ?? null;
+    return positionSuggestions.find((item) => item.linkedItem?.id === linkedItemId)?.linkedItem ?? null;
   }
 
   function updateManualColumnDraft(columnKey: string, patch: Partial<MeasurementManualColumnDraft>): void {
@@ -4395,12 +4474,40 @@ function MeasurementReviewTable({
     }));
   }
 
-  function selectPositionSuggestion(columnKey: string, item: MobileMeasurementItem): void {
+  async function selectPositionSuggestion(
+    columnKey: string,
+    suggestion: MeasurementPositionSuggestion,
+    existingItem?: MobileMeasurementItem,
+  ): Promise<void> {
+    if (freePositionOnly) {
+      setSuggestionState(null);
+      if (existingItem) {
+        setSavingPositionItemId(existingItem.id);
+        try {
+          await onFreeItemUpdate(existingItem, {
+            position: suggestion.position,
+            description: suggestion.description,
+            unit: normalizeMeasurementUnitDisplay(suggestion.unit),
+          });
+        } finally {
+          setSavingPositionItemId(null);
+        }
+      } else {
+        await onFreeItemCreate({
+          position: suggestion.position,
+          description: suggestion.description,
+          unit: normalizeMeasurementUnitDisplay(suggestion.unit),
+          quantity: 0,
+        });
+      }
+      clearManualColumnDraft(columnKey);
+      return;
+    }
     updateManualColumnDraft(columnKey, {
-      position: getVisibleMeasurementPosition(item),
-      description: item.description,
-      unit: normalizeMeasurementUnitDisplay(item.unit),
-      linkedItemId: item.id,
+      position: suggestion.position,
+      description: suggestion.description,
+      unit: normalizeMeasurementUnitDisplay(suggestion.unit),
+      linkedItemId: suggestion.linkedItem?.id ?? null,
     });
     setSuggestionState(null);
   }
@@ -4419,6 +4526,47 @@ function MeasurementReviewTable({
       }
     });
     setManualColumnTotals((current) => ({ ...current, [columnKey]: total }));
+  }
+
+  function clearManualColumnDraft(columnKey: string): void {
+    setManualColumnDrafts((current) => {
+      const next = { ...current };
+      delete next[columnKey];
+      return next;
+    });
+    setManualColumnTotals((current) => {
+      const next = { ...current };
+      delete next[columnKey];
+      return next;
+    });
+  }
+
+  async function createFreeItemFromHeaderDraft(
+    columnKey: string,
+    patch: Partial<MeasurementManualColumnDraft> = {},
+  ): Promise<void> {
+    if (!freePositionOnly) {
+      return;
+    }
+    const draft = { ...getManualColumnDraft(columnKey), ...patch };
+    const position = draft.position.trim();
+    const description = draft.description.trim();
+    const unit = normalizeMeasurementUnitDisplay(draft.unit);
+    if (!position && !description && !unit) {
+      return;
+    }
+    const cellKey = `header-${columnKey}`;
+    if (savingCellKeysRef.current.has(cellKey)) {
+      return;
+    }
+    savingCellKeysRef.current.add(cellKey);
+    try {
+      await onFreeItemCreate({ position: position || null, description, unit, quantity: 0 });
+      clearManualColumnDraft(columnKey);
+      setSuggestionState(null);
+    } finally {
+      savingCellKeysRef.current.delete(cellKey);
+    }
   }
 
   function getCellEntries(item: MobileMeasurementItem, areaKey: string): MobileMeasurementItem["entries"] {
@@ -4491,7 +4639,7 @@ function MeasurementReviewTable({
     const position = draft.position.trim();
     const description = draft.description.trim();
     const unit = normalizeMeasurementUnitDisplay(draft.unit);
-    if (!description || !unit) {
+    if (!freePositionOnly && (!description || !unit)) {
       return;
     }
 
@@ -4512,16 +4660,7 @@ function MeasurementReviewTable({
       if (area.key.startsWith("placeholder-area-")) {
         clearAreaLabelDraft(area.key);
       }
-      setManualColumnDrafts((current) => {
-        const next = { ...current };
-        delete next[columnKey];
-        return next;
-      });
-      setManualColumnTotals((current) => {
-        const next = { ...current };
-        delete next[columnKey];
-        return next;
-      });
+      clearManualColumnDraft(columnKey);
       setSuggestionState(null);
     } finally {
       savingCellKeysRef.current.delete(cellKey);
@@ -4560,7 +4699,7 @@ function MeasurementReviewTable({
       input.value = currentValue;
       return;
     }
-    if (!nextValue) {
+    if (!nextValue && !freePositionOnly) {
       input.value = currentValue;
       return;
     }
@@ -4615,6 +4754,10 @@ function MeasurementReviewTable({
                 const visiblePosition = getVisibleMeasurementPosition(column.item);
                 if (column.item.is_free_position) {
                   const isSavingPosition = savingPositionItemId === column.item.id;
+                  const suggestionColumnKey = `item-${column.item.id}`;
+                  const isSuggestionOpen = freePositionOnly
+                    && suggestionState?.columnKey === suggestionColumnKey
+                    && suggestionMatches.length > 0;
                   const positionInput = (
                     <input
                       key={`${column.item.id}-${column.item.updated_at}-${visiblePosition}`}
@@ -4623,20 +4766,59 @@ function MeasurementReviewTable({
                       disabled={!canEditRows || reviewActionLoading || isSavingPosition}
                       aria-label={`Positionsnummer für manuelle Position ${column.item.description}`}
                       placeholder="Pos."
+                      autoComplete="off"
+                      onChange={(event) => {
+                        if (!freePositionOnly) {
+                          return;
+                        }
+                        const value = event.currentTarget.value;
+                        setSuggestionState({ columnKey: suggestionColumnKey, query: value, activeIndex: 0 });
+                      }}
+                      onFocus={(event) => {
+                        if (freePositionOnly && event.currentTarget.value.trim()) {
+                          setSuggestionState({ columnKey: suggestionColumnKey, query: event.currentTarget.value, activeIndex: 0 });
+                        }
+                      }}
                       onBlur={(event) => void saveFreeItemPositionDraft(column.item, event.currentTarget)}
                       onKeyDown={(event) => {
+                        if (event.key === "ArrowDown" && suggestionMatches.length > 0) {
+                          event.preventDefault();
+                          setSuggestionState((current) => current?.columnKey === suggestionColumnKey
+                            ? { ...current, activeIndex: Math.min(current.activeIndex + 1, suggestionMatches.length - 1) }
+                            : current);
+                        }
+                        if (event.key === "ArrowUp" && suggestionMatches.length > 0) {
+                          event.preventDefault();
+                          setSuggestionState((current) => current?.columnKey === suggestionColumnKey
+                            ? { ...current, activeIndex: Math.max(current.activeIndex - 1, 0) }
+                            : current);
+                        }
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          void saveFreeItemPositionDraft(column.item, event.currentTarget);
+                          if (freePositionOnly && suggestionState?.columnKey === suggestionColumnKey && suggestionMatches.length > 0) {
+                            void selectPositionSuggestion(
+                              suggestionColumnKey,
+                              suggestionMatches[suggestionState.activeIndex] ?? suggestionMatches[0],
+                              column.item,
+                            );
+                          } else {
+                            void saveFreeItemPositionDraft(column.item, event.currentTarget);
+                          }
                         }
                         if (event.key === "Escape") {
                           event.currentTarget.value = visiblePosition;
+                          setSuggestionState(null);
                         }
                       }}
                     />
                   );
                   return (
-              <th className="measurement-matrix-position-heading" key={column.key} scope="col">
+              <th
+                className="measurement-matrix-position-heading"
+                data-position-suggestion-column={suggestionColumnKey}
+                key={column.key}
+                scope="col"
+              >
                 {freePositionOnly ? (
                   <div className="measurement-free-position-head">
                     {positionInput}
@@ -4650,6 +4832,27 @@ function MeasurementReviewTable({
                     >×</button>
                   </div>
                 ) : positionInput}
+                {isSuggestionOpen ? (
+                  <div className="measurement-position-suggestions" role="listbox">
+                    {suggestionMatches.map((suggestion, index) => (
+                      <button
+                        className={index === suggestionState.activeIndex ? "is-active" : ""}
+                        key={suggestion.id}
+                        type="button"
+                        role="option"
+                        aria-selected={index === suggestionState.activeIndex}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          void selectPositionSuggestion(suggestionColumnKey, suggestion, column.item);
+                        }}
+                      >
+                        <strong>{suggestion.position}</strong>
+                        <span>{suggestion.description}</span>
+                        <small>{normalizeMeasurementUnitDisplay(suggestion.unit)}</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </th>
                   );
                 }
@@ -4667,7 +4870,12 @@ function MeasurementReviewTable({
               const draft = getManualColumnDraft(column.key);
               const isSuggestionOpen = suggestionState?.columnKey === column.key && suggestionMatches.length > 0;
               return (
-              <th className="measurement-matrix-position-heading measurement-matrix-placeholder-heading measurement-matrix-office-extra-heading" key={column.key} scope="col">
+              <th
+                className="measurement-matrix-position-heading measurement-matrix-placeholder-heading measurement-matrix-office-extra-heading"
+                data-position-suggestion-column={column.key}
+                key={column.key}
+                scope="col"
+              >
                 <input
                   className="measurement-placeholder-header-input"
                   value={draft.position}
@@ -4685,6 +4893,7 @@ function MeasurementReviewTable({
                       setSuggestionState({ columnKey: column.key, query: event.currentTarget.value, activeIndex: 0 });
                     }
                   }}
+                  onBlur={(event) => void createFreeItemFromHeaderDraft(column.key, { position: event.currentTarget.value })}
                   onKeyDown={(event) => {
                     if (event.key === "ArrowDown" && suggestionMatches.length > 0) {
                       event.preventDefault();
@@ -4700,7 +4909,7 @@ function MeasurementReviewTable({
                     }
                     if (event.key === "Enter" && suggestionState?.columnKey === column.key && suggestionMatches.length > 0) {
                       event.preventDefault();
-                      selectPositionSuggestion(column.key, suggestionMatches[suggestionState.activeIndex] ?? suggestionMatches[0]);
+                      void selectPositionSuggestion(column.key, suggestionMatches[suggestionState.activeIndex] ?? suggestionMatches[0]);
                     }
                     if (event.key === "Escape") {
                       setSuggestionState(null);
@@ -4718,10 +4927,10 @@ function MeasurementReviewTable({
                         aria-selected={index === suggestionState.activeIndex}
                         onMouseDown={(event) => {
                           event.preventDefault();
-                          selectPositionSuggestion(column.key, item);
+                          void selectPositionSuggestion(column.key, item);
                         }}
                       >
-                        <strong>{getVisibleMeasurementPosition(item)}</strong>
+                        <strong>{item.position}</strong>
                         <span>{item.description}</span>
                         <small>{normalizeMeasurementUnitDisplay(item.unit)}</small>
                       </button>
@@ -4770,6 +4979,7 @@ function MeasurementReviewTable({
                   placeholder="Beschreibung"
                   rows={2}
                   onChange={(event) => updateManualColumnDraft(column.key, { description: event.currentTarget.value })}
+                  onBlur={(event) => void createFreeItemFromHeaderDraft(column.key, { description: event.currentTarget.value })}
                 />
               </th>
               );
@@ -4811,7 +5021,10 @@ function MeasurementReviewTable({
                   aria-label="Büro-Zusatzposition Einheit"
                   placeholder="Einheit"
                   onChange={(event) => updateManualColumnDraft(column.key, { unit: event.currentTarget.value })}
-                  onBlur={(event) => updateManualColumnDraft(column.key, { unit: normalizeMeasurementUnitDisplay(event.currentTarget.value) })}
+                  onBlur={(event) => {
+                    updateManualColumnDraft(column.key, { unit: normalizeMeasurementUnitDisplay(event.currentTarget.value) });
+                    void createFreeItemFromHeaderDraft(column.key, { unit: event.currentTarget.value });
+                  }}
                 />
               </th>
               );
