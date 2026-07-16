@@ -3898,7 +3898,7 @@ function MeasurementReviewPanel({
               </button>
             ) : (
               <>
-                {!isReviewed && !isCustomerSigned ? (
+                {!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned ? (
                   <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
                     Prüfung abschließen
                   </button>
