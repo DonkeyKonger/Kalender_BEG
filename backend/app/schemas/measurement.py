@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import MeasurementBatchOrigin
+from app.models.enums import MeasurementBatchOrigin, MeasurementPositionMode
 
 
 class MeasurementBaseRead(BaseModel):
@@ -37,7 +37,7 @@ class MeasurementItemRead(BaseModel):
 
     id: int
     site_id: int
-    measurement_base_id: int
+    measurement_base_id: int | None
     source_file_name: str | None
     source_project_number: str | None
     source_invoice_number: str | None
@@ -61,8 +61,10 @@ class MeasurementItemRead(BaseModel):
 
 class MeasurementItemUpdate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=2000)
+    unit: str | None = Field(default=None, max_length=40)
 
-    @field_validator("position", mode="before")
+    @field_validator("position", "description", "unit", mode="before")
     @classmethod
     def strip_position(cls, value: object) -> object:
         if isinstance(value, str):
@@ -72,8 +74,8 @@ class MeasurementItemUpdate(BaseModel):
 
 class MobileMeasurementFreeItemCreate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
-    description: str = Field(..., min_length=1, max_length=2000)
-    unit: str = Field(..., min_length=1, max_length=40)
+    description: str = Field(default="", max_length=2000)
+    unit: str = Field(default="st", max_length=40)
     quantity: Decimal = Field(default=Decimal("0"), ge=0)
     area_or_comment: str | None = Field(default=None, max_length=1000)
 
@@ -163,7 +165,6 @@ class OfficeMeasurementBatchCreate(BaseModel):
     area_location: str = Field(..., min_length=1, max_length=260)
     measurement_date: date
     assigned_employee_id: int | None = Field(default=None, gt=0)
-    offer_id: int | None = Field(default=None, gt=0)
     request_id: str = Field(..., min_length=8, max_length=64)
     allow_duplicate: bool = False
 
@@ -185,15 +186,16 @@ class MeasurementWorkerOptionRead(BaseModel):
 class MobileMeasurementBatchRead(BaseModel):
     id: int
     site_id: int
-    measurement_base_id: int
+    measurement_base_id: int | None
     measurement_base_name: str | None
-    offer_id: int
+    offer_id: int | None
     offer_name: str | None
     is_current_offer: bool
     number: int
     title: str
     status: str
     origin: MeasurementBatchOrigin = MeasurementBatchOrigin.LEGACY
+    position_mode: MeasurementPositionMode = MeasurementPositionMode.OFFER_BASED
     creator_role_at_creation: str | None = None
     area_location: str | None = None
     measurement_date: date | None = None

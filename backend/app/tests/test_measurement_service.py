@@ -10,6 +10,7 @@ from app.models import Base
 from app.models.audit_log import AuditLog
 from app.models.enums import (
     MeasurementBatchOrigin,
+    MeasurementPositionMode,
     PersonEmploymentStatus,
     PersonType,
     SiteLocationStatus,
@@ -26,7 +27,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
-from app.schemas.measurement import OfficeMeasurementBatchCreate
+from app.schemas.measurement import MobileMeasurementFreeItemCreate, OfficeMeasurementBatchCreate
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -2101,6 +2102,9 @@ def test_office_measurement_batch_uses_existing_model_and_is_idempotent():
     assert retried.id == created.id
     assert created.status == "draft"
     assert created.origin == MeasurementBatchOrigin.OFFICE
+    assert created.position_mode == MeasurementPositionMode.BLANK
+    assert created.measurement_base_id is None
+    assert created.offer_id is None
     assert created.creator_role_at_creation == UserRole.OFFICE.value
     assert created.area_location == "1. Obergeschoss"
     assert created.measurement_date == date(2026, 7, 16)
@@ -2109,7 +2113,8 @@ def test_office_measurement_batch_uses_existing_model_and_is_idempotent():
     assert created.submitted_by_user_id is None
     assert created.submitted_at is None
     assert created.has_original_worker_submission is False
-    assert [row.area_or_comment for row in created.area_rows] == ["1. Obergeschoss"]
+    assert created.area_rows == []
+    assert service.list_site_batch_items(site_id=site.id, batch_id=created.id) == []
     assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 1
 
 
@@ -2154,7 +2159,7 @@ def test_office_measurement_batch_requires_explicit_duplicate_confirmation():
     assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 2
 
 
-def test_office_measurement_batch_requires_offer_choice_when_several_are_valid():
+def test_office_measurement_batch_stays_blank_when_several_offers_exist():
     db = db_session()
     site = create_site(db)
     first_base = create_measurement_base(db, site)
@@ -2179,17 +2184,15 @@ def test_office_measurement_batch_requires_offer_choice_when_several_are_valid()
         request_id="office-measurement-request-3",
     )
 
-    with pytest.raises(HTTPException) as error:
-        service.create_office_batch(site_id=site.id, current_user=office_user, payload=payload)
-    assert error.value.status_code == 409
-
     created = service.create_office_batch(
         site_id=site.id,
         current_user=office_user,
-        payload=payload.model_copy(update={"offer_id": second_base.id}),
+        payload=payload,
     )
-    assert created.offer_id == second_base.id
+    assert created.position_mode == MeasurementPositionMode.BLANK
+    assert created.offer_id is None
     assert created.offer_id != first_base.id
+    assert created.offer_id != second_base.id
     assert created.is_current_offer is False
 
 
@@ -2303,10 +2306,19 @@ def test_office_measurement_draft_is_editable_but_not_visible_in_mobile_batches(
         ),
     )
 
+    free_item = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=office_batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            description="Leistung",
+            unit="st",
+        ),
+    )
     created_entry = service.create_site_entry(
         site_id=site.id,
         batch_id=office_batch.id,
-        measurement_item_id=item.id,
+        measurement_item_id=free_item.id,
         current_user=office_user,
         payload=MeasurementEntryCreate(area_or_comment="Flur West", quantity=Decimal("2")),
     )
@@ -2353,3 +2365,133 @@ def test_office_measurement_has_no_original_worker_pdf():
 
     assert error.value.status_code == 409
     assert error.value.detail == "Kein originales Monteur-Aufmaß vorhanden."
+
+
+def test_blank_office_measurement_manages_only_its_free_positions():
+    from app.schemas.measurement import MeasurementEntryCreate, MeasurementItemUpdate
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    offer_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.1",
+        description="Angebotsposition",
+        unit="st",
+        sort_order=10,
+    )
+    office_user = User(
+        username="office-blank-items",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([offer_item, office_user])
+    db.commit()
+    service = MeasurementService(db)
+    batch = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=OfficeMeasurementBatchCreate(
+            area_location="Technikraum",
+            measurement_date=date(2026, 7, 16),
+            request_id="office-blank-position-request",
+        ),
+    )
+
+    assert service.list_site_batch_items(site_id=site.id, batch_id=batch.id) == []
+    free_item = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(description="", unit="st"),
+    )
+    assert free_item.measurement_base_id is None
+    assert free_item.position == "FREI-1"
+
+    updated = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(
+            position="A-1",
+            description="Freie Leistung",
+            unit="m",
+        ),
+    )
+    assert updated.position == "A-1"
+    assert updated.description == "Freie Leistung"
+    assert updated.unit == "m"
+    assert [item.id for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id)] == [free_item.id]
+
+    service.create_site_entry(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        current_user=office_user,
+        payload=MeasurementEntryCreate(area_or_comment="Technikraum", quantity=Decimal("2.5")),
+    )
+    reviewed = service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    assert reviewed.status == "reviewed"
+    stored_batch = service._get_batch_for_site(batch.id, site.id)
+    positions, areas, _cells, _totals = MeasurementPdfService(db)._build_matrix(
+        stored_batch,
+        mode="checked",
+    )
+    assert [position.description for position in positions] == ["Freie Leistung"]
+    assert [position.position for position in positions] == ["A-1"]
+    assert [area.label for area in areas] == ["Technikraum"]
+    pdf_content, filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=site.id,
+        batch_id=batch.id,
+        mode="checked",
+    )
+    assert pdf_content.startswith(b"%PDF")
+    assert filename.endswith(".pdf")
+
+
+def test_blank_office_measurement_blocks_incomplete_completion_and_deletes_empty_position():
+    db = db_session()
+    site = create_site(db)
+    office_user = User(
+        username="office-blank-validation",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add(office_user)
+    db.commit()
+    service = MeasurementService(db)
+    batch = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=OfficeMeasurementBatchCreate(
+            area_location="Flur",
+            measurement_date=date(2026, 7, 16),
+            request_id="office-blank-validation-request",
+        ),
+    )
+
+    with pytest.raises(HTTPException) as empty_error:
+        service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    assert empty_error.value.status_code == 400
+    assert "mindestens eine Position" in empty_error.value.detail
+
+    free_item = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(description="", unit="st"),
+    )
+    with pytest.raises(HTTPException) as incomplete_error:
+        service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    assert "Beschreibung" in incomplete_error.value.detail
+
+    service.delete_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+    )
+    assert service.list_site_batch_items(site_id=site.id, batch_id=batch.id) == []

@@ -14,6 +14,7 @@ from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.enums import (
     MeasurementBatchOrigin,
+    MeasurementPositionMode,
     PersonEmploymentStatus,
     PersonType,
     UserRole,
@@ -287,6 +288,7 @@ class MeasurementService:
             title=f"Aufmaß {next_number}",
             status="draft",
             origin=MeasurementBatchOrigin.MONTEUR.value,
+            position_mode=MeasurementPositionMode.OFFER_BASED.value,
             creator_role_at_creation=current_user.role.value,
             created_by_user_id=current_user.id,
         )
@@ -354,10 +356,6 @@ class MeasurementService:
         if not area_location:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich/Ort ist erforderlich.")
 
-        measurement_base = self._resolve_office_measurement_base(
-            site_id=site_id,
-            offer_id=payload.offer_id,
-        )
         assigned_employee = None
         if payload.assigned_employee_id is not None:
             assigned_employee = self.db.scalar(
@@ -405,11 +403,12 @@ class MeasurementService:
         ) + 1
         batch = SiteMeasurementBatch(
             site_id=site_id,
-            measurement_base_id=measurement_base.id,
+            measurement_base_id=None,
             number=next_number,
             title=f"Aufmaß {next_number}",
             status="draft",
             origin=MeasurementBatchOrigin.OFFICE.value,
+            position_mode=MeasurementPositionMode.BLANK.value,
             creator_role_at_creation=current_user.role.value,
             area_location=area_location,
             measurement_date=payload.measurement_date,
@@ -418,16 +417,6 @@ class MeasurementService:
             created_by_user_id=current_user.id,
         )
         self.db.add(batch)
-        self.db.flush()
-        self.db.add(
-            SiteMeasurementAreaRow(
-                measurement_batch_id=batch.id,
-                site_id=site_id,
-                area_or_comment=area_location,
-                sort_order=0,
-                created_by_user_id=current_user.id,
-            )
-        )
         self.db.commit()
         return self._build_mobile_batch(
             self._get_batch_for_site(batch.id, site_id),
@@ -531,13 +520,25 @@ class MeasurementService:
             )
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
-        if (
-            item is None
-            or item.site_id != site_id
-            or item.measurement_base_id != batch.measurement_base_id
-            or item.is_hidden
-        ):
+        item_belongs_to_batch = (
+            item is not None
+            and item.site_id == site_id
+            and not item.is_hidden
+            and (
+                (
+                    batch.position_mode == MeasurementPositionMode.BLANK.value
+                    and item.measurement_batch_id == batch.id
+                    and item.is_free_position
+                )
+                or (
+                    batch.position_mode != MeasurementPositionMode.BLANK.value
+                    and item.measurement_base_id == batch.measurement_base_id
+                )
+            )
+        )
+        if not item_belongs_to_batch:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
+        assert item is not None
 
         comment = payload.area_or_comment.strip()
         if not comment:
@@ -580,19 +581,26 @@ class MeasurementService:
 
         description = " ".join(payload.description.split())
         unit = payload.unit.strip()
-        if not description:
+        is_blank_batch = batch.position_mode == MeasurementPositionMode.BLANK.value
+        if not description and not is_blank_batch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
-        if not unit:
+        if not unit and not is_blank_batch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
+        if is_blank_batch and unit not in {"st", "m", "psch", "std"}:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Einheit für eine freie Position.")
         if payload.quantity < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
 
         position = payload.position.strip() if payload.position else ""
         if position:
+            position_scope = [SiteMeasurementItem.site_id == batch.site_id]
+            if is_blank_batch:
+                position_scope.append(SiteMeasurementItem.measurement_batch_id == batch.id)
+            else:
+                position_scope.append(SiteMeasurementItem.measurement_base_id == batch.measurement_base_id)
             existing_position = self.db.scalar(
                 select(SiteMeasurementItem.id).where(
-                    SiteMeasurementItem.site_id == batch.site_id,
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    *position_scope,
                     func.lower(SiteMeasurementItem.position) == position.lower(),
                 )
             )
@@ -604,26 +612,25 @@ class MeasurementService:
         else:
             position = self._next_free_measurement_position(batch)
 
+        sort_scope = [SiteMeasurementItem.site_id == batch.site_id]
+        if is_blank_batch:
+            sort_scope.append(SiteMeasurementItem.measurement_batch_id == batch.id)
+        else:
+            sort_scope.append(SiteMeasurementItem.measurement_base_id == batch.measurement_base_id)
         next_sort_order = (
-            self.db.scalar(
-                select(func.max(SiteMeasurementItem.sort_order)).where(
-                    SiteMeasurementItem.site_id == batch.site_id,
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                )
-            )
-            or 0
+            self.db.scalar(select(func.max(SiteMeasurementItem.sort_order)).where(*sort_scope)) or 0
         ) + 10
 
         item = SiteMeasurementItem(
             site_id=batch.site_id,
-            measurement_base_id=batch.measurement_base_id,
+            measurement_base_id=None if is_blank_batch else batch.measurement_base_id,
             measurement_batch_id=batch.id,
             source_file_name=None,
             source_project_number=None,
             source_invoice_number=None,
             source_customer_name=None,
-            source_section_key="office_extra",
-            source_section_title="Büro-Zusatzposition",
+            source_section_key="blank" if is_blank_batch else "office_extra",
+            source_section_title="Blanko-Aufmaß" if is_blank_batch else "Büro-Zusatzposition",
             position=position,
             description=description,
             list_quantity=None,
@@ -668,7 +675,6 @@ class MeasurementService:
         if (
             item is None
             or item.site_id != site_id
-            or item.measurement_base_id != batch.measurement_base_id
             or item.measurement_batch_id != batch.id
             or item.is_hidden
             or not item.is_free_position
@@ -678,11 +684,19 @@ class MeasurementService:
         if payload.position is not None:
             position = payload.position.strip()
             if position:
+                position_scope = [
+                    SiteMeasurementItem.site_id == batch.site_id,
+                    SiteMeasurementItem.id != item.id,
+                ]
+                if batch.position_mode == MeasurementPositionMode.BLANK.value:
+                    position_scope.append(SiteMeasurementItem.measurement_batch_id == batch.id)
+                else:
+                    position_scope.append(
+                        SiteMeasurementItem.measurement_base_id == batch.measurement_base_id
+                    )
                 existing_position = self.db.scalar(
                     select(SiteMeasurementItem.id).where(
-                        SiteMeasurementItem.site_id == batch.site_id,
-                        SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                        SiteMeasurementItem.id != item.id,
+                        *position_scope,
                         func.lower(SiteMeasurementItem.position) == position.lower(),
                     )
                 )
@@ -695,9 +709,53 @@ class MeasurementService:
             elif not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
+        if payload.description is not None:
+            item.description = " ".join(payload.description.split())
+        if payload.unit is not None:
+            unit = payload.unit.strip()
+            if (
+                batch.position_mode == MeasurementPositionMode.BLANK.value
+                and unit not in {"st", "m", "psch", "std"}
+            ):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Einheit für eine freie Position.")
+            item.unit = unit
+
         self.db.commit()
         self.db.refresh(item)
         return self._build_mobile_item(item, batch.id)
+
+    def delete_site_free_item(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        measurement_item_id: int,
+    ) -> None:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id)
+        item = self.db.get(SiteMeasurementItem, measurement_item_id)
+        if (
+            batch.position_mode != MeasurementPositionMode.BLANK.value
+            or batch.status in {"billed", "approved", "closed", "completed", "finalized"}
+            or item is None
+            or item.site_id != site_id
+            or item.measurement_batch_id != batch.id
+            or not item.is_free_position
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
+        has_entries = self.db.scalar(
+            select(func.count(SiteMeasurementEntry.id)).where(
+                SiteMeasurementEntry.measurement_item_id == item.id,
+                SiteMeasurementEntry.measurement_batch_id == batch.id,
+            )
+        )
+        if has_entries:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Eine Position mit Mengen kann nicht entfernt werden.",
+            )
+        self.db.delete(item)
+        self.db.commit()
 
     def hide_item(self, *, site_id: int, measurement_item_id: int) -> MeasurementItemRead:
         self._get_site(site_id)
@@ -1221,6 +1279,28 @@ class MeasurementService:
     ) -> list[MobileMeasurementItemRead]:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
+        item_filters = [
+            SiteMeasurementItem.site_id == batch.site_id,
+            SiteMeasurementItem.is_hidden.is_(False),
+        ]
+        if batch.position_mode == MeasurementPositionMode.BLANK.value:
+            item_filters.extend(
+                [
+                    SiteMeasurementItem.measurement_batch_id == batch.id,
+                    SiteMeasurementItem.is_free_position.is_(True),
+                ]
+            )
+        else:
+            item_filters.extend(
+                [
+                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    or_(
+                        SiteMeasurementItem.is_free_position.is_(False),
+                        SiteMeasurementItem.measurement_batch_id.is_(None),
+                        SiteMeasurementItem.measurement_batch_id == batch.id,
+                    ),
+                ]
+            )
         items = list(
             self.db.scalars(
                 select(SiteMeasurementItem)
@@ -1234,16 +1314,7 @@ class MeasurementService:
                         include_aliases=True,
                     ),
                 )
-                .where(
-                    SiteMeasurementItem.site_id == batch.site_id,
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                    SiteMeasurementItem.is_hidden.is_(False),
-                    or_(
-                        SiteMeasurementItem.is_free_position.is_(False),
-                        SiteMeasurementItem.measurement_batch_id.is_(None),
-                        SiteMeasurementItem.measurement_batch_id == batch.id,
-                    ),
-                )
+                .where(*item_filters)
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
         )
@@ -1597,6 +1668,8 @@ class MeasurementService:
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
+        if normalized_status == "billed":
+            self._validate_blank_batch_for_completion(batch)
 
         batch.status = normalized_status
         for entry in _current_measurement_entries(list(batch.entries)):
@@ -1622,6 +1695,7 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Unterschriebene Aufmaße bleiben bis zum Abschluss in der Prüfung.",
             )
+        self._validate_blank_batch_for_completion(batch)
 
         previous_status = batch.status
         notification_user_id = (
@@ -2125,40 +2199,6 @@ class MeasurementService:
         self.db.flush()
         return base
 
-    def _resolve_office_measurement_base(
-        self,
-        *,
-        site_id: int,
-        offer_id: int | None,
-    ) -> SiteMeasurementBase:
-        if offer_id is not None:
-            base = self._get_measurement_base_for_site(offer_id, site_id)
-            if base.status in {"closed", "archived"}:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    "Geschlossene oder archivierte Angebote können nicht als Grundlage verwendet werden.",
-                )
-            return base
-
-        candidates = list(
-            self.db.scalars(
-                select(SiteMeasurementBase)
-                .where(
-                    SiteMeasurementBase.site_id == site_id,
-                    SiteMeasurementBase.status.notin_(("closed", "archived")),
-                )
-                .order_by(SiteMeasurementBase.created_at.desc(), SiteMeasurementBase.id.desc())
-            ).all()
-        )
-        if len(candidates) == 1:
-            return candidates[0]
-        if len(candidates) > 1:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Bitte eine eindeutige Angebotsgrundlage auswählen.",
-            )
-        return self._get_or_create_default_measurement_base(site_id)
-
     def _get_mobile_measurement_base_for_site(self, site_id: int) -> SiteMeasurementBase:
         base = self.db.scalar(
             select(SiteMeasurementBase)
@@ -2333,13 +2373,16 @@ class MeasurementService:
             has_measurement_content=bool(visible_entries) or bool(batch.area_rows),
             can_sign_immediately=_can_sign_measurements_immediately(current_user),
         )
-        is_current_offer = (
-            batch.measurement_base_id == active_base_id
-            if active_base_id is not None
-            else bool(
-                batch.measurement_base
-                and batch.measurement_base.status == "active"
-                and batch.measurement_base.released_to_mobile
+        is_current_offer = bool(
+            batch.position_mode == MeasurementPositionMode.OFFER_BASED.value
+            and (
+                batch.measurement_base_id == active_base_id
+                if active_base_id is not None
+                else bool(
+                    batch.measurement_base
+                    and batch.measurement_base.status == "active"
+                    and batch.measurement_base.released_to_mobile
+                )
             )
         )
         return MobileMeasurementBatchRead(
@@ -2354,6 +2397,7 @@ class MeasurementService:
             title=batch.title,
             status=batch.status,
             origin=batch.origin,
+            position_mode=batch.position_mode,
             creator_role_at_creation=batch.creator_role_at_creation,
             area_location=batch.area_location,
             measurement_date=batch.measurement_date,
@@ -2561,13 +2605,48 @@ class MeasurementService:
     def _batch_has_measurement_content(batch: SiteMeasurementBatch) -> bool:
         return bool(_current_measurement_entries(list(batch.entries))) or bool(batch.area_rows)
 
+    def _validate_blank_batch_for_completion(self, batch: SiteMeasurementBatch) -> None:
+        if batch.position_mode != MeasurementPositionMode.BLANK.value:
+            return
+        items = [
+            item
+            for item in batch.free_items
+            if item.is_free_position and not item.is_hidden
+        ]
+        if not items:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Das Blanko-Aufmaß benötigt mindestens eine Position.",
+            )
+        if any(not item.description.strip() for item in items):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Bitte für jede Position eine Beschreibung eintragen.",
+            )
+        if any((item.unit or "").strip() not in {"st", "m", "psch", "std"} for item in items):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Bitte für jede Position eine gültige Einheit auswählen.",
+            )
+        entries = _current_measurement_entries(list(batch.entries))
+        if not entries or not any(entry.area_or_comment.strip() and entry.quantity > 0 for entry in entries):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Bitte mindestens einen Bereich/Ort und eine Menge eintragen.",
+            )
+
     def _next_free_measurement_position(
         self, batch: SiteMeasurementBatch, *, exclude_item_id: int | None = None
     ) -> str:
         statement = select(SiteMeasurementItem.position).where(
             SiteMeasurementItem.site_id == batch.site_id,
-            SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
         )
+        if batch.position_mode == MeasurementPositionMode.BLANK.value:
+            statement = statement.where(SiteMeasurementItem.measurement_batch_id == batch.id)
+        else:
+            statement = statement.where(
+                SiteMeasurementItem.measurement_base_id == batch.measurement_base_id
+            )
         if exclude_item_id is not None:
             statement = statement.where(SiteMeasurementItem.id != exclude_item_id)
         existing_positions = set(self.db.scalars(statement).all())

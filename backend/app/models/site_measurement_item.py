@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, St
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import MeasurementBatchOrigin
+from app.models.enums import MeasurementBatchOrigin, MeasurementPositionMode
 
 
 class SiteMeasurementBase(TimestampMixin, Base):
@@ -41,8 +41,8 @@ class SiteMeasurementItem(TimestampMixin, Base):
     site_id: Mapped[int] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    measurement_base_id: Mapped[int] = mapped_column(
-        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=False, index=True
+    measurement_base_id: Mapped[int | None] = mapped_column(
+        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=True, index=True
     )
     measurement_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), index=True
@@ -83,14 +83,17 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     site_id: Mapped[int] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    measurement_base_id: Mapped[int] = mapped_column(
-        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=False, index=True
+    measurement_base_id: Mapped[int | None] = mapped_column(
+        ForeignKey("site_measurement_bases.id", ondelete="CASCADE"), nullable=True, index=True
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
     origin: Mapped[str] = mapped_column(
         String(20), nullable=False, default=MeasurementBatchOrigin.LEGACY.value, index=True
+    )
+    position_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=MeasurementPositionMode.OFFER_BASED.value, index=True
     )
     creator_role_at_creation: Mapped[str | None] = mapped_column(String(40))
     area_location: Mapped[str | None] = mapped_column(String(260))

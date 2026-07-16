@@ -21,6 +21,19 @@ test("measurement review exposes the office dialog and reuses the controlled pic
   assert.match(pageSource, /<DashboardNotePicker/);
   assert.match(pageSource, /setCreateMeasurementDate\(toLocalDateKey\(new Date\(\)\)\)/);
   assert.match(pageSource, /await selectMeasurementBatch\(created\)/);
+  assert.doesNotMatch(pageSource, /Angebotsgrundlage auswählen/);
+  assert.match(pageSource, /Das Aufmaß wird als Blanko-Aufmaß ohne Angebotspositionen angelegt\./);
+});
+
+test("blank office measurements render only real positions and compact controls", () => {
+  assert.match(pageSource, /selectedBatch\.position_mode === "BLANK"/);
+  assert.match(pageSource, /Noch keine Positionen in diesem Blanko-Aufmaß\./);
+  assert.match(pageSource, /Position hinzufügen/);
+  assert.match(pageSource, /Bereich \/ Ort hinzufügen/);
+  assert.match(pageSource, /const displayColumnCount = isBlankMode/);
+  assert.match(apiSource, /deleteSiteMeasurementFreeItem/);
+  assert.match(styles, /\.measurement-blank-empty-state/);
+  assert.match(styles, /\.measurement-review-table-wrap\.is-blank-mode/);
 });
 
 test("office origin remains visible and never offers a fake worker original", () => {

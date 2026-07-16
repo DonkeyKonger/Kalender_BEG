@@ -209,7 +209,7 @@ export type MeasurementNumericValue = string | number | null;
 export type MeasurementItem = {
   id: number;
   site_id: number;
-  measurement_base_id: number;
+  measurement_base_id: number | null;
   source_file_name: string | null;
   source_project_number: string | null;
   source_invoice_number: string | null;
@@ -233,6 +233,8 @@ export type MeasurementItem = {
 
 export type MeasurementItemUpdatePayload = {
   position?: string | null;
+  description?: string | null;
+  unit?: string | null;
 };
 
 
@@ -283,15 +285,16 @@ export type MobileMeasurementFreeItemPayload = {
 export type MobileMeasurementBatch = {
   id: number;
   site_id: number;
-  measurement_base_id: number;
+  measurement_base_id: number | null;
   measurement_base_name: string | null;
-  offer_id: number;
+  offer_id: number | null;
   offer_name: string | null;
   is_current_offer: boolean;
   number: number;
   title: string;
   status: "draft" | "submitted" | "reviewed" | "customer_signed" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
   origin: "MONTEUR" | "OFFICE" | "LEGACY";
+  position_mode: "OFFER_BASED" | "BLANK";
   creator_role_at_creation: string | null;
   area_location: string | null;
   measurement_date: string | null;
@@ -334,7 +337,6 @@ export type OfficeMeasurementBatchPayload = {
   area_location: string;
   measurement_date: string;
   assigned_employee_id: number | null;
-  offer_id: number | null;
   request_id: string;
   allow_duplicate: boolean;
 };

@@ -89,7 +89,7 @@ MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-photo-cache-v1"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-position-mode-v2"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -364,6 +364,7 @@ class MeasurementPdfService:
                 "title": batch.title,
                 "status": batch.status,
                 "origin": batch.origin,
+                "position_mode": batch.position_mode,
                 "creator_role_at_creation": batch.creator_role_at_creation,
                 "area_location": batch.area_location,
                 "measurement_date": batch.measurement_date,

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_current_user
 from app.api.routes import sites
 from app.core.database import get_db
-from app.models.enums import MeasurementBatchOrigin, UserRole
+from app.models.enums import MeasurementBatchOrigin, MeasurementPositionMode, UserRole
 from app.schemas.measurement import (
     MobileMeasurementBatchAvailableActionsRead,
     MobileMeasurementBatchBlockReasonsRead,
@@ -32,15 +32,16 @@ def created_batch() -> MobileMeasurementBatchRead:
     return MobileMeasurementBatchRead(
         id=12,
         site_id=8,
-        measurement_base_id=4,
-        measurement_base_name="Hauptangebot",
-        offer_id=4,
-        offer_name="Hauptangebot",
-        is_current_offer=True,
+        measurement_base_id=None,
+        measurement_base_name=None,
+        offer_id=None,
+        offer_name=None,
+        is_current_offer=False,
         number=2,
         title="Aufmaß 2",
         status="draft",
         origin=MeasurementBatchOrigin.OFFICE,
+        position_mode=MeasurementPositionMode.BLANK,
         creator_role_at_creation=UserRole.OFFICE.value,
         area_location="1. Obergeschoss",
         measurement_date=date(2026, 7, 16),
@@ -91,7 +92,6 @@ PAYLOAD = {
     "area_location": "1. Obergeschoss",
     "measurement_date": "2026-07-16",
     "assigned_employee_id": None,
-    "offer_id": 4,
     "request_id": "route-measurement-request",
 }
 

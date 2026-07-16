@@ -18,6 +18,11 @@ class MeasurementBatchOrigin(StrEnum):
     LEGACY = "LEGACY"
 
 
+class MeasurementPositionMode(StrEnum):
+    OFFER_BASED = "OFFER_BASED"
+    BLANK = "BLANK"
+
+
 class PersonType(StrEnum):
     INTERNAL = "internal"
     EXTERNAL = "external"
