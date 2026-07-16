@@ -89,7 +89,8 @@ MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-position-mode-v2"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-office-header-v3"
+OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
 
@@ -716,9 +717,11 @@ class MeasurementPdfService:
     ) -> list[bytes]:
         site = batch.site
         assert site is not None
-        commands: list[bytes] = [b"0.75 w"]
-        title = _format_batch_number(site.site_number, batch.number)
         is_office_batch = batch.origin == MeasurementBatchOrigin.OFFICE.value
+        commands: list[bytes] = [b"0.75 w"]
+        if is_office_batch:
+            commands.insert(0, f"1 0 0 1 0 {OFFICE_PDF_CONTENT_Y_OFFSET} cm".encode("ascii"))
+        title = _format_batch_number(site.site_number, batch.number)
         submitted_by = (
             batch.assigned_employee.display_name
             if is_office_batch and batch.assigned_employee is not None
@@ -742,14 +745,14 @@ class MeasurementPdfService:
             sheet_label=_format_sheet_label(title, page_number, page_count),
             logo=logo,
         )
-        _header_meta_row(
-            commands,
-            address=project_address,
-            submitted_by=submitted_by,
-            submitted_at=submitted_at or "-",
-            status_label=_status_label(batch.status),
-            origin_note="Im Büro angelegt" if is_office_batch else None,
-        )
+        if not is_office_batch:
+            _header_meta_row(
+                commands,
+                address=project_address,
+                submitted_by=submitted_by,
+                submitted_at=submitted_at or "-",
+                status_label=_status_label(batch.status),
+            )
 
         _draw_measurement_matrix(
             commands=commands,
@@ -849,23 +852,12 @@ def _header_meta_row(
     submitted_by: str,
     submitted_at: str,
     status_label: str,
-    origin_note: str | None = None,
 ) -> None:
     y = 574.4
     _text_fitted(commands, TABLE_LEFT, y, f"Adresse: {address}", 6.0, max_width=210)
     _text_fitted(commands, 275, y, f"Monteur: {submitted_by}", 6.0, max_width=140)
     _text_fitted(commands, 430, y, f"Eingereicht: {submitted_at}", 6.0, max_width=140)
     _text_fitted(commands, 585, y, f"Status: {status_label}", 6.0, max_width=62)
-    if origin_note:
-        _text_fitted(
-            commands,
-            430,
-            y - 10,
-            f"Herkunft: {origin_note}",
-            6.0,
-            max_width=217,
-            font="F2",
-        )
 
 
 def _draw_measurement_matrix(

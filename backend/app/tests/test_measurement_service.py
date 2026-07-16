@@ -1817,6 +1817,11 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert filename == "Aufmass_geprueft_8007.01.pdf"
     assert b"Kunde Beispiel" in pdf_content
     assert b"Klinikweg 8" in pdf_content
+    assert b"Adresse:" in pdf_content
+    assert b"Monteur:" in pdf_content
+    assert b"Eingereicht:" in pdf_content
+    assert b"Status:" in pdf_content
+    assert b"1 0 0 1 0 32 cm" not in pdf_content
     assert b"0.05 0.12 0.24 RG" in pdf_content
 
     stored_batch.status = "billed"
@@ -2377,6 +2382,10 @@ def test_office_measurement_has_no_original_worker_pdf():
 
 
 def test_blank_office_measurement_manages_only_its_free_positions():
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
     from app.schemas.measurement import MeasurementEntryCreate, MeasurementItemUpdate
     from app.services.measurement_pdf_service import MeasurementPdfService
 
@@ -2483,6 +2492,19 @@ def test_blank_office_measurement_manages_only_its_free_positions():
     )
     assert pdf_content.startswith(b"%PDF")
     assert filename.endswith(".pdf")
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_content)).pages)
+    assert "Aufmaß" in pdf_text
+    assert "Kunde:" in pdf_text
+    assert "Komissions-Nr.:" in pdf_text
+    assert "Projekt/Bauvorhaben:" in pdf_text
+    assert "Blatt-Nr.:" in pdf_text
+    assert "Datum:" in pdf_text
+    assert "Adresse:" not in pdf_text
+    assert "Monteur:" not in pdf_text
+    assert "Eingereicht:" not in pdf_text
+    assert "Herkunft:" not in pdf_text
+    assert "Status:" not in pdf_text
+    assert b"1 0 0 1 0 32 cm" in pdf_content
 
     service.delete_site_free_item(
         site_id=site.id,
