@@ -81,6 +81,14 @@ from app.services.time_entry_service import TimeEntryService
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
 MEASUREMENT_ARCHIVE_FOLDER_KEY = "aufmass"
 MEASUREMENT_ARCHIVE_TIMEZONE = ZoneInfo("Europe/Berlin")
+MEASUREMENT_COMPLETED_BATCH_STATUSES = frozenset({
+    "billed",
+    "approved",
+    "closed",
+    "completed",
+    "finalized",
+    "abgeschlossen",
+})
 MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -105,6 +113,10 @@ def _measurement_entry_sort_key(entry: SiteMeasurementEntry) -> tuple[str, str, 
     )
 
 
+def _measurement_position_key(value: str | None) -> str:
+    return re.sub(r"\s+", "", value or "").casefold()
+
+
 def _is_technical_free_measurement_position(value: str | None) -> bool:
     if value is None:
         return False
@@ -115,9 +127,13 @@ def _is_technical_free_measurement_position(value: str | None) -> bool:
 
 
 def _current_measurement_entries(entries: list[SiteMeasurementEntry]) -> list[SiteMeasurementEntry]:
-    current_by_cell: dict[tuple[int, str], SiteMeasurementEntry] = {}
+    current_by_cell: dict[tuple[int, int, str], SiteMeasurementEntry] = {}
     for entry in entries:
-        key = (entry.measurement_item_id, _measurement_entry_area_key(entry.area_or_comment))
+        key = (
+            entry.measurement_batch_id,
+            entry.measurement_item_id,
+            _measurement_entry_area_key(entry.area_or_comment),
+        )
         current_entry = current_by_cell.get(key)
         if current_entry is None or _measurement_entry_sort_key(entry) > _measurement_entry_sort_key(current_entry):
             current_by_cell[key] = entry
@@ -1364,33 +1380,17 @@ class MeasurementService:
             )
 
         active_base = self.db.get(SiteMeasurementBase, active_base_id)
-        active_batch_ids = list(
+        completed_batch_ids = list(
             self.db.scalars(
                 select(SiteMeasurementBatch.id)
                 .where(
                     SiteMeasurementBatch.site_id == site_id,
-                    SiteMeasurementBatch.measurement_base_id == active_base_id,
+                    SiteMeasurementBatch.status.in_(MEASUREMENT_COMPLETED_BATCH_STATUSES),
                     SiteMeasurementBatch.deleted_at.is_(None),
                 )
                 .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
-
-        measured_by_item_id: dict[int, Decimal] = {}
-        if active_batch_ids:
-            measured_entries = list(
-                self.db.scalars(
-                    select(SiteMeasurementEntry)
-                    .where(
-                        SiteMeasurementEntry.site_id == site_id,
-                        SiteMeasurementEntry.measurement_batch_id.in_(active_batch_ids),
-                    )
-                ).all()
-            )
-            for entry in _current_measurement_entries(measured_entries):
-                measured_by_item_id[entry.measurement_item_id] = (
-                    measured_by_item_id.get(entry.measurement_item_id, Decimal("0")) + entry.quantity
-                )
 
         items = list(
             self.db.scalars(
@@ -1403,6 +1403,46 @@ class MeasurementService:
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             ).all()
         )
+        target_item_ids = {item.id for item in items}
+        target_ids_by_position: dict[str, list[int]] = {}
+        for item in items:
+            position_key = _measurement_position_key(item.position)
+            if position_key:
+                target_ids_by_position.setdefault(position_key, []).append(item.id)
+        unique_target_id_by_position = {
+            position_key: item_ids[0]
+            for position_key, item_ids in target_ids_by_position.items()
+            if len(item_ids) == 1
+        }
+
+        measured_by_item_id: dict[int, Decimal] = {}
+        if completed_batch_ids:
+            measured_entries = list(
+                self.db.scalars(
+                    select(SiteMeasurementEntry)
+                    .options(selectinload(SiteMeasurementEntry.measurement_item))
+                    .where(
+                        SiteMeasurementEntry.site_id == site_id,
+                        SiteMeasurementEntry.measurement_batch_id.in_(completed_batch_ids),
+                    )
+                ).all()
+            )
+            for entry in _current_measurement_entries(measured_entries):
+                source_item = entry.measurement_item
+                if source_item is None or source_item.is_hidden:
+                    continue
+                target_item_id = (
+                    source_item.id
+                    if source_item.id in target_item_ids
+                    else unique_target_id_by_position.get(
+                        _measurement_position_key(source_item.position)
+                    )
+                )
+                if target_item_id is None:
+                    continue
+                measured_by_item_id[target_item_id] = (
+                    measured_by_item_id.get(target_item_id, Decimal("0")) + entry.quantity
+                )
 
         rows: list[MeasurementTimesheetRowRead] = []
         planned_minutes_total = Decimal("0")
@@ -1468,7 +1508,7 @@ class MeasurementService:
         return MeasurementTimesheetRead(
             site_id=site_id,
             measurement_base_id=active_base_id,
-            active_batch_ids=active_batch_ids,
+            active_batch_ids=completed_batch_ids,
             active_measurement_label=active_base.name if active_base else None,
             last_import_label=latest_import_item.source_file_name if latest_import_item else None,
             last_import_at=latest_import_timestamp,

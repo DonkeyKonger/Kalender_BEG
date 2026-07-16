@@ -610,6 +610,8 @@ export function SiteDetailPage() {
         : await api.markSiteMeasurementBatchOpen(site.id, batch.id);
       setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setSelectedMeasurementBatch(updated);
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
       setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
       setMeasurementReviewMessage(
         billingStatus === "billed"

@@ -917,7 +917,7 @@ def test_legacy_duplicate_measurement_entries_use_latest_cell_value():
         measurement_base=base,
         number=1,
         title="Aufmaß 1",
-        status="submitted",
+        status="billed",
     )
     old_entry = SiteMeasurementEntry(
         measurement_batch=batch,
@@ -955,6 +955,267 @@ def test_legacy_duplicate_measurement_entries_use_latest_cell_value():
     assert timesheet.rows[0].measured_quantity == Decimal("5.00")
     assert checked_cells[("eg", item.id)].quantity == Decimal("5.00")
     assert checked_totals[item.id] == Decimal("5.00")
+
+
+def test_execution_progress_aggregates_all_completed_origins_by_id_or_position():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    target_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.1",
+        description="Kabelrinne",
+        list_quantity=Decimal("124"),
+        unit="m",
+        minutes_per_unit=Decimal("2"),
+        list_minutes_total=Decimal("248"),
+        is_nep=False,
+        sort_order=1,
+    )
+    worker_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Monteur-Aufmaß",
+        status="billed",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+        creator_role_at_creation=UserRole.MONTEUR.value,
+    )
+    second_worker_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=6,
+        title="Zweites Monteur-Aufmaß",
+        status="approved",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+        creator_role_at_creation=UserRole.MONTEUR.value,
+    )
+    office_batch = SiteMeasurementBatch(
+        site=site,
+        number=2,
+        title="Büro-Aufmaß Bestand",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        creator_role_at_creation=UserRole.OFFICE.value,
+    )
+    project_manager_batch = SiteMeasurementBatch(
+        site=site,
+        number=3,
+        title="Projektleiter-Aufmaß",
+        status="closed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        creator_role_at_creation=UserRole.PROJECT_MANAGER.value,
+    )
+    open_batch = SiteMeasurementBatch(
+        site=site,
+        number=4,
+        title="Noch offen",
+        status="submitted",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+    )
+    deleted_batch = SiteMeasurementBatch(
+        site=site,
+        number=5,
+        title="Archiviert",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        deleted_at=datetime.now(timezone.utc),
+    )
+    db.add_all([
+        target_item,
+        worker_batch,
+        second_worker_batch,
+        office_batch,
+        project_manager_batch,
+        open_batch,
+        deleted_batch,
+    ])
+    db.flush()
+
+    def free_item(batch: SiteMeasurementBatch, position: str, sort_order: int) -> SiteMeasurementItem:
+        return SiteMeasurementItem(
+            site=site,
+            measurement_batch=batch,
+            position=position,
+            description="Freie Leistung",
+            unit="m",
+            is_free_position=True,
+            sort_order=sort_order,
+        )
+
+    office_item = free_item(office_batch, " 1.1 ", 10)
+    unmatched_item = free_item(office_batch, "99.9", 20)
+    project_manager_item = free_item(project_manager_batch, "1.1", 10)
+    open_item = free_item(open_batch, "1.1", 10)
+    deleted_item = free_item(deleted_batch, "1.1", 10)
+    db.add_all([office_item, unmatched_item, project_manager_item, open_item, deleted_item])
+    db.flush()
+    db.add_all([
+        SiteMeasurementEntry(
+            measurement_batch=worker_batch,
+            measurement_item=target_item,
+            site=site,
+            quantity=Decimal("4"),
+            area_or_comment="EG",
+            status="billed",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=second_worker_batch,
+            measurement_item=target_item,
+            site=site,
+            quantity=Decimal("6"),
+            area_or_comment="EG",
+            status="approved",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=office_batch,
+            measurement_item=office_item,
+            site=site,
+            quantity=Decimal("109"),
+            area_or_comment="EG",
+            status="billed",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=office_batch,
+            measurement_item=unmatched_item,
+            site=site,
+            quantity=Decimal("50"),
+            area_or_comment="EG",
+            status="billed",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=project_manager_batch,
+            measurement_item=project_manager_item,
+            site=site,
+            quantity=Decimal("5"),
+            area_or_comment="EG",
+            status="closed",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=open_batch,
+            measurement_item=open_item,
+            site=site,
+            quantity=Decimal("100"),
+            area_or_comment="EG",
+            status="submitted",
+        ),
+        SiteMeasurementEntry(
+            measurement_batch=deleted_batch,
+            measurement_item=deleted_item,
+            site=site,
+            quantity=Decimal("100"),
+            area_or_comment="EG",
+            status="billed",
+        ),
+    ])
+    db.commit()
+
+    timesheet = MeasurementService(db).get_site_measurement_timesheet(site.id)
+
+    assert timesheet.active_batch_ids == [
+        worker_batch.id,
+        office_batch.id,
+        project_manager_batch.id,
+        second_worker_batch.id,
+    ]
+    assert len(timesheet.rows) == 1
+    assert timesheet.rows[0].position_id == target_item.id
+    assert timesheet.rows[0].measured_quantity == Decimal("124")
+    assert timesheet.rows[0].remaining_quantity == Decimal("0")
+    assert timesheet.rows[0].progress_percent == 100.0
+    assert timesheet.kpi.measured_minutes == Decimal("248")
+    assert timesheet.kpi.progress_percent == 100.0
+
+
+def test_execution_progress_recomputes_after_reopen_edit_reclose_and_archive():
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    target_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.1",
+        description="Kabelrinne",
+        list_quantity=Decimal("20"),
+        unit="m",
+        minutes_per_unit=Decimal("1"),
+        list_minutes_total=Decimal("20"),
+        is_nep=False,
+        sort_order=1,
+    )
+    office_user = User(
+        username="execution-progress-office",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="Bestehendes Büro-Aufmaß",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        creator_role_at_creation=UserRole.OFFICE.value,
+    )
+    free_item = SiteMeasurementItem(
+        site=site,
+        measurement_batch=batch,
+        position="1.1",
+        description="Freie Leistung",
+        unit="m",
+        is_free_position=True,
+        sort_order=10,
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=free_item,
+        site=site,
+        quantity=Decimal("10"),
+        area_or_comment="EG",
+        status="billed",
+    )
+    db.add_all([target_item, office_user, batch, free_item, entry])
+    db.commit()
+    service = MeasurementService(db)
+
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("10")
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("10")
+
+    service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        billing_status="submitted",
+    )
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("0")
+
+    service.update_site_entry(
+        site_id=site.id,
+        batch_id=batch.id,
+        entry_id=entry.id,
+        payload=MeasurementEntryCreate(area_or_comment="EG", quantity=Decimal("15")),
+    )
+    service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        billing_status="billed",
+    )
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("15")
+
+    service.delete_site_batch(site_id=site.id, batch_id=batch.id, current_user=office_user)
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("0")
+
+    service.restore_site_batch(site_id=site.id, batch_id=batch.id)
+    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("15")
 
 
 def test_office_can_review_and_bill_unsubmitted_measurement_batch():

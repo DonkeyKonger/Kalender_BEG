@@ -86,3 +86,14 @@ test("office origin does not create a special presentation and never offers a fa
   assert.doesNotMatch(styles, /\.measurement-review-origin-note/);
   assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*0/s);
 });
+
+test("closing or reopening a measurement invalidates execution progress before the tab is revisited", () => {
+  const handlerStart = pageSource.indexOf("async function setMeasurementBatchBillingStatus(");
+  const handlerEnd = pageSource.indexOf("async function markMeasurementBatchReviewed", handlerStart);
+  const handlerSource = pageSource.slice(handlerStart, handlerEnd);
+
+  assert.match(handlerSource, /markSiteMeasurementBatchBilled/);
+  assert.match(handlerSource, /markSiteMeasurementBatchOpen/);
+  assert.match(handlerSource, /setMeasurementTimesheet\(null\)/);
+  assert.match(handlerSource, /setMeasurementLoaded\(false\)/);
+});
