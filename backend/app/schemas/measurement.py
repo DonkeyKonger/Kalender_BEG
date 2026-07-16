@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.enums import MeasurementBatchOrigin
+
 
 class MeasurementBaseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -157,6 +159,29 @@ class MobileMeasurementBatchBlockReasonsRead(BaseModel):
     customer_sign: str | None = None
 
 
+class OfficeMeasurementBatchCreate(BaseModel):
+    area_location: str = Field(..., min_length=1, max_length=260)
+    measurement_date: date
+    assigned_employee_id: int | None = Field(default=None, gt=0)
+    offer_id: int | None = Field(default=None, gt=0)
+    request_id: str = Field(..., min_length=8, max_length=64)
+    allow_duplicate: bool = False
+
+    @field_validator("area_location", "request_id", mode="before")
+    @classmethod
+    def strip_office_batch_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return " ".join(value.split())
+        return value
+
+
+class MeasurementWorkerOptionRead(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    display_name: str
+
+
 class MobileMeasurementBatchRead(BaseModel):
     id: int
     site_id: int
@@ -168,6 +193,13 @@ class MobileMeasurementBatchRead(BaseModel):
     number: int
     title: str
     status: str
+    origin: MeasurementBatchOrigin = MeasurementBatchOrigin.LEGACY
+    creator_role_at_creation: str | None = None
+    area_location: str | None = None
+    measurement_date: date | None = None
+    assigned_employee_id: int | None = None
+    assigned_employee_name: str | None = None
+    has_original_worker_submission: bool = False
     created_by_user_id: int | None
     created_by_name: str | None = None
     submitted_by_user_id: int | None

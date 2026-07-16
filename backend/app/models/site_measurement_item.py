@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from typing import Any
@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, St
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.enums import MeasurementBatchOrigin
 
 
 class SiteMeasurementBase(TimestampMixin, Base):
@@ -88,6 +89,16 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
+    origin: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=MeasurementBatchOrigin.LEGACY.value, index=True
+    )
+    creator_role_at_creation: Mapped[str | None] = mapped_column(String(40))
+    area_location: Mapped[str | None] = mapped_column(String(260))
+    measurement_date: Mapped[date | None] = mapped_column()
+    assigned_employee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("persons.id", ondelete="SET NULL"), index=True
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
@@ -133,6 +144,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     submitted_by = relationship("User", foreign_keys=[submitted_by_user_id])
     deleted_by = relationship("User", foreign_keys=[deleted_by_user_id])
+    assigned_employee = relationship("Person", foreign_keys=[assigned_employee_id])
 
 
 class SiteMeasurementAreaRow(TimestampMixin, Base):

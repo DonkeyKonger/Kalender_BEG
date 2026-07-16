@@ -12,7 +12,13 @@ from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.extra_work_ticket import ExtraWorkTicket
-from app.models.enums import UserRole
+from app.models.enums import (
+    MeasurementBatchOrigin,
+    PersonEmploymentStatus,
+    PersonType,
+    UserRole,
+)
+from app.models.person import Person
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
@@ -39,6 +45,7 @@ from app.schemas.measurement import (
     MeasurementItemRead,
     MobileMeasurementBatchAvailableActionsRead,
     MobileMeasurementBatchBlockReasonsRead,
+    OfficeMeasurementBatchCreate,
     MobileMeasurementFreeItemCreate,
     MeasurementTimeAnalysisExtraWorkTicketRead,
     MeasurementTimeAnalysisRead,
@@ -231,9 +238,11 @@ class MeasurementService:
                     selectinload(SiteMeasurementBatch.measurement_base),
                     selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                     selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+                    selectinload(SiteMeasurementBatch.assigned_employee),
                 )
                 .where(SiteMeasurementBatch.site_id == assignment.site_id)
                 .where(SiteMeasurementBatch.deleted_at.is_(None))
+                .where(SiteMeasurementBatch.origin != MeasurementBatchOrigin.OFFICE.value)
                 .order_by(
                     SiteMeasurementBatch.created_at.desc(),
                     SiteMeasurementBatch.id.desc(),
@@ -277,12 +286,153 @@ class MeasurementService:
             number=next_number,
             title=f"Aufmaß {next_number}",
             status="draft",
+            origin=MeasurementBatchOrigin.MONTEUR.value,
+            creator_role_at_creation=current_user.role.value,
             created_by_user_id=current_user.id,
         )
         self.db.add(batch)
         self.db.commit()
         self.db.refresh(batch)
         return self._build_mobile_batch(batch, active_base_id=measurement_base.id, current_user=current_user)
+
+    def list_office_measurement_workers(self, site_id: int) -> list[Person]:
+        self._get_site(site_id)
+        return list(
+            self.db.scalars(
+                select(Person)
+                .join(User, User.person_id == Person.id)
+                .where(
+                    Person.person_type == PersonType.INTERNAL,
+                    Person.is_active.is_(True),
+                    Person.employment_status == PersonEmploymentStatus.ACTIVE.value,
+                    Person.deleted_at.is_(None),
+                    User.role == UserRole.MONTEUR,
+                    User.is_active.is_(True),
+                )
+                .distinct()
+                .order_by(Person.last_name, Person.first_name, Person.id)
+            ).all()
+        )
+
+    def create_office_batch(
+        self,
+        *,
+        site_id: int,
+        current_user: User,
+        payload: OfficeMeasurementBatchCreate,
+    ) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        existing_request = self.db.scalar(
+            select(SiteMeasurementBatch)
+            .options(
+                selectinload(SiteMeasurementBatch.entries).selectinload(
+                    SiteMeasurementEntry.measurement_item
+                ),
+                selectinload(SiteMeasurementBatch.free_items),
+                selectinload(SiteMeasurementBatch.area_rows),
+                selectinload(SiteMeasurementBatch.measurement_base),
+                selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.assigned_employee),
+            )
+            .where(SiteMeasurementBatch.request_id == payload.request_id)
+        )
+        if existing_request is not None:
+            if (
+                existing_request.site_id != site_id
+                or existing_request.created_by_user_id != current_user.id
+            ):
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Diese Anforderungs-ID wurde bereits verwendet.",
+                )
+            return self._build_mobile_batch(
+                existing_request,
+                active_base_id=self._get_active_measurement_base_id(site_id),
+            )
+
+        area_location = " ".join(payload.area_location.split())
+        if not area_location:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich/Ort ist erforderlich.")
+
+        measurement_base = self._resolve_office_measurement_base(
+            site_id=site_id,
+            offer_id=payload.offer_id,
+        )
+        assigned_employee = None
+        if payload.assigned_employee_id is not None:
+            assigned_employee = self.db.scalar(
+                select(Person)
+                .join(User, User.person_id == Person.id)
+                .where(
+                    Person.id == payload.assigned_employee_id,
+                    Person.person_type == PersonType.INTERNAL,
+                    Person.is_active.is_(True),
+                    Person.employment_status == PersonEmploymentStatus.ACTIVE.value,
+                    Person.deleted_at.is_(None),
+                    User.role == UserRole.MONTEUR,
+                    User.is_active.is_(True),
+                )
+            )
+            if assigned_employee is None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "Der ausgewählte Monteur ist nicht aktiv oder nicht zuordenbar.",
+                )
+
+        duplicate = self.db.scalar(
+            select(SiteMeasurementBatch.id).where(
+                SiteMeasurementBatch.site_id == site_id,
+                SiteMeasurementBatch.status == "draft",
+                SiteMeasurementBatch.deleted_at.is_(None),
+                SiteMeasurementBatch.area_location == area_location,
+                SiteMeasurementBatch.measurement_date == payload.measurement_date,
+            )
+        )
+        if duplicate is not None and not payload.allow_duplicate:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Für diesen Bereich und dieses Datum besteht bereits ein offener Entwurf. "
+                "Die bewusste Anlage eines weiteren Aufmaßes muss bestätigt werden.",
+            )
+
+        next_number = (
+            self.db.scalar(
+                select(func.max(SiteMeasurementBatch.number)).where(
+                    SiteMeasurementBatch.site_id == site_id
+                )
+            )
+            or 0
+        ) + 1
+        batch = SiteMeasurementBatch(
+            site_id=site_id,
+            measurement_base_id=measurement_base.id,
+            number=next_number,
+            title=f"Aufmaß {next_number}",
+            status="draft",
+            origin=MeasurementBatchOrigin.OFFICE.value,
+            creator_role_at_creation=current_user.role.value,
+            area_location=area_location,
+            measurement_date=payload.measurement_date,
+            assigned_employee_id=assigned_employee.id if assigned_employee else None,
+            request_id=payload.request_id,
+            created_by_user_id=current_user.id,
+        )
+        self.db.add(batch)
+        self.db.flush()
+        self.db.add(
+            SiteMeasurementAreaRow(
+                measurement_batch_id=batch.id,
+                site_id=site_id,
+                area_or_comment=area_location,
+                sort_order=0,
+                created_by_user_id=current_user.id,
+            )
+        )
+        self.db.commit()
+        return self._build_mobile_batch(
+            self._get_batch_for_site(batch.id, site_id),
+            active_base_id=self._get_active_measurement_base_id(site_id),
+        )
 
     def create_mobile_area_row(
         self,
@@ -374,7 +524,7 @@ class MeasurementService:
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft":
+        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Entwürfe werden mobil bearbeitet.",
@@ -422,7 +572,7 @@ class MeasurementService:
     ) -> MobileMeasurementItemRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft":
+        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Entwürfe werden mobil bearbeitet.",
@@ -1034,6 +1184,8 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.created_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.deleted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.assigned_employee),
+                selectinload(SiteMeasurementBatch.area_rows),
             )
             .where(SiteMeasurementBatch.site_id == site_id)
         )
@@ -1496,7 +1648,7 @@ class MeasurementService:
             entry.status = "reviewed"
         self.db.commit()
         self.db.refresh(batch)
-        if previous_status != "reviewed":
+        if previous_status != "reviewed" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
             try:
                 PushNotificationService(self.db).send_measurement_reviewed(
                     user_id=notification_user_id,
@@ -1529,7 +1681,7 @@ class MeasurementService:
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft":
+        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Entwürfe werden mobil bearbeitet.",
@@ -1973,6 +2125,40 @@ class MeasurementService:
         self.db.flush()
         return base
 
+    def _resolve_office_measurement_base(
+        self,
+        *,
+        site_id: int,
+        offer_id: int | None,
+    ) -> SiteMeasurementBase:
+        if offer_id is not None:
+            base = self._get_measurement_base_for_site(offer_id, site_id)
+            if base.status in {"closed", "archived"}:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Geschlossene oder archivierte Angebote können nicht als Grundlage verwendet werden.",
+                )
+            return base
+
+        candidates = list(
+            self.db.scalars(
+                select(SiteMeasurementBase)
+                .where(
+                    SiteMeasurementBase.site_id == site_id,
+                    SiteMeasurementBase.status.notin_(("closed", "archived")),
+                )
+                .order_by(SiteMeasurementBase.created_at.desc(), SiteMeasurementBase.id.desc())
+            ).all()
+        )
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Bitte eine eindeutige Angebotsgrundlage auswählen.",
+            )
+        return self._get_or_create_default_measurement_base(site_id)
+
     def _get_mobile_measurement_base_for_site(self, site_id: int) -> SiteMeasurementBase:
         base = self.db.scalar(
             select(SiteMeasurementBase)
@@ -2064,6 +2250,7 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.deleted_by).selectinload(User.person),
                 selectinload(SiteMeasurementBatch.measurement_base),
+                selectinload(SiteMeasurementBatch.assigned_employee),
             )
             .where(SiteMeasurementBatch.id == batch_id, SiteMeasurementBatch.site_id == site_id)
         )
@@ -2166,6 +2353,19 @@ class MeasurementService:
             number=batch.number,
             title=batch.title,
             status=batch.status,
+            origin=batch.origin,
+            creator_role_at_creation=batch.creator_role_at_creation,
+            area_location=batch.area_location,
+            measurement_date=batch.measurement_date,
+            assigned_employee_id=batch.assigned_employee_id,
+            assigned_employee_name=(
+                batch.assigned_employee.display_name if batch.assigned_employee else None
+            ),
+            has_original_worker_submission=(
+                batch.origin != MeasurementBatchOrigin.OFFICE.value
+                and batch.submitted_at is not None
+                and batch.original_submitted_snapshot is not None
+            ),
             created_by_user_id=batch.created_by_user_id,
             created_by_name=self._format_user_display_name(batch.created_by),
             submitted_by_user_id=batch.submitted_by_user_id,

@@ -21,11 +21,13 @@ from app.schemas.measurement import (
     MeasurementImportResponse,
     MeasurementItemRead,
     MeasurementItemUpdate,
+    MeasurementWorkerOptionRead,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
     MobileMeasurementFreeItemCreate,
     MobileMeasurementItemRead,
+    OfficeMeasurementBatchCreate,
 )
 from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
@@ -571,6 +573,39 @@ def list_measurement_batches(
         measurement_base_id=measurement_base_id,
         active_only=active_only,
         archived_only=archived_only,
+    )
+
+
+@router.get(
+    "/{site_id}/measurement-workers",
+    response_model=list[MeasurementWorkerOptionRead],
+)
+def list_measurement_workers(
+    site_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> list[MeasurementWorkerOptionRead]:
+    return [
+        MeasurementWorkerOptionRead.model_validate(person, from_attributes=True)
+        for person in MeasurementService(db).list_office_measurement_workers(site_id)
+    ]
+
+
+@router.post(
+    "/{site_id}/measurement-batches",
+    response_model=MobileMeasurementBatchRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_office_measurement_batch(
+    site_id: int,
+    payload: OfficeMeasurementBatchCreate,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).create_office_batch(
+        site_id=site_id,
+        current_user=current_user,
+        payload=payload,
     )
 
 

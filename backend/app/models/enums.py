@@ -12,6 +12,12 @@ class UserRole(StrEnum):
     MONTEUR = "monteur"
 
 
+class MeasurementBatchOrigin(StrEnum):
+    MONTEUR = "MONTEUR"
+    OFFICE = "OFFICE"
+    LEGACY = "LEGACY"
+
+
 class PersonType(StrEnum):
     INTERNAL = "internal"
     EXTERNAL = "external"

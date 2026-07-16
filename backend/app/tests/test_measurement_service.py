@@ -3,12 +3,20 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Base
 from app.models.audit_log import AuditLog
-from app.models.enums import SiteLocationStatus, SiteStatus, UserRole
+from app.models.enums import (
+    MeasurementBatchOrigin,
+    PersonEmploymentStatus,
+    PersonType,
+    SiteLocationStatus,
+    SiteStatus,
+    UserRole,
+)
+from app.models.person import Person
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
@@ -18,6 +26,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
+from app.schemas.measurement import OfficeMeasurementBatchCreate
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -2038,3 +2047,309 @@ def test_site_measurement_batch_delete_archives_and_restore_reactivates():
     assert restored_batch.deleted_by_user_id is None
     assert [active_batch.id for active_batch in service.list_site_batches(site.id)] == [batch.id]
     assert service.list_site_batches(site.id, archived_only=True) == []
+
+
+def test_office_measurement_batch_uses_existing_model_and_is_idempotent():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    office_user = User(
+        username="office-create",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    worker = Person(
+        first_name="Anna",
+        last_name="Zimmer",
+        display_name="Anna Zimmer",
+        short_code="AZ",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+        employment_status=PersonEmploymentStatus.ACTIVE.value,
+    )
+    worker_user = User(
+        username="worker-create",
+        display_name="Anna Zimmer",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=worker,
+        is_active=True,
+    )
+    db.add_all([office_user, worker_user])
+    db.commit()
+    payload = OfficeMeasurementBatchCreate(
+        area_location="  1.   Obergeschoss ",
+        measurement_date=date(2026, 7, 16),
+        assigned_employee_id=worker.id,
+        offer_id=base.id,
+        request_id="office-measurement-request-1",
+    )
+
+    service = MeasurementService(db)
+    created = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=payload,
+    )
+    retried = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=payload,
+    )
+
+    assert retried.id == created.id
+    assert created.status == "draft"
+    assert created.origin == MeasurementBatchOrigin.OFFICE
+    assert created.creator_role_at_creation == UserRole.OFFICE.value
+    assert created.area_location == "1. Obergeschoss"
+    assert created.measurement_date == date(2026, 7, 16)
+    assert created.assigned_employee_id == worker.id
+    assert created.assigned_employee_name == "Anna Zimmer"
+    assert created.submitted_by_user_id is None
+    assert created.submitted_at is None
+    assert created.has_original_worker_submission is False
+    assert [row.area_or_comment for row in created.area_rows] == ["1. Obergeschoss"]
+    assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 1
+
+
+def test_office_measurement_batch_requires_explicit_duplicate_confirmation():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    office_user = User(
+        username="office-duplicate",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add(office_user)
+    db.commit()
+    service = MeasurementService(db)
+    first_payload = OfficeMeasurementBatchCreate(
+        area_location="Technikzentrale",
+        measurement_date=date(2026, 7, 16),
+        offer_id=base.id,
+        request_id="office-measurement-request-2a",
+    )
+    service.create_office_batch(site_id=site.id, current_user=office_user, payload=first_payload)
+
+    second_payload = first_payload.model_copy(
+        update={"request_id": "office-measurement-request-2b"}
+    )
+    with pytest.raises(HTTPException) as error:
+        service.create_office_batch(
+            site_id=site.id,
+            current_user=office_user,
+            payload=second_payload,
+        )
+    assert error.value.status_code == 409
+
+    confirmed = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=second_payload.model_copy(update={"allow_duplicate": True}),
+    )
+    assert confirmed.id is not None
+    assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 2
+
+
+def test_office_measurement_batch_requires_offer_choice_when_several_are_valid():
+    db = db_session()
+    site = create_site(db)
+    first_base = create_measurement_base(db, site)
+    second_base = SiteMeasurementBase(
+        site=site,
+        name="Nachtragsangebot",
+        status="draft",
+        released_to_mobile=False,
+    )
+    office_user = User(
+        username="office-offer",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([second_base, office_user])
+    db.commit()
+    service = MeasurementService(db)
+    payload = OfficeMeasurementBatchCreate(
+        area_location="Bauteil A",
+        measurement_date=date(2026, 7, 16),
+        request_id="office-measurement-request-3",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        service.create_office_batch(site_id=site.id, current_user=office_user, payload=payload)
+    assert error.value.status_code == 409
+
+    created = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=payload.model_copy(update={"offer_id": second_base.id}),
+    )
+    assert created.offer_id == second_base.id
+    assert created.offer_id != first_base.id
+    assert created.is_current_offer is False
+
+
+def test_office_measurement_worker_options_only_contain_active_internal_monteurs():
+    db = db_session()
+    site = create_site(db)
+
+    def add_person(
+        first_name: str,
+        last_name: str,
+        *,
+        role: UserRole = UserRole.MONTEUR,
+        person_type: PersonType = PersonType.INTERNAL,
+        active: bool = True,
+    ) -> Person:
+        person = Person(
+            first_name=first_name,
+            last_name=last_name,
+            display_name=f"{first_name} {last_name}",
+            short_code=f"{first_name[0]}{last_name[0]}",
+            person_type=person_type,
+            is_active=active,
+            employment_status=(
+                PersonEmploymentStatus.ACTIVE.value
+                if active
+                else PersonEmploymentStatus.DEPARTED.value
+            ),
+        )
+        db.add(
+            User(
+                username=f"{first_name}-{last_name}-{role.value}",
+                display_name=person.display_name,
+                password_hash="x",
+                role=role,
+                person=person,
+                is_active=active,
+            )
+        )
+        return person
+
+    anna = add_person("Anna", "Zimmer")
+    bernd = add_person("Bernd", "Albers")
+    add_person("Clara", "Extern", person_type=PersonType.EXTERNAL)
+    add_person("Dora", "Inaktiv", active=False)
+    add_person("Erik", "Leitung", role=UserRole.PROJECT_MANAGER)
+    db.commit()
+
+    workers = MeasurementService(db).list_office_measurement_workers(site.id)
+
+    assert [person.id for person in workers] == [bernd.id, anna.id]
+
+
+def test_office_measurement_draft_is_editable_but_not_visible_in_mobile_batches():
+    from app.models.assignment import Assignment
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    worker = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+        employment_status=PersonEmploymentStatus.ACTIVE.value,
+    )
+    worker_user = User(
+        username="mobile-worker",
+        display_name=worker.display_name,
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=worker,
+    )
+    office_user = User(
+        username="office-mobile-visibility",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    assignment = Assignment(
+        site=site,
+        person=worker,
+        start_date=date(2026, 7, 16),
+        end_date=date(2026, 7, 16),
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.1",
+        description="Leistung",
+        unit="Stck",
+        sort_order=10,
+    )
+    db.add_all([worker_user, office_user, assignment, item])
+    db.commit()
+    service = MeasurementService(db)
+    mobile_batch = service.create_mobile_batch(
+        assignment_id=assignment.id,
+        current_user=worker_user,
+    )
+    office_batch = service.create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=OfficeMeasurementBatchCreate(
+            area_location="Flur West",
+            measurement_date=date(2026, 7, 16),
+            offer_id=base.id,
+            request_id="office-measurement-request-4",
+        ),
+    )
+
+    created_entry = service.create_site_entry(
+        site_id=site.id,
+        batch_id=office_batch.id,
+        measurement_item_id=item.id,
+        current_user=office_user,
+        payload=MeasurementEntryCreate(area_or_comment="Flur West", quantity=Decimal("2")),
+    )
+    mobile_batches = service.list_mobile_batches(
+        assignment_id=assignment.id,
+        current_user=worker_user,
+    )
+
+    assert created_entry.quantity == Decimal("2")
+    assert [batch.id for batch in mobile_batches] == [mobile_batch.id]
+
+
+def test_office_measurement_has_no_original_worker_pdf():
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    office_user = User(
+        username="office-pdf",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add(office_user)
+    db.commit()
+    created = MeasurementService(db).create_office_batch(
+        site_id=site.id,
+        current_user=office_user,
+        payload=OfficeMeasurementBatchCreate(
+            area_location="Technikzentrale",
+            measurement_date=date(2026, 7, 16),
+            offer_id=base.id,
+            request_id="office-measurement-request-5",
+        ),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        MeasurementPdfService(db).build_batch_pdf(
+            site_id=site.id,
+            batch_id=created.id,
+            mode="original",
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Kein originales Monteur-Aufmaß vorhanden."

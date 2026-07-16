@@ -25,6 +25,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementEntry,
     SiteMeasurementItem,
 )
+from app.models.enums import MeasurementBatchOrigin
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
@@ -272,6 +273,7 @@ class MeasurementPdfService:
                 selectinload(SiteMeasurementBatch.free_items),
                 selectinload(SiteMeasurementBatch.area_rows),
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
+                selectinload(SiteMeasurementBatch.assigned_employee),
                 selectinload(SiteMeasurementBatch.photos).selectinload(
                     SiteMeasurementBatchPhoto.uploaded_by
                 ).selectinload(User.person),
@@ -284,6 +286,11 @@ class MeasurementPdfService:
         )
         if batch is None or batch.site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
+        if mode == "original" and batch.origin == MeasurementBatchOrigin.OFFICE.value:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Kein originales Monteur-Aufmaß vorhanden.",
+            )
         file_number = _format_batch_number(batch.site.site_number, batch.number)
         safe_number = file_number.replace("/", "-").replace(" ", "_")
         prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
@@ -356,6 +363,11 @@ class MeasurementPdfService:
                 "number": batch.number,
                 "title": batch.title,
                 "status": batch.status,
+                "origin": batch.origin,
+                "creator_role_at_creation": batch.creator_role_at_creation,
+                "area_location": batch.area_location,
+                "measurement_date": batch.measurement_date,
+                "assigned_employee_id": batch.assigned_employee_id,
                 "updated_at": batch.updated_at,
                 "submitted_at": batch.submitted_at,
                 "customer_signed_at": batch.customer_signed_at,
@@ -705,7 +717,12 @@ class MeasurementPdfService:
         assert site is not None
         commands: list[bytes] = [b"0.75 w"]
         title = _format_batch_number(site.site_number, batch.number)
-        submitted_by = _format_user(batch.submitted_by) or "-"
+        is_office_batch = batch.origin == MeasurementBatchOrigin.OFFICE.value
+        submitted_by = (
+            batch.assigned_employee.display_name
+            if is_office_batch and batch.assigned_employee is not None
+            else _format_user(batch.submitted_by) or "-"
+        )
         submitted_at = _format_datetime(batch.submitted_at)
         address = " ".join(part for part in [site.street, site.house_number] if part)
         city = " ".join(part for part in [site.postal_code, site.city] if part)
@@ -716,7 +733,11 @@ class MeasurementPdfService:
             customer=site.customer or "-",
             project=site.name,
             commission=site.site_number or "-",
-            date_label=_format_date(datetime.now()),
+            date_label=(
+                batch.measurement_date.strftime("%d.%m.%Y")
+                if batch.measurement_date is not None
+                else _format_date(datetime.now())
+            ),
             sheet_label=_format_sheet_label(title, page_number, page_count),
             logo=logo,
         )
@@ -726,6 +747,7 @@ class MeasurementPdfService:
             submitted_by=submitted_by,
             submitted_at=submitted_at or "-",
             status_label=_status_label(batch.status),
+            origin_note="Im Büro angelegt" if is_office_batch else None,
         )
 
         _draw_measurement_matrix(
@@ -826,12 +848,23 @@ def _header_meta_row(
     submitted_by: str,
     submitted_at: str,
     status_label: str,
+    origin_note: str | None = None,
 ) -> None:
     y = 574.4
     _text_fitted(commands, TABLE_LEFT, y, f"Adresse: {address}", 6.0, max_width=210)
     _text_fitted(commands, 275, y, f"Monteur: {submitted_by}", 6.0, max_width=140)
     _text_fitted(commands, 430, y, f"Eingereicht: {submitted_at}", 6.0, max_width=140)
     _text_fitted(commands, 585, y, f"Status: {status_label}", 6.0, max_width=62)
+    if origin_note:
+        _text_fitted(
+            commands,
+            430,
+            y - 10,
+            f"Herkunft: {origin_note}",
+            6.0,
+            max_width=217,
+            font="F2",
+        )
 
 
 def _draw_measurement_matrix(

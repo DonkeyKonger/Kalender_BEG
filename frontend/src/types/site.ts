@@ -291,6 +291,13 @@ export type MobileMeasurementBatch = {
   number: number;
   title: string;
   status: "draft" | "submitted" | "reviewed" | "customer_signed" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
+  origin: "MONTEUR" | "OFFICE" | "LEGACY";
+  creator_role_at_creation: string | null;
+  area_location: string | null;
+  measurement_date: string | null;
+  assigned_employee_id: number | null;
+  assigned_employee_name: string | null;
+  has_original_worker_submission: boolean;
   created_by_user_id: number | null;
   created_by_name: string | null;
   submitted_by_user_id: number | null;
@@ -321,6 +328,22 @@ export type MobileMeasurementBatch = {
     customer_sign?: string | null;
   };
   area_rows?: MeasurementAreaRow[];
+};
+
+export type OfficeMeasurementBatchPayload = {
+  area_location: string;
+  measurement_date: string;
+  assigned_employee_id: number | null;
+  offer_id: number | null;
+  request_id: string;
+  allow_duplicate: boolean;
+};
+
+export type MeasurementWorkerOption = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  display_name: string;
 };
 
 export type MobileMeasurementBatchPhoto = {

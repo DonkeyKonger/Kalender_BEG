@@ -1,12 +1,13 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { AddressSearch } from "../components/AddressSearch";
+import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
@@ -20,7 +21,7 @@ import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors"
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -173,6 +174,10 @@ export function SiteDetailPage() {
   const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
   const [measurementReviewError, setMeasurementReviewError] = useState<string | null>(null);
   const [measurementReviewActionLoading, setMeasurementReviewActionLoading] = useState(false);
+  const [measurementWorkers, setMeasurementWorkers] = useState<MeasurementWorkerOption[]>([]);
+  const [measurementWorkersLoading, setMeasurementWorkersLoading] = useState(false);
+  const [measurementWorkersLoaded, setMeasurementWorkersLoaded] = useState(false);
+  const [measurementWorkersError, setMeasurementWorkersError] = useState<string | null>(null);
   const [extraWorkTickets, setExtraWorkTickets] = useState<MobileExtraWorkTicket[]>([]);
   const [extraWorkLoading, setExtraWorkLoading] = useState(false);
   const [extraWorkLoaded, setExtraWorkLoaded] = useState(false);
@@ -281,6 +286,10 @@ export function SiteDetailPage() {
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     setMeasurementReviewActionLoading(false);
+    setMeasurementWorkers([]);
+    setMeasurementWorkersLoading(false);
+    setMeasurementWorkersLoaded(false);
+    setMeasurementWorkersError(null);
     setExtraWorkTickets([]);
     setExtraWorkLoading(false);
     setExtraWorkLoaded(false);
@@ -518,6 +527,37 @@ export function SiteDetailPage() {
     } finally {
       setMeasurementBatchesLoading(false);
     }
+  }
+
+  async function loadMeasurementWorkers(): Promise<void> {
+    if (!site || measurementWorkersLoading || measurementWorkersLoaded) {
+      return;
+    }
+    setMeasurementWorkersLoading(true);
+    setMeasurementWorkersError(null);
+    try {
+      setMeasurementWorkers(await api.siteMeasurementWorkers(site.id));
+      setMeasurementWorkersLoaded(true);
+    } catch (requestError) {
+      setMeasurementWorkersError(readApiError(requestError, "Monteure konnten nicht geladen werden."));
+    } finally {
+      setMeasurementWorkersLoading(false);
+    }
+  }
+
+  async function createOfficeMeasurementBatch(
+    payload: OfficeMeasurementBatchPayload,
+  ): Promise<MobileMeasurementBatch> {
+    if (!site) {
+      throw new Error("Baustelle ist nicht geladen.");
+    }
+    const created = await api.createOfficeMeasurementBatch(site.id, payload);
+    setMeasurementBatches((current) => {
+      const withoutCreated = current.filter((batch) => batch.id !== created.id);
+      return [...withoutCreated, created];
+    });
+    await selectMeasurementBatch(created);
+    return created;
   }
 
   async function loadExtraWorkTickets(): Promise<void> {
@@ -1233,6 +1273,7 @@ export function SiteDetailPage() {
             }
           }}
           bases={measurementBases}
+          canCreateBatch={canEditSite}
           timesheet={measurementTimesheet}
           timeAnalysis={measurementTimeAnalysis}
           timeAnalysisLoading={measurementTimeAnalysisLoading}
@@ -1262,6 +1303,9 @@ export function SiteDetailPage() {
             setMeasurementTimeAnalysisError(null);
           }}
           batches={measurementBatches}
+          measurementWorkers={measurementWorkers}
+          measurementWorkersLoading={measurementWorkersLoading}
+          measurementWorkersError={measurementWorkersError}
           workerHeadCount={measurementWorkerHeadCount}
           batchesLoading={measurementBatchesLoading}
           batchesError={measurementBatchesError}
@@ -1276,6 +1320,8 @@ export function SiteDetailPage() {
             setMeasurementBatchesLoaded(false);
             setMeasurementBatchesError(null);
           }}
+          onLoadMeasurementWorkers={() => void loadMeasurementWorkers()}
+          onCreateBatch={createOfficeMeasurementBatch}
           onToggleArchive={() => {
             const nextArchiveMode = !measurementArchiveMode;
             setMeasurementArchiveMode(nextArchiveMode);
@@ -2168,6 +2214,7 @@ function MeasurementTab({
   activeSubtab,
   onSubtabChange,
   bases,
+  canCreateBatch,
   timesheet,
   timeAnalysis,
   timeAnalysisLoading,
@@ -2188,6 +2235,9 @@ function MeasurementTab({
   onRetry,
   onRetryTimeAnalysis,
   batches,
+  measurementWorkers,
+  measurementWorkersLoading,
+  measurementWorkersError,
   workerHeadCount,
   batchesLoading,
   batchesError,
@@ -2199,6 +2249,8 @@ function MeasurementTab({
   reviewActionLoading,
   archiveMode,
   onRetryBatches,
+  onLoadMeasurementWorkers,
+  onCreateBatch,
   onToggleArchive,
   onSelectBatch,
   onBackToBatchList,
@@ -2218,6 +2270,7 @@ function MeasurementTab({
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
+  canCreateBatch: boolean;
   timesheet: MeasurementTimesheet | null;
   timeAnalysis: MeasurementTimeAnalysis | null;
   timeAnalysisLoading: boolean;
@@ -2238,6 +2291,9 @@ function MeasurementTab({
   onRetry: () => void;
   onRetryTimeAnalysis: () => void;
   batches: MobileMeasurementBatch[];
+  measurementWorkers: MeasurementWorkerOption[];
+  measurementWorkersLoading: boolean;
+  measurementWorkersError: string | null;
   workerHeadCount: number;
   batchesLoading: boolean;
   batchesError: string | null;
@@ -2249,6 +2305,8 @@ function MeasurementTab({
   reviewActionLoading: boolean;
   archiveMode: boolean;
   onRetryBatches: () => void;
+  onLoadMeasurementWorkers: () => void;
+  onCreateBatch: (payload: OfficeMeasurementBatchPayload) => Promise<MobileMeasurementBatch>;
   onToggleArchive: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
@@ -2424,7 +2482,12 @@ function MeasurementTab({
       {activeSubtab === "review" ? (
         <MeasurementReviewPanel
           siteNumber={siteNumber}
+          bases={bases}
+          canCreateBatch={canCreateBatch}
           batches={batches}
+          measurementWorkers={measurementWorkers}
+          measurementWorkersLoading={measurementWorkersLoading}
+          measurementWorkersError={measurementWorkersError}
           batchesLoading={batchesLoading}
           batchesError={batchesError}
           selectedBatch={selectedBatch}
@@ -2435,6 +2498,8 @@ function MeasurementTab({
           reviewActionLoading={reviewActionLoading}
           archiveMode={archiveMode}
           onRetryBatches={onRetryBatches}
+          onLoadMeasurementWorkers={onLoadMeasurementWorkers}
+          onCreateBatch={onCreateBatch}
           onToggleArchive={onToggleArchive}
           onSelectBatch={onSelectBatch}
           onBackToBatchList={onBackToBatchList}
@@ -3369,7 +3434,12 @@ function addMeasurementEntryToItems(items: MobileMeasurementItem[], createdEntry
 
 function MeasurementReviewPanel({
   siteNumber,
+  bases,
+  canCreateBatch,
   batches,
+  measurementWorkers,
+  measurementWorkersLoading,
+  measurementWorkersError,
   batchesLoading,
   batchesError,
   selectedBatch,
@@ -3380,6 +3450,8 @@ function MeasurementReviewPanel({
   reviewActionLoading,
   archiveMode,
   onRetryBatches,
+  onLoadMeasurementWorkers,
+  onCreateBatch,
   onToggleArchive,
   onSelectBatch,
   onBackToBatchList,
@@ -3396,7 +3468,12 @@ function MeasurementReviewPanel({
   onExportPdf,
 }: {
   siteNumber: string | null;
+  bases: MeasurementBase[];
+  canCreateBatch: boolean;
   batches: MobileMeasurementBatch[];
+  measurementWorkers: MeasurementWorkerOption[];
+  measurementWorkersLoading: boolean;
+  measurementWorkersError: string | null;
   batchesLoading: boolean;
   batchesError: string | null;
   selectedBatch: MobileMeasurementBatch | null;
@@ -3407,6 +3484,8 @@ function MeasurementReviewPanel({
   reviewActionLoading: boolean;
   archiveMode: boolean;
   onRetryBatches: () => void;
+  onLoadMeasurementWorkers: () => void;
+  onCreateBatch: (payload: OfficeMeasurementBatchPayload) => Promise<MobileMeasurementBatch>;
   onToggleArchive: () => void;
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
@@ -3422,13 +3501,58 @@ function MeasurementReviewPanel({
   onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
-  const [entryDrafts, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
+  const [, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
   const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createAreaLocation, setCreateAreaLocation] = useState("");
+  const [createMeasurementDate, setCreateMeasurementDate] = useState("");
+  const [createEmployeeId, setCreateEmployeeId] = useState("");
+  const [createOfferId, setCreateOfferId] = useState("");
+  const [createRequestId, setCreateRequestId] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [forceDuplicateConfirmation, setForceDuplicateConfirmation] = useState(false);
+  const createAreaLabelId = useId();
+  const createDateLabelId = useId();
+  const createEmployeeLabelId = useId();
+  const createOfferLabelId = useId();
+
+  const availableBases = useMemo(
+    () => bases.filter((base) => base.status !== "closed" && base.status !== "archived"),
+    [bases],
+  );
+  const workerPickerOptions = useMemo(
+    () => measurementWorkers.map((worker) => ({
+      value: String(worker.id),
+      label: worker.display_name,
+      searchText: `${worker.first_name} ${worker.last_name} ${worker.display_name} ${worker.last_name} ${worker.first_name}`,
+    })),
+    [measurementWorkers],
+  );
+  const offerPickerOptions = useMemo(
+    () => availableBases.map((base) => ({
+      value: String(base.id),
+      label: `${base.name}${base.status === "active" ? " · Aktuell" : " · Nicht aktuell"}`,
+      searchText: base.name,
+    })),
+    [availableBases],
+  );
+  const matchingDraft = useMemo(() => {
+    const areaKey = normalizeMeasurementArea(createAreaLocation);
+    if (!areaKey || !createMeasurementDate) {
+      return null;
+    }
+    return batches.find((batch) => (
+      batch.status === "draft"
+      && batch.measurement_date === createMeasurementDate
+      && normalizeMeasurementArea(batch.area_location ?? "") === areaKey
+    )) ?? null;
+  }, [batches, createAreaLocation, createMeasurementDate]);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -3454,6 +3578,71 @@ function MeasurementReviewPanel({
     setUndoStack([]);
   }, [selectedBatch?.id]);
 
+  useEffect(() => {
+    if (!isCreateDialogOpen) {
+      return undefined;
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape" && !isCreatingBatch) {
+        setIsCreateDialogOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isCreateDialogOpen, isCreatingBatch]);
+
+  function openCreateDialog(): void {
+    const defaultOffer = availableBases.length === 1
+      ? availableBases[0]
+      : null;
+    setCreateAreaLocation("");
+    setCreateMeasurementDate(toLocalDateKey(new Date()));
+    setCreateEmployeeId("");
+    setCreateOfferId(defaultOffer ? String(defaultOffer.id) : "");
+    setCreateRequestId(createClientRequestId());
+    setCreateError(null);
+    setForceDuplicateConfirmation(false);
+    setIsCreateDialogOpen(true);
+    onLoadMeasurementWorkers();
+  }
+
+  async function submitCreateBatch(): Promise<void> {
+    const areaLocation = createAreaLocation.trim().split(/\s+/).join(" ");
+    if (!areaLocation) {
+      setCreateError("Bitte einen Bereich oder Ort angeben.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(createMeasurementDate)) {
+      setCreateError("Bitte ein gültiges Aufmaßdatum angeben.");
+      return;
+    }
+    if (availableBases.length > 1 && !createOfferId) {
+      setCreateError("Bitte eine Angebotsgrundlage auswählen.");
+      return;
+    }
+    setIsCreatingBatch(true);
+    setCreateError(null);
+    try {
+      await onCreateBatch({
+        area_location: areaLocation,
+        measurement_date: createMeasurementDate,
+        assigned_employee_id: createEmployeeId ? Number(createEmployeeId) : null,
+        offer_id: createOfferId ? Number(createOfferId) : null,
+        request_id: createRequestId,
+        allow_duplicate: Boolean(matchingDraft) || forceDuplicateConfirmation,
+      });
+      setIsCreateDialogOpen(false);
+    } catch (error) {
+      const message = readApiError(error, "Aufmaß konnte nicht angelegt werden.");
+      if (message.includes("bereits ein offener Entwurf")) {
+        setForceDuplicateConfirmation(true);
+      }
+      setCreateError(message);
+    } finally {
+      setIsCreatingBatch(false);
+    }
+  }
+
   const sortedBatches = useMemo(() => [...batches].sort((left, right) => {
     const rightTime = getMeasurementBatchSortTime(right);
     const leftTime = getMeasurementBatchSortTime(left);
@@ -3462,17 +3651,6 @@ function MeasurementReviewPanel({
     }
     return right.number - left.number;
   }), [batches]);
-
-  function updateEntryDraft(entryId: number, field: keyof MeasurementEntryDraft, value: string): void {
-    setEntryDrafts((current) => ({
-      ...current,
-      [entryId]: {
-        area_or_comment: current[entryId]?.area_or_comment ?? "",
-        quantity: current[entryId]?.quantity ?? "",
-        [field]: value,
-      },
-    }));
-  }
 
   function resetEntryDraft(entry: MobileMeasurementItem["entries"][number]): void {
     setEntryDrafts((current) => ({
@@ -3632,10 +3810,11 @@ function MeasurementReviewPanel({
     const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
+    const isOfficeBatch = selectedBatch.origin === "OFFICE";
     const isReviewed = isMeasurementBatchReviewed(selectedBatch.status);
     const isCustomerSigned = isCustomerSignedMeasurementBatch(selectedBatch);
     const showUnsubmittedWarning = isMeasurementBatchBeforeSubmitted(selectedBatch.status);
-    const canEditRows = !isDraft;
+    const canEditRows = !isDraft || isOfficeBatch;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
     const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
 
@@ -3668,14 +3847,16 @@ function MeasurementReviewPanel({
             >
               Undo
             </button>
-            <button
-              type="button"
-              className="secondary-action"
-              disabled={!canEditRows || reviewActionLoading || savingEntryId !== null}
-              onClick={() => void resetToSubmitted(selectedBatch)}
-            >
-              Auf Monteurstand zurücksetzen
-            </button>
+            {selectedBatch.has_original_worker_submission ? (
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={!canEditRows || reviewActionLoading || savingEntryId !== null}
+                onClick={() => void resetToSubmitted(selectedBatch)}
+              >
+                Auf Monteurstand zurücksetzen
+              </button>
+            ) : null}
             <span className="measurement-review-action-divider" aria-hidden="true" />
             {isBilled ? (
               <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
@@ -3696,7 +3877,11 @@ function MeasurementReviewPanel({
           </div>
         </div>
 
-        {showUnsubmittedWarning ? (
+        {isOfficeBatch ? (
+          <div className="measurement-review-origin-note" role="note">
+            Dieses Aufmaß wurde im Büro angelegt und nicht durch einen Monteur eingereicht.
+          </div>
+        ) : showUnsubmittedWarning ? (
           <div className="measurement-review-unsubmitted-warning" role="note">
             Dieses Aufmaß wurde vom Monteur noch nicht zur Prüfung eingereicht. Eine Prüfung oder ein Abschluss durch das Büro ist trotzdem möglich. Bitte vor dem Fortfahren fachlich kontrollieren.
           </div>
@@ -3738,11 +3923,162 @@ function MeasurementReviewPanel({
           </p>
         </div>
         <div className="measurement-review-header-actions">
+          {!archiveMode && canCreateBatch ? (
+            <button type="button" className="secondary-action" disabled={batchesLoading} onClick={openCreateDialog}>
+              <Plus aria-hidden="true" size={15} />
+              Aufmaß anlegen
+            </button>
+          ) : null}
           <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
             {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
           </button>
         </div>
       </header>
+      {isCreateDialogOpen ? (
+        <div
+          className="measurement-create-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isCreatingBatch) {
+              setIsCreateDialogOpen(false);
+            }
+          }}
+        >
+          <section
+            aria-labelledby="measurement-create-modal-title"
+            aria-modal="true"
+            className="measurement-create-modal"
+            role="dialog"
+          >
+            <header className="measurement-create-modal-header">
+              <div>
+                <h3 id="measurement-create-modal-title">Aufmaß anlegen</h3>
+                <p>Neues Aufmaßpaket direkt in der Projektakte erstellen.</p>
+              </div>
+              <button
+                aria-label="Dialog schließen"
+                className="measurement-create-modal-close"
+                disabled={isCreatingBatch}
+                type="button"
+                onClick={() => setIsCreateDialogOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="measurement-create-modal-form">
+              <label className="measurement-create-field" htmlFor={`${createAreaLabelId}-input`}>
+                <span id={createAreaLabelId}>Bereich/Ort *</span>
+                <input
+                  autoFocus
+                  id={`${createAreaLabelId}-input`}
+                  maxLength={260}
+                  placeholder="z. B. 1. Obergeschoss"
+                  type="text"
+                  value={createAreaLocation}
+                  onChange={(event) => {
+                    setCreateAreaLocation(event.target.value);
+                    setCreateError(null);
+                    setForceDuplicateConfirmation(false);
+                  }}
+                />
+              </label>
+              <label className="measurement-create-field" htmlFor={`${createDateLabelId}-input`}>
+                <span id={createDateLabelId}>Aufmaßdatum *</span>
+                <input
+                  id={`${createDateLabelId}-input`}
+                  type="date"
+                  value={createMeasurementDate}
+                  onChange={(event) => {
+                    setCreateMeasurementDate(event.target.value);
+                    setCreateError(null);
+                    setForceDuplicateConfirmation(false);
+                  }}
+                />
+              </label>
+              {availableBases.length > 0 ? (
+                <div className="measurement-create-field">
+                  <span id={createOfferLabelId}>Angebotsgrundlage{availableBases.length > 1 ? " *" : ""}</span>
+                  <DashboardNotePicker
+                    emptyOptionLabel="Angebot auswählen"
+                    emptyText="Keine Angebotsgrundlage gefunden"
+                    error={null}
+                    errorText="Angebotsgrundlagen konnten nicht geladen werden."
+                    includeEmptyOption={availableBases.length > 1}
+                    labelId={createOfferLabelId}
+                    listLabel="Angebotsgrundlage auswählen"
+                    loading={false}
+                    loadingText="Angebotsgrundlagen werden geladen..."
+                    options={offerPickerOptions}
+                    searchable={false}
+                    value={createOfferId}
+                    onChange={(value) => {
+                      setCreateOfferId(value);
+                      setCreateError(null);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="measurement-create-empty-base" role="note">
+                  Keine Angebotspositionen vorhanden. Das Aufmaß wird leer angelegt und kann mit freien Positionen ergänzt werden.
+                </div>
+              )}
+              <div className="measurement-create-field">
+                <span id={createEmployeeLabelId}>Verantwortlicher Monteur</span>
+                <DashboardNotePicker
+                  emptyText="Kein aktiver interner Monteur gefunden"
+                  error={measurementWorkersError}
+                  errorText="Monteure konnten nicht geladen werden."
+                  labelId={createEmployeeLabelId}
+                  listLabel="Verantwortlichen Monteur auswählen"
+                  loading={measurementWorkersLoading}
+                  loadingText="Monteure werden geladen..."
+                  options={workerPickerOptions}
+                  searchLabel="Monteur suchen"
+                  searchPlaceholder="Monteur suchen…"
+                  value={createEmployeeId}
+                  onChange={(value) => {
+                    setCreateEmployeeId(value);
+                    setCreateError(null);
+                  }}
+                />
+              </div>
+              {matchingDraft || forceDuplicateConfirmation ? (
+                <div className="measurement-create-duplicate-note" role="note">
+                  Für diesen Bereich und dieses Datum besteht bereits ein offener Entwurf. Ein weiteres Aufmaß kann bewusst trotzdem angelegt werden.
+                </div>
+              ) : null}
+              {createError ? <div className="project-record-empty-state is-error"><strong>{createError}</strong></div> : null}
+            </div>
+            <footer className="measurement-create-modal-actions">
+              <button
+                className="secondary-action"
+                disabled={isCreatingBatch}
+                type="button"
+                onClick={() => setIsCreateDialogOpen(false)}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="primary-action"
+                disabled={
+                  isCreatingBatch
+                  || !createAreaLocation.trim()
+                  || !createMeasurementDate
+                  || (availableBases.length > 1 && !createOfferId)
+                }
+                type="button"
+                onClick={() => void submitCreateBatch()}
+              >
+                {isCreatingBatch
+                  ? "Wird angelegt..."
+                  : matchingDraft || forceDuplicateConfirmation
+                    ? "Trotzdem anlegen"
+                    : "Aufmaß anlegen"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
       {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
       {batchesError ? (
         <div className="project-record-empty-state is-error">
@@ -3752,7 +4088,9 @@ function MeasurementReviewPanel({
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length === 0 ? (
         <div className="project-record-empty-state">
-          {archiveMode ? "Keine archivierten Aufmaße vorhanden." : "Noch keine Aufmaßpakete vorhanden."}
+          {archiveMode
+            ? "Keine archivierten Aufmaße vorhanden."
+            : "Noch keine Aufmaßpakete vorhanden. Du kannst ein Aufmaß im Büro anlegen, wenn kein Monteur-Aufmaß vorliegt."}
         </div>
       ) : null}
       {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
@@ -3785,8 +4123,10 @@ function MeasurementReviewPanel({
                         {batch.offer_name ? <span className="measurement-status is-old-offer">{batch.offer_name}</span> : null}
                       </div>
                       <small className="measurement-review-submitter-status">
-                        {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
-                        {batch.submitted_at ? ` · Eingereicht ${formatDateTime(batch.submitted_at)}` : ""}
+                        {batch.origin === "OFFICE"
+                          ? `Im Büro angelegt${batch.created_by_name ? ` · von ${batch.created_by_name}` : ""}`
+                          : batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
+                        {batch.origin !== "OFFICE" && batch.submitted_at ? ` · Eingereicht ${formatDateTime(batch.submitted_at)}` : ""}
                       </small>
                       <small className="measurement-review-submitter-status">
                         Gelöscht {batch.deleted_at ? formatDateTime(batch.deleted_at) : "ohne Datum"}
@@ -3840,10 +4180,17 @@ function MeasurementReviewPanel({
                     </div>
                     <CustomerEmailStatusLine item={batch} />
                     <small className="measurement-review-submitter-status">
-                      {batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
-                      {batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
+                      {batch.origin === "OFFICE"
+                        ? `Im Büro angelegt${batch.created_by_name ? ` · von ${batch.created_by_name}` : ""}`
+                        : batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
+                      {batch.origin !== "OFFICE" && batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
                       {isOldOffer && batch.offer_name ? ` · ${batch.offer_name}` : ""}
                     </small>
+                    {batch.area_location || batch.measurement_date || batch.assigned_employee_name ? (
+                      <small className="measurement-review-submitter-status">
+                        {[batch.area_location, batch.measurement_date ? formatDateOnly(batch.measurement_date, "numeric") : null, batch.assigned_employee_name].filter(Boolean).join(" · ")}
+                      </small>
+                    ) : null}
                   </div>
                   <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
                 </button>
@@ -3860,18 +4207,20 @@ function MeasurementReviewPanel({
                   >
                     {isExportingCheckedPdf ? "PDF..." : "Aufmaß geprüft"}
                   </button>
-                  <button
-                    type="button"
-                    className="measurement-review-pdf-action"
-                    disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
-                    onClick={() => {
-                      setPdfExportingAction(originalPdfKey);
-                      void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
-                    }}
-                  >
-                    {isExportingOriginalPdf ? "PDF..." : "Originales Monteur-Aufmaß"}
-                  </button>
+                  {batch.has_original_worker_submission ? (
+                    <button
+                      type="button"
+                      className="measurement-review-pdf-action"
+                      disabled={!canExportPdf || isExportingPdf}
+                      title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
+                      onClick={() => {
+                        setPdfExportingAction(originalPdfKey);
+                        void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
+                      }}
+                    >
+                      {isExportingOriginalPdf ? "PDF..." : "Originales Monteur-Aufmaß"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -6531,6 +6880,17 @@ function toLocalDateKey(value: Date): string {
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function normalizeMeasurementArea(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("de-DE");
+}
+
+function createClientRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `measurement-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function readApiError(error: unknown, fallback: string): string {

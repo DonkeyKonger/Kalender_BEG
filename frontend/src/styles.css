@@ -24704,11 +24704,177 @@ button.person-chip:focus-visible {
   justify-content: flex-end;
   min-width: 0;
   margin-left: auto;
+  gap: 8px;
 }
 
 .site-detail-page .measurement-review-toolbar .measurement-review-header-actions > .secondary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: auto;
   white-space: nowrap;
+}
+
+.measurement-create-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: grid;
+  place-items: center;
+  background: rgb(15 30 50 / 38%);
+  padding: 20px;
+}
+
+.measurement-create-modal {
+  width: min(570px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid #aebfd4;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 18px 44px rgb(20 38 62 / 24%);
+}
+
+.measurement-create-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #dce3ee;
+  background: #f7f9fc;
+  padding: 14px 16px;
+}
+
+.measurement-create-modal-header h3,
+.measurement-create-modal-header p {
+  margin: 0;
+}
+
+.measurement-create-modal-header h3 {
+  font-size: 1rem;
+}
+
+.measurement-create-modal-header p {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.measurement-create-modal-close {
+  display: grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #c8d6e6;
+  border-radius: 0;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.measurement-create-modal-close:hover,
+.measurement-create-modal-close:focus-visible {
+  border-color: #8aa8cf;
+  background: #eef4fb;
+  outline: none;
+}
+
+.measurement-create-modal-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+
+.measurement-create-field {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 5px;
+  color: #52647d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.measurement-create-field:first-child {
+  grid-column: 1 / -1;
+}
+
+.measurement-create-field input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #c8d6e6;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  padding: 6px 8px;
+  text-transform: none;
+}
+
+.measurement-create-field input:focus {
+  border-color: #8aa8cf;
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(77 122 179 / 12%);
+}
+
+.measurement-create-empty-base,
+.measurement-create-duplicate-note,
+.measurement-create-modal-form > .project-record-empty-state {
+  grid-column: 1 / -1;
+  margin: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.measurement-create-empty-base {
+  border: 1px solid #d8e1ec;
+  background: #f8fafc;
+  color: #52647d;
+}
+
+.measurement-create-duplicate-note {
+  border: 1px solid #e2d2a9;
+  background: #fdf9ee;
+  color: #72561d;
+}
+
+.measurement-create-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #dce3ee;
+  padding: 12px 16px;
+}
+
+@media (max-width: 640px) {
+  .measurement-create-modal-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .measurement-create-modal-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .measurement-create-field:first-child,
+  .measurement-create-empty-base,
+  .measurement-create-duplicate-note,
+  .measurement-create-modal-form > .project-record-empty-state {
+    grid-column: 1;
+  }
 }
 
 @media (max-width: 760px) {
@@ -24953,16 +25119,26 @@ button.person-chip:focus-visible {
   margin: 8px 18px 0;
 }
 
-.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning {
+.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning,
+.measurement-review-detail.is-table-view .measurement-review-origin-note {
   margin: 8px 18px 0;
-  border: 1px solid #f3d08a;
-  border-radius: 6px;
-  background: #fff7e6;
-  color: #8a4b10;
+  border-radius: 0;
   padding: 9px 11px;
   font-size: 0.84rem;
   font-weight: 760;
   line-height: 1.4;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-unsubmitted-warning {
+  border: 1px solid #f3d08a;
+  background: #fff7e6;
+  color: #8a4b10;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-origin-note {
+  border: 1px solid #bfd0e3;
+  background: #f3f7fb;
+  color: #334f70;
 }
 
 .measurement-review-detail.is-table-view .project-record-empty-state.is-error {
