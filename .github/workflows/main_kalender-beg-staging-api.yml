@@ -55,9 +55,14 @@ jobs:
                       ["git", "show", "--pretty=", "--name-only", current],
                       text=True,
                   ).splitlines()
-              required = required or (
-                  "backend/app/import_data/BEG-Maschinen+Werkzeugliste.xlsx" in changed
-              )
+              import_trigger_paths = {
+                  ".github/workflows/main_kalender-beg-staging-api.yml",
+                  "backend/app/import_data/BEG-Maschinen+Werkzeugliste.xlsx",
+                  "backend/app/scripts/import_tools_from_excel.py",
+                  "backend/app/scripts/run_deployed_tool_import.sh",
+                  "backend/app/services/tool_material_excel_import.py",
+              }
+              required = required or bool(import_trigger_paths.intersection(changed))
 
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"required={'true' if required else 'false'}\n")
@@ -90,6 +95,26 @@ jobs:
             -x ".pytest_cache/*" \
             -x ".ruff_cache/*" \
             -x "*.egg-info/*"
+
+      - name: Verify tool import files in deployment package
+        if: steps.tool-import-change.outputs.required == 'true'
+        run: |
+          python - <<'PY'
+          from zipfile import ZipFile
+
+          required_files = {
+              "app/import_data/BEG-Maschinen+Werkzeugliste.xlsx",
+              "app/scripts/run_deployed_tool_import.sh",
+          }
+          with ZipFile("backend-release.zip") as archive:
+              packaged_files = set(archive.namelist())
+          missing = sorted(required_files - packaged_files)
+          if missing:
+              raise SystemExit(
+                  "Deployment-Paket enthält nicht alle Importdateien: " + ", ".join(missing)
+              )
+          print("Werkzeug-Importdateien sind vollständig im Deployment-Paket enthalten.")
+          PY
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -204,6 +229,7 @@ jobs:
               if scm_base.endswith(suffix):
                   scm_base = scm_base[: -len(suffix)]
           command_url = f"{scm_base}/api/command"
+          import_script = "/home/site/wwwroot/app/scripts/run_deployed_tool_import.sh"
 
           print(f"::add-mask::{username}")
           print(f"::add-mask::{password}")
@@ -222,11 +248,40 @@ jobs:
               time.sleep(5)
 
           credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+          # The public health endpoint can still answer from the previous worker while
+          # ZipDeploy is switching the mounted package. Confirm the new import helper
+          # is visible to Kudu before executing it.
+          script_url = f"{scm_base}/api/vfs/site/wwwroot/app/scripts/run_deployed_tool_import.sh"
+          for attempt in range(60):
+              script_request = urllib.request.Request(
+                  script_url,
+                  headers={"Authorization": f"Basic {credentials}"},
+              )
+              try:
+                  with urllib.request.urlopen(script_request, timeout=15) as response:
+                      if response.status == 200:
+                          break
+              except urllib.error.HTTPError as error:
+                  if error.code != 404:
+                      detail = error.read().decode(errors="replace")[-2000:]
+                      raise SystemExit(
+                          f"Azure import helper check failed with HTTP {error.code}: {detail}"
+                      )
+              except (OSError, urllib.error.URLError):
+                  pass
+              if attempt == 59:
+                  raise SystemExit(
+                      "Azure import helper is missing after deployment: "
+                      f"{import_script}"
+                  )
+              time.sleep(2)
+
           request = urllib.request.Request(
               command_url,
               data=json.dumps(
                   {
-                      "command": "bash app/scripts/run_deployed_tool_import.sh",
+                      "command": f"bash {import_script}",
                       "dir": "/home/site/wwwroot",
                   }
               ).encode(),
