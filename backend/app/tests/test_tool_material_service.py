@@ -3,7 +3,7 @@ from time import perf_counter
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 
 from app.models import Base
@@ -90,7 +90,7 @@ def tool_material_db() -> tuple[Session, dict[str, Person]]:
     return db, people
 
 
-def test_create_item_requires_and_persists_unique_beg_number():
+def test_create_item_requires_and_persists_beg_number():
     db, _people = tool_material_db()
     service = ToolMaterialService(db)
 
@@ -132,17 +132,19 @@ def test_all_tool_material_categories_can_be_created_and_updated(category):
     db.close()
 
 
-def test_duplicate_beg_number_is_rejected_case_insensitively():
+def test_duplicate_beg_number_is_allowed_for_distinct_physical_components():
     db, _people = tool_material_db()
     service = ToolMaterialService(db)
 
-    with pytest.raises(HTTPException) as error:
-        service.create_item(
-            ToolMaterialItemCreate(beg_number="beg-001", designation="Duplikat")
-        )
+    created = service.create_item(
+        ToolMaterialItemCreate(beg_number="BEG-001", designation="Zweite Komponente")
+    )
 
-    assert error.value.status_code == 409
-    assert error.value.detail == "Diese BEG-Nr. ist bereits vergeben."
+    assert created.beg_number == "BEG-001"
+    duplicates = db.scalars(
+        select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-001")
+    ).all()
+    assert len(duplicates) == 2
     db.close()
 
 

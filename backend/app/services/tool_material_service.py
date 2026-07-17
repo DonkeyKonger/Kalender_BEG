@@ -3,7 +3,6 @@ import re
 
 from fastapi import HTTPException, status
 from sqlalchemy import String, case, cast, false, func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload, with_loader_criteria
 
 from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolIssueStatus, ToolMaterialStatus
@@ -364,11 +363,10 @@ class ToolMaterialService:
             values,
             provided_fields=payload.model_fields_set,
         )
-        self._ensure_unique_beg_number(values["beg_number"])
         self._ensure_employee_exists(values.get("employee_id"))
         item = ToolMaterialItem(**values)
         self.db.add(item)
-        self._commit_with_unique_beg_number_guard()
+        self.db.commit()
         self.db.refresh(item)
         return self._get_item(item.id)
 
@@ -380,13 +378,11 @@ class ToolMaterialService:
             provided_fields=payload.model_fields_set,
             current_status=item.status,
         )
-        if "beg_number" in values and values["beg_number"] is not None:
-            self._ensure_unique_beg_number(values["beg_number"], excluding_item_id=item_id)
         if "employee_id" in values:
             self._ensure_employee_exists(values.get("employee_id"))
         for field, value in values.items():
             setattr(item, field, value)
-        self._commit_with_unique_beg_number_guard()
+        self.db.commit()
         self.db.refresh(item)
         return self._get_item(item.id)
 
@@ -412,21 +408,6 @@ class ToolMaterialService:
         person = self.db.get(Person, employee_id)
         if person is None or person.deleted_at is not None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mitarbeiter nicht gefunden.")
-
-    def _ensure_unique_beg_number(self, beg_number: str, *, excluding_item_id: int | None = None) -> None:
-        statement = select(ToolMaterialItem.id).where(func.lower(ToolMaterialItem.beg_number) == beg_number.lower())
-        if excluding_item_id is not None:
-            statement = statement.where(ToolMaterialItem.id != excluding_item_id)
-        if self.db.scalar(statement) is not None:
-            raise duplicate_beg_number_error()
-
-    def _commit_with_unique_beg_number_guard(self) -> None:
-        try:
-            self.db.commit()
-        except IntegrityError as error:
-            self.db.rollback()
-            raise duplicate_beg_number_error() from error
-
 
 def clean_tool_material_values(values: dict, *, partial: bool = False) -> dict:
     cleaned = dict(values)
@@ -574,7 +555,3 @@ def add_filter_option(options: dict[str, str], value, *, label: str | None = Non
     option_value = EMPTY_FILTER_VALUE if value is None or value == "" else str(value)
     option_label = "(Leer)" if option_value == EMPTY_FILTER_VALUE else (label or str(value))
     options[option_value] = option_label
-
-
-def duplicate_beg_number_error() -> HTTPException:
-    return HTTPException(status.HTTP_409_CONFLICT, "Diese BEG-Nr. ist bereits vergeben.")

@@ -17,7 +17,10 @@ class ToolMaterialItem(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    beg_number: Mapped[str | None] = mapped_column(String(120), unique=True, index=True)
+    # A BEG number identifies a set in parts of the legacy workbook and is therefore
+    # intentionally not unique. Physical identity is established by the import metadata
+    # and the technical identifiers instead.
+    beg_number: Mapped[str | None] = mapped_column(String(120), index=True)
     manufacturer: Mapped[str | None] = mapped_column(String(200), index=True)
     designation: Mapped[str] = mapped_column(String(240), nullable=False, index=True)
     item_type: Mapped[str | None] = mapped_column(String(160), index=True)
@@ -30,6 +33,10 @@ class ToolMaterialItem(TimestampMixin, Base):
     supplier: Mapped[str | None] = mapped_column(String(200), index=True)
     invoice_number: Mapped[str | None] = mapped_column(String(160), index=True)
     stock: Mapped[int | None] = mapped_column(Integer)
+    import_source: Mapped[str | None] = mapped_column(String(80), index=True)
+    import_sheet: Mapped[str | None] = mapped_column(String(80))
+    import_row_number: Mapped[int | None] = mapped_column(Integer)
+    import_key: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     category: Mapped[ToolMaterialCategory] = mapped_column(
         Enum(
             ToolMaterialCategory,
