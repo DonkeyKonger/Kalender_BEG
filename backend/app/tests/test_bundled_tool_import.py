@@ -120,6 +120,8 @@ def test_startup_runs_bundled_import_after_migrations_and_before_gunicorn():
     gunicorn_index = startup_script.index("exec gunicorn")
 
     assert migration_index < import_index < gunicorn_index
+    assert "if python -m app.scripts.import_bundled_tools; then" in startup_script
+    assert "Die API wird trotzdem gestartet" in startup_script
 
 
 def test_tool_import_health_reports_pending_and_ready(monkeypatch):
