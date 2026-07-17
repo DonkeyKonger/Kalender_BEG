@@ -1661,7 +1661,9 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card {
-  min-height: 88px;
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
   overflow: hidden;
   border-color: #d7e1ee;
   border-radius: 2px;
@@ -1694,8 +1696,10 @@ button.entity-card:focus-visible,
 
 .site-overview-page .site-card-main {
   gap: 8px;
-  min-height: 88px;
-  padding: 10px 7px 10px 10px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 6px 8px 9px;
 }
 
 .site-card-main:focus-visible {
@@ -1704,31 +1708,52 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-color {
+  align-self: stretch;
   flex: 0 0 auto;
   width: 4px;
-  min-height: 62px;
+  height: auto;
+  min-height: 0;
   border-radius: 0;
 }
 
 .site-overview-page .site-card-icon {
-  width: 26px;
-  height: 26px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   border-radius: 2px;
   background: #eef6ff;
   color: #123f70;
 }
 
+.site-overview-page .site-card .entity-card-body {
+  align-content: start;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .site-overview-page .entity-card-title {
+  display: block;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   color: #132037;
   font-size: 0.87rem;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .site-overview-page .entity-card-subtitle {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: #62758f;
   font-size: 0.73rem;
   font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .site-card-meta-grid {
@@ -1760,10 +1785,18 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-meta-grid {
-  margin-top: 1px;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
   color: #5f728b;
   font-size: 0.71rem;
-  line-height: 1.28;
+  line-height: 1.22;
+}
+
+.site-overview-page .site-card-meta-grid > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .site-overview-page .site-card-meta-grid strong {
@@ -1777,7 +1810,10 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-status-control {
-  padding: 10px 10px 10px 2px;
+  flex: 0 0 82px;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 8px 8px 8px 2px;
 }
 
 .site-card-status-select {
@@ -1791,7 +1827,8 @@ button.entity-card:focus-visible,
 }
 
 .site-overview-page .site-card-status-select {
-  max-width: 78px;
+  width: 72px;
+  max-width: 72px;
   min-height: 22px;
   border: 1px solid currentColor;
   border-radius: 2px;
@@ -15338,7 +15375,7 @@ button.person-chip:focus-visible {
 
 .site-overview-page .site-card-grid {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 @media (max-width: 1100px) {

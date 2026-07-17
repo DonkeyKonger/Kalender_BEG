@@ -1050,17 +1050,20 @@ function renderSiteCard(
   onStatusChange: (site: SiteSummary, status: SiteStatus) => void,
 ) {
   const classes = ["entity-card", "site-card", INACTIVE_SITE_STATUSES.includes(site.status) ? "is-inactive" : ""].filter(Boolean).join(" ");
+  const siteLocationLabel = [site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort";
+  const projectManagerLabel = siteProjectManagerLabel(site);
+  const customerLabel = site.customer || "—";
   return (
     <article className={classes} key={site.id}>
       <button className="site-card-main" type="button" onClick={() => openSiteDetail(site.id)}>
         <span className="entity-card-color site-card-color" style={{ backgroundColor: getSiteColorDisplayValue(site.color) }} aria-hidden="true" />
         <span className="entity-card-icon site-card-icon"><BriefcaseBusiness aria-hidden="true" size={17} /></span>
         <span className="entity-card-body">
-          <span className="entity-card-title">{site.name}</span>
-          <span className="entity-card-subtitle">{[site.site_number, site.location].filter(Boolean).join(" · ") || "Ohne Ort"}</span>
+          <span className="entity-card-title" title={site.name}>{site.name}</span>
+          <span className="entity-card-subtitle" title={siteLocationLabel}>{siteLocationLabel}</span>
           <span className="site-card-meta-grid">
-            <span><strong>PL:</strong><span>{siteProjectManagerLabel(site)}</span></span>
-            <span><strong>Kunde:</strong><span>{site.customer || "—"}</span></span>
+            <span><strong>PL:</strong><span title={projectManagerLabel}>{projectManagerLabel}</span></span>
+            <span><strong>Kunde:</strong><span title={customerLabel}>{customerLabel}</span></span>
           </span>
         </span>
       </button>
