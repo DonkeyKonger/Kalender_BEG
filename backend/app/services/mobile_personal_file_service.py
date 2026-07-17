@@ -10,7 +10,7 @@ from app.models.person import Person
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
-from app.models.vehicle import VehicleAsset
+from app.models.vehicle import Vehicle
 from app.schemas.mobile import (
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
@@ -81,25 +81,20 @@ class MobilePersonalFileService:
         return person
 
     def _vehicle(self, *, person_id: int) -> MobilePersonalFileVehicle | None:
-        asset = self.db.scalar(
-            select(VehicleAsset)
+        vehicle = self.db.scalar(
+            select(Vehicle)
             .where(
-                VehicleAsset.assigned_person_id == person_id,
-                VehicleAsset.is_active.is_(True),
+                Vehicle.assigned_person_id == person_id,
+                Vehicle.is_active.is_(True),
             )
-            .order_by(VehicleAsset.updated_at.desc(), VehicleAsset.id.desc())
+            .order_by(Vehicle.updated_at.desc(), Vehicle.id.desc())
         )
-        if asset is None:
+        if vehicle is None:
             return None
         return MobilePersonalFileVehicle(
-            name=(
-                asset.label
-                or asset.vehicle_registration
-                or asset.fleet_number
-                or f"Fahrzeug {asset.external_id}"
-            ),
-            vehicle_registration=asset.vehicle_registration,
-            fleet_number=asset.fleet_number,
+            id=vehicle.id,
+            license_plate=vehicle.license_plate,
+            manufacturer=vehicle.manufacturer,
         )
 
     def _tools(self, *, person_id: int) -> list[MobilePersonalFileTool]:

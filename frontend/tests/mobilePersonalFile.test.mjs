@@ -67,6 +67,8 @@ test("summary shows at most three tools and only offers the full list above thre
   assert.match(pageSource, /data\.tool_preview\.map/);
   assert.match(pageSource, /data\.tool_count > 3/);
   assert.match(pageSource, /Alle \{data\.tool_count\} anzeigen/);
+  assert.match(pageSource, /data\.vehicle\?\.license_plate/);
+  assert.match(pageSource, /data\.vehicle\.manufacturer/);
   assert.match(pageSource, /Kein Fahrzeug zugeordnet/);
   assert.match(pageSource, /keine Werkzeuge oder Materialien zugeordnet/);
 });

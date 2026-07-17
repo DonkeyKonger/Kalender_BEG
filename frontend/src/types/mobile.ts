@@ -41,9 +41,9 @@ export type MobileAssignmentsResponse = {
 };
 
 export type MobilePersonalFileVehicle = {
-  name: string;
-  vehicle_registration: string | null;
-  fleet_number: string | null;
+  id: number;
+  license_plate: string;
+  manufacturer: string;
 };
 
 export type MobilePersonalFileTool = {

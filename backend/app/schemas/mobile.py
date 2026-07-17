@@ -53,9 +53,9 @@ class MobileSelfPlanRequest(BaseModel):
 
 
 class MobilePersonalFileVehicle(BaseModel):
-    name: str
-    vehicle_registration: str | None = None
-    fleet_number: str | None = None
+    id: int
+    license_plate: str
+    manufacturer: str
 
 
 class MobileToolIssueSummary(BaseModel):

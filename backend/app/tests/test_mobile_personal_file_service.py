@@ -26,7 +26,7 @@ from app.models.person_vacation_carryover import PersonVacationCarryover
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
-from app.models.vehicle import VehicleAsset
+from app.models.vehicle import Vehicle, VehicleAsset
 from app.services.mobile_personal_file_service import MobilePersonalFileService
 
 
@@ -95,18 +95,32 @@ def personal_file_context() -> tuple[Session, User, Person, Person]:
     )
     db.add_all(
         [
+            Vehicle(
+                license_plate="OHZ-BE 247",
+                name="Volkswagen",
+                manufacturer="Volkswagen",
+                assigned_person_id=worker.id,
+                is_active=True,
+            ),
+            Vehicle(
+                license_plate="FREM D1",
+                name="Ford",
+                manufacturer="Ford",
+                assigned_person_id=other.id,
+                is_active=True,
+            ),
             VehicleAsset(
                 source="ctrack",
-                external_id="own-vehicle",
+                external_id="own-ctrack-vehicle",
                 assigned_person_id=worker.id,
-                label="VW Transporter",
-                vehicle_registration="OHZ-BE 247",
+                label="C-Track darf nicht die Personalakte speisen",
+                vehicle_registration="ALT-CT 1",
                 fleet_number="17",
                 is_active=True,
             ),
             VehicleAsset(
                 source="ctrack",
-                external_id="other-vehicle",
+                external_id="other-ctrack-vehicle",
                 assigned_person_id=other.id,
                 label="Fremdes Fahrzeug",
                 is_active=True,
@@ -192,8 +206,8 @@ def test_personal_file_uses_current_person_and_central_weekday_calculation():
     assert summary.remaining_vacation_days == 30
     assert summary.sick_days == 2
     assert summary.vehicle is not None
-    assert summary.vehicle.name == "VW Transporter"
-    assert summary.vehicle.vehicle_registration == "OHZ-BE 247"
+    assert summary.vehicle.license_plate == "OHZ-BE 247"
+    assert summary.vehicle.manufacturer == "Volkswagen"
     assert summary.tool_count == 4
     assert [item.beg_number for item in summary.tool_preview] == ["BEG-1", "BEG-2", "BEG-10"]
     db.close()
@@ -222,7 +236,7 @@ def test_personal_file_tool_list_is_reduced_sorted_and_excludes_other_statuses()
 def test_personal_file_vehicle_empty_state_does_not_fall_back_to_foreign_vehicle():
     db, user, worker, _other = personal_file_context()
     own_vehicle = db.scalar(
-        select(VehicleAsset).where(VehicleAsset.assigned_person_id == worker.id)
+        select(Vehicle).where(Vehicle.assigned_person_id == worker.id)
     )
     assert own_vehicle is not None
     db.delete(own_vehicle)
@@ -248,7 +262,8 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
     tools_response = client.get(f"/api/me/personal-file/tools?person_id={other.id}")
 
     assert summary_response.status_code == 200
-    assert summary_response.json()["vehicle"]["name"] == "VW Transporter"
+    assert summary_response.json()["vehicle"]["license_plate"] == "OHZ-BE 247"
+    assert summary_response.json()["vehicle"]["manufacturer"] == "Volkswagen"
     assert summary_response.json()["tool_count"] == 4
     assert tools_response.status_code == 200
     assert {item["beg_number"] for item in tools_response.json()} == {

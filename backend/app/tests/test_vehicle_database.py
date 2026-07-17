@@ -1,3 +1,4 @@
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -10,10 +11,12 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.main import create_app
 from app.models import Base
-from app.models.enums import PersonEmploymentStatus, PersonType, UserRole
+from app.models.enums import GpsSourceType, PersonEmploymentStatus, PersonType, UserRole
+from app.models.gps_point import GpsPoint
 from app.models.person import Person
+from app.models.site import Site
 from app.models.user import User
-from app.models.vehicle import Vehicle, VehicleAsset
+from app.models.vehicle import SiteVehicleAssignment, Vehicle, VehicleAsset
 
 
 def principal(role: UserRole, *permissions: str):
@@ -135,6 +138,61 @@ def test_vehicle_crud_normalizes_plate_and_uses_stable_foreign_keys(vehicle_cont
     assert deleted.status_code == 204
     assert db.get(VehicleAsset, asset.id) is not None
     assert db.get(Vehicle, payload["id"]) is None
+
+
+def test_vehicle_delete_cleans_internal_links_without_touching_person_or_ctrack(vehicle_context):
+    db, client, _, worker, _, asset, _ = vehicle_context
+    site = Site(site_number="8001", name="Baustelle mit Fahrzeug")
+    vehicle = Vehicle(
+        license_plate="H-BP 3090",
+        name="Volkswagen",
+        manufacturer="Volkswagen",
+        assigned_person_id=worker.id,
+        ctrack_vehicle_asset_id=asset.id,
+        is_active=True,
+    )
+    db.add_all([site, vehicle])
+    db.flush()
+    assignment = SiteVehicleAssignment(
+        site_id=site.id,
+        vehicle_id=vehicle.id,
+        start_date=date(2026, 7, 17),
+        end_date=date(2026, 7, 17),
+    )
+    gps_point = GpsPoint(
+        source_type=GpsSourceType.VEHICLE,
+        source_id="gps-h-bp-3090",
+        vehicle_id=vehicle.id,
+        latitude=53.0142,
+        longitude=9.0263,
+        timestamp=datetime(2026, 7, 17, 8, 0, tzinfo=timezone.utc),
+    )
+    db.add_all([assignment, gps_point])
+    db.commit()
+    vehicle_id = vehicle.id
+    worker_id = worker.id
+    asset_id = asset.id
+    assignment_id = assignment.id
+    gps_point_id = gps_point.id
+
+    response = client.delete(f"/api/admin/vehicles/{vehicle_id}")
+
+    assert response.status_code == 204
+    db.expire_all()
+    assert db.get(Vehicle, vehicle_id) is None
+    assert db.get(Person, worker_id) is not None
+    assert db.get(VehicleAsset, asset_id) is not None
+    assert db.get(SiteVehicleAssignment, assignment_id) is None
+    assert db.get(GpsPoint, gps_point_id).vehicle_id is None
+
+
+def test_vehicle_delete_unknown_id_returns_404(vehicle_context):
+    _db, client, *_ = vehicle_context
+
+    response = client.delete("/api/admin/vehicles/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Fahrzeug nicht gefunden."
 
 
 def test_vehicle_uniqueness_is_case_insensitive_and_ctrack_link_is_exclusive(vehicle_context):

@@ -86,9 +86,9 @@ export function MobilePersonalFilePage() {
             <span className="mobile-personal-icon-tile"><CarFront aria-hidden="true" size={25} /></span>
             <div>
               <span>Fahrzeug</span>
-              <strong>{data.vehicle?.name ?? "Kein Fahrzeug zugeordnet"}</strong>
+              <strong>{data.vehicle?.license_plate ?? "Kein Fahrzeug zugeordnet"}</strong>
               {data.vehicle ? (
-                <small>{formatVehicleDetails(data.vehicle.fleet_number, data.vehicle.vehicle_registration)}</small>
+                <small>{data.vehicle.manufacturer}</small>
               ) : null}
             </div>
             {data.vehicle ? <span className="mobile-personal-assigned-badge">Zugeordnet</span> : null}
@@ -466,11 +466,6 @@ function formatDays(value: number): string {
 
 function formatAvailableDays(value: number): string {
   return `${value} ${value === 1 ? "Tag" : "Tagen"}`;
-}
-
-
-function formatVehicleDetails(fleetNumber: string | null, registration: string | null): string {
-  return [fleetNumber ? `BEG ${fleetNumber}` : null, registration].filter(Boolean).join(" · ");
 }
 
 

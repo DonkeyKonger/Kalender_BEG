@@ -1,12 +1,15 @@
+import logging
+
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.enums import PersonEmploymentStatus, PersonType, UserRole, VehicleType
+from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.user import User
-from app.models.vehicle import Vehicle, VehicleAsset
+from app.models.vehicle import SiteVehicleAssignment, Vehicle, VehicleAsset
 from app.schemas.vehicle_database import (
     CtrackVehicleOptionRead,
     CtrackVehicleRead,
@@ -17,6 +20,9 @@ from app.schemas.vehicle_database import (
     VehicleRead,
     VehicleUpdate,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class VehicleDatabaseService:
@@ -143,8 +149,26 @@ class VehicleDatabaseService:
 
     def delete_vehicle(self, vehicle_id: int) -> None:
         vehicle = self._get(vehicle_id)
+        self.db.execute(
+            delete(SiteVehicleAssignment).where(SiteVehicleAssignment.vehicle_id == vehicle.id)
+        )
+        self.db.execute(
+            update(GpsPoint)
+            .where(GpsPoint.vehicle_id == vehicle.id)
+            .values(vehicle_id=None)
+        )
+        vehicle.assigned_person_id = None
+        vehicle.ctrack_vehicle_asset_id = None
         self.db.delete(vehicle)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as error:
+            self.db.rollback()
+            logger.exception("Vehicle deletion failed for vehicle_id=%s", vehicle_id)
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Fahrzeug konnte wegen vorhandener Referenzen nicht gelöscht werden.",
+            ) from error
 
     def _get(self, vehicle_id: int) -> Vehicle:
         vehicle = self.db.scalar(
