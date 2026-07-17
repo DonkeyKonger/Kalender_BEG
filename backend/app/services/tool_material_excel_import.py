@@ -149,6 +149,7 @@ class ImportReport:
     warnings: list[str] = field(default_factory=list)
     backup_file: str | None = None
     applied: bool = False
+    already_applied: bool = False
     control_checks: dict[str, dict] = field(default_factory=dict)
 
     @property

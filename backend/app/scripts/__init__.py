@@ -1,1 +1,1 @@
-"""Explicit administrative scripts; never executed during application startup."""
+"""Explicit administrative scripts and verified startup data tasks."""

@@ -10,6 +10,7 @@ from app.models import Base
 from app.models.enums import PersonType, ToolMaterialStatus
 from app.models.person import Person
 from app.models.tool_material_item import ToolMaterialItem
+from app.scripts.import_bundled_tools import EXPECTED_SHA256
 from app.services.tool_material_excel_import import (
     ExcelCell,
     ImportReport,
@@ -90,7 +91,7 @@ def test_bundled_productive_snapshot_matches_all_source_controls():
 
     rows, report = read_source_rows(source_file)
 
-    assert digest == "347473065a64fc45a877eee03dd5cf5cb619d0a0adaa4ed8ad3b8aec7bf56d46"
+    assert digest == EXPECTED_SHA256
     assert report.errors == []
     assert report.stock_one_rows == 902
     assert report.valid_source_rows == 900

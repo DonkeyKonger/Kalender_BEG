@@ -8,66 +8,17 @@ on:
       - "backend/**"
       - ".github/workflows/main_kalender-beg-staging-api.yml"
   workflow_dispatch:
-    inputs:
-      import_tool_data:
-        description: "Werkzeug-Datenstamm nach dem Deployment importieren"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      tool_import_required: ${{ steps.tool-import-change.outputs.required }}
+      tool_source_sha256: ${{ steps.verify-tool-import.outputs.source_sha256 }}
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect tool data snapshot change
-        id: tool-import-change
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          CURRENT_SHA: ${{ github.sha }}
-          MANUAL_IMPORT: ${{ inputs.import_tool_data }}
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          import subprocess
-
-          required = os.environ.get("MANUAL_IMPORT", "false").lower() == "true"
-          if os.environ.get("EVENT_NAME") == "push":
-              before = os.environ.get("BEFORE_SHA", "")
-              current = os.environ["CURRENT_SHA"]
-              if before and set(before) != {"0"}:
-                  changed = subprocess.check_output(
-                      ["git", "diff", "--name-only", before, current],
-                      text=True,
-                  ).splitlines()
-              else:
-                  changed = subprocess.check_output(
-                      ["git", "show", "--pretty=", "--name-only", current],
-                      text=True,
-                  ).splitlines()
-              import_trigger_paths = {
-                  ".github/workflows/main_kalender-beg-staging-api.yml",
-                  "backend/app/import_data/BEG-Maschinen+Werkzeugliste.xlsx",
-                  "backend/app/scripts/import_tools_from_excel.py",
-                  "backend/app/scripts/run_deployed_tool_import.sh",
-                  "backend/app/services/tool_material_excel_import.py",
-              }
-              required = required or bool(import_trigger_paths.intersection(changed))
-
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              output.write(f"required={'true' if required else 'false'}\n")
-          print(f"Werkzeugimport nach Deployment: {'ja' if required else 'nein'}")
-          PY
 
       - name: Set up Python version
         uses: actions/setup-python@v5
@@ -97,23 +48,54 @@ jobs:
             -x "*.egg-info/*"
 
       - name: Verify tool import files in deployment package
-        if: steps.tool-import-change.outputs.required == 'true'
+        id: verify-tool-import
         run: |
           python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from tempfile import TemporaryDirectory
           from zipfile import ZipFile
 
           required_files = {
               "app/import_data/BEG-Maschinen+Werkzeugliste.xlsx",
-              "app/scripts/run_deployed_tool_import.sh",
+              "app/scripts/import_bundled_tools.py",
+              "startup.sh",
           }
           with ZipFile("backend-release.zip") as archive:
               packaged_files = set(archive.namelist())
-          missing = sorted(required_files - packaged_files)
-          if missing:
-              raise SystemExit(
-                  "Deployment-Paket enthält nicht alle Importdateien: " + ", ".join(missing)
-              )
-          print("Werkzeug-Importdateien sind vollständig im Deployment-Paket enthalten.")
+              missing = sorted(required_files - packaged_files)
+              if missing:
+                  raise SystemExit(
+                      "Deployment-Paket enthält nicht alle Importdateien: "
+                      + ", ".join(missing)
+                  )
+              with TemporaryDirectory() as temporary_directory:
+                  app_root = Path(temporary_directory).resolve()
+                  archive.extractall(app_root)
+                  completed = subprocess.run(
+                      [
+                          sys.executable,
+                          "-m",
+                          "app.scripts.import_bundled_tools",
+                          "--check-only",
+                      ],
+                      cwd=app_root,
+                      check=True,
+                      capture_output=True,
+                      text=True,
+                  )
+                  verification = json.loads(completed.stdout)
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"source_sha256={verification['sha256']}\n")
+          print(json.dumps(verification, ensure_ascii=False, sort_keys=True))
+          print(
+              "Werkzeug-Importdatei liegt im Deployment-Paket unter "
+              "app/import_data/BEG-Maschinen+Werkzeugliste.xlsx und wird "
+              "vom extrahierten App-Root gefunden."
+          )
           PY
 
       - name: Upload artifact for deployment jobs
@@ -188,17 +170,14 @@ jobs:
           )
           PY
 
-      - name: Import verified tool master data
-        if: needs.build.outputs.tool_import_required == 'true'
+      - name: Verify deployed application and tool import
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+          EXPECTED_TOOL_SOURCE_SHA256: ${{ needs.build.outputs.tool_source_sha256 }}
         run: |
           python - <<'PY'
-          import base64
           import json
           import os
-          import shlex
-          import textwrap
           import time
           import urllib.error
           import urllib.request
@@ -220,127 +199,38 @@ jobs:
 
           username = profile.attrib["userName"]
           password = profile.attrib["userPWD"]
+          print(f"::add-mask::{username}")
+          print(f"::add-mask::{password}")
           destination = profile.attrib.get("destinationAppUrl", "").rstrip("/")
           if not destination:
               raise SystemExit("Publish profile does not contain destinationAppUrl.")
-          publish_url = profile.attrib["publishUrl"].strip()
-          if not publish_url.startswith(("http://", "https://")):
-              publish_url = f"https://{publish_url}"
-          scm_base = publish_url.rstrip("/")
-          for suffix in ("/api/zipdeploy", "/api/msdeploy"):
-              if scm_base.endswith(suffix):
-                  scm_base = scm_base[: -len(suffix)]
-          command_url = f"{scm_base}/api/command"
-          release_sha = os.environ["GITHUB_SHA"]
-          if len(release_sha) != 40 or any(character not in "0123456789abcdef" for character in release_sha):
-              raise SystemExit("GITHUB_SHA is not a valid commit hash.")
-          archive_path = f"/home/tool-import-{release_sha}.zip"
-          bootstrap_path = f"/home/tool-import-{release_sha}.sh"
-          release_root = f"/home/data/tool-material-import/releases/{release_sha}"
-          import_script = f"{release_root}/app/scripts/run_deployed_tool_import.sh"
-
-          print(f"::add-mask::{username}")
-          print(f"::add-mask::{password}")
-
-          health_url = f"{destination}/api/health"
-          for attempt in range(60):
+          expected_sha256 = os.environ["EXPECTED_TOOL_SOURCE_SHA256"]
+          health_url = f"{destination}/api/health/tool-import"
+          last_detail = "noch keine Antwort"
+          for attempt in range(90):
               try:
                   with urllib.request.urlopen(health_url, timeout=15) as response:
                       health = json.load(response)
-                  if response.status == 200 and health.get("status") == "ok":
+                  if (
+                      response.status == 200
+                      and health.get("status") == "ok"
+                      and health.get("source_sha256") == expected_sha256
+                      and health.get("imported_rows") == health.get("expected_rows")
+                  ):
+                      print(json.dumps(health, ensure_ascii=False, sort_keys=True))
                       break
-              except (OSError, urllib.error.URLError, json.JSONDecodeError):
-                  pass
-              if attempt == 59:
-                  raise SystemExit("Azure API did not become healthy before the tool import.")
-              time.sleep(5)
-
-          credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-
-          # ZipDeploy can mount the application package directly for the running app.
-          # That package is intentionally not visible through Kudu's wwwroot VFS. Upload
-          # the already tested build artifact to persistent storage and execute the same
-          # import helper from there instead of relying on the runtime mount.
-          # Kudu's VFS endpoint is already rooted at /home.
-          def upload_file(remote_name, content, content_type):
-              upload_request = urllib.request.Request(
-                  f"{scm_base}/api/vfs/{remote_name}",
-                  data=content,
-                  headers={
-                      "Authorization": f"Basic {credentials}",
-                      "Content-Type": content_type,
-                      "If-Match": "*",
-                  },
-                  method="PUT",
-              )
-              try:
-                  with urllib.request.urlopen(upload_request, timeout=180) as response:
-                      if response.status not in {200, 201, 204}:
-                          raise SystemExit(
-                              f"Azure import file upload returned HTTP {response.status}."
-                          )
+                  last_detail = json.dumps(health, ensure_ascii=False, sort_keys=True)
               except urllib.error.HTTPError as error:
-                  detail = error.read().decode(errors="replace")[-2000:]
-                  raise SystemExit(
-                      f"Azure import file upload failed with HTTP {error.code}: {detail}"
+                  last_detail = (
+                      f"HTTP {error.code}: "
+                      + error.read().decode(errors="replace")[-2000:]
                   )
-
-          with open("backend-release.zip", "rb") as deployment_package:
-              upload_file(
-                  f"tool-import-{release_sha}.zip",
-                  deployment_package.read(),
-                  "application/zip",
-              )
-
-          # Kudu's command endpoint starts one executable directly; it does not
-          # interpret shell operators such as &&. Put the complete sequence into a
-          # script and ask Kudu to execute only /bin/bash with that script.
-          bootstrap_script = textwrap.dedent(
-              f"""\
-              #!/usr/bin/env bash
-              set -euo pipefail
-              mkdir -p {shlex.quote(release_root)}
-              python -m zipfile -e {shlex.quote(archive_path)} {shlex.quote(release_root)}
-              PROJECT_ROOT={shlex.quote(release_root)} /bin/bash {shlex.quote(import_script)}
-              """
-          )
-          upload_file(
-              f"tool-import-{release_sha}.sh",
-              bootstrap_script.encode("utf-8"),
-              "text/x-shellscript",
-          )
-
-          request = urllib.request.Request(
-              command_url,
-              data=json.dumps(
-                  {
-                      "command": f"/bin/bash {bootstrap_path}",
-                      "dir": "/home",
-                  }
-              ).encode(),
-              headers={
-                  "Authorization": f"Basic {credentials}",
-                  "Content-Type": "application/json",
-              },
-              method="POST",
-          )
-          try:
-              with urllib.request.urlopen(request, timeout=900) as response:
-                  result = json.load(response)
-          except urllib.error.HTTPError as error:
-              detail = error.read().decode(errors="replace")[-2000:]
-              raise SystemExit(f"Azure import command failed with HTTP {error.code}: {detail}")
-
-          exit_code = result.get("ExitCode")
-          if exit_code is None:
-              exit_code = result.get("exitCode", 1)
-          output = (result.get("Output") or result.get("output") or "").strip()
-          error_output = (result.get("Error") or result.get("error") or "").strip()
-          if exit_code != 0:
-              detail = error_output or output or json.dumps(result, ensure_ascii=False)
-              raise SystemExit(
-                  f"Azure tool import exited with {exit_code}: "
-                  f"{detail[-2000:]}"
-              )
-          print(output or "Werkzeugimport erfolgreich abgeschlossen.")
+              except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+                  last_detail = str(error)
+              if attempt == 89:
+                  raise SystemExit(
+                      "Die deployte Azure-App hat den Werkzeugimport nicht bestätigt. "
+                      f"URL: {health_url}; letzte Antwort: {last_detail}"
+                  )
+              time.sleep(5)
           PY
