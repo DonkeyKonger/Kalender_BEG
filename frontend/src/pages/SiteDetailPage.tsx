@@ -1,7 +1,7 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -12,6 +12,7 @@ import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { containsDraggedFiles } from "../lib/fileDrag";
 import {
   formatGermanDateKey as formatDateOnly,
   formatGermanDateTimeShort as formatDateTime,
@@ -1257,7 +1258,7 @@ export function SiteDetailPage() {
           uploadError={uploadError}
           dragOverFolderKey={dragOverFolderKey}
           onSelectFolder={setSelectedFolder}
-          onUploadFiles={(folder, files) => void uploadFilesToFolder(folder, files)}
+          onUploadFiles={uploadFilesToFolder}
           onDragOverFolder={setDragOverFolderKey}
           onRetry={() => {
             setFoldersLoaded(false);
@@ -1707,7 +1708,7 @@ function ProjectFoldersPanel({
   uploadError: string | null;
   dragOverFolderKey: string | null;
   onSelectFolder: (folder: ProjectFolder | null) => void;
-  onUploadFiles: (folder: ProjectFolder, files: FileList | File[]) => void;
+  onUploadFiles: (folder: ProjectFolder, files: FileList | File[]) => Promise<void>;
   onDragOverFolder: (folderKey: string | null) => void;
   onRetry: () => void;
   onRetryDocuments: () => void;
@@ -1754,7 +1755,7 @@ function ProjectFoldersPanel({
                       event.preventDefault();
                       event.stopPropagation();
                       onDragOverFolder(null);
-                      onUploadFiles(folder, event.dataTransfer.files);
+                      void onUploadFiles(folder, event.dataTransfer.files);
                     }}
                     title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
                   >
@@ -1818,7 +1819,7 @@ function ProjectFolderDocumentBrowser({
   isUploading: boolean;
   uploadMessage: string | null;
   uploadError: string | null;
-  onUpload: (files: FileList | File[]) => void;
+  onUpload: (files: FileList | File[]) => Promise<void>;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -1830,6 +1831,14 @@ function ProjectFolderDocumentBrowser({
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isFileDropActive, setIsFileDropActive] = useState(false);
+  const fileDragDepthRef = useRef(0);
+  const fileDropUploadPendingRef = useRef(false);
+
+  function resetFileDropState(): void {
+    fileDragDepthRef.current = 0;
+    setIsFileDropActive(false);
+  }
 
   useEffect(() => {
     setQuery("");
@@ -1837,6 +1846,7 @@ function ProjectFolderDocumentBrowser({
     setFolderNavigationError(null);
     setOpenError(null);
     setDownloadError(null);
+    resetFileDropState();
   }, [folder.id]);
 
   async function handleOpenFolder(item: ProjectFolderDocumentItem): Promise<void> {
@@ -1851,6 +1861,7 @@ function ProjectFolderDocumentBrowser({
         ...currentStack,
         { itemId: item.id, name: item.name, documents: childDocuments },
       ]);
+      resetFileDropState();
       setQuery("");
     } catch (requestError) {
       setFolderNavigationError(readApiError(requestError, "Unterordner konnte nicht geladen werden."));
@@ -1862,6 +1873,7 @@ function ProjectFolderDocumentBrowser({
   function handleBackToParentFolder(): void {
     setFolderStack((currentStack) => currentStack.slice(0, -1));
     setFolderNavigationError(null);
+    resetFileDropState();
     setQuery("");
   }
 
@@ -1916,9 +1928,77 @@ function ProjectFolderDocumentBrowser({
   }, [currentDocuments, normalizedQuery]);
   const hasLoadedItems = Boolean(currentDocuments && currentDocuments.items.length > 0);
   const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
+  const canUploadToCurrentFolder = hasSharePointFolder && !isInSubfolder;
+
+  function handleFileDragEnter(event: ReactDragEvent<HTMLElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canUploadToCurrentFolder || isUploading || fileDropUploadPendingRef.current) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    fileDragDepthRef.current += 1;
+    setIsFileDropActive(true);
+  }
+
+  function handleFileDragOver(event: ReactDragEvent<HTMLElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = canUploadToCurrentFolder && !isUploading && !fileDropUploadPendingRef.current
+      ? "copy"
+      : "none";
+  }
+
+  function handleFileDragLeave(event: ReactDragEvent<HTMLElement>): void {
+    if (fileDragDepthRef.current === 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1);
+    if (fileDragDepthRef.current === 0) {
+      setIsFileDropActive(false);
+    }
+  }
+
+  function handleFileDrop(event: ReactDragEvent<HTMLElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    resetFileDropState();
+    if (!canUploadToCurrentFolder || isUploading || fileDropUploadPendingRef.current || event.dataTransfer.files.length === 0) {
+      return;
+    }
+    fileDropUploadPendingRef.current = true;
+    void onUpload(event.dataTransfer.files).finally(() => {
+      fileDropUploadPendingRef.current = false;
+    });
+  }
 
   return (
-    <aside className="project-document-browser" aria-live="polite">
+    <aside
+      className={`project-document-browser${isFileDropActive ? " is-file-drag-over" : ""}`}
+      aria-live="polite"
+      onDragEnter={handleFileDragEnter}
+      onDragOver={handleFileDragOver}
+      onDragLeave={handleFileDragLeave}
+      onDragEnd={resetFileDropState}
+      onDrop={handleFileDrop}
+    >
+      {isFileDropActive ? (
+        <div className="project-document-drop-overlay" role="status">
+          <UploadCloud aria-hidden="true" size={30} />
+          <strong>Dateien hier ablegen</strong>
+        </div>
+      ) : null}
       <div className="project-document-browser-header">
         <div className="project-document-browser-title">
           <span>Ordner {folder.sort_order}</span>
@@ -1952,7 +2032,7 @@ function ProjectFolderDocumentBrowser({
                 disabled={isUploading}
                 onChange={(event) => {
                   if (event.target.files) {
-                    onUpload(event.target.files);
+                    void onUpload(event.target.files);
                     event.target.value = "";
                   }
                 }}
