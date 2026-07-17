@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   CalendarDays,
-  Car,
   ChartColumn,
   CheckCircle2,
   ChevronDown,
@@ -55,7 +54,7 @@ type EditablePerson = PersonCreate & { id: number };
 type DrawerState = { mode: "new" } | { mode: "edit"; personId: number } | null;
 type PersonScope = "internal" | "external";
 type PeopleOverviewGroup = { key: string; label: string; people: Person[]; collapsible?: boolean };
-type PersonDetailActionKey = "absence" | "timeAccount" | "equipment" | "vehicle" | "performance";
+type PersonDetailActionKey = "absence" | "timeAccount" | "equipment" | "performance";
 
 const personDetailActions: Array<{
   key: PersonDetailActionKey;
@@ -88,14 +87,6 @@ const personDetailActions: Array<{
     description: "Aktuell ausgegebenes Werkzeug und Material dieser Person.",
     preview: "Ausgegebenes Werkzeug und Material.",
     icon: Wrench,
-  },
-  {
-    key: "vehicle",
-    label: "Fahrzeug",
-    title: "Fahrzeug",
-    description: "Zugewiesene Fahrzeuge je Person werden hier vorbereitet.",
-    preview: "Fahrzeugzuordnung wird vorbereitet.",
-    icon: Car,
   },
   {
     key: "performance",
@@ -791,13 +782,16 @@ function PersonReadView({
                 onSave={(value) => onInformationSave({ weekly_hours: parseOptionalDecimal(value) })}
               />
             </PersonDetailField>
-            <PersonDetailField className="is-wide person-detail-signature-field" label="Kundenunterschrift">
+            <PersonDetailField className="person-detail-signature-field" label="Kundenunterschrift">
               <PersonSignaturePermissionSelect
                 canEdit={canEdit}
                 disabled={isSaving}
                 value={person.can_sign_measurements_immediately}
                 onChange={onSignaturePermissionChange}
               />
+            </PersonDetailField>
+            <PersonDetailField label="Fahrzeug">
+              <strong>{person.assigned_vehicle?.license_plate ?? "Kein Fahrzeug zugewiesen"}</strong>
             </PersonDetailField>
           </div>
         </section>

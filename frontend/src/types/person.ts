@@ -18,6 +18,10 @@ export type Person = {
   can_sign_measurements_immediately: boolean;
   annual_vacation_days: number | null;
   weekly_hours: number | null;
+  assigned_vehicle?: {
+    id: number;
+    license_plate: string;
+  } | null;
   email: string | null;
   phone: string | null;
   address_postal_code: string | null;

@@ -12,7 +12,14 @@ class PersonRepository:
         self.db = db
 
     def get(self, person_id: int, *, include_deleted: bool = False) -> Person | None:
-        person = self.db.get(Person, person_id)
+        person = self.db.scalar(
+            select(Person)
+            .options(
+                selectinload(Person.users),
+                selectinload(Person.assigned_vehicles),
+            )
+            .where(Person.id == person_id)
+        )
         if person is not None and person.deleted_at is not None and not include_deleted:
             return None
         return person
@@ -20,7 +27,10 @@ class PersonRepository:
     def list(self, is_active: bool | None = None) -> list[Person]:
         statement = (
             select(Person)
-            .options(selectinload(Person.users))
+            .options(
+                selectinload(Person.users),
+                selectinload(Person.assigned_vehicles),
+            )
             .where(Person.deleted_at.is_(None))
             .order_by(Person.display_name)
         )

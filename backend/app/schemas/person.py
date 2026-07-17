@@ -80,9 +80,17 @@ class PersonUpdate(BaseModel):
         return self
 
 
+class PersonAssignedVehicleRead(BaseModel):
+    id: int
+    license_plate: str
+
+    model_config = {"from_attributes": True}
+
+
 class PersonRead(PersonBase):
     id: int
     user_roles: list[UserRole] = Field(default_factory=list)
+    assigned_vehicle: PersonAssignedVehicleRead | None = None
     deleted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

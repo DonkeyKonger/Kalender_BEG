@@ -140,6 +140,68 @@ def test_vehicle_crud_normalizes_plate_and_uses_stable_foreign_keys(vehicle_cont
     assert db.get(Vehicle, payload["id"]) is None
 
 
+def test_person_list_exposes_current_vehicle_assignment(vehicle_context):
+    db, client, _, worker, _, _, _ = vehicle_context
+    second_worker = Person(
+        first_name="Mara",
+        last_name="Muster",
+        display_name="Mara Muster",
+        short_code="M.Muster",
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+        employment_status=PersonEmploymentStatus.ACTIVE.value,
+    )
+    db.add(second_worker)
+    db.commit()
+    created = client.post(
+        "/api/admin/vehicles",
+        json={
+            "license_plate": "OHZ-BE 247",
+            "manufacturer": "Volkswagen",
+            "assigned_person_id": worker.id,
+        },
+    )
+    assert created.status_code == 201
+
+    people = client.get("/api/persons")
+
+    assert people.status_code == 200
+    person = next(item for item in people.json() if item["id"] == worker.id)
+    assert person["assigned_vehicle"] == {
+        "id": created.json()["id"],
+        "license_plate": "OHZ-BE 247",
+    }
+
+    reassigned = client.patch(
+        f"/api/admin/vehicles/{created.json()['id']}",
+        json={"assigned_person_id": second_worker.id},
+    )
+    assert reassigned.status_code == 200
+
+    reassigned_people = client.get("/api/persons")
+
+    assert reassigned_people.status_code == 200
+    reassigned_by_id = {item["id"]: item for item in reassigned_people.json()}
+    assert reassigned_by_id[worker.id]["assigned_vehicle"] is None
+    assert reassigned_by_id[second_worker.id]["assigned_vehicle"] == {
+        "id": created.json()["id"],
+        "license_plate": "OHZ-BE 247",
+    }
+
+    removed = client.patch(
+        f"/api/admin/vehicles/{created.json()['id']}",
+        json={"assigned_person_id": None},
+    )
+    assert removed.status_code == 200
+
+    refreshed_people = client.get("/api/persons")
+
+    assert refreshed_people.status_code == 200
+    refreshed_by_id = {item["id"]: item for item in refreshed_people.json()}
+    assert refreshed_by_id[worker.id]["assigned_vehicle"] is None
+    assert refreshed_by_id[second_worker.id]["assigned_vehicle"] is None
+
+
 def test_vehicle_delete_cleans_internal_links_without_touching_person_or_ctrack(vehicle_context):
     db, client, _, worker, _, asset, _ = vehicle_context
     site = Site(site_number="8001", name="Baustelle mit Fahrzeug")

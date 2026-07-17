@@ -7,6 +7,7 @@ from app.models.enums import UserRole
 from app.schemas.person import (
     ExternalPersonCreate,
     PersonCreate,
+    PersonAssignedVehicleRead,
     PersonGeocodeSearchResult,
     PersonMapResponse,
     PersonRead,
@@ -205,4 +206,26 @@ def person_read(person) -> PersonRead:
         for user in getattr(person, "users", [])
         if user.is_active
     })
-    return PersonRead.model_validate(person).model_copy(update={"user_roles": user_roles})
+    active_vehicles = [
+        vehicle
+        for vehicle in getattr(person, "assigned_vehicles", [])
+        if vehicle.is_active
+    ]
+    assigned_vehicle = max(
+        active_vehicles,
+        key=lambda vehicle: (
+            vehicle.updated_at.isoformat() if vehicle.updated_at is not None else "",
+            vehicle.id,
+        ),
+        default=None,
+    )
+    return PersonRead.model_validate(person).model_copy(
+        update={
+            "user_roles": user_roles,
+            "assigned_vehicle": (
+                PersonAssignedVehicleRead.model_validate(assigned_vehicle)
+                if assigned_vehicle is not None
+                else None
+            ),
+        }
+    )

@@ -49,7 +49,7 @@ class Vehicle(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     site_assignments = relationship("SiteVehicleAssignment", back_populates="vehicle")
-    assigned_person = relationship("Person")
+    assigned_person = relationship("Person", back_populates="assigned_vehicles")
     ctrack_vehicle_asset = relationship("VehicleAsset", foreign_keys=[ctrack_vehicle_asset_id])
 
 
