@@ -6045,6 +6045,19 @@ button.person-chip:focus-visible {
   outline-offset: 1px;
 }
 
+.mobile-tool-issue-trigger.has-open-issue {
+  border-color: #d9aa62;
+  background: #fff4df;
+  color: #9a620e;
+}
+
+.mobile-tool-issue-trigger.has-open-issue:hover,
+.mobile-tool-issue-trigger.has-open-issue:focus-visible {
+  border-color: #bd8430;
+  background: #ffedcb;
+  outline-color: rgb(174 112 18 / 18%);
+}
+
 .mobile-tool-report-success {
   margin: 0;
   border-left: 3px solid #35756d;
@@ -6076,6 +6089,87 @@ button.person-chip:focus-visible {
 
 .mobile-tool-issue-sheet > strong {
   font-size: 0.95rem;
+}
+
+.mobile-tool-issue-detail-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 4px;
+}
+
+.mobile-tool-issue-detail-heading .mobile-personal-tool-icon {
+  border: 1px solid #e4c58f;
+  background: #fff4df;
+  color: #9a620e;
+}
+
+.mobile-tool-issue-detail-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mobile-tool-issue-detail-heading h2,
+.mobile-tool-issue-detail-heading strong,
+.mobile-tool-issue-detail-heading span {
+  margin: 0;
+}
+
+.mobile-tool-issue-detail-heading span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.mobile-tool-issue-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-tool-issue-detail-list article {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #ead5af;
+  border-left: 3px solid #c4862d;
+  border-radius: 10px;
+  background: #fffaf1;
+  padding: 11px 12px;
+}
+
+.mobile-tool-issue-detail-list article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mobile-tool-issue-detail-list p,
+.mobile-tool-issue-detail-list time {
+  margin: 0;
+}
+
+.mobile-tool-issue-detail-list p {
+  color: #3f4d60;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.mobile-tool-issue-detail-list time {
+  color: #6b7280;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.mobile-tool-issue-status {
+  flex: 0 0 auto;
+  border: 1px solid #e1bd7f;
+  border-radius: 999px;
+  background: #fff0d3;
+  color: #8a570b;
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 
 .mobile-tool-issue-sheet > button {

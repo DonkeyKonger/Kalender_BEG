@@ -32,6 +32,28 @@ test("preview and full list share the two-reason report action", () => {
 });
 
 
+test("open tool reports replace the menu with an orange warning and a detail sheet", () => {
+  assert.match(mobileSource, /const hasOpenIssue = tool\.open_issue_reports\.length > 0/);
+  assert.match(mobileSource, /hasOpenIssue \? "details" : "menu"/);
+  assert.match(mobileSource, /Offene Werkzeugmeldung anzeigen/);
+  assert.match(mobileSource, /mobile-tool-issue-trigger.*has-open-issue/);
+  assert.match(mobileSource, /tool\.open_issue_reports\.map/);
+  assert.match(mobileSource, /Gerätenummer: \{tool\.device_number \|\| "Nicht hinterlegt"\}/);
+  assert.match(mobileSource, /formatToolIssueReason\(report\.reason\)/);
+  assert.match(mobileSource, /formatToolIssueStatus\(report\.status\)/);
+  assert.match(mobileSource, /formatToolIssueDateTime\(report\.created_at\)/);
+  assert.match(styles, /\.mobile-tool-issue-trigger\.has-open-issue \{[^}]*background:\s*#fff4df;[^}]*color:\s*#9a620e/s);
+  assert.match(styles, /\.mobile-tool-issue-detail-list article \{[^}]*background:\s*#fffaf1/s);
+});
+
+
+test("report creation refreshes preview and full tool list without page navigation", () => {
+  assert.match(mobileSource, /setNotice\(message\);\s*void loadPersonalFile\(\)/);
+  assert.match(mobileSource, /setNotice\(message\);\s*void loadTools\(\)/);
+  assert.doesNotMatch(mobileSource, /window\.location\.reload/);
+});
+
+
 test("message navigation and API filtering use the stable tool ID", () => {
   const path = buildToolMaterialIssuePath(25043);
   const search = new URLSearchParams(path.split("?")[1]);
@@ -42,6 +64,8 @@ test("message navigation and API filtering use the stable tool ID", () => {
   assert.match(dashboardSource, /await api\.dismissDashboardMessage\(message\.message_key\)[\s\S]*navigate\(buildToolMaterialIssuePath\(message\.tool_id\)\)/);
   assert.match(toolsSource, /Werkzeug-ID \{toolIdFilter\}/);
   assert.match(toolsSource, /Das gemeldete Werkzeug ist nicht mehr verfügbar/);
+  assert.match(dashboardSource, /Werkzeugmeldung als erledigt markieren/);
+  assert.match(dashboardSource, /Als erledigt markieren/);
 });
 
 

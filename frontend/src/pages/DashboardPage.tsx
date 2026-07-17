@@ -773,11 +773,15 @@ export function DashboardPage() {
                           <button
                             type="button"
                             className="dashboard-message-read-button"
-                            aria-label="Meldung als gelesen markieren"
+                            aria-label={message.message_type === "tool_issue_reported"
+                              ? "Werkzeugmeldung als erledigt markieren"
+                              : "Meldung als gelesen markieren"}
                             disabled={dismissingMessageKey === message.message_key}
                             onClick={() => void dismissDashboardMessage(message)}
                           >
-                            Als gelesen markieren
+                            {message.message_type === "tool_issue_reported"
+                              ? "Als erledigt markieren"
+                              : "Als gelesen markieren"}
                           </button>
                         </div>
                       </div>

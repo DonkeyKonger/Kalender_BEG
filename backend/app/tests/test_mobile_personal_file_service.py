@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -15,12 +15,15 @@ from app.models.absence import Absence
 from app.models.enums import (
     AbsenceStatus,
     AbsenceType,
+    ToolIssueReason,
+    ToolIssueStatus,
     ToolMaterialCategory,
     ToolMaterialStatus,
     UserRole,
 )
 from app.models.person import Person
 from app.models.person_vacation_carryover import PersonVacationCarryover
+from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
 from app.models.vehicle import VehicleAsset
@@ -116,6 +119,7 @@ def personal_file_context() -> tuple[Session, User, Person, Person]:
                 beg_number="BEG-10",
                 manufacturer="Bosch",
                 designation="Bohrhammer",
+                device_number="GER-4711",
                 category=ToolMaterialCategory.DRILLING_SCREWING,
                 employee_id=worker.id,
                 item_date=date(2026, 7, 10),
@@ -259,12 +263,110 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
         "beg_number",
         "manufacturer",
         "designation",
+        "device_number",
         "item_date",
+        "open_issue_reports",
     }
     assert "serial_number" not in tools_response.json()[0]
     assert "supplier" not in tools_response.json()[0]
     assert "employee_id" not in tools_response.json()[0]
     app.dependency_overrides.clear()
+    db.close()
+
+
+def test_personal_file_lists_only_own_open_tool_reports_newest_first():
+    db, user, worker, other = personal_file_context()
+    own_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-10"))
+    other_own_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-2"))
+    foreign_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "FREMD"))
+    assert own_tool is not None and other_own_tool is not None and foreign_tool is not None
+    now = datetime.now(timezone.utc)
+
+    older = ToolIssueReport(
+        tool=own_tool,
+        tool_id_snapshot=own_tool.id,
+        tool_beg_number_snapshot=own_tool.beg_number,
+        tool_designation_snapshot=own_tool.designation,
+        reason=ToolIssueReason.DEFECTIVE,
+        status=ToolIssueStatus.OPEN,
+        reporter_user_id=user.id,
+        reporter_employee_id=worker.id,
+        reporter_last_name_snapshot=worker.last_name,
+        request_id="0b953238-c8c3-4b69-b402-a20869793001",
+        created_at=now - timedelta(hours=2),
+    )
+    newest = ToolIssueReport(
+        tool=own_tool,
+        tool_id_snapshot=own_tool.id,
+        tool_beg_number_snapshot=own_tool.beg_number,
+        tool_designation_snapshot=own_tool.designation,
+        reason=ToolIssueReason.STOLEN,
+        status=ToolIssueStatus.OPEN,
+        reporter_user_id=user.id,
+        reporter_employee_id=worker.id,
+        reporter_last_name_snapshot=worker.last_name,
+        request_id="0b953238-c8c3-4b69-b402-a20869793002",
+        created_at=now - timedelta(hours=1),
+    )
+    resolved = ToolIssueReport(
+        tool=own_tool,
+        tool_id_snapshot=own_tool.id,
+        tool_beg_number_snapshot=own_tool.beg_number,
+        tool_designation_snapshot=own_tool.designation,
+        reason=ToolIssueReason.DEFECTIVE,
+        status=ToolIssueStatus.OPEN,
+        reporter_user_id=user.id,
+        reporter_employee_id=worker.id,
+        reporter_last_name_snapshot=worker.last_name,
+        resolved_at=now,
+        request_id="0b953238-c8c3-4b69-b402-a20869793003",
+    )
+    other_tool_report = ToolIssueReport(
+        tool=other_own_tool,
+        tool_id_snapshot=other_own_tool.id,
+        tool_beg_number_snapshot=other_own_tool.beg_number,
+        tool_designation_snapshot=other_own_tool.designation,
+        reason=ToolIssueReason.DEFECTIVE,
+        status=ToolIssueStatus.OPEN,
+        reporter_user_id=user.id,
+        reporter_employee_id=worker.id,
+        reporter_last_name_snapshot=worker.last_name,
+        request_id="0b953238-c8c3-4b69-b402-a20869793004",
+    )
+    foreign_report = ToolIssueReport(
+        tool=foreign_tool,
+        tool_id_snapshot=foreign_tool.id,
+        tool_beg_number_snapshot=foreign_tool.beg_number,
+        tool_designation_snapshot=foreign_tool.designation,
+        reason=ToolIssueReason.DEFECTIVE,
+        status=ToolIssueStatus.OPEN,
+        reporter_employee_id=other.id,
+        reporter_last_name_snapshot=other.last_name,
+        request_id="0b953238-c8c3-4b69-b402-a20869793005",
+    )
+    db.add_all([older, newest, resolved, other_tool_report, foreign_report])
+    db.commit()
+
+    tools = MobilePersonalFileService(db).list_tools(current_user=user)
+    tool = next(item for item in tools if item.id == own_tool.id)
+    other_tool = next(item for item in tools if item.id == other_own_tool.id)
+
+    assert tool.device_number == "GER-4711"
+    assert [report.id for report in tool.open_issue_reports] == [newest.id, older.id]
+    assert [report.reason for report in tool.open_issue_reports] == [
+        ToolIssueReason.STOLEN,
+        ToolIssueReason.DEFECTIVE,
+    ]
+    assert all(report.status == "open" for report in tool.open_issue_reports)
+    assert other_tool.open_issue_reports[0].id == other_tool_report.id
+    assert all(report.id != foreign_report.id for item in tools for report in item.open_issue_reports)
+
+    newest.resolved_at = now
+    older.resolved_at = now
+    db.commit()
+    refreshed = MobilePersonalFileService(db).list_tools(current_user=user)
+    refreshed_tool = next(item for item in refreshed if item.id == own_tool.id)
+    assert refreshed_tool.open_issue_reports == []
     db.close()
 
 

@@ -1,4 +1,6 @@
-from sqlalchemy import Enum, ForeignKey, Index, Integer, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -57,9 +59,14 @@ class ToolIssueReport(TimestampMixin, Base):
     recipient_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     request_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
     tool = relationship("ToolMaterialItem", back_populates="issue_reports")
     reporter_user = relationship("User", foreign_keys=[reporter_user_id])
     reporter_employee = relationship("Person", foreign_keys=[reporter_employee_id])
     recipient_user = relationship("User", foreign_keys=[recipient_user_id])
+    resolved_by_user = relationship("User", foreign_keys=[resolved_by_user_id])

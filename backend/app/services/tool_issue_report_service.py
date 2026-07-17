@@ -68,6 +68,7 @@ class ToolIssueReportService:
                 ToolIssueReport.reporter_employee_id == person.id,
                 ToolIssueReport.reason == payload.reason,
                 ToolIssueReport.status == ToolIssueStatus.OPEN,
+                ToolIssueReport.resolved_at.is_(None),
                 ToolIssueReport.created_at >= datetime.now(timezone.utc) - DUPLICATE_REPORT_WINDOW,
             )
             .order_by(ToolIssueReport.created_at.desc(), ToolIssueReport.id.desc())

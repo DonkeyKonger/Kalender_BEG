@@ -107,7 +107,10 @@ export function MobilePersonalFilePage() {
                     key={toolKey(tool, index)}
                     tool={tool}
                     onAssignmentConflict={() => void loadPersonalFile()}
-                    onReported={setNotice}
+                    onReported={(message) => {
+                      setNotice(message);
+                      void loadPersonalFile();
+                    }}
                   />
                 ))}
               </div>
@@ -185,7 +188,10 @@ export function MobilePersonalFileToolsPage() {
               key={toolKey(tool, index)}
               tool={tool}
               onAssignmentConflict={() => void loadTools()}
-              onReported={setNotice}
+              onReported={(message) => {
+                setNotice(message);
+                void loadTools();
+              }}
             />
           ))}
         </div>
@@ -263,7 +269,7 @@ function MobileToolIssueAction({
   onAssignmentConflict: () => void;
   onReported: (message: string) => void;
 }) {
-  const [stage, setStage] = useState<"closed" | "menu" | "confirm">("closed");
+  const [stage, setStage] = useState<"closed" | "menu" | "confirm" | "details">("closed");
   const [reason, setReason] = useState<MobileToolIssueReason | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -302,26 +308,59 @@ function MobileToolIssueAction({
   }
 
   const reasonLabel = reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+  const hasOpenIssue = tool.open_issue_reports.length > 0;
   return (
     <>
       <button
-        aria-label="Problem mit diesem Werkzeug melden"
-        className="mobile-tool-issue-trigger"
+        aria-label={hasOpenIssue ? "Offene Werkzeugmeldung anzeigen" : "Problem mit diesem Werkzeug melden"}
+        className={`mobile-tool-issue-trigger${hasOpenIssue ? " has-open-issue" : ""}`}
         type="button"
-        onClick={() => { setError(null); setStage("menu"); }}
+        onClick={() => { setError(null); setStage(hasOpenIssue ? "details" : "menu"); }}
       >
-        <MoreVertical aria-hidden="true" size={21} />
+        {hasOpenIssue
+          ? <AlertTriangle aria-hidden="true" size={21} />
+          : <MoreVertical aria-hidden="true" size={21} />}
       </button>
       {stage !== "closed" ? createPortal(
         <div className="mobile-dialog-backdrop mobile-tool-issue-backdrop" role="presentation" onClick={() => !saving && setStage("closed")}>
           <section
-            aria-label={stage === "menu" ? "Werkzeugproblem auswählen" : reasonLabel}
+            aria-label={stage === "menu"
+              ? "Werkzeugproblem auswählen"
+              : stage === "details" ? "Offene Werkzeugmeldungen" : reasonLabel}
             aria-modal="true"
             className="mobile-tool-issue-sheet"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
           >
-            {stage === "menu" ? (
+            {stage === "details" ? (
+              <>
+                <div className="mobile-tool-issue-detail-heading">
+                  <span className="mobile-personal-tool-icon" aria-hidden="true">
+                    <AlertTriangle size={21} />
+                  </span>
+                  <div>
+                    <h2>Offene Meldungen</h2>
+                    <strong>{formatToolTitle(tool)}</strong>
+                    <span>Gerätenummer: {tool.device_number || "Nicht hinterlegt"}</span>
+                  </div>
+                </div>
+                <div className="mobile-tool-issue-detail-list">
+                  {tool.open_issue_reports.map((report) => (
+                    <article key={report.id}>
+                      <div>
+                        <strong>{formatToolIssueReason(report.reason)}</strong>
+                        <span className="mobile-tool-issue-status">{formatToolIssueStatus(report.status)}</span>
+                      </div>
+                      <p>{report.description}</p>
+                      <time dateTime={report.created_at}>{formatToolIssueDateTime(report.created_at)}</time>
+                    </article>
+                  ))}
+                </div>
+                <div className="mobile-tool-issue-actions">
+                  <button className="is-primary" type="button" onClick={() => setStage("closed")}>Schließen</button>
+                </div>
+              </>
+            ) : stage === "menu" ? (
               <>
                 <strong>Problem melden</strong>
                 <button type="button" onClick={() => chooseReason("DEFECTIVE")}>
@@ -451,6 +490,30 @@ function formatBegNumber(value: string | null): string {
 function formatGermanDate(value: string): string {
   const [year, month, day] = value.split("-");
   return year && month && day ? `${day}.${month}.${year}` : value;
+}
+
+
+function formatToolIssueReason(reason: MobileToolIssueReason): string {
+  return reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+}
+
+
+function formatToolIssueStatus(status: string): string {
+  if (status === "in_progress") return "In Bearbeitung";
+  if (status === "resolved" || status === "completed") return "Erledigt";
+  return "Gemeldet";
+}
+
+
+function formatToolIssueDateTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 

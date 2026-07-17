@@ -199,9 +199,24 @@ def test_system_notes_are_separate_from_manual_remarks_and_dismissal_marks_one_m
 
     messages = DashboardMessageService(db).get_summary(limit=6, current_user=office).latest_messages
     DashboardMessageService(db).dismiss_message(message_key=messages[0].message_key, current_user=office)
+    resolved_report_id = int(messages[0].message_key.rpartition(":")[2])
+    resolved_report = db.get(ToolIssueReport, resolved_report_id)
+    assert resolved_report is not None
+    assert resolved_report.resolved_at is not None
+    assert resolved_report.resolved_by_user_id == office.id
     remaining = DashboardMessageService(db).get_summary(limit=6, current_user=office)
     assert remaining.open_count == 1
     assert remaining.latest_messages[0].message_key != messages[0].message_key
+
+    replacement = service.report(
+        tool_id=tool.id,
+        payload=payload(
+            resolved_report.reason,
+            "4e5a3624-a031-4fe7-b633-6403ce244a72",
+        ),
+        current_user=worker,
+    )
+    assert replacement.id != resolved_report.id
 
 
 def test_report_api_uses_authenticated_employee_and_rejects_unauthenticated_requests():

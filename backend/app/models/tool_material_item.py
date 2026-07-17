@@ -64,4 +64,8 @@ class ToolMaterialItem(TimestampMixin, Base):
 
     @property
     def open_issue_reports(self):
-        return [report for report in self.issue_reports if report.status == ToolIssueStatus.OPEN]
+        return [
+            report
+            for report in self.issue_reports
+            if report.status == ToolIssueStatus.OPEN and report.resolved_at is None
+        ]

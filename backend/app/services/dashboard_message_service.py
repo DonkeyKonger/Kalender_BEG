@@ -59,6 +59,8 @@ class DashboardMessageService:
             report = self.db.get(ToolIssueReport, int(raw_report_id)) if raw_report_id.isdigit() else None
             if report is None or report.recipient_user_id != current_user.id:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Meldung nicht gefunden.")
+            report.resolved_at = datetime.now(timezone.utc)
+            report.resolved_by_user_id = current_user.id
         self.measurements.dismiss_dashboard_message(
             message_key=message_key,
             current_user=current_user,
@@ -105,6 +107,7 @@ class DashboardMessageService:
             .where(
                 ToolIssueReport.recipient_user_id == current_user.id,
                 ToolIssueReport.status == ToolIssueStatus.OPEN,
+                ToolIssueReport.resolved_at.is_(None),
             )
             .order_by(ToolIssueReport.created_at.desc(), ToolIssueReport.id.desc())
         ).all()

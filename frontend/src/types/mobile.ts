@@ -52,10 +52,20 @@ export type MobilePersonalFileTool = {
   beg_number: string | null;
   manufacturer: string | null;
   designation: string;
+  device_number: string | null;
   item_date: string | null;
+  open_issue_reports: MobileToolIssueSummary[];
 };
 
 export type MobileToolIssueReason = "DEFECTIVE" | "STOLEN";
+
+export type MobileToolIssueSummary = {
+  id: number;
+  reason: MobileToolIssueReason;
+  status: string;
+  description: string;
+  created_at: string;
+};
 
 export type MobileToolIssueReport = {
   id: number;

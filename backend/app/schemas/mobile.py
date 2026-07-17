@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as Date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import AssignmentType, SiteStatus, ToolIssueReason, ToolMaterialCategory
 
@@ -58,13 +58,23 @@ class MobilePersonalFileVehicle(BaseModel):
     fleet_number: str | None = None
 
 
+class MobileToolIssueSummary(BaseModel):
+    id: int
+    reason: ToolIssueReason
+    status: str
+    description: str
+    created_at: datetime
+
+
 class MobilePersonalFileTool(BaseModel):
     id: int
     category: ToolMaterialCategory
     beg_number: str | None = None
     manufacturer: str | None = None
     designation: str
+    device_number: str | None = None
     item_date: Date | None = None
+    open_issue_reports: list[MobileToolIssueSummary] = Field(default_factory=list)
 
 
 class MobileToolIssueReportCreate(BaseModel):

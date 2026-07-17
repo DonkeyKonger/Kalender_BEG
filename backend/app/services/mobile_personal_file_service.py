@@ -5,8 +5,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import ToolMaterialStatus, UserRole
+from app.models.enums import ToolIssueReason, ToolIssueStatus, ToolMaterialStatus, UserRole
 from app.models.person import Person
+from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
 from app.models.vehicle import VehicleAsset
@@ -14,6 +15,7 @@ from app.schemas.mobile import (
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
     MobilePersonalFileVehicle,
+    MobileToolIssueSummary,
 )
 from app.services.absence_service import AbsenceService
 from app.services.tool_material_service import natural_beg_number_key
@@ -108,13 +110,51 @@ class MobilePersonalFileService:
                 ToolMaterialItem.beg_number,
                 ToolMaterialItem.manufacturer,
                 ToolMaterialItem.designation,
+                ToolMaterialItem.device_number,
                 ToolMaterialItem.item_date,
             ).where(
                 ToolMaterialItem.employee_id == person_id,
                 ToolMaterialItem.status == ToolMaterialStatus.ISSUED,
             )
         ).mappings().all()
-        tools = [MobilePersonalFileTool.model_validate(row) for row in rows]
+        tool_ids = [row["id"] for row in rows]
+        reports_by_tool_id: dict[int, list[MobileToolIssueSummary]] = {}
+        if tool_ids:
+            reports = list(
+                self.db.scalars(
+                    select(ToolIssueReport)
+                    .where(
+                        ToolIssueReport.tool_id.in_(tool_ids),
+                        ToolIssueReport.reporter_employee_id == person_id,
+                        ToolIssueReport.status == ToolIssueStatus.OPEN,
+                        ToolIssueReport.resolved_at.is_(None),
+                    )
+                    .order_by(ToolIssueReport.created_at.desc(), ToolIssueReport.id.desc())
+                ).all()
+            )
+            for report in reports:
+                if report.tool_id is None:
+                    continue
+                reports_by_tool_id.setdefault(report.tool_id, []).append(
+                    MobileToolIssueSummary(
+                        id=report.id,
+                        reason=report.reason,
+                        status=report.status.value,
+                        description=(
+                            "Das Werkzeug wurde als defekt gemeldet."
+                            if report.reason == ToolIssueReason.DEFECTIVE
+                            else "Das Werkzeug wurde als entwendet gemeldet."
+                        ),
+                        created_at=report.created_at,
+                    )
+                )
+        tools = [
+            MobilePersonalFileTool.model_validate({
+                **row,
+                "open_issue_reports": reports_by_tool_id.get(row["id"], []),
+            })
+            for row in rows
+        ]
         return sorted(
             tools,
             key=lambda item: (
