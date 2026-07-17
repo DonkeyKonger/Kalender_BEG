@@ -48,6 +48,7 @@ exclude = ["alembic*"]
 [tool.setuptools.package-data]
 app = [
   "assets/*.png",
+  "import_data/*.xlsx",
   "templates/extra_work/*.pdf",
   "templates/project_folders/*.pdf",
   "templates/time_entries/*.xlsx",

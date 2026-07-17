@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+import hashlib
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -17,6 +19,7 @@ from app.services.tool_material_excel_import import (
     excel_date,
     identifier_text,
     is_exact_numeric_one,
+    read_source_rows,
     stable_source_key,
     verify_applied_import,
 )
@@ -75,6 +78,28 @@ def test_stock_filter_accepts_only_the_exact_numeric_value_one():
     assert is_exact_numeric_one(ExcelCell("1")) is False
     assert is_exact_numeric_one(ExcelCell(True)) is False
     assert is_exact_numeric_one(ExcelCell(Decimal("2"), True)) is False
+
+
+def test_bundled_productive_snapshot_matches_all_source_controls():
+    source_file = (
+        Path(__file__).parents[1]
+        / "import_data"
+        / "BEG-Maschinen+Werkzeugliste.xlsx"
+    )
+    digest = hashlib.sha256(source_file.read_bytes()).hexdigest()
+
+    rows, report = read_source_rows(source_file)
+
+    assert digest == "347473065a64fc45a877eee03dd5cf5cb619d0a0adaa4ed8ad3b8aec7bf56d46"
+    assert report.errors == []
+    assert report.stock_one_rows == 902
+    assert report.valid_source_rows == 900
+    assert len(report.invalid_rows) == 2
+    assert report.physical_tool_rows == 898
+    assert report.unnumbered_rows == 33
+    assert report.company_stock_rows == 281
+    assert len(report.duplicate_groups) == 2
+    assert len(rows) == 898
 
 
 def test_duplicate_physical_tools_select_newest_assignment():

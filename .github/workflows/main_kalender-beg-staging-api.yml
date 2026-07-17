@@ -8,15 +8,61 @@ on:
       - "backend/**"
       - ".github/workflows/main_kalender-beg-staging-api.yml"
   workflow_dispatch:
+    inputs:
+      import_tool_data:
+        description: "Werkzeug-Datenstamm nach dem Deployment importieren"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      tool_import_required: ${{ steps.tool-import-change.outputs.required }}
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect tool data snapshot change
+        id: tool-import-change
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+          MANUAL_IMPORT: ${{ inputs.import_tool_data }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+
+          required = os.environ.get("MANUAL_IMPORT", "false").lower() == "true"
+          if os.environ.get("EVENT_NAME") == "push":
+              before = os.environ.get("BEFORE_SHA", "")
+              current = os.environ["CURRENT_SHA"]
+              if before and set(before) != {"0"}:
+                  changed = subprocess.check_output(
+                      ["git", "diff", "--name-only", before, current],
+                      text=True,
+                  ).splitlines()
+              else:
+                  changed = subprocess.check_output(
+                      ["git", "show", "--pretty=", "--name-only", current],
+                      text=True,
+                  ).splitlines()
+              required = required or (
+                  "backend/app/import_data/BEG-Maschinen+Werkzeugliste.xlsx" in changed
+              )
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"required={'true' if required else 'false'}\n")
+          print(f"Werkzeugimport nach Deployment: {'ja' if required else 'nein'}")
+          PY
 
       - name: Set up Python version
         uses: actions/setup-python@v5
@@ -115,4 +161,95 @@ jobs:
               ],
               check=True,
           )
+          PY
+
+      - name: Import verified tool master data
+        if: needs.build.outputs.tool_import_required == 'true'
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
+          profiles = root.findall("publishProfile")
+          profile = next(
+              (item for item in profiles if item.attrib.get("publishMethod") == "ZipDeploy"),
+              None,
+          )
+          if profile is None:
+              profile = next(
+                  (item for item in profiles if item.attrib.get("publishMethod") == "MSDeploy"),
+                  None,
+              )
+          if profile is None:
+              raise SystemExit("Publish profile does not contain ZipDeploy/MSDeploy credentials.")
+
+          username = profile.attrib["userName"]
+          password = profile.attrib["userPWD"]
+          destination = profile.attrib.get("destinationAppUrl", "").rstrip("/")
+          if not destination:
+              raise SystemExit("Publish profile does not contain destinationAppUrl.")
+          publish_url = profile.attrib["publishUrl"].strip()
+          if not publish_url.startswith(("http://", "https://")):
+              publish_url = f"https://{publish_url}"
+          scm_base = publish_url.rstrip("/")
+          for suffix in ("/api/zipdeploy", "/api/msdeploy"):
+              if scm_base.endswith(suffix):
+                  scm_base = scm_base[: -len(suffix)]
+          command_url = f"{scm_base}/api/command"
+
+          print(f"::add-mask::{username}")
+          print(f"::add-mask::{password}")
+
+          health_url = f"{destination}/api/health"
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen(health_url, timeout=15) as response:
+                      health = json.load(response)
+                  if response.status == 200 and health.get("status") == "ok":
+                      break
+              except (OSError, urllib.error.URLError, json.JSONDecodeError):
+                  pass
+              if attempt == 59:
+                  raise SystemExit("Azure API did not become healthy before the tool import.")
+              time.sleep(5)
+
+          credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+          request = urllib.request.Request(
+              command_url,
+              data=json.dumps(
+                  {
+                      "command": "bash app/scripts/run_deployed_tool_import.sh",
+                      "dir": "/home/site/wwwroot",
+                  }
+              ).encode(),
+              headers={
+                  "Authorization": f"Basic {credentials}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=900) as response:
+                  result = json.load(response)
+          except urllib.error.HTTPError as error:
+              detail = error.read().decode(errors="replace")[-2000:]
+              raise SystemExit(f"Azure import command failed with HTTP {error.code}: {detail}")
+
+          exit_code = result.get("ExitCode", result.get("exitCode", 1))
+          output = result.get("Output", result.get("output", "")).strip()
+          error_output = result.get("Error", result.get("error", "")).strip()
+          if exit_code != 0:
+              raise SystemExit(
+                  f"Azure tool import exited with {exit_code}: "
+                  f"{(error_output or output)[-2000:]}"
+              )
+          print(output or "Werkzeugimport erfolgreich abgeschlossen.")
           PY
