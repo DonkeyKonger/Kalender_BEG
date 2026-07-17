@@ -723,21 +723,21 @@ export function MyAssignmentsPage() {
                 icon={CalendarClock}
                 tone="deployments"
                 title="Alle Einsätze anzeigen"
-                text="Öffnet die vollständige Einsatzliste mit 14-Tage- und Jahresansicht."
+                text="Gesamte Einsatzübersicht öffnen."
                 onOpen={() => setActiveScreen("assignments")}
               />
               <PlaceholderAction
                 icon={UserCircle}
                 tone="profile"
                 title="Persönliche Akte"
-                text="Resturlaub, Krankheitstage sowie Fahrzeug- und Werkzeugzuordnung anzeigen."
+                text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen."
                 onOpen={() => navigate("/me/personal-file")}
               />
               <PlaceholderAction
                 icon={Settings}
                 tone="settings"
                 title="Einstellungen"
-                text="Standortprüfung und Benachrichtigungen verwalten."
+                text="App-Einstellungen und persönliche Optionen."
                 onOpen={() => setActiveScreen("settings")}
               />
             </div>

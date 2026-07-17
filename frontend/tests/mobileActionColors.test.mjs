@@ -68,14 +68,37 @@ test("disabled mobile actions stay neutral and interaction states keep their acc
 test("mobile home keeps every action reachable below browser safe areas", () => {
   assert.match(
     styles,
-    /\.mobile-home-page \{[^}]*padding-bottom:\s*calc\(118px \+ env\(safe-area-inset-bottom, 0px\)\);[^}]*overflow:\s*visible;/s,
+    /\.mobile-home-page \{[^}]*padding-bottom:\s*calc\(96px \+ env\(safe-area-inset-bottom, 0px\)\);[^}]*overflow:\s*visible;/s,
   );
   assert.match(
     styles,
-    /\.mobile-action-list \{[^}]*padding-bottom:\s*calc\(22px \+ env\(safe-area-inset-bottom, 0px\)\);/s,
+    /\.mobile-action-list \{[^}]*padding-bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/s,
   );
   assert.doesNotMatch(
     styles,
     /\.app-shell\.is-mobile-workspace \.mobile-action-list,[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
   );
+});
+
+
+test("mobile home stays compact across phone and tablet viewports", () => {
+  assert.match(
+    styles,
+    /\.mobile-home-page \{[^}]*width:\s*min\(100%, 560px\);[^}]*max-width:\s*560px;/s,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-title-card \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
+  );
+  assert.match(
+    styles,
+    /\.app-shell\.is-mobile-workspace \.app-main \{[^}]*min-height:\s*100dvh;/s,
+  );
+});
+
+
+test("mobile home actions keep the established destinations and compact copy", () => {
+  assert.match(pageSource, /title="Alle Einsätze anzeigen"\s+text="Gesamte Einsatzübersicht öffnen\."\s+onOpen=\{\(\) => setActiveScreen\("assignments"\)\}/);
+  assert.match(pageSource, /title="Persönliche Akte"\s+text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen\."\s+onOpen=\{\(\) => navigate\("\/me\/personal-file"\)\}/);
+  assert.match(pageSource, /title="Einstellungen"\s+text="App-Einstellungen und persönliche Optionen\."\s+onOpen=\{\(\) => setActiveScreen\("settings"\)\}/);
 });
