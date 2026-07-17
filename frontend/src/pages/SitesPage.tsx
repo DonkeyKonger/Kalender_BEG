@@ -1,5 +1,5 @@
 import { BriefcaseBusiness, ChevronDown, PlusCircle, Search, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -11,6 +11,11 @@ import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
 import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
+import {
+  initialCollapsedSiteGroupKeys,
+  siteGroupKeyForProjectManager,
+  withNewForeignSiteGroupsCollapsed,
+} from "../lib/siteGroupCollapse";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
@@ -80,9 +85,9 @@ export function SitesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManagerFilter, setProjectManagerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>("standard");
-  const [hasInitializedProjectManagerFilter, setHasInitializedProjectManagerFilter] = useState(false);
-  const [hasInitializedSiteGroupCollapse, setHasInitializedSiteGroupCollapse] = useState(false);
   const [collapsedSiteGroupKeys, setCollapsedSiteGroupKeys] = useState<Set<string>>(() => new Set());
+  const hasInitializedSiteGroupCollapse = useRef(false);
+  const knownSiteGroupKeys = useRef<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [savingSiteId, setSavingSiteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,18 +120,6 @@ export function SitesPage() {
     }
   }
 
-  useEffect(() => {
-    if (hasInitializedProjectManagerFilter || isLoading) {
-      return;
-    }
-    if (user?.role === "project_manager" && user.person_id && sites.some((site) => site.project_manager_person_id === user.person_id)) {
-      setProjectManagerFilter(String(user.person_id));
-    } else {
-      setProjectManagerFilter("all");
-    }
-    setHasInitializedProjectManagerFilter(true);
-  }, [hasInitializedProjectManagerFilter, isLoading, sites, user?.person_id, user?.role]);
-
   const projectManagerOptions = useMemo(() => projectManagerOptionsFromSites(sites), [sites]);
   const statusFilterOptions = useMemo(() => siteStatusFilterOptions(), []);
 
@@ -142,26 +135,36 @@ export function SitesPage() {
   }, [searchTerm, sites, statusFilter]);
 
   const siteGroups = useMemo(() => groupSites(filteredSites, projectManagerFilter), [filteredSites, projectManagerFilter]);
-  const allSiteGroups = useMemo(() => groupSites(filteredSites, "all"), [filteredSites]);
+  const allSiteGroups = useMemo(() => groupSites(sites, "all"), [sites]);
+  const allSiteGroupKeys = useMemo(() => allSiteGroups.map((group) => group.key), [allSiteGroups]);
   const visibleSiteCount = siteGroups.reduce((count, group) => count + group.sites.length, 0);
 
   useEffect(() => {
-    if (hasInitializedSiteGroupCollapse || isLoading) {
+    if (isLoading || !user) {
       return;
     }
 
-    const ownProjectManagerGroupKey = user?.role === "project_manager" && user.person_id ? String(user.person_id) : null;
-    const hasOwnProjectManagerGroup = Boolean(
-      ownProjectManagerGroupKey && allSiteGroups.some((group) => group.key === ownProjectManagerGroupKey),
-    );
+    if (!hasInitializedSiteGroupCollapse.current) {
+      setCollapsedSiteGroupKeys(initialCollapsedSiteGroupKeys(allSiteGroupKeys, user.person_id));
+      knownSiteGroupKeys.current = new Set(allSiteGroupKeys);
+      hasInitializedSiteGroupCollapse.current = true;
+      return;
+    }
 
-    setCollapsedSiteGroupKeys(
-      hasOwnProjectManagerGroup
-        ? new Set(allSiteGroups.filter((group) => group.key !== ownProjectManagerGroupKey).map((group) => group.key))
-        : new Set(),
-    );
-    setHasInitializedSiteGroupCollapse(true);
-  }, [allSiteGroups, hasInitializedSiteGroupCollapse, isLoading, user?.person_id, user?.role]);
+    const hasNewGroup = allSiteGroupKeys.some((groupKey) => !knownSiteGroupKeys.current.has(groupKey));
+    if (!hasNewGroup) {
+      return;
+    }
+
+    const previousKnownGroupKeys = knownSiteGroupKeys.current;
+    knownSiteGroupKeys.current = new Set([...previousKnownGroupKeys, ...allSiteGroupKeys]);
+    setCollapsedSiteGroupKeys((current) => withNewForeignSiteGroupsCollapsed(
+      current,
+      previousKnownGroupKeys,
+      allSiteGroupKeys,
+      user.person_id,
+    ));
+  }, [allSiteGroupKeys, isLoading, user]);
 
   async function updateSiteStatus(site: SiteSummary, nextStatus: SiteStatus) {
     if (!canEdit || site.status === nextStatus) {
@@ -1139,7 +1142,7 @@ function groupSites(sites: SiteSummary[], projectManagerFilter: string): SiteGro
 
   const groups = new Map<string, SiteGroup>();
   sortedSites.forEach((site) => {
-    const key = site.project_manager_person_id ? String(site.project_manager_person_id) : "unassigned";
+    const key = siteGroupKeyForProjectManager(site.project_manager_person_id);
     const label = site.project_manager?.display_name ?? "Ohne Projektleiter";
     const existing = groups.get(key);
     if (existing) {
