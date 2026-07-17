@@ -46,6 +46,11 @@ export type MobilePersonalFileVehicle = {
   manufacturer: string;
 };
 
+export type MobilePersonalFileHoursAccount = {
+  current_balance_minutes: number;
+  last_entry_at: string | null;
+};
+
 export type MobilePersonalFileTool = {
   id: number;
   category: ToolMaterialCategory;
@@ -80,6 +85,7 @@ export type MobilePersonalFile = {
   remaining_vacation_days: number;
   total_vacation_days: number;
   sick_days: number;
+  hours_account: MobilePersonalFileHoursAccount;
   vehicle: MobilePersonalFileVehicle | null;
   tool_count: number;
   tool_preview: MobilePersonalFileTool[];

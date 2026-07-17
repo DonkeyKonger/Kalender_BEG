@@ -58,6 +58,11 @@ class MobilePersonalFileVehicle(BaseModel):
     manufacturer: str
 
 
+class MobilePersonalFileHoursAccount(BaseModel):
+    current_balance_minutes: int
+    last_entry_at: datetime | None = None
+
+
 class MobileToolIssueSummary(BaseModel):
     id: int
     reason: ToolIssueReason
@@ -95,6 +100,7 @@ class MobilePersonalFileResponse(BaseModel):
     remaining_vacation_days: int
     total_vacation_days: int
     sick_days: int
+    hours_account: MobilePersonalFileHoursAccount
     vehicle: MobilePersonalFileVehicle | None = None
     tool_count: int
     tool_preview: list[MobilePersonalFileTool]

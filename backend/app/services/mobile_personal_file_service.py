@@ -11,13 +11,16 @@ from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.schemas.person_hours_account import PersonHoursAccountRead
 from app.schemas.mobile import (
+    MobilePersonalFileHoursAccount,
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
     MobilePersonalFileVehicle,
     MobileToolIssueSummary,
 )
 from app.services.absence_service import AbsenceService
+from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.tool_material_service import natural_beg_number_key
 
 
@@ -41,12 +44,14 @@ class MobilePersonalFileService:
             person=person,
             year=year,
         )
+        hours_account = PersonHoursAccountService(self.db).get_account(person_id=person.id)
         tools = self._tools(person_id=person.id)
         return MobilePersonalFileResponse(
             current_year=year,
             remaining_vacation_days=absence_summary.remaining_vacation_days,
             total_vacation_days=absence_summary.total_vacation_days,
             sick_days=absence_summary.sick_days,
+            hours_account=self._hours_account(hours_account),
             vehicle=self._vehicle(person_id=person.id),
             tool_count=len(tools),
             tool_preview=tools[:3],
@@ -79,6 +84,14 @@ class MobilePersonalFileService:
                 "Das hinterlegte Monteurprofil ist nicht verfügbar.",
             )
         return person
+
+    @staticmethod
+    def _hours_account(hours_account: PersonHoursAccountRead) -> MobilePersonalFileHoursAccount:
+        latest_entry = hours_account.entries[0] if hours_account.entries else None
+        return MobilePersonalFileHoursAccount(
+            current_balance_minutes=hours_account.current_balance_minutes,
+            last_entry_at=latest_entry.created_at if latest_entry is not None else None,
+        )
 
     def _vehicle(self, *, person_id: int) -> MobilePersonalFileVehicle | None:
         vehicle = self.db.scalar(

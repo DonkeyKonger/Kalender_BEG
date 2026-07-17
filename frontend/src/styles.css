@@ -31,6 +31,13 @@
   --mobile-personal-vacation-background: #f7f1df;
   --mobile-personal-sickness-icon: #9b4b4b;
   --mobile-personal-sickness-background: #f8eaea;
+  --mobile-personal-hours-icon: #6b3fa0;
+  --mobile-personal-hours-background: #f0e9f8;
+  --mobile-personal-hours-border: #d8c6ed;
+  --mobile-personal-hours-negative-icon: #a84d5b;
+  --mobile-personal-hours-negative-background: #f8e9ec;
+  --mobile-personal-hours-neutral-icon: #64748b;
+  --mobile-personal-hours-neutral-background: #eef2f6;
   --mobile-personal-vehicle-icon: #315f91;
   --mobile-personal-vehicle-background: #eaf1f8;
   --mobile-personal-tools-icon: #35756d;
@@ -5924,6 +5931,66 @@ button.person-chip:focus-visible {
   color: var(--mobile-personal-sickness-icon);
 }
 
+.mobile-personal-hours-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 104px;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 15px;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-hours-card .mobile-personal-icon-tile {
+  background: var(--mobile-personal-hours-background);
+  color: var(--mobile-personal-hours-icon);
+}
+
+.mobile-personal-hours-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mobile-personal-hours-card > div > span,
+.mobile-personal-hours-card small {
+  color: #718097;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.mobile-personal-hours-card strong {
+  overflow-wrap: anywhere;
+  color: #111827;
+  font-size: clamp(1.35rem, 6vw, 1.7rem);
+  line-height: 1.08;
+}
+
+.mobile-personal-hours-badge {
+  border-radius: 999px;
+  background: var(--mobile-personal-hours-background);
+  color: var(--mobile-personal-hours-icon);
+  padding: 5px 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mobile-personal-hours-card.is-negative .mobile-personal-icon-tile,
+.mobile-personal-hours-card.is-negative .mobile-personal-hours-badge {
+  background: var(--mobile-personal-hours-negative-background);
+  color: var(--mobile-personal-hours-negative-icon);
+}
+
+.mobile-personal-hours-card.is-neutral .mobile-personal-icon-tile,
+.mobile-personal-hours-card.is-neutral .mobile-personal-hours-badge {
+  background: var(--mobile-personal-hours-neutral-background);
+  color: var(--mobile-personal-hours-neutral-icon);
+}
+
 .mobile-personal-vehicle-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -6367,6 +6434,7 @@ button.person-chip:focus-visible {
   min-height: 156px;
 }
 
+.mobile-personal-file-skeleton .is-hours,
 .mobile-personal-file-skeleton .is-vehicle {
   min-height: 104px;
 }
@@ -6380,11 +6448,13 @@ button.person-chip:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .mobile-personal-hours-card,
   .mobile-personal-vehicle-card,
   .mobile-personal-tools-card > header {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .mobile-personal-hours-badge,
   .mobile-personal-assigned-badge,
   .mobile-personal-tool-count {
     grid-column: 2;

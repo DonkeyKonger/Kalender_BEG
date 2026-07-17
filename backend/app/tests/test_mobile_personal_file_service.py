@@ -22,6 +22,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.person import Person
+from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.person_vacation_carryover import PersonVacationCarryover
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
@@ -61,6 +62,8 @@ def personal_file_context() -> tuple[Session, User, Person, Person]:
     )
     db.add_all([worker, other, user])
     db.flush()
+    first_hours_entry_at = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+    latest_hours_entry_at = datetime(2026, 7, 17, 9, 30, tzinfo=timezone.utc)
     db.add(
         PersonVacationCarryover(
             person_id=worker.id,
@@ -129,6 +132,36 @@ def personal_file_context() -> tuple[Session, User, Person, Person]:
     )
     db.add_all(
         [
+            PersonHoursAccountEntry(
+                person_id=worker.id,
+                entry_type="manual_adjustment",
+                minutes_delta=900,
+                balance_after_minutes=900,
+                note="Startwert",
+                created_by_user_id=user.id,
+                created_at=first_hours_entry_at,
+                updated_at=first_hours_entry_at,
+            ),
+            PersonHoursAccountEntry(
+                person_id=worker.id,
+                entry_type="payout",
+                minutes_delta=-45,
+                balance_after_minutes=855,
+                note="Auszahlung",
+                created_by_user_id=user.id,
+                created_at=latest_hours_entry_at,
+                updated_at=latest_hours_entry_at,
+            ),
+            PersonHoursAccountEntry(
+                person_id=other.id,
+                entry_type="manual_adjustment",
+                minutes_delta=-510,
+                balance_after_minutes=-510,
+                note="Fremder Stand",
+                created_by_user_id=user.id,
+                created_at=latest_hours_entry_at,
+                updated_at=latest_hours_entry_at,
+            ),
             ToolMaterialItem(
                 beg_number="BEG-10",
                 manufacturer="Bosch",
@@ -205,11 +238,74 @@ def test_personal_file_uses_current_person_and_central_weekday_calculation():
     assert summary.total_vacation_days == 32
     assert summary.remaining_vacation_days == 30
     assert summary.sick_days == 2
+    assert summary.hours_account.current_balance_minutes == 855
+    assert summary.hours_account.last_entry_at is not None
+    assert summary.hours_account.last_entry_at.replace(tzinfo=timezone.utc) == datetime(
+        2026,
+        7,
+        17,
+        9,
+        30,
+        tzinfo=timezone.utc,
+    )
     assert summary.vehicle is not None
     assert summary.vehicle.license_plate == "OHZ-BE 247"
     assert summary.vehicle.manufacturer == "Volkswagen"
     assert summary.tool_count == 4
     assert [item.beg_number for item in summary.tool_preview] == ["BEG-1", "BEG-2", "BEG-10"]
+    db.close()
+
+
+def test_personal_file_hours_account_supports_negative_zero_and_empty_states():
+    db, user, worker, _other = personal_file_context()
+    db.query(PersonHoursAccountEntry).filter(
+        PersonHoursAccountEntry.person_id == worker.id
+    ).delete()
+    db.commit()
+    service = MobilePersonalFileService(db)
+
+    empty_summary = service.get_summary(current_user=user, today=date(2026, 7, 15))
+    assert empty_summary.hours_account.current_balance_minutes == 0
+    assert empty_summary.hours_account.last_entry_at is None
+
+    now = datetime(2026, 7, 18, 7, 0, tzinfo=timezone.utc)
+    db.add(
+        PersonHoursAccountEntry(
+            person_id=worker.id,
+            entry_type="manual_adjustment",
+            minutes_delta=-510,
+            balance_after_minutes=-510,
+            note="Minusstunden",
+            created_by_user_id=user.id,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+    negative_summary = service.get_summary(current_user=user, today=date(2026, 7, 18))
+    assert negative_summary.hours_account.current_balance_minutes == -510
+    assert negative_summary.hours_account.last_entry_at is not None
+    assert negative_summary.hours_account.last_entry_at.replace(tzinfo=timezone.utc) == now
+
+    db.add(
+        PersonHoursAccountEntry(
+            person_id=worker.id,
+            entry_type="manual_adjustment",
+            minutes_delta=510,
+            balance_after_minutes=0,
+            note="Ausgleich",
+            created_by_user_id=user.id,
+            created_at=now + timedelta(hours=1),
+            updated_at=now + timedelta(hours=1),
+        )
+    )
+    db.commit()
+    zero_summary = service.get_summary(current_user=user, today=date(2026, 7, 18))
+    assert zero_summary.hours_account.current_balance_minutes == 0
+    assert zero_summary.hours_account.last_entry_at is not None
+    assert zero_summary.hours_account.last_entry_at.replace(
+        tzinfo=timezone.utc
+    ) == now + timedelta(hours=1)
     db.close()
 
 
@@ -264,6 +360,7 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
     assert summary_response.status_code == 200
     assert summary_response.json()["vehicle"]["license_plate"] == "OHZ-BE 247"
     assert summary_response.json()["vehicle"]["manufacturer"] == "Volkswagen"
+    assert summary_response.json()["hours_account"]["current_balance_minutes"] == 855
     assert summary_response.json()["tool_count"] == 4
     assert tools_response.status_code == 200
     assert {item["beg_number"] for item in tools_response.json()} == {

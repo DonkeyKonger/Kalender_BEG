@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CarFront,
   ChevronRight,
+  Clock,
   HeartPulse,
   MoreVertical,
   Plane,
@@ -81,6 +82,18 @@ export function MobilePersonalFilePage() {
               <small>im Jahr {data.current_year}</small>
             </article>
           </div>
+
+          <article className={`mobile-personal-hours-card ${hoursAccountTone(data.hours_account.current_balance_minutes)}`}>
+            <span className="mobile-personal-icon-tile"><Clock aria-hidden="true" size={25} /></span>
+            <div>
+              <span>Überstundenkonto</span>
+              <strong>{formatOvertimeHours(data.hours_account.current_balance_minutes)}</strong>
+              <small>{formatHoursAccountStand(data.hours_account.last_entry_at)}</small>
+            </div>
+            <span className="mobile-personal-hours-badge">
+              {hoursAccountStatusLabel(data.hours_account.current_balance_minutes)}
+            </span>
+          </article>
 
           <article className="mobile-personal-vehicle-card">
             <span className="mobile-personal-icon-tile"><CarFront aria-hidden="true" size={25} /></span>
@@ -421,6 +434,7 @@ function MobilePersonalFileSkeleton() {
   return (
     <div className="mobile-personal-file-skeleton" aria-label="Persönliche Akte wird geladen">
       <div className="mobile-personal-stat-grid"><span /><span /></div>
+      <span className="is-hours" />
       <span className="is-vehicle" />
       <span className="is-tools" />
     </div>
@@ -466,6 +480,42 @@ function formatDays(value: number): string {
 
 function formatAvailableDays(value: number): string {
   return `${value} ${value === 1 ? "Tag" : "Tagen"}`;
+}
+
+
+function formatOvertimeHours(minutes: number): string {
+  const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
+  const hours = Math.abs(minutes) / 60;
+  return `${sign}${new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(hours)} Std.`;
+}
+
+
+function formatHoursAccountStand(value: string | null): string {
+  if (!value) {
+    return "Noch keine Buchungen";
+  }
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return `Stand: ${value}`;
+  }
+  return `Stand: ${new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(parsedDate)}`;
+}
+
+
+function hoursAccountTone(minutes: number): string {
+  if (minutes > 0) return "is-positive";
+  if (minutes < 0) return "is-negative";
+  return "is-neutral";
+}
+
+
+function hoursAccountStatusLabel(minutes: number): string {
+  if (minutes > 0) return "Guthaben";
+  if (minutes < 0) return "Minusstunden";
+  return "Ausgeglichen";
 }
 
 
