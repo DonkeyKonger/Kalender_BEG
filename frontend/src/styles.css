@@ -11926,7 +11926,7 @@ button.person-chip:focus-visible {
 .miscellaneous-tools-header-actions {
   display: flex;
   min-width: 0;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -11949,6 +11949,7 @@ button.person-chip:focus-visible {
 
 .tool-material-responsibility-readonly {
   min-width: 0;
+  height: 32px;
   min-height: 32px;
   overflow: hidden;
   border: 1px solid #d7e0ea;
@@ -11976,10 +11977,16 @@ button.person-chip:focus-visible {
 }
 
 .miscellaneous-tools-add-button {
+  height: 32px;
   min-height: 32px;
   border-radius: 0;
-  margin-top: 15px;
+  margin-top: 0;
   padding: 7px 10px;
+}
+
+.tool-material-responsibility .dashboard-note-picker-trigger {
+  height: 32px;
+  min-height: 32px;
 }
 
 .miscellaneous-tools-toolbar {
