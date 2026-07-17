@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models.person import Person
 from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolMaterialStatus
 from app.models.tool_material_item import ToolMaterialItem
+from app.models.tool_issue_report import ToolIssueReport
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOption,
     ToolMaterialFilterOptionsRead,
@@ -70,7 +71,9 @@ class ToolMaterialService:
             .outerjoin(ToolMaterialItem.employee)
             .options(
                 joinedload(ToolMaterialItem.employee),
-                selectinload(ToolMaterialItem.issue_reports),
+                selectinload(ToolMaterialItem.issue_reports).selectinload(
+                    ToolIssueReport.reporter_employee
+                ),
             )
         )
         if filters.tool_id is not None:
@@ -292,7 +295,9 @@ class ToolMaterialService:
             select(ToolMaterialItem)
             .options(
                 joinedload(ToolMaterialItem.employee),
-                selectinload(ToolMaterialItem.issue_reports),
+                selectinload(ToolMaterialItem.issue_reports).selectinload(
+                    ToolIssueReport.reporter_employee
+                ),
             )
             .where(ToolMaterialItem.id == item_id)
         )

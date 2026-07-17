@@ -64,8 +64,12 @@ class ToolMaterialItem(TimestampMixin, Base):
 
     @property
     def open_issue_reports(self):
-        return [
-            report
-            for report in self.issue_reports
-            if report.status == ToolIssueStatus.OPEN and report.resolved_at is None
-        ]
+        return sorted(
+            (
+                report
+                for report in self.issue_reports
+                if report.status == ToolIssueStatus.OPEN and report.resolved_at is None
+            ),
+            key=lambda report: (report.created_at, report.id),
+            reverse=True,
+        )

@@ -72,6 +72,20 @@ test("message navigation and API filtering use the stable tool ID", () => {
 test("manual remarks and red structured system notes remain separate", () => {
   assert.match(toolsSource, /item\.remarks \? <span title=\{item\.remarks\}>\{item\.remarks\}<\/span>/);
   assert.match(toolsSource, /item\.open_issue_reports\.map/);
-  assert.match(toolsSource, /report\.reason === "DEFECTIVE" \? "Maschine defekt" : "Maschine entwendet"/);
+  assert.match(toolsSource, /formatToolIssueReason\(report\.reason\)/);
+  assert.match(toolsSource, /reason === "DEFECTIVE" \? "Maschine defekt" : "Maschine entwendet"/);
   assert.match(styles, /\.tool-material-system-note \{[^}]*color:\s*#a23f3f/s);
+});
+
+
+test("the edit drawer shows all open reports separately above editable remarks", () => {
+  assert.match(toolsSource, /openIssueReports=\{selectedItem\.open_issue_reports\}/);
+  assert.match(toolsSource, /aria-label="Offene Monteurmeldungen"/);
+  assert.match(toolsSource, /openIssueReports\.map\(\(report\)/);
+  assert.match(toolsSource, /formatToolIssueReason\(report\.reason\)/);
+  assert.match(toolsSource, /formatToolIssueDescription\(report\.reason\)/);
+  assert.match(toolsSource, /report\.reporter_name/);
+  assert.match(toolsSource, /formatToolIssueStatus\(report\.status\)/);
+  assert.match(toolsSource, /<textarea rows=\{4\} value=\{draft\.remarks\}/);
+  assert.match(styles, /\.tool-material-issue-notice \{[^}]*border-radius:\s*0;[^}]*background:\s*#fff7f7/s);
 });

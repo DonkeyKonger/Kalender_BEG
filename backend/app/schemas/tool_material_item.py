@@ -3,12 +3,20 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import PersonType, ToolIssueReason, ToolMaterialCategory, ToolMaterialStatus
+from app.models.enums import (
+    PersonType,
+    ToolIssueReason,
+    ToolIssueStatus,
+    ToolMaterialCategory,
+    ToolMaterialStatus,
+)
 
 
 class ToolIssueSystemNoteRead(BaseModel):
     id: int
     reason: ToolIssueReason
+    status: ToolIssueStatus
+    reporter_name: str
     reporter_last_name_snapshot: str
     created_at: datetime
 

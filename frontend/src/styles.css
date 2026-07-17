@@ -12584,6 +12584,67 @@ button.person-chip:focus-visible {
   grid-column: 1 / -1;
 }
 
+.tool-material-issue-notice {
+  border: 1px solid #dfb7b7;
+  border-radius: 0;
+  background: #fff7f7;
+  color: #713434;
+  font-weight: 650;
+}
+
+.tool-material-issue-notice > header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid #ead0d0;
+  background: #fbecec;
+  padding: 7px 9px;
+  color: #8e3838;
+}
+
+.tool-material-issue-notice-list {
+  display: grid;
+}
+
+.tool-material-issue-notice-list article {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+}
+
+.tool-material-issue-notice-list article + article {
+  border-top: 1px solid #ead0d0;
+}
+
+.tool-material-issue-notice-list p,
+.tool-material-issue-notice-list dl,
+.tool-material-issue-notice-list dd {
+  margin: 0;
+}
+
+.tool-material-issue-notice-list p {
+  color: #713f3f;
+  font-weight: 650;
+}
+
+.tool-material-issue-notice-list dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  color: #7e5555;
+  font-size: 0.74rem;
+}
+
+.tool-material-issue-notice-list dl div {
+  display: flex;
+  gap: 4px;
+}
+
+.tool-material-issue-notice-list dt {
+  font-weight: 800;
+}
+
 .miscellaneous-tools-drawer-footer {
   display: flex;
   align-items: center;

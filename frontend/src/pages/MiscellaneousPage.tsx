@@ -1,4 +1,4 @@
-import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ListFilter, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -191,13 +191,30 @@ function MiscellaneousPlaceholderPanel({ activeTab }: { activeTab: Miscellaneous
 }
 
 function formatToolIssueSystemNote(report: ToolMaterialItem["open_issue_reports"][number]): string {
-  const label = report.reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
-  return `${label} · ${new Intl.DateTimeFormat("de-DE", {
+  return `${formatToolIssueReason(report.reason)} · ${formatToolIssueDate(report.created_at)} · ${report.reporter_name}`;
+}
+
+function formatToolIssueReason(reason: ToolMaterialItem["open_issue_reports"][number]["reason"]): string {
+  return reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+}
+
+function formatToolIssueDescription(reason: ToolMaterialItem["open_issue_reports"][number]["reason"]): string {
+  return reason === "DEFECTIVE"
+    ? "Das Werkzeug wurde als defekt gemeldet."
+    : "Das Werkzeug wurde als entwendet gemeldet.";
+}
+
+function formatToolIssueDate(createdAt: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
     timeZone: "Europe/Berlin",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  }).format(new Date(report.created_at))} · ${report.reporter_last_name_snapshot}`;
+  }).format(new Date(createdAt));
+}
+
+function formatToolIssueStatus(status: ToolMaterialItem["open_issue_reports"][number]["status"]): string {
+  return status === "open" ? "Gemeldet" : status;
 }
 
 function ToolMaterialList({
@@ -797,6 +814,7 @@ function ToolMaterialList({
           <ToolMaterialFields
             draft={selectedDraft}
             historicalEmployee={selectedItem.employee}
+            openIssueReports={selectedItem.open_issue_reports}
             people={people}
             peopleError={peopleError}
             peopleLoading={peopleLoading}
@@ -906,6 +924,7 @@ function ToolMaterialResponsibleUserControl({
 function ToolMaterialFields({
   draft,
   historicalEmployee,
+  openIssueReports = [],
   people,
   peopleError,
   peopleLoading,
@@ -914,6 +933,7 @@ function ToolMaterialFields({
 }: {
   draft: ToolMaterialDraft;
   historicalEmployee: ToolMaterialEmployee | null;
+  openIssueReports?: ToolMaterialItem["open_issue_reports"];
   people: Person[];
   peopleError: string | null;
   peopleLoading: boolean;
@@ -971,6 +991,36 @@ function ToolMaterialFields({
       </label>
       <label className="tool-material-form-wide">
         <span>Bemerkungen</span>
+        {openIssueReports.length > 0 ? (
+          <section aria-label="Offene Monteurmeldungen" className="tool-material-issue-notice">
+            <header>
+              <AlertTriangle aria-hidden="true" size={16} />
+              <strong>{openIssueReports.length === 1 ? "Offene Monteurmeldung" : "Offene Monteurmeldungen"}</strong>
+            </header>
+            <div className="tool-material-issue-notice-list">
+              {openIssueReports.map((report) => (
+                <article key={report.id}>
+                  <strong>{formatToolIssueReason(report.reason)}</strong>
+                  <p>{formatToolIssueDescription(report.reason)}</p>
+                  <dl>
+                    <div>
+                      <dt>Gemeldet am</dt>
+                      <dd>{formatToolIssueDate(report.created_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Von</dt>
+                      <dd>{report.reporter_name}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{formatToolIssueStatus(report.status)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <textarea rows={4} value={draft.remarks} onChange={(event) => onChange({ remarks: event.target.value })} />
       </label>
       <label>

@@ -70,3 +70,9 @@ class ToolIssueReport(TimestampMixin, Base):
     reporter_employee = relationship("Person", foreign_keys=[reporter_employee_id])
     recipient_user = relationship("User", foreign_keys=[recipient_user_id])
     resolved_by_user = relationship("User", foreign_keys=[resolved_by_user_id])
+
+    @property
+    def reporter_name(self) -> str:
+        if self.reporter_employee is not None:
+            return self.reporter_employee.display_name
+        return self.reporter_last_name_snapshot

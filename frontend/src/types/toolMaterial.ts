@@ -48,6 +48,8 @@ export type ToolMaterialItem = {
 export type ToolIssueSystemNote = {
   id: number;
   reason: "DEFECTIVE" | "STOLEN";
+  status: "open";
+  reporter_name: string;
   reporter_last_name_snapshot: string;
   created_at: string;
 };

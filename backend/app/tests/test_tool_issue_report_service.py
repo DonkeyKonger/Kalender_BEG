@@ -11,12 +11,13 @@ from app.models import Base
 from app.api.dependencies import get_current_app_user
 from app.core.database import get_db
 from app.main import create_app
-from app.models.enums import ToolIssueReason, ToolMaterialStatus, UserRole
+from app.models.enums import ToolIssueReason, ToolIssueStatus, ToolMaterialStatus, UserRole
 from app.models.person import Person
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.user import User
 from app.schemas.mobile import MobileToolIssueReportCreate
+from app.schemas.tool_material_item import ToolMaterialItemRead, ToolMaterialItemUpdate
 from app.services.dashboard_message_service import DashboardMessageService
 from app.services.tool_issue_report_service import ToolIssueReportService
 from app.services.tool_material_responsibility_service import ToolMaterialResponsibilityService
@@ -195,7 +196,21 @@ def test_system_notes_are_separate_from_manual_remarks_and_dismissal_marks_one_m
     if item.id != tool.id:
         item = next(entry for entry in ToolMaterialService(db).list_items() if entry.id == tool.id)
     assert item.remarks == "Manuelle Bemerkung"
-    assert {entry.id for entry in item.open_issue_reports} == {first.id, second.id}
+    assert [entry.id for entry in item.open_issue_reports] == [second.id, first.id]
+    assert all(entry.status == ToolIssueStatus.OPEN for entry in item.open_issue_reports)
+    assert all(entry.reporter_name == "Theo Erichsen" for entry in item.open_issue_reports)
+
+    serialized_item = ToolMaterialItemRead.model_validate(item)
+    assert serialized_item.remarks == "Manuelle Bemerkung"
+    assert serialized_item.open_issue_reports[0].reporter_name == "Theo Erichsen"
+    assert serialized_item.open_issue_reports[0].status == ToolIssueStatus.OPEN
+
+    updated_item = ToolMaterialService(db).update_item(
+        tool.id,
+        ToolMaterialItemUpdate(remarks="Zusätzliche interne Notiz"),
+    )
+    assert updated_item.remarks == "Zusätzliche interne Notiz"
+    assert [entry.id for entry in updated_item.open_issue_reports] == [second.id, first.id]
 
     messages = DashboardMessageService(db).get_summary(limit=6, current_user=office).latest_messages
     DashboardMessageService(db).dismiss_message(message_key=messages[0].message_key, current_user=office)
@@ -207,6 +222,12 @@ def test_system_notes_are_separate_from_manual_remarks_and_dismissal_marks_one_m
     remaining = DashboardMessageService(db).get_summary(limit=6, current_user=office)
     assert remaining.open_count == 1
     assert remaining.latest_messages[0].message_key != messages[0].message_key
+    refreshed_item = next(
+        entry
+        for entry in ToolMaterialService(db).list_items()
+        if entry.id == tool.id
+    )
+    assert [entry.id for entry in refreshed_item.open_issue_reports] == [first.id]
 
     replacement = service.report(
         tool_id=tool.id,
