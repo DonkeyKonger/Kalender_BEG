@@ -229,7 +229,12 @@ jobs:
               if scm_base.endswith(suffix):
                   scm_base = scm_base[: -len(suffix)]
           command_url = f"{scm_base}/api/command"
-          import_script = "/home/site/wwwroot/app/scripts/run_deployed_tool_import.sh"
+          release_sha = os.environ["GITHUB_SHA"]
+          if len(release_sha) != 40 or any(character not in "0123456789abcdef" for character in release_sha):
+              raise SystemExit("GITHUB_SHA is not a valid commit hash.")
+          archive_path = f"/home/data/tool-import-{release_sha}.zip"
+          release_root = f"/home/data/tool-material-import/releases/{release_sha}"
+          import_script = f"{release_root}/app/scripts/run_deployed_tool_import.sh"
 
           print(f"::add-mask::{username}")
           print(f"::add-mask::{password}")
@@ -249,40 +254,44 @@ jobs:
 
           credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
 
-          # The public health endpoint can still answer from the previous worker while
-          # ZipDeploy is switching the mounted package. Confirm the new import helper
-          # is visible to Kudu before executing it.
-          script_url = f"{scm_base}/api/vfs/site/wwwroot/app/scripts/run_deployed_tool_import.sh"
-          for attempt in range(60):
-              script_request = urllib.request.Request(
-                  script_url,
-                  headers={"Authorization": f"Basic {credentials}"},
+          # ZipDeploy can mount the application package directly for the running app.
+          # That package is intentionally not visible through Kudu's wwwroot VFS. Upload
+          # the already tested build artifact to persistent storage and execute the same
+          # import helper from there instead of relying on the runtime mount.
+          upload_url = f"{scm_base}/api/vfs/home/data/tool-import-{release_sha}.zip"
+          with open("backend-release.zip", "rb") as deployment_package:
+              upload_request = urllib.request.Request(
+                  upload_url,
+                  data=deployment_package.read(),
+                  headers={
+                      "Authorization": f"Basic {credentials}",
+                      "Content-Type": "application/zip",
+                      "If-Match": "*",
+                  },
+                  method="PUT",
               )
-              try:
-                  with urllib.request.urlopen(script_request, timeout=15) as response:
-                      if response.status == 200:
-                          break
-              except urllib.error.HTTPError as error:
-                  if error.code != 404:
-                      detail = error.read().decode(errors="replace")[-2000:]
+          try:
+              with urllib.request.urlopen(upload_request, timeout=180) as response:
+                  if response.status not in {200, 201, 204}:
                       raise SystemExit(
-                          f"Azure import helper check failed with HTTP {error.code}: {detail}"
+                          f"Azure import package upload returned HTTP {response.status}."
                       )
-              except (OSError, urllib.error.URLError):
-                  pass
-              if attempt == 59:
-                  raise SystemExit(
-                      "Azure import helper is missing after deployment: "
-                      f"{import_script}"
-                  )
-              time.sleep(2)
+          except urllib.error.HTTPError as error:
+              detail = error.read().decode(errors="replace")[-2000:]
+              raise SystemExit(
+                  f"Azure import package upload failed with HTTP {error.code}: {detail}"
+              )
 
           request = urllib.request.Request(
               command_url,
               data=json.dumps(
                   {
-                      "command": f"bash {import_script}",
-                      "dir": "/home/site/wwwroot",
+                      "command": (
+                          f"mkdir -p {release_root} && "
+                          f"python -m zipfile -e {archive_path} {release_root} && "
+                          f"PROJECT_ROOT={release_root} bash {import_script}"
+                      ),
+                      "dir": "/home/data",
                   }
               ).encode(),
               headers={
