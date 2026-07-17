@@ -72,7 +72,11 @@ test("message navigation and API filtering use the stable tool ID", () => {
 test("manual remarks and red structured system notes remain separate", () => {
   assert.match(toolsSource, /item\.remarks \? <span title=\{item\.remarks\}>\{item\.remarks\}<\/span>/);
   assert.match(toolsSource, /item\.open_issue_reports\.map/);
-  assert.match(toolsSource, /formatToolIssueReason\(report\.reason\)/);
+  assert.match(
+    toolsSource,
+    /className="tool-material-system-note" key=\{report\.id\} title=\{formatToolIssueReason\(report\.reason\)\}>\s*\{formatToolIssueReason\(report\.reason\)\}/,
+  );
+  assert.doesNotMatch(toolsSource, /formatToolIssueSystemNote/);
   assert.match(toolsSource, /reason === "DEFECTIVE" \? "Maschine defekt" : "Maschine entwendet"/);
   assert.match(styles, /\.tool-material-system-note \{[^}]*color:\s*#a23f3f/s);
 });

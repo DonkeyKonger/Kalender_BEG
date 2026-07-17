@@ -193,10 +193,6 @@ function MiscellaneousPlaceholderPanel({ activeTab }: { activeTab: Miscellaneous
   );
 }
 
-function formatToolIssueSystemNote(report: ToolMaterialItem["open_issue_reports"][number]): string {
-  return `${formatToolIssueReason(report.reason)} · ${formatToolIssueDate(report.created_at)} · ${report.reporter_name}`;
-}
-
 function formatToolIssueReason(reason: ToolMaterialItem["open_issue_reports"][number]["reason"]): string {
   return reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
 }
@@ -843,8 +839,8 @@ function ToolMaterialList({
                   <td className="miscellaneous-tools-remarks">
                     {item.remarks ? <span title={item.remarks}>{item.remarks}</span> : null}
                     {item.open_issue_reports.map((report) => (
-                      <strong className="tool-material-system-note" key={report.id} title={formatToolIssueSystemNote(report)}>
-                        {formatToolIssueSystemNote(report)}
+                      <strong className="tool-material-system-note" key={report.id} title={formatToolIssueReason(report.reason)}>
+                        {formatToolIssueReason(report.reason)}
                       </strong>
                     ))}
                   </td>
