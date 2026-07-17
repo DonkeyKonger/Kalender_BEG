@@ -197,6 +197,8 @@ jobs:
           import base64
           import json
           import os
+          import shlex
+          import textwrap
           import time
           import urllib.error
           import urllib.request
@@ -233,6 +235,7 @@ jobs:
           if len(release_sha) != 40 or any(character not in "0123456789abcdef" for character in release_sha):
               raise SystemExit("GITHUB_SHA is not a valid commit hash.")
           archive_path = f"/home/tool-import-{release_sha}.zip"
+          bootstrap_path = f"/home/tool-import-{release_sha}.sh"
           release_root = f"/home/data/tool-material-import/releases/{release_sha}"
           import_script = f"{release_root}/app/scripts/run_deployed_tool_import.sh"
 
@@ -259,39 +262,59 @@ jobs:
           # the already tested build artifact to persistent storage and execute the same
           # import helper from there instead of relying on the runtime mount.
           # Kudu's VFS endpoint is already rooted at /home.
-          upload_url = f"{scm_base}/api/vfs/tool-import-{release_sha}.zip"
-          with open("backend-release.zip", "rb") as deployment_package:
+          def upload_file(remote_name, content, content_type):
               upload_request = urllib.request.Request(
-                  upload_url,
-                  data=deployment_package.read(),
+                  f"{scm_base}/api/vfs/{remote_name}",
+                  data=content,
                   headers={
                       "Authorization": f"Basic {credentials}",
-                      "Content-Type": "application/zip",
+                      "Content-Type": content_type,
                       "If-Match": "*",
                   },
                   method="PUT",
               )
-          try:
-              with urllib.request.urlopen(upload_request, timeout=180) as response:
-                  if response.status not in {200, 201, 204}:
-                      raise SystemExit(
-                          f"Azure import package upload returned HTTP {response.status}."
-                      )
-          except urllib.error.HTTPError as error:
-              detail = error.read().decode(errors="replace")[-2000:]
-              raise SystemExit(
-                  f"Azure import package upload failed with HTTP {error.code}: {detail}"
+              try:
+                  with urllib.request.urlopen(upload_request, timeout=180) as response:
+                      if response.status not in {200, 201, 204}:
+                          raise SystemExit(
+                              f"Azure import file upload returned HTTP {response.status}."
+                          )
+              except urllib.error.HTTPError as error:
+                  detail = error.read().decode(errors="replace")[-2000:]
+                  raise SystemExit(
+                      f"Azure import file upload failed with HTTP {error.code}: {detail}"
+                  )
+
+          with open("backend-release.zip", "rb") as deployment_package:
+              upload_file(
+                  f"tool-import-{release_sha}.zip",
+                  deployment_package.read(),
+                  "application/zip",
               )
+
+          # Kudu's command endpoint starts one executable directly; it does not
+          # interpret shell operators such as &&. Put the complete sequence into a
+          # script and ask Kudu to execute only /bin/bash with that script.
+          bootstrap_script = textwrap.dedent(
+              f"""\
+              #!/usr/bin/env bash
+              set -euo pipefail
+              mkdir -p {shlex.quote(release_root)}
+              python -m zipfile -e {shlex.quote(archive_path)} {shlex.quote(release_root)}
+              PROJECT_ROOT={shlex.quote(release_root)} /bin/bash {shlex.quote(import_script)}
+              """
+          )
+          upload_file(
+              f"tool-import-{release_sha}.sh",
+              bootstrap_script.encode("utf-8"),
+              "text/x-shellscript",
+          )
 
           request = urllib.request.Request(
               command_url,
               data=json.dumps(
                   {
-                      "command": (
-                          f"mkdir -p {release_root} && "
-                          f"python -m zipfile -e {archive_path} {release_root} && "
-                          f"PROJECT_ROOT={release_root} bash {import_script}"
-                      ),
+                      "command": f"/bin/bash {bootstrap_path}",
                       "dir": "/home",
                   }
               ).encode(),
