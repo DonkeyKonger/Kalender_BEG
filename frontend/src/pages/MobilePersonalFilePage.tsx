@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { ApiError, api } from "../lib/api";
+import { useMobileScrollReset } from "../lib/mobileScroll";
 import type { MobilePersonalFile, MobilePersonalFileTool, MobileToolIssueReason } from "../types/mobile";
 
 
@@ -28,6 +29,8 @@ export function MobilePersonalFilePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+
+  useMobileScrollReset("personal-file");
 
   const loadPersonalFile = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -157,6 +160,8 @@ export function MobilePersonalFileToolsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+
+  useMobileScrollReset("personal-file-tools");
 
   const loadTools = useCallback(async () => {
     const requestId = ++requestIdRef.current;

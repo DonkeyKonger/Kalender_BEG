@@ -31,6 +31,7 @@ import {
   startAndroidBackgroundGpsTracking,
   stopAndroidBackgroundGpsTracking,
 } from "../lib/mobileGps";
+import { useMobileScrollReset } from "../lib/mobileScroll";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
@@ -476,6 +477,8 @@ export function MyAssignmentsPage() {
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
   const greetingName = getGreetingName(user?.display_name || user?.username || "");
+
+  useMobileScrollReset(activeScreen, activeScreen !== "home");
 
   if (activeScreen === "assignments") {
     return (

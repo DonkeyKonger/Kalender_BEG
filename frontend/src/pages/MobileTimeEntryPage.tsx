@@ -9,6 +9,7 @@ import {
   formatGermanWeekdayShortCompact as formatWeekdayShort,
   formatHoursFromMinutes,
 } from "../lib/formatters";
+import { useMobileScrollReset } from "../lib/mobileScroll";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
 import type { TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
 
@@ -103,6 +104,8 @@ export function MobileTimeEntryPage() {
   const minuteWheelRef = useRef<HTMLDivElement | null>(null);
   const hourWheelScrollTimeoutRef = useRef<number | null>(null);
   const minuteWheelScrollTimeoutRef = useRef<number | null>(null);
+
+  useMobileScrollReset("time-entry");
 
   const timeEntryLoadRange = useMemo(
     () => ({
