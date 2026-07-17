@@ -5502,8 +5502,10 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-page {
-  gap: 12px;
+  gap: 14px;
   background: #f5f8fc;
+  padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+  overflow: visible;
 }
 
 .mobile-home-actions {
@@ -5515,10 +5517,11 @@ button.person-chip:focus-visible {
 
 .mobile-home-actions .icon-button {
   flex: 1 1 0;
-  min-height: 38px;
+  justify-content: center;
+  min-height: 44px;
   border-radius: 8px;
-  padding: 8px 9px;
-  font-size: 0.82rem;
+  padding: 9px 10px;
+  font-size: 0.86rem;
   box-shadow: 0 8px 18px rgb(18 29 52 / 8%);
 }
 
@@ -5542,23 +5545,41 @@ button.person-chip:focus-visible {
 .mobile-home-title-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
-  min-height: 116px;
+  align-items: center;
+  gap: 12px;
+  min-height: 124px;
   border: 1px solid #d5e2f1;
   border-top: 6px solid #f4b73f;
   border-radius: 12px;
   background:
     linear-gradient(135deg, rgb(255 255 255 / 98%) 0%, rgb(239 247 255 / 96%) 100%),
     #ffffff;
-  padding: 18px 18px 17px;
+  padding: 18px;
   box-shadow: 0 14px 32px rgb(18 29 52 / 9%);
 }
 
-.mobile-home-title-card div {
+.mobile-home-title-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  gap: 14px;
+}
+
+.mobile-home-title-main > div {
   display: grid;
   min-width: 0;
   gap: 5px;
+}
+
+.mobile-home-hero-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  background: #eaf2fb;
+  color: #143c6d;
 }
 
 .mobile-home-title-card h1,
@@ -5583,7 +5604,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-title-card h1 {
   color: #111827;
-  font-size: 1.68rem;
+  font-size: clamp(1.55rem, 7vw, 1.95rem);
   line-height: 1.1;
   letter-spacing: 0;
 }
@@ -5595,6 +5616,24 @@ button.person-chip:focus-visible {
   line-height: 1.25;
 }
 
+.mobile-home-stand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-home-stand svg {
+  flex: 0 0 auto;
+  color: #65738a;
+}
+
+.mobile-home-stand span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mobile-home-title-card .mobile-home-greeting {
   color: #143c6d;
   font-size: 0.96rem;
@@ -5602,6 +5641,9 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   align-self: start;
   margin-top: 1px;
   border-radius: 999px;
@@ -5611,6 +5653,14 @@ button.person-chip:focus-visible {
   font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
+}
+
+.mobile-home-status-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .mobile-home-status-badge.is-cache {
@@ -5674,8 +5724,12 @@ button.person-chip:focus-visible {
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
+.mobile-action-card {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .mobile-message-card svg,
-.mobile-action-card svg {
+.mobile-action-card .mobile-action-icon {
   box-sizing: border-box;
   width: 36px;
   height: 36px;
@@ -5734,9 +5788,14 @@ button.person-chip:focus-visible {
   --mobile-action-focus: var(--mobile-action-settings-focus);
 }
 
-.app-shell.is-mobile-workspace .mobile-action-card svg {
+.app-shell.is-mobile-workspace .mobile-action-card .mobile-action-icon {
   background: var(--mobile-action-background);
   color: var(--mobile-action-icon);
+}
+
+.mobile-action-chevron {
+  justify-self: end;
+  color: #6d7b90;
 }
 
 .mobile-message-card:hover,
@@ -5777,7 +5836,7 @@ button.person-chip:focus-visible {
   transform: none;
 }
 
-.app-shell.is-mobile-workspace .mobile-action-card:disabled svg {
+.app-shell.is-mobile-workspace .mobile-action-card:disabled .mobile-action-icon {
   background: #edf0f3;
   color: #8b96a3;
 }
@@ -6444,6 +6503,15 @@ button.person-chip:focus-visible {
 }
 
 @media (max-width: 350px) {
+  .mobile-home-title-card {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-home-status-badge {
+    justify-self: start;
+    margin-left: 56px;
+  }
+
   .mobile-personal-stat-grid {
     grid-template-columns: 1fr;
   }
@@ -6635,6 +6703,11 @@ button.person-chip:focus-visible {
   gap: 8px;
 }
 
+.mobile-action-list {
+  align-content: start;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+}
+
 .mobile-focus-card {
   display: grid;
   gap: 8px;
@@ -6698,7 +6771,7 @@ button.person-chip:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   min-width: 0;
   border: 1px solid #d8e3ef;
   border-radius: 8px;
@@ -6719,25 +6792,23 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-assignment-card.is-day-cluster-item {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
   align-items: center;
-  min-height: 82px;
-  padding: 8px 9px;
+  min-height: 86px;
+  padding: 9px;
 }
 
-.mobile-home-assignment-card.is-day-cluster-item > svg {
-  display: none;
-}
-
-.mobile-home-assignment-card > svg {
+.mobile-home-assignment-icon {
   box-sizing: border-box;
-  width: 34px;
-  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  width: 39px;
+  height: 39px;
+  place-items: center;
   border-radius: 8px;
   background: #eaf2fb;
   color: #143c6d;
-  padding: 8px;
 }
 
 .mobile-home-assignment-card > span:not(.assignment-card-affordance) {
@@ -6802,7 +6873,9 @@ button.person-chip:focus-visible {
 
 .mobile-home-empty-day {
   display: grid;
-  gap: 2px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
   width: 100%;
   border: 1px solid #d8e3ef;
   border-radius: 8px;
@@ -6827,7 +6900,14 @@ button.person-chip:focus-visible {
   font-size: 0.84rem;
 }
 
-.mobile-home-empty-day span {
+.mobile-home-empty-day > span:not(.mobile-home-assignment-icon) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mobile-home-empty-day b {
+  color: #111827;
   font-size: 0.78rem;
   font-weight: 760;
 }
@@ -8627,7 +8707,6 @@ button.person-chip:focus-visible {
   }
 
   .app-shell.is-mobile-workspace .mobile-focus-grid,
-  .app-shell.is-mobile-workspace .mobile-action-list,
   .app-shell.is-mobile-workspace .assignment-list,
   .app-shell.is-mobile-workspace .mobile-home-day-assignment-grid,
   .app-shell.is-mobile-workspace .mobile-measurement-list,

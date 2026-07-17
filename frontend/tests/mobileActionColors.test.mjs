@@ -41,13 +41,15 @@ test("mobile action colors are centralized as semantic design tokens", () => {
 
   assert.match(
     styles,
-    /\.app-shell\.is-mobile-workspace \.mobile-action-card svg \{[^}]*background:\s*var\(--mobile-action-background\);[^}]*color:\s*var\(--mobile-action-icon\);/s,
+    /\.app-shell\.is-mobile-workspace \.mobile-action-card \.mobile-action-icon \{[^}]*background:\s*var\(--mobile-action-background\);[^}]*color:\s*var\(--mobile-action-icon\);/s,
   );
 });
 
 
 test("disabled mobile actions stay neutral and interaction states keep their accent", () => {
   assert.match(pageSource, /disabled=\{disabled\}/);
+  assert.match(pageSource, /className="mobile-action-icon"/);
+  assert.match(pageSource, /className="mobile-action-chevron"/);
   assert.match(
     styles,
     /\.app-shell\.is-mobile-workspace \.mobile-action-card:focus-visible:not\(:disabled\) \{[^}]*outline:\s*3px solid var\(--mobile-action-focus\);[^}]*transform:\s*none;/s,
@@ -58,6 +60,22 @@ test("disabled mobile actions stay neutral and interaction states keep their acc
   );
   assert.match(
     styles,
-    /\.app-shell\.is-mobile-workspace \.mobile-action-card:disabled svg \{[^}]*background:\s*#edf0f3;[^}]*color:\s*#8b96a3;/s,
+    /\.app-shell\.is-mobile-workspace \.mobile-action-card:disabled \.mobile-action-icon \{[^}]*background:\s*#edf0f3;[^}]*color:\s*#8b96a3;/s,
+  );
+});
+
+
+test("mobile home keeps every action reachable below browser safe areas", () => {
+  assert.match(
+    styles,
+    /\.mobile-home-page \{[^}]*padding-bottom:\s*calc\(118px \+ env\(safe-area-inset-bottom, 0px\)\);[^}]*overflow:\s*visible;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-action-list \{[^}]*padding-bottom:\s*calc\(22px \+ env\(safe-area-inset-bottom, 0px\)\);/s,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.app-shell\.is-mobile-workspace \.mobile-action-list,[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
   );
 });

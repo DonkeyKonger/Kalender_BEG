@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   CalendarClock,
   ChevronRight,
+  Clock,
   FileText,
   HeartPulse,
   LogOut,
@@ -645,12 +646,18 @@ export function MyAssignmentsPage() {
       </div>
 
       <header className="mobile-home-title-card">
-        <div>
-          <h1>Baustellenkalender</h1>
-          {loadedAt ? (
-            <p>Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}</p>
-          ) : null}
-          <p className="mobile-home-greeting">Hallo {greetingName}</p>
+        <div className="mobile-home-title-main">
+          <span className="mobile-home-hero-icon"><CalendarClock aria-hidden="true" size={25} /></span>
+          <div>
+            <h1>Baustellenkalender</h1>
+            {loadedAt ? (
+              <p className="mobile-home-stand">
+                <Clock aria-hidden="true" size={15} />
+                <span>Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}</span>
+              </p>
+            ) : null}
+            <p className="mobile-home-greeting">Hallo {greetingName}</p>
+          </div>
         </div>
         <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
           {isFromCache ? "Offline" : "Online"}
@@ -887,9 +894,14 @@ function DayFocusCard({
           type="button"
           onClick={() => onEmptyDaySelect?.(date, compact ? `${label} · ${formatShortDate(date)}` : "Heute")}
         >
-          <strong>{formatHomeAssignmentDateLabel(date)}</strong>
-          <span>Kein Einsatz geplant.</span>
-          <small>Antippen, falls du trotzdem auf Baustelle bist.</small>
+          <span className="mobile-home-assignment-icon">
+            <CalendarClock aria-hidden="true" size={22} />
+          </span>
+          <span>
+            <strong>{formatHomeAssignmentDateLabel(date)}</strong>
+            <b>Kein Einsatz geplant.</b>
+            <small>Antippen, falls du trotzdem auf Baustelle bist.</small>
+          </span>
         </button>
       )}
     </article>
@@ -909,7 +921,9 @@ function CompactHomeAssignmentCard({
       to={`/me/assignments/${assignment.id}`}
       state={{ assignment }}
     >
-      <CalendarClock aria-hidden="true" size={18} />
+      <span className="mobile-home-assignment-icon">
+        <CalendarClock aria-hidden="true" size={20} />
+      </span>
       <span>
         <strong>{formatHomeAssignmentDateLabel(date)}</strong>
         <b>{assignment.site.name}</b>
@@ -935,7 +949,9 @@ function HomeAssignmentCard({
       to={`/me/assignments/${assignment.id}`}
       state={{ assignment }}
     >
-      <CalendarClock aria-hidden="true" size={18} />
+      <span className="mobile-home-assignment-icon">
+        <CalendarClock aria-hidden="true" size={22} />
+      </span>
       <span>
         <strong>{formatHomeAssignmentDateLabel(date)}</strong>
         <b>{assignment.site.name}</b>
@@ -1000,11 +1016,12 @@ function PlaceholderAction({
       disabled={disabled}
       onClick={onOpen}
     >
-      <Icon aria-hidden="true" size={20} />
+      <Icon className="mobile-action-icon" aria-hidden="true" size={20} />
       <span>
         <strong>{title}</strong>
         <small>{text}</small>
       </span>
+      <ChevronRight className="mobile-action-chevron" aria-hidden="true" size={18} />
     </button>
   );
 }
