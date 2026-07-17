@@ -232,7 +232,7 @@ jobs:
           release_sha = os.environ["GITHUB_SHA"]
           if len(release_sha) != 40 or any(character not in "0123456789abcdef" for character in release_sha):
               raise SystemExit("GITHUB_SHA is not a valid commit hash.")
-          archive_path = f"/home/data/tool-import-{release_sha}.zip"
+          archive_path = f"/home/tool-import-{release_sha}.zip"
           release_root = f"/home/data/tool-material-import/releases/{release_sha}"
           import_script = f"{release_root}/app/scripts/run_deployed_tool_import.sh"
 
@@ -258,7 +258,8 @@ jobs:
           # That package is intentionally not visible through Kudu's wwwroot VFS. Upload
           # the already tested build artifact to persistent storage and execute the same
           # import helper from there instead of relying on the runtime mount.
-          upload_url = f"{scm_base}/api/vfs/home/data/tool-import-{release_sha}.zip"
+          # Kudu's VFS endpoint is already rooted at /home.
+          upload_url = f"{scm_base}/api/vfs/tool-import-{release_sha}.zip"
           with open("backend-release.zip", "rb") as deployment_package:
               upload_request = urllib.request.Request(
                   upload_url,
@@ -291,7 +292,7 @@ jobs:
                           f"python -m zipfile -e {archive_path} {release_root} && "
                           f"PROJECT_ROOT={release_root} bash {import_script}"
                       ),
-                      "dir": "/home/data",
+                      "dir": "/home",
                   }
               ).encode(),
               headers={
