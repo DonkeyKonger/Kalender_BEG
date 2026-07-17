@@ -307,13 +307,16 @@ jobs:
               detail = error.read().decode(errors="replace")[-2000:]
               raise SystemExit(f"Azure import command failed with HTTP {error.code}: {detail}")
 
-          exit_code = result.get("ExitCode", result.get("exitCode", 1))
-          output = result.get("Output", result.get("output", "")).strip()
-          error_output = result.get("Error", result.get("error", "")).strip()
+          exit_code = result.get("ExitCode")
+          if exit_code is None:
+              exit_code = result.get("exitCode", 1)
+          output = (result.get("Output") or result.get("output") or "").strip()
+          error_output = (result.get("Error") or result.get("error") or "").strip()
           if exit_code != 0:
+              detail = error_output or output or json.dumps(result, ensure_ascii=False)
               raise SystemExit(
                   f"Azure tool import exited with {exit_code}: "
-                  f"{(error_output or output)[-2000:]}"
+                  f"{detail[-2000:]}"
               )
           print(output or "Werkzeugimport erfolgreich abgeschlossen.")
           PY
