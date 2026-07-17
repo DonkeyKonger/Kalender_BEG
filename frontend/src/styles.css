@@ -9392,7 +9392,33 @@ button.person-chip:focus-visible {
 }
 
 .customers-page .customer-overview-card {
+  height: 112px;
+  min-height: 112px;
+  max-height: 112px;
   border-radius: 3px;
+}
+
+.customers-page .customer-overview-card .entity-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customers-page .customer-overview-card .entity-card-subtitle {
+  display: -webkit-box;
+  height: 2.7em;
+  min-height: 2.7em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
+}
+
+.customers-page .customer-overview-card .entity-card-meta {
+  min-height: 1.35em;
+  overflow: hidden;
 }
 
 .customers-page .customer-overview-card:hover,
