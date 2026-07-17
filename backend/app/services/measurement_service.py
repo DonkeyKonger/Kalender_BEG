@@ -634,11 +634,18 @@ class MeasurementService:
         next_sort_order = (
             self.db.scalar(select(func.max(SiteMeasurementItem.sort_order)).where(*sort_scope)) or 0
         ) + 10
+        linked_measurement_item = self._get_calculated_measurement_item(
+            site_id=site_id,
+            measurement_item_id=payload.linked_measurement_item_id,
+        )
 
         item = SiteMeasurementItem(
             site_id=batch.site_id,
             measurement_base_id=None if is_blank_batch else batch.measurement_base_id,
             measurement_batch_id=batch.id,
+            linked_measurement_item_id=(
+                linked_measurement_item.id if linked_measurement_item is not None else None
+            ),
             source_file_name=None,
             source_project_number=None,
             source_invoice_number=None,
@@ -723,6 +730,9 @@ class MeasurementService:
             elif not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
+            if "linked_measurement_item_id" not in payload.model_fields_set:
+                item.linked_measurement_item_id = None
+
         if payload.description is not None:
             description = " ".join(payload.description.split())
             if not description and batch.position_mode != MeasurementPositionMode.BLANK.value:
@@ -733,6 +743,14 @@ class MeasurementService:
             if not unit and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
             item.unit = unit
+        if "linked_measurement_item_id" in payload.model_fields_set:
+            linked_measurement_item = self._get_calculated_measurement_item(
+                site_id=site_id,
+                measurement_item_id=payload.linked_measurement_item_id,
+            )
+            item.linked_measurement_item_id = (
+                linked_measurement_item.id if linked_measurement_item is not None else None
+            )
 
         self.db.commit()
         self.db.refresh(item)
@@ -1267,12 +1285,14 @@ class MeasurementService:
             entity_ids=[batch.id for batch in batches],
         )
         photo_counts = self._photo_counts_by_batch_id(batch_ids=[batch.id for batch in batches])
+        calculation_lookup = self._measurement_calculation_lookup(site_id)
         return [
             self._build_mobile_batch(
                 batch,
                 active_base_id=active_base_id,
                 customer_email_status=customer_email_statuses.get(batch.id),
                 photo_count=photo_counts.get(batch.id, 0),
+                calculation_lookup=calculation_lookup,
             )
             for batch in batches
         ]
@@ -1357,6 +1377,34 @@ class MeasurementService:
 
     def get_site_measurement_timesheet(self, site_id: int) -> MeasurementTimesheetRead:
         self._get_site(site_id)
+        completed_batch_ids = list(
+            self.db.scalars(
+                select(SiteMeasurementBatch.id)
+                .where(
+                    SiteMeasurementBatch.site_id == site_id,
+                    SiteMeasurementBatch.status.in_(MEASUREMENT_COMPLETED_BATCH_STATUSES),
+                    SiteMeasurementBatch.deleted_at.is_(None),
+                )
+                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
+            ).all()
+        )
+        completed_entries: list[SiteMeasurementEntry] = []
+        if completed_batch_ids:
+            completed_entries = _current_measurement_entries(list(
+                self.db.scalars(
+                    select(SiteMeasurementEntry)
+                    .options(selectinload(SiteMeasurementEntry.measurement_item))
+                    .where(
+                        SiteMeasurementEntry.site_id == site_id,
+                        SiteMeasurementEntry.measurement_batch_id.in_(completed_batch_ids),
+                    )
+                ).all()
+            ))
+        calculation_lookup = self._measurement_calculation_lookup(site_id)
+        billed_minutes, missing_billed_item_ids = self._sum_reported_minutes_with_missing(
+            completed_entries,
+            calculation_lookup=calculation_lookup,
+        )
         active_base_id = self._get_active_measurement_base_id(site_id)
         if active_base_id is None:
             return MeasurementTimesheetRead(
@@ -1370,6 +1418,9 @@ class MeasurementService:
                     position_count=0,
                     planned_minutes=Decimal("0"),
                     measured_minutes=Decimal("0"),
+                    billed_minutes=billed_minutes,
+                    billed_missing_position_count=len(missing_billed_item_ids),
+                    completed_batch_count=len(completed_batch_ids),
                     open_minutes=None,
                     progress_percent=None,
                     captured_count=0,
@@ -1380,18 +1431,6 @@ class MeasurementService:
             )
 
         active_base = self.db.get(SiteMeasurementBase, active_base_id)
-        completed_batch_ids = list(
-            self.db.scalars(
-                select(SiteMeasurementBatch.id)
-                .where(
-                    SiteMeasurementBatch.site_id == site_id,
-                    SiteMeasurementBatch.status.in_(MEASUREMENT_COMPLETED_BATCH_STATUSES),
-                    SiteMeasurementBatch.deleted_at.is_(None),
-                )
-                .order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
-            ).all()
-        )
-
         items = list(
             self.db.scalars(
                 select(SiteMeasurementItem)
@@ -1416,26 +1455,20 @@ class MeasurementService:
         }
 
         measured_by_item_id: dict[int, Decimal] = {}
-        if completed_batch_ids:
-            measured_entries = list(
-                self.db.scalars(
-                    select(SiteMeasurementEntry)
-                    .options(selectinload(SiteMeasurementEntry.measurement_item))
-                    .where(
-                        SiteMeasurementEntry.site_id == site_id,
-                        SiteMeasurementEntry.measurement_batch_id.in_(completed_batch_ids),
-                    )
-                ).all()
-            )
-            for entry in _current_measurement_entries(measured_entries):
+        if completed_entries:
+            for entry in completed_entries:
                 source_item = entry.measurement_item
                 if source_item is None or source_item.is_hidden:
                     continue
                 target_item_id = (
-                    source_item.id
-                    if source_item.id in target_item_ids
-                    else unique_target_id_by_position.get(
-                        _measurement_position_key(source_item.position)
+                    source_item.linked_measurement_item_id
+                    if source_item.linked_measurement_item_id in target_item_ids
+                    else (
+                        source_item.id
+                        if source_item.id in target_item_ids
+                        else unique_target_id_by_position.get(
+                            _measurement_position_key(source_item.position)
+                        )
                     )
                 )
                 if target_item_id is None:
@@ -1516,6 +1549,9 @@ class MeasurementService:
                 position_count=len(rows),
                 planned_minutes=planned_minutes_total,
                 measured_minutes=measured_minutes_total,
+                billed_minutes=billed_minutes,
+                billed_missing_position_count=len(missing_billed_item_ids),
+                completed_batch_count=len(completed_batch_ids),
                 open_minutes=planned_minutes_total - measured_minutes_total if has_planned_basis else None,
                 progress_percent=(
                     float((measured_minutes_total / planned_minutes_total) * Decimal("100"))
@@ -1572,13 +1608,17 @@ class MeasurementService:
             entry for entry in work_entries if TimeEntryService.is_project_mounting_time_relevant(entry)
         ]
         project_mounting_contexts = time_entry_service.project_mounting_contexts(relevant_work_entries)
+        calculation_lookup = self._measurement_calculation_lookup(site_id)
 
         previous_boundary: datetime | None = None
         row_payloads: list[dict[str, object]] = []
         for batch in batches:
             analysis_at = self._analysis_timestamp(batch)
             boundary = self._local_analysis_datetime(analysis_at) if analysis_at else None
-            measurement_minutes = self._sum_reported_minutes(_current_measurement_entries(list(batch.entries))) or Decimal("0")
+            measurement_minutes = self._sum_reported_minutes(
+                _current_measurement_entries(list(batch.entries)),
+                calculation_lookup=calculation_lookup,
+            ) or Decimal("0")
             actual_minutes = self._sum_work_minutes_for_period(
                 relevant_work_entries,
                 period_start=previous_boundary,
@@ -2325,6 +2365,31 @@ class MeasurementService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
         return batch
 
+    def _get_calculated_measurement_item(
+        self,
+        *,
+        site_id: int,
+        measurement_item_id: int | None,
+    ) -> SiteMeasurementItem | None:
+        if measurement_item_id is None:
+            return None
+        item = self.db.scalar(
+            select(SiteMeasurementItem).where(
+                SiteMeasurementItem.id == measurement_item_id,
+                SiteMeasurementItem.site_id == site_id,
+                SiteMeasurementItem.measurement_base_id.is_not(None),
+                SiteMeasurementItem.measurement_batch_id.is_(None),
+                SiteMeasurementItem.minutes_per_unit.is_not(None),
+                SiteMeasurementItem.is_hidden.is_(False),
+            )
+        )
+        if item is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Die verknüpfte Projektposition besitzt keine Kalkulationsgrundlage.",
+            )
+        return item
+
     def _delete_existing_entries_for_cell(
         self,
         *,
@@ -2376,6 +2441,7 @@ class MeasurementService:
         customer_email_status: CustomerEmailStatus | None = None,
         current_user: User | None = None,
         photo_count: int | None = None,
+        calculation_lookup: tuple[dict[int, Decimal], dict[str, Decimal]] | None = None,
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
@@ -2388,7 +2454,10 @@ class MeasurementService:
             for item in batch.free_items
             if item.is_free_position and not item.is_hidden
         )
-        reported_minutes = self._sum_reported_minutes(visible_entries)
+        reported_minutes = self._sum_reported_minutes(
+            visible_entries,
+            calculation_lookup=calculation_lookup,
+        )
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
         workflow_state = self._mobile_batch_workflow_state(
             batch,
@@ -2762,6 +2831,7 @@ class MeasurementService:
             id=item.id,
             site_id=item.site_id,
             measurement_base_id=item.measurement_base_id,
+            linked_measurement_item_id=item.linked_measurement_item_id,
             source_file_name=item.source_file_name,
             source_project_number=item.source_project_number,
             source_invoice_number=item.source_invoice_number,
@@ -2788,16 +2858,77 @@ class MeasurementService:
         )
 
     def _sum_reported_minutes(
-        self, entries: list[SiteMeasurementEntry]
+        self,
+        entries: list[SiteMeasurementEntry],
+        calculation_lookup: tuple[dict[int, Decimal], dict[str, Decimal]] | None = None,
     ) -> Decimal | None:
+        total, _missing_item_ids = self._sum_reported_minutes_with_missing(
+            entries,
+            calculation_lookup=calculation_lookup,
+        )
+        return total
+
+    def _sum_reported_minutes_with_missing(
+        self,
+        entries: list[SiteMeasurementEntry],
+        calculation_lookup: tuple[dict[int, Decimal], dict[str, Decimal]] | None = None,
+    ) -> tuple[Decimal | None, set[int]]:
         total = Decimal("0")
         has_minutes = False
+        missing_item_ids: set[int] = set()
+        if calculation_lookup is None:
+            site_id = next((entry.site_id for entry in entries), None)
+            calculation_lookup = self._measurement_calculation_lookup(site_id)
+        minutes_by_item_id, minutes_by_unique_position = calculation_lookup
         for entry in entries:
-            if entry.measurement_item.minutes_per_unit is None:
+            item = entry.measurement_item
+            minutes_per_unit = item.minutes_per_unit
+            if minutes_per_unit is None and item.linked_measurement_item_id is not None:
+                minutes_per_unit = minutes_by_item_id.get(item.linked_measurement_item_id)
+            if minutes_per_unit is None:
+                minutes_per_unit = minutes_by_unique_position.get(
+                    _measurement_position_key(item.position)
+                )
+            if minutes_per_unit is None:
+                missing_item_ids.add(item.id)
                 continue
-            total += entry.quantity * entry.measurement_item.minutes_per_unit
+            total += entry.quantity * minutes_per_unit
             has_minutes = True
-        return total if has_minutes else None
+        return (total if has_minutes else None), missing_item_ids
+
+    def _measurement_calculation_lookup(
+        self,
+        site_id: int | None,
+    ) -> tuple[dict[int, Decimal], dict[str, Decimal]]:
+        if site_id is None:
+            return {}, {}
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem).where(
+                    SiteMeasurementItem.site_id == site_id,
+                    SiteMeasurementItem.measurement_base_id.is_not(None),
+                    SiteMeasurementItem.measurement_batch_id.is_(None),
+                    SiteMeasurementItem.minutes_per_unit.is_not(None),
+                    SiteMeasurementItem.is_hidden.is_(False),
+                )
+            ).all()
+        )
+        minutes_by_item_id = {
+            item.id: item.minutes_per_unit
+            for item in items
+            if item.id is not None and item.minutes_per_unit is not None
+        }
+        item_ids_by_position: dict[str, list[int]] = {}
+        for item in items:
+            position_key = _measurement_position_key(item.position)
+            if position_key and item.id is not None:
+                item_ids_by_position.setdefault(position_key, []).append(item.id)
+        minutes_by_unique_position = {
+            position_key: minutes_by_item_id[item_ids[0]]
+            for position_key, item_ids in item_ids_by_position.items()
+            if len(item_ids) == 1
+        }
+        return minutes_by_item_id, minutes_by_unique_position
 
     @staticmethod
     def _analysis_timestamp(batch: SiteMeasurementBatch) -> datetime | None:

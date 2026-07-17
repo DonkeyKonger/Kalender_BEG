@@ -64,7 +64,7 @@ test("blank measurements expose ten lazy free columns and append one after the l
   assert.match(pageSource, /Math\.max\(MEASUREMENT_FREE_INPUT_MIN_COLUMNS - items\.length, highestActiveFreeColumnIndex \+ 1, 1\)/);
   assert.match(pageSource, /Array\.from\(\{ length: freeInputColumnCount \}/);
   assert.match(pageSource, /createFreeItemFromHeaderDraft/);
-  assert.match(pageSource, /await onFreeItemCreate\(\{ position: position \|\| null, description, unit, quantity: 0 \}\)/);
+  assert.match(pageSource, /await onFreeItemCreate\(\{\s*position: position \|\| null,\s*description,\s*unit,\s*linked_measurement_item_id: draft\.linkedItemId \?\? null,\s*quantity: 0,/s);
   assert.match(pageSource, /\|\| \(item\.unit \?\? ""\)\.trim\(\)\.length > 0/);
 });
 
@@ -77,6 +77,7 @@ test("blank position suggestions reuse the loaded project timesheet and stay fre
   assert.match(pageSource, /if \(freePositionOnly\) \{\s*setSuggestionState\(null\);\s*if \(existingItem\)/s);
   assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
   assert.match(pageSource, /description: suggestion\.description/);
+  assert.match(pageSource, /linked_measurement_item_id: suggestion\.id/);
   assert.match(pageSource, /closeSuggestionOnOutsidePointer/);
 });
 
@@ -96,4 +97,18 @@ test("closing or reopening a measurement invalidates execution progress before t
   assert.match(handlerSource, /markSiteMeasurementBatchOpen/);
   assert.match(handlerSource, /setMeasurementTimesheet\(null\)/);
   assert.match(handlerSource, /setMeasurementLoaded\(false\)/);
+});
+
+test("hours comparison uses backend-calculated completed measurement minutes", () => {
+  const panelStart = pageSource.indexOf("function SiteWorkTimesPanel(");
+  const panelEnd = pageSource.indexOf("function buildSiteHoursComparison(", panelStart);
+  const panelSource = pageSource.slice(panelStart, panelEnd);
+  const comparisonStart = pageSource.indexOf("function buildSiteHoursComparison(");
+  const comparisonEnd = pageSource.indexOf("function getSiteHoursComparisonStatus(", comparisonStart);
+  const comparisonSource = pageSource.slice(comparisonStart, comparisonEnd);
+
+  assert.match(panelSource, /api\.measurementTimesheet\(site\.id\)/);
+  assert.doesNotMatch(panelSource, /api\.siteMeasurementBatches\(site\.id\)/);
+  assert.match(comparisonSource, /timesheet\?\.kpi\.billed_minutes/);
+  assert.match(comparisonSource, /billed_missing_position_count/);
 });

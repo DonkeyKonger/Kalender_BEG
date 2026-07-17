@@ -210,6 +210,7 @@ export type MeasurementItem = {
   id: number;
   site_id: number;
   measurement_base_id: number | null;
+  linked_measurement_item_id: number | null;
   source_file_name: string | null;
   source_project_number: string | null;
   source_invoice_number: string | null;
@@ -235,6 +236,7 @@ export type MeasurementItemUpdatePayload = {
   position?: string | null;
   description?: string;
   unit?: string;
+  linked_measurement_item_id?: number | null;
 };
 
 
@@ -278,6 +280,7 @@ export type MobileMeasurementFreeItemPayload = {
   position?: string | null;
   description: string;
   unit: string;
+  linked_measurement_item_id?: number | null;
   quantity?: number;
   area_or_comment?: string | null;
 };
@@ -500,6 +503,9 @@ export type MeasurementTimesheetKpi = {
   position_count: number;
   planned_minutes: MeasurementNumericValue;
   measured_minutes: MeasurementNumericValue;
+  billed_minutes: MeasurementNumericValue;
+  billed_missing_position_count: number;
+  completed_batch_count: number;
   open_minutes: MeasurementNumericValue;
   progress_percent: number | null;
   captured_count: number;

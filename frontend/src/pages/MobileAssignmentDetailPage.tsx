@@ -6784,6 +6784,7 @@ function createInlineFreePositionDraftItem(batch: MobileMeasurementBatch, id: nu
     id,
     site_id: batch.site_id,
     measurement_base_id: batch.measurement_base_id,
+    linked_measurement_item_id: null,
     source_file_name: null,
     source_project_number: null,
     source_invoice_number: null,

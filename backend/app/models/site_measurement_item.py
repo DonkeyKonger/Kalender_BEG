@@ -47,6 +47,9 @@ class SiteMeasurementItem(TimestampMixin, Base):
     measurement_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("site_measurement_batches.id", ondelete="CASCADE"), index=True
     )
+    linked_measurement_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("site_measurement_items.id", ondelete="SET NULL"), index=True
+    )
     source_file_name: Mapped[str | None] = mapped_column(String(255))
     source_project_number: Mapped[str | None] = mapped_column(String(120))
     source_invoice_number: Mapped[str | None] = mapped_column(String(120), index=True)
@@ -70,6 +73,11 @@ class SiteMeasurementItem(TimestampMixin, Base):
         "SiteMeasurementBatch",
         back_populates="free_items",
         foreign_keys=[measurement_batch_id],
+    )
+    linked_measurement_item = relationship(
+        "SiteMeasurementItem",
+        remote_side=[id],
+        foreign_keys=[linked_measurement_item_id],
     )
     entries = relationship(
         "SiteMeasurementEntry", back_populates="measurement_item", cascade="all, delete-orphan"

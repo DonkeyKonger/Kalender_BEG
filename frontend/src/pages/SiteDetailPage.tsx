@@ -50,17 +50,6 @@ const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
 const MEASUREMENT_TABLE_POSITION_WIDTH = 134;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
 const MEASUREMENT_FREE_INPUT_MIN_COLUMNS = 10;
-const VALUED_MEASUREMENT_BATCH_STATUSES = new Set([
-  "reviewed",
-  "checked",
-  "customer_signed",
-  "signed",
-  "approved",
-  "billed",
-  "closed",
-  "completed",
-  "finalized",
-]);
 const MEASUREMENT_BATCH_BEFORE_SUBMITTED_STATUSES = new Set(["draft"]);
 const MEASUREMENT_BATCH_REVIEWED_STATUSES = new Set(["reviewed", "checked"]);
 const MEASUREMENT_BATCH_BILLED_STATUSES = new Set(["billed", "approved", "closed", "completed", "finalized"]);
@@ -4490,6 +4479,7 @@ function MeasurementReviewTable({
             position: suggestion.position,
             description: suggestion.description,
             unit: normalizeMeasurementUnitDisplay(suggestion.unit),
+            linked_measurement_item_id: suggestion.id,
           });
         } finally {
           setSavingPositionItemId(null);
@@ -4499,6 +4489,7 @@ function MeasurementReviewTable({
           position: suggestion.position,
           description: suggestion.description,
           unit: normalizeMeasurementUnitDisplay(suggestion.unit),
+          linked_measurement_item_id: suggestion.id,
           quantity: 0,
         });
       }
@@ -4563,7 +4554,13 @@ function MeasurementReviewTable({
     }
     savingCellKeysRef.current.add(cellKey);
     try {
-      await onFreeItemCreate({ position: position || null, description, unit, quantity: 0 });
+      await onFreeItemCreate({
+        position: position || null,
+        description,
+        unit,
+        linked_measurement_item_id: draft.linkedItemId ?? null,
+        quantity: 0,
+      });
       clearManualColumnDraft(columnKey);
       setSuggestionState(null);
     } finally {
@@ -4655,6 +4652,7 @@ function MeasurementReviewTable({
         position: position || null,
         description,
         unit,
+        linked_measurement_item_id: draft.linkedItemId ?? null,
         quantity,
         area_or_comment: areaLabel,
       });
@@ -5363,7 +5361,6 @@ function SiteWorkTimesPanel({
 }) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [projectTimesheet, setProjectTimesheet] = useState<MeasurementTimesheet | null>(null);
-  const [projectMeasurementBatches, setProjectMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isComparisonLoading, setIsComparisonLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -5378,8 +5375,8 @@ function SiteWorkTimesPanel({
     travelMinutes: sumSiteWorkTimeMinutes(entries, "travel"),
   }), [entries]);
   const hoursComparison = useMemo(
-    () => buildSiteHoursComparison(projectTimesheet, projectMeasurementBatches, summary.workMinutes),
-    [projectMeasurementBatches, projectTimesheet, summary.workMinutes],
+    () => buildSiteHoursComparison(projectTimesheet, summary.workMinutes),
+    [projectTimesheet, summary.workMinutes],
   );
   const hourCreditMinutes = hoursComparison.valuedDifferenceMinutes !== null
     ? -hoursComparison.valuedDifferenceMinutes
@@ -5423,20 +5420,15 @@ function SiteWorkTimesPanel({
     setIsComparisonLoading(true);
     setComparisonError(null);
 
-    Promise.all([
-      api.measurementTimesheet(site.id),
-      api.siteMeasurementBatches(site.id),
-    ])
-      .then(([timesheetData, batchData]) => {
+    api.measurementTimesheet(site.id)
+      .then((timesheetData) => {
         if (!ignore) {
           setProjectTimesheet(timesheetData);
-          setProjectMeasurementBatches(batchData);
         }
       })
       .catch((requestError) => {
         if (!ignore) {
           setProjectTimesheet(null);
-          setProjectMeasurementBatches([]);
           setComparisonError(readApiError(requestError, "Stundenvergleich konnte nicht geladen werden."));
         }
       })
@@ -7051,13 +7043,16 @@ function countSiteWorkTimeParticipants(entries: TimeEntry[]): number {
 
 function buildSiteHoursComparison(
   timesheet: MeasurementTimesheet | null,
-  batches: MobileMeasurementBatch[],
   workerMinutes: number,
 ): SiteHoursComparison {
   const offerMinutes = timesheet?.kpi.has_planned_basis
     ? getMeasurementNumericValue(timesheet.kpi.planned_minutes)
     : null;
-  const valuedMeasurementMinutes = getValuedMeasurementMinutes(batches);
+  const valuedMeasurementMinutes = timesheet?.kpi.billed_minutes === null
+    || timesheet?.kpi.billed_minutes === undefined
+    ? null
+    : getMeasurementNumericValue(timesheet.kpi.billed_minutes);
+  const hasMissingMeasurementBasis = (timesheet?.kpi.billed_missing_position_count ?? 0) > 0;
 
   return {
     offerMinutes,
@@ -7065,32 +7060,24 @@ function buildSiteHoursComparison(
     workerMinutes,
     offerDifferenceMinutes: offerMinutes !== null ? workerMinutes - offerMinutes : null,
     valuedDifferenceMinutes: valuedMeasurementMinutes !== null ? workerMinutes - valuedMeasurementMinutes : null,
-    status: getSiteHoursComparisonStatus(offerMinutes, valuedMeasurementMinutes, workerMinutes),
+    status: getSiteHoursComparisonStatus(
+      offerMinutes,
+      valuedMeasurementMinutes,
+      workerMinutes,
+      hasMissingMeasurementBasis,
+    ),
   };
-}
-
-function getValuedMeasurementMinutes(batches: MobileMeasurementBatch[]): number | null {
-  const valuedBatches = batches.filter(isValuedMeasurementBatch);
-  if (valuedBatches.length === 0) {
-    return null;
-  }
-  return valuedBatches.reduce(
-    (sum, batch) => sum + getMeasurementNumericValue(batch.reported_minutes),
-    0,
-  );
-}
-
-function isValuedMeasurementBatch(batch: MobileMeasurementBatch): boolean {
-  return VALUED_MEASUREMENT_BATCH_STATUSES.has(batch.status.toLowerCase()) || isCustomerSignedMeasurementBatch(batch);
 }
 
 function getSiteHoursComparisonStatus(
   offerMinutes: number | null,
   valuedMeasurementMinutes: number | null,
   workerMinutes: number,
+  hasMissingMeasurementBasis = false,
 ): SiteHoursComparisonStatus {
   if (
-    offerMinutes === null
+    hasMissingMeasurementBasis
+    || offerMinutes === null
     || offerMinutes <= 0
     || valuedMeasurementMinutes === null
     || valuedMeasurementMinutes <= 0

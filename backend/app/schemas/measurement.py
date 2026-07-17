@@ -38,6 +38,7 @@ class MeasurementItemRead(BaseModel):
     id: int
     site_id: int
     measurement_base_id: int | None
+    linked_measurement_item_id: int | None = None
     source_file_name: str | None
     source_project_number: str | None
     source_invoice_number: str | None
@@ -63,6 +64,7 @@ class MeasurementItemUpdate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
     description: str | None = Field(default=None, max_length=2000)
     unit: str | None = Field(default=None, max_length=40)
+    linked_measurement_item_id: int | None = Field(default=None, gt=0)
 
     @field_validator("position", "description", "unit", mode="before")
     @classmethod
@@ -76,6 +78,7 @@ class MobileMeasurementFreeItemCreate(BaseModel):
     position: str | None = Field(default=None, max_length=80)
     description: str = Field(default="", max_length=2000)
     unit: str = Field(default="", max_length=40)
+    linked_measurement_item_id: int | None = Field(default=None, gt=0)
     quantity: Decimal = Field(default=Decimal("0"), ge=0)
     area_or_comment: str | None = Field(default=None, max_length=1000)
 
@@ -234,6 +237,9 @@ class MeasurementTimesheetKpiRead(BaseModel):
     position_count: int
     planned_minutes: Decimal
     measured_minutes: Decimal
+    billed_minutes: Decimal | None = None
+    billed_missing_position_count: int = 0
+    completed_batch_count: int = 0
     open_minutes: Decimal | None
     progress_percent: float | None
     captured_count: int

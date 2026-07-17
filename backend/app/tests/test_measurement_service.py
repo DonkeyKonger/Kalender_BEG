@@ -1131,6 +1131,9 @@ def test_execution_progress_aggregates_all_completed_origins_by_id_or_position()
     assert timesheet.rows[0].remaining_quantity == Decimal("0")
     assert timesheet.rows[0].progress_percent == 100.0
     assert timesheet.kpi.measured_minutes == Decimal("248")
+    assert timesheet.kpi.billed_minutes == Decimal("248")
+    assert timesheet.kpi.billed_missing_position_count == 1
+    assert timesheet.kpi.completed_batch_count == 4
     assert timesheet.kpi.progress_percent == 100.0
 
 
@@ -1188,15 +1191,19 @@ def test_execution_progress_recomputes_after_reopen_edit_reclose_and_archive():
     db.commit()
     service = MeasurementService(db)
 
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("10")
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("10")
+    initial_timesheet = service.get_site_measurement_timesheet(site.id)
+    assert initial_timesheet.rows[0].measured_quantity == Decimal("10")
+    assert initial_timesheet.kpi.billed_minutes == Decimal("10")
+    assert service.get_site_measurement_timesheet(site.id).kpi.billed_minutes == Decimal("10")
 
     service.set_site_batch_billing_status(
         site_id=site.id,
         batch_id=batch.id,
         billing_status="submitted",
     )
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("0")
+    reopened_timesheet = service.get_site_measurement_timesheet(site.id)
+    assert reopened_timesheet.rows[0].measured_quantity == Decimal("0")
+    assert reopened_timesheet.kpi.billed_minutes is None
 
     service.update_site_entry(
         site_id=site.id,
@@ -1209,13 +1216,162 @@ def test_execution_progress_recomputes_after_reopen_edit_reclose_and_archive():
         batch_id=batch.id,
         billing_status="billed",
     )
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("15")
+    reclosed_timesheet = service.get_site_measurement_timesheet(site.id)
+    assert reclosed_timesheet.rows[0].measured_quantity == Decimal("15")
+    assert reclosed_timesheet.kpi.billed_minutes == Decimal("15")
 
     service.delete_site_batch(site_id=site.id, batch_id=batch.id, current_user=office_user)
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("0")
+    archived_timesheet = service.get_site_measurement_timesheet(site.id)
+    assert archived_timesheet.rows[0].measured_quantity == Decimal("0")
+    assert archived_timesheet.kpi.billed_minutes is None
 
     service.restore_site_batch(site_id=site.id, batch_id=batch.id)
-    assert service.get_site_measurement_timesheet(site.id).rows[0].measured_quantity == Decimal("15")
+    restored_timesheet = service.get_site_measurement_timesheet(site.id)
+    assert restored_timesheet.rows[0].measured_quantity == Decimal("15")
+    assert restored_timesheet.kpi.billed_minutes == Decimal("15")
+
+
+def test_blank_position_persists_project_link_and_uses_it_before_position_fallback():
+    db = db_session()
+    site = create_site(db)
+    active_base = create_measurement_base(db, site)
+    other_base = SiteMeasurementBase(
+        site=site,
+        name="Alte Kalkulation",
+        base_type="main_offer",
+        status="closed",
+        released_to_mobile=False,
+    )
+    linked_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=active_base,
+        position="1.1",
+        description="Kabelrinne",
+        list_quantity=Decimal("10"),
+        unit="m",
+        minutes_per_unit=Decimal("5"),
+        list_minutes_total=Decimal("50"),
+        is_nep=False,
+        sort_order=1,
+    )
+    ambiguous_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=other_base,
+        position="1.1",
+        description="Alte Kabelrinne",
+        list_quantity=Decimal("10"),
+        unit="m",
+        minutes_per_unit=Decimal("99"),
+        list_minutes_total=Decimal("990"),
+        is_nep=False,
+        sort_order=1,
+    )
+    office_user = User(
+        username="linked-office-measurement",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="Verknüpftes Büro-Aufmaß",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        creator_role_at_creation=UserRole.OFFICE.value,
+    )
+    db.add_all([other_base, linked_item, ambiguous_item, office_user, batch])
+    db.commit()
+
+    service = MeasurementService(db)
+    created = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            position="Freie Anzeige",
+            description="Aus Kalkulation gewählt",
+            unit="m",
+            linked_measurement_item_id=linked_item.id,
+            quantity=Decimal("3"),
+            area_or_comment="EG",
+        ),
+    )
+
+    timesheet = service.get_site_measurement_timesheet(site.id)
+    listed_batch = next(item for item in service.list_site_batches(site.id) if item.id == batch.id)
+
+    assert created.linked_measurement_item_id == linked_item.id
+    assert db.get(SiteMeasurementItem, created.id).linked_measurement_item_id == linked_item.id
+    assert timesheet.kpi.billed_minutes == Decimal("15")
+    assert timesheet.kpi.billed_missing_position_count == 0
+    assert listed_batch.reported_minutes == Decimal("15")
+
+
+def test_blank_position_does_not_guess_between_duplicate_project_positions():
+    db = db_session()
+    site = create_site(db)
+    active_base = create_measurement_base(db, site)
+    second_base = SiteMeasurementBase(
+        site=site,
+        name="Zweite Kalkulation",
+        base_type="work_phase",
+        status="closed",
+        released_to_mobile=False,
+    )
+    first_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=active_base,
+        position="2.1",
+        description="Erste Kalkulation",
+        unit="m",
+        minutes_per_unit=Decimal("5"),
+        is_nep=False,
+        sort_order=1,
+    )
+    duplicate_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=second_base,
+        position=" 2.1 ",
+        description="Zweite Kalkulation",
+        unit="m",
+        minutes_per_unit=Decimal("7"),
+        is_nep=False,
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="Nicht eindeutig zuordenbar",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+    )
+    free_item = SiteMeasurementItem(
+        site=site,
+        measurement_batch=batch,
+        position="2.1",
+        description="Altbestand ohne Link",
+        unit="m",
+        is_free_position=True,
+        sort_order=10,
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=free_item,
+        site=site,
+        quantity=Decimal("3"),
+        area_or_comment="EG",
+        status="billed",
+    )
+    db.add_all([second_base, first_item, duplicate_item, batch, free_item, entry])
+    db.commit()
+
+    timesheet = MeasurementService(db).get_site_measurement_timesheet(site.id)
+
+    assert timesheet.kpi.billed_minutes is None
+    assert timesheet.kpi.billed_missing_position_count == 1
 
 
 def test_office_can_review_and_bill_unsubmitted_measurement_batch():
