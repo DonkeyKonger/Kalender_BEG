@@ -20,7 +20,7 @@ test("responsible user control sits before the add action in the tool header", (
     styles,
     /\.miscellaneous-tools-header-actions \{[^}]*display:\s*flex;[^}]*align-items:\s*flex-end;[^}]*gap:\s*8px/s,
   );
-  assert.match(styles, /\.tool-material-responsibility \{[\s\S]*width:\s*260px/);
+  assert.match(styles, /\.tool-material-responsibility \{[\s\S]*width:\s*150px/);
   assert.match(styles, /\.miscellaneous-tools-add-button \{[^}]*height:\s*32px;[^}]*margin-top:\s*0/s);
   assert.match(styles, /\.tool-material-responsibility \.dashboard-note-picker-trigger \{[^}]*height:\s*32px/s);
 });

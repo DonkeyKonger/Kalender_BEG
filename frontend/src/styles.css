@@ -11933,7 +11933,7 @@ button.person-chip:focus-visible {
 
 .tool-material-responsibility {
   display: grid;
-  width: 260px;
+  width: 150px;
   min-width: 0;
   gap: 4px;
 }
