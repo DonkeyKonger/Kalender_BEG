@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
+import { VehicleDatabasePanel } from "../components/VehicleDatabasePanel";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
@@ -177,6 +178,8 @@ export function MiscellaneousPage() {
           onToolIdFilterClear={() => setSearchParams(clearToolMaterialIdFilter(searchParams), { replace: true })}
           onAllRouteFiltersReset={resetToolMaterialRouteFilters}
         />
+      ) : activeTab.key === "vehicles" ? (
+        <VehicleDatabasePanel />
       ) : (
         <MiscellaneousPlaceholderPanel activeTab={activeTab} />
       )}

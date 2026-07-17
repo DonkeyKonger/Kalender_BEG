@@ -28,6 +28,16 @@ class Vehicle(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     license_plate: Mapped[str] = mapped_column(String(30), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    manufacturer: Mapped[str] = mapped_column(String(120), nullable=False, default="Unbekannt")
+    assigned_person_id: Mapped[int | None] = mapped_column(
+        ForeignKey("persons.id", ondelete="SET NULL"),
+        index=True,
+    )
+    ctrack_vehicle_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vehicle_assets.id", ondelete="SET NULL"),
+        unique=True,
+        index=True,
+    )
     vehicle_type: Mapped[VehicleType] = mapped_column(
         Enum(VehicleType, values_callable=enum_values, name="vehicle_type"),
         nullable=False,
@@ -39,6 +49,8 @@ class Vehicle(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     site_assignments = relationship("SiteVehicleAssignment", back_populates="vehicle")
+    assigned_person = relationship("Person")
+    ctrack_vehicle_asset = relationship("VehicleAsset", foreign_keys=[ctrack_vehicle_asset_id])
 
 
 class SiteVehicleAssignment(TimestampMixin, Base):

@@ -21,6 +21,7 @@ from app.api.routes import (
     time_entries,
     tool_material_items,
     users,
+    vehicle_database,
 )
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(sites.router, prefix="/api")
     app.include_router(time_entries.router, prefix="/api")
     app.include_router(tool_material_items.router, prefix="/api")
+    app.include_router(vehicle_database.router, prefix="/api")
     app.include_router(project_folders.router, prefix="/api")
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")

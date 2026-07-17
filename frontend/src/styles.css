@@ -12067,6 +12067,86 @@ button.person-chip:focus-visible {
   background: #ffffff;
 }
 
+.vehicle-database-panel {
+  min-height: 420px;
+}
+
+.vehicle-database-toolbar {
+  justify-content: flex-start;
+}
+
+.vehicle-database-table {
+  table-layout: fixed;
+}
+
+.vehicle-col-license {
+  width: 18%;
+}
+
+.vehicle-col-manufacturer {
+  width: 27%;
+}
+
+.vehicle-col-employee {
+  width: 27%;
+}
+
+.vehicle-col-ctrack {
+  width: 28%;
+}
+
+.vehicle-sort-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  padding: 8px 6px;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.vehicle-sort-trigger:hover,
+.vehicle-sort-trigger:focus-visible,
+.vehicle-sort-trigger.is-active {
+  background: #e5edf7;
+  color: #1d4f7d;
+  outline: none;
+}
+
+.vehicle-database-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vehicle-form-grid {
+  align-content: start;
+}
+
+.vehicle-form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .vehicle-database-panel .miscellaneous-tools-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vehicle-database-panel .miscellaneous-tools-add-button {
+    align-self: flex-start;
+  }
+}
+
 .miscellaneous-tools-pagination {
   display: flex;
   min-height: 34px;

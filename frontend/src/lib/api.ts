@@ -11,6 +11,7 @@ import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, M
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
+import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
@@ -558,6 +559,45 @@ export const api = {
 
   async vehicleLatestPositions(): Promise<VehicleLatestPositionItem[]> {
     return request<VehicleLatestPositionItem[]>("/vehicles/latest-positions");
+  },
+
+  async vehicleDatabaseItems(params: {
+    search?: string;
+    sortBy?: VehicleDatabaseSortField;
+    sortDirection?: VehicleDatabaseSortDirection;
+  } = {}): Promise<VehicleDatabaseItem[]> {
+    const search = new URLSearchParams();
+    if (params.search?.trim()) search.set("search", params.search.trim());
+    if (params.sortBy) search.set("sort_by", params.sortBy);
+    if (params.sortDirection) search.set("sort_direction", params.sortDirection);
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<VehicleDatabaseItem[]>(`/admin/vehicles${suffix}`);
+  },
+
+  async vehicleDatabaseItem(vehicleId: number): Promise<VehicleDatabaseItem> {
+    return request<VehicleDatabaseItem>(`/admin/vehicles/${vehicleId}`);
+  },
+
+  async vehicleDatabaseOptions(): Promise<VehicleDatabaseOptions> {
+    return request<VehicleDatabaseOptions>("/admin/vehicles/options");
+  },
+
+  async createVehicleDatabaseItem(payload: VehicleDatabasePayload): Promise<VehicleDatabaseItem> {
+    return request<VehicleDatabaseItem>("/admin/vehicles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateVehicleDatabaseItem(vehicleId: number, payload: VehicleDatabasePayload): Promise<VehicleDatabaseItem> {
+    return request<VehicleDatabaseItem>(`/admin/vehicles/${vehicleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteVehicleDatabaseItem(vehicleId: number): Promise<void> {
+    await request<void>(`/admin/vehicles/${vehicleId}`, { method: "DELETE" });
   },
 
   async toolMaterialItems(params: ToolMaterialListParams = {}): Promise<ToolMaterialItem[]> {

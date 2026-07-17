@@ -267,6 +267,7 @@ def get_or_create_vehicle(
     vehicle = Vehicle(
         license_plate=license_plate,
         name=name,
+        manufacturer=name,
         vehicle_type=vehicle_type,
         is_active=is_active,
         gps_vehicle_id=gps_vehicle_id,
