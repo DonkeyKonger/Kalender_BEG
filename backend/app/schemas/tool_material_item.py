@@ -83,7 +83,32 @@ class ToolMaterialItemRead(ToolMaterialItemBase):
     model_config = {"from_attributes": True}
 
 
+class ToolMaterialPageRead(BaseModel):
+    items: list[ToolMaterialItemRead]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    total_pages: int = Field(ge=0)
+
+
 ToolMaterialSortField = Literal[
+    "beg_number",
+    "manufacturer",
+    "designation",
+    "item_type",
+    "device_number",
+    "serial_number",
+    "employee",
+    "item_date",
+    "delivery_note",
+    "remarks",
+    "supplier",
+    "invoice_number",
+    "stock",
+    "status",
+]
+
+ToolMaterialFilterColumn = Literal[
     "beg_number",
     "manufacturer",
     "designation",
@@ -102,6 +127,8 @@ ToolMaterialSortField = Literal[
 
 
 class ToolMaterialListQuery(BaseModel):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=100, ge=1, le=200)
     tool_id: int | None = Field(default=None, ge=1)
     search: str | None = Field(default=None, max_length=200)
     filter_beg_number: str | None = Field(default=None, max_length=200)
@@ -129,6 +156,7 @@ class ToolMaterialListQuery(BaseModel):
     values_invoice_number: list[str] = Field(default_factory=list)
     values_stock: list[str] = Field(default_factory=list)
     values_status: list[ToolMaterialStatus] = Field(default_factory=list)
+    values_category: list[ToolMaterialCategory] = Field(default_factory=list)
     date_from: date | None = None
     date_to: date | None = None
     stock_min: int | None = Field(default=None, ge=0)

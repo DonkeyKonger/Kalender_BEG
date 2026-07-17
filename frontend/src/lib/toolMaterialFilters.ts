@@ -39,8 +39,11 @@ export type ToolMaterialColumnFilter = {
 export type ToolMaterialFilters = Partial<Record<ToolMaterialColumnKey, ToolMaterialColumnFilter>>;
 
 export type ToolMaterialListParams = {
+  page?: number;
+  pageSize?: number;
   toolId?: number;
   search?: string;
+  categories?: string[];
   filters?: ToolMaterialFilters;
   sortBy?: ToolMaterialColumnKey;
   sortDirection?: ToolMaterialSortDirection;
@@ -74,12 +77,21 @@ export function clearAllToolMaterialFilters(): ToolMaterialFilters {
 
 export function buildToolMaterialSearchParams(params: ToolMaterialListParams = {}): URLSearchParams {
   const search = new URLSearchParams();
+  if (params.page && Number.isInteger(params.page) && params.page > 0) {
+    search.set("page", String(params.page));
+  }
+  if (params.pageSize && Number.isInteger(params.pageSize) && params.pageSize > 0) {
+    search.set("page_size", String(params.pageSize));
+  }
   if (params.toolId && Number.isInteger(params.toolId) && params.toolId > 0) {
     search.set("tool_id", String(params.toolId));
   }
   const cleanedSearch = params.search?.trim();
   if (cleanedSearch) {
     search.set("search", cleanedSearch);
+  }
+  for (const category of params.categories ?? []) {
+    search.append("values_category", category);
   }
 
   for (const key of toolMaterialColumnKeys) {

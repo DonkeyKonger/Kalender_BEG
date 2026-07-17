@@ -154,6 +154,54 @@ def test_tool_material_items_admin_and_opted_in_office_crud_routes(
     app.dependency_overrides.clear()
 
 
+def test_paginated_list_detail_and_column_filter_routes():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    db.add_all(
+        [
+            ToolMaterialItem(
+                beg_number=f"PAGE-{index:03d}",
+                manufacturer="Bosch" if index % 2 else "Makita",
+                designation=f"Werkzeug {index}",
+                status=ToolMaterialStatus.WAREHOUSE,
+            )
+            for index in range(120)
+        ]
+    )
+    db.commit()
+    first_id = db.scalar(select(ToolMaterialItem.id))
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: user(UserRole.ADMIN)
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    page_response = client.get(
+        "/api/admin/tool-material-items/page?page=2&page_size=50&sort_by=beg_number"
+    )
+    detail_response = client.get(f"/api/admin/tool-material-items/{first_id}")
+    filter_response = client.get(
+        "/api/admin/tool-material-items/filter-options/manufacturer"
+    )
+
+    assert page_response.status_code == 200
+    assert page_response.json()["total"] == 120
+    assert page_response.json()["page"] == 2
+    assert page_response.json()["page_size"] == 50
+    assert page_response.json()["total_pages"] == 3
+    assert len(page_response.json()["items"]) == 50
+    assert detail_response.status_code == 200
+    assert detail_response.json()["id"] == first_id
+    assert {option["value"] for option in filter_response.json()} == {"Bosch", "Makita"}
+    app.dependency_overrides.clear()
+    db.close()
+
+
 @pytest.mark.parametrize(
     "current_user",
     [
@@ -166,7 +214,10 @@ def test_tool_material_items_admin_and_opted_in_office_crud_routes(
     ("method", "path", "payload"),
     [
         ("get", "/api/admin/tool-material-items", None),
+        ("get", "/api/admin/tool-material-items/page", None),
         ("get", "/api/admin/tool-material-items/filter-options", None),
+        ("get", "/api/admin/tool-material-items/filter-options/status", None),
+        ("get", "/api/admin/tool-material-items/7", None),
         (
             "post",
             "/api/admin/tool-material-items",

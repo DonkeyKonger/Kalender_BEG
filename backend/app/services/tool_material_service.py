@@ -4,14 +4,15 @@ import re
 from fastapi import HTTPException, status
 from sqlalchemy import String, case, cast, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload, with_loader_criteria
 
+from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolIssueStatus, ToolMaterialStatus
 from app.models.person import Person
-from app.models.enums import TOOL_MATERIAL_STATUS_PRIORITY, ToolMaterialStatus
-from app.models.tool_material_item import ToolMaterialItem
 from app.models.tool_issue_report import ToolIssueReport
+from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOption,
+    ToolMaterialFilterColumn,
     ToolMaterialFilterOptionsRead,
     ToolMaterialItemCreate,
     ToolMaterialItemUpdate,
@@ -66,16 +67,65 @@ class ToolMaterialService:
 
     def list_items(self, query: ToolMaterialListQuery | None = None) -> list[ToolMaterialItem]:
         filters = query or ToolMaterialListQuery()
-        statement = (
-            select(ToolMaterialItem)
-            .outerjoin(ToolMaterialItem.employee)
-            .options(
-                joinedload(ToolMaterialItem.employee),
-                selectinload(ToolMaterialItem.issue_reports).selectinload(
-                    ToolIssueReport.reporter_employee
-                ),
-            )
+        statement = self._filtered_statement(filters).options(*self._item_load_options())
+        if filters.sort_by is not None:
+            statement = self._apply_manual_sort(statement, filters)
+            return list(self.db.scalars(statement).unique())
+
+        return sorted(
+            self.db.scalars(statement).unique(),
+            key=default_tool_material_sort_key,
         )
+
+    def list_page(self, query: ToolMaterialListQuery) -> tuple[list[ToolMaterialItem], int]:
+        statement = self._filtered_statement(query)
+        offset = (query.page - 1) * query.page_size
+        if query.sort_by is not None:
+            count_statement = select(func.count()).select_from(
+                statement.order_by(None).with_only_columns(ToolMaterialItem.id).subquery()
+            )
+            total = int(self.db.scalar(count_statement) or 0)
+            if total == 0 or offset >= total:
+                return [], total
+            page_statement = (
+                self._apply_manual_sort(statement, query)
+                .offset(offset)
+                .limit(query.page_size)
+                .options(*self._item_load_options())
+            )
+            return list(self.db.scalars(page_statement).unique()), total
+
+        candidate_rows = self.db.execute(
+            statement.order_by(None).with_only_columns(
+                ToolMaterialItem.id,
+                ToolMaterialItem.status,
+                ToolMaterialItem.item_date,
+                ToolMaterialItem.beg_number,
+            )
+        ).all()
+        total = len(candidate_rows)
+        if total == 0 or offset >= total:
+            return [], total
+        ordered_ids = [
+            row.id
+            for row in sorted(candidate_rows, key=default_tool_material_candidate_sort_key)
+        ]
+        page_ids = ordered_ids[offset : offset + query.page_size]
+        loaded_items = list(
+            self.db.scalars(
+                select(ToolMaterialItem)
+                .where(ToolMaterialItem.id.in_(page_ids))
+                .options(*self._item_load_options())
+            ).unique()
+        )
+        items_by_id = {item.id: item for item in loaded_items}
+        return [items_by_id[item_id] for item_id in page_ids], total
+
+    def get_item(self, item_id: int) -> ToolMaterialItem:
+        return self._get_item(item_id)
+
+    def _filtered_statement(self, filters: ToolMaterialListQuery):
+        statement = select(ToolMaterialItem).outerjoin(ToolMaterialItem.employee)
         if filters.tool_id is not None:
             statement = statement.where(ToolMaterialItem.id == filters.tool_id)
         cleaned_search = clean_search(filters.search)
@@ -128,29 +178,44 @@ class ToolMaterialService:
 
         if filters.values_status:
             statement = statement.where(ToolMaterialItem.status.in_(filters.values_status))
+        if filters.values_category:
+            statement = statement.where(ToolMaterialItem.category.in_(filters.values_category))
 
-        if filters.sort_by is not None:
-            sort_column = SORT_COLUMNS[filters.sort_by]
-            normalized_sort_column = (
-                func.lower(sort_column)
-                if filters.sort_by not in {"item_date", "stock"}
-                else sort_column
-            )
-            direction = (
-                normalized_sort_column.desc()
-                if filters.sort_direction == "desc"
-                else normalized_sort_column.asc()
-            )
-            statement = statement.order_by(
-                case((sort_column.is_(None), 1), else_=0),
-                direction,
-                ToolMaterialItem.id,
-            )
-            return list(self.db.scalars(statement).unique())
+        return statement
 
-        return sorted(
-            self.db.scalars(statement).unique(),
-            key=default_tool_material_sort_key,
+    def _apply_manual_sort(self, statement, filters: ToolMaterialListQuery):
+        sort_column = SORT_COLUMNS[filters.sort_by]
+        normalized_sort_column = (
+            func.lower(sort_column)
+            if filters.sort_by not in {"item_date", "stock"}
+            else sort_column
+        )
+        direction = (
+            normalized_sort_column.desc()
+            if filters.sort_direction == "desc"
+            else normalized_sort_column.asc()
+        )
+        return statement.order_by(
+            case((sort_column.is_(None), 1), else_=0),
+            direction,
+            ToolMaterialItem.id,
+        )
+
+    @staticmethod
+    def _item_load_options():
+        return (
+            joinedload(ToolMaterialItem.employee),
+            selectinload(ToolMaterialItem.issue_reports).selectinload(
+                ToolIssueReport.reporter_employee
+            ),
+            with_loader_criteria(
+                ToolIssueReport,
+                lambda report: (
+                    (report.status == ToolIssueStatus.OPEN)
+                    & report.resolved_at.is_(None)
+                ),
+                include_aliases=True,
+            ),
         )
 
     def list_person_assignments(self, person_id: int) -> list[PersonToolMaterialRead]:
@@ -253,6 +318,46 @@ class ToolMaterialService:
             }
         )
 
+    def filter_options_for(self, column: ToolMaterialFilterColumn) -> list[ToolMaterialFilterOption]:
+        options: dict[str, str] = {}
+        if column in TEXT_FILTER_COLUMNS:
+            values = self.db.scalars(select(TEXT_FILTER_COLUMNS[column]).distinct()).all()
+            for value in values:
+                add_filter_option(options, value)
+        elif column == "employee":
+            rows = self.db.execute(
+                select(ToolMaterialItem.employee_id, Person.display_name)
+                .outerjoin(ToolMaterialItem.employee)
+                .distinct()
+            ).all()
+            for employee_id, display_name in rows:
+                add_filter_option(options, employee_id, label=display_name)
+        elif column == "item_date":
+            values = self.db.scalars(select(ToolMaterialItem.item_date).distinct()).all()
+            for value in values:
+                add_filter_option(
+                    options,
+                    value.isoformat() if value else None,
+                    label=value.strftime("%d.%m.%Y") if value else None,
+                )
+        elif column == "stock":
+            values = self.db.scalars(select(ToolMaterialItem.stock).distinct()).all()
+            for value in values:
+                add_filter_option(options, value)
+        elif column == "status":
+            values = self.db.scalars(select(ToolMaterialItem.status).distinct()).all()
+            for value in values:
+                normalized = value.value if isinstance(value, ToolMaterialStatus) else value
+                add_filter_option(options, normalized, label=STATUS_LABELS.get(normalized))
+
+        return [
+            ToolMaterialFilterOption(value=value, label=label)
+            for value, label in sorted(
+                options.items(),
+                key=lambda entry: (entry[0] == EMPTY_FILTER_VALUE, entry[1].casefold()),
+            )
+        ]
+
     def create_item(self, payload: ToolMaterialItemCreate) -> ToolMaterialItem:
         values = clean_tool_material_values(payload.model_dump())
         values = enforce_status_employee_consistency(
@@ -293,12 +398,7 @@ class ToolMaterialService:
     def _get_item(self, item_id: int) -> ToolMaterialItem:
         statement = (
             select(ToolMaterialItem)
-            .options(
-                joinedload(ToolMaterialItem.employee),
-                selectinload(ToolMaterialItem.issue_reports).selectinload(
-                    ToolIssueReport.reporter_employee
-                ),
-            )
+            .options(*self._item_load_options())
             .where(ToolMaterialItem.id == item_id)
         )
         item = self.db.scalar(statement)
@@ -362,6 +462,18 @@ def default_tool_material_sort_key(item: ToolMaterialItem) -> tuple:
         item_date_order,
         natural_beg_number_key(item.beg_number),
         item.id,
+    )
+
+
+def default_tool_material_candidate_sort_key(row) -> tuple:
+    status_priority = TOOL_MATERIAL_STATUS_PRIORITY.get(row.status, 99)
+    item_date_order = -row.item_date.toordinal() if row.item_date is not None else 0
+    return (
+        status_priority,
+        row.item_date is None,
+        item_date_order,
+        natural_beg_number_key(row.beg_number),
+        row.id,
     )
 
 

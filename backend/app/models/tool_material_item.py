@@ -24,7 +24,7 @@ class ToolMaterialItem(TimestampMixin, Base):
     device_number: Mapped[str | None] = mapped_column(String(120), index=True)
     serial_number: Mapped[str | None] = mapped_column(String(160), index=True)
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), index=True)
-    item_date: Mapped[date | None] = mapped_column(Date)
+    item_date: Mapped[date | None] = mapped_column(Date, index=True)
     delivery_note: Mapped[str | None] = mapped_column(String(160))
     remarks: Mapped[str | None] = mapped_column(Text)
     supplier: Mapped[str | None] = mapped_column(String(200), index=True)

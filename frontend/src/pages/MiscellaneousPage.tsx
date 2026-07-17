@@ -41,7 +41,7 @@ import {
   setToolMaterialEmployeeFilterValues,
   type MiscellaneousTabKey,
 } from "../lib/toolMaterialRouting";
-import type { ToolMaterialCategory, ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialResponsibility, ToolMaterialStatus, ToolResponsibleUser } from "../types/toolMaterial";
+import type { ToolMaterialCategory, ToolMaterialEmployee, ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialPage, ToolMaterialResponsibility, ToolMaterialStatus, ToolResponsibleUser } from "../types/toolMaterial";
 
 type MiscellaneousTab = {
   key: MiscellaneousTabKey;
@@ -91,6 +91,9 @@ const emptyToolMaterialDraft: ToolMaterialDraft = {
   category: "other",
   status: "warehouse",
 };
+
+const TOOL_MATERIAL_PAGE_SIZE = 100;
+const TOOL_MATERIAL_PAGE_CACHE_MS = 30_000;
 
 export function MiscellaneousPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -238,6 +241,13 @@ function ToolMaterialList({
   const [createDraft, setCreateDraft] = useState<ToolMaterialDraft>(emptyToolMaterialDraft);
   const [drawer, setDrawer] = useState<ToolMaterialDrawerState>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [selectedItem, setSelectedItem] = useState<ToolMaterialItem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const employeeFilterKey = employeeFilterValues.join(",");
   const [filters, setFilters] = useState<ToolMaterialFilters>(() => (
     employeeFilterValues.length
@@ -265,9 +275,23 @@ function ToolMaterialList({
   const [responsibilitySaving, setResponsibilitySaving] = useState(false);
   const [responsibilityError, setResponsibilityError] = useState<string | null>(null);
   const savingStatusItemIdRef = useRef<number | null>(null);
+  const listRequestIdRef = useRef(0);
+  const detailRequestIdRef = useRef(0);
+  const pageCacheRef = useRef(new Map<string, { expiresAt: number; data: ToolMaterialPage }>());
+  const pageRequestCacheRef = useRef(new Map<string, Promise<ToolMaterialPage>>());
+  const loadedFilterOptionKeysRef = useRef(new Set<ToolMaterialColumnKey>());
+  const loadingFilterOptionKeysRef = useRef(new Set<ToolMaterialColumnKey>());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
     setFilters((current) => {
       const currentValues = current.employee?.values ?? [];
       if (currentValues.join(",") === employeeFilterKey) {
@@ -350,72 +374,102 @@ function ToolMaterialList({
 
   useEffect(() => {
     let active = true;
-    async function loadFilterOptions() {
-      try {
-        const loadedOptions = await api.toolMaterialFilterOptions();
-        if (active) {
-          setFilterOptions(loadedOptions);
-        }
-      } catch (requestError) {
-        if (active) {
-          setError(readApiError(requestError, "Filterwerte konnten nicht geladen werden."));
-        }
-      }
+    const requestId = ++listRequestIdRef.current;
+    const cacheKey = JSON.stringify({
+      page,
+      search: debouncedSearchTerm,
+      filters,
+      sortBy,
+      sortDirection,
+      toolId: toolIdFilter,
+    });
+    const cached = pageCacheRef.current.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      setItems(cached.data.items);
+      setTotalItems(cached.data.total);
+      setTotalPages(cached.data.total_pages);
+      setHasLoadedItems(true);
+      setIsLoading(false);
+      return () => {
+        active = false;
+      };
     }
-    void loadFilterOptions();
-    return () => {
-      active = false;
-    };
-  }, []);
 
-  useEffect(() => {
-    let active = true;
-    const timeoutId = window.setTimeout(() => {
-      async function loadItems() {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const loadedItems = await api.toolMaterialItems({
+    async function loadItems() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        let request = pageRequestCacheRef.current.get(cacheKey);
+        if (!request) {
+          request = api.toolMaterialItemsPage({
+            page,
+            pageSize: TOOL_MATERIAL_PAGE_SIZE,
             toolId: toolIdFilter ?? undefined,
-            search: searchTerm,
+            search: debouncedSearchTerm,
             filters,
             sortBy,
             sortDirection,
           });
-          if (active) {
-            setItems(loadedItems);
-            setDrafts(toToolMaterialDrafts(loadedItems));
-            setHasLoadedItems(true);
-          }
-        } catch (requestError) {
-          if (active) {
-            setError(readApiError(requestError, "Werkzeuge und Material konnten nicht geladen werden."));
-          }
-        } finally {
-          if (active) {
-            setIsLoading(false);
-          }
+          pageRequestCacheRef.current.set(cacheKey, request);
+        }
+        const loadedPage = await request;
+        if (active && requestId === listRequestIdRef.current) {
+          pageCacheRef.current.set(cacheKey, {
+            data: loadedPage,
+            expiresAt: Date.now() + TOOL_MATERIAL_PAGE_CACHE_MS,
+          });
+          setItems(loadedPage.items);
+          setTotalItems(loadedPage.total);
+          setTotalPages(loadedPage.total_pages);
+          setHasLoadedItems(true);
+        }
+      } catch (requestError) {
+        if (active && requestId === listRequestIdRef.current) {
+          setError(readApiError(requestError, "Werkzeuge und Material konnten nicht geladen werden."));
+        }
+      } finally {
+        pageRequestCacheRef.current.delete(cacheKey);
+        if (active && requestId === listRequestIdRef.current) {
+          setIsLoading(false);
         }
       }
-      void loadItems();
-    }, 180);
+    }
+    void loadItems();
     return () => {
       active = false;
-      window.clearTimeout(timeoutId);
     };
-  }, [filters, searchTerm, sortBy, sortDirection, toolIdFilter]);
+  }, [debouncedSearchTerm, filters, page, sortBy, sortDirection, toolIdFilter]);
 
-  async function refreshItems() {
-    const [loadedItems, loadedOptions] = await Promise.all([
-      api.toolMaterialItems({ toolId: toolIdFilter ?? undefined, search: searchTerm, filters, sortBy, sortDirection }),
-      api.toolMaterialFilterOptions(),
-    ]);
-    setItems(loadedItems);
-    setDrafts(toToolMaterialDrafts(loadedItems));
-    setFilterOptions(loadedOptions);
+  async function refreshItems(invalidateFilterOptions = false) {
+    const requestId = ++listRequestIdRef.current;
+    pageCacheRef.current.clear();
+    pageRequestCacheRef.current.clear();
+    const loadedPage = await api.toolMaterialItemsPage({
+      page,
+      pageSize: TOOL_MATERIAL_PAGE_SIZE,
+      toolId: toolIdFilter ?? undefined,
+      search: debouncedSearchTerm,
+      filters,
+      sortBy,
+      sortDirection,
+    });
+    if (requestId !== listRequestIdRef.current) {
+      return;
+    }
+    if (loadedPage.total_pages > 0 && page > loadedPage.total_pages) {
+      setPage(loadedPage.total_pages);
+      return;
+    }
+    setItems(loadedPage.items);
+    setTotalItems(loadedPage.total);
+    setTotalPages(loadedPage.total_pages);
+    if (invalidateFilterOptions) {
+      loadedFilterOptionKeysRef.current.clear();
+      setFilterOptions({ columns: {} });
+    }
   }
 
-  const selectedItem = drawer?.mode === "edit"
+  const selectedListItem = drawer?.mode === "edit"
     ? items.find((item) => item.id === drawer.itemId) ?? null
     : null;
   const selectedDraft = selectedItem ? drafts[selectedItem.id] ?? toToolMaterialDraft(selectedItem) : null;
@@ -426,16 +480,40 @@ function ToolMaterialList({
     setDrawer({ mode: "new" });
   }
 
-  function openEditDrawer(itemId: number) {
+  async function openEditDrawer(itemId: number) {
+    const requestId = ++detailRequestIdRef.current;
     setError(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    setSelectedItem(null);
     setDrawer({ mode: "edit", itemId });
+    try {
+      const item = await api.toolMaterialItem(itemId);
+      if (requestId !== detailRequestIdRef.current) {
+        return;
+      }
+      setSelectedItem(item);
+      setDrafts({ [item.id]: toToolMaterialDraft(item) });
+    } catch (requestError) {
+      if (requestId === detailRequestIdRef.current) {
+        setDetailError(readApiError(requestError, "Eintrag konnte nicht geladen werden."));
+      }
+    } finally {
+      if (requestId === detailRequestIdRef.current) {
+        setDetailLoading(false);
+      }
+    }
   }
 
   function closeDrawer() {
+    detailRequestIdRef.current += 1;
     if (selectedItem) {
       setDrafts((current) => ({ ...current, [selectedItem.id]: toToolMaterialDraft(selectedItem) }));
     }
     setCreateDraft(emptyToolMaterialDraft);
+    setSelectedItem(null);
+    setDetailError(null);
+    setDetailLoading(false);
     setDrawer(null);
   }
 
@@ -453,7 +531,7 @@ function ToolMaterialList({
     setError(null);
     try {
       await api.createToolMaterialItem(payload);
-      await refreshItems();
+      await refreshItems(true);
       setCreateDraft(emptyToolMaterialDraft);
       setDrawer(null);
     } catch (requestError) {
@@ -476,8 +554,9 @@ function ToolMaterialList({
     setSavingItemId(itemId);
     setError(null);
     try {
-      await api.updateToolMaterialItem(itemId, payload);
-      await refreshItems();
+      const updatedItem = await api.updateToolMaterialItem(itemId, payload);
+      setSelectedItem(updatedItem);
+      await refreshItems(true);
       setDrawer(null);
     } catch (requestError) {
       setError(readApiError(requestError, "Eintrag konnte nicht gespeichert werden."));
@@ -494,12 +573,12 @@ function ToolMaterialList({
     setError(null);
     try {
       await api.deleteToolMaterialItem(item.id);
-      setItems((current) => current.filter((currentItem) => currentItem.id !== item.id));
       setDrafts((current) => {
         const next = { ...current };
         delete next[item.id];
         return next;
       });
+      await refreshItems(true);
       setDrawer(null);
     } catch (requestError) {
       setError(readApiError(requestError, "Eintrag konnte nicht gelöscht werden."));
@@ -591,6 +670,7 @@ function ToolMaterialList({
   }
 
   function updateColumnFilter(key: ToolMaterialColumnKey, nextFilter: ToolMaterialColumnFilter) {
+    setPage(1);
     setFilters((current) => ({ ...current, [key]: nextFilter }));
     if (key === "employee") {
       onEmployeeFilterChange(nextFilter.values ?? []);
@@ -598,6 +678,7 @@ function ToolMaterialList({
   }
 
   function resetColumnFilter(key: ToolMaterialColumnKey) {
+    setPage(1);
     setFilters((current) => clearToolMaterialColumnFilter(current, key));
     if (key === "employee") {
       onEmployeeFilterChange([]);
@@ -605,11 +686,39 @@ function ToolMaterialList({
   }
 
   function updateSort(key: ToolMaterialColumnKey, direction: ToolMaterialSortDirection) {
+    setPage(1);
     setSortBy(key);
     setSortDirection(direction);
   }
 
+  async function setColumnFilterOpen(key: ToolMaterialColumnKey, open: boolean) {
+    setActiveFilterKey(open ? key : null);
+    if (
+      !open
+      || loadedFilterOptionKeysRef.current.has(key)
+      || loadingFilterOptionKeysRef.current.has(key)
+    ) {
+      return;
+    }
+    loadingFilterOptionKeysRef.current.add(key);
+    try {
+      const options = await api.toolMaterialFilterOptionsForColumn(key);
+      loadedFilterOptionKeysRef.current.add(key);
+      setFilterOptions((current) => ({
+        columns: { ...current.columns, [key]: options },
+      }));
+    } catch (requestError) {
+      setError(readApiError(requestError, "Filterwerte konnten nicht geladen werden."));
+    } finally {
+      loadingFilterOptionKeysRef.current.delete(key);
+    }
+  }
+
   const filtersActive = hasToolMaterialFilters(filters) || toolIdFilter !== null;
+  const visibleItemStart = totalItems > 0 ? (page - 1) * TOOL_MATERIAL_PAGE_SIZE + 1 : 0;
+  const visibleItemEnd = totalItems > 0
+    ? Math.min(visibleItemStart + items.length - 1, totalItems)
+    : 0;
 
   return (
     <section className="miscellaneous-tools-panel" role="tabpanel" aria-label="Werkzeuge und Material">
@@ -642,7 +751,10 @@ function ToolMaterialList({
           <input
             placeholder="Werkzeug oder Material suchen"
             value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
+            onChange={(event) => {
+              setSearchTerm(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
         {toolIdFilter !== null ? (
@@ -656,6 +768,7 @@ function ToolMaterialList({
             className="miscellaneous-tools-reset-filters"
             type="button"
             onClick={() => {
+              setPage(1);
               setFilters(clearAllToolMaterialFilters());
               onAllRouteFiltersReset();
               setSortBy(defaultToolMaterialSorting.sortBy);
@@ -673,7 +786,8 @@ function ToolMaterialList({
       {isLoading && !hasLoadedItems && <div className="matrix-state">Werkzeuge und Material werden geladen...</div>}
 
       {hasLoadedItems && (
-        <div className="miscellaneous-tools-table-wrap">
+        <>
+          <div className="miscellaneous-tools-table-wrap" aria-busy={isLoading}>
           <table className="miscellaneous-tools-table">
             <colgroup>
               {toolMaterialColumns.map((column) => (
@@ -695,7 +809,7 @@ function ToolMaterialList({
                     options={filterOptions.columns[column.key] ?? []}
                     sortDirection={sortDirection}
                     onChange={(nextFilter) => updateColumnFilter(column.key, nextFilter)}
-                    onOpenChange={(open) => setActiveFilterKey(open ? column.key : null)}
+                    onOpenChange={(open) => void setColumnFilterOpen(column.key, open)}
                     onReset={() => resetColumnFilter(column.key)}
                     onSort={(direction) => updateSort(column.key, direction)}
                   />
@@ -709,11 +823,11 @@ function ToolMaterialList({
                   key={item.id}
                   tabIndex={0}
                   title="Eintrag bearbeiten"
-                  onClick={() => openEditDrawer(item.id)}
+                  onClick={() => void openEditDrawer(item.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      openEditDrawer(item.id);
+                      void openEditDrawer(item.id);
                     }
                   }}
                 >
@@ -756,7 +870,34 @@ function ToolMaterialList({
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+          <footer className="miscellaneous-tools-pagination" aria-label="Seitennavigation Werkzeuge und Material">
+            <span>
+              {totalItems > 0
+                ? `${visibleItemStart}–${visibleItemEnd} von ${totalItems} Einträgen`
+                : "0 Einträge"}
+            </span>
+            <div>
+              <button
+                className="icon-button secondary"
+                disabled={isLoading || page <= 1}
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Zurück
+              </button>
+              <strong>Seite {totalPages > 0 ? page : 0} von {totalPages}</strong>
+              <button
+                className="icon-button secondary"
+                disabled={isLoading || totalPages === 0 || page >= totalPages}
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                Weiter
+              </button>
+            </div>
+          </footer>
+        </>
       )}
 
       <EntityDetailDrawer
@@ -783,9 +924,9 @@ function ToolMaterialList({
       </EntityDetailDrawer>
 
       <EntityDetailDrawer
-        isOpen={drawer?.mode === "edit" && Boolean(selectedItem && selectedDraft)}
+        isOpen={drawer?.mode === "edit"}
         title="Eintrag bearbeiten"
-        subtitle={selectedItem?.designation}
+        subtitle={selectedItem?.designation ?? selectedListItem?.designation}
         onClose={closeDrawer}
         footer={selectedItem && selectedDraft ? (
           <div className="miscellaneous-tools-drawer-footer">
@@ -810,6 +951,8 @@ function ToolMaterialList({
           </div>
         ) : undefined}
       >
+        {detailLoading ? <div className="matrix-state">Eintrag wird geladen...</div> : null}
+        {detailError ? <p className="form-error">{detailError}</p> : null}
         {selectedItem && selectedDraft && (
           <ToolMaterialFields
             draft={selectedDraft}
@@ -1489,10 +1632,6 @@ function toToolMaterialDraft(item: ToolMaterialItem): ToolMaterialDraft {
     category: item.category,
     status: item.status,
   };
-}
-
-function toToolMaterialDrafts(items: ToolMaterialItem[]): Record<number, ToolMaterialDraft> {
-  return Object.fromEntries(items.map((item) => [item.id, toToolMaterialDraft(item)]));
 }
 
 function toToolMaterialPayload(draft: ToolMaterialDraft): ToolMaterialItemCreate {

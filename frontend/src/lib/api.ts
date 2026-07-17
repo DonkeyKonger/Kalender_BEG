@@ -9,7 +9,7 @@ import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccoun
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
-import type { ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
+import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
@@ -566,8 +566,24 @@ export const api = {
     return request<ToolMaterialItem[]>(`/admin/tool-material-items${suffix}`);
   },
 
+  async toolMaterialItemsPage(params: ToolMaterialListParams = {}): Promise<ToolMaterialPage> {
+    const search = buildToolMaterialSearchParams(params);
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<ToolMaterialPage>(`/admin/tool-material-items/page${suffix}`);
+  },
+
+  async toolMaterialItem(itemId: number): Promise<ToolMaterialItem> {
+    return request<ToolMaterialItem>(`/admin/tool-material-items/${itemId}`);
+  },
+
   async toolMaterialFilterOptions(): Promise<ToolMaterialFilterOptions> {
     return request<ToolMaterialFilterOptions>("/admin/tool-material-items/filter-options");
+  },
+
+  async toolMaterialFilterOptionsForColumn(column: string): Promise<ToolMaterialFilterOption[]> {
+    return request<ToolMaterialFilterOption[]>(
+      `/admin/tool-material-items/filter-options/${encodeURIComponent(column)}`,
+    );
   },
 
   async toolMaterialResponsibility(): Promise<ToolMaterialResponsibility> {

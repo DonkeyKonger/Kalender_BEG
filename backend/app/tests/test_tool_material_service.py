@@ -1,8 +1,9 @@
 from datetime import date
+from time import perf_counter
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
 from app.models import Base
@@ -11,8 +12,10 @@ from app.models.person import Person
 from app.models.tool_material_item import ToolMaterialItem
 from app.schemas.tool_material_item import (
     ToolMaterialItemCreate,
+    ToolMaterialItemRead,
     ToolMaterialItemUpdate,
     ToolMaterialListQuery,
+    ToolMaterialPageRead,
 )
 from app.services.tool_material_service import EMPTY_FILTER_VALUE, ToolMaterialService
 
@@ -230,6 +233,14 @@ def test_default_sort_groups_status_then_date_and_natural_beg_number():
         ToolMaterialStatus.ISSUED,
         ToolMaterialStatus.WRITTEN_OFF,
     ]
+    paged_ids = []
+    for page in range(1, 5):
+        page_items, total = ToolMaterialService(db).list_page(
+            ToolMaterialListQuery(page=page, page_size=2)
+        )
+        assert total == len(items)
+        paged_ids.extend(item.id for item in page_items)
+    assert paged_ids == [item.id for item in items]
     db.close()
 
 
@@ -346,6 +357,81 @@ def test_status_filter_is_applied_server_side():
         and option.label == "Ausgebucht"
         for option in status_options
     )
+    db.close()
+
+
+def test_paginated_list_scales_to_3000_items_without_loading_all_rows():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    db.bulk_save_objects(
+        [
+            ToolMaterialItem(
+                beg_number=f"BEG-{index:05d}",
+                manufacturer="Bosch",
+                designation=f"Werkzeug {index}",
+                item_type="Typ",
+                device_number=f"G-{index}",
+                serial_number=f"S-{index}",
+                item_date=date(2026, 1, (index % 28) + 1),
+                supplier="Lieferant",
+                status=ToolMaterialStatus.WAREHOUSE,
+            )
+            for index in range(3000)
+        ]
+    )
+    db.commit()
+
+    query_count = 0
+
+    def count_query(*_args):
+        nonlocal query_count
+        query_count += 1
+
+    event.listen(engine, "before_cursor_execute", count_query)
+    started_at = perf_counter()
+    first_page, total = ToolMaterialService(db).list_page(
+        ToolMaterialListQuery(page=1, page_size=100)
+    )
+    elapsed = perf_counter() - started_at
+    first_page_query_count = query_count
+    payload = ToolMaterialPageRead(
+        items=[ToolMaterialItemRead.model_validate(item) for item in first_page],
+        total=total,
+        page=1,
+        page_size=100,
+        total_pages=30,
+    ).model_dump_json()
+
+    assert total == 3000
+    assert len(first_page) == 100
+    assert first_page_query_count <= 4
+    assert elapsed < 1.5
+    assert len(payload.encode()) < 100_000
+
+    second_page, second_total = ToolMaterialService(db).list_page(
+        ToolMaterialListQuery(page=2, page_size=100)
+    )
+    assert second_total == 3000
+    assert {item.id for item in first_page}.isdisjoint(item.id for item in second_page)
+
+    search_results, search_total = ToolMaterialService(db).list_page(
+        ToolMaterialListQuery(page=1, page_size=100, search="Werkzeug 2999")
+    )
+    assert search_total == 1
+    assert [item.beg_number for item in search_results] == ["BEG-02999"]
+
+    sorted_results, sorted_total = ToolMaterialService(db).list_page(
+        ToolMaterialListQuery(
+            page=1,
+            page_size=100,
+            sort_by="beg_number",
+            sort_direction="desc",
+            values_status=[ToolMaterialStatus.WAREHOUSE],
+        )
+    )
+    assert sorted_total == 3000
+    assert sorted_results[0].beg_number == "BEG-02999"
     db.close()
 
 

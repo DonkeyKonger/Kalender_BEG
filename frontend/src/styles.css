@@ -12041,6 +12041,36 @@ button.person-chip:focus-visible {
   background: #ffffff;
 }
 
+.miscellaneous-tools-pagination {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #52627a;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.miscellaneous-tools-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.miscellaneous-tools-pagination .icon-button {
+  min-height: 30px;
+  border-radius: 0;
+  font-size: 0.76rem;
+  padding: 5px 9px;
+}
+
+.miscellaneous-tools-pagination .icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .miscellaneous-tools-table {
   width: 100%;
   border-collapse: separate;
@@ -12694,6 +12724,15 @@ button.person-chip:focus-visible {
 
   .miscellaneous-tools-drawer-actions {
     justify-content: stretch;
+  }
+
+  .miscellaneous-tools-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .miscellaneous-tools-pagination > div {
+    justify-content: space-between;
   }
 }
 

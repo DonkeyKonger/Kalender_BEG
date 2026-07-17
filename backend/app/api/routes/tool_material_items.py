@@ -7,10 +7,13 @@ from app.api.dependencies import require_admin, require_admin_or_office_page
 from app.core.database import get_db
 from app.schemas.tool_material_item import (
     ToolMaterialFilterOptionsRead,
+    ToolMaterialFilterColumn,
+    ToolMaterialFilterOption,
     ToolMaterialItemCreate,
     ToolMaterialItemRead,
     ToolMaterialItemUpdate,
     ToolMaterialListQuery,
+    ToolMaterialPageRead,
     ToolMaterialResponsibilityRead,
     ToolMaterialResponsibilityUpdate,
     ToolResponsibleUserRead,
@@ -34,12 +37,39 @@ def list_tool_material_items(
     return [ToolMaterialItemRead.model_validate(item) for item in service.list_items(query)]
 
 
+@router.get("/page", response_model=ToolMaterialPageRead)
+def list_tool_material_items_page(
+    query: Annotated[ToolMaterialListQuery, Query()],
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> ToolMaterialPageRead:
+    service = ToolMaterialService(db)
+    items, total = service.list_page(query)
+    total_pages = (total + query.page_size - 1) // query.page_size if total else 0
+    return ToolMaterialPageRead(
+        items=[ToolMaterialItemRead.model_validate(item) for item in items],
+        total=total,
+        page=query.page,
+        page_size=query.page_size,
+        total_pages=total_pages,
+    )
+
+
 @router.get("/filter-options", response_model=ToolMaterialFilterOptionsRead)
 def list_tool_material_filter_options(
     _user=Depends(CAN_MANAGE),
     db: Session = Depends(get_db),
 ) -> ToolMaterialFilterOptionsRead:
     return ToolMaterialService(db).filter_options()
+
+
+@router.get("/filter-options/{column}", response_model=list[ToolMaterialFilterOption])
+def list_tool_material_filter_options_for_column(
+    column: ToolMaterialFilterColumn,
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> list[ToolMaterialFilterOption]:
+    return ToolMaterialService(db).filter_options_for(column)
 
 
 @router.get("/responsibility", response_model=ToolMaterialResponsibilityRead)
@@ -67,6 +97,15 @@ def update_tool_material_responsibility(
     return ToolMaterialResponsibilityService(db).update_responsible_user(
         payload.tool_responsible_user_id
     )
+
+
+@router.get("/{item_id}", response_model=ToolMaterialItemRead)
+def read_tool_material_item(
+    item_id: int,
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> ToolMaterialItemRead:
+    return ToolMaterialItemRead.model_validate(ToolMaterialService(db).get_item(item_id))
 
 
 @router.post("", response_model=ToolMaterialItemRead, status_code=status.HTTP_201_CREATED)

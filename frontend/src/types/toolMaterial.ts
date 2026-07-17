@@ -45,6 +45,14 @@ export type ToolMaterialItem = {
   open_issue_reports: ToolIssueSystemNote[];
 };
 
+export type ToolMaterialPage = {
+  items: ToolMaterialItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+
 export type ToolIssueSystemNote = {
   id: number;
   reason: "DEFECTIVE" | "STOLEN";
