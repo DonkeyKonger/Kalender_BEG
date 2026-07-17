@@ -18413,6 +18413,62 @@ button.person-chip:focus-visible {
   font-weight: 400;
 }
 
+.absence-person-highlight-trigger {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.absence-person-highlight-trigger:hover span {
+  color: #1d5c99;
+}
+
+.absence-person-highlight-trigger:focus-visible {
+  outline: 2px solid rgb(29 92 153 / 32%);
+  outline-offset: 1px;
+}
+
+.absence-person-row.is-highlighted > td {
+  position: relative;
+}
+
+.absence-person-row.is-highlighted > th::after,
+.absence-person-row.is-highlighted > td::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgb(37 99 235 / 34%) 0 1px, transparent 1px calc(100% - 1px), rgb(37 99 235 / 34%) calc(100% - 1px)),
+    rgb(59 130 246 / 9%);
+  content: "";
+  pointer-events: none;
+}
+
+.absence-person-row.is-highlighted > .absence-person-col::after {
+  background:
+    linear-gradient(to bottom, rgb(37 99 235 / 42%) 0 1px, transparent 1px calc(100% - 1px), rgb(37 99 235 / 42%) calc(100% - 1px)),
+    rgb(59 130 246 / 16%);
+}
+
+.absence-person-row.is-highlighted .absence-person-highlight-trigger span {
+  color: #173b66;
+  font-weight: 700;
+}
+
+.absence-person-row.is-highlighted .absence-cell-stack {
+  position: relative;
+  z-index: 1;
+}
+
 .absence-day-col {
   position: sticky;
   top: calc(var(--absence-month-header-height) + var(--absence-week-header-height));

@@ -646,6 +646,22 @@ function AbsenceMatrix({
   const monthGroups = useMemo(() => buildAbsenceMonthGroups(days), [days]);
   const weekGroups = useMemo(() => buildAbsenceWeekGroups(days), [days]);
   const hasRows = personGroups.some((group) => group.rows.length > 0);
+  const [highlightedPersonId, setHighlightedPersonId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (highlightedPersonId === null) {
+      return;
+    }
+
+    function clearHighlightOnEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setHighlightedPersonId(null);
+      }
+    }
+
+    window.addEventListener("keydown", clearHighlightOnEscape);
+    return () => window.removeEventListener("keydown", clearHighlightOnEscape);
+  }, [highlightedPersonId]);
 
   if (!hasRows) {
     return (
@@ -711,61 +727,76 @@ function AbsenceMatrix({
                 </th>
                 <td className="absence-person-group-fill" colSpan={days.length} />
               </tr>
-              {group.rows.map((row) => (
-                <tr key={row.person.id}>
-                  <th className="absence-person-col" scope="row">
-                    <span>{row.person.display_name}</span>
-                  </th>
-                  {row.cells.map((cell) => (
-                    <td
-                      className={absenceCellClassName(
-                        cell.date,
-                        today,
-                        Boolean(
-                          activeSelection
-                          && activeSelection.personId === row.person.id
-                          && isDateWithinAbsenceSelection(cell.date, activeSelection),
-                        ),
-                      )}
-                      key={`${row.person.id}-${cell.date}`}
-                      onMouseDown={(event) => {
-                        if (canEdit && !cell.absences.length) {
-                          onStartSelection(row.person.id, cell.date, event);
-                        }
-                      }}
-                      onMouseEnter={() => {
-                        if (canEdit) {
-                          onExtendSelection(row.person.id, cell.date);
-                        }
-                      }}
-                    >
-                      <div className="absence-cell-stack">
-                        {cell.absences.map((absence) => (
-                          <button
-                            className={absenceBlockClassName(absence)}
-                            key={absence.id}
-                            title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
-                            type="button"
-                            onContextMenu={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              if (canEdit) {
-                                onDeleteAbsenceDay(absence, cell.date);
-                              }
-                            }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onOpenAbsence(absence.id);
-                            }}
-                          >
-                            {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {group.rows.map((row) => {
+                const isPersonHighlighted = highlightedPersonId === row.person.id;
+                return (
+                  <tr
+                    aria-selected={isPersonHighlighted}
+                    className={`absence-person-row${isPersonHighlighted ? " is-highlighted" : ""}`}
+                    key={row.person.id}
+                  >
+                    <th className="absence-person-col" scope="row">
+                      <button
+                        aria-label={`${row.person.display_name}: ${isPersonHighlighted ? "Zeilenmarkierung aufheben" : "Zeile hervorheben"}`}
+                        aria-pressed={isPersonHighlighted}
+                        className="absence-person-highlight-trigger"
+                        type="button"
+                        onClick={() => setHighlightedPersonId((current) => current === row.person.id ? null : row.person.id)}
+                      >
+                        <span>{row.person.display_name}</span>
+                      </button>
+                    </th>
+                    {row.cells.map((cell) => (
+                      <td
+                        className={absenceCellClassName(
+                          cell.date,
+                          today,
+                          Boolean(
+                            activeSelection
+                            && activeSelection.personId === row.person.id
+                            && isDateWithinAbsenceSelection(cell.date, activeSelection),
+                          ),
+                        )}
+                        key={`${row.person.id}-${cell.date}`}
+                        onMouseDown={(event) => {
+                          if (canEdit && !cell.absences.length) {
+                            onStartSelection(row.person.id, cell.date, event);
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (canEdit) {
+                            onExtendSelection(row.person.id, cell.date);
+                          }
+                        }}
+                      >
+                        <div className="absence-cell-stack">
+                          {cell.absences.map((absence) => (
+                            <button
+                              className={absenceBlockClassName(absence)}
+                              key={absence.id}
+                              title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
+                              type="button"
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (canEdit) {
+                                  onDeleteAbsenceDay(absence, cell.date);
+                                }
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onOpenAbsence(absence.id);
+                              }}
+                            >
+                              {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </Fragment>
           ))}
         </tbody>
