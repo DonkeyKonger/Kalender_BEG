@@ -13,12 +13,17 @@ case "${RUN_SEED_VALUE,,}" in
     ;;
 esac
 
-if python -m app.scripts.import_bundled_tools; then
-  echo "Werkzeugimport beim Start abgeschlossen."
-else
-  import_status=$?
-  echo "WARNUNG: Werkzeugimport beim Start fehlgeschlagen (Exit ${import_status})." >&2
-  echo "Die API wird trotzdem gestartet; Details sind über /api/health/tool-import prüfbar." >&2
-fi
+run_tool_import() {
+  if python -m app.scripts.import_bundled_tools; then
+    echo "Werkzeugimport beim Start abgeschlossen."
+  else
+    import_status=$?
+    echo "WARNUNG: Werkzeugimport beim Start fehlgeschlagen (Exit ${import_status})." >&2
+    echo "Die API läuft weiter; Details sind über /api/health/tool-import prüfbar." >&2
+  fi
+}
+
+run_tool_import &
+echo "Werkzeugimport im Hintergrund gestartet; API-Start wird nicht blockiert."
 
 exec gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 app.main:app

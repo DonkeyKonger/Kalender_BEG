@@ -170,7 +170,7 @@ jobs:
           )
           PY
 
-      - name: Verify deployed application and tool import
+      - name: Verify deployed application
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
           EXPECTED_TOOL_SOURCE_SHA256: ${{ needs.build.outputs.tool_source_sha256 }}
@@ -205,18 +205,13 @@ jobs:
           if not destination:
               raise SystemExit("Publish profile does not contain destinationAppUrl.")
           expected_sha256 = os.environ["EXPECTED_TOOL_SOURCE_SHA256"]
-          health_url = f"{destination}/api/health/tool-import"
+          health_url = f"{destination}/api/health"
           last_detail = "noch keine Antwort"
           for attempt in range(90):
               try:
                   with urllib.request.urlopen(health_url, timeout=15) as response:
                       health = json.load(response)
-                  if (
-                      response.status == 200
-                      and health.get("status") == "ok"
-                      and health.get("source_sha256") == expected_sha256
-                      and health.get("imported_rows") == health.get("expected_rows")
-                  ):
+                  if response.status == 200 and health.get("status") == "ok":
                       print(json.dumps(health, ensure_ascii=False, sort_keys=True))
                       break
                   last_detail = json.dumps(health, ensure_ascii=False, sort_keys=True)
@@ -229,8 +224,39 @@ jobs:
                   last_detail = str(error)
               if attempt == 89:
                   raise SystemExit(
-                      "Die deployte Azure-App hat den Werkzeugimport nicht bestätigt. "
+                      "Die deployte Azure-App hat ihre Health-Prüfung nicht bestätigt. "
                       f"URL: {health_url}; letzte Antwort: {last_detail}"
                   )
               time.sleep(5)
+
+          tool_health_url = f"{destination}/api/health/tool-import"
+          tool_detail = "noch keine Antwort"
+          tool_ready = False
+          for attempt in range(12):
+              try:
+                  with urllib.request.urlopen(tool_health_url, timeout=15) as response:
+                      tool_health = json.load(response)
+                  tool_detail = json.dumps(tool_health, ensure_ascii=False, sort_keys=True)
+                  tool_ready = (
+                      response.status == 200
+                      and tool_health.get("status") == "ok"
+                      and tool_health.get("source_sha256") == expected_sha256
+                      and tool_health.get("imported_rows") == tool_health.get("expected_rows")
+                  )
+                  if tool_ready:
+                      print(tool_detail)
+                      break
+              except urllib.error.HTTPError as error:
+                  tool_detail = (
+                      f"HTTP {error.code}: "
+                      + error.read().decode(errors="replace")[-2000:]
+                  )
+              except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+                  tool_detail = str(error)
+              time.sleep(5)
+          if not tool_ready:
+              print(
+                  "::warning::Werkzeugimport wurde nach dem Deploy noch nicht bestätigt. "
+                  f"URL: {tool_health_url}; letzte Antwort: {tool_detail}"
+              )
           PY

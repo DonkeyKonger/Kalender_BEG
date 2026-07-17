@@ -116,12 +116,13 @@ def test_startup_runs_bundled_import_after_migrations_and_before_gunicorn():
     startup_script = (resolve_app_root() / "startup.sh").read_text(encoding="utf-8")
 
     migration_index = startup_script.index("alembic upgrade head")
-    import_index = startup_script.index("python -m app.scripts.import_bundled_tools")
+    import_index = startup_script.index("run_tool_import &")
     gunicorn_index = startup_script.index("exec gunicorn")
 
     assert migration_index < import_index < gunicorn_index
     assert "if python -m app.scripts.import_bundled_tools; then" in startup_script
-    assert "Die API wird trotzdem gestartet" in startup_script
+    assert "Werkzeugimport im Hintergrund gestartet" in startup_script
+    assert "API-Start wird nicht blockiert" in startup_script
 
 
 def test_tool_import_health_reports_pending_and_ready(monkeypatch):
