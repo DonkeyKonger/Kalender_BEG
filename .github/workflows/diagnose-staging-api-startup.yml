@@ -66,6 +66,42 @@ jobs:
               print(f"\n===== {title} =====")
               print(decoded[-100_000:])
 
+          def print_relevant_log(title, content):
+              lines = content.decode("utf-8", errors="replace").splitlines()
+              markers = (
+                  "werkzeug",
+                  "traceback",
+                  "exception",
+                  "unresolved",
+                  "ambiguous",
+                  "blocker",
+                  "startup.sh",
+                  "gunicorn",
+                  "alembic",
+              )
+              matching = {
+                  index
+                  for index, line in enumerate(lines)
+                  if any(marker in line.casefold() for marker in markers)
+              }
+              context = sorted(
+                  {
+                      nearby
+                      for index in matching
+                      for nearby in range(max(0, index - 3), min(len(lines), index + 4))
+                  }
+              )
+              print(f"\n===== {title} (relevante Zeilen) =====")
+              if not context:
+                  print("<keine passenden Anwendungszeilen>")
+                  return
+              previous = None
+              for index in context[-500:]:
+                  if previous is not None and index > previous + 1:
+                      print("...")
+                  print(lines[index])
+                  previous = index
+
           failures = []
           try:
               docker_payload = fetch(f"{scm_base}/api/logs/docker")
@@ -77,7 +113,7 @@ jobs:
                       if not href:
                           continue
                       try:
-                          print_log(f"Containerlog {href}", fetch(href))
+                          print_relevant_log(f"Containerlog {href}", fetch(href))
                       except Exception as error:
                           failures.append(f"{href}: {error}")
           except Exception as error:
@@ -90,6 +126,22 @@ jobs:
               )
           except Exception as error:
               failures.append(f"/api/vfs/LogFiles/: {error}")
+
+          try:
+              startup_payload = fetch(f"{scm_base}/api/vfs/LogFiles/StartupLogs/")
+              print_log("Kudu StartupLogs-Verzeichnis", startup_payload)
+              startup_entries = json.loads(startup_payload)
+              if isinstance(startup_entries, list):
+                  for entry in startup_entries[-20:]:
+                      href = entry.get("href") if isinstance(entry, dict) else None
+                      if not href:
+                          continue
+                      try:
+                          print_relevant_log(f"StartupLog {href}", fetch(href))
+                      except Exception as error:
+                          failures.append(f"{href}: {error}")
+          except Exception as error:
+              failures.append(f"/api/vfs/LogFiles/StartupLogs/: {error}")
 
           if failures:
               print("\n===== Nicht lesbare Diagnosequellen =====")
