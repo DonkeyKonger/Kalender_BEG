@@ -16,6 +16,7 @@ from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
+from app.schemas.time_entry import TimeEntryCreate
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, effective_weekly_work_minutes
 from app.services.time_entry_service import TimeEntryService
 
@@ -91,6 +92,56 @@ def test_overlap_guard_returns_structured_conflict():
     assert error.value.status_code == 409
     assert error.value.detail["code"] == "time_entry_overlap"
     assert error.value.detail["conflicts"][0]["site_label"] == "1010 - Firma BEG"
+
+
+def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="M.Monteur",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-create", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([person, user])
+    db.flush()
+    review = TimeEntryWeeklyReview(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=24,
+        status="reviewed",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 6, 12, 12, 0),
+    )
+    db.add(review)
+    db.commit()
+
+    payload = TimeEntryCreate(
+        person_id=person.id,
+        work_date=date.fromisocalendar(2026, 24, 1),
+        work_minutes=60,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+    )
+    item = TimeEntryService(db)
+
+    with pytest.raises(HTTPException) as error:
+        item.create_entry(payload, user)
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Geprüfte Woche zuerst zurücksetzen."
+
+    regular_entry = item.create_entry(payload.model_copy(update={"note": None}), user)
+
+    assert regular_entry.person_id == person.id
+
+    review.status = "reset"
+    db.commit()
+
+    entry = item.create_entry(payload, user)
+
+    assert entry.person_id == person.id
+    assert entry.work_date == payload.work_date
 
 
 def test_approve_time_review_marks_entry_with_user_audit():

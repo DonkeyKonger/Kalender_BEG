@@ -13,7 +13,7 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
-from app.services.person_hours_account_service import PersonHoursAccountService
+from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, PersonHoursAccountService
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
 OPEN_TIME_REVIEW_STATUS = "open"
@@ -66,6 +66,8 @@ class TimeEntryService:
     def create_entry(self, payload: TimeEntryCreate, current_user: User) -> WorkTimeEntry:
         self._ensure_can_write_person(current_user, payload.person_id)
         self._ensure_person_exists(payload.person_id)
+        if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+            self._ensure_week_is_open(payload.person_id, payload.work_date)
         self._ensure_site_exists(payload.site_id)
         self._ensure_assignment_matches(payload.assignment_id, payload.person_id, payload.site_id)
         values = payload.model_dump()
@@ -719,6 +721,21 @@ class TimeEntryService:
     def _ensure_person_exists(self, person_id: int) -> None:
         if self.db.get(Person, person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
+
+    def _ensure_week_is_open(self, person_id: int, work_date: date) -> None:
+        iso_year, iso_week, _ = work_date.isocalendar()
+        review = self.db.scalar(
+            select(TimeEntryWeeklyReview)
+            .where(TimeEntryWeeklyReview.person_id == person_id)
+            .where(TimeEntryWeeklyReview.iso_year == iso_year)
+            .where(TimeEntryWeeklyReview.iso_week == iso_week)
+            .where(TimeEntryWeeklyReview.status == WEEKLY_REVIEW_STATUS_REVIEWED)
+        )
+        if review is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Geprüfte Woche zuerst zurücksetzen.",
+            )
 
     def _ensure_site_exists(self, site_id: int | None) -> None:
         if site_id is not None and self.db.get(Site, site_id) is None:

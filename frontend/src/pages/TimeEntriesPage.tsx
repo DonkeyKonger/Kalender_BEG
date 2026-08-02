@@ -247,6 +247,7 @@ export function TimeEntriesPage() {
     break_minutes: "",
     hours: "",
   });
+  const [payrollManualWorkDate, setPayrollManualWorkDate] = useState("");
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
@@ -465,10 +466,12 @@ export function TimeEntriesPage() {
   useEffect(() => {
     if (!timeReviewDiagnosticEntry) {
       setPayrollCorrectionForm({ start_time: "", end_time: "", break_minutes: "", hours: "" });
+      setPayrollManualWorkDate("");
       setPayrollCorrectionError(null);
       setIsSavingPayrollCorrection(false);
       return;
     }
+    setPayrollManualWorkDate(timeReviewDiagnosticEntry.work_date);
     const initialForm: PayrollCorrectionFormState = {
       start_time: timeInputValue(effectivePayrollStartTime(timeReviewDiagnosticEntry)),
       end_time: timeInputValue(effectivePayrollEndTime(timeReviewDiagnosticEntry)),
@@ -1134,6 +1137,16 @@ export function TimeEntriesPage() {
     setTimeReviewDiagnosticEntry(entry);
   }
 
+  function openManualTimeEntryDialog(): void {
+    if (!canManageTimeEntries || !selectedReviewWorker || selectedReviewWorker.isReviewed) {
+      return;
+    }
+    const initialDay = selectedReviewWeekDays.find((day) => day.entries.length === 0 && day.absenceType === null)
+      ?? selectedReviewWeekDays[0];
+    const workDate = initialDay?.date ?? reviewWeekRange.start;
+    openTimeReviewDiagnostic(buildMissingTimeReviewEntry(selectedReviewWorker, workDate));
+  }
+
   function closeTimeReviewDiagnostic(): void {
     setTimeReviewDiagnosticEntry(null);
     setTimeReviewPopupTop(null);
@@ -1217,15 +1230,27 @@ export function TimeEntriesPage() {
       setPayrollCorrectionError(payload.error);
       return;
     }
+    const isManualCreation = timeReviewDiagnosticEntry.id < 0;
+    if (
+      isManualCreation
+      && !selectedReviewWeekDayOptions.some((option) => option.date === payrollManualWorkDate)
+    ) {
+      setPayrollCorrectionError("Bitte einen Tag aus der geöffneten Kalenderwoche auswählen.");
+      return;
+    }
 
     setIsSavingPayrollCorrection(true);
     setPayrollCorrectionError(null);
     try {
-      const targetEntry = timeReviewDiagnosticEntry.id < 0
-        ? await createTimeEntryForMissingDay(timeReviewDiagnosticEntry)
+      const pendingEntry = isManualCreation
+        ? { ...timeReviewDiagnosticEntry, work_date: payrollManualWorkDate }
+        : timeReviewDiagnosticEntry;
+      const targetEntry = isManualCreation
+        ? await createTimeEntryForMissingDay(pendingEntry)
         : timeReviewDiagnosticEntry;
       const updatedEntry = await api.setTimeEntryPayrollCorrection(targetEntry.id, payload.payload);
       applyUpdatedTimeEntry(updatedEntry);
+      void refreshSelectedReviewPayrollWeekSummary();
       setTimeReviewDiagnosticEntry((currentEntry) => (
         currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
           ? mergeTimeEntryReviewUpdate(targetEntry, updatedEntry)
@@ -1241,6 +1266,19 @@ export function TimeEntriesPage() {
   function updatePayrollTimeBasis(field: PayrollTimeBasisField, value: string): void {
     setPayrollCorrectionError(null);
     setPayrollCorrectionForm((current) => applyPayrollTimeBasisChange(current, field, value));
+  }
+
+  async function refreshSelectedReviewPayrollWeekSummary(): Promise<void> {
+    try {
+      const payrollWeek = await api.timeEntryPayrollWeek({
+        isoYear: selectedReviewWeek.year,
+        isoWeek: selectedReviewWeek.week,
+      });
+      setReviewPayrollWeek(payrollWeek);
+      setReviewPayrollWeekError(null);
+    } catch (requestError) {
+      setReviewPayrollWeekError(readApiError(requestError, "Wochensumme konnte nicht aktualisiert werden."));
+    }
   }
 
   async function saveLocationReviewSite(): Promise<void> {
@@ -1724,18 +1762,32 @@ export function TimeEntriesPage() {
                 )}
                 <div className="time-review-worker-detail-actions">
                   <div className="time-review-worker-detail-action-stack">
-                    <button
-                      className="icon-button secondary"
-                      type="button"
-                      disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                      onClick={() => void markSelectedReviewWeekReviewed()}
-                    >
-                      {selectedReviewWorker.isReviewed
-                        ? "Monteurwoche geprüft"
-                        : markingReviewWeekPersonId === selectedReviewWorker.personId
-                          ? "Monteurwoche wird geprüft..."
-                          : "Monteurwoche als geprüft markieren"}
-                    </button>
+                    <div className="time-review-worker-detail-primary-actions">
+                      {canManageTimeEntries && (
+                        <button
+                          className="icon-button secondary time-review-manual-create-button"
+                          type="button"
+                          aria-haspopup="dialog"
+                          title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erstellen"}
+                          disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                          onClick={openManualTimeEntryDialog}
+                        >
+                          Zeit manuell erstellen
+                        </button>
+                      )}
+                      <button
+                        className="icon-button secondary"
+                        type="button"
+                        disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                        onClick={() => void markSelectedReviewWeekReviewed()}
+                      >
+                        {selectedReviewWorker.isReviewed
+                          ? "Monteurwoche geprüft"
+                          : markingReviewWeekPersonId === selectedReviewWorker.personId
+                            ? "Monteurwoche wird geprüft..."
+                            : "Monteurwoche als geprüft markieren"}
+                      </button>
+                    </div>
                     {selectedReviewWorker.isReviewed && (
                       <button
                         className="icon-button secondary time-review-week-xlsx-button"
@@ -1915,6 +1967,25 @@ export function TimeEntriesPage() {
                 ×
               </button>
             </div>
+            {timeReviewDiagnosticEntry.id < 0 && (
+              <div className="time-review-manual-context">
+                <div>
+                  <span>Monteur</span>
+                  <strong>{timeReviewDiagnosticEntry.person_name}</strong>
+                </div>
+                <label>
+                  <span>Datum</span>
+                  <input
+                    type="date"
+                    min={reviewWeekRange.start}
+                    max={reviewWeekRange.end}
+                    value={payrollManualWorkDate}
+                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    onChange={(event) => setPayrollManualWorkDate(event.target.value)}
+                  />
+                </label>
+              </div>
+            )}
             <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
               <div className="time-review-diagnostic-row is-head" role="row">
                 <span role="columnheader" aria-label="Zeilenbezeichnung" />
