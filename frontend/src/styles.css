@@ -20149,19 +20149,6 @@ button.person-chip:focus-visible {
   opacity: 0.55;
 }
 
-.dashboard-message-unread-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 0 0;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-  padding: 7px 9px;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
 .dashboard-alert-dot {
   width: 8px;
   height: 8px;

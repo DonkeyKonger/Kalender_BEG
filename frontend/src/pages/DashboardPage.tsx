@@ -787,9 +787,6 @@ export function DashboardPage() {
                       </div>
                     );
                   })}
-                  <p className="dashboard-message-unread-note">
-                    {dashboardMessages.length} ungelesene {dashboardMessages.length === 1 ? "Meldung" : "Meldungen"} — bitte prüfen.
-                  </p>
                 </div>
               ) : (
                 <div className="dashboard-message-box">
