@@ -122,3 +122,22 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.doesNotMatch(source.slice(weekSiteCellStart, weekSiteCellEnd), /original_site|planned_site|gps_detected/);
   assert.match(source, /key={`\$\{day\.date\}-\$\{check\.entry\.id\}`}/);
 });
+
+test("office-created entries display their directly stored times without requiring a later correction", async () => {
+  const source = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /return entry\.payroll_corrected_start_time \?\? entry\.start_time;/,
+  );
+  assert.match(
+    source,
+    /return entry\.payroll_corrected_end_time \?\? entry\.end_time;/,
+  );
+  assert.match(
+    source,
+    /isOfficeOnlyTimeEntry\(entry\) && !hasDirectOfficeTime\(entry\)/,
+  );
+  assert.match(source, /entry\.payroll_corrected_break_minutes \?\? entry\.break_minutes/);
+  assert.match(source, /entry\.work_minutes \+ \(entry\.travel_minutes \|\| 0\)/);
+});

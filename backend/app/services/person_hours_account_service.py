@@ -408,8 +408,6 @@ def effective_weekly_work_minutes(entry: WorkTimeEntry) -> int:
     corrected_minutes = effective_corrected_work_minutes(entry)
     if corrected_minutes is not None:
         return round_minutes_to_quarter_hour(corrected_minutes + (entry.travel_minutes or 0))
-    if entry.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
-        return 0
     return round_minutes_to_quarter_hour((entry.work_minutes or 0) + (entry.travel_minutes or 0))
 
 

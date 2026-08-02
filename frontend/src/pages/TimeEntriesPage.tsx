@@ -3558,7 +3558,11 @@ function renderPayrollWorkMinutes(entry: TimeEntry) {
 }
 
 function renderTimeReviewBreakMinutes(entry: TimeEntry): string {
-  if (isOfficeOnlyTimeEntry(entry) && entry.payroll_corrected_break_minutes === null) {
+  if (
+    isOfficeOnlyTimeEntry(entry)
+    && entry.payroll_corrected_break_minutes === null
+    && !hasDirectOfficeTime(entry)
+  ) {
     return "-";
   }
   return formatTimeEntryMinutes(
@@ -3589,11 +3593,11 @@ function hasPayrollTimeCorrection(entry: TimeEntry): boolean {
 }
 
 function effectivePayrollStartTime(entry: TimeEntry): string | null {
-  return entry.payroll_corrected_start_time ?? (isOfficeOnlyTimeEntry(entry) ? null : entry.start_time);
+  return entry.payroll_corrected_start_time ?? entry.start_time;
 }
 
 function effectivePayrollEndTime(entry: TimeEntry): string | null {
-  return entry.payroll_corrected_end_time ?? (isOfficeOnlyTimeEntry(entry) ? null : entry.end_time);
+  return entry.payroll_corrected_end_time ?? entry.end_time;
 }
 
 function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
@@ -3601,7 +3605,19 @@ function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
   if (correctedMinutes !== null) {
     return roundMinutesToQuarterHour(correctedMinutes + (entry.travel_minutes || 0));
   }
-  return isOfficeOnlyTimeEntry(entry) ? null : roundMinutesToQuarterHour(entry.work_minutes + (entry.travel_minutes || 0));
+  if (isOfficeOnlyTimeEntry(entry) && !hasDirectOfficeTime(entry)) {
+    return null;
+  }
+  return roundMinutesToQuarterHour(entry.work_minutes + (entry.travel_minutes || 0));
+}
+
+function hasDirectOfficeTime(entry: TimeEntry): boolean {
+  return (
+    entry.start_time !== null
+    || entry.end_time !== null
+    || entry.work_minutes > 0
+    || (entry.travel_minutes || 0) > 0
+  );
 }
 
 function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {

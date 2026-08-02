@@ -81,6 +81,11 @@ class TimeEntryService:
             break_minutes=values["break_minutes"],
             work_minutes=values.get("work_minutes"),
         )
+        if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+            values["payroll_corrected_start_time"] = values.get("start_time")
+            values["payroll_corrected_end_time"] = values.get("end_time")
+            values["payroll_corrected_break_minutes"] = values["break_minutes"]
+            values["payroll_corrected_work_minutes"] = values["work_minutes"]
         self._ensure_no_time_overlap(
             person_id=values["person_id"],
             work_date=values["work_date"],

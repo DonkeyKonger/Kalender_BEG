@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -8,7 +8,7 @@ from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, AbsenceType, PersonType
 from app.models.person import Person
 from app.models.work_time_entry import WorkTimeEntry
-from app.services.person_hours_account_service import PersonHoursAccountService
+from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, PersonHoursAccountService
 
 
 def db_session() -> Session:
@@ -101,6 +101,31 @@ def test_mixed_vacation_and_work_week_combines_server_values():
     assert summary.work_minutes == 360
     assert summary.vacation_credit_minutes == 480
     assert summary.total_minutes == 840
+
+
+def test_existing_office_manual_entry_uses_its_direct_time_in_week_total():
+    db = db_session()
+    person = add_person(db)
+    monday = date.fromisocalendar(2026, 31, 1)
+    db.add(
+        WorkTimeEntry(
+            person=person,
+            work_date=monday,
+            start_time=time(6, 0),
+            end_time=time(12, 0),
+            break_minutes=60,
+            travel_minutes=0,
+            work_minutes=300,
+            note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+        )
+    )
+    db.commit()
+
+    summary = payroll_summary(db, person, iso_year=2026, iso_week=31)
+
+    assert summary.work_minutes == 300
+    assert summary.vacation_credit_minutes == 0
+    assert summary.total_minutes == 300
 
 
 def test_vacation_weekend_does_not_receive_additional_credit():

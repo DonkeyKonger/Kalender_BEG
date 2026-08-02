@@ -248,6 +248,11 @@ def test_office_manual_entries_keep_site_and_override_and_allow_multiple_same_da
     assert [entry.id for entry in entries] == [first_entry.id, second_entry.id]
     assert [entry.site_id for entry in entries] == [first_site.id, second_site.id]
     assert [entry.work_minutes for entry in entries] == [90, 120]
+    assert [entry.payroll_corrected_start_time for entry in entries] == [time(8, 0), time(10, 0)]
+    assert [entry.payroll_corrected_end_time for entry in entries] == [time(10, 0), time(12, 0)]
+    assert [entry.payroll_corrected_break_minutes for entry in entries] == [0, 0]
+    assert [entry.payroll_corrected_work_minutes for entry in entries] == [90, 120]
+    assert [effective_weekly_work_minutes(entry) for entry in entries] == [90, 120]
     assert sum(entry.work_minutes for entry in entries) == 210
 
     db.expire_all()
