@@ -79,6 +79,14 @@ export function parsePayrollBreakMinutes(value: string): number | null {
   return Number.isSafeInteger(minutes) && minutes >= 0 ? minutes : null;
 }
 
+export function resolvePayrollCorrectionWorkMinutes(
+  draft: Pick<PayrollCorrectionDraft, "start_time" | "end_time" | "break_minutes">,
+  manuallyEnteredMinutes: number | null,
+): number | null {
+  const calculation = calculatePayrollTime(draft);
+  return calculation.status === "valid" ? calculation.minutes : manuallyEnteredMinutes;
+}
+
 export function formatPayrollHours(minutes: number): string {
   return (minutes / 60).toFixed(2).replace(".", ",");
 }

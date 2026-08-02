@@ -16,7 +16,7 @@ from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
-from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
+from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, effective_weekly_work_minutes
 from app.services.time_entry_service import TimeEntryService
 
 
@@ -173,15 +173,30 @@ def test_set_payroll_time_correction_stores_office_checked_time():
         start_time=time(7, 30),
         end_time=time(13, 0),
         break_minutes=30,
-        work_minutes=330,
+        work_minutes=999,
         current_user=current_user,
     )
 
     assert updated.payroll_corrected_start_time == time(7, 30)
     assert updated.payroll_corrected_end_time == time(13, 0)
     assert updated.payroll_corrected_break_minutes == 30
-    assert updated.payroll_corrected_work_minutes == 330
+    assert updated.payroll_corrected_work_minutes == 300
     assert commits == [True]
+
+
+def test_corrected_pause_is_used_for_weekly_payroll_minutes():
+    entry = SimpleNamespace(
+        payroll_corrected_work_minutes=None,
+        payroll_corrected_start_time=time(7, 0),
+        payroll_corrected_end_time=time(17, 0),
+        payroll_corrected_break_minutes=60,
+        break_minutes=30,
+        work_minutes=570,
+        travel_minutes=0,
+        note=None,
+    )
+
+    assert effective_weekly_work_minutes(entry) == 540
 
 
 def test_set_payroll_time_correction_calculates_overnight_time_with_break():

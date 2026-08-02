@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyPayrollTimeBasisChange,
   calculatePayrollTime,
+  resolvePayrollCorrectionWorkMinutes,
 } from "../src/lib/payrollTimeCorrection.ts";
 
 
@@ -49,6 +50,18 @@ test("manual total remains until a time basis field changes again", () => {
   assert.equal(
     applyPayrollTimeBasisChange(manualDraft, "break_minutes", "30").hours,
     "11,50",
+  );
+});
+
+
+test("complete time basis overrides a conflicting manual total", () => {
+  assert.equal(
+    resolvePayrollCorrectionWorkMinutes({
+      start_time: "05:30",
+      end_time: "17:30",
+      break_minutes: "60",
+    }, 645),
+    660,
   );
 });
 

@@ -203,8 +203,7 @@ class TimeEntryService:
                     status.HTTP_400_BAD_REQUEST,
                     "Beginn, Ende und Pause ergeben keine plausible Arbeitszeit.",
                 )
-            if work_minutes is None:
-                work_minutes = calculated_minutes
+            work_minutes = calculated_minutes
 
         entry.payroll_corrected_start_time = start_time
         entry.payroll_corrected_end_time = end_time

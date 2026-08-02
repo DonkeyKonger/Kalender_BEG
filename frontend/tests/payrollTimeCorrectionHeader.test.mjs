@@ -16,6 +16,10 @@ test("Arbeitszeit-Pruefung blendet nur die sichtbare Quellenueberschrift aus", (
   assert.ok(tableEnd > tableStart);
   assert.doesNotMatch(tableSource, /<span role="columnheader">Quelle<\/span>/);
   assert.match(tableSource, /<span role="columnheader" aria-label="Zeilenbezeichnung" \/>/);
+  assert.match(tableSource, /<span role="columnheader">Pause<\/span>/);
   assert.match(pageSource, /Eingetragene Monteursstunden/);
   assert.match(tableSource, /Stunden Büro geprüft/);
+  assert.match(tableSource, /Pause Büro geprüft in Minuten/);
+  assert.match(tableSource, /updatePayrollTimeBasis\("break_minutes", event\.target\.value\)/);
+  assert.match(pageSource, /payroll_corrected_break_minutes: breakMinutes/);
 });

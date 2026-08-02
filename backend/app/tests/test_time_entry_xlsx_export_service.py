@@ -14,6 +14,7 @@ from app.services.time_entry_xlsx_export_service import (
     excel_date_serial,
     unique_weekly_worker_sheet_names,
     weekly_worker_entry_has_hours,
+    weekly_worker_break_minutes,
     weekly_worker_rows,
     weekly_worker_total_minutes,
     weekly_worker_work_minutes,
@@ -141,6 +142,40 @@ def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
     assert "C25:F25" in merge_refs
     assert "G25:I25" in merge_refs
     assert "L31:N31" in merge_refs
+
+
+def test_weekly_worker_xlsx_uses_office_corrected_break_and_derived_hours():
+    entry = WorkTimeEntry(
+        work_date=date(2026, 6, 8),
+        start_time=time(7, 0),
+        end_time=time(17, 0),
+        break_minutes=30,
+        work_minutes=570,
+        travel_minutes=0,
+        payroll_corrected_start_time=time(7, 0),
+        payroll_corrected_end_time=time(17, 0),
+        payroll_corrected_break_minutes=60,
+        payroll_corrected_work_minutes=None,
+        source="manual",
+    )
+    entry.site = Site(site_number="8008", name="Friedensschule Osnabrück")
+    rows = weekly_worker_rows(date(2026, 6, 8), date(2026, 6, 14), [entry], {})
+
+    content = build_weekly_worker_xlsx(
+        person_name="Christopher Erichsen",
+        week_number=24,
+        year=2026,
+        start=date(2026, 6, 8),
+        end=date(2026, 6, 14),
+        rows=rows,
+    )
+    _, sheet = workbook_sheet(content)
+
+    assert weekly_worker_break_minutes(entry) == 60
+    assert weekly_worker_work_minutes(entry) == 540
+    assert weekly_worker_total_minutes(rows[0]) == 540
+    assert cell_number(sheet, "L15") == 1
+    assert cell_text(sheet, "O15") == "9,00 h"
 
 
 def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():

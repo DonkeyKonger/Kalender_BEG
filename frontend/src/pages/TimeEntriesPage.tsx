@@ -9,6 +9,7 @@ import {
   applyPayrollTimeBasisChange,
   calculatePayrollTime,
   parsePayrollBreakMinutes,
+  resolvePayrollCorrectionWorkMinutes,
   type PayrollCorrectionDraft,
   type PayrollTimeBasisField,
 } from "../lib/payrollTimeCorrection";
@@ -469,8 +470,8 @@ export function TimeEntriesPage() {
       return;
     }
     const initialForm: PayrollCorrectionFormState = {
-      start_time: timeInputValue(timeReviewDiagnosticEntry.payroll_corrected_start_time),
-      end_time: timeInputValue(timeReviewDiagnosticEntry.payroll_corrected_end_time),
+      start_time: timeInputValue(effectivePayrollStartTime(timeReviewDiagnosticEntry)),
+      end_time: timeInputValue(effectivePayrollEndTime(timeReviewDiagnosticEntry)),
       break_minutes: String(
         timeReviewDiagnosticEntry.payroll_corrected_break_minutes ?? timeReviewDiagnosticEntry.break_minutes ?? 0,
       ),
@@ -480,7 +481,7 @@ export function TimeEntriesPage() {
     };
     const initialCalculation = calculatePayrollTime(initialForm);
     setPayrollCorrectionForm(
-      !initialForm.hours && initialCalculation.status === "valid"
+      initialCalculation.status === "valid"
         ? { ...initialForm, hours: initialCalculation.formattedHours }
         : initialForm,
     );
@@ -1975,6 +1976,7 @@ export function TimeEntriesPage() {
                       setPayrollCorrectionError(null);
                       setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
                     }}
+                    readOnly={calculatePayrollTime(payrollCorrectionForm).status === "valid"}
                     disabled={!canManageTimeEntries || isSavingPayrollCorrection}
                   />
                 </label>
@@ -4046,11 +4048,7 @@ function buildPayrollCorrectionPayload(
   if (timeCalculation.status === "invalid") {
     return { ok: false, error: timeCalculation.error };
   }
-  const calculatedWorkMinutes = workMinutes.value ?? (
-    timeCalculation.status === "valid"
-      ? timeCalculation.minutes
-      : null
-  );
+  const calculatedWorkMinutes = resolvePayrollCorrectionWorkMinutes(form, workMinutes.value);
   if (!startTime.value && !endTime.value && calculatedWorkMinutes === null) {
     return { ok: false, error: "Bitte mindestens eine Bürozeit eintragen." };
   }
