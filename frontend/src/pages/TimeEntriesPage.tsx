@@ -1687,7 +1687,7 @@ export function TimeEntriesPage() {
                               label: "Ort-Diagnose öffnen",
                             })}
                           </div>
-                          <div role="cell">
+                          <div className={hasVacationCredit ? "time-review-week-time" : undefined} role="cell">
                             {hasVacationCredit
                               ? formatTimeEntryMinutes(day.vacationCreditMinutes, "hours")
                               : renderTimeReviewCheckMark("unknown", {

@@ -39,6 +39,7 @@ test("Stundenprüfung lädt und rendert den serverseitigen Urlaubswert", async (
 
   assert.match(source, /api\.timeEntryPayrollWeek\(/);
   assert.match(source, /payrollWeekTotalMinutes\(payrollWeekPerson,/);
+  assert.match(source, /className=\{hasVacationCredit \? "time-review-week-time" : undefined\} role="cell"/);
   assert.match(source, /formatTimeEntryMinutes\(day\.vacationCreditMinutes, "hours"\)/);
   assert.doesNotMatch(source, /vacation[^\n]*480|480[^\n]*vacation/i);
 });
