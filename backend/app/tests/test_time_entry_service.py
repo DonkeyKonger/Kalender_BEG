@@ -155,7 +155,9 @@ def test_set_payroll_time_correction_stores_office_checked_time():
         person_id=4,
         payroll_corrected_start_time=None,
         payroll_corrected_end_time=None,
+        payroll_corrected_break_minutes=None,
         payroll_corrected_work_minutes=None,
+        break_minutes=0,
     )
     commits: list[bool] = []
     item = TimeEntryService.__new__(TimeEntryService)
@@ -170,14 +172,64 @@ def test_set_payroll_time_correction_stores_office_checked_time():
         entry.id,
         start_time=time(7, 30),
         end_time=time(13, 0),
+        break_minutes=30,
         work_minutes=330,
         current_user=current_user,
     )
 
     assert updated.payroll_corrected_start_time == time(7, 30)
     assert updated.payroll_corrected_end_time == time(13, 0)
+    assert updated.payroll_corrected_break_minutes == 30
     assert updated.payroll_corrected_work_minutes == 330
     assert commits == [True]
+
+
+def test_set_payroll_time_correction_calculates_overnight_time_with_break():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        break_minutes=0,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_break_minutes=None,
+        payroll_corrected_work_minutes=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: None,
+        refresh=lambda refreshed: None,
+    )
+
+    updated = item.set_payroll_time_correction(
+        entry.id,
+        start_time=time(22, 0),
+        end_time=time(6, 0),
+        break_minutes=30,
+        work_minutes=None,
+        current_user=SimpleNamespace(id=7, role=UserRole.OFFICE),
+    )
+
+    assert updated.payroll_corrected_break_minutes == 30
+    assert updated.payroll_corrected_work_minutes == 450
+
+
+def test_set_payroll_time_correction_rejects_implausible_break():
+    entry = SimpleNamespace(id=1, person_id=4, break_minutes=0)
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(get=lambda model, entry_id: entry)
+
+    with pytest.raises(HTTPException) as error:
+        item.set_payroll_time_correction(
+            entry.id,
+            start_time=time(8, 0),
+            end_time=time(9, 0),
+            break_minutes=60,
+            work_minutes=60,
+            current_user=SimpleNamespace(id=7, role=UserRole.OFFICE),
+        )
+
+    assert error.value.status_code == 400
 
 
 def test_set_payroll_date_correction_moves_entry_with_original_date():

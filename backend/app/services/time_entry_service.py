@@ -181,17 +181,34 @@ class TimeEntryService:
         end_time: time | None,
         work_minutes: int | None,
         current_user: User,
+        break_minutes: int | None = None,
     ) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
         self._ensure_can_write_person(current_user, entry.person_id)
-        if work_minutes is not None and work_minutes < 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Arbeitszeit darf nicht negativ sein.")
+        if work_minutes is not None and work_minutes <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Arbeitszeit muss größer als 0 sein.")
+        if break_minutes is not None and break_minutes < 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Pause darf nicht negativ sein.")
         if start_time is None and end_time is None and work_minutes is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte mindestens eine Bürozeit eintragen.")
+        if start_time is not None and end_time is not None:
+            calculated_minutes = self._payroll_duration_minutes(
+                start_time,
+                end_time,
+                break_minutes if break_minutes is not None else entry.break_minutes,
+            )
+            if calculated_minutes is None:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Beginn, Ende und Pause ergeben keine plausible Arbeitszeit.",
+                )
+            if work_minutes is None:
+                work_minutes = calculated_minutes
 
         entry.payroll_corrected_start_time = start_time
         entry.payroll_corrected_end_time = end_time
+        entry.payroll_corrected_break_minutes = break_minutes
         entry.payroll_corrected_work_minutes = work_minutes
         self.db.commit()
         self.db.refresh(entry)
@@ -471,10 +488,12 @@ class TimeEntryService:
         payroll_minutes = getattr(entry, "payroll_corrected_work_minutes", None)
         if payroll_minutes is not None:
             return payroll_minutes
-        payroll_duration = TimeEntryService._duration_minutes(
+        payroll_duration = TimeEntryService._payroll_duration_minutes(
             getattr(entry, "payroll_corrected_start_time", None),
             getattr(entry, "payroll_corrected_end_time", None),
-            getattr(entry, "break_minutes", 0),
+            getattr(entry, "payroll_corrected_break_minutes", None)
+            if getattr(entry, "payroll_corrected_break_minutes", None) is not None
+            else getattr(entry, "break_minutes", 0),
         )
         if payroll_duration is not None:
             return payroll_duration
@@ -645,6 +664,7 @@ class TimeEntryService:
             or getattr(entry, "payroll_corrected_work_minutes", None) is not None
             or getattr(entry, "payroll_corrected_start_time", None) is not None
             or getattr(entry, "payroll_corrected_end_time", None) is not None
+            or getattr(entry, "payroll_corrected_break_minutes", None) is not None
         ):
             raise HTTPException(status.HTTP_409_CONFLICT, "Geprüfte Arbeitszeiten können nicht gelöscht werden.")
 
@@ -752,6 +772,22 @@ class TimeEntryService:
         if end_minutes <= start_minutes:
             return None
         return max(0, end_minutes - start_minutes - (break_minutes or 0))
+
+    @staticmethod
+    def _payroll_duration_minutes(
+        start_time: time | None,
+        end_time: time | None,
+        break_minutes: int,
+    ) -> int | None:
+        if start_time is None or end_time is None or start_time == end_time:
+            return None
+        start_minutes = start_time.hour * 60 + start_time.minute
+        end_minutes = end_time.hour * 60 + end_time.minute
+        gross_minutes = end_minutes - start_minutes
+        if gross_minutes < 0:
+            gross_minutes += 24 * 60
+        net_minutes = gross_minutes - (break_minutes or 0)
+        return net_minutes if net_minutes > 0 else None
 
     def _ensure_no_time_overlap(
         self,

@@ -42,6 +42,7 @@ class WorkTimeEntry(TimestampMixin, Base):
     corrected_work_minutes: Mapped[int | None] = mapped_column(Integer)
     payroll_corrected_start_time: Mapped[time | None] = mapped_column(Time)
     payroll_corrected_end_time: Mapped[time | None] = mapped_column(Time)
+    payroll_corrected_break_minutes: Mapped[int | None] = mapped_column(Integer)
     payroll_corrected_work_minutes: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")

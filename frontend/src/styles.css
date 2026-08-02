@@ -16524,7 +16524,7 @@ button.person-chip:focus-visible {
   position: fixed;
   top: 40vh;
   left: 50%;
-  width: min(720px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
   max-height: calc(60vh - 24px);
   overflow: auto;
   border: 1px solid #d7e1ee;
@@ -16585,7 +16585,7 @@ button.person-chip:focus-visible {
 
 .time-review-diagnostic-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(96px, 1fr));
+  grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(88px, 1fr));
   gap: 8px;
   align-items: center;
   border-bottom: 1px solid #e2e8f0;

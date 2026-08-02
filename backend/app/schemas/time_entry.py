@@ -142,6 +142,7 @@ class TimeEntryPayrollReviewUpdate(BaseModel):
 class TimeEntryPayrollCorrectionUpdate(BaseModel):
     payroll_corrected_start_time: Time | None = None
     payroll_corrected_end_time: Time | None = None
+    payroll_corrected_break_minutes: int | None = Field(default=None, ge=0)
     payroll_corrected_work_minutes: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
@@ -201,6 +202,7 @@ class TimeEntryRead(BaseModel):
     corrected_work_minutes: int | None = None
     payroll_corrected_start_time: Time | None = None
     payroll_corrected_end_time: Time | None = None
+    payroll_corrected_break_minutes: int | None = None
     payroll_corrected_work_minutes: int | None = None
     project_mounting_multiplier: int = 1
     project_mounting_external_person_count: int = 0

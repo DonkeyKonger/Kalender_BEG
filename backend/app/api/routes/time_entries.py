@@ -219,6 +219,7 @@ def set_time_entry_payroll_correction(
         entry_id,
         start_time=payload.payroll_corrected_start_time,
         end_time=payload.payroll_corrected_end_time,
+        break_minutes=payload.payroll_corrected_break_minutes,
         work_minutes=payload.payroll_corrected_work_minutes,
         current_user=current_user,
     )
@@ -386,6 +387,7 @@ def time_entry_read(
         corrected_work_minutes=entry.corrected_work_minutes,
         payroll_corrected_start_time=entry.payroll_corrected_start_time,
         payroll_corrected_end_time=entry.payroll_corrected_end_time,
+        payroll_corrected_break_minutes=entry.payroll_corrected_break_minutes,
         payroll_corrected_work_minutes=entry.payroll_corrected_work_minutes,
         project_mounting_multiplier=project_mounting_multiplier,
         project_mounting_external_person_count=project_mounting_external_person_count,
@@ -456,6 +458,7 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         corrected_work_minutes=None,
         payroll_corrected_start_time=None,
         payroll_corrected_end_time=None,
+        payroll_corrected_break_minutes=None,
         payroll_corrected_work_minutes=None,
         note="GPS erkannt · kein manueller Eintrag",
         source="gps_suggestion",

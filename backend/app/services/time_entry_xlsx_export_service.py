@@ -745,7 +745,7 @@ def fill_weekly_worker_data_row(
     set_cell_string(root, f"C{row_number}", weekly_worker_site_label(entry))
     set_cell_number_or_blank(root, f"J{row_number}", excel_time_serial(weekly_worker_start_time(entry)))
     set_cell_number_or_blank(root, f"K{row_number}", excel_time_serial(weekly_worker_end_time(entry)))
-    set_cell_number(root, f"L{row_number}", (entry.break_minutes or 0) / 60)
+    set_cell_number(root, f"L{row_number}", weekly_worker_break_minutes(entry) / 60)
     set_cell_string(root, f"O{row_number}", format_export_hours(weekly_worker_total_minutes(row)))
 
 
@@ -770,15 +770,20 @@ def weekly_worker_end_time(entry: WorkTimeEntry) -> time | None:
     return entry.payroll_corrected_end_time or entry.end_time
 
 
+def weekly_worker_break_minutes(entry: WorkTimeEntry) -> int:
+    corrected_minutes = getattr(entry, "payroll_corrected_break_minutes", None)
+    return corrected_minutes if corrected_minutes is not None else entry.break_minutes or 0
+
+
 def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
     if weekly_worker_is_travel_only(entry):
         return 0
     if entry.payroll_corrected_work_minutes is not None:
         return entry.payroll_corrected_work_minutes
-    payroll_minutes = duration_minutes(
+    payroll_minutes = payroll_duration_minutes(
         entry.payroll_corrected_start_time,
         entry.payroll_corrected_end_time,
-        entry.break_minutes,
+        weekly_worker_break_minutes(entry),
     )
     if payroll_minutes is not None:
         return payroll_minutes
@@ -808,6 +813,22 @@ def duration_minutes(start_time: time | None, end_time: time | None, break_minut
     if end_minutes <= start_minutes:
         return None
     return max(0, end_minutes - start_minutes - (break_minutes or 0))
+
+
+def payroll_duration_minutes(
+    start_time: time | None,
+    end_time: time | None,
+    break_minutes: int,
+) -> int | None:
+    if start_time is None or end_time is None or start_time == end_time:
+        return None
+    start_minutes = start_time.hour * 60 + start_time.minute
+    end_minutes = end_time.hour * 60 + end_time.minute
+    gross_minutes = end_minutes - start_minutes
+    if gross_minutes < 0:
+        gross_minutes += 24 * 60
+    net_minutes = gross_minutes - (break_minutes or 0)
+    return net_minutes if net_minutes > 0 else None
 
 
 def round_minutes_to_quarter_hour(minutes: int) -> int:
@@ -1117,6 +1138,7 @@ def payroll_correction_label(entry: WorkTimeEntry) -> str:
     if (
         entry.payroll_corrected_start_time is None
         and entry.payroll_corrected_end_time is None
+        and getattr(entry, "payroll_corrected_break_minutes", None) is None
         and entry.payroll_corrected_work_minutes is None
     ):
         return "-"
@@ -1125,8 +1147,14 @@ def payroll_correction_label(entry: WorkTimeEntry) -> str:
         for value in [format_clock(entry.payroll_corrected_start_time), format_clock(entry.payroll_corrected_end_time)]
         if value != "-"
     )
+    corrected_break_minutes = getattr(entry, "payroll_corrected_break_minutes", None)
+    pause = (
+        f"Pause {format_minutes(corrected_break_minutes)}"
+        if corrected_break_minutes is not None
+        else ""
+    )
     hours = format_export_hours(entry.payroll_corrected_work_minutes)
-    return " · ".join(value for value in [time_range, hours] if value)
+    return " · ".join(value for value in [time_range, pause, hours] if value)
 
 
 def weekly_worker_status_note(entry: WorkTimeEntry, gps_evaluation: GpsPresenceEvaluation | None) -> str:

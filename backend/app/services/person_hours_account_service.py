@@ -398,10 +398,11 @@ def effective_weekly_work_minutes(entry: WorkTimeEntry) -> int:
 def effective_corrected_work_minutes(entry: WorkTimeEntry) -> int | None:
     if entry.payroll_corrected_work_minutes is not None:
         return entry.payroll_corrected_work_minutes
-    return duration_minutes(
+    corrected_break_minutes = getattr(entry, "payroll_corrected_break_minutes", None)
+    return payroll_duration_minutes(
         entry.payroll_corrected_start_time,
         entry.payroll_corrected_end_time,
-        entry.break_minutes or 0,
+        corrected_break_minutes if corrected_break_minutes is not None else entry.break_minutes or 0,
     )
 
 
@@ -413,6 +414,18 @@ def duration_minutes(start_time, end_time, break_minutes: int) -> int | None:
     if end_minutes < start_minutes:
         return None
     return max(0, end_minutes - start_minutes - (break_minutes or 0))
+
+
+def payroll_duration_minutes(start_time, end_time, break_minutes: int) -> int | None:
+    if start_time is None or end_time is None or start_time == end_time:
+        return None
+    start_minutes = start_time.hour * 60 + start_time.minute
+    end_minutes = end_time.hour * 60 + end_time.minute
+    gross_minutes = end_minutes - start_minutes
+    if gross_minutes < 0:
+        gross_minutes += 24 * 60
+    net_minutes = gross_minutes - (break_minutes or 0)
+    return net_minutes if net_minutes > 0 else None
 
 
 def round_minutes_to_quarter_hour(minutes: int) -> int:

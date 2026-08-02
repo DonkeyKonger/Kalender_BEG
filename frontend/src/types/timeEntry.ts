@@ -28,6 +28,7 @@ export type TimeEntry = {
   corrected_work_minutes: number | null;
   payroll_corrected_start_time: string | null;
   payroll_corrected_end_time: string | null;
+  payroll_corrected_break_minutes: number | null;
   payroll_corrected_work_minutes: number | null;
   project_mounting_multiplier: number;
   project_mounting_external_person_count: number;
@@ -100,6 +101,7 @@ export type TimeEntryCorrection = {
 export type TimeEntryPayrollCorrection = {
   payroll_corrected_start_time?: string | null;
   payroll_corrected_end_time?: string | null;
+  payroll_corrected_break_minutes?: number | null;
   payroll_corrected_work_minutes?: number | null;
 };
 
