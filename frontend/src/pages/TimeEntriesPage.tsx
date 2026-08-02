@@ -1836,7 +1836,7 @@ export function TimeEntriesPage() {
             </div>
             <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
               <div className="time-review-diagnostic-row is-head" role="row">
-                <span role="columnheader">Quelle</span>
+                <span role="columnheader" aria-label="Zeilenbezeichnung" />
                 <span role="columnheader">Anfang Arbeitszeit</span>
                 <span role="columnheader">Ende Arbeitszeit</span>
                 <span role="columnheader">Pause</span>
