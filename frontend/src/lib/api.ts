@@ -8,7 +8,7 @@ import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoi
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursManualAdjustmentPayload, PersonHoursPayoutPayload, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonToolMaterialItem, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
-import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
@@ -896,6 +896,14 @@ export const api = {
       search.set("iso_week", String(params.isoWeek));
     }
     return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`);
+  },
+
+  async timeEntryPayrollWeek(params: { isoYear: number; isoWeek: number }): Promise<TimeEntryPayrollWeek> {
+    const search = new URLSearchParams({
+      iso_year: String(params.isoYear),
+      iso_week: String(params.isoWeek),
+    });
+    return request<TimeEntryPayrollWeek>(`/time-entries/payroll-week?${search.toString()}`);
   },
 
   async myTimeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number }): Promise<TimeEntryWeeklyReview[]> {

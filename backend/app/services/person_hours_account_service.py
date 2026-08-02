@@ -38,6 +38,23 @@ class WeeklyHoursBreakdown:
     actual_minutes: int
     absence_minutes_by_type: dict[str, int]
     overtime_absence_minutes: int
+    daily_absence_credits: tuple["DailyAbsenceCredit", ...] = ()
+
+
+@dataclass(frozen=True)
+class DailyAbsenceCredit:
+    work_date: date
+    absence_type: AbsenceType
+    credit_minutes: int
+
+
+@dataclass(frozen=True)
+class PayrollWeekPersonSummary:
+    person_id: int
+    work_minutes: int
+    vacation_credit_minutes: int
+    total_minutes: int
+    vacation_days: tuple[DailyAbsenceCredit, ...]
 
 
 class PersonHoursAccountService:
@@ -306,34 +323,6 @@ class PersonHoursAccountService:
                 .where(WorkTimeEntry.work_date <= end)
             )
         )
-        work_minutes_by_date: dict[date, int] = {}
-        for entry in entries:
-            work_minutes_by_date[entry.work_date] = (
-                work_minutes_by_date.get(entry.work_date, 0) + effective_weekly_work_minutes(entry)
-            )
-        work_minutes = sum(work_minutes_by_date.values())
-        absence_minutes_by_type, overtime_absence_minutes = self._absence_week_minutes(
-            person_id=person_id,
-            start=start,
-            end=end,
-            work_minutes_by_date=work_minutes_by_date,
-        )
-        absence_credit_minutes = sum(absence_minutes_by_type.values()) - overtime_absence_minutes
-        return WeeklyHoursBreakdown(
-            work_minutes=work_minutes,
-            actual_minutes=work_minutes + absence_credit_minutes,
-            absence_minutes_by_type=absence_minutes_by_type,
-            overtime_absence_minutes=overtime_absence_minutes,
-        )
-
-    def _absence_week_minutes(
-        self,
-        *,
-        person_id: int,
-        start: date,
-        end: date,
-        work_minutes_by_date: dict[date, int],
-    ) -> tuple[dict[str, int], int]:
         absences = list(
             self.db.scalars(
                 select(Absence)
@@ -343,33 +332,62 @@ class PersonHoursAccountService:
                 .where(Absence.end_date >= start)
             )
         )
-        absence_types_by_date: dict[date, set[AbsenceType]] = {}
-        for absence in absences:
-            cursor = max(absence.start_date, start)
-            last_day = min(absence.end_date, end)
-            while cursor <= last_day:
-                if cursor.weekday() < 5:
-                    absence_types_by_date.setdefault(cursor, set()).add(absence.absence_type)
-                cursor += timedelta(days=1)
+        return calculate_weekly_hours_breakdown(
+            entries=entries,
+            absences=absences,
+            start=start,
+            end=end,
+        )
 
-        credit_by_date = {
-            absence_date: max(0, ABSENCE_DAY_CREDIT_MINUTES - work_minutes_by_date.get(absence_date, 0))
-            for absence_date in absence_types_by_date
-        }
-        minutes_by_type: dict[str, int] = defaultdict(int)
-        overtime_absence_minutes = 0
-        for absence_date, credit_minutes in credit_by_date.items():
-            if credit_minutes <= 0:
-                continue
-            absence_types = absence_types_by_date.get(absence_date, set())
-            absence_type = primary_absence_type(absence_types)
-            if absence_type is None:
-                continue
-            if AbsenceType.FREE in absence_types:
-                overtime_absence_minutes += credit_minutes
-                continue
-            minutes_by_type[absence_type.value] += credit_minutes
-        return dict(minutes_by_type), overtime_absence_minutes
+    def payroll_week_summaries(
+        self,
+        *,
+        iso_year: int,
+        iso_week: int,
+    ) -> list[PayrollWeekPersonSummary]:
+        start = date.fromisocalendar(iso_year, iso_week, 1)
+        end = start + timedelta(days=6)
+        entries_by_person: dict[int, list[WorkTimeEntry]] = defaultdict(list)
+        for entry in self.db.scalars(
+            select(WorkTimeEntry)
+            .where(WorkTimeEntry.work_date >= start)
+            .where(WorkTimeEntry.work_date <= end)
+        ):
+            entries_by_person[entry.person_id].append(entry)
+
+        absences_by_person: dict[int, list[Absence]] = defaultdict(list)
+        for absence in self.db.scalars(
+            select(Absence)
+            .where(Absence.status == AbsenceStatus.ACTIVE)
+            .where(Absence.start_date <= end)
+            .where(Absence.end_date >= start)
+        ):
+            absences_by_person[absence.person_id].append(absence)
+
+        summaries: list[PayrollWeekPersonSummary] = []
+        for person_id in sorted(entries_by_person.keys() | absences_by_person.keys()):
+            breakdown = calculate_weekly_hours_breakdown(
+                entries=entries_by_person.get(person_id, []),
+                absences=absences_by_person.get(person_id, []),
+                start=start,
+                end=end,
+            )
+            vacation_days = tuple(
+                credit
+                for credit in breakdown.daily_absence_credits
+                if credit.absence_type == AbsenceType.VACATION and credit.credit_minutes > 0
+            )
+            vacation_credit_minutes = sum(day.credit_minutes for day in vacation_days)
+            summaries.append(
+                PayrollWeekPersonSummary(
+                    person_id=person_id,
+                    work_minutes=breakdown.work_minutes,
+                    vacation_credit_minutes=vacation_credit_minutes,
+                    total_minutes=breakdown.work_minutes + vacation_credit_minutes,
+                    vacation_days=vacation_days,
+                )
+            )
+        return summaries
 
     def _get_person(self, person_id: int) -> Person:
         person = self.db.get(Person, person_id)
@@ -393,6 +411,66 @@ def effective_weekly_work_minutes(entry: WorkTimeEntry) -> int:
     if entry.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
         return 0
     return round_minutes_to_quarter_hour((entry.work_minutes or 0) + (entry.travel_minutes or 0))
+
+
+def calculate_weekly_hours_breakdown(
+    *,
+    entries: list[WorkTimeEntry],
+    absences: list[Absence],
+    start: date,
+    end: date,
+) -> WeeklyHoursBreakdown:
+    work_minutes_by_date: dict[date, int] = defaultdict(int)
+    for entry in entries:
+        if start <= entry.work_date <= end:
+            work_minutes_by_date[entry.work_date] += effective_weekly_work_minutes(entry)
+
+    absence_types_by_date: dict[date, set[AbsenceType]] = {}
+    for absence in absences:
+        if absence.status != AbsenceStatus.ACTIVE:
+            continue
+        cursor = max(absence.start_date, start)
+        last_day = min(absence.end_date, end)
+        while cursor <= last_day:
+            if cursor.weekday() < 5:
+                absence_types_by_date.setdefault(cursor, set()).add(absence.absence_type)
+            cursor += timedelta(days=1)
+
+    minutes_by_type: dict[str, int] = defaultdict(int)
+    overtime_absence_minutes = 0
+    daily_absence_credits: list[DailyAbsenceCredit] = []
+    for absence_date in sorted(absence_types_by_date):
+        absence_types = absence_types_by_date[absence_date]
+        absence_type = primary_absence_type(absence_types)
+        if absence_type is None:
+            continue
+        credit_minutes = max(
+            0,
+            ABSENCE_DAY_CREDIT_MINUTES - work_minutes_by_date.get(absence_date, 0),
+        )
+        daily_absence_credits.append(
+            DailyAbsenceCredit(
+                work_date=absence_date,
+                absence_type=absence_type,
+                credit_minutes=credit_minutes,
+            )
+        )
+        if credit_minutes <= 0:
+            continue
+        if AbsenceType.FREE in absence_types:
+            overtime_absence_minutes += credit_minutes
+            continue
+        minutes_by_type[absence_type.value] += credit_minutes
+
+    work_minutes = sum(work_minutes_by_date.values())
+    absence_credit_minutes = sum(minutes_by_type.values()) - overtime_absence_minutes
+    return WeeklyHoursBreakdown(
+        work_minutes=work_minutes,
+        actual_minutes=work_minutes + absence_credit_minutes,
+        absence_minutes_by_type=dict(minutes_by_type),
+        overtime_absence_minutes=overtime_absence_minutes,
+        daily_absence_credits=tuple(daily_absence_credits),
+    )
 
 
 def effective_corrected_work_minutes(entry: WorkTimeEntry) -> int | None:

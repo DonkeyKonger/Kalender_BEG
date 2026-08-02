@@ -174,6 +174,27 @@ class TimeEntryWeeklyReviewRead(BaseModel):
     updated_at: datetime
 
 
+class TimeEntryPayrollWeekDayRead(BaseModel):
+    work_date: Date
+    vacation_credit_minutes: int = Field(ge=0)
+
+
+class TimeEntryPayrollWeekPersonRead(BaseModel):
+    person_id: int
+    work_minutes: int = Field(ge=0)
+    vacation_credit_minutes: int = Field(ge=0)
+    total_minutes: int = Field(ge=0)
+    vacation_days: list[TimeEntryPayrollWeekDayRead] = Field(default_factory=list)
+
+
+class TimeEntryPayrollWeekRead(BaseModel):
+    iso_year: int
+    iso_week: int
+    start_date: Date
+    end_date: Date
+    persons: list[TimeEntryPayrollWeekPersonRead] = Field(default_factory=list)
+
+
 class TimeEntryPayrollReviewStateRead(BaseModel):
     state: str
     is_auto_plausible: bool = False

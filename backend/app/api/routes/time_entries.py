@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page, require_office_page
@@ -13,6 +13,9 @@ from app.schemas.time_entry import (
     TimeEntryCreate,
     TimeEntryPayrollCorrectionUpdate,
     TimeEntryPayrollDateCorrectionUpdate,
+    TimeEntryPayrollWeekDayRead,
+    TimeEntryPayrollWeekPersonRead,
+    TimeEntryPayrollWeekRead,
     TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
@@ -21,6 +24,7 @@ from app.schemas.time_entry import (
     TimeEntryWeeklyReviewRead,
 )
 from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService, GpsSiteStay
+from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["time-entries"])
@@ -35,6 +39,46 @@ CAN_WRITE = require_office_page(
     roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
 )
 CAN_REVIEW = require_business_page("payroll")
+
+
+@router.get("/payroll-week", response_model=TimeEntryPayrollWeekRead)
+def get_time_entry_payroll_week(
+    iso_year: int = Query(ge=2000, le=2100),
+    iso_week: int = Query(ge=1, le=53),
+    _current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryPayrollWeekRead:
+    try:
+        week_start = date.fromisocalendar(iso_year, iso_week, 1)
+        week_end = date.fromisocalendar(iso_year, iso_week, 7)
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Kalenderwoche.") from error
+    summaries = PersonHoursAccountService(db).payroll_week_summaries(
+        iso_year=iso_year,
+        iso_week=iso_week,
+    )
+    return TimeEntryPayrollWeekRead(
+        iso_year=iso_year,
+        iso_week=iso_week,
+        start_date=week_start,
+        end_date=week_end,
+        persons=[
+            TimeEntryPayrollWeekPersonRead(
+                person_id=summary.person_id,
+                work_minutes=summary.work_minutes,
+                vacation_credit_minutes=summary.vacation_credit_minutes,
+                total_minutes=summary.total_minutes,
+                vacation_days=[
+                    TimeEntryPayrollWeekDayRead(
+                        work_date=day.work_date,
+                        vacation_credit_minutes=day.credit_minutes,
+                    )
+                    for day in summary.vacation_days
+                ],
+            )
+            for summary in summaries
+        ],
+    )
 
 
 @router.get("", response_model=list[TimeEntryRead])

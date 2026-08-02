@@ -22,12 +22,17 @@ import {
   formatHalfHourFromMinutes as formatHalfHour,
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
+import {
+  payrollWeekPersonsById,
+  payrollWeekTotalMinutes,
+  vacationCreditMinutesForDate,
+} from "../lib/payrollWeek";
 import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "gpsVerification" | "evaluation";
 type TimeReviewIssue = {
@@ -112,6 +117,7 @@ type TimeReviewWeekDay = {
   date: string;
   weekdayLabel: string;
   absenceType: AbsenceType | null;
+  vacationCreditMinutes: number;
   entries: TimeReviewEntryCheck[];
 };
 type TimeReviewDiagnosticRow = {
@@ -174,6 +180,7 @@ const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
 const TIME_REVIEW_API_OPEN_ENTRIES = "timeEntries(open review)";
 const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
 const TIME_REVIEW_API_ABSENCES = "absences";
+const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
 const OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung.";
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
@@ -197,6 +204,7 @@ export function TimeEntriesPage() {
   const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
   const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
   const [reviewAbsences, setReviewAbsences] = useState<Absence[]>([]);
+  const [reviewPayrollWeek, setReviewPayrollWeek] = useState<TimeEntryPayrollWeek | null>(null);
   const [reviewWeeklyReviews, setReviewWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [reviewWeekCompletionReviews, setReviewWeekCompletionReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
@@ -208,6 +216,7 @@ export function TimeEntriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [reviewEntriesError, setReviewEntriesError] = useState<string | null>(null);
   const [reviewAllEntriesError, setReviewAllEntriesError] = useState<string | null>(null);
+  const [reviewPayrollWeekError, setReviewPayrollWeekError] = useState<string | null>(null);
   const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
   const [reviewActionEntryId, setReviewActionEntryId] = useState<number | null>(null);
   const [reviewActionError, setReviewActionError] = useState<string | null>(null);
@@ -370,14 +379,26 @@ export function TimeEntriesPage() {
     () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReset).map((review) => review.person_id)),
     [reviewWeeklyReviews],
   );
+  const payrollWeekPersons = useMemo(
+    () => payrollWeekPersonsById(reviewPayrollWeek?.persons ?? []),
+    [reviewPayrollWeek],
+  );
   const timeReviewWorkers = useMemo(() => {
     const perfStart = timeReviewPerfNow();
-    const result = buildTimeReviewWorkerSummaries(people, reviewAllEntries, reviewEntries, reviewAbsences, reviewedWorkerIds, resetWorkerIds);
+    const result = buildTimeReviewWorkerSummaries(
+      people,
+      reviewAllEntries,
+      reviewEntries,
+      reviewAbsences,
+      reviewedWorkerIds,
+      resetWorkerIds,
+      payrollWeekPersons,
+    );
     recordTimeReviewPerfCalculation(timeReviewPerfRef, "worker summaries", perfStart, {
       details: `${people.length} Personen · ${reviewAllEntries.length} Einträge · ${reviewAbsences.length} Abwesenheiten · ${result.length} Monteure`,
     });
     return result;
-  }, [people, reviewAbsences, reviewAllEntries, reviewEntries, resetWorkerIds, reviewedWorkerIds]);
+  }, [payrollWeekPersons, people, reviewAbsences, reviewAllEntries, reviewEntries, resetWorkerIds, reviewedWorkerIds]);
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
     [selectedReviewPersonId, timeReviewWorkers],
@@ -389,12 +410,13 @@ export function TimeEntriesPage() {
       reviewAbsences,
       selectedReviewWorker?.personId ?? null,
       reviewWeekRange.start,
+      selectedReviewWorker ? payrollWeekPersons.get(selectedReviewWorker.personId) : null,
     );
     recordTimeReviewPerfCalculation(timeReviewPerfRef, "selected worker week rows", perfStart, {
       details: `${selectedReviewWorker?.entries.length ?? 0} Einträge · ${reviewAbsences.length} Abwesenheiten`,
     });
     return result;
-  }, [reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
+  }, [payrollWeekPersons, reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
   const selectedReviewWeekDayOptions = useMemo(
     () => buildReviewWeekDayOptions(reviewWeekRange.start),
     [reviewWeekRange.start],
@@ -683,6 +705,60 @@ export function TimeEntriesPage() {
       ignore = true;
     };
   }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      setReviewPayrollWeek(null);
+      setReviewPayrollWeekError(null);
+      return;
+    }
+
+    let ignore = false;
+    const perfStart = timeReviewPerfNow();
+    let perfRows: number | undefined;
+    let perfOk = false;
+    setReviewPayrollWeek(null);
+    setReviewPayrollWeekError(null);
+    api.timeEntryPayrollWeek({
+      isoYear: selectedReviewWeek.year,
+      isoWeek: selectedReviewWeek.week,
+    })
+      .then((payrollWeek) => {
+        perfRows = payrollWeek.persons.length;
+        perfOk = true;
+        if (!ignore) {
+          setReviewPayrollWeek(payrollWeek);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setReviewPayrollWeek(null);
+          setReviewPayrollWeekError(readApiError(
+            requestError,
+            "Urlaubsstunden konnten nicht geladen werden.",
+          ));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          recordTimeReviewPerfApiCall(
+            timeReviewPerfRef,
+            timeReviewRenderCountRef,
+            TIME_REVIEW_API_PAYROLL_WEEK,
+            perfStart,
+            {
+              details: `KW ${selectedReviewWeek.week}/${selectedReviewWeek.year}`,
+              ok: perfOk,
+              rows: perfRows,
+            },
+          );
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" || !canManageTimeEntries) {
@@ -1393,6 +1469,7 @@ export function TimeEntriesPage() {
 
             {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
             {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
+            {reviewPayrollWeekError && <p className="time-table-note">{reviewPayrollWeekError}</p>}
             {isLoadingPeople && timeReviewWorkers.length === 0 && (
               <div className="empty-panel">Monteure werden geladen...</div>
             )}
@@ -1582,6 +1659,7 @@ export function TimeEntriesPage() {
                       </div>
                     )) : (() => {
                       const missingEntry = buildMissingTimeReviewEntry(selectedReviewWorker, day.date);
+                      const hasVacationCredit = day.absenceType === "vacation" && day.vacationCreditMinutes > 0;
                       return (
                         <div className="time-review-week-check-row is-empty" key={day.date} role="row">
                           <div className="time-review-week-move" role="cell"></div>
@@ -1603,16 +1681,18 @@ export function TimeEntriesPage() {
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div role="cell">
-                            {renderTimeReviewCheckMark("unknown", {
+                            {hasVacationCredit ? "-" : renderTimeReviewCheckMark("unknown", {
                               onClick: () => openLocationReviewDiagnostic(missingEntry),
                               label: "Ort-Diagnose öffnen",
                             })}
                           </div>
                           <div role="cell">
-                            {renderTimeReviewCheckMark("unknown", {
-                              onClick: () => openTimeReviewDiagnostic(missingEntry),
-                              label: "Arbeitszeit-Diagnose öffnen",
-                            })}
+                            {hasVacationCredit
+                              ? formatTimeEntryMinutes(day.vacationCreditMinutes, "hours")
+                              : renderTimeReviewCheckMark("unknown", {
+                                onClick: () => openTimeReviewDiagnostic(missingEntry),
+                                label: "Arbeitszeit-Diagnose öffnen",
+                              })}
                           </div>
                           <div role="cell">{renderPayrollReviewEmptyMark()}</div>
                         </div>
@@ -2098,6 +2178,7 @@ function startTimeReviewPerfSession(
       TIME_REVIEW_API_OPEN_ENTRIES,
       TIME_REVIEW_API_ALL_ENTRIES,
       TIME_REVIEW_API_ABSENCES,
+      TIME_REVIEW_API_PAYROLL_WEEK,
       ...(includeWeeklyReviews ? [TIME_REVIEW_API_WEEKLY_REVIEWS] : []),
     ],
     flushScheduled: false,
@@ -2845,6 +2926,7 @@ function buildTimeReviewWorkerSummaries(
   absences: Absence[],
   reviewedWorkerIds: Set<number>,
   resetWorkerIds: Set<number>,
+  payrollWeekPersons: Map<number, TimeEntryPayrollWeekPerson>,
 ): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
@@ -2882,10 +2964,16 @@ function buildTimeReviewWorkerSummaries(
       const dayCount = new Set(summary.entries.map((entry) => entry.work_date)).size;
       const openIssueCount = summary.entries.filter((entry) => openEntryIds.has(entry.id)).length;
       const reviewedEntryCount = summary.entries.filter((entry) => !openEntryIds.has(entry.id)).length;
-      const totalMinutes = summary.entries.reduce((sum, entry) => sum + (effectivePayrollWorkMinutes(entry) ?? 0), 0);
-      const submittedMinutes = summary.entries.reduce((sum, entry) => (
+      const fallbackTotalMinutes = summary.entries.reduce(
+        (sum, entry) => sum + (effectivePayrollWorkMinutes(entry) ?? 0),
+        0,
+      );
+      const fallbackSubmittedMinutes = summary.entries.reduce((sum, entry) => (
         entry.is_gps_suggestion ? sum : sum + (effectivePayrollWorkMinutes(entry) ?? 0)
       ), 0);
+      const payrollWeekPerson = payrollWeekPersons.get(summary.personId);
+      const totalMinutes = payrollWeekTotalMinutes(payrollWeekPerson, fallbackTotalMinutes);
+      const submittedMinutes = payrollWeekTotalMinutes(payrollWeekPerson, fallbackSubmittedMinutes);
       return {
         ...summary,
         entryCount: summary.entries.length,
@@ -2971,6 +3059,7 @@ function buildTimeReviewWeekDays(
   absences: Absence[],
   personId: number | null,
   weekStart: string,
+  payrollWeekPerson: TimeEntryPayrollWeekPerson | null | undefined,
 ): TimeReviewWeekDay[] {
   const entriesByDate = new Map<string, TimeEntry[]>();
   for (const entry of entries) {
@@ -2987,6 +3076,7 @@ function buildTimeReviewWeekDays(
       date,
       weekdayLabel: formatWeekday(date),
       absenceType,
+      vacationCreditMinutes: vacationCreditMinutesForDate(payrollWeekPerson, date),
       entries: dayEntries
         .map((entry) => ({
           entry,

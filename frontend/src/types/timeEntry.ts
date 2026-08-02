@@ -126,3 +126,24 @@ export type TimeEntryWeeklyReview = {
   created_at: string;
   updated_at: string;
 };
+
+export type TimeEntryPayrollWeekDay = {
+  work_date: string;
+  vacation_credit_minutes: number;
+};
+
+export type TimeEntryPayrollWeekPerson = {
+  person_id: number;
+  work_minutes: number;
+  vacation_credit_minutes: number;
+  total_minutes: number;
+  vacation_days: TimeEntryPayrollWeekDay[];
+};
+
+export type TimeEntryPayrollWeek = {
+  iso_year: number;
+  iso_week: number;
+  start_date: string;
+  end_date: string;
+  persons: TimeEntryPayrollWeekPerson[];
+};
