@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from app.api.routes.time_entries import time_entry_read
 from app.models import Base
 from app.models.absence import Absence
 from app.models.assignment import Assignment
@@ -224,6 +225,21 @@ def test_office_manual_entries_keep_site_and_override_and_allow_multiple_same_da
         note=OFFICE_ONLY_TIME_ENTRY_NOTE,
     ), user)
 
+    first_response = time_entry_read(first_entry)
+    second_response = time_entry_read(second_entry)
+    assert first_entry.__dict__["site"] is first_site
+    assert second_entry.__dict__["site"] is second_site
+    assert (first_response.site_id, first_response.site_name, first_response.site_number) == (
+        first_site.id,
+        "Erste Baustelle",
+        "9201",
+    )
+    assert (second_response.site_id, second_response.site_name, second_response.site_number) == (
+        second_site.id,
+        "Zweite Baustelle",
+        "9202",
+    )
+
     entries = list(db.scalars(
         select(WorkTimeEntry)
         .where(WorkTimeEntry.person_id == person.id, WorkTimeEntry.work_date == work_date)
@@ -233,6 +249,62 @@ def test_office_manual_entries_keep_site_and_override_and_allow_multiple_same_da
     assert [entry.site_id for entry in entries] == [first_site.id, second_site.id]
     assert [entry.work_minutes for entry in entries] == [90, 120]
     assert sum(entry.work_minutes for entry in entries) == 210
+
+    db.expire_all()
+    reloaded_entries = item.list_entries(
+        current_user=user,
+        person_id=person.id,
+        date_from=work_date,
+        date_to=work_date,
+    )
+    reloaded_responses = {entry.id: time_entry_read(entry) for entry in reloaded_entries}
+    assert (
+        reloaded_responses[first_entry.id].site_name,
+        reloaded_responses[first_entry.id].site_number,
+    ) == ("Erste Baustelle", "9201")
+    assert (
+        reloaded_responses[second_entry.id].site_name,
+        reloaded_responses[second_entry.id].site_number,
+    ) == ("Zweite Baustelle", "9202")
+
+
+def test_old_time_entry_without_site_is_serialized_without_guessed_site():
+    db = db_session()
+    person = Person(
+        first_name="Alt",
+        last_name="Eintrag",
+        display_name="Alt Eintrag",
+        short_code="AE",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-old-entry", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    entry = WorkTimeEntry(
+        person=person,
+        work_date=date(2026, 8, 4),
+        start_time=time(8, 0),
+        end_time=time(9, 0),
+        break_minutes=0,
+        travel_minutes=0,
+        work_minutes=60,
+        note="Historischer Eintrag ohne Baustellenzuordnung",
+        source="manual",
+        status="draft",
+        created_by=user,
+    )
+    db.add_all([person, user, entry])
+    db.commit()
+
+    loaded_entry = TimeEntryService(db).list_entries(
+        current_user=user,
+        person_id=person.id,
+        date_from=entry.work_date,
+        date_to=entry.work_date,
+    )[0]
+    response = time_entry_read(loaded_entry)
+
+    assert response.site_id is None
+    assert response.site_name is None
+    assert response.site_number is None
 
 
 def test_monteur_cannot_create_office_manual_time_entry():

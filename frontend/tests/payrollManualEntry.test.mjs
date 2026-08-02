@@ -96,6 +96,8 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   const source = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
   const createStart = source.indexOf('timeReviewDialogMode === "create" ? (');
   const editStart = source.indexOf('aria-label="Arbeitszeit-Diagnosewerte"', createStart);
+  const weekSiteCellStart = source.indexOf('<div className="time-review-week-site" role="cell">');
+  const weekSiteCellEnd = source.indexOf('</div>', weekSiteCellStart);
 
   assert.match(source, /type TimeReviewDialogMode = "create" \| "edit"/);
   assert.match(source, /setTimeReviewDialogMode\("create"\)/);
@@ -109,4 +111,14 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(source.slice(editStart), /timeReviewDiagnosticRows\(timeReviewDiagnosticEntry\)/);
   assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
   assert.match(source, /closeTimeReviewDiagnostic\(\)/);
+  assert.match(
+    source,
+    /setPayrollManualSiteId\(timeReviewDialogMode === "create" \? "" : String\(timeReviewDiagnosticEntry\.site_id \?\? ""\)\)/,
+  );
+  assert.ok(weekSiteCellStart >= 0);
+  assert.ok(weekSiteCellEnd > weekSiteCellStart);
+  assert.match(source.slice(weekSiteCellStart, weekSiteCellEnd), /timeEntrySiteName\(check\.entry\)/);
+  assert.match(source.slice(weekSiteCellStart, weekSiteCellEnd), /check\.entry\.site_number/);
+  assert.doesNotMatch(source.slice(weekSiteCellStart, weekSiteCellEnd), /original_site|planned_site|gps_detected/);
+  assert.match(source, /key={`\$\{day\.date\}-\$\{check\.entry\.id\}`}/);
 });

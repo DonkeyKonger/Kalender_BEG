@@ -92,8 +92,7 @@ class TimeEntryService:
         entry = WorkTimeEntry(**values, created_by_user_id=current_user.id)
         self.db.add(entry)
         self.db.commit()
-        self.db.refresh(entry)
-        return entry
+        return self._load_entry_for_read(entry.id)
 
     def update_entry(self, entry_id: int, payload: TimeEntryUpdate, current_user: User) -> WorkTimeEntry:
         entry = self._get_entry(entry_id)
@@ -140,8 +139,7 @@ class TimeEntryService:
             entry.reviewed_at = datetime.now().astimezone()
 
         self.db.commit()
-        self.db.refresh(entry)
-        return entry
+        return self._load_entry_for_read(entry.id)
 
     def delete_entry(self, entry_id: int, current_user: User) -> None:
         entry = self._get_entry(entry_id)
@@ -630,6 +628,21 @@ class TimeEntryService:
 
     def _get_entry(self, entry_id: int) -> WorkTimeEntry:
         entry = self.db.get(WorkTimeEntry, entry_id)
+        if entry is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Arbeitszeit nicht gefunden.")
+        return entry
+
+    def _load_entry_for_read(self, entry_id: int) -> WorkTimeEntry:
+        entry = self.db.scalar(
+            select(WorkTimeEntry)
+            .options(
+                selectinload(WorkTimeEntry.person),
+                selectinload(WorkTimeEntry.site),
+                selectinload(WorkTimeEntry.original_site),
+            )
+            .where(WorkTimeEntry.id == entry_id)
+            .execution_options(populate_existing=True)
+        )
         if entry is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Arbeitszeit nicht gefunden.")
         return entry
