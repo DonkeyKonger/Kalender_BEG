@@ -104,7 +104,8 @@ def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
         person_type=PersonType.INTERNAL,
     )
     user = User(username="office-create", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
-    db.add_all([person, user])
+    site = Site(site_number="9100", name="Testbaustelle", status=SiteStatus.ACTIVE)
+    db.add_all([person, user, site])
     db.flush()
     review = TimeEntryWeeklyReview(
         person_id=person.id,
@@ -119,6 +120,7 @@ def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
 
     payload = TimeEntryCreate(
         person_id=person.id,
+        site_id=site.id,
         work_date=date.fromisocalendar(2026, 24, 1),
         work_minutes=60,
         note=OFFICE_ONLY_TIME_ENTRY_NOTE,
@@ -142,6 +144,130 @@ def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
 
     assert entry.person_id == person.id
     assert entry.work_date == payload.work_date
+
+
+def test_office_manual_time_entry_requires_existing_non_deleted_site():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-sites", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    deleted_site = Site(site_number="9199", name="Gelöscht", status=SiteStatus.DELETED)
+    db.add_all([person, user, deleted_site])
+    db.commit()
+    item = TimeEntryService(db)
+    base_payload = {
+        "person_id": person.id,
+        "work_date": date(2026, 8, 3),
+        "start_time": time(8, 0),
+        "end_time": time(10, 0),
+        "break_minutes": 0,
+        "work_minutes": 120,
+        "note": OFFICE_ONLY_TIME_ENTRY_NOTE,
+    }
+
+    with pytest.raises(HTTPException) as missing_error:
+        item.create_entry(TimeEntryCreate(**base_payload), user)
+    assert missing_error.value.status_code == 400
+    assert missing_error.value.detail == "Bitte eine Baustelle auswählen."
+
+    with pytest.raises(HTTPException) as unknown_error:
+        item.create_entry(TimeEntryCreate(**base_payload, site_id=99999), user)
+    assert unknown_error.value.status_code == 400
+    assert unknown_error.value.detail == "Baustelle nicht gefunden oder gelöscht."
+
+    with pytest.raises(HTTPException) as deleted_error:
+        item.create_entry(TimeEntryCreate(**base_payload, site_id=deleted_site.id), user)
+    assert deleted_error.value.status_code == 400
+    assert deleted_error.value.detail == "Baustelle nicht gefunden oder gelöscht."
+
+
+def test_office_manual_entries_keep_site_and_override_and_allow_multiple_same_day():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-multiple", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    first_site = Site(site_number="9201", name="Erste Baustelle", status=SiteStatus.ACTIVE)
+    second_site = Site(site_number="9202", name="Zweite Baustelle", status=SiteStatus.PAUSED)
+    db.add_all([person, user, first_site, second_site])
+    db.commit()
+    item = TimeEntryService(db)
+    work_date = date(2026, 8, 3)
+
+    first_entry = item.create_entry(TimeEntryCreate(
+        person_id=person.id,
+        site_id=first_site.id,
+        work_date=work_date,
+        start_time=time(8, 0),
+        end_time=time(10, 0),
+        break_minutes=0,
+        work_minutes=90,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+    ), user)
+    second_entry = item.create_entry(TimeEntryCreate(
+        person_id=person.id,
+        site_id=second_site.id,
+        work_date=work_date,
+        start_time=time(10, 0),
+        end_time=time(12, 0),
+        break_minutes=0,
+        work_minutes=120,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+    ), user)
+
+    entries = list(db.scalars(
+        select(WorkTimeEntry)
+        .where(WorkTimeEntry.person_id == person.id, WorkTimeEntry.work_date == work_date)
+        .order_by(WorkTimeEntry.start_time),
+    ))
+    assert [entry.id for entry in entries] == [first_entry.id, second_entry.id]
+    assert [entry.site_id for entry in entries] == [first_site.id, second_site.id]
+    assert [entry.work_minutes for entry in entries] == [90, 120]
+    assert sum(entry.work_minutes for entry in entries) == 210
+
+
+def test_monteur_cannot_create_office_manual_time_entry():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="worker-office-entry",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    site = Site(site_number="9300", name="Baustelle", status=SiteStatus.ACTIVE)
+    db.add_all([person, user, site])
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        TimeEntryService(db).create_entry(TimeEntryCreate(
+            person_id=person.id,
+            site_id=site.id,
+            work_date=date(2026, 8, 3),
+            start_time=time(8, 0),
+            end_time=time(9, 0),
+            break_minutes=0,
+            work_minutes=60,
+            note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+        ), user)
+
+    assert error.value.status_code == 403
 
 
 def test_approve_time_review_marks_entry_with_user_audit():

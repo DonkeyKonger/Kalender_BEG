@@ -7,6 +7,7 @@ import pytest
 
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
+from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
 from app.services.time_entry_xlsx_export_service import (
     WeeklyWorkerSheet,
     build_weekly_workers_xlsx,
@@ -176,6 +177,35 @@ def test_weekly_worker_xlsx_uses_office_corrected_break_and_derived_hours():
     assert weekly_worker_total_minutes(rows[0]) == 540
     assert cell_number(sheet, "L15") == 1
     assert cell_text(sheet, "O15") == "9,00 h"
+
+
+def test_weekly_worker_xlsx_contains_manual_office_entry_site_and_hours():
+    entry = WorkTimeEntry(
+        work_date=date(2026, 8, 3),
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        break_minutes=60,
+        work_minutes=450,
+        travel_minutes=30,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+        source="manual",
+    )
+    entry.site = Site(site_number="8072", name="Hochschule Osnabrück")
+
+    rows = weekly_worker_rows(date(2026, 8, 3), date(2026, 8, 9), [entry], {})
+    content = build_weekly_worker_xlsx(
+        person_name="Christopher Erichsen",
+        week_number=32,
+        year=2026,
+        start=date(2026, 8, 3),
+        end=date(2026, 8, 9),
+        rows=rows,
+    )
+    _, sheet = workbook_sheet(content)
+
+    assert len([row for row in rows if row.entry is not None]) == 1
+    assert cell_text(sheet, "C15") == "8072 - Hochschule Osnabrück"
+    assert cell_text(sheet, "O15") == "8,00 h"
 
 
 def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():

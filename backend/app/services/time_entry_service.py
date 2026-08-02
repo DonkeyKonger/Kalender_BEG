@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
 from app.models.assignment import Assignment
-from app.models.enums import AbsenceStatus, PersonType, UserRole
+from app.models.enums import AbsenceStatus, PersonType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
@@ -67,7 +67,9 @@ class TimeEntryService:
         self._ensure_can_write_person(current_user, payload.person_id)
         self._ensure_person_exists(payload.person_id)
         if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+            self._ensure_can_review_time(current_user)
             self._ensure_week_is_open(payload.person_id, payload.work_date)
+            self._ensure_office_manual_entry(payload)
         self._ensure_site_exists(payload.site_id)
         self._ensure_assignment_matches(payload.assignment_id, payload.person_id, payload.site_id)
         values = payload.model_dump()
@@ -738,8 +740,35 @@ class TimeEntryService:
             )
 
     def _ensure_site_exists(self, site_id: int | None) -> None:
-        if site_id is not None and self.db.get(Site, site_id) is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden.")
+        if site_id is None:
+            return
+        site = self.db.get(Site, site_id)
+        if site is None or getattr(site, "status", None) == SiteStatus.DELETED:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden oder gelöscht.")
+
+    @staticmethod
+    def _ensure_office_manual_entry(payload: TimeEntryCreate) -> None:
+        if payload.site_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine Baustelle auswählen.")
+        if payload.start_time is None and payload.end_time is None:
+            return
+        if payload.start_time is None or payload.end_time is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Manuelle Bürozeiten benötigen Beginn und Ende.",
+            )
+        start_minutes = payload.start_time.hour * 60 + payload.start_time.minute
+        end_minutes = payload.end_time.hour * 60 + payload.end_time.minute
+        if start_minutes == end_minutes:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Beginn und Ende dürfen nicht identisch sein.")
+        gross_minutes = end_minutes - start_minutes
+        if gross_minutes < 0:
+            gross_minutes += 24 * 60
+        if (payload.break_minutes or 0) >= gross_minutes:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Pause muss kürzer als die Arbeitszeit sein.",
+            )
 
     def _ensure_assignment_matches(self, assignment_id: int | None, person_id: int, site_id: int | None) -> None:
         if assignment_id is None:

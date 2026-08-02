@@ -3,11 +3,14 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
+import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
   applyPayrollTimeBasisChange,
+  buildPayrollManualEntryPayload,
   calculatePayrollTime,
+  OFFICE_ONLY_TIME_ENTRY_NOTE,
   parsePayrollBreakMinutes,
   resolvePayrollCorrectionWorkMinutes,
   type PayrollCorrectionDraft,
@@ -56,6 +59,7 @@ type TimeReviewIssue = {
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
 type ReviewSummaryFilter = "all" | "matches" | "needs_review" | "verified";
 type ReviewEditorMode = "corrected" | "assign_site" | null;
+type TimeReviewDialogMode = "create" | "edit";
 type ReviewDecisionFormState = {
   hours: string;
   site_id: string;
@@ -183,7 +187,6 @@ const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
 const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
-const OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung.";
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
   { key: "gpsVerification", label: "GPS-Prüfung" },
@@ -210,6 +213,8 @@ export function TimeEntriesPage() {
   const [reviewWeekCompletionReviews, setReviewWeekCompletionReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
+  const [isLoadingSites, setIsLoadingSites] = useState(true);
+  const [sitesError, setSitesError] = useState<string | null>(null);
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingReviewEntries, setIsLoadingReviewEntries] = useState(false);
   const [isLoadingReviewAllEntries, setIsLoadingReviewAllEntries] = useState(false);
@@ -233,6 +238,7 @@ export function TimeEntriesPage() {
   const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
+  const [timeReviewDialogMode, setTimeReviewDialogMode] = useState<TimeReviewDialogMode | null>(null);
   const [timeReviewPopupTop, setTimeReviewPopupTop] = useState<number | null>(null);
   const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
@@ -248,6 +254,9 @@ export function TimeEntriesPage() {
     hours: "",
   });
   const [payrollManualWorkDate, setPayrollManualWorkDate] = useState("");
+  const [payrollManualSiteId, setPayrollManualSiteId] = useState("");
+  const [payrollManualSiteError, setPayrollManualSiteError] = useState<string | null>(null);
+  const [payrollManualTravelMinutes, setPayrollManualTravelMinutes] = useState("0");
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
@@ -372,6 +381,16 @@ export function TimeEntriesPage() {
     () => filterLocationReviewSites(locationReviewSiteOptions, locationReviewSiteSearch).slice(0, 8),
     [locationReviewSiteOptions, locationReviewSiteSearch],
   );
+  const payrollManualSiteOptions = useMemo(
+    () => siteOptions
+      .filter((site) => site.status !== "deleted")
+      .map((site) => ({
+        value: String(site.id),
+        label: manualTimeEntrySiteOptionLabel(site),
+        searchText: locationReviewSiteSearchText(site),
+      })),
+    [siteOptions],
+  );
   const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReviewed).map((review) => review.person_id)),
@@ -423,6 +442,14 @@ export function TimeEntriesPage() {
     () => buildReviewWeekDayOptions(reviewWeekRange.start),
     [reviewWeekRange.start],
   );
+  const payrollManualDateOptions = useMemo(
+    () => selectedReviewWeekDayOptions.map((option) => ({
+      value: option.date,
+      label: formatPayrollManualEntryDate(option.date),
+      searchText: `${option.date} ${option.label} ${formatPayrollManualEntryDate(option.date)}`,
+    })),
+    [selectedReviewWeekDayOptions],
+  );
   const payrollDatePickerEntry = useMemo(
     () => payrollDatePicker ? findEntryInReviewWeekDays(selectedReviewWeekDays, payrollDatePicker.entryId) : null,
     [payrollDatePicker, selectedReviewWeekDays],
@@ -431,15 +458,24 @@ export function TimeEntriesPage() {
   const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
   useEffect(() => {
     let ignore = false;
+    setIsLoadingSites(true);
+    setSitesError(null);
     api.siteSummaries()
       .then((siteData) => {
         if (!ignore) {
           setSites(siteData);
+          setSitesError(null);
         }
       })
       .catch(() => {
         if (!ignore) {
           setSites([]);
+          setSitesError("Baustellen konnten nicht geladen werden.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingSites(false);
         }
       });
 
@@ -456,6 +492,7 @@ export function TimeEntriesPage() {
 
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
+    setTimeReviewDialogMode(null);
     setTimeReviewPopupTop(null);
     setLocationReviewDiagnosticEntry(null);
     setLocationReviewPopupTop(null);
@@ -467,11 +504,22 @@ export function TimeEntriesPage() {
     if (!timeReviewDiagnosticEntry) {
       setPayrollCorrectionForm({ start_time: "", end_time: "", break_minutes: "", hours: "" });
       setPayrollManualWorkDate("");
+      setPayrollManualSiteId("");
+      setPayrollManualSiteError(null);
+      setPayrollManualTravelMinutes("0");
       setPayrollCorrectionError(null);
       setIsSavingPayrollCorrection(false);
       return;
     }
     setPayrollManualWorkDate(timeReviewDiagnosticEntry.work_date);
+    setPayrollManualSiteId(timeReviewDialogMode === "create" ? "" : String(timeReviewDiagnosticEntry.site_id ?? ""));
+    setPayrollManualSiteError(null);
+    setPayrollManualTravelMinutes(String(timeReviewDialogMode === "create" ? 0 : timeReviewDiagnosticEntry.travel_minutes ?? 0));
+    if (timeReviewDialogMode === "create") {
+      setPayrollCorrectionForm({ start_time: "", end_time: "", break_minutes: "0", hours: "" });
+      setPayrollCorrectionError(null);
+      return;
+    }
     const initialForm: PayrollCorrectionFormState = {
       start_time: timeInputValue(effectivePayrollStartTime(timeReviewDiagnosticEntry)),
       end_time: timeInputValue(effectivePayrollEndTime(timeReviewDiagnosticEntry)),
@@ -489,7 +537,7 @@ export function TimeEntriesPage() {
         : initialForm,
     );
     setPayrollCorrectionError(null);
-  }, [timeReviewDiagnosticEntry]);
+  }, [timeReviewDiagnosticEntry, timeReviewDialogMode]);
 
   useEffect(() => {
     if (!locationReviewDiagnosticEntry) {
@@ -548,6 +596,7 @@ export function TimeEntriesPage() {
     function closeOnEscape(event: KeyboardEvent): void {
       if (event.key === "Escape") {
         setTimeReviewDiagnosticEntry(null);
+        setTimeReviewDialogMode(null);
         setTimeReviewPopupTop(null);
         setLocationReviewDiagnosticEntry(null);
         setLocationReviewPopupTop(null);
@@ -1134,6 +1183,7 @@ export function TimeEntriesPage() {
 
   function openTimeReviewDiagnostic(entry: TimeEntry): void {
     setTimeReviewPopupTop(payrollPanelTop());
+    setTimeReviewDialogMode("edit");
     setTimeReviewDiagnosticEntry(entry);
   }
 
@@ -1144,11 +1194,14 @@ export function TimeEntriesPage() {
     const initialDay = selectedReviewWeekDays.find((day) => day.entries.length === 0 && day.absenceType === null)
       ?? selectedReviewWeekDays[0];
     const workDate = initialDay?.date ?? reviewWeekRange.start;
-    openTimeReviewDiagnostic(buildMissingTimeReviewEntry(selectedReviewWorker, workDate));
+    setTimeReviewPopupTop(payrollPanelTop());
+    setTimeReviewDialogMode("create");
+    setTimeReviewDiagnosticEntry(buildMissingTimeReviewEntry(selectedReviewWorker, workDate));
   }
 
   function closeTimeReviewDiagnostic(): void {
     setTimeReviewDiagnosticEntry(null);
+    setTimeReviewDialogMode(null);
     setTimeReviewPopupTop(null);
   }
 
@@ -1162,13 +1215,13 @@ export function TimeEntriesPage() {
     setLocationReviewPopupTop(null);
   }
 
-  async function createTimeEntryForMissingDay(missingEntry: TimeEntry): Promise<TimeEntry> {
+  async function createTimeEntryForMissingDay(missingEntry: TimeEntry, siteId: number): Promise<TimeEntry> {
     if (missingEntry.person_id <= 0) {
       throw new Error("Monteur fehlt für die Büroprüfung.");
     }
     const createdEntry = await api.createTimeEntry({
       person_id: missingEntry.person_id,
-      site_id: null,
+      site_id: siteId,
       work_date: missingEntry.work_date,
       work_minutes: 0,
       break_minutes: 0,
@@ -1225,39 +1278,62 @@ export function TimeEntriesPage() {
     if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection) {
       return;
     }
+    if (timeReviewDialogMode === "create") {
+      await createPayrollManualTimeEntry(timeReviewDiagnosticEntry);
+      return;
+    }
     const payload = buildPayrollCorrectionPayload(payrollCorrectionForm);
     if (!payload.ok) {
       setPayrollCorrectionError(payload.error);
-      return;
-    }
-    const isManualCreation = timeReviewDiagnosticEntry.id < 0;
-    if (
-      isManualCreation
-      && !selectedReviewWeekDayOptions.some((option) => option.date === payrollManualWorkDate)
-    ) {
-      setPayrollCorrectionError("Bitte einen Tag aus der geöffneten Kalenderwoche auswählen.");
       return;
     }
 
     setIsSavingPayrollCorrection(true);
     setPayrollCorrectionError(null);
     try {
-      const pendingEntry = isManualCreation
-        ? { ...timeReviewDiagnosticEntry, work_date: payrollManualWorkDate }
-        : timeReviewDiagnosticEntry;
-      const targetEntry = isManualCreation
-        ? await createTimeEntryForMissingDay(pendingEntry)
-        : timeReviewDiagnosticEntry;
-      const updatedEntry = await api.setTimeEntryPayrollCorrection(targetEntry.id, payload.payload);
+      const updatedEntry = await api.setTimeEntryPayrollCorrection(timeReviewDiagnosticEntry.id, payload.payload);
       applyUpdatedTimeEntry(updatedEntry);
       void refreshSelectedReviewPayrollWeekSummary();
       setTimeReviewDiagnosticEntry((currentEntry) => (
         currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
-          ? mergeTimeEntryReviewUpdate(targetEntry, updatedEntry)
+          ? mergeTimeEntryReviewUpdate(timeReviewDiagnosticEntry, updatedEntry)
           : currentEntry
       ));
     } catch (requestError) {
       setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingPayrollCorrection(false);
+    }
+  }
+
+  async function createPayrollManualTimeEntry(missingEntry: TimeEntry): Promise<void> {
+    const result = buildPayrollManualEntryPayload({
+      personId: missingEntry.person_id,
+      draft: {
+        ...payrollCorrectionForm,
+        site_id: payrollManualSiteId,
+        travel_minutes: payrollManualTravelMinutes,
+        work_date: payrollManualWorkDate,
+      },
+      allowedWorkDates: selectedReviewWeekDayOptions.map((option) => option.date),
+      allowedSiteIds: payrollManualSiteOptions.map((option) => Number(option.value)),
+    });
+    if (!result.ok) {
+      setPayrollManualSiteError(result.field === "site" ? result.error : null);
+      setPayrollCorrectionError(result.field === "site" ? null : result.error);
+      return;
+    }
+
+    setIsSavingPayrollCorrection(true);
+    setPayrollManualSiteError(null);
+    setPayrollCorrectionError(null);
+    try {
+      const createdEntry = await api.createTimeEntry(result.payload);
+      applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry);
+      await refreshSelectedReviewPayrollWeekSummary();
+      closeTimeReviewDiagnostic();
+    } catch (requestError) {
+      setPayrollCorrectionError(readApiError(requestError, "Zeiteintrag konnte nicht gespeichert werden."));
     } finally {
       setIsSavingPayrollCorrection(false);
     }
@@ -1296,7 +1372,7 @@ export function TimeEntriesPage() {
     setLocationReviewError(null);
     try {
       const targetEntry = locationReviewDiagnosticEntry.id < 0
-        ? await createTimeEntryForMissingDay(locationReviewDiagnosticEntry)
+        ? await createTimeEntryForMissingDay(locationReviewDiagnosticEntry, parsedSiteId)
         : locationReviewDiagnosticEntry;
       const updatedEntry = await api.decideTimeEntryReview(targetEntry.id, {
         decision: "assign_site",
@@ -1943,9 +2019,9 @@ export function TimeEntriesPage() {
           onClick={closeTimeReviewDiagnostic}
         >
           <div
-            className="time-review-diagnostic-popover"
+            className={`time-review-diagnostic-popover${timeReviewDialogMode === "create" ? " is-create" : ""}`}
             role="dialog"
-            aria-label="Arbeitszeit-Diagnose"
+            aria-label={timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit-Diagnose"}
             aria-modal="true"
             style={timeReviewPopupTop === null ? undefined : {
               maxHeight: `calc(100vh - ${timeReviewPopupTop}px - 24px)`,
@@ -1955,8 +2031,8 @@ export function TimeEntriesPage() {
           >
             <div className="time-review-diagnostic-head">
               <div>
-                <span>Diagnose</span>
-                <h4>Arbeitszeit-Prüfung</h4>
+                <span>{timeReviewDialogMode === "create" ? "Lohnprüfung" : "Diagnose"}</span>
+                <h4>{timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit-Prüfung"}</h4>
               </div>
               <button
                 className="time-review-diagnostic-close"
@@ -1967,93 +2043,195 @@ export function TimeEntriesPage() {
                 ×
               </button>
             </div>
-            {timeReviewDiagnosticEntry.id < 0 && (
-              <div className="time-review-manual-context">
-                <div>
-                  <span>Monteur</span>
-                  <strong>{timeReviewDiagnosticEntry.person_name}</strong>
+            {timeReviewDialogMode === "create" ? (
+              <div className="time-review-manual-form" aria-label="Manueller Zeiteintrag">
+                <div className="time-review-manual-context">
+                  <div>
+                    <span>Monteur</span>
+                    <strong>{timeReviewDiagnosticEntry.person_name}</strong>
+                  </div>
+                  <div className="time-review-manual-field">
+                    <span id="payroll-manual-date-label">Datum</span>
+                    <DashboardNotePicker
+                      emptyOptionLabel="Datum auswählen"
+                      emptyText="Kein Datum gefunden"
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                      error={null}
+                      errorText="Datum konnte nicht geladen werden."
+                      includeEmptyOption={false}
+                      labelId="payroll-manual-date-label"
+                      listLabel="Datum auswählen"
+                      loading={false}
+                      loadingText="Datum wird geladen..."
+                      options={payrollManualDateOptions}
+                      searchable={false}
+                      value={payrollManualWorkDate}
+                      onChange={(value) => {
+                        setPayrollManualWorkDate(value);
+                        setPayrollCorrectionError(null);
+                      }}
+                    />
+                  </div>
                 </div>
-                <label>
-                  <span>Datum</span>
-                  <input
-                    type="date"
-                    min={reviewWeekRange.start}
-                    max={reviewWeekRange.end}
-                    value={payrollManualWorkDate}
+                <div className="time-review-manual-site-field">
+                  <span id="payroll-manual-site-label">Baustelle *</span>
+                  <DashboardNotePicker
+                    emptyOptionLabel="Baustelle auswählen"
+                    emptyText="Keine Baustelle gefunden"
                     disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                    onChange={(event) => setPayrollManualWorkDate(event.target.value)}
+                    error={sitesError}
+                    errorText="Baustellen konnten nicht geladen werden."
+                    includeEmptyOption={false}
+                    labelId="payroll-manual-site-label"
+                    listLabel="Baustelle auswählen"
+                    loading={isLoadingSites}
+                    loadingText="Baustellen werden geladen..."
+                    options={payrollManualSiteOptions}
+                    searchLabel="Baustelle suchen"
+                    searchPlaceholder="Nummer, Name oder Ort suchen…"
+                    value={payrollManualSiteId}
+                    onChange={(value) => {
+                      setPayrollManualSiteId(value);
+                      setPayrollManualSiteError(null);
+                      setPayrollCorrectionError(null);
+                    }}
                   />
-                </label>
+                  {payrollManualSiteError && (
+                    <small className="time-review-manual-field-error" role="alert">{payrollManualSiteError}</small>
+                  )}
+                </div>
+                <div className="time-review-manual-time-grid">
+                  <label>
+                    <span>Anfang Arbeitszeit</span>
+                    <input
+                      type="time"
+                      value={payrollCorrectionForm.start_time}
+                      onChange={(event) => updatePayrollTimeBasis("start_time", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label>
+                    <span>Ende Arbeitszeit</span>
+                    <input
+                      type="time"
+                      value={payrollCorrectionForm.end_time}
+                      onChange={(event) => updatePayrollTimeBasis("end_time", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label>
+                    <span>Pause (Min.)</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      value={payrollCorrectionForm.break_minutes}
+                      onChange={(event) => updatePayrollTimeBasis("break_minutes", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label>
+                    <span>Gesamtstunden</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={payrollCorrectionForm.hours}
+                      onChange={(event) => {
+                        setPayrollCorrectionError(null);
+                        setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
+                      }}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label>
+                    <span>Fahrtzeit (Min.)</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      value={payrollManualTravelMinutes}
+                      onChange={(event) => {
+                        setPayrollManualTravelMinutes(event.target.value);
+                        setPayrollCorrectionError(null);
+                      }}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
+                <div className="time-review-diagnostic-row is-head" role="row">
+                  <span role="columnheader" aria-label="Zeilenbezeichnung" />
+                  <span role="columnheader">Anfang Arbeitszeit</span>
+                  <span role="columnheader">Ende Arbeitszeit</span>
+                  <span role="columnheader">Pause</span>
+                  <span role="columnheader">Gesamtstunden</span>
+                </div>
+                {timeReviewDiagnosticRows(timeReviewDiagnosticEntry).map((row) => (
+                  <div className="time-review-diagnostic-row" key={row.source} role="row">
+                    <strong role="cell">{row.source}</strong>
+                    <span role="cell">{row.start}</span>
+                    <span role="cell">{row.end}</span>
+                    <span role="cell">{row.break}</span>
+                    <span role="cell">{row.total}</span>
+                  </div>
+                ))}
+                <div className="time-review-diagnostic-row is-editable" role="row">
+                  <strong role="cell">Stunden Büro geprüft</strong>
+                  <label role="cell">
+                    <span className="sr-only">Anfang Arbeitszeit Büro geprüft</span>
+                    <input
+                      type="time"
+                      value={payrollCorrectionForm.start_time}
+                      onChange={(event) => updatePayrollTimeBasis("start_time", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label role="cell">
+                    <span className="sr-only">Ende Arbeitszeit Büro geprüft</span>
+                    <input
+                      type="time"
+                      value={payrollCorrectionForm.end_time}
+                      onChange={(event) => updatePayrollTimeBasis("end_time", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label role="cell">
+                    <span className="sr-only">Pause Büro geprüft in Minuten</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      placeholder="Min."
+                      value={payrollCorrectionForm.break_minutes}
+                      onChange={(event) => updatePayrollTimeBasis("break_minutes", event.target.value)}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                  <label role="cell">
+                    <span className="sr-only">Gesamtstunden Büro geprüft</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="-"
+                      value={payrollCorrectionForm.hours}
+                      onChange={(event) => {
+                        setPayrollCorrectionError(null);
+                        setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
+                      }}
+                      readOnly={calculatePayrollTime(payrollCorrectionForm).status === "valid"}
+                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                    />
+                  </label>
+                </div>
               </div>
             )}
-            <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
-              <div className="time-review-diagnostic-row is-head" role="row">
-                <span role="columnheader" aria-label="Zeilenbezeichnung" />
-                <span role="columnheader">Anfang Arbeitszeit</span>
-                <span role="columnheader">Ende Arbeitszeit</span>
-                <span role="columnheader">Pause</span>
-                <span role="columnheader">Gesamtstunden</span>
-              </div>
-              {timeReviewDiagnosticRows(timeReviewDiagnosticEntry).map((row) => (
-                <div className="time-review-diagnostic-row" key={row.source} role="row">
-                  <strong role="cell">{row.source}</strong>
-                  <span role="cell">{row.start}</span>
-                  <span role="cell">{row.end}</span>
-                  <span role="cell">{row.break}</span>
-                  <span role="cell">{row.total}</span>
-                </div>
-              ))}
-              <div className="time-review-diagnostic-row is-editable" role="row">
-                <strong role="cell">Stunden Büro geprüft</strong>
-                <label role="cell">
-                  <span className="sr-only">Anfang Arbeitszeit Büro geprüft</span>
-                  <input
-                    type="time"
-                    value={payrollCorrectionForm.start_time}
-                    onChange={(event) => updatePayrollTimeBasis("start_time", event.target.value)}
-                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                  />
-                </label>
-                <label role="cell">
-                  <span className="sr-only">Ende Arbeitszeit Büro geprüft</span>
-                  <input
-                    type="time"
-                    value={payrollCorrectionForm.end_time}
-                    onChange={(event) => updatePayrollTimeBasis("end_time", event.target.value)}
-                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                  />
-                </label>
-                <label role="cell">
-                  <span className="sr-only">Pause Büro geprüft in Minuten</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    step="1"
-                    placeholder="Min."
-                    value={payrollCorrectionForm.break_minutes}
-                    onChange={(event) => updatePayrollTimeBasis("break_minutes", event.target.value)}
-                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                  />
-                </label>
-                <label role="cell">
-                  <span className="sr-only">Gesamtstunden Büro geprüft</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="-"
-                    value={payrollCorrectionForm.hours}
-                    onChange={(event) => {
-                      setPayrollCorrectionError(null);
-                      setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
-                    }}
-                    readOnly={calculatePayrollTime(payrollCorrectionForm).status === "valid"}
-                    disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                  />
-                </label>
-              </div>
-            </div>
-            {isCurrentLocalDateInput(timeReviewDiagnosticEntry.work_date) && (
+            {timeReviewDialogMode === "edit" && isCurrentLocalDateInput(timeReviewDiagnosticEntry.work_date) && (
               <p className="time-review-diagnostic-note">GPS-Auswertung für den aktuellen Tag erst ab morgen verfügbar.</p>
             )}
             <div className="time-review-diagnostic-actions">
@@ -2064,7 +2242,9 @@ export function TimeEntriesPage() {
                 disabled={!canManageTimeEntries || isSavingPayrollCorrection}
                 onClick={() => void savePayrollTimeCorrection()}
               >
-                {isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern"}
+                {timeReviewDialogMode === "create"
+                  ? (isSavingPayrollCorrection ? "Zeit wird gespeichert..." : "Zeit speichern")
+                  : (isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern")}
               </button>
             </div>
           </div>
@@ -4224,6 +4404,15 @@ function manualTimeEntrySiteText(entry: TimeEntry): string {
 
 function siteOptionLabel(site: SiteSummary): string {
   return [site.site_number, site.name].filter(Boolean).join(" · ") || `Baustelle ${site.id}`;
+}
+
+function manualTimeEntrySiteOptionLabel(site: SiteSummary): string {
+  return [site.site_number, site.name, site.location || site.city].filter(Boolean).join(" · ")
+    || `Baustelle ${site.id}`;
+}
+
+function formatPayrollManualEntryDate(workDate: string): string {
+  return `${formatWeekday(workDate)}, ${formatDate(workDate, "numeric")}`;
 }
 
 function isSelectableLocationReviewSite(site: SiteSummary): boolean {

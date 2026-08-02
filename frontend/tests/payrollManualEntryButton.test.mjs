@@ -7,7 +7,7 @@ const [source, styles] = await Promise.all([
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
 ]);
 
-test("manual payroll entry action reuses the prepared office-entry dialog", () => {
+test("manual payroll entry action opens the explicit create mode", () => {
   const manualButton = source.indexOf("Zeit manuell erstellen");
   const reviewButton = source.indexOf("Monteurwoche als geprüft markieren", manualButton);
 
@@ -16,11 +16,13 @@ test("manual payroll entry action reuses the prepared office-entry dialog", () =
   assert.match(source, /\{canManageTimeEntries && \(/);
   assert.match(source, /disabled=\{selectedReviewWorker\.isReviewed \|\| markingReviewWeekPersonId/);
   assert.match(source, /onClick=\{openManualTimeEntryDialog\}/);
-  assert.match(source, /openTimeReviewDiagnostic\(buildMissingTimeReviewEntry\(selectedReviewWorker, workDate\)\)/);
-  assert.match(source, /min=\{reviewWeekRange\.start\}/);
-  assert.match(source, /max=\{reviewWeekRange\.end\}/);
-  assert.match(source, /createTimeEntryForMissingDay\(pendingEntry\)/);
+  assert.match(source, /setTimeReviewDialogMode\("create"\)/);
+  assert.match(source, /setTimeReviewDiagnosticEntry\(buildMissingTimeReviewEntry\(selectedReviewWorker, workDate\)\)/);
+  assert.match(source, /options=\{payrollManualDateOptions\}/);
+  assert.match(source, /buildPayrollManualEntryPayload\(/);
+  assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
   assert.match(source, /refreshSelectedReviewPayrollWeekSummary\(\)/);
+  assert.match(source, /closeTimeReviewDiagnostic\(\)/);
 });
 
 test("manual action row stays aligned and stacks safely on narrow screens", () => {
