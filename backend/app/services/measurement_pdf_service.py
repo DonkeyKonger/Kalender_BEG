@@ -82,14 +82,15 @@ MATRIX_AREA_ROW_LINES = tuple(
         504.7,
     )
 )
-MATRIX_AREA_ROW_COUNT = len(MATRIX_AREA_ROW_LINES) - 1
+MAX_MEASUREMENT_ROWS_PER_LOGICAL_BLOCK = len(MATRIX_AREA_ROW_LINES) - 1
+MATRIX_AREA_ROW_COUNT = MAX_MEASUREMENT_ROWS_PER_LOGICAL_BLOCK
 MATRIX_AREA_LABEL_X = 96.3
 MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-office-header-v3"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v4"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -132,6 +133,25 @@ class SnapshotMatrix:
     positions_by_id: dict[int, MatrixPosition]
     areas_by_key: dict[str, MatrixArea]
     quantities: dict[tuple[str, int], Decimal]
+
+
+@dataclass(frozen=True)
+class LogicalMeasurementBlock:
+    block_index: int
+    positions: list[MatrixPosition]
+    areas: list[MatrixArea]
+    cells: dict[tuple[str, int], MatrixCellValue]
+    totals_by_position: dict[int, Decimal]
+
+
+@dataclass(frozen=True)
+class MeasurementPdfPage:
+    logical_block_index: int
+    position_page_index: int
+    positions: list[MatrixPosition]
+    areas: list[MatrixArea]
+    cells: dict[tuple[str, int], MatrixCellValue]
+    totals_by_position: dict[int, Decimal]
 
 
 def _visible_measurement_position(position: str | None) -> str:
@@ -319,28 +339,29 @@ class MeasurementPdfService:
         logo = _load_png_rgb(LOGO_PATH)
         if logo is not None:
             pdf.add_image(LOGO_RESOURCE_NAME, logo)
-        positions, areas, cells, totals_by_position = self._build_matrix(batch, mode=mode)
-        position_pages = _chunk(positions, MATRIX_COLUMN_COUNT) or [[]]
-        area_pages = _chunk(areas, MATRIX_AREA_ROW_COUNT) or [[]]
-        page_count = len(position_pages) * len(area_pages)
-        page_number = 1
-        for position_page_index, position_page in enumerate(position_pages, start=1):
-            for area_page_index, area_page in enumerate(area_pages, start=1):
-                pdf.add_page(
-                    self._render_page(
-                        batch=batch,
-                        positions=position_page,
-                        areas=area_page,
-                        cells=cells,
-                        totals_by_position=totals_by_position,
-                        page_number=page_number,
-                        page_count=page_count,
-                        position_page_index=position_page_index,
-                        area_page_index=area_page_index,
-                        logo=logo,
-                    )
+        positions, areas, cells, _global_totals = self._build_matrix(batch, mode=mode)
+        logical_blocks = _build_logical_measurement_blocks(
+            positions=positions,
+            areas=areas,
+            cells=cells,
+        )
+        pages = _build_measurement_pdf_pages(logical_blocks)
+        page_count = len(pages)
+        for page_number, page in enumerate(pages, start=1):
+            pdf.add_page(
+                self._render_page(
+                    batch=batch,
+                    positions=page.positions,
+                    areas=page.areas,
+                    cells=page.cells,
+                    totals_by_position=page.totals_by_position,
+                    page_number=page_number,
+                    page_count=page_count,
+                    position_page_index=page.position_page_index,
+                    area_page_index=page.logical_block_index + 1,
+                    logo=logo,
                 )
-                page_number += 1
+            )
         self._append_photo_pages(pdf, batch)
 
         content = pdf.build()
@@ -1256,6 +1277,80 @@ def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
         output = BytesIO()
         rgb.save(output, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
         return PdfImage(width=width, height=height, data=output.getvalue(), filter_name="DCTDecode")
+
+
+def _build_logical_measurement_blocks(
+    *,
+    positions: list[MatrixPosition],
+    areas: list[MatrixArea],
+    cells: dict[tuple[str, int], MatrixCellValue],
+) -> list[LogicalMeasurementBlock]:
+    area_blocks = _chunk(areas, MAX_MEASUREMENT_ROWS_PER_LOGICAL_BLOCK) or [[]]
+    cells_by_area: dict[str, list[tuple[int, MatrixCellValue]]] = {}
+    for (area_key, item_id), cell in cells.items():
+        cells_by_area.setdefault(area_key, []).append((item_id, cell))
+
+    logical_blocks: list[LogicalMeasurementBlock] = []
+    for block_index, block_areas in enumerate(area_blocks):
+        block_cells: dict[tuple[str, int], MatrixCellValue] = {}
+        active_position_ids: set[int] = set()
+        totals_by_position: dict[int, Decimal] = {}
+        for area in block_areas:
+            for item_id, cell in cells_by_area.get(area.key, []):
+                block_cells[(area.key, item_id)] = cell
+                totals_by_position[item_id] = (
+                    totals_by_position.get(item_id, Decimal("0")) + cell.quantity
+                )
+                if _is_relevant_measurement_cell(cell):
+                    active_position_ids.add(item_id)
+
+        # A completely empty measurement keeps the existing blank-sheet behavior.
+        block_positions = (
+            list(positions)
+            if not areas
+            else [position for position in positions if position.item_id in active_position_ids]
+        )
+        block_totals = {
+            position.item_id: totals_by_position.get(position.item_id, Decimal("0"))
+            for position in block_positions
+            if position.item_id in active_position_ids
+        }
+        logical_blocks.append(
+            LogicalMeasurementBlock(
+                block_index=block_index,
+                positions=block_positions,
+                areas=list(block_areas),
+                cells=block_cells,
+                totals_by_position=block_totals,
+            )
+        )
+    return logical_blocks
+
+
+def _build_measurement_pdf_pages(
+    logical_blocks: list[LogicalMeasurementBlock],
+) -> list[MeasurementPdfPage]:
+    pages: list[MeasurementPdfPage] = []
+    for block in logical_blocks:
+        position_pages = _chunk(block.positions, MATRIX_COLUMN_COUNT) or [[]]
+        for position_page_index, position_page in enumerate(position_pages, start=1):
+            pages.append(
+                MeasurementPdfPage(
+                    logical_block_index=block.block_index,
+                    position_page_index=position_page_index,
+                    positions=position_page,
+                    areas=block.areas,
+                    cells=block.cells,
+                    totals_by_position=block.totals_by_position,
+                )
+            )
+    return pages
+
+
+def _is_relevant_measurement_cell(cell: MatrixCellValue) -> bool:
+    if cell.quantity != Decimal("0"):
+        return True
+    return cell.original_quantity is not None and cell.original_quantity != Decimal("0")
 
 
 def _chunk[T](rows: list[T], size: int) -> list[list[T]]:
