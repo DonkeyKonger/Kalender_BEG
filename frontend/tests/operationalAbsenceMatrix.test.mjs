@@ -77,7 +77,8 @@ test("right click deletes via the dedicated API independently of calendar edit m
   assert.match(matrixSource, /item\.kind === "operational"[\s\S]*props\.onDeleteOperationalAbsence\(item\.operationalAbsence\)/);
 });
 
-test("operational bubbles are dark desaturated purple in direct and overflow views", () => {
-  assert.match(styles, /\.absence-planning-chip\.operational-absence-chip \{[^}]*border-color:\s*#554e6c;[^}]*background:\s*#625b7a;[^}]*color:\s*#ffffff/s);
-  assert.match(styles, /\.absence-overflow-item\.operational-absence-overflow \{[^}]*border-left-color:\s*#554e6c;[^}]*background:\s*#625b7a;[^}]*color:\s*#ffffff/s);
+test("operational bubbles use the same light pastel logic in direct and overflow views", () => {
+  assert.match(styles, /\.absence-planning-chip\.operational-absence-chip \{[^}]*border-color:\s*#c9bcd8;[^}]*background:\s*#e7e1ee;[^}]*color:\s*#5e4e73/s);
+  assert.match(styles, /\.absence-overflow-item\.operational-absence-overflow \{[^}]*border-left-color:\s*#c9bcd8;[^}]*background:\s*#e7e1ee;[^}]*color:\s*#5e4e73/s);
+  assert.match(styles, /\.absence-overflow-item\.operational-absence-overflow em \{[^}]*color:\s*#5e4e73/s);
 });

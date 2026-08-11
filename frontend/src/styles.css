@@ -4777,12 +4777,10 @@ button.person-chip:focus-visible {
 }
 
 .absence-planning-chip.operational-absence-chip {
-  border-color: #554e6c;
-  background: #625b7a;
-  color: #ffffff;
-  box-shadow: 0 1px 0 rgb(47 43 61 / 18%);
+  border-color: #c9bcd8;
+  background: #e7e1ee;
+  color: #5e4e73;
 }
-
 
 .absence-planning-chip:hover,
 .absence-planning-chip:focus-visible {
@@ -4893,13 +4891,13 @@ button.person-chip:focus-visible {
 }
 
 .absence-overflow-item.operational-absence-overflow {
-  border-left-color: #554e6c;
-  background: #625b7a;
-  color: #ffffff;
+  border-left-color: #c9bcd8;
+  background: #e7e1ee;
+  color: #5e4e73;
 }
 
 .absence-overflow-item.operational-absence-overflow em {
-  color: #eee8f5;
+  color: #5e4e73;
 }
 
 .operational-absence-detail-popover {
