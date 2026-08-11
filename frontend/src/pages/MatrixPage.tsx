@@ -3254,10 +3254,6 @@ function OperationalAbsenceDetailPopup({
       <strong>{absence.project_manager.display_name}</strong>
       <dl>
         <div>
-          <dt>Datum</dt>
-          <dd>{formatOperationalAbsenceDate(absence.date)}</dd>
-        </div>
-        <div>
           <dt>Zeitraum</dt>
           <dd>{formatOperationalAbsenceTimeRange(absence)}</dd>
         </div>

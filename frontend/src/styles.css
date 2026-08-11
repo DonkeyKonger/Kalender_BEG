@@ -4777,10 +4777,10 @@ button.person-chip:focus-visible {
 }
 
 .absence-planning-chip.operational-absence-chip {
-  border-color: #49385d;
-  background: #5b466f;
+  border-color: #554e6c;
+  background: #625b7a;
   color: #ffffff;
-  box-shadow: 0 1px 0 rgb(42 30 55 / 18%);
+  box-shadow: 0 1px 0 rgb(47 43 61 / 18%);
 }
 
 
@@ -4893,8 +4893,8 @@ button.person-chip:focus-visible {
 }
 
 .absence-overflow-item.operational-absence-overflow {
-  border-left-color: #49385d;
-  background: #5b466f;
+  border-left-color: #554e6c;
+  background: #625b7a;
   color: #ffffff;
 }
 

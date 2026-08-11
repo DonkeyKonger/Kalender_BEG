@@ -57,7 +57,11 @@ test("operational entries use stable priority ordering and collision-free keys",
 test("left click opens a read-only viewport-aware detail popup with all fallbacks", () => {
   assert.match(matrixSource, /function OperationalAbsenceDetailPopup/);
   assert.match(matrixSource, /role="dialog"/);
-  assert.match(matrixSource, /<dt>Datum<\/dt>/);
+  const popupStart = matrixSource.indexOf("function OperationalAbsenceDetailPopup");
+  const popupEnd = matrixSource.indexOf("type AbsenceCellEditorPopupProps", popupStart);
+  const popupSource = matrixSource.slice(popupStart, popupEnd);
+  assert.ok(popupStart >= 0 && popupEnd > popupStart);
+  assert.doesNotMatch(popupSource, /<dt>Datum<\/dt>/);
   assert.match(matrixSource, /<dt>Zeitraum<\/dt>/);
   assert.match(matrixSource, /<dt>Baustelle<\/dt>/);
   assert.match(matrixSource, /<dt>Notizen<\/dt>/);
@@ -73,6 +77,6 @@ test("right click deletes via the dedicated API independently of calendar edit m
 });
 
 test("operational bubbles are dark desaturated purple in direct and overflow views", () => {
-  assert.match(styles, /\.absence-planning-chip\.operational-absence-chip \{[^}]*background:\s*#5b466f;[^}]*color:\s*#ffffff/s);
-  assert.match(styles, /\.absence-overflow-item\.operational-absence-overflow \{[^}]*background:\s*#5b466f;[^}]*color:\s*#ffffff/s);
+  assert.match(styles, /\.absence-planning-chip\.operational-absence-chip \{[^}]*border-color:\s*#554e6c;[^}]*background:\s*#625b7a;[^}]*color:\s*#ffffff/s);
+  assert.match(styles, /\.absence-overflow-item\.operational-absence-overflow \{[^}]*border-left-color:\s*#554e6c;[^}]*background:\s*#625b7a;[^}]*color:\s*#ffffff/s);
 });
