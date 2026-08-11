@@ -12,6 +12,10 @@ import {
   publishOperationalAbsencesUpdated,
   subscribeToOperationalAbsenceUpdates,
 } from "../lib/operationalAbsence";
+import {
+  planningAbsenceTypePriority,
+  sortPlanningAbsenceEntries,
+} from "../lib/planningAbsenceSort";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
@@ -5240,25 +5244,13 @@ function buildAbsencePlanningItemsByDate(
         personLabel: calendarPersonCode(absence.project_manager),
         personName: absence.project_manager.display_name,
       }));
-    const items = [...operationalItems, ...classicItems].sort(comparePlanningAbsenceItems);
+    const items = sortPlanningAbsenceEntries([...operationalItems, ...classicItems]);
     return [day.date, items];
   }));
 }
 
 function absenceTypeSortPriority(absence: Absence): number {
-  if (absence.absence_type === "sick") {
-    return 0;
-  }
-  if (absence.absence_type === "vacation") {
-    return 1;
-  }
-  if (absence.absence_type === "school") {
-    return 2;
-  }
-  if (absence.absence_type === "free") {
-    return 3;
-  }
-  return 4;
+  return planningAbsenceTypePriority(absence.absence_type);
 }
 
 function absencePersonLabel(person: Person | undefined): string {
@@ -5311,40 +5303,6 @@ function comparePlanningAbsences(left: Absence, right: Absence): number {
     || left.end_date.localeCompare(right.end_date)
     || left.person_id - right.person_id
     || left.id - right.id;
-}
-
-function comparePlanningAbsenceItems(left: PlanningAbsenceItem, right: PlanningAbsenceItem): number {
-  if (left.kind !== right.kind) {
-    return left.kind === "operational" ? -1 : 1;
-  }
-  if (left.kind === "operational" && right.kind === "operational") {
-    return compareOptionalOperationalStartTimes(
-      left.operationalAbsence.start_time,
-      right.operationalAbsence.start_time,
-    )
-      || left.personName.localeCompare(right.personName, "de-DE")
-      || left.operationalAbsence.id - right.operationalAbsence.id;
-  }
-  if (left.kind === "classic" && right.kind === "classic") {
-    return left.personLabel.localeCompare(right.personLabel, "de-DE")
-      || left.personName.localeCompare(right.personName, "de-DE")
-      || left.absence.person_id - right.absence.person_id
-      || comparePlanningAbsences(left.absence, right.absence);
-  }
-  return 0;
-}
-
-function compareOptionalOperationalStartTimes(left: string | null, right: string | null): number {
-  if (left === null && right === null) {
-    return 0;
-  }
-  if (left === null) {
-    return 1;
-  }
-  if (right === null) {
-    return -1;
-  }
-  return left.localeCompare(right);
 }
 
 function planningAbsenceItemKey(item: PlanningAbsenceItem): string {

@@ -39,17 +39,15 @@ test("cross-tab updates reconcile an open detail and delete failures do not rest
   assert.doesNotMatch(matrixSource, /setOperationalAbsences\(previousAbsences\)/);
 });
 
-test("operational absences are merged into the existing row before classic absences", () => {
+test("all absence types are centrally sorted before visible and overflow rendering", () => {
   assert.match(matrixSource, /type PlanningAbsenceItem = PlanningClassicAbsenceItem \| PlanningOperationalAbsenceItem/);
-  assert.match(matrixSource, /const items = \[\.\.\.operationalItems, \.\.\.classicItems\]\.sort\(comparePlanningAbsenceItems\)/);
-  assert.match(matrixSource, /if \(left\.kind !== right\.kind\)[\s\S]*left\.kind === "operational" \? -1 : 1/);
+  assert.match(matrixSource, /const items = sortPlanningAbsenceEntries\(\[\.\.\.operationalItems, \.\.\.classicItems\]\)/);
   assert.match(matrixSource, /dayAbsenceItems\.slice\(0, MAX_VISIBLE_ABSENCES_PER_DAY\)/);
   assert.match(matrixSource, /dayAbsenceItems\.map\(\(item\) =>/);
 });
 
 test("operational entries use stable priority ordering and collision-free keys", () => {
-  assert.match(matrixSource, /compareOptionalOperationalStartTimes\([\s\S]*\.start_time,[\s\S]*\.start_time/);
-  assert.match(matrixSource, /personName\.localeCompare\(right\.personName, "de-DE"\)/);
+  assert.match(matrixSource, /sortPlanningAbsenceEntries/);
   assert.match(matrixSource, /`operational-\$\{item\.operationalAbsence\.id\}`/);
   assert.match(matrixSource, /`absence-\$\{item\.absence\.id\}`/);
 });
