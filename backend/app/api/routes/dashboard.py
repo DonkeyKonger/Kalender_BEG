@@ -11,7 +11,11 @@ from app.schemas.dashboard_note import (
     DashboardNoteUpdate,
     DashboardNoteUserRead,
 )
-from app.schemas.measurement import DashboardMessagesSummaryRead, MeasurementDashboardSubmissionRead
+from app.schemas.measurement import (
+    DashboardMessageCountRead,
+    DashboardMessagesSummaryRead,
+    MeasurementDashboardSubmissionRead,
+)
 from app.schemas.person import PersonRead
 from app.schemas.site import SiteSummary
 from app.schemas.weather import WeatherSummary
@@ -154,6 +158,16 @@ def get_dashboard_messages_summary(
     db: Session = Depends(get_db),
 ) -> DashboardMessagesSummaryRead:
     return DashboardMessageService(db).get_summary(limit=limit, current_user=user)
+
+
+@router.get("/messages/unread-count", response_model=DashboardMessageCountRead)
+def get_dashboard_message_unread_count(
+    user=Depends(CAN_READ_MESSAGES),
+    db: Session = Depends(get_db),
+) -> DashboardMessageCountRead:
+    return DashboardMessageCountRead(
+        count=DashboardMessageService(db).count_open_messages(current_user=user),
+    )
 
 
 @router.post("/messages/{message_key}/dismiss", status_code=status.HTTP_204_NO_CONTENT)

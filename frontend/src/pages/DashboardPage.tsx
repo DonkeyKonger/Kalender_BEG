@@ -29,6 +29,7 @@ import {
 } from "../lib/operationalAbsence";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import { buildToolMaterialIssuePath } from "../lib/toolMaterialRouting";
+import { useDashboardMessageCount } from "../messages/DashboardMessageCountContext";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
@@ -132,8 +133,6 @@ type DashboardNoteDraft = {
 };
 
 const MAX_PREVIEW_ITEMS = 6;
-const DASHBOARD_MESSAGES_UPDATED_EVENT = "dashboard-messages-updated";
-const DASHBOARD_MESSAGE_READ_EVENT = "dashboard-message-read";
 const FREE_WORKER_ALL_KEY = "__all__";
 const DASHBOARD_NOTE_SITE_FILTER_PARAM = "noteSiteId";
 const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
@@ -146,6 +145,11 @@ const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const {
+    count: dashboardMessageCount,
+    initialized: dashboardMessageCountInitialized,
+    refresh: refreshDashboardMessageCount,
+  } = useDashboardMessageCount();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const dashboardNoteSiteFilterId = parseDashboardNoteSiteFilterId(
@@ -190,6 +194,7 @@ export function DashboardPage() {
   const [openedDashboardMessageNote, setOpenedDashboardMessageNote] = useState<DashboardNote | null>(null);
   const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
   const freeSummaryRef = useRef<HTMLDivElement | null>(null);
+  const dashboardMessageListCountRef = useRef<number | null>(null);
 
   const range = useMemo(() => getDashboardRange(new Date()), []);
 
@@ -205,7 +210,7 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [overviewData, measurementData] = await Promise.all([
+        const [overviewData, messageSummary] = await Promise.all([
           api.dashboardOverview({
             historyStart: range.historyStart,
             today: range.today,
@@ -214,13 +219,14 @@ export function DashboardPage() {
             nextWeekStart: range.nextWeekStart,
             nextWeekEnd: range.nextWeekEnd,
           }),
-          api.dashboardMessagesSummary().then((summary) => summary.latest_messages).catch(() => [] as DashboardMessage[]),
+          api.dashboardMessagesSummary().catch(() => null),
         ]);
         if (!active) {
           return;
         }
         setDashboardOverview(overviewData);
-        setDashboardMessages(measurementData);
+        dashboardMessageListCountRef.current = messageSummary?.open_count ?? null;
+        setDashboardMessages(messageSummary?.latest_messages ?? []);
       } catch {
         if (!active) {
           return;
@@ -390,6 +396,35 @@ export function DashboardPage() {
   }, [user?.id, user?.role]);
 
   useEffect(() => {
+    if (
+      loading
+      || user?.role === "monteur"
+      || !dashboardMessageCountInitialized
+      || dashboardMessageListCountRef.current === dashboardMessageCount
+    ) {
+      return undefined;
+    }
+
+    let active = true;
+    async function refreshDashboardMessageList(): Promise<void> {
+      try {
+        const summary = await api.dashboardMessagesSummary();
+        if (active) {
+          dashboardMessageListCountRef.current = summary.open_count;
+          setDashboardMessages(summary.latest_messages);
+        }
+      } catch {
+        // The live count remains visible; retry when the count changes again or the page reloads.
+      }
+    }
+
+    void refreshDashboardMessageList();
+    return () => {
+      active = false;
+    };
+  }, [dashboardMessageCount, dashboardMessageCountInitialized, loading, user?.id, user?.role]);
+
+  useEffect(() => {
     if (dashboardNoteSiteFilterId === null || loading || !dashboardOverview) {
       return undefined;
     }
@@ -399,25 +434,6 @@ export function DashboardPage() {
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [dashboardNoteSiteFilterId, dashboardOverview, loading]);
-
-  useEffect(() => {
-    function handleDashboardMessagesUpdated(event: Event) {
-      const messages = (event as CustomEvent<DashboardMessage[]>).detail;
-      if (Array.isArray(messages)) {
-        setDashboardMessages((current) => (
-          dashboardMessagesSignature(current) === dashboardMessagesSignature(messages)
-            ? current
-            : messages
-        ));
-      }
-    }
-
-    window.addEventListener(DASHBOARD_MESSAGES_UPDATED_EVENT, handleDashboardMessagesUpdated);
-
-    return () => {
-      window.removeEventListener(DASHBOARD_MESSAGES_UPDATED_EVENT, handleDashboardMessagesUpdated);
-    };
-  }, []);
 
   useEffect(() => {
     if (!openFreeWorkerKey) {
@@ -521,6 +537,7 @@ export function DashboardPage() {
     setDashboardMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
     try {
       await api.dismissDashboardMessage(message.message_key);
+      refreshDashboardMessageCount();
     } catch {
       setDashboardMessages(previousMessages);
     } finally {
@@ -542,6 +559,7 @@ export function DashboardPage() {
       setDashboardMessages((current) => (
         current.filter((entry) => entry.message_key !== message.message_key)
       ));
+      refreshDashboardMessageCount();
     } catch {
       setDashboardNoteError("Die geteilte Notiz konnte nicht geöffnet werden.");
     } finally {
@@ -555,7 +573,7 @@ export function DashboardPage() {
     try {
       await api.dismissDashboardMessage(message.message_key);
       setDashboardMessages((current) => current.filter((entry) => entry.message_key !== message.message_key));
-      window.dispatchEvent(new Event(DASHBOARD_MESSAGE_READ_EVENT));
+      refreshDashboardMessageCount();
       navigate(buildToolMaterialIssuePath(message.tool_id));
     } catch (requestError) {
       setError(
@@ -841,7 +859,7 @@ export function DashboardPage() {
             <DashboardCard
               title="Eingang / Meldungen"
               icon={<Inbox aria-hidden="true" size={20} />}
-              badge={dashboardMessages.length > 0 ? String(dashboardMessages.length) : undefined}
+              badge={dashboardMessageCount > 0 ? String(dashboardMessageCount) : undefined}
               className="dashboard-card-messages dashboard-section--messages"
             >
               {dashboardMessages.length > 0 ? (
@@ -1923,31 +1941,6 @@ function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   const workerCount = siteSummary.internalCount + siteSummary.externalCount;
   const workerLabel = formatCount(workerCount, "Monteur", "Monteure");
   return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
-}
-
-function dashboardMessagesSignature(messages: DashboardMessage[]): string {
-  return messages
-    .map((message) => [
-      message.message_key,
-      message.message_type,
-      message.event_at,
-      message.submitted_at,
-      message.customer_signed_at,
-      message.status,
-      message.title,
-      message.site_name,
-      message.site_number,
-      message.submitted_by_name,
-      message.customer_signature_name,
-      message.note_id,
-      message.note_preview,
-      message.note_due_date,
-      message.note_created_at,
-      message.message_text,
-      message.tool_id,
-      message.tool_issue_report_id,
-    ].join("|"))
-    .join(";");
 }
 
 function formatDashboardMessageTitle(message: DashboardMessage): string {

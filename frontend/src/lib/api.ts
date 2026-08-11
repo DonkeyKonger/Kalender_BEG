@@ -85,6 +85,10 @@ export type DashboardMessagesSummary = {
   latest_messages: DashboardMessage[];
 };
 
+export type DashboardMessageCount = {
+  count: number;
+};
+
 export type DashboardMessage = {
   message_key: string;
   message_type: string;
@@ -525,6 +529,10 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<DashboardMessagesSummary>(`/dashboard/messages/summary${suffix}`);
+  },
+
+  async dashboardMessageUnreadCount(): Promise<DashboardMessageCount> {
+    return request<DashboardMessageCount>("/dashboard/messages/unread-count");
   },
 
   async dismissDashboardMessage(messageKey: string): Promise<void> {

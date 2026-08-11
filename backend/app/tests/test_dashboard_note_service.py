@@ -2,10 +2,14 @@ from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.api.dependencies import get_current_app_user
+from app.core.database import get_db
+from app.main import create_app
 from app.models import Base
 from app.models.enums import PersonType, SiteStatus, UserRole
 from app.models.person import Person
@@ -280,6 +284,51 @@ def test_dashboard_note_share_messages_are_idempotent_and_use_existing_read_stat
     second_summary = messages.get_summary(limit=6, current_user=recipient)
     assert second_summary.open_count == 1
     assert second_summary.latest_messages[0].message_key == f"dashboard_note_shared:{note.id}:3"
+
+
+def test_dashboard_message_count_endpoint_returns_only_the_current_count():
+    db = db_session()
+    owner = User(
+        username="owner",
+        display_name="Christopher Erichsen",
+        password_hash="x",
+        role=UserRole.PROJECT_MANAGER,
+        is_active=True,
+    )
+    recipient = User(
+        username="recipient",
+        display_name="Administrator",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    db.add_all([owner, recipient])
+    db.commit()
+    note = DashboardNoteService(db).create_note(
+        DashboardNoteCreate(
+            text="Neue Meldung",
+            shared_with_user_id=recipient.id,
+        ),
+        user_id=owner.id,
+    )
+    service = DashboardMessageService(db)
+    assert service.count_open_messages(current_user=recipient) == 1
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_app_user] = lambda: recipient
+    client = TestClient(app)
+
+    response = client.get("/api/dashboard/messages/unread-count")
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 1}
+
+    service.dismiss_message(
+        message_key=f"dashboard_note_shared:{note.id}:{note.share_revision}",
+        current_user=recipient,
+    )
+    assert client.get("/api/dashboard/messages/unread-count").json() == {"count": 0}
 
 
 def test_dashboard_note_share_user_options_filter_self_workers_and_inactive_users():

@@ -4,13 +4,16 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { DashboardMessageCountProvider } from "./messages/DashboardMessageCountProvider";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <DashboardMessageCountProvider>
+          <App />
+        </DashboardMessageCountProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

@@ -399,6 +399,10 @@ class DashboardMessagesSummaryRead(BaseModel):
     latest_messages: list[DashboardMessageRead]
 
 
+class DashboardMessageCountRead(BaseModel):
+    count: int
+
+
 class MeasurementImportResponse(BaseModel):
     imported_count: int
     measurement_base: MeasurementBaseRead

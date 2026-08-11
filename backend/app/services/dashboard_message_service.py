@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, literal, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.dashboard_message_dismissal import DashboardMessageDismissal
@@ -25,12 +25,15 @@ class DashboardMessageService:
 
     def get_summary(self, *, limit: int, current_user: User) -> DashboardMessagesSummaryRead:
         return DashboardMessagesSummaryRead(
-            open_count=(
-                self.measurements.count_dashboard_submissions(current_user=current_user)
-                + self._count_note_share_messages(current_user=current_user)
-                + self._count_tool_issue_messages(current_user=current_user)
-            ),
+            open_count=self.count_open_messages(current_user=current_user),
             latest_messages=self.list_messages(limit=limit, current_user=current_user),
+        )
+
+    def count_open_messages(self, *, current_user: User) -> int:
+        return (
+            self.measurements.count_dashboard_submissions(current_user=current_user)
+            + self._count_note_share_messages(current_user=current_user)
+            + self._count_tool_issue_messages(current_user=current_user)
         )
 
     def list_messages(self, *, limit: int, current_user: User) -> list[DashboardMessageRead]:
@@ -91,7 +94,24 @@ class DashboardMessageService:
         ]
 
     def _count_note_share_messages(self, *, current_user: User) -> int:
-        return len(self._list_note_share_messages(current_user=current_user))
+        message_key = (
+            literal(f"{DASHBOARD_NOTE_SHARED_MESSAGE_TYPE}:")
+            + cast(DashboardNote.id, String)
+            + literal(":")
+            + cast(DashboardNote.share_revision, String)
+        )
+        is_dismissed = select(DashboardMessageDismissal.id).where(
+            DashboardMessageDismissal.user_id == current_user.id,
+            DashboardMessageDismissal.message_type == DASHBOARD_NOTE_SHARED_MESSAGE_TYPE,
+            DashboardMessageDismissal.message_key == message_key,
+        ).exists()
+        return self.db.scalar(
+            select(func.count(DashboardNote.id)).where(
+                DashboardNote.shared_with_user_id == current_user.id,
+                DashboardNote.deleted_at.is_(None),
+                ~is_dismissed,
+            )
+        ) or 0
 
     def _list_tool_issue_messages(self, *, current_user: User) -> list[DashboardMessageRead]:
         dismissed_keys = set(
@@ -118,7 +138,23 @@ class DashboardMessageService:
         ]
 
     def _count_tool_issue_messages(self, *, current_user: User) -> int:
-        return len(self._list_tool_issue_messages(current_user=current_user))
+        message_key = (
+            literal(f"{TOOL_ISSUE_REPORTED_MESSAGE_TYPE}:")
+            + cast(ToolIssueReport.id, String)
+        )
+        is_dismissed = select(DashboardMessageDismissal.id).where(
+            DashboardMessageDismissal.user_id == current_user.id,
+            DashboardMessageDismissal.message_type == TOOL_ISSUE_REPORTED_MESSAGE_TYPE,
+            DashboardMessageDismissal.message_key == message_key,
+        ).exists()
+        return self.db.scalar(
+            select(func.count(ToolIssueReport.id)).where(
+                ToolIssueReport.recipient_user_id == current_user.id,
+                ToolIssueReport.status == ToolIssueStatus.OPEN,
+                ToolIssueReport.resolved_at.is_(None),
+                ~is_dismissed,
+            )
+        ) or 0
 
     def _dismissed_note_message_keys(self, *, current_user: User) -> set[str]:
         return set(

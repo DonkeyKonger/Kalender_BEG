@@ -10,7 +10,7 @@ const [pageSource, styles] = await Promise.all([
 test("dashboard messages keep the unread badge without a redundant summary box", () => {
   assert.match(
     pageSource,
-    /badge=\{dashboardMessages\.length > 0 \? String\(dashboardMessages\.length\) : undefined\}/,
+    /badge=\{dashboardMessageCount > 0 \? String\(dashboardMessageCount\) : undefined\}/,
   );
   assert.match(pageSource, /Als gelesen markieren/);
   assert.match(pageSource, /Keine neuen Meldungen/);
