@@ -131,6 +131,8 @@ test("absence action precedes note action and both open the shared dashboard edi
 
   assert.ok(notesCardStart >= 0 && notesPanelStart > notesCardStart);
   assert.ok(absenceButton >= 0 && noteButton > absenceButton);
+  assert.match(notesCard, /className="dashboard-note-action-row"/);
+  assert.doesNotMatch(notesCard, /actions=\{/);
   assert.equal(notesCard.match(/aria-controls="dashboard-note-editor"/g)?.length, 2);
   assert.match(dashboardSource, /id="dashboard-note-editor"/);
   assert.match(dashboardSource, /editorMode === "note" \? \(/);
@@ -153,7 +155,7 @@ test("project manager options come from the backend and are not hardcoded", () =
   assert.doesNotMatch(picker, /\b(?:AB|CE|KE|TW)\b/);
 });
 
-test("time inputs stay paired and header actions adapt without widening the notes card", () => {
+test("time inputs stay paired and the separate action row adapts without widening the notes card", () => {
   assert.match(
     styles,
     /\.dashboard-operational-absence-time-range \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s,
@@ -161,7 +163,18 @@ test("time inputs stay paired and header actions adapt without widening the note
   assert.match(styles, /container-name:\s*dashboard-notes-card/);
   assert.match(
     styles,
-    /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-card-actions \{[\s\S]*grid-column:\s*1 \/ -1[\s\S]*flex-wrap:\s*wrap/s,
+    /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-note-action-row \{[\s\S]*flex-wrap:\s*wrap/s,
   );
   assert.match(styles, /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-note-add-button \{[\s\S]*flex:\s*1 1 145px[\s\S]*white-space:\s*normal/s);
+});
+
+test("notes and messages use the same title-row sizing while note actions sit below it", () => {
+  assert.match(
+    styles,
+    /\.dashboard-card-messages \.dashboard-card-header,\s*\.dashboard-card-notes \.dashboard-card-header \{[^}]*min-height:\s*36px;[^}]*gap:\s*7px;[^}]*padding:\s*7px 10px/s,
+  );
+  assert.match(
+    styles,
+    /\.dashboard-note-action-row \{[^}]*border-bottom:\s*1px solid var\(--dashboard-section-border\);[^}]*padding:\s*6px 8px/s,
+  );
 });

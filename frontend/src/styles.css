@@ -19909,14 +19909,6 @@ button.person-chip:focus-visible {
   font-weight: 900;
 }
 
-.dashboard-card-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
-}
-
 .dashboard-card-messages .dashboard-card-header,
 .dashboard-card-notes .dashboard-card-header {
   min-height: 36px;
@@ -19959,6 +19951,18 @@ button.person-chip:focus-visible {
 .dashboard-card-notes {
   container-name: dashboard-notes-card;
   container-type: inline-size;
+}
+
+.dashboard-note-action-row {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  border-bottom: 1px solid var(--dashboard-section-border);
+  background: var(--dashboard-section-background);
+  padding: 6px 8px;
 }
 
 .dashboard-card-messages > .dashboard-alert-list,
@@ -21112,15 +21116,9 @@ button.person-chip:focus-visible {
 }
 
 @container dashboard-notes-card (max-width: 430px) {
-  .dashboard-card-notes .dashboard-card-header {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .dashboard-card-notes .dashboard-card-actions {
-    grid-column: 1 / -1;
-    width: 100%;
+  .dashboard-card-notes .dashboard-note-action-row {
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: stretch;
   }
 
   .dashboard-card-notes .dashboard-note-add-button {
@@ -21130,26 +21128,6 @@ button.person-chip:focus-visible {
 }
 
 /* Compact sizing is intentionally limited to the dashboard notes card. */
-.dashboard-card-notes .dashboard-card-header {
-  min-height: 32px;
-  gap: 6px;
-  padding: 5px 8px;
-}
-
-.dashboard-card-notes .dashboard-card-header > span:first-child {
-  width: 16px;
-  height: 16px;
-}
-
-.dashboard-card-notes .dashboard-card-header > span:first-child svg {
-  width: 15px;
-  height: 15px;
-}
-
-.dashboard-card-notes h2 {
-  font-size: 0.74rem;
-}
-
 .dashboard-card-notes .dashboard-note-add-button {
   min-height: 26px;
   gap: 4px;

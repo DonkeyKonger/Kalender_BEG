@@ -921,31 +921,29 @@ export function DashboardPage() {
               title="Notizen"
               icon={<ClipboardList aria-hidden="true" size={20} />}
               className="dashboard-card-notes dashboard-section--notes"
-              actions={(
-                <>
-                  <button
-                    aria-controls="dashboard-note-editor"
-                    aria-expanded={dashboardEditorMode === "operational_absence"}
-                    type="button"
-                    className="dashboard-note-add-button"
-                    onClick={openOperationalAbsenceCreateForm}
-                  >
-                    <Plus aria-hidden="true" size={15} />
-                    Abwesenheit hinzufügen
-                  </button>
-                  <button
-                    aria-controls="dashboard-note-editor"
-                    aria-expanded={dashboardEditorMode === "note"}
-                    type="button"
-                    className="dashboard-note-add-button"
-                    onClick={openDashboardNoteCreateForm}
-                  >
-                    <Plus aria-hidden="true" size={15} />
-                    Notiz hinzufügen
-                  </button>
-                </>
-              )}
             >
+              <div className="dashboard-note-action-row" aria-label="Notizaktionen">
+                <button
+                  aria-controls="dashboard-note-editor"
+                  aria-expanded={dashboardEditorMode === "operational_absence"}
+                  type="button"
+                  className="dashboard-note-add-button"
+                  onClick={openOperationalAbsenceCreateForm}
+                >
+                  <Plus aria-hidden="true" size={15} />
+                  Abwesenheit hinzufügen
+                </button>
+                <button
+                  aria-controls="dashboard-note-editor"
+                  aria-expanded={dashboardEditorMode === "note"}
+                  type="button"
+                  className="dashboard-note-add-button"
+                  onClick={openDashboardNoteCreateForm}
+                >
+                  <Plus aria-hidden="true" size={15} />
+                  Notiz hinzufügen
+                </button>
+              </div>
               <DashboardNotesPanel
                 editorMode={dashboardEditorMode}
                 busyNoteId={dashboardNoteBusyId}
@@ -1062,7 +1060,6 @@ function DashboardCard({
   className,
   meta,
   badge,
-  actions,
 }: {
   title: string;
   icon: ReactNode;
@@ -1070,7 +1067,6 @@ function DashboardCard({
   className?: string;
   meta?: ReactNode;
   badge?: ReactNode;
-  actions?: ReactNode;
 }) {
   return (
     <article className={["dashboard-card", className ?? ""].filter(Boolean).join(" ")}>
@@ -1080,8 +1076,7 @@ function DashboardCard({
           <h2>{title}</h2>
           {meta ? <p>{meta}</p> : null}
         </div>
-        {actions ? <div className="dashboard-card-actions">{actions}</div> : null}
-        {!actions && badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
+        {badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
       </div>
       {children}
     </article>
