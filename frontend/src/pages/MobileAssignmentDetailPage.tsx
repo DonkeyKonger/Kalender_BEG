@@ -38,6 +38,7 @@ import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
+import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../utils/dateRange";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -568,6 +569,7 @@ function MobileExtraWorkTab({
       <>
         <ExtraWorkOrderOverview
           assignmentId={assignment.id}
+          assignmentStartDate={assignment.start_date}
           order={selectedOrder}
           message={message}
           error={error}
@@ -596,6 +598,11 @@ function MobileExtraWorkTab({
             mergeUpdatedOrder(updatedOrder);
             setPhotoMessageTone("info");
             setMessage("Bezeichnung gespeichert.");
+          }}
+          onDetailsUpdated={(updatedOrder) => {
+            mergeUpdatedOrder(updatedOrder);
+            setPhotoMessageTone("info");
+            setMessage("Stundenzettel-Details gespeichert.");
           }}
           onEmailRecipientsSaved={(count) => {
             setPhotoMessageTone("info");
@@ -710,6 +717,7 @@ function MobileExtraWorkTab({
 
 function ExtraWorkOrderOverview({
   assignmentId,
+  assignmentStartDate,
   order,
   message,
   error,
@@ -723,12 +731,14 @@ function ExtraWorkOrderOverview({
   onOpenPhotos,
   onCustomerSigned,
   onTitleUpdated,
+  onDetailsUpdated,
   onEmailRecipientsSaved,
   onEmailSent,
   onWorkerSigned,
   onSubmit,
 }: {
   assignmentId: number;
+  assignmentStartDate: string;
   order: MobileExtraWorkTicket;
   message: string | null;
   error: string | null;
@@ -742,6 +752,7 @@ function ExtraWorkOrderOverview({
   onOpenPhotos: () => void;
   onCustomerSigned: (order: MobileExtraWorkTicket) => void;
   onTitleUpdated: (order: MobileExtraWorkTicket) => void;
+  onDetailsUpdated: (order: MobileExtraWorkTicket) => void;
   onEmailRecipientsSaved: (count: number) => void;
   onEmailSent: (result: ExtraWorkTicketEmailSendResponse) => void;
   onWorkerSigned: (order: MobileExtraWorkTicket) => void;
@@ -756,6 +767,7 @@ function ExtraWorkOrderOverview({
   const [isSigningCustomer, setIsSigningCustomer] = useState(false);
   const [isSigningWorker, setIsSigningWorker] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [isEditingEmailRecipients, setIsEditingEmailRecipients] = useState(false);
   const [emailRecipients, setEmailRecipients] = useState<SiteEmailRecipient[]>([]);
   const [isLoadingEmailRecipients, setIsLoadingEmailRecipients] = useState(true);
@@ -871,16 +883,15 @@ function ExtraWorkOrderOverview({
         </button>
       </div>
 
-      <button
-        className={`mobile-measurement-summary-card mobile-extra-work-title-card${canRename ? " is-editable" : " is-locked"}`}
-        type="button"
-        onClick={() => {
-          if (canRename) {
-            setIsRenaming(true);
-          }
-        }}
-        aria-label={canRename ? "Stundenzettel benennen" : "Stundenzettel-Name gesperrt"}
+      <section
+        className="mobile-measurement-summary-card mobile-extra-work-title-card is-editable"
       >
+        <button
+          className="mobile-extra-work-details-hit-area"
+          type="button"
+          onClick={() => setIsEditingDetails(true)}
+          aria-label="Stundenzettel-Details öffnen"
+        />
         <span className="mobile-measurement-summary-status-row">
           <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
           <MobileCustomerEmailStatus item={order} />
@@ -888,7 +899,19 @@ function ExtraWorkOrderOverview({
         <span className="mobile-measurement-card-date">{kindLabel}</span>
         <span className="mobile-extra-work-title-line">
           <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
-          {canRename ? <Pencil aria-hidden="true" size={15} /> : null}
+          {canRename ? (
+            <button
+              className="mobile-extra-work-rename-button"
+              type="button"
+              aria-label="Stundenzettel benennen"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsRenaming(true);
+              }}
+            >
+              <Pencil aria-hidden="true" size={15} />
+            </button>
+          ) : null}
         </span>
         <span className="mobile-measurement-card-date">Datum: {formatMobileExtraWorkOrderDate(order)}</span>
         <span className="mobile-measurement-card-meta">
@@ -897,7 +920,7 @@ function ExtraWorkOrderOverview({
             <span>Vorgabe: {formatExtraWorkHours(order.estimated_hours)}</span>
           ) : null}
         </span>
-      </button>
+      </section>
       {error || pdfError ? <div className="form-error">{error ?? pdfError}</div> : null}
 
       <div className="mobile-measurement-overview-actions">
@@ -991,6 +1014,18 @@ function ExtraWorkOrderOverview({
           onSaved={(updatedOrder) => {
             setIsRenaming(false);
             onTitleUpdated(updatedOrder);
+          }}
+        />
+      ) : null}
+      {isEditingDetails ? (
+        <ExtraWorkDetailsDialog
+          assignmentId={assignmentId}
+          assignmentStartDate={assignmentStartDate}
+          order={order}
+          onClose={() => setIsEditingDetails(false)}
+          onSaved={(updatedOrder) => {
+            setIsEditingDetails(false);
+            onDetailsUpdated(updatedOrder);
           }}
         />
       ) : null}
@@ -1103,6 +1138,135 @@ function ExtraWorkTitleDialog({
           <button className="primary-action" type="button" onClick={() => void saveTitle()} disabled={!canRename || isSaving}>
             {isSaving ? "Speichert..." : "Speichern"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtraWorkDetailsDialog({
+  assignmentId,
+  assignmentStartDate,
+  order,
+  onClose,
+  onSaved,
+}: {
+  assignmentId: number;
+  assignmentStartDate: string;
+  order: MobileExtraWorkTicket;
+  onClose: () => void;
+  onSaved: (order: MobileExtraWorkTicket) => void;
+}) {
+  const automaticOrderDate = getExtraWorkAutomaticOrderDate(order.created_at);
+  const automaticWeek = getIsoWeekInfo(assignmentStartDate || automaticOrderDate);
+  const initialWeekYear = order.manual_execution_week_year ?? automaticWeek.isoYear;
+  const initialWeek = order.manual_execution_week ?? automaticWeek.week;
+  const [orderDate, setOrderDate] = useState(order.manual_order_date ?? automaticOrderDate);
+  const [executionWeek, setExecutionWeek] = useState(`${initialWeekYear}-${initialWeek}`);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const canEdit = !order.customer_signed_at;
+  const weekOptions = useMemo(
+    () => buildExtraWorkIsoWeekOptions(automaticWeek.isoYear, initialWeekYear),
+    [automaticWeek.isoYear, initialWeekYear],
+  );
+  const selectedWeek = parseExtraWorkIsoWeekValue(executionWeek);
+  const selectedWeekRange = selectedWeek
+    ? getIsoWeekRange(selectedWeek.isoYear, selectedWeek.week)
+    : null;
+
+  async function saveDetails(): Promise<void> {
+    if (!canEdit || isSaving || !orderDate || !selectedWeek) {
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const usesAutomaticWeek = selectedWeek.isoYear === automaticWeek.isoYear
+        && selectedWeek.week === automaticWeek.week;
+      const updatedOrder = await api.updateMobileExtraWorkTicketDetails(assignmentId, order.id, {
+        manual_order_date: orderDate === automaticOrderDate ? null : orderDate,
+        manual_execution_week: usesAutomaticWeek ? null : selectedWeek.week,
+        manual_execution_week_year: usesAutomaticWeek ? null : selectedWeek.isoYear,
+      });
+      onSaved(updatedOrder);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Stundenzettel-Details konnten nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSaving ? undefined : onClose}>
+      <div
+        className="mobile-extra-work-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-details-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-extra-work-details-dialog-head">
+          <div>
+            <p>{formatMobileExtraWorkOrderTitle(order)}</p>
+            <h2 id="mobile-extra-work-details-dialog-title">Stundenzettel-Details</h2>
+          </div>
+          <button className="icon-button secondary" type="button" onClick={onClose} disabled={isSaving} aria-label="Schließen">
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+
+        <label className="mobile-extra-work-details-field">
+          <span>Datum der Auftragserteilung</span>
+          <input
+            type="date"
+            value={orderDate}
+            onChange={(event) => setOrderDate(event.target.value)}
+            disabled={!canEdit || isSaving}
+            required
+          />
+          <small>Automatisch: {formatGermanDateKey(automaticOrderDate)}</small>
+        </label>
+
+        <label className="mobile-extra-work-details-field">
+          <span>Kalenderwoche der Ausführung</span>
+          <select
+            value={executionWeek}
+            onChange={(event) => setExecutionWeek(event.target.value)}
+            disabled={!canEdit || isSaving}
+          >
+            {weekOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <small>
+            {selectedWeekRange
+              ? `${formatGermanDateKey(selectedWeekRange.start)} – ${formatGermanDateKey(selectedWeekRange.end)}`
+              : "Ungültige Kalenderwoche"}
+            {` · Automatisch: KW ${String(automaticWeek.week).padStart(2, "0")} / ${automaticWeek.isoYear}`}
+          </small>
+        </label>
+
+        {!canEdit ? (
+          <p className="mobile-extra-work-details-locked-note">
+            Nach der Kundenunterschrift können diese Angaben nicht mehr geändert werden.
+          </p>
+        ) : null}
+        {error ? <p className="form-error">{error}</p> : null}
+        <div className={`mobile-extra-work-title-dialog-actions${canEdit ? "" : " is-single"}`}>
+          <button className="secondary-action" type="button" onClick={onClose} disabled={isSaving}>
+            {canEdit ? "Abbrechen" : "Schließen"}
+          </button>
+          {canEdit ? (
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void saveDetails()}
+              disabled={isSaving || !orderDate || !selectedWeek}
+            >
+              {isSaving ? "Speichert..." : "Speichern"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -7246,6 +7410,58 @@ function formatMobileExtraWorkOrderDate(order: MobileExtraWorkTicket): string {
     ? order.updated_at
     : order.submitted_at || order.created_at;
   return formatMobileDateValue(dateValue);
+}
+
+function getExtraWorkAutomaticOrderDate(createdAt: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(createdAt);
+  if (match) {
+    return match[1];
+  }
+  const today = new Date();
+  return [
+    String(today.getFullYear()).padStart(4, "0"),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function buildExtraWorkIsoWeekOptions(
+  automaticIsoYear: number,
+  selectedIsoYear: number,
+): Array<{ value: string; label: string }> {
+  const currentIsoYear = getIsoWeekInfo(getExtraWorkAutomaticOrderDate(new Date().toISOString())).isoYear;
+  const years = new Set<number>();
+  for (const anchor of [automaticIsoYear, selectedIsoYear, currentIsoYear]) {
+    for (let year = anchor - 2; year <= anchor + 2; year += 1) {
+      if (year >= 1 && year <= 9999) {
+        years.add(year);
+      }
+    }
+  }
+  return [...years]
+    .sort((left, right) => left - right)
+    .flatMap((isoYear) => Array.from({ length: getIsoWeeksInYear(isoYear) }, (_, index) => {
+      const week = index + 1;
+      return {
+        value: `${isoYear}-${week}`,
+        label: `KW ${String(week).padStart(2, "0")} / ${isoYear}`,
+      };
+    }));
+}
+
+function parseExtraWorkIsoWeekValue(value: string): { isoYear: number; week: number } | null {
+  const match = /^(\d{1,4})-(\d{1,2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const isoYear = Number(match[1]);
+  const week = Number(match[2]);
+  try {
+    getIsoWeekRange(isoYear, week);
+    return { isoYear, week };
+  } catch {
+    return null;
+  }
 }
 
 function getMobileExtraWorkOrderStatusBadge(order: MobileExtraWorkTicket): { label: string; className: string } {

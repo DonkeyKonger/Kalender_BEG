@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import logging
@@ -21,6 +21,7 @@ from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, 
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
+from app.services.extra_work_dates import resolve_extra_work_document_dates
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
@@ -28,7 +29,7 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v5"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v6"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -216,6 +217,9 @@ class ExtraWorkPdfService:
                 "title": ticket.title,
                 "kind": ticket.kind,
                 "status": ticket.status,
+                "manual_order_date": ticket.manual_order_date,
+                "manual_execution_week": ticket.manual_execution_week,
+                "manual_execution_week_year": ticket.manual_execution_week_year,
                 "updated_at": ticket.updated_at,
                 "submitted_at": ticket.submitted_at,
                 "customer_signature_type": ticket.customer_signature_type,
@@ -403,10 +407,16 @@ class ExtraWorkPdfService:
         total_pages: int,
     ) -> None:
         site = ticket.site
-        created_date = _date_from_datetime(ticket.created_at)
+        document_dates = resolve_extra_work_document_dates(
+            created_at=ticket.created_at,
+            assignment_start_date=assignment.start_date if assignment else None,
+            manual_order_date=ticket.manual_order_date,
+            manual_execution_week=ticket.manual_execution_week,
+            manual_execution_week_year=ticket.manual_execution_week_year,
+        )
         _field(commands, FIELD_RECTS["Kunde"], site.customer or "")
         _field(commands, FIELD_RECTS["Projekt"], site.name)
-        _field(commands, FIELD_RECTS["Datum"], _format_date(created_date))
+        _field(commands, FIELD_RECTS["Datum"], _format_date(document_dates.order_date))
         if ticket.customer_signature_name:
             _text(
                 commands,
@@ -446,10 +456,20 @@ class ExtraWorkPdfService:
         title = _clean_text(ticket.title)
         if title:
             _field(commands, FieldRect(236.88, 366.00, 313.00, 10.00), title, size=7.1)
-        assignment_date = assignment.start_date if assignment else None
-        week_start, week_end = _week_range(assignment_date or created_date)
-        _field(commands, FIELD_RECTS["für die Zeit vom"], _format_date(week_start), size=7.0, align="center")
-        _field(commands, FIELD_RECTS["bis"], _format_date(week_end), size=7.0, align="center")
+        _field(
+            commands,
+            FIELD_RECTS["für die Zeit vom"],
+            _format_date(document_dates.execution_start),
+            size=7.0,
+            align="center",
+        )
+        _field(
+            commands,
+            FIELD_RECTS["bis"],
+            _format_date(document_dates.execution_end),
+            size=7.0,
+            align="center",
+        )
         if entry:
             _field(commands, _shift_rect(FIELD_RECTS["Bauteil"], dy=2.0), entry.component, size=9)
             _field(commands, _shift_rect(FIELD_RECTS["Etage"], dy=2.0), entry.floor, size=9)
@@ -1139,11 +1159,6 @@ def _clean_text(value: str | None) -> str:
 
 def _date_from_datetime(value: datetime | None) -> date:
     return value.date() if value else date.today()
-
-
-def _week_range(value: date) -> tuple[date, date]:
-    start = value - timedelta(days=value.weekday())
-    return start, start + timedelta(days=6)
 
 
 def _format_date(value: date) -> str:

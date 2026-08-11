@@ -379,6 +379,9 @@ export type MobileExtraWorkTicket = {
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;
+  manual_order_date: string | null;
+  manual_execution_week: number | null;
+  manual_execution_week_year: number | null;
   customer_signature_type: "billing_customer" | "approval_customer" | string | null;
   customer_signature_name: string | null;
   customer_signature_place: string | null;
@@ -393,6 +396,12 @@ export type MobileExtraWorkTicket = {
   estimated_hours: MeasurementNumericValue | null;
   created_at: string;
   updated_at: string;
+};
+
+export type MobileExtraWorkTicketDetailsUpdate = {
+  manual_order_date: string | null;
+  manual_execution_week: number | null;
+  manual_execution_week_year: number | null;
 };
 
 export type SiteEmailRecipient = {

@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkTicketCreate,
+    ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketPhotoRead,
@@ -222,6 +223,29 @@ class ExtraWorkService:
                 "Der Name kann nur im Entwurf geändert werden.",
             )
         ticket.title = self._clean_optional_text(payload.title)
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return self._build_ticket_read(ticket)
+
+    def update_mobile_ticket_details(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkTicketDetailsUpdate,
+    ) -> ExtraWorkTicketRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        if ticket.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Stundenzettel-Details können nach Kundenunterschrift nicht mehr geändert werden.",
+            )
+        ticket.manual_order_date = payload.manual_order_date
+        ticket.manual_execution_week = payload.manual_execution_week
+        ticket.manual_execution_week_year = payload.manual_execution_week_year
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)

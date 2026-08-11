@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.services.extra_work_dates import validate_iso_week
 
 
 class ExtraWorkTicketCreate(BaseModel):
@@ -16,6 +18,20 @@ class ExtraWorkTicketStatusUpdate(BaseModel):
 
 class ExtraWorkTicketTitleUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=160)
+
+
+class ExtraWorkTicketDetailsUpdate(BaseModel):
+    manual_order_date: date | None = None
+    manual_execution_week: int | None = Field(default=None, ge=1, le=53)
+    manual_execution_week_year: int | None = Field(default=None, ge=1, le=9999)
+
+    @model_validator(mode="after")
+    def validate_manual_execution_week(self) -> "ExtraWorkTicketDetailsUpdate":
+        if (self.manual_execution_week is None) != (self.manual_execution_week_year is None):
+            raise ValueError("Kalenderwoche und ISO-Jahr müssen gemeinsam angegeben werden.")
+        if self.manual_execution_week is not None and self.manual_execution_week_year is not None:
+            validate_iso_week(self.manual_execution_week_year, self.manual_execution_week)
+        return self
 
 
 class ExtraWorkSignaturePoint(BaseModel):
@@ -126,6 +142,9 @@ class ExtraWorkTicketRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
+    manual_order_date: date | None
+    manual_execution_week: int | None
+    manual_execution_week_year: int | None
     customer_signature_type: str | None
     customer_signature_name: str | None
     customer_signature_place: str | None

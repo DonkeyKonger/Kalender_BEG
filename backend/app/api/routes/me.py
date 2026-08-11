@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkTicketCreate,
+    ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketEmailSendRead,
@@ -328,6 +329,25 @@ def update_my_assignment_extra_work_ticket_title(
     db: Session = Depends(get_db),
 ) -> ExtraWorkTicketRead:
     return ExtraWorkService(db).update_mobile_ticket_title(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.patch(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/details",
+    response_model=ExtraWorkTicketRead,
+)
+def update_my_assignment_extra_work_ticket_details(
+    assignment_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketDetailsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).update_mobile_ticket_details(
         assignment_id=assignment_id,
         ticket_id=ticket_id,
         current_user=current_user,

@@ -29,6 +29,7 @@ from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
+    ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
@@ -1067,6 +1068,166 @@ def test_mobile_extra_work_ticket_title_is_locked_after_customer_signature():
     assert getattr(blocked_update.value, "status_code", None) == 409
 
 
+def test_mobile_extra_work_details_persist_after_worker_signature_and_submission_without_touching_signatures():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    worker_signed = service.sign_mobile_ticket_worker(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkWorkerSignatureCreate(
+            worker_name="Max Monteur",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.1, y=0.4),
+                ExtraWorkSignaturePoint(x=0.7, y=0.45),
+            ]],
+        ),
+    )
+    submitted = service.submit_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    updated = service.update_mobile_ticket_details(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketDetailsUpdate(
+            manual_order_date=date(2026, 8, 4),
+            manual_execution_week=1,
+            manual_execution_week_year=2027,
+        ),
+    )
+    reloaded = service.get_mobile_ticket(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    assert updated.status == submitted.status == "submitted"
+    assert updated.worker_signature_name == "Max Monteur"
+    assert updated.worker_signed_at == worker_signed.worker_signed_at
+    assert updated.manual_order_date == date(2026, 8, 4)
+    assert updated.manual_execution_week == 1
+    assert updated.manual_execution_week_year == 2027
+    assert reloaded.manual_order_date == date(2026, 8, 4)
+
+
+def test_mobile_extra_work_details_are_locked_after_customer_signature():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                ExtraWorkSignaturePoint(x=0.7, y=0.5),
+            ]],
+        ),
+    )
+
+    with pytest.raises(HTTPException) as blocked_update:
+        service.update_mobile_ticket_details(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+            payload=ExtraWorkTicketDetailsUpdate(manual_order_date=date(2026, 8, 4)),
+        )
+
+    assert blocked_update.value.status_code == 409
+
+
+def test_mobile_extra_work_details_endpoint_rejects_invalid_weeks_and_customer_signed_updates():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(
+        id=7,
+        person_id=person.id,
+        role="monteur",
+        is_active=True,
+        must_change_password=False,
+    )
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_app_user] = lambda: current_user
+    endpoint = f"/api/me/assignments/{assignment.id}/extra-work-tickets/{ticket.id}/details"
+    try:
+        invalid_response = TestClient(app).patch(
+            endpoint,
+            json={"manual_execution_week": 53, "manual_execution_week_year": 2025},
+        )
+        assert invalid_response.status_code == 422
+
+        service.sign_mobile_ticket_customer(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=current_user,
+            payload=ExtraWorkCustomerSignatureCreate(
+                customer_name="Kunde Beispiel",
+                signature_strokes=[[
+                    ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                    ExtraWorkSignaturePoint(x=0.7, y=0.5),
+                ]],
+            ),
+        )
+        locked_response = TestClient(app).patch(
+            endpoint,
+            json={"manual_order_date": "2026-08-04"},
+        )
+        assert locked_response.status_code == 409
+        assert "Kundenunterschrift" in locked_response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_mobile_extra_work_customer_signature_rejects_empty_signature():
     with pytest.raises(ValueError):
         ExtraWorkCustomerSignatureCreate(
@@ -1148,6 +1309,47 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     assert "Name: Max Monteur" not in pdf_text
     assert "Name: Kunde Beispiel" not in pdf_text
     assert "Unterschrift Kunde" not in pdf_text
+
+
+def test_mobile_extra_work_pdf_uses_manual_order_date_and_iso_week_period():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="9999", name="Testbaustelle Finienweg", customer="Kunde GmbH")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    updated = service.update_mobile_ticket_details(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketDetailsUpdate(
+            manual_order_date=date(2026, 8, 4),
+            manual_execution_week=1,
+            manual_execution_week_year=2027,
+        ),
+    )
+
+    content, _filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages)
+
+    assert updated.manual_order_date == date(2026, 8, 4)
+    assert "04.08.2026" in pdf_text
+    assert "04.01.2027" in pdf_text
+    assert "10.01.2027" in pdf_text
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):

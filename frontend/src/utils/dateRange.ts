@@ -63,6 +63,30 @@ export function getIsoWeekStartDate(referenceDate: Date | string = new Date()): 
   return toDateInputValue(parsedDate);
 }
 
+export function getIsoWeeksInYear(isoYear: number): number {
+  return getIsoWeekInfo(`${isoYear}-12-28`).week;
+}
+
+export function getIsoWeekRange(isoYear: number, week: number): { start: string; end: string } {
+  if (!Number.isInteger(isoYear) || !Number.isInteger(week) || isoYear < 1 || isoYear > 9999) {
+    throw new RangeError("Ungültiges ISO-Kalenderjahr oder ungültige Kalenderwoche.");
+  }
+  const januaryFourth = new Date(Date.UTC(isoYear, 0, 4));
+  const januaryFourthIsoDay = januaryFourth.getUTCDay() || 7;
+  const firstMonday = new Date(januaryFourth);
+  firstMonday.setUTCDate(januaryFourth.getUTCDate() - januaryFourthIsoDay + 1);
+  const start = new Date(firstMonday);
+  start.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
+  const startValue = toUtcDateInputValue(start);
+  const actualWeek = getIsoWeekInfo(startValue);
+  if (actualWeek.isoYear !== isoYear || actualWeek.week !== week) {
+    throw new RangeError(`KW ${week} existiert im ISO-Jahr ${isoYear} nicht.`);
+  }
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  return { start: startValue, end: toUtcDateInputValue(end) };
+}
+
 export function getEasterSunday(year: number): Date {
   const a = year % 19;
   const b = Math.floor(year / 100);
@@ -131,6 +155,13 @@ export function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toUtcDateInputValue(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 

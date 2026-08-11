@@ -22708,6 +22708,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-extra-work-title-card {
+  position: relative;
   appearance: none;
   width: 100%;
   color: inherit;
@@ -22716,11 +22717,28 @@ button.person-chip:focus-visible {
   text-align: left;
 }
 
+.mobile-extra-work-title-card > span {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.mobile-extra-work-details-hit-area {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
 .mobile-extra-work-title-card.is-locked {
   cursor: default;
 }
 
-.mobile-extra-work-title-card:focus-visible {
+.mobile-extra-work-details-hit-area:focus-visible {
   outline: 3px solid rgb(47 96 150 / 28%);
   outline-offset: 2px;
 }
@@ -22739,6 +22757,27 @@ button.person-chip:focus-visible {
 .mobile-extra-work-title-line svg {
   flex: 0 0 auto;
   color: #2f6096;
+}
+
+.mobile-extra-work-rename-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #2f6096;
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 0;
+}
+
+.mobile-extra-work-rename-button:focus-visible {
+  outline: 3px solid rgb(47 96 150 / 28%);
+  outline-offset: 1px;
 }
 
 .mobile-extra-work-title-dialog {
@@ -22797,6 +22836,115 @@ button.person-chip:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.mobile-extra-work-title-dialog-actions.is-single {
+  grid-template-columns: 1fr;
+}
+
+.mobile-extra-work-details-dialog {
+  display: grid;
+  gap: 15px;
+  width: min(92vw, 460px);
+  max-height: min(86vh, 680px);
+  overflow-y: auto;
+  border: 1px solid #d8e3ef;
+  border-top: 4px solid #f4b73f;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 24px 55px rgb(15 23 42 / 20%);
+}
+
+.mobile-extra-work-details-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-extra-work-details-dialog-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mobile-extra-work-details-dialog-head p,
+.mobile-extra-work-details-dialog-head h2,
+.mobile-extra-work-details-locked-note {
+  margin: 0;
+}
+
+.mobile-extra-work-details-dialog-head p {
+  overflow: hidden;
+  color: #65738a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-extra-work-details-dialog-head h2 {
+  color: #111827;
+  font-size: 1.08rem;
+}
+
+.mobile-extra-work-details-field {
+  display: grid;
+  gap: 7px;
+  color: #42526b;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.mobile-extra-work-details-field input,
+.mobile-extra-work-details-field select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #cbd7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.mobile-extra-work-details-field input:focus,
+.mobile-extra-work-details-field select:focus {
+  border-color: #6f9ac7;
+  outline: 3px solid rgb(47 96 150 / 16%);
+}
+
+.mobile-extra-work-details-field input:disabled,
+.mobile-extra-work-details-field select:disabled {
+  background: #f3f6f9;
+  color: #65738a;
+  opacity: 1;
+}
+
+.mobile-extra-work-details-field small {
+  color: #718096;
+  font-size: 0.73rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.mobile-extra-work-details-locked-note {
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+  background: #f5f8fb;
+  color: #5d6b7e;
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.4;
+  padding: 10px 11px;
+}
+
+@media (max-width: 430px) {
+  .mobile-extra-work-details-dialog {
+    width: min(94vw, 460px);
+    padding: 14px;
+  }
 }
 
 .mobile-project-email-dialog {

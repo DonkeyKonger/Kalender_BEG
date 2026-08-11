@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -12,6 +12,15 @@ class ExtraWorkTicket(TimestampMixin, Base):
     __tablename__ = "extra_work_tickets"
     __table_args__ = (
         UniqueConstraint("site_id", "sequence_number", name="uq_extra_work_tickets_site_sequence"),
+        CheckConstraint(
+            "(manual_execution_week IS NULL AND manual_execution_week_year IS NULL) OR "
+            "(manual_execution_week IS NOT NULL AND manual_execution_week_year IS NOT NULL)",
+            name="ck_extra_work_ticket_manual_execution_week_pair",
+        ),
+        CheckConstraint(
+            "manual_execution_week IS NULL OR manual_execution_week BETWEEN 1 AND 53",
+            name="ck_extra_work_ticket_manual_execution_week_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -34,6 +43,9 @@ class ExtraWorkTicket(TimestampMixin, Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+    manual_order_date: Mapped[date | None] = mapped_column(Date)
+    manual_execution_week: Mapped[int | None] = mapped_column(Integer)
+    manual_execution_week_year: Mapped[int | None] = mapped_column(Integer)
     customer_signature_type: Mapped[str | None] = mapped_column(String(60))
     customer_signature_name: Mapped[str | None] = mapped_column(String(160))
     customer_signature_place: Mapped[str | None] = mapped_column(String(160))
