@@ -161,6 +161,42 @@ export type DashboardNoteUpdatePayload = Partial<DashboardNotePayload> & {
   completed?: boolean;
 };
 
+export type OperationalAbsenceProjectManager = {
+  id: number;
+  display_name: string;
+  short_code: string;
+};
+
+export type OperationalAbsenceSite = {
+  id: number;
+  site_number: string | null;
+  name: string;
+};
+
+export type OperationalAbsence = {
+  id: number;
+  project_manager_id: number;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  site_id: number | null;
+  text: string | null;
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  project_manager: OperationalAbsenceProjectManager;
+  site: OperationalAbsenceSite | null;
+};
+
+export type OperationalAbsencePayload = {
+  project_manager_id: number;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  site_id: number | null;
+  text: string | null;
+};
+
 export type DashboardOverviewAssignedSite = {
   site: MatrixSite;
   managerLabel: string;
@@ -537,6 +573,33 @@ export const api = {
 
   async deleteDashboardNote(noteId: number): Promise<void> {
     await request<void>(`/dashboard/notes/${noteId}`, { method: "DELETE" });
+  },
+
+  async operationalAbsences(params: { startDate: string; endDate: string }): Promise<OperationalAbsence[]> {
+    const search = new URLSearchParams({
+      start: params.startDate,
+      end: params.endDate,
+    });
+    return request<OperationalAbsence[]>(`/operational-absences?${search.toString()}`);
+  },
+
+  async operationalAbsenceProjectManagers(): Promise<OperationalAbsenceProjectManager[]> {
+    return request<OperationalAbsenceProjectManager[]>("/operational-absences/project-manager-options");
+  },
+
+  async operationalAbsenceSiteOptions(): Promise<OperationalAbsenceSite[]> {
+    return request<OperationalAbsenceSite[]>("/operational-absences/site-options");
+  },
+
+  async createOperationalAbsence(payload: OperationalAbsencePayload): Promise<OperationalAbsence> {
+    return request<OperationalAbsence>("/operational-absences", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteOperationalAbsence(absenceId: number): Promise<void> {
+    await request<void>(`/operational-absences/${absenceId}`, { method: "DELETE" });
   },
 
   async persons(params: { isActive?: boolean | null } = { isActive: true }): Promise<Person[]> {

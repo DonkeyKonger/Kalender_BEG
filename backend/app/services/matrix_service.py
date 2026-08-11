@@ -10,6 +10,7 @@ from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.dashboard_note import DashboardNote
 from app.models.enums import AbsenceStatus
+from app.models.operational_absence import OperationalAbsence
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
@@ -184,6 +185,16 @@ class MatrixService:
             absence_statement = absence_statement.where(False)
         absence_latest, absence_count = self.db.execute(absence_statement).one()
 
+        operational_absence_latest, operational_absence_count = self.db.execute(
+            select(
+                func.max(OperationalAbsence.updated_at),
+                func.count(OperationalAbsence.id),
+            ).where(
+                OperationalAbsence.absence_date >= start,
+                OperationalAbsence.absence_date <= end,
+            )
+        ).one()
+
         person_statement = select(
             func.max(Person.updated_at),
             func.count(Person.id),
@@ -222,13 +233,21 @@ class MatrixService:
         audit_latest = self.db.scalar(
             select(func.max(AuditLog.created_at)).where(
                 AuditLog.entity_type.in_(
-                    ["assignment", "absence", "matrix", "matrix_cell_mark", "site"]
+                    [
+                        "assignment",
+                        "absence",
+                        "operational_absence",
+                        "matrix",
+                        "matrix_cell_mark",
+                        "site",
+                    ]
                 )
             )
         )
         latest_updated_at = max_datetime(
             assignment_latest,
             absence_latest,
+            operational_absence_latest,
             person_latest,
             mark_latest,
             site_latest,
@@ -246,6 +265,8 @@ class MatrixService:
                 str(assignment_count or 0),
                 datetime_token(absence_latest),
                 str(absence_count or 0),
+                datetime_token(operational_absence_latest),
+                str(operational_absence_count or 0),
                 datetime_token(person_latest),
                 str(person_count or 0),
                 datetime_token(mark_latest),

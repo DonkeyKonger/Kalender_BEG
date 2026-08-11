@@ -2,12 +2,19 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { DashboardNote, DashboardNoteUser } from "../lib/api";
+import type {
+  DashboardNote,
+  DashboardNoteUser,
+  OperationalAbsenceProjectManager,
+} from "../lib/api";
 import { filterPickerOptions } from "../lib/pickerSearch";
 import type { Person } from "../types/person";
-import type { SiteSummary } from "../types/site";
 
-type DashboardNoteSiteOption = SiteSummary | NonNullable<DashboardNote["site"]>;
+type DashboardNoteSiteOption = {
+  id: number;
+  site_number: string | null;
+  name: string;
+};
 
 export type DashboardNotePickerOption = {
   value: string;
@@ -57,6 +64,54 @@ export function DashboardNoteSiteSelect({
       options={options}
       searchLabel="Baustelle suchen"
       searchPlaceholder="Baustelle suchen…"
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+export function DashboardOperationalAbsenceProjectManagerSelect({
+  value,
+  people,
+  loading,
+  error,
+  labelId,
+  onChange,
+}: {
+  value: string;
+  people: OperationalAbsenceProjectManager[];
+  loading: boolean;
+  error: string | null;
+  labelId: string;
+  onChange: (value: string) => void;
+}) {
+  const options = useMemo(() => people
+    .slice()
+    .sort((first, second) => (
+      first.display_name.localeCompare(second.display_name, "de", { sensitivity: "base" })
+      || first.id - second.id
+    ))
+    .map((person) => ({
+      value: String(person.id),
+      label: person.short_code
+        ? `${person.short_code} · ${person.display_name}`
+        : person.display_name,
+      searchText: `${person.short_code} ${person.display_name}`,
+    })), [people]);
+
+  return (
+    <DashboardNotePicker
+      emptyOptionLabel="Bitte auswählen"
+      emptyText="Kein Projektleiter gefunden"
+      error={error}
+      errorText="Projektleiter konnten nicht geladen werden."
+      labelId={labelId}
+      listLabel="Projektleiter auswählen"
+      loading={loading}
+      loadingText="Projektleiter werden geladen..."
+      options={options}
+      searchLabel="Projektleiter suchen"
+      searchPlaceholder="Projektleiter suchen…"
       value={value}
       onChange={onChange}
     />

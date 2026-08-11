@@ -4776,6 +4776,13 @@ button.person-chip:focus-visible {
   color: #475569;
 }
 
+.absence-planning-chip.operational-absence-chip {
+  border-color: #49385d;
+  background: #5b466f;
+  color: #ffffff;
+  box-shadow: 0 1px 0 rgb(42 30 55 / 18%);
+}
+
 
 .absence-planning-chip:hover,
 .absence-planning-chip:focus-visible {
@@ -4883,6 +4890,67 @@ button.person-chip:focus-visible {
 .absence-overflow-item.absence-overflow-free,
 .absence-overflow-item.absence-overflow-other {
   border-left-color: #94a3b8;
+}
+
+.absence-overflow-item.operational-absence-overflow {
+  border-left-color: #49385d;
+  background: #5b466f;
+  color: #ffffff;
+}
+
+.absence-overflow-item.operational-absence-overflow em {
+  color: #eee8f5;
+}
+
+.operational-absence-detail-popover {
+  position: fixed;
+  z-index: 260;
+  display: grid;
+  width: min(310px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  border: 1px solid #cfc4dc;
+  border-radius: 2px;
+  padding: 10px 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgb(31 24 42 / 18%);
+  color: #1f2937;
+  outline: none;
+}
+
+.operational-absence-detail-popover > strong {
+  border-bottom: 2px solid #6a537f;
+  padding-bottom: 8px;
+  color: #3e304d;
+  font-size: 0.86rem;
+}
+
+.operational-absence-detail-popover dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.operational-absence-detail-popover dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+.operational-absence-detail-popover dt {
+  color: #6b7280;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.operational-absence-detail-popover dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #26344d;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 
@@ -19888,6 +19956,11 @@ button.person-chip:focus-visible {
   min-height: 0;
 }
 
+.dashboard-card-notes {
+  container-name: dashboard-notes-card;
+  container-type: inline-size;
+}
+
 .dashboard-card-messages > .dashboard-alert-list,
 .dashboard-card-notes > .dashboard-notes {
   flex: 1 1 auto;
@@ -20985,6 +21058,27 @@ button.person-chip:focus-visible {
   min-height: 34px;
 }
 
+.dashboard-operational-absence-time-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-operational-absence-time-range > label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dashboard-operational-absence-time-range > label > span {
+  color: #6b778c;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .dashboard-card-notes .dashboard-note-editor .dashboard-note-form-actions {
   justify-content: space-between;
   gap: 10px;
@@ -21014,6 +21108,24 @@ button.person-chip:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .dashboard-note-editor {
     animation: none;
+  }
+}
+
+@container dashboard-notes-card (max-width: 430px) {
+  .dashboard-card-notes .dashboard-card-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dashboard-card-notes .dashboard-card-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .dashboard-card-notes .dashboard-note-add-button {
+    flex: 1 1 145px;
+    white-space: normal;
   }
 }
 

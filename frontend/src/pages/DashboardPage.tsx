@@ -4,8 +4,29 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect, DashboardNoteSiteSelect } from "../components/DashboardNotePickers";
-import { api, type DashboardMessage, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser, type DashboardOverview, type DashboardOverviewPerson } from "../lib/api";
+import {
+  DashboardNoteEmployeeSelect,
+  DashboardNoteShareUserSelect,
+  DashboardNoteSiteSelect,
+  DashboardOperationalAbsenceProjectManagerSelect,
+} from "../components/DashboardNotePickers";
+import {
+  api,
+  type DashboardMessage,
+  type DashboardNote,
+  type DashboardNotePayload,
+  type DashboardNoteUser,
+  type DashboardOverview,
+  type DashboardOverviewPerson,
+  type OperationalAbsenceProjectManager,
+  type OperationalAbsenceSite,
+} from "../lib/api";
+import {
+  EMPTY_OPERATIONAL_ABSENCE_DRAFT,
+  operationalAbsencePayloadFromDraft,
+  publishOperationalAbsencesUpdated,
+  type OperationalAbsenceDraft,
+} from "../lib/operationalAbsence";
 import { compareSiteNumbers } from "../lib/siteSorting";
 import { buildToolMaterialIssuePath } from "../lib/toolMaterialRouting";
 import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../types/matrix";
@@ -100,6 +121,7 @@ type DashboardData = {
 };
 
 type DashboardNoteMode = "open" | "completed";
+type DashboardEditorMode = "note" | "operational_absence" | null;
 
 type DashboardNoteDraft = {
   text: string;
@@ -147,12 +169,23 @@ export function DashboardPage() {
   const [dashboardNoteShareUsersError, setDashboardNoteShareUsersError] = useState<string | null>(null);
   const [dashboardNotesLoading, setDashboardNotesLoading] = useState(false);
   const [dashboardNoteMode, setDashboardNoteMode] = useState<DashboardNoteMode>("open");
-  const [dashboardNoteFormOpen, setDashboardNoteFormOpen] = useState(false);
+  const [dashboardEditorMode, setDashboardEditorMode] = useState<DashboardEditorMode>(null);
   const [editingDashboardNoteId, setEditingDashboardNoteId] = useState<number | null>(null);
   const [dashboardNoteDraft, setDashboardNoteDraft] = useState<DashboardNoteDraft>(EMPTY_DASHBOARD_NOTE_DRAFT);
   const [dashboardNoteSaving, setDashboardNoteSaving] = useState(false);
   const [dashboardNoteError, setDashboardNoteError] = useState<string | null>(null);
   const [dashboardNoteBusyId, setDashboardNoteBusyId] = useState<number | null>(null);
+  const [operationalAbsenceDraft, setOperationalAbsenceDraft] = useState<OperationalAbsenceDraft>(
+    EMPTY_OPERATIONAL_ABSENCE_DRAFT,
+  );
+  const [operationalAbsenceProjectManagers, setOperationalAbsenceProjectManagers] = useState<OperationalAbsenceProjectManager[]>([]);
+  const [operationalAbsenceProjectManagersLoading, setOperationalAbsenceProjectManagersLoading] = useState(false);
+  const [operationalAbsenceProjectManagersError, setOperationalAbsenceProjectManagersError] = useState<string | null>(null);
+  const [operationalAbsenceSites, setOperationalAbsenceSites] = useState<OperationalAbsenceSite[]>([]);
+  const [operationalAbsenceSitesLoading, setOperationalAbsenceSitesLoading] = useState(false);
+  const [operationalAbsenceSitesError, setOperationalAbsenceSitesError] = useState<string | null>(null);
+  const [operationalAbsenceSaving, setOperationalAbsenceSaving] = useState(false);
+  const [operationalAbsenceError, setOperationalAbsenceError] = useState<string | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
   const [openedDashboardMessageNote, setOpenedDashboardMessageNote] = useState<DashboardNote | null>(null);
   const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
@@ -304,10 +337,52 @@ export function DashboardPage() {
       }
     }
 
+    async function loadOperationalAbsenceProjectManagers() {
+      setOperationalAbsenceProjectManagersLoading(true);
+      setOperationalAbsenceProjectManagersError(null);
+      try {
+        const projectManagers = await api.operationalAbsenceProjectManagers();
+        if (active) {
+          setOperationalAbsenceProjectManagers(projectManagers);
+        }
+      } catch {
+        if (active) {
+          setOperationalAbsenceProjectManagers([]);
+          setOperationalAbsenceProjectManagersError("Projektleiter konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setOperationalAbsenceProjectManagersLoading(false);
+        }
+      }
+    }
+
+    async function loadOperationalAbsenceSites() {
+      setOperationalAbsenceSitesLoading(true);
+      setOperationalAbsenceSitesError(null);
+      try {
+        const sites = await api.operationalAbsenceSiteOptions();
+        if (active) {
+          setOperationalAbsenceSites(sites.slice().sort(compareDashboardNoteSites));
+        }
+      } catch {
+        if (active) {
+          setOperationalAbsenceSites([]);
+          setOperationalAbsenceSitesError("Baustellen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (active) {
+          setOperationalAbsenceSitesLoading(false);
+        }
+      }
+    }
+
     void loadDashboardNotes();
     void loadDashboardNotePeople();
     void loadDashboardNoteSites();
     void loadDashboardNoteShareUsers();
+    void loadOperationalAbsenceProjectManagers();
+    void loadOperationalAbsenceSites();
 
     return () => {
       active = false;
@@ -496,8 +571,20 @@ export function DashboardPage() {
   function openDashboardNoteCreateForm(): void {
     setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
     setEditingDashboardNoteId(null);
-    setDashboardNoteFormOpen(true);
+    setDashboardEditorMode("note");
     setDashboardNoteError(null);
+    setOperationalAbsenceError(null);
+  }
+
+  function openOperationalAbsenceCreateForm(): void {
+    setOperationalAbsenceDraft({
+      ...EMPTY_OPERATIONAL_ABSENCE_DRAFT,
+      date: range.today,
+    });
+    setEditingDashboardNoteId(null);
+    setDashboardEditorMode("operational_absence");
+    setDashboardNoteError(null);
+    setOperationalAbsenceError(null);
   }
 
   function editDashboardNote(note: DashboardNote): void {
@@ -509,19 +596,26 @@ export function DashboardPage() {
       shared_with_user_id: note.shared_with_user_id === null ? "" : String(note.shared_with_user_id),
     });
     setEditingDashboardNoteId(note.id);
-    setDashboardNoteFormOpen(true);
+    setDashboardEditorMode("note");
     setDashboardNoteError(null);
+    setOperationalAbsenceError(null);
   }
 
-  function cancelDashboardNoteForm(): void {
-    setDashboardNoteFormOpen(false);
+  function cancelDashboardEditor(): void {
+    setDashboardEditorMode(null);
     setEditingDashboardNoteId(null);
     setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
+    setOperationalAbsenceDraft(EMPTY_OPERATIONAL_ABSENCE_DRAFT);
     setDashboardNoteError(null);
+    setOperationalAbsenceError(null);
   }
 
   function updateDashboardNoteDraft(field: keyof DashboardNoteDraft, value: string): void {
     setDashboardNoteDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateOperationalAbsenceDraft(field: keyof OperationalAbsenceDraft, value: string): void {
+    setOperationalAbsenceDraft((current) => ({ ...current, [field]: value }));
   }
 
   function clearDashboardNoteSiteFilter(): void {
@@ -551,13 +645,41 @@ export function DashboardPage() {
         ? await api.createDashboardNote(payload)
         : await api.updateDashboardNote(editingDashboardNoteId, payload);
       setDashboardNotes((current) => upsertDashboardNote(current, savedNote));
-      setDashboardNoteFormOpen(false);
+      setDashboardEditorMode(null);
       setEditingDashboardNoteId(null);
       setDashboardNoteDraft(EMPTY_DASHBOARD_NOTE_DRAFT);
     } catch {
       setDashboardNoteError("Notiz konnte nicht gespeichert werden.");
     } finally {
       setDashboardNoteSaving(false);
+    }
+  }
+
+  async function saveOperationalAbsence(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (operationalAbsenceSaving) {
+      return;
+    }
+    const result = operationalAbsencePayloadFromDraft(operationalAbsenceDraft);
+    if (result.payload === null) {
+      setOperationalAbsenceError(result.error);
+      return;
+    }
+    setOperationalAbsenceSaving(true);
+    setOperationalAbsenceError(null);
+    try {
+      await api.createOperationalAbsence(result.payload);
+      publishOperationalAbsencesUpdated();
+      setDashboardEditorMode(null);
+      setOperationalAbsenceDraft(EMPTY_OPERATIONAL_ABSENCE_DRAFT);
+    } catch (requestError) {
+      setOperationalAbsenceError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Abwesenheit konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setOperationalAbsenceSaving(false);
     }
   }
 
@@ -590,7 +712,7 @@ export function DashboardPage() {
       await api.deleteDashboardNote(note.id);
       setOpenedDashboardMessageNote((current) => current?.id === note.id ? null : current);
       if (editingDashboardNoteId === note.id) {
-        cancelDashboardNoteForm();
+        cancelDashboardEditor();
       }
     } catch {
       setDashboardNotes(previousNotes);
@@ -800,28 +922,49 @@ export function DashboardPage() {
               icon={<ClipboardList aria-hidden="true" size={20} />}
               className="dashboard-card-notes dashboard-section--notes"
               actions={(
-                <button
-                  aria-controls="dashboard-note-editor"
-                  aria-expanded={dashboardNoteFormOpen}
-                  type="button"
-                  className="dashboard-note-add-button"
-                  onClick={openDashboardNoteCreateForm}
-                >
-                  <Plus aria-hidden="true" size={15} />
-                  Notiz hinzufügen
-                </button>
+                <>
+                  <button
+                    aria-controls="dashboard-note-editor"
+                    aria-expanded={dashboardEditorMode === "operational_absence"}
+                    type="button"
+                    className="dashboard-note-add-button"
+                    onClick={openOperationalAbsenceCreateForm}
+                  >
+                    <Plus aria-hidden="true" size={15} />
+                    Abwesenheit hinzufügen
+                  </button>
+                  <button
+                    aria-controls="dashboard-note-editor"
+                    aria-expanded={dashboardEditorMode === "note"}
+                    type="button"
+                    className="dashboard-note-add-button"
+                    onClick={openDashboardNoteCreateForm}
+                  >
+                    <Plus aria-hidden="true" size={15} />
+                    Notiz hinzufügen
+                  </button>
+                </>
               )}
             >
               <DashboardNotesPanel
+                editorMode={dashboardEditorMode}
                 busyNoteId={dashboardNoteBusyId}
                 completedCount={completedDashboardNoteCount}
                 draft={dashboardNoteDraft}
                 editingNoteId={editingDashboardNoteId}
                 error={dashboardNoteError}
-                formOpen={dashboardNoteFormOpen}
                 loading={dashboardNotesLoading}
                 mode={dashboardNoteMode}
                 notes={visibleDashboardNotes}
+                operationalAbsenceDraft={operationalAbsenceDraft}
+                operationalAbsenceError={operationalAbsenceError}
+                operationalAbsenceProjectManagers={operationalAbsenceProjectManagers}
+                operationalAbsenceProjectManagersError={operationalAbsenceProjectManagersError}
+                operationalAbsenceProjectManagersLoading={operationalAbsenceProjectManagersLoading}
+                operationalAbsenceSaving={operationalAbsenceSaving}
+                operationalAbsenceSites={operationalAbsenceSites}
+                operationalAbsenceSitesError={operationalAbsenceSitesError}
+                operationalAbsenceSitesLoading={operationalAbsenceSitesLoading}
                 openCount={openDashboardNoteCount}
                 people={dashboardNotePeople}
                 peopleError={dashboardNotePeopleError}
@@ -836,12 +979,14 @@ export function DashboardPage() {
                 sitesLoading={dashboardNoteSitesLoading}
                 today={range.today}
                 currentUserId={user?.id ?? null}
-                onCancel={cancelDashboardNoteForm}
+                onCancel={cancelDashboardEditor}
                 onClearSiteFilter={clearDashboardNoteSiteFilter}
                 onDelete={(note) => void deleteDashboardNote(note)}
                 onDraftChange={updateDashboardNoteDraft}
                 onEdit={editDashboardNote}
                 onModeChange={setDashboardNoteMode}
+                onOperationalAbsenceDraftChange={updateOperationalAbsenceDraft}
+                onOperationalAbsenceSubmit={(event) => void saveOperationalAbsence(event)}
                 onSubmit={(event) => void saveDashboardNote(event)}
                 onToggle={(note) => void toggleDashboardNoteCompleted(note)}
               />
@@ -946,11 +1091,11 @@ function DashboardCard({
 function DashboardNotesPanel({
   notes,
   mode,
+  editorMode,
   openCount,
   completedCount,
   loading,
   error,
-  formOpen,
   draft,
   editingNoteId,
   saving,
@@ -964,6 +1109,15 @@ function DashboardNotesPanel({
   shareUsers,
   shareUsersError,
   shareUsersLoading,
+  operationalAbsenceDraft,
+  operationalAbsenceError,
+  operationalAbsenceProjectManagers,
+  operationalAbsenceProjectManagersError,
+  operationalAbsenceProjectManagersLoading,
+  operationalAbsenceSaving,
+  operationalAbsenceSites,
+  operationalAbsenceSitesError,
+  operationalAbsenceSitesLoading,
   siteFilterLabel,
   today,
   currentUserId,
@@ -975,14 +1129,16 @@ function DashboardNotesPanel({
   onToggle,
   onEdit,
   onDelete,
+  onOperationalAbsenceDraftChange,
+  onOperationalAbsenceSubmit,
 }: {
   notes: DashboardNote[];
   mode: DashboardNoteMode;
+  editorMode: DashboardEditorMode;
   openCount: number;
   completedCount: number;
   loading: boolean;
   error: string | null;
-  formOpen: boolean;
   draft: DashboardNoteDraft;
   editingNoteId: number | null;
   saving: boolean;
@@ -996,6 +1152,15 @@ function DashboardNotesPanel({
   shareUsers: DashboardNoteUser[];
   shareUsersError: string | null;
   shareUsersLoading: boolean;
+  operationalAbsenceDraft: OperationalAbsenceDraft;
+  operationalAbsenceError: string | null;
+  operationalAbsenceProjectManagers: OperationalAbsenceProjectManager[];
+  operationalAbsenceProjectManagersError: string | null;
+  operationalAbsenceProjectManagersLoading: boolean;
+  operationalAbsenceSaving: boolean;
+  operationalAbsenceSites: OperationalAbsenceSite[];
+  operationalAbsenceSitesError: string | null;
+  operationalAbsenceSitesLoading: boolean;
   siteFilterLabel: string | null;
   today: string;
   currentUserId: number | null;
@@ -1007,6 +1172,8 @@ function DashboardNotesPanel({
   onToggle: (note: DashboardNote) => void;
   onEdit: (note: DashboardNote) => void;
   onDelete: (note: DashboardNote) => void;
+  onOperationalAbsenceDraftChange: (field: keyof OperationalAbsenceDraft, value: string) => void;
+  onOperationalAbsenceSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const editingNote = editingNoteId === null
     ? null
@@ -1026,7 +1193,7 @@ function DashboardNotesPanel({
   }, [onCancel]);
 
   useEffect(() => {
-    if (!formOpen) {
+    if (editorMode === null) {
       return undefined;
     }
     const focusFrame = window.requestAnimationFrame(() => editorTextRef.current?.focus());
@@ -1041,7 +1208,7 @@ function DashboardNotesPanel({
       window.cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [formOpen]);
+  }, [editorMode]);
 
   return (
     <>
@@ -1074,7 +1241,7 @@ function DashboardNotesPanel({
           </div>
         ) : null}
 
-        {!formOpen && error ? <p className="dashboard-note-error">{error}</p> : null}
+        {editorMode === null && error ? <p className="dashboard-note-error">{error}</p> : null}
 
         {loading ? (
           <p className="dashboard-empty-text">Notizen werden geladen...</p>
@@ -1098,7 +1265,7 @@ function DashboardNotesPanel({
         )}
       </div>
 
-      {formOpen ? (
+      {editorMode !== null ? (
         <section
           aria-labelledby="dashboard-note-editor-title"
           className="dashboard-note-editor"
@@ -1108,90 +1275,186 @@ function DashboardNotesPanel({
             <div>
               <span>Notizen</span>
               <h3 id="dashboard-note-editor-title">
-                {editingNoteId === null ? "Notiz erstellen" : "Notiz bearbeiten"}
+                {editorMode === "operational_absence"
+                  ? "Abwesenheit erstellen"
+                  : editingNoteId === null
+                    ? "Notiz erstellen"
+                    : "Notiz bearbeiten"}
               </h3>
             </div>
-            <button aria-label="Notizeditor schließen" type="button" onClick={onCancel}>
+            <button aria-label="Editor schließen" type="button" onClick={onCancel}>
               <X aria-hidden="true" size={16} />
             </button>
           </header>
 
-          <form className="dashboard-note-form dashboard-note-editor-form" onSubmit={onSubmit}>
-            {error ? <p className="dashboard-note-error">{error}</p> : null}
+          {editorMode === "note" ? (
+            <form className="dashboard-note-form dashboard-note-editor-form" onSubmit={onSubmit}>
+              {error ? <p className="dashboard-note-error">{error}</p> : null}
 
-            <label className="dashboard-note-field dashboard-note-field-wide">
-              <span>Text</span>
-              <textarea
-                ref={editorTextRef}
-                required
-                rows={5}
-                value={draft.text}
-                onChange={(event) => onDraftChange("text", event.target.value)}
-              />
-            </label>
-
-            <div className="dashboard-note-form-grid dashboard-note-editor-fields">
-              <label className="dashboard-note-field">
-                <span>Fällig am</span>
-                <input
-                  type="date"
-                  value={draft.due_date}
-                  onChange={(event) => onDraftChange("due_date", event.target.value)}
+              <label className="dashboard-note-field dashboard-note-field-wide">
+                <span>Text</span>
+                <textarea
+                  ref={editorTextRef}
+                  required
+                  rows={5}
+                  value={draft.text}
+                  onChange={(event) => onDraftChange("text", event.target.value)}
                 />
               </label>
-              <div className="dashboard-note-field">
-                <span id="dashboard-note-site-label">Baustelle</span>
-                <DashboardNoteSiteSelect
-                  error={sitesError}
-                  labelId="dashboard-note-site-label"
-                  loading={sitesLoading}
-                  sites={siteOptions}
-                  value={draft.site_id}
-                  onChange={(value) => onDraftChange("site_id", value)}
-                />
-              </div>
-              <div className="dashboard-note-field">
-                <span id="dashboard-note-employee-label">Monteur</span>
-                <DashboardNoteEmployeeSelect
-                  error={peopleError}
-                  historicalEmployee={editingEmployee}
-                  labelId="dashboard-note-employee-label"
-                  loading={peopleLoading}
-                  people={people}
-                  value={draft.employee_id}
-                  onChange={(value) => onDraftChange("employee_id", value)}
-                />
-              </div>
-              <div className="dashboard-note-field dashboard-note-share-field">
-                <span id="dashboard-note-share-user-label">Büro anpingen</span>
-                <DashboardNoteShareUserSelect
-                  disabled={!canManageShare}
-                  error={shareUsersError}
-                  historicalUser={editingShareUser}
-                  labelId="dashboard-note-share-user-label"
-                  loading={shareUsersLoading}
-                  users={shareUsers}
-                  value={draft.shared_with_user_id}
-                  onChange={(value) => onDraftChange("shared_with_user_id", value)}
-                />
-                {!canManageShare ? (
-                  <small className="dashboard-note-field-status">
-                    Nur der Ersteller kann die Bürofreigabe ändern.
-                  </small>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="dashboard-note-form-actions">
-              <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
-                <X aria-hidden="true" size={14} />
-                Abbrechen
-              </button>
-              <button type="submit" className="dashboard-note-form-button is-primary" disabled={saving}>
-                {saving ? "Speichert..." : editingNoteId === null ? "Anlegen" : "Speichern"}
-              </button>
-            </div>
-          </form>
+              <div className="dashboard-note-form-grid dashboard-note-editor-fields">
+                <label className="dashboard-note-field">
+                  <span>Fällig am</span>
+                  <input
+                    type="date"
+                    value={draft.due_date}
+                    onChange={(event) => onDraftChange("due_date", event.target.value)}
+                  />
+                </label>
+                <div className="dashboard-note-field">
+                  <span id="dashboard-note-site-label">Baustelle</span>
+                  <DashboardNoteSiteSelect
+                    error={sitesError}
+                    labelId="dashboard-note-site-label"
+                    loading={sitesLoading}
+                    sites={siteOptions}
+                    value={draft.site_id}
+                    onChange={(value) => onDraftChange("site_id", value)}
+                  />
+                </div>
+                <div className="dashboard-note-field">
+                  <span id="dashboard-note-employee-label">Monteur</span>
+                  <DashboardNoteEmployeeSelect
+                    error={peopleError}
+                    historicalEmployee={editingEmployee}
+                    labelId="dashboard-note-employee-label"
+                    loading={peopleLoading}
+                    people={people}
+                    value={draft.employee_id}
+                    onChange={(value) => onDraftChange("employee_id", value)}
+                  />
+                </div>
+                <div className="dashboard-note-field dashboard-note-share-field">
+                  <span id="dashboard-note-share-user-label">Büro anpingen</span>
+                  <DashboardNoteShareUserSelect
+                    disabled={!canManageShare}
+                    error={shareUsersError}
+                    historicalUser={editingShareUser}
+                    labelId="dashboard-note-share-user-label"
+                    loading={shareUsersLoading}
+                    users={shareUsers}
+                    value={draft.shared_with_user_id}
+                    onChange={(value) => onDraftChange("shared_with_user_id", value)}
+                  />
+                  {!canManageShare ? (
+                    <small className="dashboard-note-field-status">
+                      Nur der Ersteller kann die Bürofreigabe ändern.
+                    </small>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="dashboard-note-form-actions">
+                <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
+                  <X aria-hidden="true" size={14} />
+                  Abbrechen
+                </button>
+                <button type="submit" className="dashboard-note-form-button is-primary" disabled={saving}>
+                  {saving ? "Speichert..." : editingNoteId === null ? "Anlegen" : "Speichern"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form
+              className="dashboard-note-form dashboard-note-editor-form dashboard-operational-absence-form"
+              onSubmit={onOperationalAbsenceSubmit}
+            >
+              {operationalAbsenceError ? (
+                <p className="dashboard-note-error">{operationalAbsenceError}</p>
+              ) : null}
+
+              <label className="dashboard-note-field dashboard-note-field-wide">
+                <span>Text</span>
+                <textarea
+                  ref={editorTextRef}
+                  rows={5}
+                  value={operationalAbsenceDraft.text}
+                  onChange={(event) => onOperationalAbsenceDraftChange("text", event.target.value)}
+                />
+              </label>
+
+              <div className="dashboard-note-form-grid dashboard-note-editor-fields">
+                <label className="dashboard-note-field">
+                  <span>Datum</span>
+                  <input
+                    required
+                    type="date"
+                    value={operationalAbsenceDraft.date}
+                    onChange={(event) => onOperationalAbsenceDraftChange("date", event.target.value)}
+                  />
+                </label>
+                <div className="dashboard-note-field">
+                  <span id="dashboard-operational-absence-project-manager-label">Projektleiter</span>
+                  <DashboardOperationalAbsenceProjectManagerSelect
+                    error={operationalAbsenceProjectManagersError}
+                    labelId="dashboard-operational-absence-project-manager-label"
+                    loading={operationalAbsenceProjectManagersLoading}
+                    people={operationalAbsenceProjectManagers}
+                    value={operationalAbsenceDraft.project_manager_id}
+                    onChange={(value) => onOperationalAbsenceDraftChange("project_manager_id", value)}
+                  />
+                </div>
+                <div className="dashboard-note-field">
+                  <span>Zeitraum</span>
+                  <div className="dashboard-operational-absence-time-range">
+                    <label>
+                      <span>Von</span>
+                      <input
+                        aria-label="Zeitraum von"
+                        type="time"
+                        value={operationalAbsenceDraft.start_time}
+                        onChange={(event) => onOperationalAbsenceDraftChange("start_time", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Bis</span>
+                      <input
+                        aria-label="Zeitraum bis"
+                        type="time"
+                        value={operationalAbsenceDraft.end_time}
+                        onChange={(event) => onOperationalAbsenceDraftChange("end_time", event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="dashboard-note-field">
+                  <span id="dashboard-operational-absence-site-label">Baustelle</span>
+                  <DashboardNoteSiteSelect
+                    error={operationalAbsenceSitesError}
+                    labelId="dashboard-operational-absence-site-label"
+                    loading={operationalAbsenceSitesLoading}
+                    sites={operationalAbsenceSites}
+                    value={operationalAbsenceDraft.site_id}
+                    onChange={(value) => onOperationalAbsenceDraftChange("site_id", value)}
+                  />
+                </div>
+              </div>
+
+              <div className="dashboard-note-form-actions">
+                <button type="button" className="dashboard-note-form-button" onClick={onCancel}>
+                  <X aria-hidden="true" size={14} />
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  className="dashboard-note-form-button is-primary"
+                  disabled={operationalAbsenceSaving}
+                >
+                  {operationalAbsenceSaving ? "Speichert..." : "Anlegen"}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       ) : null}
     </>

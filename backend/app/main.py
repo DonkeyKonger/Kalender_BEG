@@ -15,6 +15,7 @@ from app.api.routes import (
     health,
     matrix,
     me,
+    operational_absences,
     persons,
     project_folders,
     sites,
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(project_folders.router, prefix="/api")
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
+    app.include_router(operational_absences.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(gps.router, prefix="/api")
     app.include_router(matrix.router, prefix="/api")

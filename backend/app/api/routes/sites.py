@@ -4,13 +4,11 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page, require_office_page, require_roles
 from app.core.database import get_db
-from app.models.enums import PersonType, UserRole
-from app.models.person import Person
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
 from app.schemas.measurement import (
@@ -64,6 +62,7 @@ from app.services.photo_filename import (
     user_photo_name,
 )
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_manager_service import ProjectManagerService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
 
@@ -120,20 +119,10 @@ def list_project_manager_people(
     _user=Depends(CAN_WRITE),
     db: Session = Depends(get_db),
 ) -> list[PersonRead]:
-    statement = (
-        select(Person)
-        .join(User, User.person_id == Person.id)
-        .where(
-            User.is_active.is_(True),
-            User.role.in_([UserRole.ADMIN, UserRole.PROJECT_MANAGER]),
-            Person.is_active.is_(True),
-            Person.deleted_at.is_(None),
-            Person.person_type == PersonType.INTERNAL,
-        )
-        .distinct()
-        .order_by(Person.display_name, Person.id)
-    )
-    return [PersonRead.model_validate(person) for person in db.scalars(statement)]
+    return [
+        PersonRead.model_validate(person)
+        for person in ProjectManagerService(db).list_active_project_managers()
+    ]
 
 
 @router.get("/map", response_model=SiteMapResponse)

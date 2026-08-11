@@ -7,7 +7,11 @@ import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { DashboardNoteEmployeeSelect, DashboardNoteShareUserSelect } from "../components/DashboardNotePickers";
 import { absenceTypeLabels, siteStatusLabels } from "../components/StatusBadge";
-import { ApiError, api, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser } from "../lib/api";
+import { ApiError, api, type DashboardNote, type DashboardNotePayload, type DashboardNoteUser, type OperationalAbsence } from "../lib/api";
+import {
+  publishOperationalAbsencesUpdated,
+  subscribeToOperationalAbsenceUpdates,
+} from "../lib/operationalAbsence";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
@@ -91,7 +95,23 @@ type AssignmentResizeState = {
   previewEndDate: string;
   rowY: number;
 };
-type PlanningAbsenceItem = { absence: Absence; personLabel: string; personName: string };
+type PlanningClassicAbsenceItem = {
+  kind: "classic";
+  absence: Absence;
+  personLabel: string;
+  personName: string;
+};
+type PlanningOperationalAbsenceItem = {
+  kind: "operational";
+  operationalAbsence: OperationalAbsence;
+  personLabel: string;
+  personName: string;
+};
+type PlanningAbsenceItem = PlanningClassicAbsenceItem | PlanningOperationalAbsenceItem;
+type OperationalAbsenceDetailState = {
+  absence: OperationalAbsence;
+  anchor: EditorAnchor;
+};
 type CellTypingPreview = { siteId: number; date: string; text: string };
 type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
 type UpdatedMatrixSiteCells = { site_id: number; cells: MatrixCell[] };
@@ -183,6 +203,8 @@ export function MatrixPage() {
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [operationalAbsences, setOperationalAbsences] = useState<OperationalAbsence[]>([]);
+  const [operationalAbsenceDetail, setOperationalAbsenceDetail] = useState<OperationalAbsenceDetailState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
@@ -220,6 +242,8 @@ export function MatrixPage() {
   const rangeScrollFallbackTimeoutRef = useRef<number | null>(null);
   const initialScrollSnapResetTimeoutRef = useRef<number | null>(null);
   const matrixVersionRef = useRef<string | null>(null);
+  const classicAbsenceLoadRequestIdRef = useRef(0);
+  const operationalAbsenceLoadRequestIdRef = useRef(0);
   const matrixNotePreviewCacheRef = useRef<Map<number, MatrixNoteCacheEntry>>(new Map());
   const matrixNotePreviewRequestsRef = useRef<Map<number, Promise<DashboardNote[]>>>(new Map());
   const matrixNotePreviewUserIdRef = useRef<number | null>(user?.id ?? null);
@@ -263,6 +287,7 @@ export function MatrixPage() {
     || editorAnchor
     || activeAbsenceCell
     || absenceEditorAnchor
+    || operationalAbsenceDetail
     || isSelecting
     || assignmentDrag
     || assignmentResize
@@ -335,19 +360,34 @@ export function MatrixPage() {
   const invalidateMatrixDataContext = useCallback(() => {
     matrixContextVersionRef.current += 1;
     matrixLoadRequestIdRef.current += 1;
+    classicAbsenceLoadRequestIdRef.current += 1;
+    operationalAbsenceLoadRequestIdRef.current += 1;
     matrixVersionRef.current = null;
     hasDeferredMatrixRefreshRef.current = false;
+  }, []);
+
+  const applyOperationalAbsenceData = useCallback((items: OperationalAbsence[]) => {
+    setOperationalAbsences(items);
+    setOperationalAbsenceDetail((current) => {
+      if (!current) {
+        return null;
+      }
+      const currentAbsence = items.find((item) => item.id === current.absence.id);
+      return currentAbsence ? { ...current, absence: currentAbsence } : null;
+    });
   }, []);
 
   const loadMatrix = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
     const requestId = ++matrixLoadRequestIdRef.current;
+    const classicAbsenceRequestId = ++classicAbsenceLoadRequestIdRef.current;
+    const operationalAbsenceRequestId = ++operationalAbsenceLoadRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
       const shouldLoadPeople = !hasLoadedPeopleRef.current;
       const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
-      const [matrixData, personData, absenceData, versionData] = await Promise.all([
+      const [matrixData, personData, absenceData, operationalAbsenceData, versionData] = await Promise.all([
         api.matrix({
           start: activeRange.start,
           end: activeRange.end,
@@ -357,6 +397,7 @@ export function MatrixPage() {
         }),
         shouldLoadPeople ? api.persons() : Promise.resolve<Person[] | null>(null),
         api.absences({ start: activeRange.start, end: activeRange.end }),
+        api.operationalAbsences({ startDate: activeRange.start, endDate: activeRange.end }),
         api.matrixVersion({
           start: activeRange.start,
           end: activeRange.end,
@@ -375,7 +416,12 @@ export function MatrixPage() {
         setPeople(personData);
         hasLoadedPeopleRef.current = personData.length > 0;
       }
-      setAbsences(absenceData);
+      if (classicAbsenceRequestId === classicAbsenceLoadRequestIdRef.current) {
+        setAbsences(absenceData);
+      }
+      if (operationalAbsenceRequestId === operationalAbsenceLoadRequestIdRef.current) {
+        applyOperationalAbsenceData(operationalAbsenceData);
+      }
     } catch (requestError) {
       if (contextVersion !== matrixContextVersionRef.current || requestId !== matrixLoadRequestIdRef.current) {
         return;
@@ -386,7 +432,7 @@ export function MatrixPage() {
         setIsLoading(false);
       }
     }
-  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, projectManagerFilter]);
 
   const refreshMatrixOnly = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
@@ -408,12 +454,46 @@ export function MatrixPage() {
 
   const refreshAbsencesOnly = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
-    const absenceData = await api.absences({ start: activeRange.start, end: activeRange.end });
-    if (contextVersion !== matrixContextVersionRef.current) {
+    const classicAbsenceRequestId = ++classicAbsenceLoadRequestIdRef.current;
+    const operationalAbsenceRequestId = ++operationalAbsenceLoadRequestIdRef.current;
+    const [absenceData, operationalAbsenceData] = await Promise.all([
+      api.absences({ start: activeRange.start, end: activeRange.end }),
+      api.operationalAbsences({ startDate: activeRange.start, endDate: activeRange.end }),
+    ]);
+    if (
+      contextVersion !== matrixContextVersionRef.current
+    ) {
       return;
     }
-    setAbsences(absenceData);
-  }, [activeRange.end, activeRange.start]);
+    if (classicAbsenceRequestId === classicAbsenceLoadRequestIdRef.current) {
+      setAbsences(absenceData);
+    }
+    if (operationalAbsenceRequestId === operationalAbsenceLoadRequestIdRef.current) {
+      applyOperationalAbsenceData(operationalAbsenceData);
+    }
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData]);
+
+  const refreshOperationalAbsencesOnly = useCallback(async () => {
+    const contextVersion = matrixContextVersionRef.current;
+    const operationalAbsenceRequestId = ++operationalAbsenceLoadRequestIdRef.current;
+    const operationalAbsenceData = await api.operationalAbsences({
+      startDate: activeRange.start,
+      endDate: activeRange.end,
+    });
+    if (
+      contextVersion !== matrixContextVersionRef.current
+      || operationalAbsenceRequestId !== operationalAbsenceLoadRequestIdRef.current
+    ) {
+      return;
+    }
+    applyOperationalAbsenceData(operationalAbsenceData);
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData]);
+
+  useEffect(() => subscribeToOperationalAbsenceUpdates(() => {
+    void refreshOperationalAbsencesOnly().catch(() => {
+      // Die reguläre Hintergrundaktualisierung versucht es erneut.
+    });
+  }), [refreshOperationalAbsencesOnly]);
 
   const syncMatrixVersionSilently = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
@@ -444,7 +524,9 @@ export function MatrixPage() {
       ? { left: matrixScroll.scrollLeft, top: matrixScroll.scrollTop }
       : null;
     const windowScrollSnapshot = { left: window.scrollX, top: window.scrollY };
-    const [matrixData, absenceData] = await Promise.all([
+    const classicAbsenceRequestId = ++classicAbsenceLoadRequestIdRef.current;
+    const operationalAbsenceRequestId = ++operationalAbsenceLoadRequestIdRef.current;
+    const [matrixData, absenceData, operationalAbsenceData] = await Promise.all([
       api.matrix({
         start: activeRange.start,
         end: activeRange.end,
@@ -453,6 +535,7 @@ export function MatrixPage() {
         projectManagerPersonId,
       }),
       api.absences({ start: activeRange.start, end: activeRange.end }),
+      api.operationalAbsences({ startDate: activeRange.start, endDate: activeRange.end }),
     ]);
     if (contextVersion !== matrixContextVersionRef.current) {
       return;
@@ -460,7 +543,12 @@ export function MatrixPage() {
     matrixDataContextVersionRef.current = contextVersion;
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-    setAbsences(absenceData);
+    if (classicAbsenceRequestId === classicAbsenceLoadRequestIdRef.current) {
+      setAbsences(absenceData);
+    }
+    if (operationalAbsenceRequestId === operationalAbsenceLoadRequestIdRef.current) {
+      applyOperationalAbsenceData(operationalAbsenceData);
+    }
     matrixVersionRef.current = nextVersion;
     window.requestAnimationFrame(() => {
       if (contextVersion !== matrixContextVersionRef.current) {
@@ -472,7 +560,7 @@ export function MatrixPage() {
       }
       window.scrollTo(windowScrollSnapshot.left, windowScrollSnapshot.top);
     });
-  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, projectManagerFilter]);
 
   const checkMatrixVersionInBackground = useCallback(async () => {
     if (!matrix || isCheckingMatrixVersionRef.current) {
@@ -1010,11 +1098,18 @@ export function MatrixPage() {
     if (!matrixIsEditable) {
       return;
     }
+    setOperationalAbsenceDetail(null);
     closeActiveEditor();
     setActiveAbsenceCell({ date, endDate: date });
     setAbsenceEditorAnchor(anchor);
     setSelectedAbsencePersonId("");
     setSelectedAbsenceType("vacation");
+  }
+
+  function openOperationalAbsenceDetail(absence: OperationalAbsence, anchor: EditorAnchor) {
+    closeActiveEditor();
+    closeAbsenceEditor();
+    setOperationalAbsenceDetail({ absence, anchor });
   }
 
   function closeAbsenceEditor() {
@@ -1071,6 +1166,33 @@ export function MatrixPage() {
     }
   }
 
+  async function deleteOperationalAbsenceFromPlanning(absence: OperationalAbsence) {
+    const managerName = absence.project_manager.display_name;
+    if (!window.confirm(`Abwesenheit von ${managerName} am ${formatOperationalAbsenceDate(absence.date)} löschen?`)) {
+      return;
+    }
+    operationalAbsenceLoadRequestIdRef.current += 1;
+    setOperationalAbsences((current) => current.filter((item) => item.id !== absence.id));
+    setOperationalAbsenceDetail((current) => current?.absence.id === absence.id ? null : current);
+    try {
+      await api.deleteOperationalAbsence(absence.id);
+      publishOperationalAbsencesUpdated();
+      setError(null);
+      await syncMatrixVersionSilently();
+    } catch (requestError) {
+      setError(readApiError(requestError, "Betriebliche Abwesenheit konnte nicht gelöscht werden."));
+      try {
+        await refreshOperationalAbsencesOnly();
+      } catch {
+        setOperationalAbsences((current) => (
+          current.some((item) => item.id === absence.id)
+            ? current
+            : [...current, absence]
+        ));
+      }
+    }
+  }
+
   async function deleteSingleAbsenceDayFromPlanning(absence: Absence, date: string) {
     if (absence.start_date === absence.end_date) {
       await api.deleteAbsence(absence.id);
@@ -1107,6 +1229,7 @@ export function MatrixPage() {
     setActiveEditorRange(null);
     setPersonSearchSeed("");
     setHighlightedPersonIndex(-1);
+    setOperationalAbsenceDetail(null);
     clearSelection();
   }
 
@@ -2058,6 +2181,7 @@ export function MatrixPage() {
         <>
           <MatrixTable
             absences={absences}
+            operationalAbsences={operationalAbsences}
             canCreateSites={matrixIsEditable}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
@@ -2071,6 +2195,8 @@ export function MatrixPage() {
             noteInteractionContext={matrixNoteInteractionContext}
             peopleById={peopleById}
             onDeleteAbsence={deleteAbsenceDayFromPlanning}
+            onDeleteOperationalAbsence={(absence) => void deleteOperationalAbsenceFromPlanning(absence)}
+            onOpenOperationalAbsence={openOperationalAbsenceDetail}
             onDeleteAssignment={deleteAssignmentFromCell}
             onStartAssignmentDrag={startAssignmentDrag}
             onStartAssignmentResize={startAssignmentResize}
@@ -2132,6 +2258,14 @@ export function MatrixPage() {
               onSelectedPersonChange={setSelectedAbsencePersonId}
               people={people}
               selectedPersonId={selectedAbsencePersonId}
+            />
+          )}
+
+          {operationalAbsenceDetail && (
+            <OperationalAbsenceDetailPopup
+              absence={operationalAbsenceDetail.absence}
+              anchor={operationalAbsenceDetail.anchor}
+              onClose={() => setOperationalAbsenceDetail(null)}
             />
           )}
 
@@ -3044,6 +3178,103 @@ function AssignmentAutocompleteDropdown({
     document.body,
   );
 }
+
+function OperationalAbsenceDetailPopup({
+  absence,
+  anchor,
+  onClose,
+}: {
+  absence: OperationalAbsence;
+  anchor: EditorAnchor;
+  onClose: () => void;
+}) {
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState(() => ({ left: anchor.left, top: anchor.bottom + 6 }));
+
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    if (!popup) {
+      return;
+    }
+    const gap = 6;
+    const viewportPadding = 8;
+    const bounds = popup.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(viewportPadding, anchor.left),
+      Math.max(viewportPadding, window.innerWidth - bounds.width - viewportPadding),
+    );
+    const preferredTop = anchor.bottom + gap;
+    const top = preferredTop + bounds.height <= window.innerHeight - viewportPadding
+      ? preferredTop
+      : Math.max(viewportPadding, anchor.top - bounds.height - gap);
+    setPosition({ left, top });
+    popup.focus({ preventScroll: true });
+  }, [anchor]);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!popupRef.current?.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    function handleViewportChange() {
+      onClose();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      aria-label={`Betriebliche Abwesenheit ${absence.project_manager.display_name}`}
+      className="operational-absence-detail-popover"
+      ref={popupRef}
+      role="dialog"
+      style={position}
+      tabIndex={-1}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <strong>{absence.project_manager.display_name}</strong>
+      <dl>
+        <div>
+          <dt>Datum</dt>
+          <dd>{formatOperationalAbsenceDate(absence.date)}</dd>
+        </div>
+        <div>
+          <dt>Zeitraum</dt>
+          <dd>{formatOperationalAbsenceTimeRange(absence)}</dd>
+        </div>
+        <div>
+          <dt>Baustelle</dt>
+          <dd>{formatOperationalAbsenceSite(absence)}</dd>
+        </div>
+        <div>
+          <dt>Notizen</dt>
+          <dd>{absence.text?.trim() || "Keine Angabe"}</dd>
+        </div>
+      </dl>
+    </div>,
+    document.body,
+  );
+}
+
 type AbsenceCellEditorPopupProps = {
   activeCell: ActiveAbsenceCell;
   anchor: EditorAnchor;
@@ -3305,6 +3536,7 @@ function AbsenceCellEditor({
 
 type MatrixTableProps = {
   absences: Absence[];
+  operationalAbsences: OperationalAbsence[];
   canCreateSites: boolean;
   cellMessage: Record<CellKey, string>;
   dayColumnWidth: number;
@@ -3319,6 +3551,8 @@ type MatrixTableProps = {
   noteInteractionContext: MatrixNoteInteractionContext;
   peopleById: Map<number, Person>;
   onDeleteAbsence: (absence: Absence, date: string) => void;
+  onDeleteOperationalAbsence: (absence: OperationalAbsence) => void;
+  onOpenOperationalAbsence: (absence: OperationalAbsence, anchor: EditorAnchor) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCreateSiteForGroup: (projectManagerPersonId: number | null) => void;
@@ -3446,7 +3680,12 @@ type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<str
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
   const absencePlanning = useMemo(() => {
-    const itemsByDate = buildAbsencePlanningItemsByDate(props.absences, props.matrix.days, props.peopleById);
+    const itemsByDate = buildAbsencePlanningItemsByDate(
+      props.absences,
+      props.operationalAbsences,
+      props.matrix.days,
+      props.peopleById,
+    );
     const rowCount = Math.max(
       1,
       ...Array.from(itemsByDate.values()).map((items) => {
@@ -3457,7 +3696,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
       }),
     );
     return { itemsByDate, rowCount };
-  }, [props.absences, props.matrix.days, props.peopleById]);
+  }, [props.absences, props.matrix.days, props.operationalAbsences, props.peopleById]);
   const rowStyle = { "--absence-rows": absencePlanning.rowCount } as CSSProperties;
 
   return (
@@ -3493,21 +3732,32 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
           >
             <div className="absence-planning-stack">
               {visibleAbsenceItems.map((item) => {
-                const person = props.peopleById.get(item.absence.person_id);
                 return (
                   <button
                     className={absencePlanningBlockClassName(item)}
-                    key={item.absence.id}
-                    title={absencePlanningTitle(item, person)}
+                    key={planningAbsenceItemKey(item)}
+                    title={absencePlanningTitle(item)}
                     type="button"
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (item.kind === "operational") {
+                        props.onOpenOperationalAbsence(
+                          item.operationalAbsence,
+                          anchorFromRect(event.currentTarget.getBoundingClientRect()),
+                        );
+                      }
+                    }}
                     onContextMenu={(event) => {
-                      if (!props.isEditable) {
+                      if (item.kind === "classic" && !props.isEditable) {
                         return;
                       }
                       event.preventDefault();
                       event.stopPropagation();
-                      props.onDeleteAbsence(item.absence, date);
+                      if (item.kind === "operational") {
+                        props.onDeleteOperationalAbsence(item.operationalAbsence);
+                      } else if (props.isEditable) {
+                        props.onDeleteAbsence(item.absence, date);
+                      }
                     }}
                   >
                     <span>{item.personLabel}</span>
@@ -3523,25 +3773,36 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
                     <strong>Fehlzeiten {formatDayNumber(date)}</strong>
                     <div className="absence-overflow-list">
                       {dayAbsenceItems.map((item) => {
-                        const person = props.peopleById.get(item.absence.person_id);
                         return (
                           <button
                             className={absenceOverflowItemClassName(item)}
-                            key={item.absence.id}
+                            key={planningAbsenceItemKey(item)}
                             type="button"
-                            title="Rechtsklick entfernt nur diesen Tag"
-                            onClick={(event) => event.stopPropagation()}
+                            title={item.kind === "operational" ? "Linksklick zeigt Details, Rechtsklick löscht den Eintrag" : "Rechtsklick entfernt nur diesen Tag"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (item.kind === "operational") {
+                                props.onOpenOperationalAbsence(
+                                  item.operationalAbsence,
+                                  anchorFromRect(event.currentTarget.getBoundingClientRect()),
+                                );
+                              }
+                            }}
                             onContextMenu={(event) => {
-                              if (!props.isEditable) {
+                              if (item.kind === "classic" && !props.isEditable) {
                                 return;
                               }
                               event.preventDefault();
                               event.stopPropagation();
-                              props.onDeleteAbsence(item.absence, date);
+                              if (item.kind === "operational") {
+                                props.onDeleteOperationalAbsence(item.operationalAbsence);
+                              } else if (props.isEditable) {
+                                props.onDeleteAbsence(item.absence, date);
+                              }
                             }}
                           >
-                            <span>{person?.display_name ?? "Person"}</span>
-                            <em>{absenceTypeLabels[item.absence.absence_type]}</em>
+                            <span>{item.personName}</span>
+                            <em>{item.kind === "operational" ? "Betriebliche Abwesenheit" : absenceTypeLabels[item.absence.absence_type]}</em>
                           </button>
                         );
                       })}
@@ -4928,6 +5189,7 @@ function activeAbsencesForPersonOnDay(absences: Absence[], personId: number, dat
 
 function buildAbsencePlanningItemsByDate(
   absences: Absence[],
+  operationalAbsences: OperationalAbsence[],
   days: MatrixDay[],
   peopleById: ReadonlyMap<number, Person>,
 ): Map<string, PlanningAbsenceItem[]> {
@@ -4953,17 +5215,36 @@ function buildAbsencePlanningItemsByDate(
     });
   });
 
+  const operationalAbsencesByDate = new Map<string, OperationalAbsence[]>();
+  operationalAbsences.forEach((absence) => {
+    if (!bestAbsencesByDate.has(absence.date)) {
+      return;
+    }
+    operationalAbsencesByDate.set(absence.date, [
+      ...(operationalAbsencesByDate.get(absence.date) ?? []),
+      absence,
+    ]);
+  });
+
   return new Map(days.map((day) => {
-    const items = Array.from(bestAbsencesByDate.get(day.date)?.values() ?? [])
+    const classicItems: PlanningClassicAbsenceItem[] = Array.from(bestAbsencesByDate.get(day.date)?.values() ?? [])
       .map((absence) => {
         const person = peopleById.get(absence.person_id);
         return {
+          kind: "classic",
           absence,
           personLabel: absencePersonLabel(person),
           personName: person?.display_name ?? "Person",
         };
-      })
-      .sort(comparePlanningAbsenceItems);
+      });
+    const operationalItems: PlanningOperationalAbsenceItem[] = (operationalAbsencesByDate.get(day.date) ?? [])
+      .map((absence) => ({
+        kind: "operational",
+        operationalAbsence: absence,
+        personLabel: calendarPersonCode(absence.project_manager),
+        personName: absence.project_manager.display_name,
+      }));
+    const items = [...operationalItems, ...classicItems].sort(comparePlanningAbsenceItems);
     return [day.date, items];
   }));
 }
@@ -4988,11 +5269,18 @@ function absencePersonLabel(person: Person | undefined): string {
   return person ? calendarPersonCode(person) : "Person";
 }
 
-function absencePlanningTitle(item: PlanningAbsenceItem, person: Person | undefined): string {
-  return `${person?.display_name ?? "Person"}: ${absenceTypeLabels[item.absence.absence_type]} ${formatAbsenceDateRange(item.absence)}`;
+function absencePlanningTitle(item: PlanningAbsenceItem): string {
+  if (item.kind === "operational") {
+    const timeRange = formatOperationalAbsenceTimeRange(item.operationalAbsence);
+    return `${item.personName}: Betriebliche Abwesenheit ${formatOperationalAbsenceDate(item.operationalAbsence.date)} · ${timeRange}`;
+  }
+  return `${item.personName}: ${absenceTypeLabels[item.absence.absence_type]} ${formatAbsenceDateRange(item.absence)}`;
 }
 
 function absencePlanningBlockClassName(item: PlanningAbsenceItem): string {
+  if (item.kind === "operational") {
+    return "absence-planning-chip operational-absence-chip";
+  }
   return [
     "absence-planning-chip",
     `absence-block-${item.absence.absence_type}`,
@@ -5001,6 +5289,9 @@ function absencePlanningBlockClassName(item: PlanningAbsenceItem): string {
 }
 
 function absenceOverflowItemClassName(item: PlanningAbsenceItem): string {
+  if (item.kind === "operational") {
+    return "absence-overflow-item operational-absence-overflow";
+  }
   return [
     "absence-overflow-item",
     `absence-overflow-${item.absence.absence_type}`,
@@ -5027,10 +5318,64 @@ function comparePlanningAbsences(left: Absence, right: Absence): number {
 }
 
 function comparePlanningAbsenceItems(left: PlanningAbsenceItem, right: PlanningAbsenceItem): number {
-  return left.personLabel.localeCompare(right.personLabel, "de-DE")
-    || left.personName.localeCompare(right.personName, "de-DE")
-    || left.absence.person_id - right.absence.person_id
-    || comparePlanningAbsences(left.absence, right.absence);
+  if (left.kind !== right.kind) {
+    return left.kind === "operational" ? -1 : 1;
+  }
+  if (left.kind === "operational" && right.kind === "operational") {
+    return compareOptionalOperationalStartTimes(
+      left.operationalAbsence.start_time,
+      right.operationalAbsence.start_time,
+    )
+      || left.personName.localeCompare(right.personName, "de-DE")
+      || left.operationalAbsence.id - right.operationalAbsence.id;
+  }
+  if (left.kind === "classic" && right.kind === "classic") {
+    return left.personLabel.localeCompare(right.personLabel, "de-DE")
+      || left.personName.localeCompare(right.personName, "de-DE")
+      || left.absence.person_id - right.absence.person_id
+      || comparePlanningAbsences(left.absence, right.absence);
+  }
+  return 0;
+}
+
+function compareOptionalOperationalStartTimes(left: string | null, right: string | null): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return left.localeCompare(right);
+}
+
+function planningAbsenceItemKey(item: PlanningAbsenceItem): string {
+  return item.kind === "operational"
+    ? `operational-${item.operationalAbsence.id}`
+    : `absence-${item.absence.id}`;
+}
+
+function formatOperationalAbsenceTimeRange(absence: OperationalAbsence): string {
+  if (!absence.start_time || !absence.end_time) {
+    return "Keine Angabe";
+  }
+  return `${absence.start_time.slice(0, 5)} – ${absence.end_time.slice(0, 5)}`;
+}
+
+function formatOperationalAbsenceDate(value: string): string {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}.${month}.${year}` : value;
+}
+
+function formatOperationalAbsenceSite(absence: OperationalAbsence): string {
+  if (!absence.site) {
+    return "Keine Angabe";
+  }
+  return absence.site.site_number
+    ? `${absence.site.site_number} – ${absence.site.name}`
+    : absence.site.name;
 }
 
 function formatAbsenceDateRange(absence: Absence): string {
