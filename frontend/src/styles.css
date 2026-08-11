@@ -4953,6 +4953,10 @@ button.person-chip:focus-visible {
   line-height: 1.35;
 }
 
+.operational-absence-detail-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 .absence-cell-editor-popup {
   width: min(380px, calc(100vw - 24px));

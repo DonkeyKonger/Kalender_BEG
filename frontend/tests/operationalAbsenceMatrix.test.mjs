@@ -64,8 +64,11 @@ test("left click opens a read-only viewport-aware detail popup with all fallback
   assert.match(matrixSource, /<dt>Baustelle<\/dt>/);
   assert.match(matrixSource, /<dt>Notizen<\/dt>/);
   assert.match(matrixSource, /absence\.text\?\.trim\(\) \|\| "Keine Angabe"/);
+  assert.match(popupSource, /className="operational-absence-detail-notes"/);
+  assert.doesNotMatch(popupSource, /dangerouslySetInnerHTML|<br\s*\/>/);
   assert.match(matrixSource, /event\.key === "Escape"/);
   assert.match(styles, /\.operational-absence-detail-popover \{[^}]*position:\s*fixed;[^}]*max-height:\s*calc\(100vh - 16px\)/s);
+  assert.match(styles, /\.operational-absence-detail-notes \{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;/s);
 });
 
 test("right click deletes via the dedicated API independently of calendar edit mode", () => {

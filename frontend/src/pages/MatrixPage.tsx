@@ -3267,7 +3267,9 @@ function OperationalAbsenceDetailPopup({
         </div>
         <div>
           <dt>Notizen</dt>
-          <dd>{absence.text?.trim() || "Keine Angabe"}</dd>
+          <dd className="operational-absence-detail-notes">
+            {absence.text?.trim() || "Keine Angabe"}
+          </dd>
         </div>
       </dl>
     </div>,
