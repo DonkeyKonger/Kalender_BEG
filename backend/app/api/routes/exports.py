@@ -13,6 +13,7 @@ from app.services.time_entry_xlsx_export_service import TimeEntryXlsxExportServi
 router = APIRouter(prefix="/exports", tags=["exports"])
 
 CAN_EXPORT = require_business_page("export")
+CAN_PAYROLL_EXPORT = require_business_page("payroll")
 
 
 @router.get("/daily-plan")
@@ -57,7 +58,7 @@ def monthly_time_entries_xlsx(
 @router.get("/time-entries/weekly-worker-hours.pdf")
 def weekly_worker_hours_pdf(
     week_start: date,
-    _current_user=Depends(CAN_EXPORT),
+    _current_user=Depends(CAN_PAYROLL_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
     normalized_start = week_start
@@ -71,7 +72,7 @@ def weekly_worker_hours_pdf(
 def weekly_worker_time_entries_xlsx(
     person_id: int = Query(gt=0),
     week_start: date = Query(),
-    current_user=Depends(CAN_EXPORT),
+    current_user=Depends(CAN_PAYROLL_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
     normalized_start = week_start - timedelta(days=week_start.weekday())
@@ -88,7 +89,7 @@ def weekly_worker_time_entries_xlsx(
 @router.get("/time-entries/weekly-workers-xlsx")
 def weekly_all_workers_time_entries_xlsx(
     week_start: date = Query(),
-    current_user=Depends(CAN_EXPORT),
+    current_user=Depends(CAN_PAYROLL_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
     normalized_start = week_start - timedelta(days=week_start.weekday())

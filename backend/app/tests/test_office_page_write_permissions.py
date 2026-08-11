@@ -50,6 +50,7 @@ CROSS_PAGE_READ_POLICIES = [
     (sites.CAN_READ, "payroll"),
     (time_entries.CAN_ACCESS, "sites"),
     (exports.CAN_EXPORT, "export"),
+    (exports.CAN_PAYROLL_EXPORT, "payroll"),
     (gps.CAN_READ_GPS, "map"),
     (admin_ctrack.CAN_READ_VEHICLE_POSITIONS, "map"),
     (persons.CAN_LIST, "miscellaneous"),
@@ -102,6 +103,13 @@ def test_existing_management_roles_keep_write_access(policy, _permission: str, r
 @pytest.mark.parametrize(("policy", "_permission"), WRITE_POLICIES)
 def test_monteur_does_not_gain_business_page_write_access(policy, _permission: str):
     assert policy_status(policy, user(UserRole.MONTEUR)) == 403
+
+
+def test_payroll_opt_in_does_not_grant_the_separate_general_export_page():
+    assert policy_status(
+        exports.CAN_EXPORT,
+        user(UserRole.OFFICE, "payroll"),
+    ) == 403
 
 
 def test_miscellaneous_policy_allows_admin_and_opted_in_office_only():
