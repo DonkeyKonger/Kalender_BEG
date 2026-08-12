@@ -18,6 +18,14 @@ import {
   formatGermanDateKey as formatDateOnly,
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
+import {
+  DEFAULT_PROJECT_DOCUMENT_SORT,
+  getProjectDocumentTypeLabel,
+  getNextProjectDocumentSort,
+  sortProjectDocumentItems,
+  type ProjectDocumentSort,
+  type ProjectDocumentSortKey,
+} from "../lib/projectDocumentSort";
 import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
 import {
   extraWorkStatusPromotionOptions,
@@ -1904,6 +1912,9 @@ function ProjectFolderDocumentBrowser({
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [documentSort, setDocumentSort] = useState<ProjectDocumentSort>(() => ({
+    ...DEFAULT_PROJECT_DOCUMENT_SORT,
+  }));
   const [isFileDropActive, setIsFileDropActive] = useState(false);
   const fileDragDepthRef = useRef(0);
   const fileDropUploadPendingRef = useRef(false);
@@ -1912,6 +1923,10 @@ function ProjectFolderDocumentBrowser({
     fileDragDepthRef.current = 0;
     setIsFileDropActive(false);
   }
+
+  useEffect(() => {
+    setDocumentSort({ ...DEFAULT_PROJECT_DOCUMENT_SORT });
+  }, [siteId]);
 
   useEffect(() => {
     setQuery("");
@@ -1990,18 +2005,22 @@ function ProjectFolderDocumentBrowser({
     if (!currentDocuments) {
       return [];
     }
-    if (!normalizedQuery) {
-      return currentDocuments.items;
-    }
-    return currentDocuments.items.filter((item) => (
-      [item.name, item.file_extension, item.mime_type]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(normalizedQuery))
-    ));
-  }, [currentDocuments, normalizedQuery]);
+    const filteredItems = normalizedQuery
+      ? currentDocuments.items.filter((item) => (
+          [item.name, item.file_extension, item.mime_type]
+            .filter(Boolean)
+            .some((value) => value?.toLowerCase().includes(normalizedQuery))
+        ))
+      : currentDocuments.items;
+    return sortProjectDocumentItems(filteredItems, documentSort);
+  }, [currentDocuments, documentSort, normalizedQuery]);
   const hasLoadedItems = Boolean(currentDocuments && currentDocuments.items.length > 0);
   const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
   const canUploadToCurrentFolder = hasSharePointFolder && !isInSubfolder;
+
+  function handleDocumentSort(key: ProjectDocumentSortKey): void {
+    setDocumentSort((currentSort) => getNextProjectDocumentSort(currentSort, key));
+  }
 
   function handleFileDragEnter(event: ReactDragEvent<HTMLElement>): void {
     if (!containsDraggedFiles(event.dataTransfer.types)) {
@@ -2159,10 +2178,30 @@ function ProjectFolderDocumentBrowser({
           <table className="project-document-table">
             <thead>
               <tr>
-                <th>Dateiname</th>
-                <th>Typ</th>
-                <th>Geändert</th>
-                <th>Größe</th>
+                <ProjectDocumentSortHeader
+                  label="Dateiname"
+                  sortKey="name"
+                  activeSort={documentSort}
+                  onSort={handleDocumentSort}
+                />
+                <ProjectDocumentSortHeader
+                  label="Typ"
+                  sortKey="type"
+                  activeSort={documentSort}
+                  onSort={handleDocumentSort}
+                />
+                <ProjectDocumentSortHeader
+                  label="Geändert"
+                  sortKey="modified"
+                  activeSort={documentSort}
+                  onSort={handleDocumentSort}
+                />
+                <ProjectDocumentSortHeader
+                  label="Größe"
+                  sortKey="size"
+                  activeSort={documentSort}
+                  onSort={handleDocumentSort}
+                />
                 <th aria-label="Aktionen"></th>
               </tr>
             </thead>
@@ -2225,11 +2264,46 @@ function ProjectFolderDocumentBrowser({
   );
 }
 
+function ProjectDocumentSortHeader({
+  label,
+  sortKey,
+  activeSort,
+  onSort,
+}: {
+  label: string;
+  sortKey: ProjectDocumentSortKey;
+  activeSort: ProjectDocumentSort;
+  onSort: (key: ProjectDocumentSortKey) => void;
+}) {
+  const isActive = activeSort.key === sortKey;
+  const ariaSort = isActive
+    ? activeSort.direction === "asc" ? "ascending" : "descending"
+    : "none";
+  const nextDirection = isActive
+    ? activeSort.direction === "asc" ? "absteigend" : "aufsteigend"
+    : sortKey === "modified" ? "absteigend" : "aufsteigend";
+
+  return (
+    <th scope="col" aria-sort={ariaSort}>
+      <button
+        type="button"
+        className={`project-document-sort-trigger${isActive ? " is-active" : ""}`}
+        aria-label={`${label} ${nextDirection} sortieren`}
+        onClick={() => onSort(sortKey)}
+      >
+        <span>{label}</span>
+        {isActive ? (
+          <span className="project-document-sort-indicator" aria-hidden="true">
+            {activeSort.direction === "asc" ? "↑" : "↓"}
+          </span>
+        ) : null}
+      </button>
+    </th>
+  );
+}
+
 function formatProjectDocumentType(item: ProjectFolderDocumentItem): string {
-  if (item.is_folder) {
-    return "Ordner";
-  }
-  return item.file_extension?.toUpperCase() ?? "Datei";
+  return getProjectDocumentTypeLabel(item) ?? "Datei";
 }
 
 function formatProjectDocumentChanged(item: ProjectFolderDocumentItem): string {

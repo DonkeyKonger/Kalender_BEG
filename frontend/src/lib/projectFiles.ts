@@ -1,5 +1,6 @@
 import type { ProjectFolderDocumentItem } from "../types/site";
 import { formatFileSize, formatGermanDateTimeShort } from "./formatters";
+import { getProjectDocumentTypeLabel } from "./projectDocumentSort";
 
 export type ProjectDocumentKind = "folder" | "pdf" | "word" | "excel" | "image" | "mail" | "file";
 
@@ -41,11 +42,4 @@ export function formatProjectDocumentMeta(item: ProjectFolderDocumentItem, optio
   const changed = item.last_modified_date_time ? `Geändert ${formatGermanDateTimeShort(item.last_modified_date_time)}` : null;
   const size = item.is_folder ? null : formatProjectFileSize(item.size);
   return [type, changed, size].filter(Boolean).join(" · ") || "Datei";
-}
-
-function getProjectDocumentTypeLabel(item: ProjectFolderDocumentItem, includeFallbackType: boolean): string | null {
-  if (item.is_folder) {
-    return "Ordner";
-  }
-  return item.file_extension?.toUpperCase() ?? item.mime_type ?? (includeFallbackType ? "Datei" : null);
 }

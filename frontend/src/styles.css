@@ -11063,6 +11063,39 @@ button.person-chip:focus-visible {
   text-transform: uppercase;
 }
 
+.project-document-sort-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.project-document-sort-trigger:hover,
+.project-document-sort-trigger.is-active {
+  color: #254f83;
+}
+
+.project-document-sort-trigger:focus-visible {
+  outline: 1px solid #2f6fb3;
+  outline-offset: 2px;
+}
+
+.project-document-sort-indicator {
+  color: #2f6fb3;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
 .project-document-table td {
   color: #40516b;
   font-size: 0.84rem;
