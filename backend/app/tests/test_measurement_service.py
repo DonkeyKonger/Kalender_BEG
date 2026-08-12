@@ -1783,6 +1783,230 @@ def test_site_free_item_creates_office_extra_position_with_entry():
     assert db.get(SiteMeasurementItem, created.id) is not None
 
 
+def test_existing_free_measurement_item_links_to_offer_item_without_changing_quantities():
+    from app.schemas.measurement import MeasurementItemUpdate
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    batch_base = create_measurement_base(db, site)
+    batch_base.status = "closed"
+    batch_base.released_to_mobile = False
+    other_base = SiteMeasurementBase(
+        site=site,
+        name="Andere Angebotsbasis",
+        base_type="main_offer",
+        status="active",
+        released_to_mobile=True,
+    )
+    target_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=batch_base,
+        position="1.01",
+        description="Kabelrinne 60/200",
+        list_quantity=Decimal("100"),
+        unit="m",
+        minutes_per_unit=Decimal("5"),
+        list_minutes_total=Decimal("500"),
+        is_nep=False,
+        sort_order=10,
+    )
+    wrong_base_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=other_base,
+        position="1.01",
+        description="Position aus altem Fremdangebot",
+        list_quantity=Decimal("100"),
+        unit="Stck",
+        minutes_per_unit=Decimal("99"),
+        list_minutes_total=Decimal("9900"),
+        is_nep=False,
+        sort_order=10,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=batch_base,
+        number=1,
+        title="Aufmaß 1",
+        status="submitted",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=batch_base,
+        measurement_batch=batch,
+        position="FREI-1",
+        description="Freie Kabelrinne",
+        unit="lfm",
+        is_free_position=True,
+        sort_order=20,
+    )
+    entries = [
+        SiteMeasurementEntry(
+            measurement_batch=batch,
+            measurement_item=free_item,
+            site=site,
+            quantity=quantity,
+            area_or_comment=area,
+            status="submitted",
+        )
+        for area, quantity in (
+            ("EG", Decimal("20")),
+            ("1. OG", Decimal("15")),
+            ("2. OG", Decimal("10")),
+        )
+    ]
+    db.add_all([other_base, target_item, wrong_base_item, batch, free_item, *entries])
+    db.commit()
+    service = MeasurementService(db)
+    free_item_id = free_item.id
+    entry_state = [(entry.id, entry.area_or_comment, entry.quantity) for entry in entries]
+
+    with pytest.raises(HTTPException) as wrong_base_error:
+        service.update_site_free_item(
+            site_id=site.id,
+            batch_id=batch.id,
+            measurement_item_id=free_item.id,
+            payload=MeasurementItemUpdate(linked_measurement_item_id=wrong_base_item.id),
+        )
+    assert wrong_base_error.value.status_code == 400
+    assert db.get(SiteMeasurementItem, free_item.id).linked_measurement_item_id is None
+
+    with pytest.raises(HTTPException) as typed_only_error:
+        service.update_site_free_item(
+            site_id=site.id,
+            batch_id=batch.id,
+            measurement_item_id=free_item.id,
+            payload=MeasurementItemUpdate(position=target_item.position),
+        )
+    assert typed_only_error.value.status_code == 409
+    assert db.get(SiteMeasurementItem, free_item.id).linked_measurement_item_id is None
+
+    updated = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(
+            position="Manipulierte Nummer",
+            description="Manipulierter Text",
+            unit="falsch",
+            linked_measurement_item_id=target_item.id,
+        ),
+    )
+
+    assert updated.id == free_item_id
+    assert updated.is_free_position is True
+    assert updated.linked_measurement_item_id == target_item.id
+    assert updated.position == "1.01"
+    assert updated.description == "Kabelrinne 60/200"
+    assert updated.unit == "m"
+    assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in updated.entries] == entry_state
+    assert updated.reported_quantity == Decimal("45")
+    assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in entries] == entry_state
+    reloaded = next(
+        item
+        for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+        if item.id == free_item_id
+    )
+    assert reloaded.linked_measurement_item_id == target_item.id
+    assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in reloaded.entries] == entry_state
+
+    stored_batch = service._get_batch_for_site(batch.id, site.id)
+    positions, areas, _cells, totals = MeasurementPdfService(db)._build_matrix(
+        stored_batch,
+        mode="checked",
+    )
+    assert [(position.item_id, position.position, position.description, position.unit) for position in positions] == [
+        (free_item_id, "1.01", "Kabelrinne 60/200", "m"),
+    ]
+    assert [area.label for area in areas] == ["1. OG", "2. OG", "EG"]
+    assert totals == {free_item_id: Decimal("45")}
+
+    batch_base.status = "active"
+    batch_base.released_to_mobile = True
+    other_base.status = "closed"
+    other_base.released_to_mobile = False
+    stored_batch.status = "billed"
+    db.commit()
+    timesheet = service.get_site_measurement_timesheet(site.id)
+    target_row = next(row for row in timesheet.rows if row.position_id == target_item.id)
+    assert target_row.measured_quantity == Decimal("45")
+    assert target_row.measured_minutes == Decimal("225")
+
+
+def test_free_measurement_link_reuses_duplicate_and_status_guards():
+    from app.schemas.measurement import MeasurementItemUpdate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    target_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="2.01",
+        description="Angebotsposition",
+        unit="m",
+        minutes_per_unit=Decimal("4"),
+        is_nep=False,
+        sort_order=10,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=2,
+        title="Aufmaß 2",
+        status="submitted",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        measurement_batch=batch,
+        position="FREI-1",
+        description="Freie Position",
+        unit="m",
+        is_free_position=True,
+        sort_order=20,
+    )
+    existing_target_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=target_item,
+        site=site,
+        quantity=Decimal("3"),
+        area_or_comment="EG",
+        status="submitted",
+    )
+    db.add_all([target_item, batch, free_item, existing_target_entry])
+    db.commit()
+    service = MeasurementService(db)
+
+    with pytest.raises(HTTPException) as duplicate_error:
+        service.update_site_free_item(
+            site_id=site.id,
+            batch_id=batch.id,
+            measurement_item_id=free_item.id,
+            payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
+        )
+    assert duplicate_error.value.status_code == 409
+    assert duplicate_error.value.detail == "Diese Positionsnummer existiert in diesem Aufmaß bereits."
+
+    db.delete(existing_target_entry)
+    batch.status = "customer_signed"
+    batch.customer_signed_at = datetime.now(timezone.utc)
+    db.commit()
+    with pytest.raises(HTTPException) as locked_error:
+        service.update_site_free_item(
+            site_id=site.id,
+            batch_id=batch.id,
+            measurement_item_id=free_item.id,
+            payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
+        )
+    assert locked_error.value.status_code == 409
+    assert "Unterschriebene oder abgeschlossene" in locked_error.value.detail
+
+
 def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():
     from app.models.enums import PersonType
     from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry

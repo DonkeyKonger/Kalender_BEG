@@ -91,6 +91,12 @@ MEASUREMENT_COMPLETED_BATCH_STATUSES = frozenset({
     "finalized",
     "abgeschlossen",
 })
+MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES = MEASUREMENT_COMPLETED_BATCH_STATUSES | frozenset({
+    "archived",
+    "customer_signed",
+    "signed",
+    "unterschrieben",
+})
 MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -639,6 +645,11 @@ class MeasurementService:
         linked_measurement_item = self._get_calculated_measurement_item(
             site_id=site_id,
             measurement_item_id=payload.linked_measurement_item_id,
+            measurement_base_id=(
+                batch.measurement_base_id
+                if batch.measurement_base_id is not None
+                else self._get_active_measurement_base_id(site_id)
+            ),
         )
 
         item = SiteMeasurementItem(
@@ -694,6 +705,7 @@ class MeasurementService:
     ) -> MobileMeasurementItemRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
+        self._ensure_site_batch_can_be_edited_in_office(batch)
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
             item is None
@@ -704,7 +716,36 @@ class MeasurementService:
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
 
-        if payload.position is not None:
+        linked_measurement_item = None
+        if (
+            "linked_measurement_item_id" in payload.model_fields_set
+            and payload.linked_measurement_item_id is not None
+        ):
+            expected_base_id = (
+                batch.measurement_base_id
+                if batch.measurement_base_id is not None
+                else self._get_active_measurement_base_id(site_id)
+            )
+            linked_measurement_item = self._get_calculated_measurement_item(
+                site_id=site_id,
+                measurement_item_id=payload.linked_measurement_item_id,
+                measurement_base_id=expected_base_id,
+            )
+            self._ensure_measurement_target_is_available_for_batch(
+                batch=batch,
+                target_item=linked_measurement_item,
+                source_item_id=item.id,
+            )
+
+        if linked_measurement_item is not None:
+            # The selected offer item is the canonical source for position metadata.
+            # The free item itself remains in place so all existing entry foreign keys
+            # and quantities stay untouched.
+            item.linked_measurement_item_id = linked_measurement_item.id
+            item.position = linked_measurement_item.position
+            item.description = linked_measurement_item.description
+            item.unit = linked_measurement_item.unit
+        elif payload.position is not None:
             position = payload.position.strip()
             if position:
                 position_scope = [
@@ -735,24 +776,21 @@ class MeasurementService:
             if "linked_measurement_item_id" not in payload.model_fields_set:
                 item.linked_measurement_item_id = None
 
-        if payload.description is not None:
+        if linked_measurement_item is None and payload.description is not None:
             description = " ".join(payload.description.split())
             if not description and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
             item.description = description
-        if payload.unit is not None:
+        if linked_measurement_item is None and payload.unit is not None:
             unit = payload.unit.strip()
             if not unit and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
             item.unit = unit
-        if "linked_measurement_item_id" in payload.model_fields_set:
-            linked_measurement_item = self._get_calculated_measurement_item(
-                site_id=site_id,
-                measurement_item_id=payload.linked_measurement_item_id,
-            )
-            item.linked_measurement_item_id = (
-                linked_measurement_item.id if linked_measurement_item is not None else None
-            )
+        if (
+            linked_measurement_item is None
+            and "linked_measurement_item_id" in payload.model_fields_set
+        ):
+            item.linked_measurement_item_id = None
 
         self.db.commit()
         self.db.refresh(item)
@@ -2404,25 +2442,82 @@ class MeasurementService:
         *,
         site_id: int,
         measurement_item_id: int | None,
+        measurement_base_id: int | None = None,
     ) -> SiteMeasurementItem | None:
         if measurement_item_id is None:
             return None
-        item = self.db.scalar(
-            select(SiteMeasurementItem).where(
+        filters = [
                 SiteMeasurementItem.id == measurement_item_id,
                 SiteMeasurementItem.site_id == site_id,
                 SiteMeasurementItem.measurement_base_id.is_not(None),
                 SiteMeasurementItem.measurement_batch_id.is_(None),
                 SiteMeasurementItem.minutes_per_unit.is_not(None),
                 SiteMeasurementItem.is_hidden.is_(False),
-            )
+        ]
+        if measurement_base_id is not None:
+            filters.append(SiteMeasurementItem.measurement_base_id == measurement_base_id)
+        item = self.db.scalar(
+            select(SiteMeasurementItem).where(*filters)
         )
         if item is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Die verknüpfte Projektposition besitzt keine Kalkulationsgrundlage.",
+                "Die verknüpfte Projektposition gehört nicht zur Angebotsgrundlage dieses Aufmaßes "
+                "oder besitzt keine Kalkulationsgrundlage.",
             )
         return item
+
+    def _ensure_measurement_target_is_available_for_batch(
+        self,
+        *,
+        batch: SiteMeasurementBatch,
+        target_item: SiteMeasurementItem,
+        source_item_id: int,
+    ) -> None:
+        existing_entry = self.db.scalar(
+            select(SiteMeasurementEntry.id)
+            .join(
+                SiteMeasurementItem,
+                SiteMeasurementEntry.measurement_item_id == SiteMeasurementItem.id,
+            )
+            .where(
+                SiteMeasurementEntry.measurement_batch_id == batch.id,
+                SiteMeasurementItem.id != source_item_id,
+                or_(
+                    SiteMeasurementItem.id == target_item.id,
+                    SiteMeasurementItem.linked_measurement_item_id == target_item.id,
+                ),
+            )
+            .limit(1)
+        )
+        if existing_entry is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Diese Positionsnummer existiert in diesem Aufmaß bereits.",
+            )
+
+    def _ensure_site_batch_can_be_edited_in_office(
+        self,
+        batch: SiteMeasurementBatch,
+    ) -> None:
+        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Entwürfe werden mobil bearbeitet.",
+            )
+        if batch.deleted_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Archivierte Aufmaße können nicht bearbeitet werden.",
+            )
+        if (
+            batch.customer_signed_at is not None
+            or batch.status.casefold() in MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Unterschriebene oder abgeschlossene Aufmaße können nicht bearbeitet werden.",
+            )
 
     def _delete_existing_entries_for_cell(
         self,

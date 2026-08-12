@@ -68,17 +68,39 @@ test("blank measurements expose ten lazy free columns and append one after the l
   assert.match(pageSource, /\|\| \(item\.unit \?\? ""\)\.trim\(\)\.length > 0/);
 });
 
-test("blank position suggestions reuse the loaded project timesheet and stay free positions", () => {
+test("existing free positions reuse the shared offer autocomplete and stay in the same column", () => {
   assert.match(pageSource, /projectPositionSuggestions/);
   assert.match(pageSource, /position: row\.position_number/);
   assert.match(pageSource, /linkedItem: null/);
   assert.match(pageSource, /item\.position\.toLocaleLowerCase\("de-DE"\)\.includes\(query\)/);
   assert.match(pageSource, /left\.position\.localeCompare\(right\.position, "de-DE", \{ numeric: true/);
-  assert.match(pageSource, /if \(freePositionOnly\) \{\s*setSuggestionState\(null\);\s*if \(existingItem\)/s);
+  assert.match(pageSource, /setSuggestionState\(null\);\s*if \(existingItem\)/s);
   assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
   assert.match(pageSource, /description: suggestion\.description/);
   assert.match(pageSource, /linked_measurement_item_id: suggestion\.id/);
+  assert.match(pageSource, /batchItems\.filter\(\(item\) => !item\.is_free_position\)\.map/);
+  assert.match(pageSource, /const usedPositionSuggestionIds = useMemo/);
+  assert.match(pageSource, /item\.linked_measurement_item_id === null \? \[\] : \[item\.linked_measurement_item_id\]/);
+  assert.match(pageSource, /\.filter\(\(item\) => !usedPositionSuggestionIds\.has\(item\.id\)\)/);
+  assert.doesNotMatch(pageSource, /onChange=\{\(event\) => \{\s*if \(!freePositionOnly\) \{\s*return;/s);
   assert.match(pageSource, /closeSuggestionOnOutsidePointer/);
+});
+
+test("signed and completed measurements keep their existing edit locks", () => {
+  assert.match(pageSource, /const canEditRows = \(!isDraft \|\| selectedBatch\.origin === "OFFICE"\)\s*&& !isBilled\s*&& !isCustomerSigned\s*&& selectedBatch\.deleted_at === null/s);
+  assert.match(pageSource, /disabled=\{!canEditRows \|\| reviewActionLoading \|\| isSavingPosition\}/);
+});
+
+test("linking a free position invalidates derived execution and time analysis data", () => {
+  const handlerStart = pageSource.indexOf("async function updateMeasurementFreeItem(");
+  const handlerEnd = pageSource.indexOf("async function deleteMeasurementFreeItem", handlerStart);
+  const handlerSource = pageSource.slice(handlerStart, handlerEnd);
+
+  assert.match(handlerSource, /replaceMeasurementItem\(current, updatedItem\)/);
+  assert.match(handlerSource, /setMeasurementTimesheet\(null\)/);
+  assert.match(handlerSource, /setMeasurementLoaded\(false\)/);
+  assert.match(handlerSource, /setMeasurementTimeAnalysis\(null\)/);
+  assert.match(handlerSource, /setMeasurementTimeAnalysisLoaded\(false\)/);
 });
 
 test("office origin does not create a special presentation and never offers a fake worker original", () => {
