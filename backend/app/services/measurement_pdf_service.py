@@ -613,7 +613,7 @@ class MeasurementPdfService:
             _current_measurement_entries(list(batch.entries)),
             key=lambda entry: (
                 entry.measurement_item.sort_order if entry.measurement_item else 0,
-                entry.measurement_item.position if entry.measurement_item else "",
+                entry.measurement_item.id if entry.measurement_item else 0,
                 entry.area_or_comment,
                 entry.id,
             ),
@@ -668,7 +668,7 @@ class MeasurementPdfService:
                 for key, quantity in submitted_snapshot.quantities.items()
             }
             return (
-                sorted(submitted_snapshot.positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
+                sorted(submitted_snapshot.positions_by_id.values(), key=lambda item: (item.sort_order, item.item_id)),
                 list(submitted_snapshot.areas_by_key.values()),
                 snapshot_cells,
                 _position_totals(submitted_snapshot.quantities),
@@ -717,7 +717,7 @@ class MeasurementPdfService:
                 if area_key not in correction_snapshot.areas_by_key:
                     area_by_key[area_key] = MatrixArea(key=area.key, label=area.label, is_added=True)
         return (
-            sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.position)),
+            sorted(positions_by_id.values(), key=lambda item: (item.sort_order, item.item_id)),
             list(area_by_key.values()),
             cells,
             totals_by_position,

@@ -634,14 +634,7 @@ class MeasurementService:
         else:
             position = self._next_free_measurement_position(batch)
 
-        sort_scope = [SiteMeasurementItem.site_id == batch.site_id]
-        if is_blank_batch:
-            sort_scope.append(SiteMeasurementItem.measurement_batch_id == batch.id)
-        else:
-            sort_scope.append(SiteMeasurementItem.measurement_base_id == batch.measurement_base_id)
-        next_sort_order = (
-            self.db.scalar(select(func.max(SiteMeasurementItem.sort_order)).where(*sort_scope)) or 0
-        ) + 10
+        next_sort_order = self._next_site_batch_column_sort_order(batch)
         linked_measurement_item = self._get_calculated_measurement_item(
             site_id=site_id,
             measurement_item_id=payload.linked_measurement_item_id,
@@ -2466,6 +2459,45 @@ class MeasurementService:
                 "oder besitzt keine Kalkulationsgrundlage.",
             )
         return item
+
+    def _next_site_batch_column_sort_order(self, batch: SiteMeasurementBatch) -> int:
+        """Append a new office position after this batch's persisted columns.
+
+        Offer positions share their ``sort_order`` with the measurement base, while
+        manual positions are owned by a concrete batch.  Limiting the maximum to
+        the same item scope as the review table prevents positions from unrelated
+        batches (or hidden legacy items) from influencing the column order.
+        """
+        item_filters = [
+            SiteMeasurementItem.site_id == batch.site_id,
+            SiteMeasurementItem.is_hidden.is_(False),
+        ]
+        if (
+            batch.position_mode == MeasurementPositionMode.BLANK.value
+            or batch.measurement_base_id is None
+        ):
+            item_filters.extend(
+                [
+                    SiteMeasurementItem.measurement_batch_id == batch.id,
+                    SiteMeasurementItem.is_free_position.is_(True),
+                ]
+            )
+        else:
+            item_filters.extend(
+                [
+                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
+                    or_(
+                        SiteMeasurementItem.is_free_position.is_(False),
+                        SiteMeasurementItem.measurement_batch_id.is_(None),
+                        SiteMeasurementItem.measurement_batch_id == batch.id,
+                    ),
+                ]
+            )
+
+        current_max = self.db.scalar(
+            select(func.max(SiteMeasurementItem.sort_order)).where(*item_filters)
+        )
+        return 1 if current_max is None else current_max + 1
 
     def _ensure_measurement_target_is_available_for_batch(
         self,

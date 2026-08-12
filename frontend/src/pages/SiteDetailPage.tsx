@@ -586,7 +586,9 @@ export function SiteDetailPage() {
     setMeasurementBatchItemsLoading(true);
     setMeasurementReviewError(null);
     try {
-      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(
+        await api.siteMeasurementBatchItems(site.id, batch.id),
+      ));
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Aufmaßzeilen konnten nicht geladen werden."));
     } finally {
@@ -612,7 +614,9 @@ export function SiteDetailPage() {
       setSelectedMeasurementBatch(updated);
       setMeasurementTimesheet(null);
       setMeasurementLoaded(false);
-      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(
+        await api.siteMeasurementBatchItems(site.id, batch.id),
+      ));
       setMeasurementReviewMessage(
         billingStatus === "billed"
           ? `${batch.title} wurde abgeschlossen.`
@@ -636,7 +640,9 @@ export function SiteDetailPage() {
       const updated = await api.markSiteMeasurementBatchReviewed(site.id, batch.id);
       setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setSelectedMeasurementBatch(updated);
-      setMeasurementBatchItems(await api.siteMeasurementBatchItems(site.id, batch.id));
+      setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(
+        await api.siteMeasurementBatchItems(site.id, batch.id),
+      ));
       setMeasurementReviewMessage(`${batch.title} wurde als geprüft markiert.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Prüfstatus konnte nicht gespeichert werden."));
@@ -777,7 +783,7 @@ export function SiteDetailPage() {
     setMeasurementReviewError(null);
     try {
       const createdItem = await api.createSiteMeasurementFreeItem(site.id, batch.id, payload);
-      setMeasurementBatchItems((current) => [...current, createdItem]);
+      setMeasurementBatchItems((current) => orderMeasurementItemsByColumnPosition([...current, createdItem]));
       return createdItem;
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Büro-Zusatzposition konnte nicht angelegt werden."));
@@ -835,7 +841,9 @@ export function SiteDetailPage() {
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      setMeasurementBatchItems(await api.resetSiteMeasurementBatchToSubmitted(site.id, batch.id));
+      setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(
+        await api.resetSiteMeasurementBatchToSubmitted(site.id, batch.id),
+      ));
       setMeasurementReviewMessage(`${formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)} wurde auf den Monteurstand zurückgesetzt.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Monteurstand konnte nicht wiederhergestellt werden."));
@@ -3733,6 +3741,10 @@ function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: 
 
 function replaceMeasurementItem(items: MobileMeasurementItem[], updatedItem: MobileMeasurementItem): MobileMeasurementItem[] {
   return items.map((item) => (item.id === updatedItem.id ? updatedItem : item));
+}
+
+function orderMeasurementItemsByColumnPosition(items: MobileMeasurementItem[]): MobileMeasurementItem[] {
+  return [...items].sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
 }
 
 function replaceMeasurementEntryInItems(items: MobileMeasurementItem[], updatedEntry: MeasurementEntry): MobileMeasurementItem[] {

@@ -68,6 +68,20 @@ test("blank measurements expose ten lazy free columns and append one after the l
   assert.match(pageSource, /\|\| \(item\.unit \?\? ""\)\.trim\(\)\.length > 0/);
 });
 
+test("measurement columns use only the persisted order and append new office positions on the right", () => {
+  assert.match(pageSource, /function orderMeasurementItemsByColumnPosition\(items: MobileMeasurementItem\[\]\)/);
+  assert.match(pageSource, /left\.sort_order - right\.sort_order \|\| left\.id - right\.id/);
+  assert.match(pageSource, /orderMeasurementItemsByColumnPosition\(\[\.\.\.current, createdItem\]\)/);
+  assert.match(pageSource, /orderMeasurementItemsByColumnPosition\(\s*await api\.siteMeasurementBatchItems/s);
+
+  const replaceStart = pageSource.indexOf("function replaceMeasurementItem(");
+  const replaceEnd = pageSource.indexOf("function orderMeasurementItemsByColumnPosition", replaceStart);
+  const replaceSource = pageSource.slice(replaceStart, replaceEnd);
+  assert.match(replaceSource, /items\.map/);
+  assert.doesNotMatch(replaceSource, /\.sort\(/);
+  assert.doesNotMatch(replaceSource, /position\.localeCompare/);
+});
+
 test("existing free positions reuse the shared offer autocomplete and stay in the same column", () => {
   assert.match(pageSource, /projectPositionSuggestions/);
   assert.match(pageSource, /position: row\.position_number/);

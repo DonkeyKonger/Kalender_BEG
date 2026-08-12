@@ -1783,6 +1783,186 @@ def test_site_free_item_creates_office_extra_position_with_entry():
     assert db.get(SiteMeasurementItem, created.id) is not None
 
 
+def test_site_free_items_append_to_persisted_batch_order_and_keep_it_when_linked():
+    from app.schemas.measurement import MeasurementItemUpdate
+    from app.services.measurement_pdf_service import MeasurementPdfService
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    office_user = User(
+        username="office-column-order",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=7,
+        title="Aufmaß 7",
+        status="submitted",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    offer_items = [
+        SiteMeasurementItem(
+            site=site,
+            measurement_base=base,
+            position=position,
+            description=f"Angebotsposition {position}",
+            unit="m",
+            minutes_per_unit=Decimal("1"),
+            sort_order=sort_order,
+        )
+        # The first two legacy positions intentionally share an order and are not
+        # numerically sorted. Their stable ID order is the existing visible order.
+        for position, sort_order in (("1.03", 10), ("1.01", 10), ("1.05", 50))
+    ]
+    link_target = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="1.04",
+        description="Nachträglich verknüpfte Angebotsposition",
+        unit="Stck",
+        minutes_per_unit=Decimal("2"),
+        sort_order=40,
+    )
+    worker_free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        measurement_batch=batch,
+        position="FREI-1",
+        description="Freie Monteurposition",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=70,
+    )
+    unrelated_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=8,
+        title="Aufmaß 8",
+        status="submitted",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    unrelated_free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        measurement_batch=unrelated_batch,
+        position="FREI-99",
+        description="Position eines anderen Aufmaßes",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=900,
+    )
+    hidden_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="9.99",
+        description="Ausgeblendete Altposition",
+        unit="Stck",
+        is_hidden=True,
+        sort_order=1000,
+    )
+    visible_entries = [
+        SiteMeasurementEntry(
+            measurement_batch=batch,
+            measurement_item=item,
+            site=site,
+            quantity=Decimal("1"),
+            area_or_comment="EG",
+            status="submitted",
+        )
+        for item in [*offer_items, worker_free_item]
+    ]
+    db.add_all(
+        [
+            office_user,
+            batch,
+            unrelated_batch,
+            *offer_items,
+            link_target,
+            worker_free_item,
+            unrelated_free_item,
+            hidden_item,
+            *visible_entries,
+        ]
+    )
+    db.commit()
+    service = MeasurementService(db)
+
+    appended = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            position="1.02",
+            description="Erste Büroposition",
+            unit="m",
+            quantity=Decimal("2"),
+            area_or_comment="EG",
+        ),
+    )
+    appended_again = service.create_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            position="2.01",
+            description="Zweite Büroposition",
+            unit="m",
+        ),
+    )
+
+    assert appended.sort_order == 71
+    assert appended_again.sort_order == 72
+    reloaded = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    visible_ids = {item.id for item in reloaded}
+    assert unrelated_free_item.id not in visible_ids
+    assert hidden_item.id not in visible_ids
+    assert [item.id for item in reloaded if item.entries or item.is_free_position] == [
+        offer_items[0].id,
+        offer_items[1].id,
+        offer_items[2].id,
+        worker_free_item.id,
+        appended.id,
+        appended_again.id,
+    ]
+
+    linked = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=appended.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=link_target.id),
+    )
+    assert linked.position == "1.04"
+    assert linked.sort_order == 71
+    assert [item.id for item in service.list_site_batch_items(site_id=site.id, batch_id=batch.id) if item.entries or item.is_free_position] == [
+        offer_items[0].id,
+        offer_items[1].id,
+        offer_items[2].id,
+        worker_free_item.id,
+        appended.id,
+        appended_again.id,
+    ]
+
+    stored_batch = service._get_batch_for_site(batch.id, site.id)
+    pdf_positions, _areas, _cells, _totals = MeasurementPdfService(db)._build_matrix(
+        stored_batch,
+        mode="checked",
+    )
+    assert [position.item_id for position in pdf_positions] == [
+        offer_items[0].id,
+        offer_items[1].id,
+        offer_items[2].id,
+        worker_free_item.id,
+        appended.id,
+        appended_again.id,
+    ]
+
+
 def test_existing_free_measurement_item_links_to_offer_item_without_changing_quantities():
     from app.schemas.measurement import MeasurementItemUpdate
     from app.services.measurement_pdf_service import MeasurementPdfService
@@ -1901,6 +2081,7 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
     assert updated.position == "1.01"
     assert updated.description == "Kabelrinne 60/200"
     assert updated.unit == "m"
+    assert updated.sort_order == 20
     assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in updated.entries] == entry_state
     assert updated.reported_quantity == Decimal("45")
     assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in entries] == entry_state
@@ -3208,6 +3389,7 @@ def test_blank_office_measurement_manages_only_its_free_positions():
         ),
     )
     assert second_item.id != free_item.id
+    assert (free_item.sort_order, second_item.sort_order) == (1, 2)
 
     updated = service.update_site_free_item(
         site_id=site.id,
