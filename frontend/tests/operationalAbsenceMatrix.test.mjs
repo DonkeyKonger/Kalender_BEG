@@ -102,7 +102,7 @@ test("optional operational absence details only expose meaningful content", () =
   );
 });
 
-test("absence overflow opens only from the explicit accessible more button", () => {
+test("absence overflow hover opens only from the explicit accessible more button", () => {
   const rowStart = matrixSource.indexOf("function MatrixAbsencePlanningRow");
   const rowEnd = matrixSource.indexOf("function AbsenceOverflowPopover", rowStart);
   const rowSource = matrixSource.slice(rowStart, rowEnd);
@@ -110,11 +110,27 @@ test("absence overflow opens only from the explicit accessible more button", () 
   assert.ok(rowStart >= 0 && rowEnd > rowStart);
   assert.match(rowSource, /aria-expanded=\{props\.absenceOverflowDetail\?\.date === date\}/);
   assert.match(rowSource, /aria-haspopup="dialog"/);
-  assert.match(rowSource, /props\.onToggleAbsenceOverflow\(/);
-  assert.doesNotMatch(rowSource, /onMouseEnter|onPointerEnter|onFocus=/);
+  assert.match(rowSource, /className="absence-planning-more"[\s\S]*onMouseEnter=\{\(event\) => openOverflowFromTrigger\(date, event\.currentTarget\)\}/);
+  assert.match(rowSource, /className="absence-planning-more"[\s\S]*onMouseLeave=\{scheduleOverflowClose\}/);
+  assert.match(rowSource, /function openOverflowFromTrigger[\s\S]*props\.onToggleAbsenceOverflow\(/);
+  assert.doesNotMatch(rowSource, /<td[^>]*onMouseEnter=/);
+  assert.doesNotMatch(rowSource, /<button\s+className=\{absencePlanningBlockClassName\(item\)\}[^>]*onMouseEnter=/);
   assert.doesNotMatch(styles, /has-absence-overflow:hover[\s\S]*absence-overflow-popover/);
   assert.doesNotMatch(styles, /has-absence-overflow:focus-within[\s\S]*absence-overflow-popover/);
   assert.doesNotMatch(styles, /\.absence-overflow-popover \{[^}]*display:\s*none/s);
+});
+
+test("absence overflow trigger and portal share one delayed hover close lifecycle", () => {
+  const rowStart = matrixSource.indexOf("function MatrixAbsencePlanningRow");
+  const rowEnd = matrixSource.indexOf("function MatrixTableGroup", rowStart);
+  const rowSource = matrixSource.slice(rowStart, rowEnd);
+
+  assert.match(matrixSource, /const ABSENCE_OVERFLOW_HOVER_CLOSE_DELAY_MS = 200/);
+  assert.match(rowSource, /overflowCloseTimerRef/);
+  assert.match(rowSource, /window\.setTimeout\([\s\S]*ABSENCE_OVERFLOW_HOVER_CLOSE_DELAY_MS/);
+  assert.match(rowSource, /onMouseEnter=\{cancelOverflowClose\}/);
+  assert.match(rowSource, /onMouseLeave=\{scheduleOverflowClose\}/);
+  assert.match(rowSource, /window\.clearTimeout\(overflowCloseTimerRef\.current\)/);
 });
 
 test("absence overflow has explicit outside-click and Escape lifecycle cleanup", () => {

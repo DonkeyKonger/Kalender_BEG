@@ -194,6 +194,7 @@ type UndoItem = {
 const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
 const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
+const ABSENCE_OVERFLOW_HOVER_CLOSE_DELAY_MS = 200;
 const MATRIX_BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 const MATRIX_NOTE_CACHE_TTL_MS = 30_000;
 const MATRIX_NOTE_HOVER_OPEN_DELAY_MS = 200;
@@ -3710,6 +3711,7 @@ type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<str
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
   const { absenceOverflowDetail, onCloseAbsenceOverflow } = props;
+  const overflowCloseTimerRef = useRef<number | null>(null);
   const absencePlanning = useMemo(() => {
     const itemsByDate = buildAbsencePlanningItemsByDate(
       props.absences,
@@ -3739,6 +3741,35 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
       onCloseAbsenceOverflow();
     }
   }, [absenceOverflowDetail?.date, absencePlanning.itemsByDate, onCloseAbsenceOverflow]);
+
+  useEffect(() => () => {
+    if (overflowCloseTimerRef.current !== null) {
+      window.clearTimeout(overflowCloseTimerRef.current);
+    }
+  }, []);
+
+  function cancelOverflowClose(): void {
+    if (overflowCloseTimerRef.current === null) {
+      return;
+    }
+    window.clearTimeout(overflowCloseTimerRef.current);
+    overflowCloseTimerRef.current = null;
+  }
+
+  function scheduleOverflowClose(): void {
+    cancelOverflowClose();
+    overflowCloseTimerRef.current = window.setTimeout(() => {
+      overflowCloseTimerRef.current = null;
+      onCloseAbsenceOverflow();
+    }, ABSENCE_OVERFLOW_HOVER_CLOSE_DELAY_MS);
+  }
+
+  function openOverflowFromTrigger(date: string, trigger: HTMLButtonElement): void {
+    cancelOverflowClose();
+    if (absenceOverflowDetail?.date !== date) {
+      props.onToggleAbsenceOverflow(date, anchorFromRect(trigger.getBoundingClientRect()));
+    }
+  }
 
   return (
     <tr className="matrix-absence-row" style={rowStyle}>
@@ -3813,12 +3844,11 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
                     aria-haspopup="dialog"
                     className="absence-planning-more"
                     type="button"
+                    onMouseEnter={(event) => openOverflowFromTrigger(date, event.currentTarget)}
+                    onMouseLeave={scheduleOverflowClose}
                     onClick={(event) => {
                       event.stopPropagation();
-                      props.onToggleAbsenceOverflow(
-                        date,
-                        anchorFromRect(event.currentTarget.getBoundingClientRect()),
-                      );
+                      openOverflowFromTrigger(date, event.currentTarget);
                     }}
                   >
                     +{hiddenAbsenceCount} mehr
@@ -3830,6 +3860,8 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
                       isEditable={props.isEditable}
                       items={dayAbsenceItems}
                       onClose={props.onCloseAbsenceOverflow}
+                      onMouseEnter={cancelOverflowClose}
+                      onMouseLeave={scheduleOverflowClose}
                       onDeleteAbsence={props.onDeleteAbsence}
                       onDeleteOperationalAbsence={props.onDeleteOperationalAbsence}
                       onOpenOperationalAbsence={props.onOpenOperationalAbsence}
@@ -3851,6 +3883,8 @@ function AbsenceOverflowPopover({
   isEditable,
   items,
   onClose,
+  onMouseEnter,
+  onMouseLeave,
   onDeleteAbsence,
   onDeleteOperationalAbsence,
   onOpenOperationalAbsence,
@@ -3860,6 +3894,8 @@ function AbsenceOverflowPopover({
   isEditable: boolean;
   items: PlanningAbsenceItem[];
   onClose: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
   onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteOperationalAbsence: (absence: OperationalAbsence) => void;
   onOpenOperationalAbsence: (absence: OperationalAbsence, anchor: EditorAnchor) => void;
@@ -3931,6 +3967,8 @@ function AbsenceOverflowPopover({
       role="dialog"
       style={position}
       onClick={(event) => event.stopPropagation()}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <strong>Fehlzeiten {formatDayNumber(date)}</strong>
       <div className="absence-overflow-list">
