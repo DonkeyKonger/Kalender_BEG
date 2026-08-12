@@ -22,6 +22,10 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerSignatureCreate,
 )
 from app.services.document_photo_optimizer import optimize_document_photo
+from app.services.extra_work_archive_service import (
+    ExtraWorkArchiveService,
+    is_extra_work_completed_status,
+)
 from app.services.photo_filename import (
     build_photo_filename,
     extra_work_photo_document_label,
@@ -58,8 +62,14 @@ CustomerEmailStatus = tuple[datetime, bool | None]
 
 
 class ExtraWorkService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        archive_service: ExtraWorkArchiveService | None = None,
+    ) -> None:
         self.db = db
+        self.archive_service = archive_service or ExtraWorkArchiveService(db)
 
     def list_site_tickets(self, site_id: int) -> list[ExtraWorkTicketRead]:
         self._get_site(site_id)
@@ -138,6 +148,14 @@ class ExtraWorkService:
         self._get_site(site_id)
         ticket = self._get_ticket_for_site(ticket_id, site_id, for_update=True)
         previous_status = ticket.status
+        normalized_previous = (previous_status or "").strip().lower()
+        normalized_target = (target_status or "").strip().lower()
+        if (
+            normalized_previous == normalized_target
+            and is_extra_work_completed_status(normalized_previous)
+        ):
+            self._archive_completed_ticket(ticket)
+            return self._build_ticket_read(ticket)
         target_status = validate_extra_work_status_promotion(previous_status, target_status)
         ticket.status = target_status
         AuditService(self.db).record(
@@ -151,6 +169,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
+        self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
     def list_mobile_tickets(
@@ -212,6 +231,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
+        self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
     def update_mobile_ticket_status(
@@ -380,6 +400,7 @@ class ExtraWorkService:
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
+        self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
     def sign_mobile_ticket_worker(
@@ -721,6 +742,25 @@ class ExtraWorkService:
         if approval_ticket.kind != EXTRA_WORK_APPROVAL_KIND:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Verknüpfte Freigabe muss eine Stundenfreigabe sein.")
         return approval_ticket.id
+
+    def _archive_completed_ticket(self, ticket: ExtraWorkTicket) -> None:
+        if not is_extra_work_completed_status(ticket.status):
+            return
+        try:
+            self.archive_service.archive_completed_ticket(
+                site_id=ticket.site_id,
+                ticket_id=ticket.id,
+            )
+        except Exception:
+            # The business transaction is already committed at this point. A
+            # SharePoint outage must never roll back or hide the completed status.
+            LOGGER.exception(
+                "Extra-work PDF archive failed after status persistence: "
+                "site_id=%s ticket_id=%s status=%s.",
+                ticket.site_id,
+                ticket.id,
+                ticket.status,
+            )
 
     @staticmethod
     def _normalize_kind(value: str | None, *, default: str) -> str:

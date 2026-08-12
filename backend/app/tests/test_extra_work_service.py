@@ -240,6 +240,14 @@ def test_site_extra_work_ticket_can_be_deleted():
 
 
 def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatures():
+    class RecordingArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+            return {"id": "archived-pdf"}
+
     db = db_session()
     site = Site(site_number="8007", name="Schüchtermann Klinik")
     actor = User(
@@ -251,7 +259,8 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
     )
     db.add_all([site, actor])
     db.commit()
-    service = ExtraWorkService(db)
+    archive_service = RecordingArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
     created = service.create_site_ticket(
         site_id=site.id,
         current_user=actor,
@@ -299,7 +308,153 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
     assert completed.status == "billed"
     assert completed.customer_signature_name == "Kunde Beispiel"
     assert completed.customer_signed_at is not None
+    assert archive_service.calls == [(site.id, created.id)]
+
+    repeated = service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=created.id,
+        target_status="billed",
+        current_user=actor,
+    )
+    assert repeated.status == "billed"
+    assert archive_service.calls == [(site.id, created.id), (site.id, created.id)]
     assert db.query(AuditLog).filter_by(action="extra_work.status_promoted").count() == 2
+
+
+def test_extra_work_archive_failure_does_not_revert_completed_status(caplog):
+    class FailingArchiveService:
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            raise RuntimeError("Graph temporarily unavailable")
+
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="archive-office",
+        display_name="Archiv Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db, archive_service=FailingArchiveService())
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+    stored = db.get(ExtraWorkTicket, ticket.id)
+    stored.status = "signed"
+    db.commit()
+
+    with caplog.at_level("ERROR", logger="app.services.extra_work_service"):
+        completed = service.promote_site_ticket_status(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            target_status="billed",
+            current_user=actor,
+        )
+
+    assert completed.status == "billed"
+    assert db.get(ExtraWorkTicket, ticket.id).status == "billed"
+    assert "Extra-work PDF archive failed after status persistence" in caplog.text
+    assert "Graph temporarily unavailable" in caplog.text
+
+
+def test_manual_submitted_to_completed_status_archives_pdf():
+    class RecordingArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+            return {"id": "archived-pdf"}
+
+    db = db_session()
+    site = Site(site_number="9999", name="Testbaustelle Finienweg")
+    actor = User(
+        username="manual-status-office",
+        display_name="Status Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    archive_service = RecordingArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+    service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        target_status="submitted",
+        current_user=actor,
+    )
+
+    completed = service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        target_status="billed",
+        current_user=actor,
+    )
+
+    assert completed.status == "billed"
+    assert archive_service.calls == [(site.id, ticket.id)]
+
+
+def test_customer_signature_status_alone_does_not_archive_pdf():
+    class RecordingArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="9999", name="Testbaustelle Finienweg")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 12),
+        end_date=date(2026, 8, 12),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    archive_service = RecordingArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
+    ticket = service.create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+
+    signed = service.sign_mobile_ticket_customer(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkCustomerSignatureCreate(
+            customer_name="Kunde Beispiel",
+            signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.2, y=0.3),
+                ExtraWorkSignaturePoint(x=0.7, y=0.5),
+            ]],
+        ),
+    )
+
+    assert signed.status == "signed"
+    assert archive_service.calls == []
 
 
 def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval():

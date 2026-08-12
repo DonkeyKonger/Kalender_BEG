@@ -295,7 +295,7 @@ def test_create_test_project_folder_is_blocked_without_feature_flag():
     assert "MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED" in error.value.detail
 
 
-def test_create_test_project_folder_creates_root_and_15_subfolders():
+def test_create_test_project_folder_creates_root_standard_and_extra_work_subfolder():
     graph = FakeGraphClient()
     service = ProjectStorageService(
         config=enabled_config(ms_graph_create_test_folders_enabled=True),
@@ -309,7 +309,18 @@ def test_create_test_project_folder_creates_root_and_15_subfolders():
     assert len(result["subfolders"]) == 15
     assert result["subfolders"][0]["name"] == "01_Angebote"
     assert result["subfolders"][-1]["name"] == "15_Mails"
-    assert len(graph.posts) == 16
+    assert result["nested_subfolders"] == [
+        {
+            "folder_key": "zusatzauftraege",
+            "parent_folder_key": "aufmass",
+            "name": "8.1 Zusatzaufträge",
+            "id": "folder-17",
+            "web_url": "https://example.invalid/folder-17",
+        }
+    ]
+    assert graph.posts[-1][0] == "/drives/drive-1/items/folder-9/children"
+    assert graph.posts[-1][1]["name"] == "8.1 Zusatzaufträge"
+    assert len(graph.posts) == 17
     assert "super-secret-value" not in str(result)
 
 
@@ -390,7 +401,10 @@ def test_create_project_folder_for_site_creates_sanitized_root_and_subfolders():
     assert graph.posts[1][1]["name"] == "8007_Schuechtermann_Klinik"
     assert graph.posts[2][1]["name"] == "01_Angebote"
     assert graph.posts[4][1]["name"] == "03_Aufträge"
-    assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert graph.posts[-2][1]["name"] == "15_Mails"
+    assert result["nested_subfolders"][0]["name"] == "8.1 Zusatzaufträge"
+    assert graph.posts[-1][0] == "/drives/drive-1/items/folder-10/children"
+    assert graph.posts[-1][1]["name"] == "8.1 Zusatzaufträge"
     assert len(graph.puts) == 1
     upload_path, upload_content, upload_content_type = graph.puts[0]
     assert upload_path == (
@@ -485,8 +499,60 @@ def test_create_project_folder_for_site_logs_material_template_upload_failure(ca
 
     assert result["status"] == "created"
     assert len(result["subfolders"]) == 15
-    assert graph.posts[-1][1]["name"] == "15_Mails"
+    assert graph.posts[-2][1]["name"] == "15_Mails"
+    assert graph.posts[-1][1]["name"] == "8.1 Zusatzaufträge"
     assert "Material order template upload failed for site 42" in caplog.text
+
+
+def test_extra_work_archive_folder_is_created_on_demand_and_upload_is_idempotent():
+    class PersistentFolderGraphClient(FakeGraphClient):
+        def __init__(self):
+            super().__init__()
+            self.children_by_parent = {}
+
+        def get(self, path):
+            suffix = "/children?$select=id,name,webUrl,folder,parentReference"
+            if path.startswith("/drives/drive-1/items/") and path.endswith(suffix):
+                parent_id = path.removeprefix("/drives/drive-1/items/").removesuffix(suffix)
+                return {"value": list(self.children_by_parent.get(parent_id, []))}
+            return super().get(path)
+
+        def post(self, path, payload):
+            created = super().post(path, payload)
+            created["folder"] = {}
+            parent_id = path.removeprefix("/drives/drive-1/items/").removesuffix("/children")
+            self.children_by_parent.setdefault(parent_id, []).append(created)
+            return created
+
+    graph = PersistentFolderGraphClient()
+    service = ProjectStorageService(
+        config=enabled_config(ms_graph_create_project_folders_enabled=True),
+        graph_client=graph,
+    )
+
+    first = service.upload_extra_work_archive_pdf(
+        project_folder_item_id="existing-project-root",
+        filename="Zusatzauftrag_9999_9999.SZ03.pdf",
+        content=b"first-current-pdf",
+    )
+    second = service.upload_extra_work_archive_pdf(
+        project_folder_item_id="existing-project-root",
+        filename="Zusatzauftrag_9999_9999.SZ03.pdf",
+        content=b"corrected-current-pdf",
+    )
+
+    assert first["id"] == second["id"] == "uploaded-1"
+    assert [payload["name"] for _, payload in graph.posts] == [
+        "08_Aufmass",
+        "8.1 Zusatzaufträge",
+    ]
+    assert len(graph.puts) == 2
+    upload_paths = [path for path, _, _ in graph.puts]
+    assert upload_paths == [
+        "/drives/drive-1/items/folder-2:/Zusatzauftrag_9999_9999.SZ03.pdf:/content",
+        "/drives/drive-1/items/folder-2:/Zusatzauftrag_9999_9999.SZ03.pdf:/content",
+    ]
+    assert graph.puts[-1][1] == b"corrected-current-pdf"
 
 
 def test_sync_project_folder_for_site_moves_existing_flat_folder_to_project_manager_folder():

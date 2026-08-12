@@ -17,3 +17,17 @@ PROJECT_FOLDER_TEMPLATE = [
 ]
 
 PROJECT_FOLDER_TEMPLATE_BY_KEY = {folder["folder_key"]: folder for folder in PROJECT_FOLDER_TEMPLATE}
+
+# Child folders that are part of the standard SharePoint project structure but do
+# not appear as separate entries in the left-hand project-file navigation.
+PROJECT_FOLDER_NESTED_TEMPLATE = [
+    {
+        "parent_folder_key": "aufmass",
+        "name": "8.1 Zusatzaufträge",
+        "folder_key": "zusatzauftraege",
+    },
+]
+
+PROJECT_FOLDER_NESTED_TEMPLATE_BY_KEY = {
+    folder["folder_key"]: folder for folder in PROJECT_FOLDER_NESTED_TEMPLATE
+}

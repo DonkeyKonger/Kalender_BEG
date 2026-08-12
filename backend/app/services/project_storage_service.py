@@ -16,7 +16,12 @@ from app.services.microsoft_graph_client import (
     MicrosoftGraphConfigError,
     MicrosoftGraphRequestError,
 )
-from app.services.project_folder_template import PROJECT_FOLDER_TEMPLATE
+from app.services.project_folder_template import (
+    PROJECT_FOLDER_NESTED_TEMPLATE,
+    PROJECT_FOLDER_NESTED_TEMPLATE_BY_KEY,
+    PROJECT_FOLDER_TEMPLATE,
+    PROJECT_FOLDER_TEMPLATE_BY_KEY,
+)
 
 PROJECT_FOLDER_STATUS_DISABLED = "disabled"
 PROJECT_FOLDER_STATUS_CREATED = "created"
@@ -28,6 +33,7 @@ MATERIAL_ORDER_TEMPLATE_FILENAME = "Materialschein_Formular_Master.pdf"
 MATERIAL_ORDER_TEMPLATE_RESOURCE = (
     "templates/project_folders/Materialschein_Formular_Master.pdf"
 )
+EXTRA_WORK_ARCHIVE_FOLDER_KEY = "zusatzauftraege"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -154,9 +160,11 @@ class ProjectStorageService:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Microsoft Graph did not return folder id.")
 
         subfolders = []
+        top_level_folders: dict[str, dict[str, Any]] = {}
         for template in PROJECT_FOLDER_TEMPLATE:
             folder_name = _project_subfolder_name(template)
             created = self._create_folder(root_folder_id, folder_name)
+            top_level_folders[str(template["folder_key"])] = created
             subfolders.append(
                 {
                     "sort_order": template["sort_order"],
@@ -165,6 +173,7 @@ class ProjectStorageService:
                     "web_url": created.get("webUrl"),
                 }
             )
+        nested_subfolders = self._ensure_nested_project_folders(top_level_folders)
 
         return {
             "created": True,
@@ -174,6 +183,7 @@ class ProjectStorageService:
                 "web_url": root_folder.get("webUrl"),
             },
             "subfolders": subfolders,
+            "nested_subfolders": nested_subfolders,
         }
 
     def create_project_folder_for_site(
@@ -253,9 +263,11 @@ class ProjectStorageService:
                 raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Microsoft Graph did not return folder id.")
 
             subfolders = []
+            top_level_folders: dict[str, dict[str, Any]] = {}
             for template in PROJECT_FOLDER_TEMPLATE:
                 subfolder_name = _project_subfolder_name(template)
                 created = self._ensure_folder(root_folder_id, subfolder_name)
+                top_level_folders[str(template["folder_key"])] = created
                 subfolders.append(
                     {
                         "sort_order": template["sort_order"],
@@ -274,6 +286,7 @@ class ProjectStorageService:
                             site_id,
                             material_order_folder_id,
                         )
+            nested_subfolders = self._ensure_nested_project_folders(top_level_folders)
         except HTTPException as error:
             return {
                 "status": PROJECT_FOLDER_STATUS_ERROR,
@@ -291,7 +304,53 @@ class ProjectStorageService:
             "drive_id": self.config.ms_project_drive_id,
             "target_path": target["target_path"],
             "subfolders": subfolders,
+            "nested_subfolders": nested_subfolders,
         }
+
+    def upload_extra_work_archive_pdf(
+        self,
+        *,
+        project_folder_item_id: str | None,
+        filename: str,
+        content: bytes,
+    ) -> dict[str, Any]:
+        """Store the current extra-work PDF at its stable project archive path.
+
+        Graph's path-based PUT replaces the existing file with the same name. This
+        keeps retries idempotent and prevents SharePoint from creating suffixes such
+        as ``(1)``.
+        """
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not self.config.ms_graph_create_project_folders_enabled:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Project folder creation is disabled.",
+            )
+        if not project_folder_item_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "SharePoint-Projektordner ist noch nicht angebunden.",
+            )
+
+        missing = self._missing_project_config()
+        if missing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Missing Microsoft Graph configuration: {', '.join(missing)}",
+            )
+
+        archive_folder = self._ensure_nested_project_folder(
+            project_folder_item_id,
+            EXTRA_WORK_ARCHIVE_FOLDER_KEY,
+        )
+        return self.upload_file_to_folder(
+            drive_id=self.config.ms_project_drive_id,
+            folder_item_id=_folder_id_or_raise(archive_folder),
+            filename=filename,
+            content=content,
+            content_type="application/pdf",
+        )
 
     def list_folder_children(self, *, drive_id: str | None, folder_item_id: str | None) -> list[dict[str, Any]]:
         if not self.config.ms_graph_enabled:
@@ -576,6 +635,55 @@ class ProjectStorageService:
             if _is_name_conflict(error):
                 return
             raise _safe_graph_files_exception(error) from error
+
+    def _ensure_nested_project_folders(
+        self,
+        top_level_folders: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        nested_subfolders: list[dict[str, Any]] = []
+        for template in PROJECT_FOLDER_NESTED_TEMPLATE:
+            parent_folder_key = str(template["parent_folder_key"])
+            parent_folder = top_level_folders.get(parent_folder_key)
+            if parent_folder is None:
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    f"Parent project folder is missing: {parent_folder_key}",
+                )
+            created = self._ensure_folder(
+                _folder_id_or_raise(parent_folder),
+                str(template["name"]),
+            )
+            nested_subfolders.append(
+                {
+                    "folder_key": template["folder_key"],
+                    "parent_folder_key": parent_folder_key,
+                    "name": template["name"],
+                    "id": created.get("id"),
+                    "web_url": created.get("webUrl"),
+                }
+            )
+        return nested_subfolders
+
+    def _ensure_nested_project_folder(
+        self,
+        project_folder_item_id: str,
+        nested_folder_key: str,
+    ) -> dict[str, Any]:
+        template = PROJECT_FOLDER_NESTED_TEMPLATE_BY_KEY.get(nested_folder_key)
+        if template is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Unknown nested project folder: {nested_folder_key}",
+            )
+        parent_template = PROJECT_FOLDER_TEMPLATE_BY_KEY[str(template["parent_folder_key"])]
+        parent_folder = self._ensure_folder(
+            project_folder_item_id,
+            _project_subfolder_name(parent_template),
+        )
+        return self._ensure_folder(
+            _folder_id_or_raise(parent_folder),
+            str(template["name"]),
+        )
 
     def _resolve_site_folder(
         self,
