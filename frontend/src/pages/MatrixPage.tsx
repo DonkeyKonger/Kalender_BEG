@@ -117,6 +117,10 @@ type OperationalAbsenceDetailState = {
   absence: OperationalAbsence;
   anchor: EditorAnchor;
 };
+type AbsenceOverflowDetailState = {
+  date: string;
+  anchor: EditorAnchor;
+};
 type CellTypingPreview = { siteId: number; date: string; text: string };
 type CalendarWeekGroup = { isoYear: number; week: number; dayCount: number; width: number };
 type UpdatedMatrixSiteCells = { site_id: number; cells: MatrixCell[] };
@@ -210,6 +214,7 @@ export function MatrixPage() {
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [operationalAbsences, setOperationalAbsences] = useState<OperationalAbsence[]>([]);
   const [operationalAbsenceDetail, setOperationalAbsenceDetail] = useState<OperationalAbsenceDetailState | null>(null);
+  const [absenceOverflowDetail, setAbsenceOverflowDetail] = useState<AbsenceOverflowDetailState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
@@ -1103,6 +1108,7 @@ export function MatrixPage() {
     if (!matrixIsEditable) {
       return;
     }
+    setAbsenceOverflowDetail(null);
     setOperationalAbsenceDetail(null);
     closeActiveEditor();
     setActiveAbsenceCell({ date, endDate: date });
@@ -1112,9 +1118,19 @@ export function MatrixPage() {
   }
 
   function openOperationalAbsenceDetail(absence: OperationalAbsence, anchor: EditorAnchor) {
+    setAbsenceOverflowDetail(null);
     closeActiveEditor();
     closeAbsenceEditor();
     setOperationalAbsenceDetail({ absence, anchor });
+  }
+
+  function toggleAbsenceOverflowDetail(date: string, anchor: EditorAnchor) {
+    closeActiveEditor();
+    closeAbsenceEditor();
+    setOperationalAbsenceDetail(null);
+    setAbsenceOverflowDetail((current) => (
+      current?.date === date ? null : { date, anchor }
+    ));
   }
 
   function closeAbsenceEditor() {
@@ -2186,6 +2202,7 @@ export function MatrixPage() {
         <>
           <MatrixTable
             absences={absences}
+            absenceOverflowDetail={absenceOverflowDetail}
             operationalAbsences={operationalAbsences}
             canCreateSites={matrixIsEditable}
             cellMessage={cellMessage}
@@ -2201,7 +2218,9 @@ export function MatrixPage() {
             peopleById={peopleById}
             onDeleteAbsence={deleteAbsenceDayFromPlanning}
             onDeleteOperationalAbsence={(absence) => void deleteOperationalAbsenceFromPlanning(absence)}
+            onCloseAbsenceOverflow={() => setAbsenceOverflowDetail(null)}
             onOpenOperationalAbsence={openOperationalAbsenceDetail}
+            onToggleAbsenceOverflow={toggleAbsenceOverflowDetail}
             onDeleteAssignment={deleteAssignmentFromCell}
             onStartAssignmentDrag={startAssignmentDrag}
             onStartAssignmentResize={startAssignmentResize}
@@ -3544,6 +3563,7 @@ function AbsenceCellEditor({
 
 type MatrixTableProps = {
   absences: Absence[];
+  absenceOverflowDetail: AbsenceOverflowDetailState | null;
   operationalAbsences: OperationalAbsence[];
   canCreateSites: boolean;
   cellMessage: Record<CellKey, string>;
@@ -3560,7 +3580,9 @@ type MatrixTableProps = {
   peopleById: Map<number, Person>;
   onDeleteAbsence: (absence: Absence, date: string) => void;
   onDeleteOperationalAbsence: (absence: OperationalAbsence) => void;
+  onCloseAbsenceOverflow: () => void;
   onOpenOperationalAbsence: (absence: OperationalAbsence, anchor: EditorAnchor) => void;
+  onToggleAbsenceOverflow: (date: string, anchor: EditorAnchor) => void;
   onDeleteAssignment: (row: MatrixRow, cell: MatrixCell, assignment: MatrixAssignment) => void;
   onClearCellMark: (row: MatrixRow, cell: MatrixCell) => void;
   onCreateSiteForGroup: (projectManagerPersonId: number | null) => void;
@@ -3687,6 +3709,7 @@ function MatrixTable(props: MatrixTableProps) {
 type MatrixTableCalendarProps = MatrixTableProps & { holidayMap: ReadonlyMap<string, HolidayInfo> };
 
 function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
+  const { absenceOverflowDetail, onCloseAbsenceOverflow } = props;
   const absencePlanning = useMemo(() => {
     const itemsByDate = buildAbsencePlanningItemsByDate(
       props.absences,
@@ -3706,6 +3729,16 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
     return { itemsByDate, rowCount };
   }, [props.absences, props.matrix.days, props.operationalAbsences, props.peopleById]);
   const rowStyle = { "--absence-rows": absencePlanning.rowCount } as CSSProperties;
+
+  useEffect(() => {
+    const openDate = absenceOverflowDetail?.date;
+    if (
+      openDate
+      && (absencePlanning.itemsByDate.get(openDate)?.length ?? 0) <= MAX_VISIBLE_ABSENCES_PER_DAY
+    ) {
+      onCloseAbsenceOverflow();
+    }
+  }, [absenceOverflowDetail?.date, absencePlanning.itemsByDate, onCloseAbsenceOverflow]);
 
   return (
     <tr className="matrix-absence-row" style={rowStyle}>
@@ -3727,7 +3760,7 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
         const hasOverflow = hiddenAbsenceCount > 0;
         return (
           <td
-            className={[matrixAbsenceCellClassName(date, props.today, props.holidayMap.get(date) ?? null), hasOverflow ? "has-absence-overflow" : ""].filter(Boolean).join(" ")}
+            className={matrixAbsenceCellClassName(date, props.today, props.holidayMap.get(date) ?? null)}
             data-matrix-date={date}
             data-matrix-day-index={cellIndex}
             key={`absence-${date}`}
@@ -3774,48 +3807,34 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
               })}
               {hasOverflow && (
                 <>
-                  <button className="absence-planning-more" type="button" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    aria-controls={props.absenceOverflowDetail?.date === date ? `absence-overflow-${date}` : undefined}
+                    aria-expanded={props.absenceOverflowDetail?.date === date}
+                    aria-haspopup="dialog"
+                    className="absence-planning-more"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onToggleAbsenceOverflow(
+                        date,
+                        anchorFromRect(event.currentTarget.getBoundingClientRect()),
+                      );
+                    }}
+                  >
                     +{hiddenAbsenceCount} mehr
                   </button>
-                  <div className="absence-overflow-popover" role="tooltip" onClick={(event) => event.stopPropagation()}>
-                    <strong>Fehlzeiten {formatDayNumber(date)}</strong>
-                    <div className="absence-overflow-list">
-                      {dayAbsenceItems.map((item) => {
-                        return (
-                          <button
-                            className={absenceOverflowItemClassName(item)}
-                            key={planningAbsenceItemKey(item)}
-                            type="button"
-                            title={item.kind === "operational" ? "Linksklick zeigt Details, Rechtsklick löscht den Eintrag" : "Rechtsklick entfernt nur diesen Tag"}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (item.kind === "operational") {
-                                props.onOpenOperationalAbsence(
-                                  item.operationalAbsence,
-                                  anchorFromRect(event.currentTarget.getBoundingClientRect()),
-                                );
-                              }
-                            }}
-                            onContextMenu={(event) => {
-                              if (item.kind === "classic" && !props.isEditable) {
-                                return;
-                              }
-                              event.preventDefault();
-                              event.stopPropagation();
-                              if (item.kind === "operational") {
-                                props.onDeleteOperationalAbsence(item.operationalAbsence);
-                              } else if (props.isEditable) {
-                                props.onDeleteAbsence(item.absence, date);
-                              }
-                            }}
-                          >
-                            <span>{item.personName}</span>
-                            <em>{item.kind === "operational" ? "Betriebliche Abwesenheit" : absenceTypeLabels[item.absence.absence_type]}</em>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  {props.absenceOverflowDetail?.date === date && (
+                    <AbsenceOverflowPopover
+                      anchor={props.absenceOverflowDetail.anchor}
+                      date={date}
+                      isEditable={props.isEditable}
+                      items={dayAbsenceItems}
+                      onClose={props.onCloseAbsenceOverflow}
+                      onDeleteAbsence={props.onDeleteAbsence}
+                      onDeleteOperationalAbsence={props.onDeleteOperationalAbsence}
+                      onOpenOperationalAbsence={props.onOpenOperationalAbsence}
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -3823,6 +3842,132 @@ function MatrixAbsencePlanningRow(props: MatrixTableCalendarProps) {
         );
       })}
     </tr>
+  );
+}
+
+function AbsenceOverflowPopover({
+  anchor,
+  date,
+  isEditable,
+  items,
+  onClose,
+  onDeleteAbsence,
+  onDeleteOperationalAbsence,
+  onOpenOperationalAbsence,
+}: {
+  anchor: EditorAnchor;
+  date: string;
+  isEditable: boolean;
+  items: PlanningAbsenceItem[];
+  onClose: () => void;
+  onDeleteAbsence: (absence: Absence, date: string) => void;
+  onDeleteOperationalAbsence: (absence: OperationalAbsence) => void;
+  onOpenOperationalAbsence: (absence: OperationalAbsence, anchor: EditorAnchor) => void;
+}) {
+  const popupId = `absence-overflow-${date}`;
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState(() => ({ left: anchor.left, top: anchor.bottom + 6 }));
+
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    if (!popup) {
+      return;
+    }
+    const gap = 6;
+    const viewportPadding = 8;
+    const bounds = popup.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(viewportPadding, anchor.left),
+      Math.max(viewportPadding, window.innerWidth - bounds.width - viewportPadding),
+    );
+    const preferredTop = anchor.bottom + gap;
+    const top = preferredTop + bounds.height <= window.innerHeight - viewportPadding
+      ? preferredTop
+      : Math.max(viewportPadding, anchor.top - bounds.height - gap);
+    setPosition({ left, top });
+  }, [anchor]);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (
+        (target instanceof Node && popupRef.current?.contains(target))
+        || (target instanceof Element && target.closest(`[aria-controls="${popupId}"]`))
+      ) {
+        return;
+      }
+      onClose();
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    function handleViewportChange() {
+      onClose();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [onClose, popupId]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      aria-label={`Fehlzeiten ${formatDayNumber(date)}`}
+      className="absence-overflow-popover"
+      id={popupId}
+      ref={popupRef}
+      role="dialog"
+      style={position}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <strong>Fehlzeiten {formatDayNumber(date)}</strong>
+      <div className="absence-overflow-list">
+        {items.map((item) => (
+          <button
+            className={absenceOverflowItemClassName(item)}
+            key={planningAbsenceItemKey(item)}
+            type="button"
+            title={item.kind === "operational" ? "Linksklick zeigt Details, Rechtsklick löscht den Eintrag" : "Rechtsklick entfernt nur diesen Tag"}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (item.kind === "operational") {
+                const itemAnchor = anchorFromRect(event.currentTarget.getBoundingClientRect());
+                onClose();
+                onOpenOperationalAbsence(item.operationalAbsence, itemAnchor);
+              }
+            }}
+            onContextMenu={(event) => {
+              if (item.kind === "classic" && !isEditable) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              if (item.kind === "operational") {
+                onDeleteOperationalAbsence(item.operationalAbsence);
+              } else if (isEditable) {
+                onDeleteAbsence(item.absence, date);
+              }
+            }}
+          >
+            <span>{item.personName}</span>
+            <em>{item.kind === "operational" ? "Betriebliche Abwesenheit" : absenceTypeLabels[item.absence.absence_type]}</em>
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

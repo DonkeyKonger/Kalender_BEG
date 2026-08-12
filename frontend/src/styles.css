@@ -4800,7 +4800,7 @@ button.person-chip:focus-visible {
   font-weight: 800;
   line-height: 1;
   text-align: left;
-  cursor: help;
+  cursor: pointer;
 }
 
 .absence-planning-more:hover,
@@ -4810,24 +4810,18 @@ button.person-chip:focus-visible {
 }
 
 .absence-overflow-popover {
-  position: absolute;
-  top: calc(100% - 2px);
-  left: 6px;
+  position: fixed;
   z-index: 180;
-  display: none;
   width: max-content;
   min-width: 210px;
   max-width: 280px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   border: 1px solid #d7e0ec;
   border-radius: 8px;
   padding: 8px;
   background: #ffffff;
   box-shadow: 0 16px 32px rgb(21 32 52 / 16%);
-}
-
-.matrix-absence-cell.has-absence-overflow:hover .absence-overflow-popover,
-.matrix-absence-cell.has-absence-overflow:focus-within .absence-overflow-popover {
-  display: block;
 }
 
 .absence-overflow-popover > strong {

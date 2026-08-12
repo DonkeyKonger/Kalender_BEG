@@ -45,7 +45,8 @@ test("all absence types are centrally sorted before visible and overflow renderi
   assert.match(matrixSource, /type PlanningAbsenceItem = PlanningClassicAbsenceItem \| PlanningOperationalAbsenceItem/);
   assert.match(matrixSource, /const items = sortPlanningAbsenceEntries\(\[\.\.\.operationalItems, \.\.\.classicItems\]\)/);
   assert.match(matrixSource, /dayAbsenceItems\.slice\(0, MAX_VISIBLE_ABSENCES_PER_DAY\)/);
-  assert.match(matrixSource, /dayAbsenceItems\.map\(\(item\) =>/);
+  assert.match(matrixSource, /items=\{dayAbsenceItems\}/);
+  assert.match(matrixSource, /\{items\.map\(\(item\) =>/);
 });
 
 test("operational entries use stable priority ordering and collision-free keys", () => {
@@ -99,6 +100,42 @@ test("optional operational absence details only expose meaningful content", () =
     getOperationalAbsenceOptionalDetails({ site: null, text: " \n\n\t " }),
     { hasSite: false, noteText: null },
   );
+});
+
+test("absence overflow opens only from the explicit accessible more button", () => {
+  const rowStart = matrixSource.indexOf("function MatrixAbsencePlanningRow");
+  const rowEnd = matrixSource.indexOf("function AbsenceOverflowPopover", rowStart);
+  const rowSource = matrixSource.slice(rowStart, rowEnd);
+
+  assert.ok(rowStart >= 0 && rowEnd > rowStart);
+  assert.match(rowSource, /aria-expanded=\{props\.absenceOverflowDetail\?\.date === date\}/);
+  assert.match(rowSource, /aria-haspopup="dialog"/);
+  assert.match(rowSource, /props\.onToggleAbsenceOverflow\(/);
+  assert.doesNotMatch(rowSource, /onMouseEnter|onPointerEnter|onFocus=/);
+  assert.doesNotMatch(styles, /has-absence-overflow:hover[\s\S]*absence-overflow-popover/);
+  assert.doesNotMatch(styles, /has-absence-overflow:focus-within[\s\S]*absence-overflow-popover/);
+  assert.doesNotMatch(styles, /\.absence-overflow-popover \{[^}]*display:\s*none/s);
+});
+
+test("absence overflow has explicit outside-click and Escape lifecycle cleanup", () => {
+  const popupStart = matrixSource.indexOf("function AbsenceOverflowPopover");
+  const popupEnd = matrixSource.indexOf("function MatrixTableGroup", popupStart);
+  const popupSource = matrixSource.slice(popupStart, popupEnd);
+
+  assert.ok(popupStart >= 0 && popupEnd > popupStart);
+  assert.match(popupSource, /role="dialog"/);
+  assert.match(popupSource, /createPortal\(/);
+  assert.match(popupSource, /document\.addEventListener\("pointerdown", handlePointerDown\)/);
+  assert.match(popupSource, /document\.removeEventListener\("pointerdown", handlePointerDown\)/);
+  assert.match(popupSource, /event\.key === "Escape"/);
+  assert.match(popupSource, /document\.removeEventListener\("keydown", handleKeyDown\)/);
+  assert.match(styles, /\.absence-overflow-popover \{[^}]*position:\s*fixed;[^}]*max-height:\s*calc\(100vh - 16px\)/s);
+});
+
+test("operational detail and absence overflow close each other before opening", () => {
+  assert.match(matrixSource, /function openOperationalAbsenceDetail[\s\S]*setAbsenceOverflowDetail\(null\)[\s\S]*setOperationalAbsenceDetail\(\{ absence, anchor \}\)/);
+  assert.match(matrixSource, /function toggleAbsenceOverflowDetail[\s\S]*setOperationalAbsenceDetail\(null\)[\s\S]*setAbsenceOverflowDetail/);
+  assert.match(matrixSource, /current\?\.date === date \? null : \{ date, anchor \}/);
 });
 
 test("right click deletes via the dedicated API independently of calendar edit mode", () => {
