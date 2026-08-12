@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { getOperationalAbsenceOptionalDetails } from "../src/lib/operationalAbsenceDetails.ts";
+
 const [matrixSource, styles] = await Promise.all([
   readFile(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
@@ -52,7 +54,7 @@ test("operational entries use stable priority ordering and collision-free keys",
   assert.match(matrixSource, /`absence-\$\{item\.absence\.id\}`/);
 });
 
-test("left click opens a read-only viewport-aware detail popup with all fallbacks", () => {
+test("left click opens a read-only viewport-aware detail popup with optional sections", () => {
   assert.match(matrixSource, /function OperationalAbsenceDetailPopup/);
   assert.match(matrixSource, /role="dialog"/);
   const popupStart = matrixSource.indexOf("function OperationalAbsenceDetailPopup");
@@ -63,12 +65,40 @@ test("left click opens a read-only viewport-aware detail popup with all fallback
   assert.match(matrixSource, /<dt>Zeitraum<\/dt>/);
   assert.match(matrixSource, /<dt>Baustelle<\/dt>/);
   assert.match(matrixSource, /<dt>Notizen<\/dt>/);
-  assert.match(matrixSource, /absence\.text\?\.trim\(\) \|\| "Keine Angabe"/);
+  assert.match(popupSource, /optionalDetails\.hasSite &&/);
+  assert.match(popupSource, /optionalDetails\.noteText &&/);
+  assert.doesNotMatch(popupSource, /<dt>Baustelle<\/dt>[\s\S]*?Keine Angabe/);
+  assert.doesNotMatch(popupSource, /<dt>Notizen<\/dt>[\s\S]*?Keine Angabe/);
   assert.match(popupSource, /className="operational-absence-detail-notes"/);
   assert.doesNotMatch(popupSource, /dangerouslySetInnerHTML|<br\s*\/>/);
   assert.match(matrixSource, /event\.key === "Escape"/);
   assert.match(styles, /\.operational-absence-detail-popover \{[^}]*position:\s*fixed;[^}]*max-height:\s*calc\(100vh - 16px\)/s);
   assert.match(styles, /\.operational-absence-detail-notes \{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;/s);
+});
+
+test("optional operational absence details only expose meaningful content", () => {
+  const site = { id: 8015, site_number: "8015", name: "FFW Barmbek Hamburg" };
+
+  assert.deepEqual(
+    getOperationalAbsenceOptionalDetails({ site: null, text: null }),
+    { hasSite: false, noteText: null },
+  );
+  assert.deepEqual(
+    getOperationalAbsenceOptionalDetails({ site, text: null }),
+    { hasSite: true, noteText: null },
+  );
+  assert.deepEqual(
+    getOperationalAbsenceOptionalDetails({ site: null, text: "Baubesprechung vor Ort" }),
+    { hasSite: false, noteText: "Baubesprechung vor Ort" },
+  );
+  assert.deepEqual(
+    getOperationalAbsenceOptionalDetails({ site, text: "Baubesprechung\nanschließend Aufmaß" }),
+    { hasSite: true, noteText: "Baubesprechung\nanschließend Aufmaß" },
+  );
+  assert.deepEqual(
+    getOperationalAbsenceOptionalDetails({ site: null, text: " \n\n\t " }),
+    { hasSite: false, noteText: null },
+  );
 });
 
 test("right click deletes via the dedicated API independently of calendar edit mode", () => {

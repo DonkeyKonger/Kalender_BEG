@@ -12,6 +12,7 @@ import {
   publishOperationalAbsencesUpdated,
   subscribeToOperationalAbsenceUpdates,
 } from "../lib/operationalAbsence";
+import { getOperationalAbsenceOptionalDetails } from "../lib/operationalAbsenceDetails";
 import {
   planningAbsenceTypePriority,
   sortPlanningAbsenceEntries,
@@ -3194,6 +3195,7 @@ function OperationalAbsenceDetailPopup({
 }) {
   const popupRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState(() => ({ left: anchor.left, top: anchor.bottom + 6 }));
+  const optionalDetails = getOperationalAbsenceOptionalDetails(absence);
 
   useLayoutEffect(() => {
     const popup = popupRef.current;
@@ -3261,16 +3263,20 @@ function OperationalAbsenceDetailPopup({
           <dt>Zeitraum</dt>
           <dd>{formatOperationalAbsenceTimeRange(absence)}</dd>
         </div>
-        <div>
-          <dt>Baustelle</dt>
-          <dd>{formatOperationalAbsenceSite(absence)}</dd>
-        </div>
-        <div>
-          <dt>Notizen</dt>
-          <dd className="operational-absence-detail-notes">
-            {absence.text?.trim() || "Keine Angabe"}
-          </dd>
-        </div>
+        {optionalDetails.hasSite && (
+          <div>
+            <dt>Baustelle</dt>
+            <dd>{formatOperationalAbsenceSite(absence)}</dd>
+          </div>
+        )}
+        {optionalDetails.noteText && (
+          <div>
+            <dt>Notizen</dt>
+            <dd className="operational-absence-detail-notes">
+              {optionalDetails.noteText}
+            </dd>
+          </div>
+        )}
       </dl>
     </div>,
     document.body,
