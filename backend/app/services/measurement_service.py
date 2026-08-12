@@ -76,6 +76,8 @@ from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
+from app.services.audit_service import AuditService
+from app.services.project_record_status import validate_measurement_status_promotion
 
 
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
@@ -1744,6 +1746,35 @@ class MeasurementService:
         self.db.refresh(batch)
         return self._build_mobile_batch(batch)
 
+    def promote_site_batch_status(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        target_status: str,
+        current_user: User,
+    ) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        previous_status = batch.status
+        target_status = validate_measurement_status_promotion(previous_status, target_status)
+        AuditService(self.db).record(
+            user_id=current_user.id,
+            action="measurement.status_promoted",
+            entity_type="site_measurement_batch",
+            entity_id=batch.id,
+            old_value={"status": previous_status},
+            new_value={"status": target_status},
+        )
+        if target_status == "reviewed":
+            return self.set_site_batch_reviewed(site_id=site_id, batch_id=batch_id)
+        return self.set_site_batch_billing_status(
+            site_id=site_id,
+            batch_id=batch_id,
+            billing_status=target_status,
+            current_user=current_user,
+        )
+
     def set_site_batch_reviewed(
         self, *, site_id: int, batch_id: int
     ) -> MobileMeasurementBatchRead:
@@ -2338,6 +2369,7 @@ class MeasurementService:
         site_id: int,
         *,
         include_deleted: bool = False,
+        for_update: bool = False,
     ) -> SiteMeasurementBatch:
         statement = (
             select(SiteMeasurementBatch)
@@ -2358,6 +2390,8 @@ class MeasurementService:
         )
         if not include_deleted:
             statement = statement.where(SiteMeasurementBatch.deleted_at.is_(None))
+        if for_update:
+            statement = statement.with_for_update()
         batch = self.db.scalar(
             statement
         )

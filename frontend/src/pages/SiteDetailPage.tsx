@@ -1,7 +1,8 @@
 import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -18,6 +19,13 @@ import {
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
 import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
+import {
+  extraWorkStatusPromotionOptions,
+  measurementStatusPromotionOptions,
+  type ExtraWorkManualStatus,
+  type MeasurementManualStatus,
+  type ProjectRecordStatusOption,
+} from "../lib/projectRecordStatuses";
 import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
@@ -165,6 +173,7 @@ export function SiteDetailPage() {
   const [measurementReviewMessage, setMeasurementReviewMessage] = useState<string | null>(null);
   const [measurementReviewError, setMeasurementReviewError] = useState<string | null>(null);
   const [measurementReviewActionLoading, setMeasurementReviewActionLoading] = useState(false);
+  const [measurementStatusActionId, setMeasurementStatusActionId] = useState<number | null>(null);
   const [measurementWorkers, setMeasurementWorkers] = useState<MeasurementWorkerOption[]>([]);
   const [measurementWorkersLoading, setMeasurementWorkersLoading] = useState(false);
   const [measurementWorkersLoaded, setMeasurementWorkersLoaded] = useState(false);
@@ -175,6 +184,7 @@ export function SiteDetailPage() {
   const [extraWorkError, setExtraWorkError] = useState<string | null>(null);
   const [extraWorkPdfAction, setExtraWorkPdfAction] = useState<string | null>(null);
   const [deletingExtraWorkTicketId, setDeletingExtraWorkTicketId] = useState<number | null>(null);
+  const [extraWorkStatusActionId, setExtraWorkStatusActionId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -635,6 +645,32 @@ export function SiteDetailPage() {
     }
   }
 
+  async function promoteMeasurementBatchStatus(
+    batch: MobileMeasurementBatch,
+    targetStatus: MeasurementManualStatus,
+  ): Promise<void> {
+    if (!site || !canEditSite || measurementStatusActionId !== null) {
+      return;
+    }
+    setMeasurementStatusActionId(batch.id);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const updated = await api.promoteSiteMeasurementBatchStatus(site.id, batch.id, targetStatus);
+      setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setSelectedMeasurementBatch((current) => (current?.id === updated.id ? updated : current));
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementReviewMessage(`${batch.title}: Status wurde auf ${getMeasurementBatchStatusBadge(updated).label} gesetzt.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Status konnte nicht aufgewertet werden."));
+    } finally {
+      setMeasurementStatusActionId(null);
+    }
+  }
+
   async function deleteMeasurementBatch(batch: MobileMeasurementBatch): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -869,6 +905,25 @@ export function SiteDetailPage() {
       setExtraWorkError(readApiError(requestError, "Zusatzauftrag konnte nicht gelöscht werden."));
     } finally {
       setDeletingExtraWorkTicketId(null);
+    }
+  }
+
+  async function promoteExtraWorkTicketStatus(
+    ticket: MobileExtraWorkTicket,
+    targetStatus: ExtraWorkManualStatus,
+  ): Promise<void> {
+    if (!site || !canEditSite || extraWorkStatusActionId !== null) {
+      return;
+    }
+    setExtraWorkStatusActionId(ticket.id);
+    setExtraWorkError(null);
+    try {
+      const updated = await api.promoteSiteExtraWorkTicketStatus(site.id, ticket.id, targetStatus);
+      setExtraWorkTickets((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+    } catch (requestError) {
+      setExtraWorkError(readApiError(requestError, "Status konnte nicht aufgewertet werden."));
+    } finally {
+      setExtraWorkStatusActionId(null);
     }
   }
 
@@ -1285,6 +1340,7 @@ export function SiteDetailPage() {
           }}
           bases={measurementBases}
           canCreateBatch={canEditSite}
+          canPromoteStatus={canEditSite}
           timesheet={measurementTimesheet}
           timeAnalysis={measurementTimeAnalysis}
           timeAnalysisLoading={measurementTimeAnalysisLoading}
@@ -1326,6 +1382,7 @@ export function SiteDetailPage() {
           reviewMessage={measurementReviewMessage}
           reviewError={measurementReviewError}
           reviewActionLoading={measurementReviewActionLoading}
+          statusActionId={measurementStatusActionId}
           archiveMode={measurementArchiveMode}
           onRetryBatches={() => {
             setMeasurementBatchesLoaded(false);
@@ -1354,6 +1411,7 @@ export function SiteDetailPage() {
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
           onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
+          onPromoteStatus={(batch, status) => void promoteMeasurementBatchStatus(batch, status)}
           onDeleteBatch={deleteMeasurementBatch}
           onRestoreBatch={restoreMeasurementBatch}
           onUpdateEntry={updateMeasurementEntry}
@@ -1373,6 +1431,8 @@ export function SiteDetailPage() {
           error={extraWorkError}
           pdfAction={extraWorkPdfAction}
           deletingTicketId={deletingExtraWorkTicketId}
+          statusActionId={extraWorkStatusActionId}
+          canPromoteStatus={canEditSite}
           onRetry={() => {
             setExtraWorkLoaded(false);
             setExtraWorkError(null);
@@ -1380,6 +1440,7 @@ export function SiteDetailPage() {
           onOpenPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "open")}
           onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
           onDeleteTicket={(ticket) => void deleteExtraWorkTicket(ticket)}
+          onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
         />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -2190,6 +2251,116 @@ function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {
   return <FileIcon aria-hidden="true" size={20} />;
 }
 
+function ProjectRecordStatusControl<T extends string>({
+  active,
+  ariaLabel,
+  busy,
+  label,
+  options,
+  onClose,
+  onSelect,
+  onToggle,
+}: {
+  active: boolean;
+  ariaLabel: string;
+  busy: boolean;
+  label: string;
+  options: ProjectRecordStatusOption<T>[];
+  onClose: () => void;
+  onSelect: (status: T) => void;
+  onToggle: () => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0 });
+
+  useLayoutEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const width = 190;
+      const estimatedHeight = 34 + options.length * 32;
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const opensAbove = window.innerHeight - rect.bottom < estimatedHeight + 8 && rect.top > estimatedHeight;
+      const top = opensAbove
+        ? rect.top - estimatedHeight - 4
+        : Math.min(window.innerHeight - estimatedHeight - 8, rect.bottom + 4);
+      setPosition({ left, top: Math.max(8, top) });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [active, options.length]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) onClose();
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [active, onClose]);
+
+  if (options.length === 0) {
+    return <span className="measurement-review-status-label">{label}</span>;
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        aria-expanded={active}
+        aria-haspopup="menu"
+        aria-label={ariaLabel}
+        className="measurement-review-status-label measurement-review-status-trigger"
+        disabled={busy}
+        type="button"
+        onClick={onToggle}
+      >
+        <span>{busy ? "Speichert..." : label}</span>
+        <span aria-hidden="true" className="measurement-review-status-caret">⌄</span>
+      </button>
+      {active ? createPortal(
+        <div
+          ref={popoverRef}
+          aria-label="Status aufwerten"
+          className="project-record-status-popover"
+          role="menu"
+          style={{ left: position.left, top: position.top }}
+        >
+          <strong>Status setzen auf</strong>
+          {options.map((option) => (
+            <button key={option.value} role="menuitem" type="button" onClick={() => onSelect(option.value)}>
+              {option.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+}
+
 function ExtraWorkTab({
   site,
   tickets,
@@ -2197,10 +2368,13 @@ function ExtraWorkTab({
   error,
   pdfAction,
   deletingTicketId,
+  statusActionId,
+  canPromoteStatus,
   onRetry,
   onOpenPdf,
   onDownloadPdf,
   onDeleteTicket,
+  onPromoteStatus,
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
@@ -2208,11 +2382,15 @@ function ExtraWorkTab({
   error: string | null;
   pdfAction: string | null;
   deletingTicketId: number | null;
+  statusActionId: number | null;
+  canPromoteStatus: boolean;
   onRetry: () => void;
   onOpenPdf: (ticket: MobileExtraWorkTicket) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
   onDeleteTicket: (ticket: MobileExtraWorkTicket) => void;
+  onPromoteStatus: (ticket: MobileExtraWorkTicket, status: ExtraWorkManualStatus) => void;
 }) {
+  const [openStatusTicketId, setOpenStatusTicketId] = useState<number | null>(null);
   const sortedTickets = useMemo(
     () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
     [tickets],
@@ -2246,6 +2424,9 @@ function ExtraWorkTab({
             const isDownloadingPdf = pdfAction === downloadActionKey;
             const isPdfBusy = isOpeningPdf || isDownloadingPdf;
             const isDeleting = deletingTicketId === ticket.id;
+            const statusOptions = canPromoteStatus
+              ? extraWorkStatusPromotionOptions(ticket.status, ticket.customer_signed_at)
+              : [];
             return (
               <div
                 key={ticket.id}
@@ -2263,7 +2444,19 @@ function ExtraWorkTab({
                     >
                       {isDeleting ? "..." : "×"}
                     </button>
-                    <span className="measurement-review-status-label">{statusBadge.label}</span>
+                    <ProjectRecordStatusControl
+                      active={openStatusTicketId === ticket.id}
+                      ariaLabel={`${formatExtraWorkTicketTitle(ticket)}: Status ${statusBadge.label}`}
+                      busy={statusActionId === ticket.id}
+                      label={statusBadge.label}
+                      options={statusOptions}
+                      onClose={() => setOpenStatusTicketId(null)}
+                      onSelect={(status) => {
+                        setOpenStatusTicketId(null);
+                        onPromoteStatus(ticket, status);
+                      }}
+                      onToggle={() => setOpenStatusTicketId((current) => (current === ticket.id ? null : ticket.id))}
+                    />
                   </span>
                 </div>
                 <button
@@ -2306,6 +2499,7 @@ function MeasurementTab({
   onSubtabChange,
   bases,
   canCreateBatch,
+  canPromoteStatus,
   timesheet,
   timeAnalysis,
   timeAnalysisLoading,
@@ -2338,6 +2532,7 @@ function MeasurementTab({
   reviewMessage,
   reviewError,
   reviewActionLoading,
+  statusActionId,
   archiveMode,
   onRetryBatches,
   onLoadMeasurementWorkers,
@@ -2348,6 +2543,7 @@ function MeasurementTab({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onPromoteStatus,
   onDeleteBatch,
   onRestoreBatch,
   onUpdateEntry,
@@ -2363,6 +2559,7 @@ function MeasurementTab({
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
   canCreateBatch: boolean;
+  canPromoteStatus: boolean;
   timesheet: MeasurementTimesheet | null;
   timeAnalysis: MeasurementTimeAnalysis | null;
   timeAnalysisLoading: boolean;
@@ -2395,6 +2592,7 @@ function MeasurementTab({
   reviewMessage: string | null;
   reviewError: string | null;
   reviewActionLoading: boolean;
+  statusActionId: number | null;
   archiveMode: boolean;
   onRetryBatches: () => void;
   onLoadMeasurementWorkers: () => void;
@@ -2405,6 +2603,7 @@ function MeasurementTab({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
@@ -2587,6 +2786,7 @@ function MeasurementTab({
           siteNumber={siteNumber}
           projectPositionSuggestions={projectPositionSuggestions}
           canCreateBatch={canCreateBatch}
+          canPromoteStatus={canPromoteStatus}
           batches={batches}
           measurementWorkers={measurementWorkers}
           measurementWorkersLoading={measurementWorkersLoading}
@@ -2599,6 +2799,7 @@ function MeasurementTab({
           reviewMessage={reviewMessage}
           reviewError={reviewError}
           reviewActionLoading={reviewActionLoading}
+          statusActionId={statusActionId}
           archiveMode={archiveMode}
           onRetryBatches={onRetryBatches}
           onLoadMeasurementWorkers={onLoadMeasurementWorkers}
@@ -2609,6 +2810,7 @@ function MeasurementTab({
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onMarkReviewed={onMarkReviewed}
+          onPromoteStatus={onPromoteStatus}
           onDeleteBatch={onDeleteBatch}
           onRestoreBatch={onRestoreBatch}
           onUpdateEntry={onUpdateEntry}
@@ -3555,6 +3757,7 @@ function MeasurementReviewPanel({
   siteNumber,
   projectPositionSuggestions,
   canCreateBatch,
+  canPromoteStatus,
   batches,
   measurementWorkers,
   measurementWorkersLoading,
@@ -3567,6 +3770,7 @@ function MeasurementReviewPanel({
   reviewMessage,
   reviewError,
   reviewActionLoading,
+  statusActionId,
   archiveMode,
   onRetryBatches,
   onLoadMeasurementWorkers,
@@ -3577,6 +3781,7 @@ function MeasurementReviewPanel({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onPromoteStatus,
   onDeleteBatch,
   onRestoreBatch,
   onUpdateEntry,
@@ -3590,6 +3795,7 @@ function MeasurementReviewPanel({
   siteNumber: string | null;
   projectPositionSuggestions: MeasurementPositionSuggestion[];
   canCreateBatch: boolean;
+  canPromoteStatus: boolean;
   batches: MobileMeasurementBatch[];
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
@@ -3602,6 +3808,7 @@ function MeasurementReviewPanel({
   reviewMessage: string | null;
   reviewError: string | null;
   reviewActionLoading: boolean;
+  statusActionId: number | null;
   archiveMode: boolean;
   onRetryBatches: () => void;
   onLoadMeasurementWorkers: () => void;
@@ -3612,6 +3819,7 @@ function MeasurementReviewPanel({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onUpdateEntry: (batch: MobileMeasurementBatch, entryId: number, payload: { area_or_comment: string; quantity: number }) => Promise<void>;
@@ -3629,6 +3837,7 @@ function MeasurementReviewPanel({
   const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
+  const [openStatusBatchId, setOpenStatusBatchId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [createAreaLocation, setCreateAreaLocation] = useState("");
   const [createMeasurementDate, setCreateMeasurementDate] = useState("");
@@ -4187,6 +4396,9 @@ function MeasurementReviewPanel({
             const isExportingOriginalPdf = pdfExportingAction === originalPdfKey;
             const isExportingPdf = isExportingCheckedPdf || isExportingOriginalPdf;
             const statusBadge = getMeasurementBatchStatusBadge(batch);
+            const statusOptions = canPromoteStatus
+              ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at)
+              : [];
             if (archiveMode) {
               return (
                 <div
@@ -4248,7 +4460,19 @@ function MeasurementReviewPanel({
                     >
                       {deletingBatchId === batch.id ? "..." : "×"}
                     </button>
-                    <span className="measurement-review-status-label">{statusBadge.label}</span>
+                    <ProjectRecordStatusControl
+                      active={openStatusBatchId === batch.id}
+                      ariaLabel={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}: Status ${statusBadge.label}`}
+                      busy={statusActionId === batch.id}
+                      label={statusBadge.label}
+                      options={statusOptions}
+                      onClose={() => setOpenStatusBatchId(null)}
+                      onSelect={(status) => {
+                        setOpenStatusBatchId(null);
+                        onPromoteStatus(batch, status);
+                      }}
+                      onToggle={() => setOpenStatusBatchId((current) => (current === batch.id ? null : batch.id))}
+                    />
                   </span>
                 </div>
                 <button
@@ -6706,6 +6930,9 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
   className: string;
 } {
   const status = ticket.status.toLowerCase();
+  if (["approved", "billed", "closed", "completed", "finalized", "abgeschlossen"].includes(status)) {
+    return { label: "Abgeschlossen", className: "measurement-status measurement-review-status-badge is-billed" };
+  }
   if (ticket.customer_signed_at || status === "signed") {
     return {
       label: "Unterschrieben",
@@ -6719,9 +6946,6 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
     return { label: "Eingereicht", className: "measurement-status measurement-review-status-badge is-review-required" };
   }
   const labels: Record<string, string> = {
-    approved: "Abgeschlossen",
-    billed: "Abgeschlossen",
-    closed: "Abgeschlossen",
     draft: "Entwurf",
   };
   return {

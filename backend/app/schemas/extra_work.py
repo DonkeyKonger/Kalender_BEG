@@ -16,6 +16,10 @@ class ExtraWorkTicketStatusUpdate(BaseModel):
     status: str = Field(pattern="^(submitted)$")
 
 
+class ExtraWorkTicketManualStatusUpdate(BaseModel):
+    status: str = Field(min_length=1, max_length=32)
+
+
 class ExtraWorkTicketTitleUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=160)
 

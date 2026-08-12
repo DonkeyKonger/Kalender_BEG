@@ -32,6 +32,8 @@ from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.measurement_service import format_site_signature_location
+from app.services.audit_service import AuditService
+from app.services.project_record_status import validate_extra_work_status_promotion
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
 EXTRA_WORK_KINDS = {"billing", "approval"}
@@ -124,6 +126,32 @@ class ExtraWorkService:
             )
         self.db.delete(ticket)
         self.db.commit()
+
+    def promote_site_ticket_status(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        target_status: str,
+        current_user: User,
+    ) -> ExtraWorkTicketRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(ticket_id, site_id, for_update=True)
+        previous_status = ticket.status
+        target_status = validate_extra_work_status_promotion(previous_status, target_status)
+        ticket.status = target_status
+        AuditService(self.db).record(
+            user_id=current_user.id,
+            action="extra_work.status_promoted",
+            entity_type="extra_work_ticket",
+            entity_id=ticket.id,
+            old_value={"status": previous_status},
+            new_value={"status": target_status},
+        )
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return self._build_ticket_read(ticket)
 
     def list_mobile_tickets(
         self,
@@ -559,8 +587,14 @@ class ExtraWorkService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
         return assignment
 
-    def _get_ticket_for_site(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
-        ticket = self.db.scalar(
+    def _get_ticket_for_site(
+        self,
+        ticket_id: int,
+        site_id: int,
+        *,
+        for_update: bool = False,
+    ) -> ExtraWorkTicket:
+        statement = (
             select(ExtraWorkTicket)
             .options(
                 selectinload(ExtraWorkTicket.site),
@@ -572,6 +606,9 @@ class ExtraWorkService:
                 ExtraWorkTicket.site_id == site_id,
             )
         )
+        if for_update:
+            statement = statement.with_for_update()
+        ticket = self.db.scalar(statement)
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket

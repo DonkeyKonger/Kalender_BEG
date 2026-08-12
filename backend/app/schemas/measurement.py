@@ -233,6 +233,10 @@ class MobileMeasurementBatchRead(BaseModel):
     area_rows: list[MeasurementAreaRowRead] = Field(default_factory=list)
 
 
+class MeasurementBatchManualStatusUpdate(BaseModel):
+    status: str = Field(min_length=1, max_length=32)
+
+
 class MeasurementTimesheetKpiRead(BaseModel):
     position_count: int
     planned_minutes: Decimal

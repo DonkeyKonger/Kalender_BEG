@@ -25,6 +25,7 @@ from app.models.project_folder import ProjectFolder
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
 from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch
+from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkSignaturePoint,
@@ -236,6 +237,69 @@ def test_site_extra_work_ticket_can_be_deleted():
 
     assert db.get(extra_work_module.ExtraWorkTicket, ticket.id) is None
     assert service.list_site_tickets(site.id) == []
+
+
+def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatures():
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="status-office",
+        display_name="Status Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db)
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    submitted = service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=created.id,
+        target_status="submitted",
+        current_user=actor,
+    )
+    assert submitted.status == "submitted"
+    assert submitted.customer_signed_at is None
+
+    with pytest.raises(HTTPException) as downgrade:
+        service.promote_site_ticket_status(
+            site_id=site.id,
+            ticket_id=created.id,
+            target_status="draft",
+            current_user=actor,
+        )
+    assert downgrade.value.status_code == 400
+
+    with pytest.raises(HTTPException) as signed:
+        service.promote_site_ticket_status(
+            site_id=site.id,
+            ticket_id=created.id,
+            target_status="signed",
+            current_user=actor,
+        )
+    assert signed.value.status_code == 400
+
+    stored = db.get(ExtraWorkTicket, created.id)
+    stored.status = "signed"
+    stored.customer_signature_name = "Kunde Beispiel"
+    stored.customer_signed_at = datetime.now(UTC)
+    db.commit()
+    completed = service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=created.id,
+        target_status="billed",
+        current_user=actor,
+    )
+    assert completed.status == "billed"
+    assert completed.customer_signature_name == "Kunde Beispiel"
+    assert completed.customer_signed_at is not None
+    assert db.query(AuditLog).filter_by(action="extra_work.status_promoted").count() == 2
 
 
 def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval():

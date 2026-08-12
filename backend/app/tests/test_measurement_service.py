@@ -65,6 +65,127 @@ def create_measurement_base(db: Session, site: Site) -> SiteMeasurementBase:
     return base
 
 
+def test_manual_measurement_status_promotion_only_moves_up_and_never_fakes_signature(monkeypatch):
+    db = db_session()
+    site = create_site(db)
+    actor = User(
+        username="status-office",
+        display_name="Status Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="Aufmaß 1",
+        status="draft",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_batch=batch,
+        position="1.1",
+        description="Freie Leistung",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=1,
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("1"),
+        area_or_comment="EG",
+        status="draft",
+    )
+    db.add_all([actor, batch, item, entry])
+    db.commit()
+    service = MeasurementService(db)
+    archived: list[int] = []
+    monkeypatch.setattr(
+        service,
+        "_archive_billed_batch_pdf",
+        lambda *, batch, current_user: archived.append(batch.id),
+    )
+
+    reviewed = service.promote_site_batch_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        target_status="reviewed",
+        current_user=actor,
+    )
+    assert reviewed.status == "reviewed"
+    assert db.get(SiteMeasurementEntry, entry.id).status == "reviewed"
+
+    with pytest.raises(HTTPException) as downgrade:
+        service.promote_site_batch_status(
+            site_id=site.id,
+            batch_id=batch.id,
+            target_status="submitted",
+            current_user=actor,
+        )
+    assert downgrade.value.status_code == 409
+
+    with pytest.raises(HTTPException) as signed:
+        service.promote_site_batch_status(
+            site_id=site.id,
+            batch_id=batch.id,
+            target_status="customer_signed",
+            current_user=actor,
+        )
+    assert signed.value.status_code == 400
+
+    unsigned_batch = SiteMeasurementBatch(
+        site=site,
+        number=2,
+        title="Aufmaß 2",
+        status="draft",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+    )
+    db.add(unsigned_batch)
+    db.commit()
+    unsigned_completed = service.promote_site_batch_status(
+        site_id=site.id,
+        batch_id=unsigned_batch.id,
+        target_status="billed",
+        current_user=actor,
+    )
+    assert unsigned_completed.customer_signed_at is None
+    assert unsigned_completed.customer_signature_name is None
+
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    stored_batch.status = "customer_signed"
+    stored_batch.customer_signature_name = "Kunde Beispiel"
+    stored_batch.customer_signed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    completed = service.promote_site_batch_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        target_status="billed",
+        current_user=actor,
+    )
+    assert completed.status == "billed"
+    assert completed.customer_signed_at is not None
+    assert completed.customer_signature_name == "Kunde Beispiel"
+    assert archived == [unsigned_batch.id, batch.id]
+    logs = list(
+        db.scalars(
+            select(AuditLog)
+            .where(AuditLog.action == "measurement.status_promoted")
+            .order_by(AuditLog.id)
+        )
+    )
+    assert [(log.old_value_json, log.new_value_json) for log in logs] == [
+        ({"status": "draft"}, {"status": "reviewed"}),
+        ({"status": "draft"}, {"status": "billed"}),
+        ({"status": "customer_signed"}, {"status": "billed"}),
+    ]
+
+
 def parsed_timesheet() -> MeasurementTimesheetParseResult:
     return MeasurementTimesheetParseResult(
         source_project_number="8007 / P250092",

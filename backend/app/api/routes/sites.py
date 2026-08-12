@@ -10,7 +10,11 @@ from app.api.dependencies import require_business_page, require_office_page, req
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.extra_work import ExtraWorkTicketCreate, ExtraWorkTicketRead
+from app.schemas.extra_work import (
+    ExtraWorkTicketCreate,
+    ExtraWorkTicketManualStatusUpdate,
+    ExtraWorkTicketRead,
+)
 from app.schemas.measurement import (
     MeasurementBaseRead,
     MeasurementBaseUpdate,
@@ -20,6 +24,7 @@ from app.schemas.measurement import (
     MeasurementItemRead,
     MeasurementItemUpdate,
     MeasurementWorkerOptionRead,
+    MeasurementBatchManualStatusUpdate,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
@@ -81,6 +86,7 @@ CAN_FOLDER_READ = require_office_page(
     roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
 )
 CAN_WRITE = require_business_page("sites", "calendar")
+CAN_SITES_WRITE = require_business_page("sites")
 CAN_ADMIN = require_roles(UserRole.ADMIN)
 
 SAFE_INLINE_CONTENT_TYPES = {
@@ -484,6 +490,25 @@ def delete_extra_work_ticket(
     )
 
 
+@router.patch(
+    "/{site_id}/extra-work-tickets/{ticket_id}/status",
+    response_model=ExtraWorkTicketRead,
+)
+def promote_extra_work_ticket_status(
+    site_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketManualStatusUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).promote_site_ticket_status(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        target_status=payload.status,
+        current_user=current_user,
+    )
+
+
 @router.get("/{site_id}/extra-work-tickets/{ticket_id}/pdf")
 def download_extra_work_ticket_pdf(
     site_id: int,
@@ -719,6 +744,25 @@ def mark_measurement_batch_reviewed(
         current_user.role.value if current_user.role else None,
     )
     return MeasurementService(db).set_site_batch_reviewed(site_id=site_id, batch_id=batch_id)
+
+
+@router.patch(
+    "/{site_id}/measurement-batches/{batch_id}/status",
+    response_model=MobileMeasurementBatchRead,
+)
+def promote_measurement_batch_status(
+    site_id: int,
+    batch_id: int,
+    payload: MeasurementBatchManualStatusUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).promote_site_batch_status(
+        site_id=site_id,
+        batch_id=batch_id,
+        target_status=payload.status,
+        current_user=current_user,
+    )
 
 
 @router.post(

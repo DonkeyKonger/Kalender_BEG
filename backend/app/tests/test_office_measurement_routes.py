@@ -78,6 +78,12 @@ class FakeMeasurementService:
         assert payload.area_location == "1. Obergeschoss"
         return created_batch()
 
+    def promote_site_batch_status(self, *, site_id, batch_id, target_status, current_user):
+        assert site_id == 8
+        assert batch_id == 12
+        assert current_user.id == 7
+        return created_batch().model_copy(update={"status": target_status})
+
 
 def api_client(monkeypatch, user) -> TestClient:
     app = FastAPI()
@@ -124,6 +130,41 @@ def test_unauthorized_roles_cannot_create_office_measurement(monkeypatch, user):
     response = api_client(monkeypatch, user).post(
         "/api/sites/8/measurement-batches",
         json=PAYLOAD,
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.ADMIN),
+        current_user(UserRole.PROJECT_MANAGER),
+        current_user(UserRole.OFFICE, "sites"),
+    ],
+)
+def test_sites_permission_allows_manual_measurement_status_promotion(monkeypatch, user):
+    response = api_client(monkeypatch, user).patch(
+        "/api/sites/8/measurement-batches/12/status",
+        json={"status": "reviewed"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "reviewed"
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.OFFICE),
+        current_user(UserRole.OFFICE, "calendar"),
+        current_user(UserRole.MONTEUR),
+    ],
+)
+def test_manual_measurement_status_promotion_requires_exact_sites_permission(monkeypatch, user):
+    response = api_client(monkeypatch, user).patch(
+        "/api/sites/8/measurement-batches/12/status",
+        json={"status": "reviewed"},
     )
 
     assert response.status_code == 403
