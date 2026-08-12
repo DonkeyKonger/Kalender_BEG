@@ -1862,7 +1862,6 @@ function ProjectFoldersPanel({
                 uploadMessage={uploadMessage}
                 uploadError={uploadError}
                 onUpload={(files) => onUploadFiles(selectedFolder, files)}
-                onClose={() => onSelectFolder(null)}
                 onRetry={onRetryDocuments}
               />
             ) : (
@@ -1887,7 +1886,6 @@ function ProjectFolderDocumentBrowser({
   uploadMessage,
   uploadError,
   onUpload,
-  onClose,
   onRetry,
 }: {
   siteId: number;
@@ -1901,7 +1899,6 @@ function ProjectFolderDocumentBrowser({
   uploadMessage: string | null;
   uploadError: string | null;
   onUpload: (files: FileList | File[]) => Promise<void>;
-  onClose: () => void;
   onRetry: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -2137,13 +2134,6 @@ function ProjectFolderDocumentBrowser({
               <span>Ordner</span>
             </a>
           ) : null}
-          {canOpenSharePointDirectly && !isInSubfolder && folder.external_web_url ? (
-            <a className="project-document-sharepoint-link" href={folder.external_web_url} target="_blank" rel="noreferrer">
-              <ExternalLink aria-hidden="true" size={15} />
-              <span>SharePoint</span>
-            </a>
-          ) : null}
-          <button type="button" className="secondary-action project-document-close-action" aria-label="Dateiansicht schließen" onClick={onClose}>×</button>
         </div>
       </div>
 

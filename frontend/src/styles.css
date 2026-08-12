@@ -25388,32 +25388,6 @@ button.person-chip:focus-visible {
   font-size: 0.78rem;
 }
 
-.site-detail-page.is-project-file-workspace .project-document-sharepoint-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  color: #2563eb;
-  font-size: 0.8rem;
-  font-weight: 820;
-  text-decoration: none;
-}
-
-.site-detail-page.is-project-file-workspace .project-document-sharepoint-link:hover,
-.site-detail-page.is-project-file-workspace .project-document-sharepoint-link:focus-visible {
-  color: #1d4ed8;
-  text-decoration: underline;
-  outline: none;
-}
-
-.site-detail-page.is-project-file-workspace .project-document-close-action {
-  min-height: 28px;
-  width: 28px;
-  padding: 0;
-  color: #94a3b8;
-  font-size: 1rem;
-}
-
 .site-detail-page.is-project-file-workspace .project-document-table th,
 .site-detail-page.is-project-file-workspace .project-document-table td {
   border-color: #e8eef6;
