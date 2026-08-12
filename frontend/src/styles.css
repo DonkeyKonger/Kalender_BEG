@@ -11108,10 +11108,8 @@ button.person-chip:focus-visible {
 
 .project-document-table th:nth-child(2),
 .project-document-table th:nth-child(3),
-.project-document-table th:nth-child(4),
 .project-document-table td:nth-child(2),
-.project-document-table td:nth-child(3),
-.project-document-table td:nth-child(4) {
+.project-document-table td:nth-child(3) {
   white-space: nowrap;
 }
 
@@ -25416,11 +25414,6 @@ button.person-chip:focus-visible {
 .site-detail-page.is-project-file-workspace .project-document-table th:nth-child(3),
 .site-detail-page.is-project-file-workspace .project-document-table td:nth-child(3) {
   width: 150px;
-}
-
-.site-detail-page.is-project-file-workspace .project-document-table th:nth-child(4),
-.site-detail-page.is-project-file-workspace .project-document-table td:nth-child(4) {
-  width: 96px;
 }
 
 .site-detail-page.is-project-file-workspace .project-document-name-cell svg {

@@ -50,7 +50,7 @@ class FakeGraphClient:
             return {"id": "site-1", "displayName": "SharePoint Site"}
         if path == (
             "/drives/drive-1/items/folder-1/children"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder"
         ):
             return {
                 "value": [
@@ -59,6 +59,7 @@ class FakeGraphClient:
                         "name": "Angebot.pdf",
                         "webUrl": "https://example.invalid/angebot",
                         "size": 123456,
+                        "createdDateTime": "2026-05-25T07:15:00Z",
                         "lastModifiedDateTime": "2026-05-26T08:30:00Z",
                         "file": {"mimeType": "application/pdf"},
                     },
@@ -72,7 +73,7 @@ class FakeGraphClient:
             }
         if path == (
             "/drives/drive-1/items/folder-2/children"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder"
         ):
             return {
                 "value": [
@@ -81,6 +82,7 @@ class FakeGraphClient:
                         "name": "Zeichnung.png",
                         "webUrl": "https://example.invalid/zeichnung",
                         "size": 2345,
+                        "createdDateTime": "2026-05-24T09:45:00Z",
                         "lastModifiedDateTime": "2026-05-26T10:30:00Z",
                         "file": {"mimeType": "image/png"},
                     }
@@ -88,20 +90,21 @@ class FakeGraphClient:
             }
         if path == (
             "/drives/drive-1/items/file-1"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "file-1",
                 "name": "Angebot.pdf",
                 "webUrl": "https://example.invalid/angebot",
                 "size": 123456,
+                "createdDateTime": "2026-05-25T07:15:00Z",
                 "lastModifiedDateTime": "2026-05-26T08:30:00Z",
                 "file": {"mimeType": "application/pdf"},
                 "parentReference": {"id": "folder-1"},
             }
         if path == (
             "/drives/drive-1/items/folder-2"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "folder-2",
@@ -112,20 +115,21 @@ class FakeGraphClient:
             }
         if path == (
             "/drives/drive-1/items/nested-file-1"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "nested-file-1",
                 "name": "Zeichnung.png",
                 "webUrl": "https://example.invalid/zeichnung",
                 "size": 2345,
+                "createdDateTime": "2026-05-24T09:45:00Z",
                 "lastModifiedDateTime": "2026-05-26T10:30:00Z",
                 "file": {"mimeType": "image/png"},
                 "parentReference": {"id": "folder-2"},
             }
         if path == (
             "/drives/drive-1/items/foreign-file-1"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "foreign-file-1",
@@ -135,7 +139,7 @@ class FakeGraphClient:
             }
         if path == (
             "/drives/drive-1/items/foreign-folder-1"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "foreign-folder-1",
@@ -145,7 +149,7 @@ class FakeGraphClient:
             }
         if path == (
             "/drives/drive-1/items/drive-root"
-            "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+            "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
         ):
             return {
                 "id": "drive-root",
@@ -157,7 +161,7 @@ class FakeGraphClient:
         ):
             return {"value": []}
         if path.startswith("/drives/drive-1/items/") and path.endswith(
-            "/children?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+            "/children?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder"
         ):
             return {"value": []}
         raise AssertionError(f"unexpected get path: {path}")
@@ -424,7 +428,7 @@ def test_create_project_folder_for_site_keeps_existing_material_order_template()
         def get(self, path):
             if path == (
                 "/drives/drive-1/items/folder-15/children"
-                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+                "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder"
             ):
                 return {
                     "value": [
@@ -636,6 +640,7 @@ def test_list_folder_children_returns_safe_document_items():
         "name": "Angebot.pdf",
         "web_url": "https://example.invalid/angebot",
         "size": 123456,
+        "created_date_time": "2026-05-25T07:15:00Z",
         "last_modified_date_time": "2026-05-26T08:30:00Z",
         "mime_type": "application/pdf",
         "file_extension": "pdf",
@@ -665,6 +670,7 @@ def test_list_folder_item_children_verifies_subfolder_inside_root():
             "name": "Zeichnung.png",
             "web_url": "https://example.invalid/zeichnung",
             "size": 2345,
+            "created_date_time": "2026-05-24T09:45:00Z",
             "last_modified_date_time": "2026-05-26T10:30:00Z",
             "mime_type": "image/png",
             "file_extension": "png",
@@ -858,7 +864,7 @@ def test_delete_file_from_folder_ignores_missing_graph_item():
         def get(self, path):
             if path == (
                 "/drives/drive-1/items/missing-file-1"
-                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+                "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
             ):
                 raise MicrosoftGraphRequestError(
                     404,

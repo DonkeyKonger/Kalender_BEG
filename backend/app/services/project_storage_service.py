@@ -364,7 +364,7 @@ class ProjectStorageService:
         try:
             response = self.graph_client.get(
                 f"/drives/{drive_id}/items/{folder_item_id}/children"
-                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder"
+                "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder"
             )
         except MicrosoftGraphRequestError as error:
             raise _safe_graph_files_exception(error) from error
@@ -476,7 +476,7 @@ class ProjectStorageService:
         try:
             drive_item = self.graph_client.get(
                 f"/drives/{drive_id}/items/{encoded_item_id}"
-                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+                "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
             )
         except MicrosoftGraphRequestError as error:
             if error.status_code == 404:
@@ -544,7 +544,7 @@ class ProjectStorageService:
         try:
             drive_item = self.graph_client.get(
                 f"/drives/{drive_id}/items/{encoded_item_id}"
-                "?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder,parentReference"
+                "?$select=id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
             )
         except MicrosoftGraphRequestError as error:
             raise _safe_graph_files_exception(error) from error
@@ -912,6 +912,7 @@ def _document_item(item: dict[str, Any]) -> dict[str, Any]:
         "name": name or "Unbenannte Datei",
         "web_url": item.get("webUrl"),
         "size": item.get("size") if isinstance(item.get("size"), int) else None,
+        "created_date_time": item.get("createdDateTime"),
         "last_modified_date_time": item.get("lastModifiedDateTime"),
         "mime_type": file_info.get("mimeType"),
         "file_extension": _file_extension(name) if isinstance(name, str) and not is_folder else None,

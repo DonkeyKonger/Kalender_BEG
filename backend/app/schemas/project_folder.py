@@ -25,6 +25,7 @@ class ProjectFolderDocumentItem(BaseModel):
     name: str
     web_url: str | None = None
     size: int | None = None
+    created_date_time: str | None = None
     last_modified_date_time: str | None = None
     mime_type: str | None = None
     file_extension: str | None = None

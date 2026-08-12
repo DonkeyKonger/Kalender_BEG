@@ -26,7 +26,7 @@ import {
   type ProjectDocumentSort,
   type ProjectDocumentSortKey,
 } from "../lib/projectDocumentSort";
-import { formatProjectFileSize, getProjectDocumentKind } from "../lib/projectFiles";
+import { getProjectDocumentKind } from "../lib/projectFiles";
 import {
   extraWorkStatusPromotionOptions,
   measurementStatusPromotionOptions,
@@ -2181,14 +2181,8 @@ function ProjectFolderDocumentBrowser({
                   onSort={handleDocumentSort}
                 />
                 <ProjectDocumentSortHeader
-                  label="Geändert"
-                  sortKey="modified"
-                  activeSort={documentSort}
-                  onSort={handleDocumentSort}
-                />
-                <ProjectDocumentSortHeader
-                  label="Größe"
-                  sortKey="size"
+                  label="Hochgeladen"
+                  sortKey="uploaded"
                   activeSort={documentSort}
                   onSort={handleDocumentSort}
                 />
@@ -2205,8 +2199,7 @@ function ProjectFolderDocumentBrowser({
                     </div>
                   </td>
                   <td>{formatProjectDocumentType(item)}</td>
-                  <td>{formatProjectDocumentChanged(item)}</td>
-                  <td>{formatProjectDocumentSize(item)}</td>
+                  <td>{formatProjectDocumentUploaded(item)}</td>
                   <td>
                     <div className="project-document-item-actions">
                       {item.is_folder ? (
@@ -2271,7 +2264,7 @@ function ProjectDocumentSortHeader({
     : "none";
   const nextDirection = isActive
     ? activeSort.direction === "asc" ? "absteigend" : "aufsteigend"
-    : sortKey === "modified" ? "absteigend" : "aufsteigend";
+    : sortKey === "uploaded" ? "absteigend" : "aufsteigend";
 
   return (
     <th scope="col" aria-sort={ariaSort}>
@@ -2296,12 +2289,8 @@ function formatProjectDocumentType(item: ProjectFolderDocumentItem): string {
   return getProjectDocumentTypeLabel(item) ?? "Datei";
 }
 
-function formatProjectDocumentChanged(item: ProjectFolderDocumentItem): string {
-  return item.last_modified_date_time ? formatDateTime(item.last_modified_date_time) : "-";
-}
-
-function formatProjectDocumentSize(item: ProjectFolderDocumentItem): string {
-  return item.is_folder ? "-" : formatProjectFileSize(item.size) ?? "-";
+function formatProjectDocumentUploaded(item: ProjectFolderDocumentItem): string {
+  return item.created_date_time ? formatDateTime(item.created_date_time) : "-";
 }
 
 function DocumentTypeIcon({ item }: { item: ProjectFolderDocumentItem }) {

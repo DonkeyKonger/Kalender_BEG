@@ -160,6 +160,7 @@ export type ProjectFolderDocumentItem = {
   name: string;
   web_url: string | null;
   size: number | null;
+  created_date_time: string | null;
   last_modified_date_time: string | null;
   mime_type: string | null;
   file_extension: string | null;

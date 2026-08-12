@@ -1,6 +1,6 @@
 import type { ProjectFolderDocumentItem } from "../types/site";
 
-export type ProjectDocumentSortKey = "name" | "type" | "modified" | "size";
+export type ProjectDocumentSortKey = "name" | "type" | "uploaded";
 export type ProjectDocumentSortDirection = "asc" | "desc";
 export type ProjectDocumentSort = {
   key: ProjectDocumentSortKey;
@@ -8,7 +8,7 @@ export type ProjectDocumentSort = {
 };
 
 export const DEFAULT_PROJECT_DOCUMENT_SORT: ProjectDocumentSort = {
-  key: "modified",
+  key: "uploaded",
   direction: "desc",
 };
 
@@ -39,7 +39,7 @@ export function getNextProjectDocumentSort(
   }
   return {
     key,
-    direction: key === "modified" ? "desc" : "asc",
+    direction: key === "uploaded" ? "desc" : "asc",
   };
 }
 
@@ -74,18 +74,14 @@ function compareProjectDocumentItems(
     const rightType = getProjectDocumentTypeLabel(right) ?? "Datei";
     return applyDirection(projectDocumentNameCollator.compare(leftType, rightType), sort.direction);
   }
-  if (sort.key === "modified") {
+  if (sort.key === "uploaded") {
     return compareOptionalNumbers(
-      parseProjectDocumentTimestamp(left.last_modified_date_time),
-      parseProjectDocumentTimestamp(right.last_modified_date_time),
+      parseProjectDocumentTimestamp(left.created_date_time),
+      parseProjectDocumentTimestamp(right.created_date_time),
       sort.direction,
     );
   }
-  return compareOptionalNumbers(
-    left.is_folder ? null : left.size,
-    right.is_folder ? null : right.size,
-    sort.direction,
-  );
+  return 0;
 }
 
 function applyDirection(result: number, direction: ProjectDocumentSortDirection): number {
