@@ -52,6 +52,8 @@ test("desktop tool form persists category without adding a desktop table column"
 test("mobile dashboard and protected routes open the personal file", () => {
   assert.match(homeSource, /title="Persönliche Akte"[\s\S]*navigate\("\/me\/personal-file"\)/);
   assert.match(appSource, /path="me\/personal-file" element=\{<MobilePersonalFilePage \/>\}/);
+  assert.match(appSource, /path="me\/personal-file\/vacation"[\s\S]*absenceType="vacation"/);
+  assert.match(appSource, /path="me\/personal-file\/sickness"[\s\S]*absenceType="sick"/);
   assert.match(appSource, /path="me\/personal-file\/tools" element=\{<MobilePersonalFileToolsPage \/>\}/);
 });
 
@@ -59,8 +61,32 @@ test("mobile dashboard and protected routes open the personal file", () => {
 test("personal file API never accepts an employee ID and bypasses persistent caches", () => {
   assert.match(apiSource, /myPersonalFile\(\): Promise<MobilePersonalFile>/);
   assert.match(apiSource, /request<MobilePersonalFile>\("\/me\/personal-file", \{ cache: "no-store" \}\)/);
+  assert.match(apiSource, /myPersonalFileAbsences\(params:[\s\S]*\/me\/personal-file\/absences\?\$\{search\.toString\(\)\}/);
   assert.match(apiSource, /request<MobilePersonalFileTool\[]>\("\/me\/personal-file\/tools", \{ cache: "no-store" \}\)/);
   assert.doesNotMatch(apiSource, /myPersonalFile\([^)]*personId/);
+  assert.doesNotMatch(apiSource, /myPersonalFileAbsences\([^)]*personId/);
+});
+
+
+test("vacation and sickness cards open read-only weekly details", () => {
+  assert.match(pageSource, /aria-label="Urlaubsdetails öffnen"[\s\S]*navigate\("\/me\/personal-file\/vacation"\)/);
+  assert.match(pageSource, /aria-label="Krankheitsdetails öffnen"[\s\S]*navigate\("\/me\/personal-file\/sickness"\)/);
+  assert.match(pageSource, /export function MobilePersonalFileAbsencePage/);
+  assert.match(pageSource, /data\.weeks\.map/);
+  assert.match(pageSource, /KW \{week\.iso_week\}/);
+  assert.match(pageSource, /week\.week_start, week\.week_end/);
+  assert.match(pageSource, /entry\.day_count/);
+  assert.match(pageSource, /Keine \{isVacation \? "Urlaubstage" : "Krankheitstage"\} in \{data\.year\}/);
+  assert.doesNotMatch(pageSource, /MobilePersonalFileAbsencePage[\s\S]*Fehlzeit hinzufügen/);
+});
+
+
+test("absence details use the established green and red status colors without horizontal scrolling", () => {
+  assert.match(styles, /\.mobile-personal-absence-entry::before \{[^}]*background:\s*#16a34a/s);
+  assert.match(styles, /\.mobile-personal-absence-entry\.is-sick::before \{[^}]*background:\s*#dc2626/s);
+  assert.match(styles, /\.mobile-personal-absence-entry > span \{[^}]*background:\s*#e7f7ed;[^}]*color:\s*#126b36/s);
+  assert.match(styles, /\.mobile-personal-absence-entry\.is-sick > span \{[^}]*background:\s*#fff1f0;[^}]*color:\s*#9f1d14/s);
+  assert.doesNotMatch(styles, /\.mobile-personal-absence-(?:content|weeks|week|entry)[^{]*\{[^}]*overflow-x:\s*(?:auto|scroll)/s);
 });
 
 

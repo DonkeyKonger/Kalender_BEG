@@ -90,3 +90,31 @@ export type MobilePersonalFile = {
   tool_count: number;
   tool_preview: MobilePersonalFileTool[];
 };
+
+export type MobilePersonalFileAbsenceType = "vacation" | "sick";
+
+export type MobilePersonalFileAbsenceEntry = {
+  source_id: number;
+  absence_type: MobilePersonalFileAbsenceType;
+  start_date: string;
+  end_date: string;
+  day_count: number;
+};
+
+export type MobilePersonalFileAbsenceWeek = {
+  iso_year: number;
+  iso_week: number;
+  week_start: string;
+  week_end: string;
+  entries: MobilePersonalFileAbsenceEntry[];
+};
+
+export type MobilePersonalFileAbsenceResponse = {
+  year: number;
+  absence_type: MobilePersonalFileAbsenceType;
+  remaining_vacation_days: number;
+  total_vacation_days: number;
+  taken_vacation_days: number;
+  sick_days: number;
+  weeks: MobilePersonalFileAbsenceWeek[];
+};

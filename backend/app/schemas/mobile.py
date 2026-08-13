@@ -5,7 +5,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AssignmentType, SiteStatus, ToolIssueReason, ToolMaterialCategory
+from app.models.enums import (
+    AbsenceType,
+    AssignmentType,
+    SiteStatus,
+    ToolIssueReason,
+    ToolMaterialCategory,
+)
 
 
 class MobilePerson(BaseModel):
@@ -104,3 +110,29 @@ class MobilePersonalFileResponse(BaseModel):
     vehicle: MobilePersonalFileVehicle | None = None
     tool_count: int
     tool_preview: list[MobilePersonalFileTool]
+
+
+class MobilePersonalFileAbsenceEntry(BaseModel):
+    source_id: int
+    absence_type: AbsenceType
+    start_date: Date
+    end_date: Date
+    day_count: int = Field(ge=1)
+
+
+class MobilePersonalFileAbsenceWeek(BaseModel):
+    iso_year: int
+    iso_week: int
+    week_start: Date
+    week_end: Date
+    entries: list[MobilePersonalFileAbsenceEntry]
+
+
+class MobilePersonalFileAbsenceResponse(BaseModel):
+    year: int
+    absence_type: AbsenceType
+    remaining_vacation_days: int
+    total_vacation_days: int
+    taken_vacation_days: int
+    sick_days: int
+    weeks: list[MobilePersonalFileAbsenceWeek]

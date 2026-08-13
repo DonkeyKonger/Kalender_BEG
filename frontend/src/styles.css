@@ -6055,6 +6055,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-personal-stat-card {
+  position: relative;
   display: grid;
   align-content: start;
   min-width: 0;
@@ -6065,6 +6066,39 @@ button.person-chip:focus-visible {
   background: #ffffff;
   padding: 15px;
   box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-stat-card.is-action {
+  width: 100%;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.mobile-personal-stat-card.is-action:hover,
+.mobile-personal-stat-card.is-action:focus-visible,
+.mobile-personal-stat-card.is-action:active {
+  border-color: #b7c9dc;
+  background: #fbfdff;
+  outline: none;
+}
+
+.mobile-personal-stat-card.is-action:focus-visible {
+  box-shadow: 0 0 0 3px rgb(49 95 145 / 14%), 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-stat-card.is-action:active {
+  transform: translateY(1px);
+}
+
+.mobile-personal-stat-chevron {
+  position: absolute;
+  top: 15px;
+  right: 13px;
+  color: #94a3b8;
 }
 
 .mobile-personal-stat-card > span:not(.mobile-personal-icon-tile) {
@@ -6104,6 +6138,183 @@ button.person-chip:focus-visible {
 .mobile-personal-stat-card.is-sickness .mobile-personal-icon-tile {
   background: var(--mobile-personal-sickness-background);
   color: var(--mobile-personal-sickness-icon);
+}
+
+.mobile-personal-absence-content,
+.mobile-personal-absence-weeks,
+.mobile-personal-absence-week,
+.mobile-personal-absence-week > div {
+  display: grid;
+}
+
+.mobile-personal-absence-content,
+.mobile-personal-absence-weeks {
+  gap: 12px;
+}
+
+.mobile-personal-absence-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #d8e3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
+}
+
+.mobile-personal-absence-summary > div {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 82px;
+  gap: 3px;
+  padding: 13px 15px;
+}
+
+.mobile-personal-absence-summary > div:last-child:not(.is-primary) {
+  border-left: 1px solid #e2e8f0;
+}
+
+.mobile-personal-absence-summary > .is-primary {
+  grid-column: 1 / -1;
+  min-height: 105px;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: 4px solid #16a34a;
+}
+
+.mobile-personal-absence-summary.is-sickness > .is-primary {
+  border-bottom: 0;
+  border-left-color: #dc2626;
+}
+
+.mobile-personal-absence-summary span,
+.mobile-personal-absence-summary small {
+  color: #718097;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.mobile-personal-absence-summary strong {
+  overflow-wrap: anywhere;
+  color: #111827;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.mobile-personal-absence-week {
+  gap: 7px;
+}
+
+.mobile-personal-absence-week > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.mobile-personal-absence-week > header strong {
+  color: #243f5f;
+  font-size: 0.86rem;
+}
+
+.mobile-personal-absence-week > header span {
+  color: #718097;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.mobile-personal-absence-week > div {
+  gap: 7px;
+}
+
+.mobile-personal-absence-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  overflow: hidden;
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 11px 13px 11px 16px;
+  box-shadow: 0 5px 14px rgb(18 29 52 / 4%);
+}
+
+.mobile-personal-absence-entry::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #16a34a;
+  content: "";
+}
+
+.mobile-personal-absence-entry.is-sick::before {
+  background: #dc2626;
+}
+
+.mobile-personal-absence-entry > span {
+  justify-self: start;
+  border-radius: 5px;
+  background: #e7f7ed;
+  color: #126b36;
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.mobile-personal-absence-entry.is-sick > span {
+  background: #fff1f0;
+  color: #9f1d14;
+}
+
+.mobile-personal-absence-entry > strong {
+  grid-column: 1;
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.mobile-personal-absence-entry > small {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #40526b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mobile-personal-absence-empty {
+  display: grid;
+  gap: 5px;
+  border: 1px dashed #bcd9c6;
+  border-radius: 12px;
+  background: #f7fcf8;
+  padding: 17px 15px;
+}
+
+.mobile-personal-absence-empty.is-sick {
+  border-color: #e4c8c8;
+  background: #fffafa;
+}
+
+.mobile-personal-absence-empty strong,
+.mobile-personal-absence-empty p {
+  margin: 0;
+}
+
+.mobile-personal-absence-empty strong {
+  color: #24344a;
+  font-size: 0.9rem;
+}
+
+.mobile-personal-absence-empty p {
+  color: #65738a;
+  font-size: 0.79rem;
+  line-height: 1.4;
 }
 
 .mobile-personal-hours-card {
@@ -6591,13 +6802,15 @@ button.person-chip:focus-visible {
 }
 
 .mobile-personal-file-skeleton,
-.mobile-personal-tools-skeleton {
+.mobile-personal-tools-skeleton,
+.mobile-personal-absence-skeleton {
   display: grid;
   gap: 12px;
 }
 
 .mobile-personal-file-skeleton span,
-.mobile-personal-tools-skeleton span {
+.mobile-personal-tools-skeleton span,
+.mobile-personal-absence-skeleton span {
   display: block;
   min-height: 86px;
   border: 1px solid #e0e7ef;
@@ -6618,6 +6831,10 @@ button.person-chip:focus-visible {
   min-height: 290px;
 }
 
+.mobile-personal-absence-skeleton .is-summary {
+  min-height: 190px;
+}
+
 @media (max-width: 350px) {
   .mobile-home-title-card {
     grid-template-columns: 1fr;
@@ -6630,6 +6847,26 @@ button.person-chip:focus-visible {
 
   .mobile-personal-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-personal-absence-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-personal-absence-summary > div,
+  .mobile-personal-absence-summary > .is-primary {
+    grid-column: 1;
+    min-height: 78px;
+    border-left: 4px solid #16a34a;
+  }
+
+  .mobile-personal-absence-summary > div:not(.is-primary) {
+    border-top: 1px solid #e2e8f0;
+    border-left: 4px solid #16a34a;
+  }
+
+  .mobile-personal-absence-summary.is-sickness > .is-primary {
+    border-left-color: #dc2626;
   }
 
   .mobile-personal-hours-card,

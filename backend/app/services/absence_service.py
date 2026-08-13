@@ -28,10 +28,14 @@ class AbsenceService:
 
     def get_person_year_summary(self, *, person: Person, year: int) -> "PersonYearAbsenceSummary":
         """Return the shared workday-based absence totals for one person and year."""
+        return self.get_person_year_data(person=person, year=year).summary
+
+    def get_person_year_data(self, *, person: Person, year: int) -> "PersonYearAbsenceData":
+        """Return active vacation/sickness records and their shared yearly totals."""
         ensure_valid_carryover_year(year)
         year_start = date(year, 1, 1)
         year_end = date(year, 12, 31)
-        absences = list(
+        absences = tuple(
             self.db.scalars(
                 select(Absence).where(
                     Absence.person_id == person.id,
@@ -56,13 +60,19 @@ class AbsenceService:
         total_vacation_days = (person.annual_vacation_days or 0) + (
             carryover.carryover_days if carryover is not None else 0
         )
-        return PersonYearAbsenceSummary(
-            total_vacation_days=total_vacation_days,
-            remaining_vacation_days=total_vacation_days - vacation_days,
-            sick_days=sick_days,
+        return PersonYearAbsenceData(
+            summary=PersonYearAbsenceSummary(
+                total_vacation_days=total_vacation_days,
+                vacation_days=vacation_days,
+                remaining_vacation_days=total_vacation_days - vacation_days,
+                sick_days=sick_days,
+            ),
+            absences=absences,
         )
 
-    def get_vacation_carryover(self, *, person_id: int, year: int) -> PersonVacationCarryover | None:
+    def get_vacation_carryover(
+        self, *, person_id: int, year: int
+    ) -> PersonVacationCarryover | None:
         self._ensure_person_exists(person_id)
         ensure_valid_carryover_year(year)
         return self._find_vacation_carryover(person_id=person_id, year=year)
@@ -78,7 +88,9 @@ class AbsenceService:
         self._ensure_person_exists(person_id)
         ensure_valid_carryover_year(year)
         if carryover_days < 0 or carryover_days > 365:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Resturlaub muss zwischen 0 und 365 Tagen liegen.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Resturlaub muss zwischen 0 und 365 Tagen liegen."
+            )
         carryover = self._find_vacation_carryover(person_id=person_id, year=year)
         old_value = vacation_carryover_snapshot(carryover) if carryover is not None else None
         if carryover is None:
@@ -176,7 +188,9 @@ class AbsenceService:
         if self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
 
-    def _find_vacation_carryover(self, *, person_id: int, year: int) -> PersonVacationCarryover | None:
+    def _find_vacation_carryover(
+        self, *, person_id: int, year: int
+    ) -> PersonVacationCarryover | None:
         return self.db.scalar(
             select(PersonVacationCarryover)
             .where(PersonVacationCarryover.person_id == person_id)
@@ -194,8 +208,15 @@ def clean_absence_values(values: dict) -> dict:
 @dataclass(frozen=True)
 class PersonYearAbsenceSummary:
     total_vacation_days: int
+    vacation_days: int
     remaining_vacation_days: int
     sick_days: int
+
+
+@dataclass(frozen=True)
+class PersonYearAbsenceData:
+    summary: PersonYearAbsenceSummary
+    absences: tuple[Absence, ...]
 
 
 def count_absence_weekdays(start_date: date, end_date: date, year: int) -> int:

@@ -1,11 +1,18 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import ToolIssueReason, ToolIssueStatus, ToolMaterialStatus, UserRole
+from app.models.absence import Absence
+from app.models.enums import (
+    AbsenceType,
+    ToolIssueReason,
+    ToolIssueStatus,
+    ToolMaterialStatus,
+    UserRole,
+)
 from app.models.person import Person
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_item import ToolMaterialItem
@@ -14,6 +21,9 @@ from app.models.vehicle import Vehicle
 from app.schemas.person_hours_account import PersonHoursAccountRead
 from app.schemas.mobile import (
     MobilePersonalFileHoursAccount,
+    MobilePersonalFileAbsenceEntry,
+    MobilePersonalFileAbsenceResponse,
+    MobilePersonalFileAbsenceWeek,
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
     MobilePersonalFileVehicle,
@@ -60,6 +70,35 @@ class MobilePersonalFileService:
     def list_tools(self, *, current_user: User) -> list[MobilePersonalFileTool]:
         person = self._current_person(current_user)
         return self._tools(person_id=person.id)
+
+    def get_absence_details(
+        self,
+        *,
+        current_user: User,
+        year: int,
+        absence_type: AbsenceType,
+    ) -> MobilePersonalFileAbsenceResponse:
+        if absence_type not in (AbsenceType.VACATION, AbsenceType.SICK):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "In der persönlichen Akte sind nur Urlaub und Krankheit verfügbar.",
+            )
+        person = self._current_person(current_user)
+        absence_data = AbsenceService(self.db).get_person_year_data(person=person, year=year)
+        summary = absence_data.summary
+        return MobilePersonalFileAbsenceResponse(
+            year=year,
+            absence_type=absence_type,
+            remaining_vacation_days=summary.remaining_vacation_days,
+            total_vacation_days=summary.total_vacation_days,
+            taken_vacation_days=summary.vacation_days,
+            sick_days=summary.sick_days,
+            weeks=_build_absence_weeks(
+                absences=absence_data.absences,
+                year=year,
+                absence_type=absence_type,
+            ),
+        )
 
     def _current_person(self, current_user: User) -> Person:
         if current_user.role != UserRole.MONTEUR:
@@ -111,20 +150,24 @@ class MobilePersonalFileService:
         )
 
     def _tools(self, *, person_id: int) -> list[MobilePersonalFileTool]:
-        rows = self.db.execute(
-            select(
-                ToolMaterialItem.id,
-                ToolMaterialItem.category,
-                ToolMaterialItem.beg_number,
-                ToolMaterialItem.manufacturer,
-                ToolMaterialItem.designation,
-                ToolMaterialItem.device_number,
-                ToolMaterialItem.item_date,
-            ).where(
-                ToolMaterialItem.employee_id == person_id,
-                ToolMaterialItem.status == ToolMaterialStatus.ISSUED,
+        rows = (
+            self.db.execute(
+                select(
+                    ToolMaterialItem.id,
+                    ToolMaterialItem.category,
+                    ToolMaterialItem.beg_number,
+                    ToolMaterialItem.manufacturer,
+                    ToolMaterialItem.designation,
+                    ToolMaterialItem.device_number,
+                    ToolMaterialItem.item_date,
+                ).where(
+                    ToolMaterialItem.employee_id == person_id,
+                    ToolMaterialItem.status == ToolMaterialStatus.ISSUED,
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         tool_ids = [row["id"] for row in rows]
         reports_by_tool_id: dict[int, list[MobileToolIssueSummary]] = {}
         if tool_ids:
@@ -157,10 +200,12 @@ class MobilePersonalFileService:
                     )
                 )
         tools = [
-            MobilePersonalFileTool.model_validate({
-                **row,
-                "open_issue_reports": reports_by_tool_id.get(row["id"], []),
-            })
+            MobilePersonalFileTool.model_validate(
+                {
+                    **row,
+                    "open_issue_reports": reports_by_tool_id.get(row["id"], []),
+                }
+            )
             for row in rows
         ]
         return sorted(
@@ -171,3 +216,59 @@ class MobilePersonalFileService:
                 natural_beg_number_key(item.beg_number),
             ),
         )
+
+
+def _build_absence_weeks(
+    *,
+    absences: tuple[Absence, ...],
+    year: int,
+    absence_type: AbsenceType,
+) -> list[MobilePersonalFileAbsenceWeek]:
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    grouped_entries: dict[tuple[int, int, date, date], list[MobilePersonalFileAbsenceEntry]] = {}
+
+    for absence in absences:
+        if absence.absence_type != absence_type:
+            continue
+        clipped_start = max(absence.start_date, year_start)
+        clipped_end = min(absence.end_date, year_end)
+        cursor = clipped_start
+        while cursor <= clipped_end:
+            week_start = cursor - timedelta(days=cursor.weekday())
+            week_end = week_start + timedelta(days=6)
+            calendar_segment_start = max(clipped_start, week_start)
+            calendar_segment_end = min(clipped_end, week_end)
+            weekdays = [
+                calendar_segment_start + timedelta(days=offset)
+                for offset in range((calendar_segment_end - calendar_segment_start).days + 1)
+                if (calendar_segment_start + timedelta(days=offset)).weekday() < 5
+            ]
+            if weekdays:
+                iso_year, iso_week, _ = week_start.isocalendar()
+                key = (iso_year, iso_week, week_start, week_end)
+                grouped_entries.setdefault(key, []).append(
+                    MobilePersonalFileAbsenceEntry(
+                        source_id=absence.id,
+                        absence_type=absence.absence_type,
+                        start_date=weekdays[0],
+                        end_date=weekdays[-1],
+                        day_count=len(weekdays),
+                    )
+                )
+            cursor = week_end + timedelta(days=1)
+
+    weeks = [
+        MobilePersonalFileAbsenceWeek(
+            iso_year=iso_year,
+            iso_week=iso_week,
+            week_start=week_start,
+            week_end=week_end,
+            entries=sorted(
+                entries,
+                key=lambda entry: (entry.start_date, entry.end_date, entry.source_id),
+            ),
+        )
+        for (iso_year, iso_week, week_start, week_end), entries in grouped_entries.items()
+    ]
+    return sorted(weeks, key=lambda week: (week.week_start, week.iso_week), reverse=True)

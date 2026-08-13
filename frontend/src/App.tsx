@@ -12,7 +12,11 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage, PasswordChangePage } from "./pages/LoginPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
-import { MobilePersonalFilePage, MobilePersonalFileToolsPage } from "./pages/MobilePersonalFilePage";
+import {
+  MobilePersonalFileAbsencePage,
+  MobilePersonalFilePage,
+  MobilePersonalFileToolsPage,
+} from "./pages/MobilePersonalFilePage";
 import { MiscellaneousPage } from "./pages/MiscellaneousPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
@@ -118,6 +122,14 @@ export function App() {
             />
             <Route path="me/time-entry" element={<MobileTimeEntryPage />} />
             <Route path="me/personal-file" element={<MobilePersonalFilePage />} />
+            <Route
+              path="me/personal-file/vacation"
+              element={<MobilePersonalFileAbsencePage absenceType="vacation" />}
+            />
+            <Route
+              path="me/personal-file/sickness"
+              element={<MobilePersonalFileAbsencePage absenceType="sick" />}
+            />
             <Route path="me/personal-file/tools" element={<MobilePersonalFileToolsPage />} />
           </Route>
         </Route>

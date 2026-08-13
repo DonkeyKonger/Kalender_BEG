@@ -19,7 +19,13 @@ import { useNavigate } from "react-router-dom";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { ApiError, api } from "../lib/api";
 import { useMobileScrollReset } from "../lib/mobileScroll";
-import type { MobilePersonalFile, MobilePersonalFileTool, MobileToolIssueReason } from "../types/mobile";
+import type {
+  MobilePersonalFile,
+  MobilePersonalFileAbsenceResponse,
+  MobilePersonalFileAbsenceType,
+  MobilePersonalFileTool,
+  MobileToolIssueReason,
+} from "../types/mobile";
 
 
 export function MobilePersonalFilePage() {
@@ -72,18 +78,30 @@ export function MobilePersonalFilePage() {
           {notice ? <p className="mobile-tool-report-success" role="status">{notice}</p> : null}
           {error ? <MobilePersonalFileInlineError message={error} onRetry={() => void loadPersonalFile()} /> : null}
           <div className="mobile-personal-stat-grid">
-            <article className="mobile-personal-stat-card is-vacation">
+            <button
+              aria-label="Urlaubsdetails öffnen"
+              className="mobile-personal-stat-card is-vacation is-action"
+              type="button"
+              onClick={() => navigate("/me/personal-file/vacation")}
+            >
               <span className="mobile-personal-icon-tile"><Plane aria-hidden="true" size={23} /></span>
               <span>Resturlaub</span>
               <strong>{formatDays(data.remaining_vacation_days)}</strong>
               <small>von {formatAvailableDays(data.total_vacation_days)}</small>
-            </article>
-            <article className="mobile-personal-stat-card is-sickness">
+              <ChevronRight aria-hidden="true" className="mobile-personal-stat-chevron" size={18} />
+            </button>
+            <button
+              aria-label="Krankheitsdetails öffnen"
+              className="mobile-personal-stat-card is-sickness is-action"
+              type="button"
+              onClick={() => navigate("/me/personal-file/sickness")}
+            >
               <span className="mobile-personal-icon-tile"><HeartPulse aria-hidden="true" size={23} /></span>
               <span>Krankheitstage</span>
               <strong>{formatDays(data.sick_days)}</strong>
               <small>im Jahr {data.current_year}</small>
-            </article>
+              <ChevronRight aria-hidden="true" className="mobile-personal-stat-chevron" size={18} />
+            </button>
           </div>
 
           <article className={`mobile-personal-hours-card ${hoursAccountTone(data.hours_account.current_balance_minutes)}`}>
@@ -146,6 +164,125 @@ export function MobilePersonalFilePage() {
               </button>
             ) : null}
           </article>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+
+export function MobilePersonalFileAbsencePage({
+  absenceType,
+}: {
+  absenceType: MobilePersonalFileAbsenceType;
+}) {
+  const navigate = useNavigate();
+  const year = new Date().getFullYear();
+  const [data, setData] = useState<MobilePersonalFileAbsenceResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const isVacation = absenceType === "vacation";
+
+  useMobileScrollReset(`personal-file-${absenceType}`);
+
+  const loadAbsences = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await api.myPersonalFileAbsences({ absenceType, year });
+      if (requestId === requestIdRef.current) {
+        setData(response);
+      }
+    } catch (requestError) {
+      if (requestId === requestIdRef.current) {
+        setError(readApiError(
+          requestError,
+          isVacation
+            ? "Deine Urlaubstage konnten nicht geladen werden."
+            : "Deine Krankheitstage konnten nicht geladen werden.",
+        ));
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [absenceType, isVacation, year]);
+
+  useRefreshOnFocus(loadAbsences, requestIdRef);
+
+  return (
+    <section className="mobile-page mobile-personal-file-page mobile-personal-absence-page">
+      <MobilePersonalFileHeader
+        subtitle={`${isVacation ? "Meine Urlaubstage" : "Meine Krankheitstage"} · ${data?.year ?? year}`}
+        title={isVacation ? "Urlaub" : "Krankheit"}
+        onBack={() => navigate("/me/personal-file")}
+      />
+
+      {isLoading && !data ? <MobilePersonalAbsenceSkeleton /> : null}
+      {error && !data ? (
+        <MobilePersonalFileError message={error} onRetry={() => void loadAbsences()} />
+      ) : null}
+
+      {data ? (
+        <div className="mobile-personal-absence-content" aria-busy={isLoading}>
+          {error ? <MobilePersonalFileInlineError message={error} onRetry={() => void loadAbsences()} /> : null}
+          {isVacation ? (
+            <section className="mobile-personal-absence-summary is-vacation" aria-label={`Urlaubsübersicht ${data.year}`}>
+              <div className="is-primary">
+                <span>Resturlaub</span>
+                <strong>{formatDays(data.remaining_vacation_days)}</strong>
+              </div>
+              <div>
+                <span>Jahresurlaub</span>
+                <strong>{formatDays(data.total_vacation_days)}</strong>
+              </div>
+              <div>
+                <span>Genommener Urlaub</span>
+                <strong>{formatDays(data.taken_vacation_days)}</strong>
+              </div>
+            </section>
+          ) : (
+            <section className="mobile-personal-absence-summary is-sickness" aria-label={`Krankheitsübersicht ${data.year}`}>
+              <div className="is-primary">
+                <span>Krankheitstage</span>
+                <strong>{formatDays(data.sick_days)}</strong>
+                <small>im Jahr {data.year}</small>
+              </div>
+            </section>
+          )}
+
+          {data.weeks.length ? (
+            <div className="mobile-personal-absence-weeks">
+              {data.weeks.map((week) => (
+                <section className="mobile-personal-absence-week" key={`${week.iso_year}-${week.iso_week}`}>
+                  <header>
+                    <strong>KW {week.iso_week}</strong>
+                    <span>{formatCompactDateRange(week.week_start, week.week_end)}</span>
+                  </header>
+                  <div>
+                    {week.entries.map((entry) => (
+                      <article
+                        className={`mobile-personal-absence-entry is-${entry.absence_type}`}
+                        key={`${entry.source_id}-${week.iso_year}-${week.iso_week}`}
+                      >
+                        <span>{entry.absence_type === "vacation" ? "Urlaub" : "Krank"}</span>
+                        <strong>{formatMobileAbsenceDateRange(entry.start_date, entry.end_date)}</strong>
+                        <small>{formatDays(entry.day_count)}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className={`mobile-personal-absence-empty is-${absenceType}`}>
+              <strong>Keine {isVacation ? "Urlaubstage" : "Krankheitstage"} in {data.year}</strong>
+              <p>Für dieses Jahr sind keine {isVacation ? "Urlaubstage" : "Krankheitstage"} hinterlegt.</p>
+            </div>
+          )}
         </div>
       ) : null}
     </section>
@@ -456,6 +593,17 @@ function MobilePersonalToolsSkeleton() {
 }
 
 
+function MobilePersonalAbsenceSkeleton() {
+  return (
+    <div className="mobile-personal-absence-skeleton" aria-label="Fehlzeiten werden geladen">
+      <span className="is-summary" />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+
 function useRefreshOnFocus(
   load: () => Promise<void>,
   requestIdRef: MutableRefObject<number>,
@@ -540,6 +688,27 @@ function formatBegNumber(value: string | null): string {
 function formatGermanDate(value: string): string {
   const [year, month, day] = value.split("-");
   return year && month && day ? `${day}.${month}.${year}` : value;
+}
+
+
+function formatMobileAbsenceDateRange(startDate: string, endDate: string): string {
+  if (startDate === endDate) {
+    return formatGermanDate(startDate);
+  }
+  return `${formatGermanDate(startDate)} – ${formatGermanDate(endDate)}`;
+}
+
+
+function formatCompactDateRange(startDate: string, endDate: string): string {
+  const [startYear, startMonth, startDay] = startDate.split("-");
+  const [endYear, endMonth, endDay] = endDate.split("-");
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+    return formatMobileAbsenceDateRange(startDate, endDate);
+  }
+  if (startYear === endYear) {
+    return `${startDay}.${startMonth}. – ${endDay}.${endMonth}.${endYear}`;
+  }
+  return `${startDay}.${startMonth}.${startYear} – ${endDay}.${endMonth}.${endYear}`;
 }
 
 

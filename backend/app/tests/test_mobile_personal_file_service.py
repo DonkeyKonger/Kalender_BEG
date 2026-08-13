@@ -256,6 +256,85 @@ def test_personal_file_uses_current_person_and_central_weekday_calculation():
     db.close()
 
 
+def test_personal_file_absences_split_cross_week_entries_without_changing_day_totals():
+    db, user, worker, _other = personal_file_context()
+    vacation = db.scalar(
+        select(Absence).where(
+            Absence.person_id == worker.id,
+            Absence.absence_type == AbsenceType.VACATION,
+        )
+    )
+    assert vacation is not None
+
+    details = MobilePersonalFileService(db).get_absence_details(
+        current_user=user,
+        year=2026,
+        absence_type=AbsenceType.VACATION,
+    )
+
+    assert details.total_vacation_days == 32
+    assert details.taken_vacation_days == 2
+    assert details.remaining_vacation_days == 30
+    assert [week.iso_week for week in details.weeks] == [29, 28]
+    assert [(week.week_start, week.week_end) for week in details.weeks] == [
+        (date(2026, 7, 13), date(2026, 7, 19)),
+        (date(2026, 7, 6), date(2026, 7, 12)),
+    ]
+    assert [entry.day_count for week in details.weeks for entry in week.entries] == [1, 1]
+    assert {entry.source_id for week in details.weeks for entry in week.entries} == {vacation.id}
+    assert sum(entry.day_count for week in details.weeks for entry in week.entries) == 2
+    db.close()
+
+
+def test_personal_file_absences_group_multiple_entries_once_per_week_and_sort_them():
+    db, user, worker, _other = personal_file_context()
+    db.add(
+        Absence(
+            person_id=worker.id,
+            absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 7, 15),
+            end_date=date(2026, 7, 16),
+            status=AbsenceStatus.ACTIVE,
+        )
+    )
+    db.commit()
+
+    details = MobilePersonalFileService(db).get_absence_details(
+        current_user=user,
+        year=2026,
+        absence_type=AbsenceType.VACATION,
+    )
+
+    week_29 = next(week for week in details.weeks if week.iso_week == 29)
+    assert len([week for week in details.weeks if week.iso_week == 29]) == 1
+    assert [(entry.start_date, entry.end_date, entry.day_count) for entry in week_29.entries] == [
+        (date(2026, 7, 13), date(2026, 7, 13), 1),
+        (date(2026, 7, 15), date(2026, 7, 16), 2),
+    ]
+    assert details.taken_vacation_days == 4
+    assert sum(entry.day_count for week in details.weeks for entry in week.entries) == 4
+    db.close()
+
+
+def test_personal_file_absences_return_a_clean_empty_sickness_state():
+    db, user, worker, _other = personal_file_context()
+    db.query(Absence).filter(
+        Absence.person_id == worker.id,
+        Absence.absence_type == AbsenceType.SICK,
+    ).delete()
+    db.commit()
+
+    details = MobilePersonalFileService(db).get_absence_details(
+        current_user=user,
+        year=2026,
+        absence_type=AbsenceType.SICK,
+    )
+
+    assert details.sick_days == 0
+    assert details.weeks == []
+    db.close()
+
+
 def test_personal_file_hours_account_supports_negative_zero_and_empty_states():
     db, user, worker, _other = personal_file_context()
     db.query(PersonHoursAccountEntry).filter(
@@ -303,9 +382,9 @@ def test_personal_file_hours_account_supports_negative_zero_and_empty_states():
     zero_summary = service.get_summary(current_user=user, today=date(2026, 7, 18))
     assert zero_summary.hours_account.current_balance_minutes == 0
     assert zero_summary.hours_account.last_entry_at is not None
-    assert zero_summary.hours_account.last_entry_at.replace(
-        tzinfo=timezone.utc
-    ) == now + timedelta(hours=1)
+    assert zero_summary.hours_account.last_entry_at.replace(tzinfo=timezone.utc) == now + timedelta(
+        hours=1
+    )
     db.close()
 
 
@@ -331,9 +410,7 @@ def test_personal_file_tool_list_is_reduced_sorted_and_excludes_other_statuses()
 
 def test_personal_file_vehicle_empty_state_does_not_fall_back_to_foreign_vehicle():
     db, user, worker, _other = personal_file_context()
-    own_vehicle = db.scalar(
-        select(Vehicle).where(Vehicle.assigned_person_id == worker.id)
-    )
+    own_vehicle = db.scalar(select(Vehicle).where(Vehicle.assigned_person_id == worker.id))
     assert own_vehicle is not None
     db.delete(own_vehicle)
     db.commit()
@@ -355,6 +432,9 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
     client = TestClient(app)
 
     summary_response = client.get(f"/api/me/personal-file?person_id={other.id}")
+    absence_response = client.get(
+        f"/api/me/personal-file/absences?absence_type=sick&year=2026&person_id={other.id}"
+    )
     tools_response = client.get(f"/api/me/personal-file/tools?person_id={other.id}")
 
     assert summary_response.status_code == 200
@@ -362,6 +442,9 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
     assert summary_response.json()["vehicle"]["manufacturer"] == "Volkswagen"
     assert summary_response.json()["hours_account"]["current_balance_minutes"] == 855
     assert summary_response.json()["tool_count"] == 4
+    assert absence_response.status_code == 200
+    assert absence_response.json()["sick_days"] == 2
+    assert absence_response.json()["weeks"][0]["entries"][0]["day_count"] == 2
     assert tools_response.status_code == 200
     assert {item["beg_number"] for item in tools_response.json()} == {
         "BEG-1",
@@ -389,7 +472,9 @@ def test_personal_file_api_ignores_manipulated_person_id_and_exposes_no_admin_fi
 def test_personal_file_lists_only_own_open_tool_reports_newest_first():
     db, user, worker, other = personal_file_context()
     own_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-10"))
-    other_own_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-2"))
+    other_own_tool = db.scalar(
+        select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "BEG-2")
+    )
     foreign_tool = db.scalar(select(ToolMaterialItem).where(ToolMaterialItem.beg_number == "FREMD"))
     assert own_tool is not None and other_own_tool is not None and foreign_tool is not None
     now = datetime.now(timezone.utc)
@@ -471,7 +556,9 @@ def test_personal_file_lists_only_own_open_tool_reports_newest_first():
     ]
     assert all(report.status == "open" for report in tool.open_issue_reports)
     assert other_tool.open_issue_reports[0].id == other_tool_report.id
-    assert all(report.id != foreign_report.id for item in tools for report in item.open_issue_reports)
+    assert all(
+        report.id != foreign_report.id for item in tools for report in item.open_issue_reports
+    )
 
     newest.resolved_at = now
     older.resolved_at = now
@@ -485,11 +572,7 @@ def test_personal_file_lists_only_own_open_tool_reports_newest_first():
 def test_personal_file_reflects_assignment_changes_on_next_request():
     db, user, worker, other = personal_file_context()
     service = MobilePersonalFileService(db)
-    item = next(
-        item
-        for item in db.query(ToolMaterialItem).all()
-        if item.beg_number == "BEG-1"
-    )
+    item = next(item for item in db.query(ToolMaterialItem).all() if item.beg_number == "BEG-1")
     assert service.get_summary(current_user=user, today=date(2026, 7, 15)).tool_count == 4
 
     item.employee_id = other.id
@@ -511,4 +594,11 @@ def test_personal_file_handles_missing_person_and_rejects_other_roles():
     with pytest.raises(HTTPException) as role_error:
         MobilePersonalFileService(db).get_summary(current_user=user, today=date(2026, 7, 15))
     assert role_error.value.status_code == 403
+    with pytest.raises(HTTPException) as detail_role_error:
+        MobilePersonalFileService(db).get_absence_details(
+            current_user=user,
+            year=2026,
+            absence_type=AbsenceType.VACATION,
+        )
+    assert detail_role_error.value.status_code == 403
     db.close()

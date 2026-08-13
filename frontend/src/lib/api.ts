@@ -8,7 +8,7 @@ import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoi
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursManualAdjustmentPayload, PersonHoursPayoutPayload, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonToolMaterialItem, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketDetailsUpdate, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
-import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
+import type { MobileAssignment, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
@@ -1500,6 +1500,19 @@ export const api = {
 
   async myPersonalFile(): Promise<MobilePersonalFile> {
     return request<MobilePersonalFile>("/me/personal-file", { cache: "no-store" });
+  },
+
+  async myPersonalFileAbsences(params: {
+    absenceType: MobilePersonalFileAbsenceType;
+    year: number;
+  }): Promise<MobilePersonalFileAbsenceResponse> {
+    const search = new URLSearchParams({
+      absence_type: params.absenceType,
+      year: String(params.year),
+    });
+    return request<MobilePersonalFileAbsenceResponse>(`/me/personal-file/absences?${search.toString()}`, {
+      cache: "no-store",
+    });
   },
 
   async myPersonalFileTools(): Promise<MobilePersonalFileTool[]> {

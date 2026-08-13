@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_app_user as get_current_user
 from app.core.database import get_db
+from app.models.enums import AbsenceType
 from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
@@ -37,6 +38,7 @@ from app.schemas.measurement import (
 from app.schemas.mobile import (
     MobileAssignment,
     MobileAssignmentsResponse,
+    MobilePersonalFileAbsenceResponse,
     MobilePersonalFileResponse,
     MobilePersonalFileTool,
     MobileToolIssueReportCreate,
@@ -69,6 +71,20 @@ def get_my_personal_file(
     db: Session = Depends(get_db),
 ) -> MobilePersonalFileResponse:
     return MobilePersonalFileService(db).get_summary(current_user=current_user)
+
+
+@router.get("/personal-file/absences", response_model=MobilePersonalFileAbsenceResponse)
+def get_my_personal_file_absences(
+    absence_type: AbsenceType,
+    year: int = Query(ge=2000, le=2100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobilePersonalFileAbsenceResponse:
+    return MobilePersonalFileService(db).get_absence_details(
+        current_user=current_user,
+        year=year,
+        absence_type=absence_type,
+    )
 
 
 @router.get("/personal-file/tools", response_model=list[MobilePersonalFileTool])
@@ -150,7 +166,9 @@ def list_my_time_entry_weekly_reviews(
     db: Session = Depends(get_db),
 ) -> list[TimeEntryWeeklyReviewRead]:
     if current_user.person_id is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Für deinen Benutzer ist kein Monteurprofil hinterlegt.")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Für deinen Benutzer ist kein Monteurprofil hinterlegt."
+        )
     return TimeEntryService(db).list_person_weekly_reviews(
         person_id=current_user.person_id,
         iso_year=iso_year,
@@ -158,7 +176,9 @@ def list_my_time_entry_weekly_reviews(
     )
 
 
-@router.get("/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse)
+@router.get(
+    "/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse
+)
 def get_my_assignment_email_recipients(
     assignment_id: int,
     current_user: User = Depends(get_current_user),
@@ -170,7 +190,9 @@ def get_my_assignment_email_recipients(
     )
 
 
-@router.put("/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse)
+@router.put(
+    "/assignments/{assignment_id}/email-recipients", response_model=SiteEmailRecipientsResponse
+)
 def update_my_assignment_email_recipients(
     assignment_id: int,
     payload: SiteEmailRecipientsUpdate,
