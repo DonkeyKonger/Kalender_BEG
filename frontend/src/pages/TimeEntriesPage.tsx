@@ -1183,7 +1183,8 @@ export function TimeEntriesPage() {
 
   function openTimeReviewDiagnostic(entry: TimeEntry): void {
     setTimeReviewPopupTop(payrollPanelTop());
-    setTimeReviewDialogMode("edit");
+    // Missing-day and GPS suggestion rows use negative client-only IDs and must first create a real entry.
+    setTimeReviewDialogMode(entry.id < 0 ? "create" : "edit");
     setTimeReviewDiagnosticEntry(entry);
   }
 
@@ -1278,7 +1279,7 @@ export function TimeEntriesPage() {
     if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection) {
       return;
     }
-    if (timeReviewDialogMode === "create") {
+    if (timeReviewDialogMode === "create" || timeReviewDiagnosticEntry.id < 0) {
       await createPayrollManualTimeEntry(timeReviewDiagnosticEntry);
       return;
     }

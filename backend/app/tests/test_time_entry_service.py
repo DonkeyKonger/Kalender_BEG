@@ -403,7 +403,8 @@ def test_set_payroll_row_review_toggles_independent_row_check():
     assert commits == [True, True]
 
 
-def test_set_payroll_time_correction_stores_office_checked_time():
+@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.OFFICE])
+def test_set_payroll_time_correction_stores_office_checked_time(role: UserRole):
     entry = SimpleNamespace(
         id=1,
         person_id=4,
@@ -420,7 +421,7 @@ def test_set_payroll_time_correction_stores_office_checked_time():
         commit=lambda: commits.append(True),
         refresh=lambda refreshed: None,
     )
-    current_user = SimpleNamespace(id=7, role=UserRole.OFFICE)
+    current_user = SimpleNamespace(id=7, role=role)
 
     updated = item.set_payroll_time_correction(
         entry.id,
@@ -436,6 +437,41 @@ def test_set_payroll_time_correction_stores_office_checked_time():
     assert updated.payroll_corrected_break_minutes == 30
     assert updated.payroll_corrected_work_minutes == 300
     assert commits == [True]
+
+
+def test_set_payroll_time_correction_rejects_unauthorized_role():
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(get=lambda model, entry_id: pytest.fail("entry must not be loaded"))
+
+    with pytest.raises(HTTPException) as error:
+        item.set_payroll_time_correction(
+            1,
+            start_time=time(6, 0),
+            end_time=time(15, 0),
+            break_minutes=60,
+            work_minutes=480,
+            current_user=SimpleNamespace(id=8, role=UserRole.MONTEUR),
+        )
+
+    assert error.value.status_code == 403
+
+
+def test_set_payroll_time_correction_reports_missing_synthetic_entry():
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(get=lambda model, entry_id: None)
+
+    with pytest.raises(HTTPException) as error:
+        item.set_payroll_time_correction(
+            -20260813,
+            start_time=time(6, 0),
+            end_time=time(15, 0),
+            break_minutes=60,
+            work_minutes=480,
+            current_user=SimpleNamespace(id=7, role=UserRole.ADMIN),
+        )
+
+    assert error.value.status_code == 404
+    assert error.value.detail == "Arbeitszeit nicht gefunden."
 
 
 def test_corrected_pause_is_used_for_weekly_payroll_minutes():

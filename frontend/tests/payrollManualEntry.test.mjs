@@ -101,7 +101,11 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
 
   assert.match(source, /type TimeReviewDialogMode = "create" \| "edit"/);
   assert.match(source, /setTimeReviewDialogMode\("create"\)/);
-  assert.match(source, /setTimeReviewDialogMode\("edit"\)/);
+  assert.match(source, /setTimeReviewDialogMode\(entry\.id < 0 \? "create" : "edit"\)/);
+  assert.match(
+    source,
+    /timeReviewDialogMode === "create" \|\| timeReviewDiagnosticEntry\.id < 0/,
+  );
   assert.match(source, /"Zeit manuell eintragen" : "Arbeitszeit-Prüfung"/);
   assert.match(source, /id="payroll-manual-site-label">Baustelle \*<\/span>/);
   assert.match(source, /searchPlaceholder="Nummer, Name oder Ort suchen…"/);
