@@ -147,7 +147,7 @@ class PersonHoursAccountService:
         required_minutes: int,
     ) -> PersonHoursAccountEntry | None:
         weekly_delta = weekly_breakdown.actual_minutes - required_minutes
-        target_delta = weekly_delta
+        target_delta = weekly_delta - weekly_breakdown.overtime_absence_minutes
         booked_delta = self._booked_weekly_closure_delta(
             person_id=review.person_id,
             iso_year=review.iso_year,
@@ -436,6 +436,7 @@ def calculate_weekly_hours_breakdown(
 
     minutes_by_type: dict[str, int] = defaultdict(int)
     overtime_absence_minutes = 0
+    overtime_absence_credit_minutes = 0
     daily_absence_credits: list[DailyAbsenceCredit] = []
     for absence_date in sorted(absence_types_by_date):
         absence_types = absence_types_by_date[absence_date]
@@ -453,15 +454,16 @@ def calculate_weekly_hours_breakdown(
                 credit_minutes=credit_minutes,
             )
         )
-        if credit_minutes <= 0:
-            continue
         if AbsenceType.FREE in absence_types:
-            overtime_absence_minutes += credit_minutes
+            overtime_absence_minutes += ABSENCE_DAY_CREDIT_MINUTES
+            overtime_absence_credit_minutes += credit_minutes
+            continue
+        if credit_minutes <= 0:
             continue
         minutes_by_type[absence_type.value] += credit_minutes
 
     work_minutes = sum(work_minutes_by_date.values())
-    absence_credit_minutes = sum(minutes_by_type.values()) - overtime_absence_minutes
+    absence_credit_minutes = sum(minutes_by_type.values()) + overtime_absence_credit_minutes
     return WeeklyHoursBreakdown(
         work_minutes=work_minutes,
         actual_minutes=work_minutes + absence_credit_minutes,

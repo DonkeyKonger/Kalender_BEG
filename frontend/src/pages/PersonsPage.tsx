@@ -2300,11 +2300,11 @@ function hoursAccountEntryDescriptionLines(
   ) {
     const overtimeAbsenceImpactMinutes = weeklyOvertimeAbsenceImpactMinutes(entry, overtimeAbsenceMinutesByWeek);
     const detailParts = weeklyBalanceDetailParts(entry, overtimeAbsenceImpactMinutes);
-    const accountEffectiveActualMinutes = entry.weekly_required_minutes + entry.minutes_delta;
-    if (accountEffectiveActualMinutes === entry.weekly_required_minutes && overtimeAbsenceImpactMinutes === 0 && detailParts.length === 0) {
+    const weeklyDeviationMinutes = entry.weekly_actual_minutes - entry.weekly_required_minutes;
+    if (weeklyDeviationMinutes === 0 && overtimeAbsenceImpactMinutes === 0 && detailParts.length === 0) {
       return ["Sollzeit erreicht - keine Stundenkonto-Abweichung"];
     }
-    const weeklyDescription = `Ist ${formatHoursAccountMinutesUnsigned(accountEffectiveActualMinutes)} / Soll ${formatHoursAccountMinutesUnsigned(entry.weekly_required_minutes)} -> ${formatHoursAccountMinutes(entry.minutes_delta)}`;
+    const weeklyDescription = `Ist ${formatHoursAccountMinutesUnsigned(entry.weekly_actual_minutes)} / Soll ${formatHoursAccountMinutesUnsigned(entry.weekly_required_minutes)} -> ${formatHoursAccountMinutes(weeklyDeviationMinutes)}`;
     return detailParts.length > 0 ? [detailParts.join(" / "), weeklyDescription] : [weeklyDescription];
   }
   if (entry.entry_type === "overtime_absence") {
@@ -2325,7 +2325,7 @@ function weeklyBalanceDetailParts(entry: PersonHoursAccountEntry, overtimeAbsenc
   }
   const detailParts: string[] = [];
   if (entry.weekly_work_minutes !== null) {
-    detailParts.push(`Arbeitsstunden ${formatHoursAccountMinutesUnsigned(entry.weekly_work_minutes)}`);
+    detailParts.push(`Tatsächlich gearbeitet ${formatHoursAccountMinutesUnsigned(entry.weekly_work_minutes)}`);
   }
   visibleAbsenceBreakdown.forEach((item) => {
     if (item.minutes <= 0) {
@@ -2334,6 +2334,7 @@ function weeklyBalanceDetailParts(entry: PersonHoursAccountEntry, overtimeAbsenc
     detailParts.push(`${hoursAccountAbsenceTypeLabel(item.absence_type)} ${formatHoursAccountMinutesUnsigned(item.minutes)}`);
   });
   if (overtimeAbsenceImpactMinutes !== 0) {
+    detailParts.push(`Fehlzeit Überstunden ${formatHoursAccountMinutes(Math.abs(overtimeAbsenceImpactMinutes))}`);
     detailParts.push(`Überstundenabbau ${formatHoursAccountMinutes(overtimeAbsenceImpactMinutes)}`);
   }
   return detailParts;
