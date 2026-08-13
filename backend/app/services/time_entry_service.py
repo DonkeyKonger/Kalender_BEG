@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, PersonHoursAccountService
+from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
 OPEN_TIME_REVIEW_STATUS = "open"
@@ -92,6 +93,7 @@ class TimeEntryService:
             work_minutes=values.get("work_minutes"),
         )
         if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+            values["work_minutes"] = round_minutes_to_quarter_hour(values["work_minutes"])
             values["payroll_corrected_start_time"] = values.get("start_time")
             values["payroll_corrected_end_time"] = values.get("end_time")
             values["payroll_corrected_break_minutes"] = values["break_minutes"]
@@ -149,6 +151,12 @@ class TimeEntryService:
             break_minutes=entry.break_minutes,
             work_minutes=entry.work_minutes,
         )
+        if entry.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+            entry.work_minutes = round_minutes_to_quarter_hour(entry.work_minutes)
+            entry.payroll_corrected_start_time = entry.start_time
+            entry.payroll_corrected_end_time = entry.end_time
+            entry.payroll_corrected_break_minutes = entry.break_minutes
+            entry.payroll_corrected_work_minutes = entry.work_minutes
         if entry.status == "reviewed" and entry.reviewed_by_user_id is None:
             entry.reviewed_by_user_id = current_user.id
             entry.reviewed_at = datetime.now().astimezone()
@@ -227,8 +235,6 @@ class TimeEntryService:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
         self._ensure_can_write_person(current_user, entry.person_id)
-        if work_minutes is not None and work_minutes <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Arbeitszeit muss größer als 0 sein.")
         if break_minutes is not None and break_minutes < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Pause darf nicht negativ sein.")
         if start_time is None and end_time is None and work_minutes is None:
@@ -245,6 +251,11 @@ class TimeEntryService:
                     "Beginn, Ende und Pause ergeben keine plausible Arbeitszeit.",
                 )
             work_minutes = calculated_minutes
+
+        if work_minutes is not None:
+            work_minutes = round_minutes_to_quarter_hour(work_minutes)
+            if work_minutes <= 0:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Arbeitszeit muss größer als 0 sein.")
 
         entry.payroll_corrected_start_time = start_time
         entry.payroll_corrected_end_time = end_time

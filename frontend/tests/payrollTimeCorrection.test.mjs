@@ -5,6 +5,7 @@ import {
   applyPayrollTimeBasisChange,
   calculatePayrollTime,
   resolvePayrollCorrectionWorkMinutes,
+  roundMinutesToQuarterHour,
 } from "../src/lib/payrollTimeCorrection.ts";
 
 
@@ -20,6 +21,30 @@ test("payroll correction calculates hours from start, end and pause", () => {
     minutes: 660,
     formattedHours: "11,00",
   });
+});
+
+
+test("payroll time uses the existing quarter-hour rule without changing entered clocks", () => {
+  const result = calculatePayrollTime({
+    start_time: "06:05",
+    end_time: "14:03",
+    break_minutes: "0",
+  });
+
+  assert.deepEqual(result, {
+    status: "valid",
+    minutes: 480,
+    formattedHours: "8,00",
+  });
+  assert.equal(roundMinutesToQuarterHour(478), 480);
+});
+
+
+test("payroll time subtracts the pause before quarter-hour rounding", () => {
+  assert.deepEqual(
+    calculatePayrollTime({ start_time: "06:05", end_time: "14:33", break_minutes: "30" }),
+    { status: "valid", minutes: 480, formattedHours: "8,00" },
+  );
 });
 
 

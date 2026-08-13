@@ -273,6 +273,38 @@ def test_office_manual_entries_keep_site_and_override_and_allow_multiple_same_da
     ) == ("Zweite Baustelle", "9202")
 
 
+def test_office_manual_entry_persists_quarter_hour_minutes_without_changing_clocks():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-rounding", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    site = Site(site_number="9203", name="Rundung", status=SiteStatus.ACTIVE)
+    db.add_all([person, user, site])
+    db.commit()
+
+    entry = TimeEntryService(db).create_entry(TimeEntryCreate(
+        person_id=person.id,
+        site_id=site.id,
+        work_date=date(2026, 8, 13),
+        start_time=time(6, 5),
+        end_time=time(14, 3),
+        break_minutes=0,
+        work_minutes=478,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+    ), user)
+
+    assert entry.start_time == time(6, 5)
+    assert entry.end_time == time(14, 3)
+    assert entry.work_minutes == 480
+    assert entry.payroll_corrected_work_minutes == 480
+    assert effective_weekly_work_minutes(entry) == 480
+
+
 def test_old_time_entry_without_site_is_serialized_without_guessed_site():
     db = db_session()
     person = Person(
@@ -517,6 +549,37 @@ def test_set_payroll_time_correction_calculates_overnight_time_with_break():
 
     assert updated.payroll_corrected_break_minutes == 30
     assert updated.payroll_corrected_work_minutes == 450
+
+
+def test_set_payroll_time_correction_persists_quarter_hour_minutes():
+    entry = SimpleNamespace(
+        id=1,
+        person_id=4,
+        break_minutes=0,
+        payroll_corrected_start_time=None,
+        payroll_corrected_end_time=None,
+        payroll_corrected_break_minutes=None,
+        payroll_corrected_work_minutes=None,
+    )
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(
+        get=lambda model, entry_id: entry,
+        commit=lambda: None,
+        refresh=lambda refreshed: None,
+    )
+
+    updated = item.set_payroll_time_correction(
+        entry.id,
+        start_time=time(6, 5),
+        end_time=time(14, 3),
+        break_minutes=0,
+        work_minutes=478,
+        current_user=SimpleNamespace(id=7, role=UserRole.OFFICE),
+    )
+
+    assert updated.payroll_corrected_start_time == time(6, 5)
+    assert updated.payroll_corrected_end_time == time(14, 3)
+    assert updated.payroll_corrected_work_minutes == 480
 
 
 def test_set_payroll_time_correction_rejects_implausible_break():

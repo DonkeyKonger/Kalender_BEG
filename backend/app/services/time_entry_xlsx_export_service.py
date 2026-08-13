@@ -18,6 +18,7 @@ from app.models.person import Person
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.gps_service import NOTICE_GPS_NOT_CHECKABLE, GpsPresenceEvaluation, GpsPresenceService
+from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 from app.services.time_entry_service import GPS_TIME_REVIEW_TOLERANCE_MINUTES, TimeEntryService
 
 
@@ -829,10 +830,6 @@ def payroll_duration_minutes(
         gross_minutes += 24 * 60
     net_minutes = gross_minutes - (break_minutes or 0)
     return net_minutes if net_minutes > 0 else None
-
-
-def round_minutes_to_quarter_hour(minutes: int) -> int:
-    return ((minutes + 7) // 15) * 15
 
 
 def find_sheet_row(root: ET.Element, row_number: int) -> ET.Element | None:

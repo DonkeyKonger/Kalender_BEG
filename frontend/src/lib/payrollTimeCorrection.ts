@@ -79,11 +79,16 @@ export function calculatePayrollTime(
     return { status: "invalid", error: "Pause muss kürzer als die Arbeitszeit sein." };
   }
 
+  const roundedMinutes = roundMinutesToQuarterHour(netMinutes);
   return {
     status: "valid",
-    minutes: netMinutes,
-    formattedHours: formatPayrollHours(netMinutes),
+    minutes: roundedMinutes,
+    formattedHours: formatPayrollHours(roundedMinutes),
   };
+}
+
+export function roundMinutesToQuarterHour(minutes: number): number {
+  return Math.round(minutes / 15) * 15;
 }
 
 export function parsePayrollBreakMinutes(value: string): number | null {
@@ -190,7 +195,7 @@ function parseDecimalHours(
   if (!normalized || !Number.isFinite(parsed) || parsed < 0) {
     return { ok: false, field: "time", error: "Gesamtstunden müssen eine Zahl ab 0 sein." };
   }
-  return { ok: true, value: Math.round(parsed * 60) };
+  return { ok: true, value: roundMinutesToQuarterHour(Math.round(parsed * 60)) };
 }
 
 function parseOptionalNonNegativeMinutes(

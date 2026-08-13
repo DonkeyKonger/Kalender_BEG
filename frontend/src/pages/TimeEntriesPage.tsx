@@ -13,6 +13,7 @@ import {
   calculatePayrollTime,
   OFFICE_ONLY_TIME_ENTRY_NOTE,
   parsePayrollBreakMinutes,
+  roundMinutesToQuarterHour,
   resolvePayrollCorrectionWorkMinutes,
   type PayrollCorrectionDraft,
   type PayrollTimeBasisField,
@@ -3812,10 +3813,6 @@ function effectivePayrollCorrectedWorkMinutes(entry: TimeEntry): number | null {
   return Math.max(0, grossMinutes - pauseMinutes);
 }
 
-function roundMinutesToQuarterHour(minutes: number): number {
-  return Math.round(minutes / 15) * 15;
-}
-
 function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
   const hasSubmittedTime = !isOfficeOnlyTimeEntry(entry);
   return [
@@ -4515,7 +4512,7 @@ function parseHoursToMinutes(value: string): { ok: true; value: number } | { ok:
   if (!Number.isFinite(parsed) || parsed < 0) {
     return { ok: false, error: "Arbeitszeit muss eine Zahl ab 0 sein." };
   }
-  return { ok: true, value: Math.round(parsed * 60) };
+  return { ok: true, value: roundMinutesToQuarterHour(Math.round(parsed * 60)) };
 }
 
 function parseOptionalHoursToMinutes(value: string): { ok: true; value: number | null } | { ok: false; error: string } {

@@ -75,6 +75,22 @@ test("manual total is stored even when it overrides the calculated total", () =>
   assert.equal(result.payload.work_minutes, 450);
 });
 
+test("manual total is normalized to the shared quarter-hour value before saving", () => {
+  const result = build({
+    ...validDraft,
+    start_time: "06:05",
+    end_time: "14:03",
+    break_minutes: "0",
+    hours: "7,97",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.payload.start_time, "06:05");
+  assert.equal(result.payload.end_time, "14:03");
+  assert.equal(result.payload.work_minutes, 480);
+});
+
 test("invalid pause and negative travel time are rejected", () => {
   const excessivePause = build({ ...validDraft, break_minutes: "540" });
   const negativeTravel = build({ ...validDraft, travel_minutes: "-1" });

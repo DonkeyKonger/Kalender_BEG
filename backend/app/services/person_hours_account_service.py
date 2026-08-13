@@ -15,6 +15,7 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.person_hours_account import PersonHoursAccountEntryRead, PersonHoursAccountRead
+from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 
 HOURS_ACCOUNT_WEEKLY = "weekly_balance"
@@ -531,10 +532,6 @@ def payroll_duration_minutes(start_time, end_time, break_minutes: int) -> int | 
         gross_minutes += 24 * 60
     net_minutes = gross_minutes - (break_minutes or 0)
     return net_minutes if net_minutes > 0 else None
-
-
-def round_minutes_to_quarter_hour(minutes: int) -> int:
-    return round(minutes / 15) * 15
 
 
 def hours_to_minutes(hours: float) -> int:
