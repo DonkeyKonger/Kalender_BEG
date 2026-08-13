@@ -643,6 +643,116 @@ def test_delete_entry_blocks_reviewed_time_entry():
     assert error.value.status_code == 409
 
 
+def test_delete_payroll_entry_removes_exact_open_entry():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-delete", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    site = Site(site_number="9101", name="Testbaustelle", status=SiteStatus.ACTIVE)
+    db.add_all([person, user, site])
+    db.flush()
+    first = WorkTimeEntry(
+        person_id=person.id,
+        site_id=site.id,
+        work_date=date(2026, 8, 3),
+        original_work_date=date(2026, 8, 6),
+        work_minutes=120,
+        break_minutes=0,
+        travel_minutes=0,
+    )
+    second = WorkTimeEntry(
+        person_id=person.id,
+        site_id=site.id,
+        work_date=date(2026, 8, 3),
+        work_minutes=180,
+        break_minutes=0,
+        travel_minutes=0,
+        note=OFFICE_ONLY_TIME_ENTRY_NOTE,
+        payroll_corrected_work_minutes=180,
+    )
+    db.add_all([first, second])
+    db.commit()
+
+    result = TimeEntryService(db).delete_payroll_entry(first.id, user)
+
+    assert result.entry_id == first.id
+    assert result.person_id == person.id
+    assert result.weekly_review_reset is False
+    assert db.get(WorkTimeEntry, first.id) is None
+    assert db.get(WorkTimeEntry, second.id) is not None
+
+    manual_result = TimeEntryService(db).delete_payroll_entry(second.id, user)
+
+    assert manual_result.entry_id == second.id
+    assert db.get(WorkTimeEntry, second.id) is None
+
+
+def test_delete_payroll_entry_resets_reviewed_week_and_neutralizes_hours_account():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+        weekly_hours=40,
+    )
+    user = User(username="admin-delete", display_name="Admin", password_hash="x", role=UserRole.ADMIN)
+    db.add_all([person, user])
+    db.flush()
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        work_date=date(2026, 8, 3),
+        work_minutes=2520,
+        break_minutes=0,
+        travel_minutes=0,
+        status="reviewed",
+        time_review_status="corrected",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 8, 7, 12, 0),
+        payroll_reviewed_by_user_id=user.id,
+        payroll_reviewed_at=datetime(2026, 8, 7, 12, 0),
+        payroll_corrected_work_minutes=2520,
+    )
+    db.add(entry)
+    db.commit()
+    review = TimeEntryService(db).mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=32,
+        current_user=user,
+    )
+    assert sum(item.minutes_delta for item in db.scalars(select(PersonHoursAccountEntry))) == 120
+
+    result = TimeEntryService(db).delete_payroll_entry(entry.id, user)
+
+    assert result.weekly_review_reset is True
+    assert db.get(WorkTimeEntry, entry.id) is None
+    db.refresh(review)
+    assert review.status == "reset"
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
+    assert [item.minutes_delta for item in account_entries] == [120, -120]
+    assert sum(item.minutes_delta for item in account_entries) == 0
+    assert "neutralisiert" in account_entries[-1].note
+
+
+def test_delete_payroll_entry_rejects_monteur_role():
+    entry = SimpleNamespace(id=1, person_id=4, work_date=date(2026, 8, 3))
+    item = TimeEntryService.__new__(TimeEntryService)
+    item.db = SimpleNamespace(get=lambda model, entry_id: entry)
+    current_user = SimpleNamespace(id=7, role=UserRole.MONTEUR, person_id=4)
+
+    with pytest.raises(HTTPException) as error:
+        item.delete_payroll_entry(entry.id, current_user)
+
+    assert error.value.status_code == 403
+
+
 def test_mark_weekly_review_creates_person_week_status():
     added: list[TimeEntryWeeklyReview] = []
     commits: list[bool] = []

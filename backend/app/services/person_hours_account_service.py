@@ -138,6 +138,33 @@ class PersonHoursAccountService:
             required_minutes=required_minutes,
         )
 
+    def reverse_weekly_review_balance(
+        self,
+        *,
+        review: TimeEntryWeeklyReview,
+        current_user: User,
+    ) -> PersonHoursAccountEntry | None:
+        booked_delta = self._booked_weekly_closure_delta(
+            person_id=review.person_id,
+            iso_year=review.iso_year,
+            iso_week=review.iso_week,
+        )
+        if booked_delta == 0:
+            return None
+        return self._append_entry(
+            person_id=review.person_id,
+            entry_type=HOURS_ACCOUNT_WEEKLY,
+            minutes_delta=-booked_delta,
+            note=(
+                f"KW {review.iso_week:02d} / {review.iso_year} zurückgesetzt: "
+                "Stundenkonto-Buchung neutralisiert."
+            ),
+            current_user=current_user,
+            iso_year=review.iso_year,
+            iso_week=review.iso_week,
+            weekly_review_id=review.id,
+        )
+
     def _book_weekly_balance(
         self,
         *,

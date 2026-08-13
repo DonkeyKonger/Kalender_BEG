@@ -109,6 +109,14 @@ export type TimeEntryPayrollDateCorrection = {
   work_date: string;
 };
 
+export type TimeEntryPayrollDeleteResult = {
+  entry_id: number;
+  person_id: number;
+  iso_year: number;
+  iso_week: number;
+  weekly_review_reset: boolean;
+};
+
 export type TimeEntryReviewDecisionPayload = {
   decision: TimeReviewDecision;
   final_work_minutes?: number | null;

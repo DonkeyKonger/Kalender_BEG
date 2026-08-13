@@ -13,6 +13,7 @@ from app.schemas.time_entry import (
     TimeEntryCreate,
     TimeEntryPayrollCorrectionUpdate,
     TimeEntryPayrollDateCorrectionUpdate,
+    TimeEntryPayrollDeleteRead,
     TimeEntryPayrollWeekDayRead,
     TimeEntryPayrollWeekPersonRead,
     TimeEntryPayrollWeekRead,
@@ -197,6 +198,22 @@ def delete_time_entry(
     db: Session = Depends(get_db),
 ) -> None:
     TimeEntryService(db).delete_entry(entry_id, current_user)
+
+
+@router.delete("/{entry_id}/payroll", response_model=TimeEntryPayrollDeleteRead)
+def delete_time_entry_from_payroll_review(
+    entry_id: int,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> TimeEntryPayrollDeleteRead:
+    result = TimeEntryService(db).delete_payroll_entry(entry_id, current_user)
+    return TimeEntryPayrollDeleteRead(
+        entry_id=result.entry_id,
+        person_id=result.person_id,
+        iso_year=result.iso_year,
+        iso_week=result.iso_week,
+        weekly_review_reset=result.weekly_review_reset,
+    )
 
 
 @router.post("/{entry_id}/review/approve", response_model=TimeEntryRead)

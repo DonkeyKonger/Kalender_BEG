@@ -160,6 +160,14 @@ class TimeEntryPayrollDateCorrectionUpdate(BaseModel):
     work_date: Date
 
 
+class TimeEntryPayrollDeleteRead(BaseModel):
+    entry_id: int
+    person_id: int
+    iso_year: int
+    iso_week: int
+    weekly_review_reset: bool = False
+
+
 class TimeEntryWeeklyReviewRead(BaseModel):
     model_config = {"from_attributes": True}
 

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw, Trash2 } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -20,6 +20,7 @@ import {
   formatGermanDateKey as formatDate,
   formatGermanDateKeyRange as formatRangeLabel,
   formatGermanDateTimeShort as formatDateTime,
+  formatGermanDetailDate as formatDetailDate,
   formatGermanTimeShort as formatTime,
   formatGermanWeekdayShort as formatWeekday,
   formatHalfHourDeltaFromMinutes as formatHalfHourDelta,
@@ -36,7 +37,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
+import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "gpsVerification" | "evaluation";
 type TimeReviewIssue = {
@@ -68,6 +69,10 @@ type PayrollDatePickerState = {
   entryId: number;
   left: number;
   top: number;
+};
+type PayrollDeleteDialogState = {
+  entry: TimeEntry;
+  weeklyReviewed: boolean;
 };
 type PayrollCorrectionFormState = PayrollCorrectionDraft;
 type CalendarWeekSelection = {
@@ -231,6 +236,9 @@ export function TimeEntriesPage() {
   const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
   const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [payrollDatePicker, setPayrollDatePicker] = useState<PayrollDatePickerState | null>(null);
+  const [payrollDeleteDialog, setPayrollDeleteDialog] = useState<PayrollDeleteDialogState | null>(null);
+  const [isDeletingPayrollEntry, setIsDeletingPayrollEntry] = useState(false);
+  const [payrollDeleteError, setPayrollDeleteError] = useState<string | null>(null);
   const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
   const [payrollDateActionEntryId, setPayrollDateActionEntryId] = useState<number | null>(null);
   const [payrollDateError, setPayrollDateError] = useState<string | null>(null);
@@ -498,6 +506,9 @@ export function TimeEntriesPage() {
     setLocationReviewPopupTop(null);
     setPayrollDateError(null);
     setPayrollDateActionEntryId(null);
+    setPayrollDeleteDialog(null);
+    setPayrollDeleteError(null);
+    setIsDeletingPayrollEntry(false);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -588,6 +599,20 @@ export function TimeEntriesPage() {
       window.removeEventListener("scroll", closePicker, true);
     };
   }, [payrollDatePicker]);
+
+  useEffect(() => {
+    if (!payrollDeleteDialog) {
+      return;
+    }
+    function closeOnEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape" && !isDeletingPayrollEntry) {
+        setPayrollDeleteDialog(null);
+        setPayrollDeleteError(null);
+      }
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isDeletingPayrollEntry, payrollDeleteDialog]);
 
   useEffect(() => {
     if (!timeReviewDiagnosticEntry && !locationReviewDiagnosticEntry) {
@@ -1254,6 +1279,49 @@ export function TimeEntriesPage() {
     setPayrollDatePicker(null);
   }
 
+  function openPayrollDeleteDialog(entry: TimeEntry): void {
+    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
+      return;
+    }
+    closePayrollDatePicker();
+    setPayrollDeleteDialog({
+      entry,
+      weeklyReviewed: selectedReviewWorker?.isReviewed === true,
+    });
+    setPayrollDeleteError(null);
+  }
+
+  function closePayrollDeleteDialog(): void {
+    if (isDeletingPayrollEntry) {
+      return;
+    }
+    setPayrollDeleteDialog(null);
+    setPayrollDeleteError(null);
+  }
+
+  async function confirmPayrollEntryDeletion(): Promise<void> {
+    if (!canManageTimeEntries || !payrollDeleteDialog || isDeletingPayrollEntry) {
+      return;
+    }
+    setIsDeletingPayrollEntry(true);
+    setPayrollDeleteError(null);
+    try {
+      const result = await api.deleteTimeEntryFromPayrollReview(payrollDeleteDialog.entry.id);
+      setReviewEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
+      setReviewAllEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
+      if (result.weekly_review_reset) {
+        setReviewWeeklyReviews((current) => resetMatchingWeeklyReview(current, result));
+        setReviewWeekCompletionReviews((current) => resetMatchingWeeklyReview(current, result));
+      }
+      await refreshSelectedReviewPayrollWeekSummary();
+      setPayrollDeleteDialog(null);
+    } catch (requestError) {
+      setPayrollDeleteError(readApiError(requestError, "Zeiteintrag konnte nicht gelöscht werden."));
+    } finally {
+      setIsDeletingPayrollEntry(false);
+    }
+  }
+
   async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
     if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
       return;
@@ -1720,8 +1788,8 @@ export function TimeEntriesPage() {
                           <button
                             className="time-review-day-move-button"
                             type="button"
-                            aria-label="Zeiteintrag auf anderen Tag verschieben"
-                            aria-haspopup="listbox"
+                            aria-label="Aktionen für Zeiteintrag öffnen"
+                            aria-haspopup="menu"
                             aria-expanded={payrollDatePicker?.entryId === check.entry.id}
                             disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
                             onClick={(event) => togglePayrollDatePicker(check.entry, event.currentTarget)}
@@ -1819,8 +1887,8 @@ export function TimeEntriesPage() {
                 {payrollDatePicker && payrollDatePickerEntry && (
                   <div
                     className="time-review-day-move-popover"
-                    role="listbox"
-                    aria-label="Zieltag auswählen"
+                    role="menu"
+                    aria-label="Aktionen für Zeiteintrag"
                     style={{ left: `${payrollDatePicker.left}px`, top: `${payrollDatePicker.top}px` }}
                   >
                     {selectedReviewWeekDayOptions.map((option) => (
@@ -1828,13 +1896,22 @@ export function TimeEntriesPage() {
                         className={option.date === payrollDatePickerEntry.work_date ? "is-selected" : ""}
                         key={option.date}
                         type="button"
-                        role="option"
-                        aria-selected={option.date === payrollDatePickerEntry.work_date}
+                        role="menuitemradio"
+                        aria-checked={option.date === payrollDatePickerEntry.work_date}
                         onClick={() => void movePayrollEntryDate(payrollDatePickerEntry, option.date)}
                       >
                         {option.label}
                       </button>
                     ))}
+                    <button
+                      className="time-review-day-delete-action"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => openPayrollDeleteDialog(payrollDatePickerEntry)}
+                    >
+                      <Trash2 aria-hidden="true" size={13} />
+                      Eintrag löschen
+                    </button>
                   </div>
                 )}
                 <div className="time-review-worker-detail-actions">
@@ -2246,6 +2323,68 @@ export function TimeEntriesPage() {
                 {timeReviewDialogMode === "create"
                   ? (isSavingPayrollCorrection ? "Zeit wird gespeichert..." : "Zeit speichern")
                   : (isSavingPayrollCorrection ? "Bürozeit wird gespeichert..." : "Bürozeit speichern")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payrollDeleteDialog && (
+        <div className="time-review-delete-backdrop" role="presentation" onClick={closePayrollDeleteDialog}>
+          <div
+            className="time-review-delete-dialog"
+            role="alertdialog"
+            aria-labelledby="time-review-delete-title"
+            aria-describedby="time-review-delete-description"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="time-review-delete-head">
+              <div>
+                <span>Lohnprüfung</span>
+                <h4 id="time-review-delete-title">Zeiteintrag löschen?</h4>
+              </div>
+              <button
+                type="button"
+                aria-label="Dialog schließen"
+                disabled={isDeletingPayrollEntry}
+                onClick={closePayrollDeleteDialog}
+              >
+                ×
+              </button>
+            </div>
+            <div className="time-review-delete-content" id="time-review-delete-description">
+              <strong>{payrollDeleteDialog.entry.person_name}</strong>
+              <span>{formatDetailDate(payrollDeleteDialog.entry.work_date)}</span>
+              {payrollDeleteSiteLabel(payrollDeleteDialog.entry) && (
+                <span>{payrollDeleteSiteLabel(payrollDeleteDialog.entry)}</span>
+              )}
+              {payrollDeleteTimeRange(payrollDeleteDialog.entry) && (
+                <span>{payrollDeleteTimeRange(payrollDeleteDialog.entry)}</span>
+              )}
+              {effectivePayrollWorkMinutes(payrollDeleteDialog.entry) !== null && (
+                <span>{formatTimeEntryMinutes(effectivePayrollWorkMinutes(payrollDeleteDialog.entry), "hours")}</span>
+              )}
+              <p>Dieser Zeiteintrag wird vollständig gelöscht.</p>
+              {payrollDeleteDialog.weeklyReviewed && (
+                <p className="time-review-delete-warning">
+                  <strong>Diese Monteurwoche wurde bereits geprüft.</strong>
+                  Durch das Löschen wird der Prüfstatus zurückgesetzt und die Stundenkonto-Buchung neutralisiert. Die Woche muss anschließend erneut geprüft werden.
+                </p>
+              )}
+              {payrollDeleteError && <p className="time-review-delete-error">{payrollDeleteError}</p>}
+            </div>
+            <div className="time-review-delete-actions">
+              <button type="button" disabled={isDeletingPayrollEntry} onClick={closePayrollDeleteDialog}>
+                Abbrechen
+              </button>
+              <button
+                className="is-destructive"
+                type="button"
+                disabled={isDeletingPayrollEntry}
+                onClick={() => void confirmPayrollEntryDeletion()}
+              >
+                {isDeletingPayrollEntry ? "Eintrag wird gelöscht..." : "Eintrag löschen"}
               </button>
             </div>
           </div>
@@ -4400,6 +4539,32 @@ function timeEntrySiteNumber(entry: TimeEntry): string {
 
 function timeEntrySiteName(entry: TimeEntry): string {
   return entry.site_name || manualTimeEntrySiteText(entry) || "-";
+}
+
+function payrollDeleteSiteLabel(entry: TimeEntry): string {
+  return [entry.site_name, entry.site_number].filter(Boolean).join(" · ") || manualTimeEntrySiteText(entry);
+}
+
+function payrollDeleteTimeRange(entry: TimeEntry): string {
+  const start = effectivePayrollStartTime(entry);
+  const end = effectivePayrollEndTime(entry);
+  if (!start && !end) {
+    return "";
+  }
+  return `${formatTimeEntryClock(start)} – ${formatTimeEntryClock(end)}`;
+}
+
+function resetMatchingWeeklyReview(
+  reviews: TimeEntryWeeklyReview[],
+  result: TimeEntryPayrollDeleteResult,
+): TimeEntryWeeklyReview[] {
+  return reviews.map((review) => (
+    review.person_id === result.person_id
+    && review.iso_year === result.iso_year
+    && review.iso_week === result.iso_week
+      ? { ...review, status: "reset" }
+      : review
+  ));
 }
 
 function originalTimeEntrySiteName(entry: TimeEntry): string {

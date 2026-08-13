@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
@@ -26,6 +27,15 @@ TERMINAL_TIME_REVIEW_STATUSES = {
 }
 WEEKLY_REVIEW_STATUS_REVIEWED = "reviewed"
 WEEKLY_REVIEW_STATUS_RESET = "reset"
+
+
+@dataclass(frozen=True)
+class PayrollTimeEntryDeletion:
+    entry_id: int
+    person_id: int
+    iso_year: int
+    iso_week: int
+    weekly_review_reset: bool
 
 
 class TimeEntryService:
@@ -152,6 +162,30 @@ class TimeEntryService:
         self._ensure_entry_can_be_deleted(entry)
         self.db.delete(entry)
         self.db.commit()
+
+    def delete_payroll_entry(self, entry_id: int, current_user: User) -> PayrollTimeEntryDeletion:
+        self._ensure_can_review_time(current_user)
+        entry = self._get_entry(entry_id)
+        self._ensure_can_write_person(current_user, entry.person_id)
+        iso_year, iso_week, _ = entry.work_date.isocalendar()
+        review = self._get_weekly_review(
+            person_id=entry.person_id,
+            iso_year=iso_year,
+            iso_week=iso_week,
+        )
+        weekly_review_reset = bool(review is not None and review.status == WEEKLY_REVIEW_STATUS_REVIEWED)
+        if weekly_review_reset and review is not None:
+            self._reset_weekly_review_state(review, current_user=current_user)
+        result = PayrollTimeEntryDeletion(
+            entry_id=entry.id,
+            person_id=entry.person_id,
+            iso_year=iso_year,
+            iso_week=iso_week,
+            weekly_review_reset=weekly_review_reset,
+        )
+        self.db.delete(entry)
+        self.db.commit()
+        return result
 
     def approve_time_review(self, entry_id: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
@@ -453,21 +487,36 @@ class TimeEntryService:
         self._ensure_can_review_time(current_user)
         self._ensure_person_exists(person_id)
         self._ensure_valid_iso_week(iso_year, iso_week)
-        statement = (
+        review = self._get_weekly_review(person_id=person_id, iso_year=iso_year, iso_week=iso_week)
+        if review is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Monteurwoche ist nicht geprüft.")
+        if review.status != WEEKLY_REVIEW_STATUS_REVIEWED:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurwoche ist nicht als geprüft markiert.")
+        self._reset_weekly_review_state(review, current_user=current_user)
+        self.db.commit()
+        self.db.refresh(review)
+        return review
+
+    def _get_weekly_review(
+        self,
+        *,
+        person_id: int,
+        iso_year: int,
+        iso_week: int,
+    ) -> TimeEntryWeeklyReview | None:
+        return self.db.scalar(
             select(TimeEntryWeeklyReview)
             .where(TimeEntryWeeklyReview.person_id == person_id)
             .where(TimeEntryWeeklyReview.iso_year == iso_year)
             .where(TimeEntryWeeklyReview.iso_week == iso_week)
         )
-        review = self.db.scalar(statement)
-        if review is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Monteurwoche ist nicht geprüft.")
-        if review.status != WEEKLY_REVIEW_STATUS_REVIEWED:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteurwoche ist nicht als geprüft markiert.")
+
+    def _reset_weekly_review_state(self, review: TimeEntryWeeklyReview, *, current_user: User) -> None:
         review.status = WEEKLY_REVIEW_STATUS_RESET
-        self.db.commit()
-        self.db.refresh(review)
-        return review
+        PersonHoursAccountService(self.db).reverse_weekly_review_balance(
+            review=review,
+            current_user=current_user,
+        )
 
     @staticmethod
     def is_open_time_review_case(entry: WorkTimeEntry, gps_minutes: int | None) -> bool:
