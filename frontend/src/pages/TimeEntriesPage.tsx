@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw, Trash2 } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
@@ -32,6 +33,7 @@ import {
   payrollWeekTotalMinutes,
   vacationCreditMinutesForDate,
 } from "../lib/payrollWeek";
+import { resolveViewportPopoverPosition, type ViewportPopoverPosition } from "../lib/viewportPopover";
 import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
@@ -67,8 +69,10 @@ type ReviewDecisionFormState = {
 };
 type PayrollDatePickerState = {
   entryId: number;
-  left: number;
-  top: number;
+  triggerTop: number;
+  triggerBottom: number;
+  triggerLeft: number;
+  position: ViewportPopoverPosition | null;
 };
 type PayrollDeleteDialogState = {
   entry: TimeEntry;
@@ -283,6 +287,7 @@ export function TimeEntriesPage() {
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
+  const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
@@ -598,6 +603,28 @@ export function TimeEntriesPage() {
       window.removeEventListener("resize", closePicker);
       window.removeEventListener("scroll", closePicker, true);
     };
+  }, [payrollDatePicker]);
+
+  useLayoutEffect(() => {
+    if (!payrollDatePicker || payrollDatePicker.position || !payrollDatePickerMenuRef.current) {
+      return;
+    }
+    const menu = payrollDatePickerMenuRef.current;
+    const bounds = menu.getBoundingClientRect();
+    const position = resolveViewportPopoverPosition({
+      triggerTop: payrollDatePicker.triggerTop,
+      triggerBottom: payrollDatePicker.triggerBottom,
+      triggerLeft: payrollDatePicker.triggerLeft,
+      menuWidth: Math.max(bounds.width, menu.scrollWidth),
+      menuHeight: menu.scrollHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+    setPayrollDatePicker((current) => (
+      current?.entryId === payrollDatePicker.entryId && current.position === null
+        ? { ...current, position }
+        : current
+    ));
   }, [payrollDatePicker]);
 
   useEffect(() => {
@@ -1266,11 +1293,12 @@ export function TimeEntriesPage() {
         return null;
       }
       const rect = button.getBoundingClientRect();
-      const popoverWidth = 96;
       return {
         entryId: entry.id,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - popoverWidth - 8)),
-        top: rect.bottom + 4,
+        triggerTop: rect.top,
+        triggerBottom: rect.bottom,
+        triggerLeft: rect.left,
+        position: null,
       };
     });
   }
@@ -1884,12 +1912,19 @@ export function TimeEntriesPage() {
                     })()
                   ))}
                 </div>
-                {payrollDatePicker && payrollDatePickerEntry && (
+                {payrollDatePicker && payrollDatePickerEntry && typeof document !== "undefined" && createPortal(
                   <div
-                    className="time-review-day-move-popover"
+                    className={`time-review-day-move-popover${payrollDatePicker.position ? ` is-open-${payrollDatePicker.position.placement}` : ""}`}
+                    ref={payrollDatePickerMenuRef}
                     role="menu"
                     aria-label="Aktionen für Zeiteintrag"
-                    style={{ left: `${payrollDatePicker.left}px`, top: `${payrollDatePicker.top}px` }}
+                    style={{
+                      left: `${payrollDatePicker.position?.left ?? payrollDatePicker.triggerLeft}px`,
+                      top: `${payrollDatePicker.position?.top ?? payrollDatePicker.triggerBottom + 4}px`,
+                      maxHeight: payrollDatePicker.position ? `${payrollDatePicker.position.maxHeight}px` : undefined,
+                      maxWidth: payrollDatePicker.position ? `${payrollDatePicker.position.maxWidth}px` : undefined,
+                      visibility: payrollDatePicker.position ? "visible" : "hidden",
+                    }}
                   >
                     {selectedReviewWeekDayOptions.map((option) => (
                       <button
@@ -1912,7 +1947,8 @@ export function TimeEntriesPage() {
                       <Trash2 aria-hidden="true" size={13} />
                       Eintrag löschen
                     </button>
-                  </div>
+                  </div>,
+                  document.body,
                 )}
                 <div className="time-review-worker-detail-actions">
                   <div className="time-review-worker-detail-action-stack">

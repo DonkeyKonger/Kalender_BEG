@@ -16486,6 +16486,9 @@ button.person-chip:focus-visible {
   z-index: 90;
   display: grid;
   min-width: 92px;
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid #cbd7e6;
   border-radius: 0;
   background: #ffffff;
