@@ -5,7 +5,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
@@ -205,7 +205,29 @@ class MeasurementService:
                 SiteMeasurementBatch.measurement_base_id == base.id,
             )
         ) or 0
-        if batch_count > 0:
+        referenced_entry_count = self.db.scalar(
+            select(func.count(SiteMeasurementEntry.id))
+            .join(
+                SiteMeasurementItem,
+                SiteMeasurementEntry.measurement_item_id == SiteMeasurementItem.id,
+            )
+            .where(
+                SiteMeasurementItem.site_id == site_id,
+                SiteMeasurementItem.measurement_base_id == base.id,
+            )
+        ) or 0
+        linked_item_count = self.db.scalar(
+            select(func.count(SiteMeasurementItem.id)).where(
+                SiteMeasurementItem.site_id == site_id,
+                SiteMeasurementItem.linked_measurement_item_id.in_(
+                    select(SiteMeasurementItem.id).where(
+                        SiteMeasurementItem.site_id == site_id,
+                        SiteMeasurementItem.measurement_base_id == base.id,
+                    )
+                ),
+            )
+        ) or 0
+        if batch_count > 0 or referenced_entry_count > 0 or linked_item_count > 0:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Dieses Aufmaßblatt enthält bereits Aufmaßpakete oder Mengenmeldungen und kann nicht gelöscht werden.",
@@ -498,32 +520,7 @@ class MeasurementService:
     ) -> list[MobileMeasurementItemRead]:
         assignment = self._get_user_assignment(assignment_id, current_user)
         batch = self._get_batch_for_site(batch_id, assignment.site_id)
-        items = list(
-            self.db.scalars(
-                select(SiteMeasurementItem)
-                .options(
-                    selectinload(SiteMeasurementItem.entries).selectinload(
-                        SiteMeasurementEntry.created_by
-                    ),
-                    with_loader_criteria(
-                        SiteMeasurementEntry,
-                        SiteMeasurementEntry.measurement_batch_id == batch.id,
-                        include_aliases=True,
-                    ),
-                )
-                .where(
-                    SiteMeasurementItem.site_id == batch.site_id,
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                    SiteMeasurementItem.is_hidden.is_(False),
-                    or_(
-                        SiteMeasurementItem.is_free_position.is_(False),
-                        SiteMeasurementItem.measurement_batch_id.is_(None),
-                        SiteMeasurementItem.measurement_batch_id == batch.id,
-                    ),
-                )
-                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
-            ).all()
-        )
+        items = self._list_batch_position_items(batch)
         return [self._build_mobile_item(item, batch.id) for item in items]
 
     def create_site_entry(
@@ -544,21 +541,9 @@ class MeasurementService:
             )
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
-        item_belongs_to_batch = (
-            item is not None
-            and item.site_id == site_id
-            and not item.is_hidden
-            and (
-                (
-                    batch.position_mode == MeasurementPositionMode.BLANK.value
-                    and item.measurement_batch_id == batch.id
-                    and item.is_free_position
-                )
-                or (
-                    batch.position_mode != MeasurementPositionMode.BLANK.value
-                    and item.measurement_base_id == batch.measurement_base_id
-                )
-            )
+        item_belongs_to_batch = item is not None and self._measurement_item_is_available_for_batch(
+            batch=batch,
+            item=item,
         )
         if not item_belongs_to_batch:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
@@ -635,14 +620,10 @@ class MeasurementService:
             position = self._next_free_measurement_position(batch)
 
         next_sort_order = self._next_site_batch_column_sort_order(batch)
-        linked_measurement_item = self._get_calculated_measurement_item(
+        linked_measurement_item = self._get_measurement_catalog_item(
             site_id=site_id,
             measurement_item_id=payload.linked_measurement_item_id,
-            measurement_base_id=(
-                batch.measurement_base_id
-                if batch.measurement_base_id is not None
-                else self._get_active_measurement_base_id(site_id)
-            ),
+            measurement_base_ids=self._measurement_catalog_base_ids(batch),
         )
 
         item = SiteMeasurementItem(
@@ -714,15 +695,10 @@ class MeasurementService:
             "linked_measurement_item_id" in payload.model_fields_set
             and payload.linked_measurement_item_id is not None
         ):
-            expected_base_id = (
-                batch.measurement_base_id
-                if batch.measurement_base_id is not None
-                else self._get_active_measurement_base_id(site_id)
-            )
-            linked_measurement_item = self._get_calculated_measurement_item(
+            linked_measurement_item = self._get_measurement_catalog_item(
                 site_id=site_id,
                 measurement_item_id=payload.linked_measurement_item_id,
-                measurement_base_id=expected_base_id,
+                measurement_base_ids=self._measurement_catalog_base_ids(batch),
             )
             self._ensure_measurement_target_is_available_for_batch(
                 batch=batch,
@@ -846,11 +822,9 @@ class MeasurementService:
         self._ensure_mobile_batch_can_be_edited_by_worker(batch)
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
-        if (
-            item is None
-            or item.site_id != assignment.site_id
-            or item.measurement_base_id != batch.measurement_base_id
-            or item.is_hidden
+        if item is None or not self._measurement_item_is_available_for_batch(
+            batch=batch,
+            item=item,
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
 
@@ -1335,45 +1309,7 @@ class MeasurementService:
     ) -> list[MobileMeasurementItemRead]:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        item_filters = [
-            SiteMeasurementItem.site_id == batch.site_id,
-            SiteMeasurementItem.is_hidden.is_(False),
-        ]
-        if batch.position_mode == MeasurementPositionMode.BLANK.value:
-            item_filters.extend(
-                [
-                    SiteMeasurementItem.measurement_batch_id == batch.id,
-                    SiteMeasurementItem.is_free_position.is_(True),
-                ]
-            )
-        else:
-            item_filters.extend(
-                [
-                    SiteMeasurementItem.measurement_base_id == batch.measurement_base_id,
-                    or_(
-                        SiteMeasurementItem.is_free_position.is_(False),
-                        SiteMeasurementItem.measurement_batch_id.is_(None),
-                        SiteMeasurementItem.measurement_batch_id == batch.id,
-                    ),
-                ]
-            )
-        items = list(
-            self.db.scalars(
-                select(SiteMeasurementItem)
-                .options(
-                    selectinload(SiteMeasurementItem.entries).selectinload(
-                        SiteMeasurementEntry.created_by
-                    ),
-                    with_loader_criteria(
-                        SiteMeasurementEntry,
-                        SiteMeasurementEntry.measurement_batch_id == batch.id,
-                        include_aliases=True,
-                    ),
-                )
-                .where(*item_filters)
-                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
-            ).all()
-        )
+        items = self._list_batch_position_items(batch)
         return [self._build_mobile_item(item, batch.id) for item in items]
 
     def delete_site_batch(self, *, site_id: int, batch_id: int, current_user: User) -> None:
@@ -2430,33 +2366,174 @@ class MeasurementService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaß nicht gefunden.")
         return batch
 
-    def _get_calculated_measurement_item(
+    def _measurement_catalog_base_ids(self, batch: SiteMeasurementBatch) -> tuple[int, ...]:
+        """Return the persisted and currently released offer bases for a batch."""
+        base_ids: list[int] = []
+        if batch.measurement_base_id is not None:
+            base_ids.append(batch.measurement_base_id)
+        active_base_id = self._get_active_measurement_base_id(batch.site_id)
+        if active_base_id is not None and active_base_id not in base_ids:
+            base_ids.append(active_base_id)
+        return tuple(base_ids)
+
+    def _list_batch_position_items(
+        self,
+        batch: SiteMeasurementBatch,
+    ) -> list[SiteMeasurementItem]:
+        """Load persisted rows plus the selectable catalog for an offer-based batch."""
+        common_filters = [
+            SiteMeasurementItem.site_id == batch.site_id,
+            SiteMeasurementItem.is_hidden.is_(False),
+        ]
+        if batch.position_mode == MeasurementPositionMode.BLANK.value:
+            statement = select(SiteMeasurementItem).where(
+                *common_filters,
+                SiteMeasurementItem.measurement_batch_id == batch.id,
+                SiteMeasurementItem.is_free_position.is_(True),
+            )
+            return list(
+                self.db.scalars(
+                    statement.options(
+                        selectinload(SiteMeasurementItem.entries).selectinload(
+                            SiteMeasurementEntry.created_by
+                        ),
+                        with_loader_criteria(
+                            SiteMeasurementEntry,
+                            SiteMeasurementEntry.measurement_batch_id == batch.id,
+                            include_aliases=True,
+                        ),
+                    ).order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+                ).all()
+            )
+
+        catalog_base_ids = self._measurement_catalog_base_ids(batch)
+        batch_entry_item_ids = {entry.measurement_item_id for entry in batch.entries}
+        batch_owned_item_ids = {item.id for item in batch.free_items}
+        batch_specific_item_ids = batch_entry_item_ids | batch_owned_item_ids
+
+        if catalog_base_ids:
+            catalog_base_filter = SiteMeasurementItem.measurement_base_id.in_(catalog_base_ids)
+        else:
+            catalog_base_filter = SiteMeasurementItem.measurement_base_id.is_(None)
+
+        catalog_filter = and_(
+            catalog_base_filter,
+            or_(
+                SiteMeasurementItem.is_free_position.is_(False),
+                SiteMeasurementItem.measurement_batch_id.is_(None),
+                SiteMeasurementItem.measurement_batch_id == batch.id,
+            ),
+        )
+        item_scopes = [catalog_filter]
+        if batch_specific_item_ids:
+            item_scopes.append(SiteMeasurementItem.id.in_(batch_specific_item_ids))
+
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .options(
+                    selectinload(SiteMeasurementItem.entries).selectinload(
+                        SiteMeasurementEntry.created_by
+                    ),
+                    with_loader_criteria(
+                        SiteMeasurementEntry,
+                        SiteMeasurementEntry.measurement_batch_id == batch.id,
+                        include_aliases=True,
+                    ),
+                )
+                .where(*common_filters, or_(*item_scopes))
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            ).all()
+        )
+
+        # Persisted batch items are always retained. A used non-free position from
+        # the historical base suppresses the same normalized position in a copied
+        # active base. Unlinked free positions deliberately do not suppress it.
+        selected_ids = set(batch_specific_item_ids)
+        claimed_position_keys = {
+            _measurement_position_key(item.position)
+            for item in items
+            if item.id in batch_entry_item_ids and not item.is_free_position
+        }
+        claimed_position_keys.discard("")
+
+        priority_by_base_id = {
+            base_id: priority for priority, base_id in enumerate(catalog_base_ids)
+        }
+        catalog_items = sorted(
+            (
+                item
+                for item in items
+                if item.id not in batch_owned_item_ids
+                and (
+                    item.measurement_base_id in catalog_base_ids
+                    or (not catalog_base_ids and item.measurement_base_id is None)
+                )
+            ),
+            key=lambda item: (
+                priority_by_base_id.get(item.measurement_base_id, len(catalog_base_ids)),
+                item.sort_order,
+                item.id,
+            ),
+        )
+        selected_catalog_keys: set[str] = set()
+        for item in catalog_items:
+            position_key = _measurement_position_key(item.position)
+            if position_key in claimed_position_keys:
+                if item.id in batch_entry_item_ids:
+                    selected_ids.add(item.id)
+                continue
+            if position_key and position_key in selected_catalog_keys:
+                continue
+            selected_ids.add(item.id)
+            if position_key:
+                selected_catalog_keys.add(position_key)
+
+        return [item for item in items if item.id in selected_ids]
+
+    def _measurement_item_is_available_for_batch(
+        self,
+        *,
+        batch: SiteMeasurementBatch,
+        item: SiteMeasurementItem,
+    ) -> bool:
+        if item.site_id != batch.site_id or item.is_hidden:
+            return False
+        if batch.position_mode == MeasurementPositionMode.BLANK.value:
+            return bool(item.measurement_batch_id == batch.id and item.is_free_position)
+        if item.measurement_batch_id == batch.id:
+            return True
+        if any(entry.measurement_item_id == item.id for entry in batch.entries):
+            return True
+        return bool(
+            item.measurement_base_id in self._measurement_catalog_base_ids(batch)
+            and (not item.is_free_position or item.measurement_batch_id is None)
+        )
+
+    def _get_measurement_catalog_item(
         self,
         *,
         site_id: int,
         measurement_item_id: int | None,
-        measurement_base_id: int | None = None,
+        measurement_base_ids: tuple[int, ...],
     ) -> SiteMeasurementItem | None:
         if measurement_item_id is None:
             return None
         filters = [
-                SiteMeasurementItem.id == measurement_item_id,
-                SiteMeasurementItem.site_id == site_id,
-                SiteMeasurementItem.measurement_base_id.is_not(None),
-                SiteMeasurementItem.measurement_batch_id.is_(None),
-                SiteMeasurementItem.minutes_per_unit.is_not(None),
-                SiteMeasurementItem.is_hidden.is_(False),
+            SiteMeasurementItem.id == measurement_item_id,
+            SiteMeasurementItem.site_id == site_id,
+            SiteMeasurementItem.measurement_base_id.is_not(None),
+            SiteMeasurementItem.measurement_batch_id.is_(None),
+            SiteMeasurementItem.is_free_position.is_(False),
+            SiteMeasurementItem.is_hidden.is_(False),
         ]
-        if measurement_base_id is not None:
-            filters.append(SiteMeasurementItem.measurement_base_id == measurement_base_id)
-        item = self.db.scalar(
-            select(SiteMeasurementItem).where(*filters)
-        )
+        if measurement_base_ids:
+            filters.append(SiteMeasurementItem.measurement_base_id.in_(measurement_base_ids))
+        item = self.db.scalar(select(SiteMeasurementItem).where(*filters))
         if item is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Die verknüpfte Projektposition gehört nicht zur Angebotsgrundlage dieses Aufmaßes "
-                "oder besitzt keine Kalkulationsgrundlage.",
+                "Die verknüpfte Projektposition gehört nicht zum Positionskatalog dieses Aufmaßes.",
             )
         return item
 

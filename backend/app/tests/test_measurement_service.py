@@ -443,6 +443,199 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
     ))
 
 
+def test_historical_batch_uses_released_total_catalog_with_supplement_without_minutes():
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType
+    from app.schemas.measurement import MeasurementEntryCreate, MeasurementItemUpdate
+
+    db = db_session()
+    site = create_site(db)
+    historical_base = create_measurement_base(db, site)
+    historical_base.status = "closed"
+    historical_base.released_to_mobile = False
+    total_base = SiteMeasurementBase(
+        site=site,
+        name="Gesamtbasis mit Nachtrag",
+        base_type="main_offer",
+        status="active",
+        released_to_mobile=True,
+    )
+    inactive_base = SiteMeasurementBase(
+        site=site,
+        name="Nicht freigegebener Entwurf",
+        base_type="main_offer",
+        status="draft",
+        released_to_mobile=False,
+    )
+    historical_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=historical_base,
+        position="444.4.310",
+        description="Ursprüngliche Position",
+        unit="m",
+        minutes_per_unit=Decimal("5"),
+        sort_order=1,
+    )
+    copied_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=total_base,
+        position=" 444.4.310 ",
+        description="Kopie in der Gesamtbasis",
+        unit="m",
+        minutes_per_unit=Decimal("5"),
+        sort_order=1,
+    )
+    supplement_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=total_base,
+        position="N1.10",
+        description="Nachtrag ohne Kalkulationszeit",
+        unit="Stck",
+        minutes_per_unit=None,
+        list_minutes_total=None,
+        sort_order=10,
+    )
+    inactive_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=inactive_base,
+        position="N9.99",
+        description="Nicht freigegebene Position",
+        unit="Stck",
+        sort_order=99,
+    )
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="historical-catalog-worker",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 8, 14),
+        end_date=date(2026, 8, 14),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    desktop_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=historical_base,
+        number=1,
+        title="Historisches Aufmaß Büro",
+        status="submitted",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    mobile_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=historical_base,
+        number=2,
+        title="Historisches Aufmaß mobil",
+        status="draft",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    historical_entry = SiteMeasurementEntry(
+        measurement_batch=desktop_batch,
+        measurement_item=historical_item,
+        site=site,
+        quantity=Decimal("8.4"),
+        area_or_comment="EG",
+        status="submitted",
+    )
+    free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=historical_base,
+        measurement_batch=desktop_batch,
+        position="N1.10",
+        description="Frei erfasste Nachtragsposition",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=20,
+    )
+    free_entry = SiteMeasurementEntry(
+        measurement_batch=desktop_batch,
+        measurement_item=free_item,
+        site=site,
+        quantity=Decimal("4"),
+        area_or_comment="1. OG",
+        status="submitted",
+    )
+    db.add_all(
+        [
+            total_base,
+            inactive_base,
+            historical_item,
+            copied_item,
+            supplement_item,
+            inactive_item,
+            user,
+            assignment,
+            desktop_batch,
+            mobile_batch,
+            historical_entry,
+            free_item,
+            free_entry,
+        ]
+    )
+    db.commit()
+    service = MeasurementService(db)
+
+    desktop_items = service.list_site_batch_items(
+        site_id=site.id,
+        batch_id=desktop_batch.id,
+    )
+    desktop_ids = {item.id for item in desktop_items}
+    assert historical_item.id in desktop_ids
+    assert copied_item.id not in desktop_ids
+    assert supplement_item.id in desktop_ids
+    assert inactive_item.id not in desktop_ids
+    assert [item.id for item in desktop_items if item.entries] == [historical_item.id, free_item.id]
+
+    mobile_ids = {
+        item.id
+        for item in service.list_mobile_batch_items(
+            assignment_id=assignment.id,
+            batch_id=mobile_batch.id,
+            current_user=user,
+        )
+    }
+    assert historical_item.id in mobile_ids
+    assert copied_item.id not in mobile_ids
+    assert supplement_item.id in mobile_ids
+    assert inactive_item.id not in mobile_ids
+
+    linked = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=desktop_batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=supplement_item.id),
+    )
+    assert linked.linked_measurement_item_id == supplement_item.id
+    assert linked.reported_quantity == Decimal("4")
+
+    mobile_entry = service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=mobile_batch.id,
+        measurement_item_id=supplement_item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(area_or_comment="EG", quantity=Decimal("1")),
+    )
+    assert mobile_entry.quantity == Decimal("1")
+
+    service.activate_measurement_base(site_id=site.id, measurement_base_id=inactive_base.id)
+    with pytest.raises(HTTPException) as delete_error:
+        service.delete_measurement_base(site_id=site.id, measurement_base_id=total_base.id)
+    assert delete_error.value.status_code == 409
+
+
 def test_mobile_free_measurement_item_is_stored_on_batch_base():
     from app.models.assignment import Assignment
     from app.models.enums import AssignmentType, PersonType, UserRole
@@ -2109,8 +2302,8 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
         site=site,
         name="Andere Angebotsbasis",
         base_type="main_offer",
-        status="active",
-        released_to_mobile=True,
+        status="draft",
+        released_to_mobile=False,
     )
     target_item = SiteMeasurementItem(
         site=site,

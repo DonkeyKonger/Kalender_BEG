@@ -1039,9 +1039,7 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const selectedBatchId = selectedMeasurementBatch?.measurement_base_id === result.measurement_base.id
-        ? selectedMeasurementBatch.id
-        : null;
+      const selectedBatchId = selectedMeasurementBatch?.id ?? null;
       const [bases, timesheet, selectedBatchItems] = await Promise.all([
         api.measurementBases(site.id),
         api.measurementTimesheet(site.id),

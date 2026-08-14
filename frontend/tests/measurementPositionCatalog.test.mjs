@@ -6,12 +6,13 @@ const sitePageSource = await readFile(new URL("../src/pages/SiteDetailPage.tsx",
 const mobilePageSource = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 
-test("appending an offer refreshes only the selected batch position catalog", () => {
+test("every successful offer import refreshes the selected batch position catalog", () => {
   const importStart = sitePageSource.indexOf("async function importMeasurementTimesheet(");
   const importEnd = sitePageSource.indexOf("function updateSiteDraft(", importStart);
   const importSource = sitePageSource.slice(importStart, importEnd);
 
-  assert.match(importSource, /selectedMeasurementBatch\?\.measurement_base_id === result\.measurement_base\.id/);
+  assert.match(importSource, /const selectedBatchId = selectedMeasurementBatch\?\.id \?\? null/);
+  assert.doesNotMatch(importSource, /selectedMeasurementBatch\?\.measurement_base_id === result\.measurement_base\.id/);
   assert.match(importSource, /api\.siteMeasurementBatchItems\(site\.id, selectedBatchId\)/);
   assert.match(importSource, /setMeasurementBatchItems\(orderMeasurementItemsByColumnPosition\(selectedBatchItems\)\)/);
 });
