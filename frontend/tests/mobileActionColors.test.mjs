@@ -112,7 +112,7 @@ test("mobile home actions keep the established destinations and compact copy", (
 test("mobile home follows the personal-file hierarchy and uses a construction icon", () => {
   assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
   assert.match(pageSource, /className="mobile-home-overview-panel"[\s\S]*>Nächste Einsätze<\/h2>/);
-  assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelineItems\.map\(\(item\) =>/);
+  assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelinePages\.map\(\(page\) =>[\s\S]*page\.map\(\(item\) =>/);
   assert.doesNotMatch(pageSource, /mobileHomeDays\.slice\(/);
   assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
   assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
@@ -150,21 +150,27 @@ test("the assignment timeline scales its cards and copy for narrow mobile viewpo
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \{[^}]*min-height:\s*clamp\(148px, 42vw, 174px\);[^}]*padding:\s*clamp\(12px, 4vw, 16px\);/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*min-height:\s*clamp\(148px, 42vw, 174px\);/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-copy b \{[^}]*font-size:\s*clamp\(1rem, 5vw, 1\.14rem\);/s,
+    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(clamp\(66px, 20vw, 86px\), auto\) minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*padding:\s*clamp\(7px, 2\.4vw, 10px\);/s,
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-card \{[^}]*min-height:\s*142px;[^}]*padding:\s*11px;/s,
+    /\.mobile-home-timeline-copy b \{[^}]*font-size:\s*clamp\(0\.82rem, 4vw, 0\.98rem\);/s,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*min-height:\s*152px;[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(60px, 68px\) minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*padding:\s*6px 7px;/s,
   );
 });
 
 
 test("the home assignment block is a snap timeline with grouped consecutive assignment days", () => {
   assert.match(pageSource, /function buildMobileHomeTimelineItems\([\s\S]*latestItemByAssignmentId\.get\(daily\.assignment\.id\)[\s\S]*previous\.dayCount \+= 1/);
+  assert.match(pageSource, /MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\s*=\s*2/);
+  assert.match(pageSource, /function chunkMobileHomeTimelineItems\([\s\S]*items\.slice\(index, index \+ MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\)/);
   assert.match(pageSource, /className="mobile-home-timeline-pagination"[\s\S]*scrollMobileHomeTimelineTo\(index\)/);
   assert.match(
     styles,
@@ -172,7 +178,7 @@ test("the home assignment block is a snap timeline with grouped consecutive assi
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \{[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
   );
 });
 

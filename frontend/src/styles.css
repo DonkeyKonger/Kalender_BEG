@@ -5862,21 +5862,31 @@ button.person-chip:focus-visible {
   display: none;
 }
 
-.mobile-home-timeline-card {
+.mobile-home-timeline-page {
   display: grid;
-  align-content: space-between;
-  gap: clamp(12px, 4vw, 18px);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: clamp(7px, 2.5vw, 10px);
   min-width: 0;
   min-height: clamp(148px, 42vw, 174px);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.mobile-home-timeline-card {
+  display: grid;
+  grid-template-columns: minmax(clamp(66px, 20vw, 86px), auto) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(7px, 2.5vw, 11px);
+  min-width: 0;
+  min-height: 0;
   border: 1px solid #cfdaea;
   border-radius: 12px;
   background: #f9fbfe;
   color: inherit;
-  padding: clamp(12px, 4vw, 16px);
+  padding: clamp(7px, 2.4vw, 10px);
+  font: inherit;
   text-align: left;
   text-decoration: none;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
   box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
@@ -5897,24 +5907,32 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-date {
-  display: flex;
-  align-items: center;
-  gap: 5px 7px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
   min-width: 0;
   color: #52627a;
-  font-size: clamp(0.74rem, 3.5vw, 0.84rem);
+  font-size: clamp(0.68rem, 3.2vw, 0.78rem);
   font-style: normal;
   font-weight: 850;
   line-height: 1.15;
+}
+
+.mobile-home-timeline-date-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   flex-wrap: wrap;
 }
 
 .mobile-home-timeline-date em {
+  justify-self: start;
   border-radius: 999px;
   background: #1d4f82;
   color: #ffffff;
-  padding: 4px 7px;
-  font-size: 0.67rem;
+  padding: 3px 5px;
+  font-size: clamp(0.56rem, 2.6vw, 0.62rem);
   font-style: normal;
   font-weight: 900;
   letter-spacing: 0.03em;
@@ -5924,7 +5942,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-date strong {
   color: #143c6d;
-  font-size: clamp(0.82rem, 4vw, 0.94rem);
+  font-size: clamp(0.74rem, 3.5vw, 0.84rem);
   font-weight: 900;
 }
 
@@ -5933,12 +5951,12 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-date small {
-  margin-left: auto;
+  justify-self: start;
   border-radius: 999px;
   background: #e7eff9;
   color: #315f91;
-  padding: 4px 7px;
-  font-size: 0.68rem;
+  padding: 3px 5px;
+  font-size: clamp(0.56rem, 2.7vw, 0.62rem);
   font-weight: 850;
   line-height: 1;
   white-space: nowrap;
@@ -5948,7 +5966,7 @@ button.person-chip:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(9px, 3vw, 12px);
+  gap: clamp(7px, 2.5vw, 10px);
   min-width: 0;
 }
 
@@ -5965,25 +5983,25 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-copy b {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
   color: #111827;
-  font-size: clamp(1rem, 5vw, 1.14rem);
+  font-size: clamp(0.82rem, 4vw, 0.98rem);
   font-weight: 850;
   line-height: 1.12;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-home-timeline-copy small {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
   color: #65738a;
-  font-size: clamp(0.74rem, 3.6vw, 0.82rem);
+  font-size: clamp(0.66rem, 3.2vw, 0.76rem);
   font-weight: 760;
   line-height: 1.2;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-home-timeline-card .assignment-card-affordance {
@@ -7660,18 +7678,25 @@ button.person-chip:focus-visible {
     padding: 12px;
   }
 
+  .mobile-home-timeline-page {
+    gap: 6px;
+    min-height: 152px;
+  }
+
   .mobile-home-timeline-card {
-    min-height: 142px;
-    padding: 11px;
+    grid-template-columns: minmax(60px, 68px) minmax(0, 1fr);
+    gap: 6px;
+    min-height: 0;
+    padding: 6px 7px;
   }
 
   .mobile-home-timeline-card .mobile-home-assignment-icon {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 
   .mobile-home-timeline-date small {
-    margin-left: 0;
+    white-space: normal;
   }
 }
 

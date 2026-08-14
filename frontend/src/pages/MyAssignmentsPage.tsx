@@ -42,6 +42,7 @@ const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_DAY_WINDOW = 7;
 const MOBILE_HOME_VISIBLE_DAY_COUNT = 4;
+const MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE = 2;
 
 type MobileViewMode = "two_weeks" | "year";
 
@@ -480,6 +481,10 @@ export function MyAssignmentsPage() {
     () => buildMobileHomeTimelineItems(mobileHomeDays, dailyByDate),
     [dailyByDate, mobileHomeDays],
   );
+  const mobileHomeTimelinePages = useMemo(
+    () => chunkMobileHomeTimelineItems(mobileHomeTimelineItems),
+    [mobileHomeTimelineItems],
+  );
   const mobileHomePlannedCount = useMemo(
     () => mobileHomeDays.reduce(
       (count, date) => count + (dailyByDate.get(date) ?? []).filter(hasRealDailyAssignment).length,
@@ -506,12 +511,12 @@ export function MyAssignmentsPage() {
     if (mobileHomeTimelineRef.current) {
       mobileHomeTimelineRef.current.scrollLeft = 0;
     }
-  }, [mobileHomeTimelineItems]);
+  }, [mobileHomeTimelinePages]);
 
   const handleMobileHomeTimelineScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
     const timeline = event.currentTarget;
     const items = Array.from(
-      timeline.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-item]"),
+      timeline.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-page]"),
     );
     if (!items.length) {
       return;
@@ -527,7 +532,7 @@ export function MyAssignmentsPage() {
 
   const scrollMobileHomeTimelineTo = useCallback((index: number) => {
     const timeline = mobileHomeTimelineRef.current;
-    const item = timeline?.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-item]").item(index);
+    const item = timeline?.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-page]").item(index);
     if (!timeline || !item) {
       return;
     }
@@ -742,29 +747,37 @@ export function MyAssignmentsPage() {
               role="region"
               onScroll={handleMobileHomeTimelineScroll}
             >
-              {mobileHomeTimelineItems.map((item) => (
-                <MobileHomeTimelineCard
-                  item={item}
-                  key={item.key}
-                  today={today}
-                  onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
-                />
+              {mobileHomeTimelinePages.map((page) => (
+                <div
+                  className="mobile-home-timeline-page"
+                  data-mobile-home-timeline-page
+                  key={page.map((item) => item.key).join(":")}
+                >
+                  {page.map((item) => (
+                    <MobileHomeTimelineCard
+                      item={item}
+                      key={item.key}
+                      today={today}
+                      onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
-            {mobileHomeTimelineItems.length > 1 ? (
+            {mobileHomeTimelinePages.length > 1 ? (
               <div className="mobile-home-timeline-pagination" aria-label="Position in der Einsatz-Timeline">
-                {mobileHomeTimelineItems.map((item, index) => (
+                {mobileHomeTimelinePages.map((page, index) => (
                   <button
                     aria-current={activeHomeTimelineIndex === index ? "true" : undefined}
-                    aria-label={`Einsatz ${index + 1} von ${mobileHomeTimelineItems.length} anzeigen`}
+                    aria-label={`Einsatzgruppe ${index + 1} von ${mobileHomeTimelinePages.length} anzeigen`}
                     className={activeHomeTimelineIndex === index ? "is-active" : ""}
-                    key={item.key}
+                    key={page.map((item) => item.key).join(":")}
                     type="button"
                     onClick={() => scrollMobileHomeTimelineTo(index)}
                   />
                 ))}
                 <span aria-live="polite">
-                  {activeHomeTimelineIndex + 1} / {mobileHomeTimelineItems.length}
+                  {activeHomeTimelineIndex + 1} / {mobileHomeTimelinePages.length}
                 </span>
               </div>
             ) : null}
@@ -957,8 +970,10 @@ function MobileHomeTimelineCard({
   const cardContent = (
     <>
       <span className={`mobile-home-timeline-date${isToday ? " is-today" : ""}`}>
-        {isToday ? <em>Heute</em> : null}
-        <strong>{weekdayLabel}</strong>
+        <span className="mobile-home-timeline-date-line">
+          {isToday ? <em>Heute</em> : null}
+          <strong>{weekdayLabel}</strong>
+        </span>
         <span>{dateLabel}</span>
         {item.dayCount > 1 ? <small>{item.dayCount} Einsatztage</small> : null}
       </span>
@@ -967,8 +982,10 @@ function MobileHomeTimelineCard({
           <HardHat size={22} />
         </span>
         <span className="mobile-home-timeline-copy">
-          <b>{assignment?.site.name ?? "Kein Einsatz geplant."}</b>
-          <small>{secondaryText}</small>
+          <b title={assignment?.site.name ?? "Kein Einsatz geplant."}>
+            {assignment?.site.name ?? "Kein Einsatz geplant."}
+          </b>
+          <small title={secondaryText}>{secondaryText}</small>
         </span>
         <span className="assignment-card-affordance">
           <ChevronRight aria-hidden="true" size={18} />
@@ -1311,6 +1328,14 @@ function buildMobileHomeTimelineItems(
     left.start.localeCompare(right.start)
     || left.order - right.order
   ));
+}
+
+function chunkMobileHomeTimelineItems(items: MobileHomeTimelineItem[]): MobileHomeTimelineItem[][] {
+  const pages: MobileHomeTimelineItem[][] = [];
+  for (let index = 0; index < items.length; index += MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE) {
+    pages.push(items.slice(index, index + MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE));
+  }
+  return pages;
 }
 
 function groupAssignmentsForLongView(assignments: MobileAssignment[], start: string, end: string): AssignmentRangeGroup[] {
