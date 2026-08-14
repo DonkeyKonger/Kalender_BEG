@@ -1190,15 +1190,11 @@ export const api = {
       search.set("active_only", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`, {
-      cache: "no-store",
-    });
+    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`);
   },
 
   async measurementTimesheet(siteId: number): Promise<MeasurementTimesheet> {
-    return request<MeasurementTimesheet>(`/sites/${siteId}/measurement-timesheet`, {
-      cache: "no-store",
-    });
+    return request<MeasurementTimesheet>(`/sites/${siteId}/measurement-timesheet`);
   },
 
   async hideMeasurementItem(siteId: number, measurementItemId: number): Promise<MeasurementItem> {
@@ -1230,9 +1226,7 @@ export const api = {
   },
 
   async siteMeasurementBatchItems(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
-    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`, {
-      cache: "no-store",
-    });
+    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`);
   },
 
   async siteMeasurementWorkers(siteId: number): Promise<MeasurementWorkerOption[]> {
@@ -1767,9 +1761,7 @@ export const api = {
   },
 
   async mobileMeasurementBatchItems(assignmentId: number, batchId: number): Promise<MobileMeasurementItem[]> {
-    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`, {
-      cache: "no-store",
-    });
+    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`);
   },
 
   async createMobileMeasurementFreeItem(

@@ -6797,8 +6797,11 @@ function getActiveMeasurementPositionGroupKey(groups: MeasurementPositionGroup[]
   if (currentKey && groups.some((group) => group.key === currentKey)) {
     return currentKey;
   }
-  const allPositionsGroup = groups.find((group) => group.kind === "all" && group.count > 0);
-  return allPositionsGroup?.key ?? groups.find((group) => group.count > 0)?.key ?? groups[0]?.key ?? null;
+  const capturedGroup = groups.find((group) => group.kind === "captured" && group.count > 0);
+  if (capturedGroup) {
+    return capturedGroup.key;
+  }
+  return groups.find((group) => group.kind !== "captured" && group.count > 0)?.key ?? groups[0]?.key ?? null;
 }
 
 type MeasurementPositionTreeNode = {
