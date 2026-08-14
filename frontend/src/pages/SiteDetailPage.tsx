@@ -1039,12 +1039,19 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const [bases, timesheet] = await Promise.all([
+      const selectedBatchId = selectedMeasurementBatch?.id ?? null;
+      const [bases, timesheet, refreshedBatchItems] = await Promise.all([
         api.measurementBases(site.id),
         api.measurementTimesheet(site.id),
+        selectedBatchId === null
+          ? Promise.resolve(null)
+          : api.siteMeasurementBatchItems(site.id, selectedBatchId),
       ]);
       setMeasurementBases(bases);
       setMeasurementTimesheet(timesheet);
+      if (refreshedBatchItems !== null) {
+        setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(refreshedBatchItems));
+      }
       setMeasurementBatches([]);
       setMeasurementLoaded(true);
       setMeasurementBatchesLoaded(false);
@@ -4182,12 +4189,11 @@ function MeasurementReviewPanel({
   }
 
   if (selectedBatch && !archiveMode) {
-    const itemsWithEntries = batchItems.filter((item) => item.entries.length > 0);
     const isFreePositionOnlyBatch = selectedBatch.position_mode === "BLANK";
     const isOfficeCreatedBatch = selectedBatch.origin === "OFFICE";
     const tableItems = isFreePositionOnlyBatch
       ? batchItems.filter(hasMeaningfulFreeMeasurementData)
-      : itemsWithEntries;
+      : batchItems;
     const isBilled = isMeasurementBatchBilled(selectedBatch.status);
     const isDraft = selectedBatch.status === "draft";
     const isReviewed = isMeasurementBatchReviewed(selectedBatch.status);
@@ -4272,7 +4278,7 @@ function MeasurementReviewPanel({
         {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
         {inlineError ? <div className="project-record-empty-state is-error"><strong>{inlineError}</strong></div> : null}
         {batchItemsLoading ? <div className="matrix-state">Aufmaßzeilen werden geladen...</div> : null}
-        {!batchItemsLoading && !isFreePositionOnlyBatch && itemsWithEntries.length === 0 ? (
+        {!batchItemsLoading && !isFreePositionOnlyBatch && batchItems.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
         ) : null}
         {!batchItemsLoading ? (

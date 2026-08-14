@@ -206,6 +206,31 @@ def parsed_timesheet() -> MeasurementTimesheetParseResult:
     )
 
 
+def parsed_timesheet_for(
+    *,
+    invoice_number: str,
+    position: str,
+    description: str,
+) -> MeasurementTimesheetParseResult:
+    return MeasurementTimesheetParseResult(
+        source_project_number="8007 / P250092",
+        source_invoice_number=invoice_number,
+        source_customer_name="ebm elektro-bau-montage GmbH",
+        items=[
+            ParsedMeasurementItem(
+                position=position,
+                description=description,
+                list_quantity=Decimal("10.00"),
+                unit="Stck",
+                minutes_per_unit=Decimal("10.00"),
+                list_minutes_total=Decimal("100.00"),
+                is_nep=False,
+                sort_order=1,
+            )
+        ],
+    )
+
+
 def test_measurement_archive_filename_uses_completion_date_site_name_and_number():
     site = Site(
         name="Schüchtermann Klinik",
@@ -308,6 +333,173 @@ def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypat
     assert len(all_items) == 2
     assert all_items[0].position == all_items[1].position
     assert all_items[0].measurement_base_id != all_items[1].measurement_base_id
+
+
+def test_appended_timesheets_extend_existing_batch_in_all_position_views(monkeypatch):
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType
+    from app.schemas.measurement import MeasurementEntryCreate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    parsed_by_content = {
+        b"main": parsed_timesheet_for(
+            invoice_number="MAIN-001",
+            position="1.01.10",
+            description="Position aus Hauptangebot",
+        ),
+        b"n1": parsed_timesheet_for(
+            invoice_number="N1-001",
+            position="N1.01.10",
+            description="Position aus Nachtrag 1",
+        ),
+        b"n2": parsed_timesheet_for(
+            invoice_number="N2-001",
+            position="N2.01.10",
+            description="Position aus Nachtrag 2",
+        ),
+    }
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda content: parsed_by_content[content],
+    )
+
+    service = MeasurementService(db)
+    _summary, main_items = service.import_timesheet(
+        site.id,
+        file_name="Hauptangebot.pdf",
+        pdf_content=b"main",
+        import_mode="append_existing",
+        measurement_base_id=base.id,
+    )
+
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max-append",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 6, 15),
+        end_date=date(2026, 6, 15),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add_all([user, assignment])
+    db.commit()
+    existing_batch = service.create_mobile_batch(
+        assignment_id=assignment.id,
+        current_user=user,
+    )
+
+    _summary, n1_items = service.import_timesheet(
+        site.id,
+        file_name="Nachtrag 1.pdf",
+        pdf_content=b"n1",
+        import_mode="append_existing",
+        measurement_base_id=base.id,
+    )
+    _summary, n2_items = service.import_timesheet(
+        site.id,
+        file_name="Nachtrag 2.pdf",
+        pdf_content=b"n2",
+        import_mode="append_existing",
+        measurement_base_id=base.id,
+    )
+
+    unrelated_base = SiteMeasurementBase(
+        site=site,
+        name="Unabhängiges Altangebot",
+        base_type="main_offer",
+        status="draft",
+        released_to_mobile=False,
+    )
+    unrelated_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=unrelated_base,
+        position="ALT.01.10",
+        description="Position aus unabhängigem Altangebot",
+        list_quantity=Decimal("1.00"),
+        unit="Stck",
+        minutes_per_unit=Decimal("5.00"),
+        list_minutes_total=Decimal("5.00"),
+        is_nep=False,
+        sort_order=1,
+    )
+    db.add_all([unrelated_base, unrelated_item])
+    db.commit()
+
+    expected_items = [main_items[0], n1_items[0], n2_items[0]]
+    expected_ids = [item.id for item in expected_items]
+    expected_base_ids = [item.measurement_base_id for item in expected_items]
+    expected_sort_orders = [item.sort_order for item in expected_items]
+    site_id = site.id
+    expected_base_id = base.id
+    existing_batch_id = existing_batch.id
+    assignment_id = assignment.id
+    user_id = user.id
+    unrelated_item_id = unrelated_item.id
+    n2_item_id = n2_items[0].id
+    engine = db.get_bind()
+    db.close()
+
+    reloaded_db = Session(engine)
+    reloaded_service = MeasurementService(reloaded_db)
+    reloaded_user = reloaded_db.get(User, user_id)
+    assert reloaded_user is not None
+
+    timesheet = reloaded_service.get_site_measurement_timesheet(site_id)
+    desktop_items = reloaded_service.list_site_batch_items(
+        site_id=site_id,
+        batch_id=existing_batch_id,
+    )
+    mobile_items = reloaded_service.list_mobile_batch_items(
+        assignment_id=assignment_id,
+        batch_id=existing_batch_id,
+        current_user=reloaded_user,
+    )
+
+    assert existing_batch.measurement_base_id == expected_base_id
+    assert expected_base_ids == [expected_base_id] * 3
+    assert expected_sort_orders == [1, 2, 3]
+    assert [row.position_id for row in timesheet.rows] == expected_ids
+    assert [item.id for item in desktop_items] == expected_ids
+    assert [item.id for item in mobile_items] == expected_ids
+    assert len(set(expected_ids)) == 3
+    assert unrelated_item_id not in {row.position_id for row in timesheet.rows}
+    assert unrelated_item_id not in {item.id for item in desktop_items}
+    assert unrelated_item_id not in {item.id for item in mobile_items}
+
+    entry = reloaded_service.create_mobile_entry(
+        assignment_id=assignment_id,
+        batch_id=existing_batch_id,
+        measurement_item_id=n2_item_id,
+        current_user=reloaded_user,
+        payload=MeasurementEntryCreate(
+            area_or_comment="EG",
+            quantity=Decimal("2.50"),
+        ),
+    )
+    reloaded_mobile_items = reloaded_service.list_mobile_batch_items(
+        assignment_id=assignment_id,
+        batch_id=existing_batch_id,
+        current_user=reloaded_user,
+    )
+    n2_mobile_item = next(item for item in reloaded_mobile_items if item.id == n2_item_id)
+
+    assert entry.measurement_item_id == n2_item_id
+    assert n2_mobile_item.reported_quantity == Decimal("2.50")
+    reloaded_db.close()
 
 
 def test_mobile_free_measurement_item_is_stored_on_batch_base():
