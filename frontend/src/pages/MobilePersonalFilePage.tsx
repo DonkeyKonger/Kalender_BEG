@@ -236,16 +236,16 @@ export function MobilePersonalFileAbsencePage({
                 <strong>{formatDays(data.remaining_vacation_days)}</strong>
               </div>
               <div>
-                <span>Jahresurlaub</span>
                 <strong>{formatDays(data.total_vacation_days)}</strong>
+                <span>Jahresurlaub</span>
               </div>
               <div>
-                <span>Genommener Urlaub</span>
-                <strong>{formatDays(data.taken_vacation_days)}</strong>
+                <strong>− {formatDays(data.taken_vacation_days)}</strong>
+                <span>Genommen</span>
               </div>
               <div>
-                <span>Resturlaub {data.year - 1}</span>
-                <strong>{formatDays(data.vacation_carryover_days)}</strong>
+                <strong>+ {formatDays(data.vacation_carryover_days)}</strong>
+                <span>Übertrag {data.year - 1}</span>
               </div>
             </section>
           ) : (
@@ -259,20 +259,26 @@ export function MobilePersonalFileAbsencePage({
           )}
 
           {data.weeks.length ? (
-            <div className="mobile-personal-absence-weeks">
+            <div className={`mobile-personal-absence-weeks${isVacation ? " is-vacation" : ""}`}>
               {data.weeks.map((week) => (
                 <section className="mobile-personal-absence-week" key={`${week.iso_year}-${week.iso_week}`}>
-                  <header>
-                    <strong>KW {week.iso_week}</strong>
-                    <span>{formatCompactDateRange(week.week_start, week.week_end)}</span>
-                  </header>
+                  {!isVacation ? (
+                    <header>
+                      <strong>KW {week.iso_week}</strong>
+                      <span>{formatCompactDateRange(week.week_start, week.week_end)}</span>
+                    </header>
+                  ) : null}
                   <div>
                     {week.entries.map((entry) => (
                       <article
                         className={`mobile-personal-absence-entry is-${entry.absence_type}`}
                         key={`${entry.source_id}-${week.iso_year}-${week.iso_week}`}
                       >
-                        <span>{entry.absence_type === "vacation" ? "Urlaub" : "Krank"}</span>
+                        {isVacation ? (
+                          <span className="mobile-personal-absence-entry-week">KW {week.iso_week}</span>
+                        ) : (
+                          <span className="mobile-personal-absence-entry-type">Krank</span>
+                        )}
                         <strong>{formatMobileAbsenceDateRange(entry.start_date, entry.end_date)}</strong>
                         <small>{formatDays(entry.day_count)}</small>
                       </article>

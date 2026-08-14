@@ -6493,6 +6493,10 @@ button.person-chip:focus-visible {
   gap: 12px;
 }
 
+.mobile-personal-absence-weeks.is-vacation {
+  gap: 7px;
+}
+
 .mobile-personal-absence-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6599,7 +6603,7 @@ button.person-chip:focus-visible {
   background: #dc2626;
 }
 
-.mobile-personal-absence-entry > span {
+.mobile-personal-absence-entry-type {
   justify-self: start;
   border-radius: 5px;
   background: #e7f7ed;
@@ -6609,9 +6613,17 @@ button.person-chip:focus-visible {
   font-weight: 850;
 }
 
-.mobile-personal-absence-entry.is-sick > span {
+.mobile-personal-absence-entry.is-sick .mobile-personal-absence-entry-type {
   background: #fff1f0;
   color: #9f1d14;
+}
+
+.mobile-personal-absence-entry-week {
+  justify-self: start;
+  color: #243f5f;
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.15;
 }
 
 .mobile-personal-absence-entry > strong {
