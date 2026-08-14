@@ -664,6 +664,14 @@ button:disabled {
     background: #f5f8fc;
   }
 
+  .app-shell.is-mobile-workspace .app-main:has(.mobile-home-overview-header) > .mobile-appshell-actions {
+    display: none;
+  }
+
+  .app-shell.is-mobile-workspace .app-main:has(.mobile-home-overview-header) > .content-area {
+    padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 10px));
+  }
+
   .app-shell.is-mobile-workspace .content-area {
     overflow: visible;
     padding-bottom: 0;
@@ -5625,23 +5633,23 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
 .mobile-home-actions .icon-button {
-  flex: 1 1 0;
   justify-content: center;
-  min-height: 48px;
-  border-color: #d8e3ef;
-  border-radius: 10px;
-  background: #ffffff;
+  min-width: 0;
+  min-height: 42px;
+  border-color: #d4dfeb;
+  border-radius: 11px;
+  background: #f8fafc;
   color: #24364f;
-  padding: 10px 12px;
-  font-size: 0.86rem;
-  box-shadow: 0 7px 16px rgb(18 29 52 / 5%);
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  box-shadow: none;
 }
 
 .mobile-subpage-title {
@@ -5663,21 +5671,52 @@ button.person-chip:focus-visible {
 
 .mobile-home-overview-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding: 2px 2px 4px;
+  gap: 10px;
+  border: 1px solid #d8e3ef;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
 }
 
-.mobile-home-overview-header > div {
+.mobile-home-identity-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-home-user-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: #eaf2fb;
+  color: #16467b;
+}
+
+.mobile-home-identity-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #52627a;
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-home-title-copy {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 5px;
 }
 
 .mobile-home-overview-header h1,
-.mobile-home-overview-header p,
-.mobile-home-overview-header small,
+.mobile-home-meta-row,
 .mobile-section-heading h2,
 .mobile-section-heading span,
 .mobile-focus-card p,
@@ -5698,31 +5737,41 @@ button.person-chip:focus-visible {
 
 .mobile-home-overview-header h1 {
   color: #111827;
-  font-size: clamp(1.45rem, 6vw, 1.75rem);
+  font-size: clamp(1.4rem, 6vw, 1.7rem);
   line-height: 1.12;
   letter-spacing: 0;
 }
 
-.mobile-home-overview-header p {
+.mobile-home-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 5px 12px;
+  min-width: 0;
   color: #718097;
-  font-size: 0.88rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
+  flex-wrap: wrap;
 }
 
-.mobile-home-overview-header small {
-  color: #8a97aa;
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1.3;
+.mobile-home-meta-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mobile-home-meta-row span + span::before {
+  content: "·";
+  color: #a0acbc;
+  margin-right: 2px;
 }
 
 .mobile-home-status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  align-self: start;
-  margin-top: 1px;
+  justify-self: end;
   border-radius: 999px;
   background: #dcfce7;
   color: #16733d;
@@ -6855,13 +6904,13 @@ button.person-chip:focus-visible {
 }
 
 @media (max-width: 350px) {
-  .mobile-home-overview-header {
-    grid-template-columns: 1fr;
+  .mobile-home-meta-row {
+    display: grid;
+    gap: 3px;
   }
 
-  .mobile-home-status-badge {
-    justify-self: start;
-    margin-left: 0;
+  .mobile-home-meta-row span + span::before {
+    content: none;
   }
 
   .mobile-personal-stat-grid {
@@ -7418,14 +7467,7 @@ button.person-chip:focus-visible {
 
 @media (max-width: 340px) {
   .mobile-home-overview-header {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .mobile-home-status-badge {
-    justify-self: start;
-    margin-top: 1px;
-    margin-left: 0;
+    padding: 12px;
   }
 }
 

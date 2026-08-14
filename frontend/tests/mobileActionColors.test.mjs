@@ -93,7 +93,7 @@ test("mobile home stays compact across phone and tablet viewports", () => {
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-overview-header \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-overview-header \{[^}]*padding:\s*12px;/s,
   );
   assert.match(
     styles,
@@ -119,6 +119,27 @@ test("mobile home follows the personal-file hierarchy and uses a construction ic
   assert.equal(pageSource.match(/<HardHat aria-hidden="true"/g)?.length, 3);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
+});
+
+
+test("mobile home groups identity, status, metadata, and actions in one rounded header", () => {
+  assert.match(
+    pageSource,
+    /className="mobile-home-overview-header"[\s\S]*className="mobile-home-identity-row"[\s\S]*user\?\.display_name[\s\S]*className="mobile-home-title-copy"[\s\S]*Aktualisiert \{formatTime\(loadedAt\)\}[\s\S]*className="mobile-home-actions"/,
+  );
+  assert.doesNotMatch(pageSource, /Persönlicher Bereich/i);
+  assert.match(
+    styles,
+    /\.mobile-home-overview-header \{[^}]*border-radius:\s*16px;[^}]*background:\s*#ffffff;[^}]*padding:\s*14px;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-actions \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s,
+  );
+  assert.match(
+    styles,
+    /\.app-shell\.is-mobile-workspace \.app-main:has\(\.mobile-home-overview-header\) > \.mobile-appshell-actions \{[^}]*display:\s*none;/s,
+  );
 });
 
 

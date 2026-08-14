@@ -636,30 +636,38 @@ export function MyAssignmentsPage() {
   return (
     <section className="mobile-page mobile-home-page">
       <header className="mobile-home-overview-header">
-        <div>
-          <h1>Meine Übersicht</h1>
-          <p>{formatHomeOverviewDate(today)}</p>
-          {loadedAt ? (
-            <small>
-              Stand: {formatDateTime(loadedAt)}{isFromCache ? " · Lesecache" : ""}
-            </small>
-          ) : null}
+        <div className="mobile-home-identity-row">
+          <span className="mobile-home-user-icon" aria-hidden="true">
+            <UserRound size={16} />
+          </span>
+          <strong>{user?.display_name || "Mitarbeiter"}</strong>
+          <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
+            {isFromCache ? "Offline" : "Online"}
+          </span>
         </div>
-        <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
-          {isFromCache ? "Offline" : "Online"}
-        </span>
-      </header>
 
-      <div className="mobile-home-actions" aria-label="Startseitenaktionen">
-        <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
-          <RefreshCcw aria-hidden="true" size={17} />
-          <span>Aktualisieren</span>
-        </button>
-        <button className="icon-button secondary" type="button" onClick={() => void handleLogout()}>
-          <LogOut aria-hidden="true" size={17} />
-          <span>Abmelden</span>
-        </button>
-      </div>
+        <div className="mobile-home-title-copy">
+          <h1>Meine Übersicht</h1>
+          <div className="mobile-home-meta-row">
+            <span>
+              <CalendarClock aria-hidden="true" size={14} />
+              {formatHomeOverviewDate(today)}
+            </span>
+            {loadedAt ? <span>Aktualisiert {formatTime(loadedAt)}</span> : null}
+          </div>
+        </div>
+
+        <div className="mobile-home-actions" aria-label="Startseitenaktionen">
+          <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
+            <RefreshCcw aria-hidden="true" size={17} />
+            <span>Aktualisieren</span>
+          </button>
+          <button className="icon-button secondary" type="button" onClick={() => void handleLogout()}>
+            <LogOut aria-hidden="true" size={17} />
+            <span>Abmelden</span>
+          </button>
+        </div>
+      </header>
 
       {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}
       {isLoading && <div className="empty-panel">Einsätze werden geladen...</div>}
@@ -1413,6 +1421,10 @@ function formatHomeOverviewDate(date: string): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function formatOptionalDateTime(value: string | null | undefined): string {
