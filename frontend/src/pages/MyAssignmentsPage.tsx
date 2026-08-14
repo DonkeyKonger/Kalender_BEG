@@ -970,12 +970,8 @@ function MobileHomeTimelineCard({
   const cardContent = (
     <>
       <span className={`mobile-home-timeline-date${isToday ? " is-today" : ""}`}>
-        <span className="mobile-home-timeline-date-line">
-          {isToday ? <em>Heute</em> : null}
-          <strong>{weekdayLabel}</strong>
-        </span>
-        <span>{dateLabel}</span>
-        {item.dayCount > 1 ? <small>{item.dayCount} Einsatztage</small> : null}
+        {isToday ? <em>Heute</em> : <strong>{weekdayLabel}</strong>}
+        <span>{isToday ? `${weekdayLabel} ${dateLabel}` : dateLabel}</span>
       </span>
       <span className="mobile-home-timeline-main">
         <span className="mobile-home-assignment-icon" aria-hidden="true">
@@ -986,6 +982,9 @@ function MobileHomeTimelineCard({
             {assignment?.site.name ?? "Kein Einsatz geplant."}
           </b>
           <small title={secondaryText}>{secondaryText}</small>
+          {item.dayCount > 1 ? (
+            <span className="mobile-home-timeline-duration">{item.dayCount} Einsatztage</span>
+          ) : null}
         </span>
         <span className="assignment-card-affordance">
           <ChevronRight aria-hidden="true" size={18} />

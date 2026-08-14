@@ -146,23 +146,23 @@ test("mobile home groups identity, status, metadata, and actions in one rounded 
 test("the assignment timeline scales its cards and copy for narrow mobile viewports", () => {
   assert.match(
     styles,
-    /\.mobile-home-overview-panel \.mobile-home-assignment-icon \{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border-radius:\s*12px;/s,
+    /\.mobile-home-timeline-card \.mobile-home-assignment-icon \{[^}]*width:\s*clamp\(48px, 14vw, 54px\);[^}]*height:\s*clamp\(48px, 14vw, 54px\);[^}]*border-radius:\s*12px;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*min-height:\s*clamp\(148px, 42vw, 174px\);/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(100px, 28vw, 116px\), auto\);[^}]*align-content:\s*start;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(clamp\(66px, 20vw, 86px\), auto\) minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*padding:\s*clamp\(7px, 2\.4vw, 10px\);/s,
+    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*clamp\(85px, 23vw, 95px\) minmax\(0, 1fr\);[^}]*min-height:\s*clamp\(100px, 28vw, 116px\);[^}]*padding:\s*clamp\(10px, 3vw, 14px\);/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-copy b \{[^}]*font-size:\s*clamp\(0\.82rem, 4vw, 0\.98rem\);/s,
+    /\.mobile-home-timeline-copy b \{[^}]*display:\s*-webkit-box;[^}]*font-size:\s*clamp\(0\.92rem, 4\.4vw, 1\.05rem\);[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/s,
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*min-height:\s*152px;[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(60px, 68px\) minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*padding:\s*6px 7px;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(96px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(76px, 82px\) minmax\(0, 1fr\);[^}]*min-height:\s*96px;[^}]*padding:\s*8px;/s,
   );
 });
 
@@ -172,13 +172,14 @@ test("the home assignment block is a snap timeline with grouped consecutive assi
   assert.match(pageSource, /MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\s*=\s*2/);
   assert.match(pageSource, /function chunkMobileHomeTimelineItems\([\s\S]*items\.slice\(index, index \+ MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\)/);
   assert.match(pageSource, /className="mobile-home-timeline-pagination"[\s\S]*scrollMobileHomeTimelineTo\(index\)/);
+  assert.match(pageSource, /className="mobile-home-timeline-copy"[\s\S]*mobile-home-timeline-duration[\s\S]*\{item\.dayCount\} Einsatztage/);
   assert.match(
     styles,
-    /\.mobile-home-timeline-track \{[^}]*grid-auto-columns:\s*calc\(100% - clamp\(24px, 8vw, 42px\)\);[^}]*overflow-x:\s*auto;[^}]*overscroll-behavior-inline:\s*contain;[^}]*scroll-snap-type:\s*x mandatory;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s,
+    /\.mobile-home-timeline-track \{[^}]*grid-auto-columns:\s*calc\(100% - clamp\(8px, 3vw, 14px\)\);[^}]*overflow-x:\s*auto;[^}]*overscroll-behavior-inline:\s*contain;[^}]*scroll-snap-type:\s*x mandatory;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(100px, 28vw, 116px\), auto\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
   );
 });
 

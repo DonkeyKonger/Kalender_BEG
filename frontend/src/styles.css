@@ -5843,7 +5843,7 @@ button.person-chip:focus-visible {
 .mobile-home-timeline-track {
   position: relative;
   display: grid;
-  grid-auto-columns: calc(100% - clamp(24px, 8vw, 42px));
+  grid-auto-columns: calc(100% - clamp(8px, 3vw, 14px));
   grid-auto-flow: column;
   gap: 10px;
   min-width: 0;
@@ -5864,26 +5864,26 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-page {
   display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: clamp(7px, 2.5vw, 10px);
+  grid-auto-rows: minmax(clamp(100px, 28vw, 116px), auto);
+  align-content: start;
+  gap: clamp(8px, 2.5vw, 12px);
   min-width: 0;
-  min-height: clamp(148px, 42vw, 174px);
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
 
 .mobile-home-timeline-card {
   display: grid;
-  grid-template-columns: minmax(clamp(66px, 20vw, 86px), auto) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(7px, 2.5vw, 11px);
+  grid-template-columns: clamp(85px, 23vw, 95px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(10px, 3vw, 14px);
   min-width: 0;
-  min-height: 0;
+  min-height: clamp(100px, 28vw, 116px);
   border: 1px solid #cfdaea;
   border-radius: 12px;
   background: #f9fbfe;
   color: inherit;
-  padding: clamp(7px, 2.4vw, 10px);
+  padding: clamp(10px, 3vw, 14px);
   font: inherit;
   text-align: left;
   text-decoration: none;
@@ -5894,7 +5894,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-card.is-today {
   border-color: #b8cce4;
-  background: #f2f7fd;
+  background: #f9fbfe;
 }
 
 .mobile-home-timeline-card:hover,
@@ -5909,65 +5909,66 @@ button.person-chip:focus-visible {
 .mobile-home-timeline-date {
   display: grid;
   align-content: center;
-  gap: 3px;
+  justify-items: start;
+  gap: 5px;
+  width: 100%;
   min-width: 0;
+  border: 1px solid #d8e3ef;
+  border-radius: 10px;
+  background: #f3f6fa;
   color: #52627a;
-  font-size: clamp(0.68rem, 3.2vw, 0.78rem);
+  padding: 8px 9px;
+  font-size: clamp(0.7rem, 3.2vw, 0.8rem);
   font-style: normal;
   font-weight: 850;
   line-height: 1.15;
 }
 
-.mobile-home-timeline-date-line {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  flex-wrap: wrap;
+.mobile-home-timeline-date.is-today {
+  border-color: #17436f;
+  background: #1d4f82;
+  color: #ffffff;
 }
 
 .mobile-home-timeline-date em {
   justify-self: start;
-  border-radius: 999px;
-  background: #1d4f82;
   color: #ffffff;
-  padding: 3px 5px;
-  font-size: clamp(0.56rem, 2.6vw, 0.62rem);
+  font-size: clamp(0.66rem, 3vw, 0.74rem);
   font-style: normal;
   font-weight: 900;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .mobile-home-timeline-date strong {
   color: #143c6d;
-  font-size: clamp(0.74rem, 3.5vw, 0.84rem);
+  font-size: clamp(0.72rem, 3.4vw, 0.82rem);
   font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .mobile-home-timeline-date > span {
   color: #64748b;
 }
 
-.mobile-home-timeline-date small {
-  justify-self: start;
-  border-radius: 999px;
-  background: #e7eff9;
-  color: #315f91;
-  padding: 3px 5px;
-  font-size: clamp(0.56rem, 2.7vw, 0.62rem);
-  font-weight: 850;
-  line-height: 1;
-  white-space: nowrap;
+.mobile-home-timeline-date.is-today > span {
+  color: #ffffff;
 }
 
 .mobile-home-timeline-main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(7px, 2.5vw, 10px);
+  gap: clamp(8px, 2.5vw, 11px);
   min-width: 0;
+}
+
+.mobile-home-timeline-card .mobile-home-assignment-icon {
+  width: clamp(48px, 14vw, 54px);
+  height: clamp(48px, 14vw, 54px);
+  border-radius: 12px;
 }
 
 .mobile-home-timeline-copy {
@@ -5983,14 +5984,15 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-copy b {
-  display: block;
+  display: -webkit-box;
   overflow: hidden;
   color: #111827;
-  font-size: clamp(0.82rem, 4vw, 0.98rem);
+  font-size: clamp(0.92rem, 4.4vw, 1.05rem);
   font-weight: 850;
-  line-height: 1.12;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.14;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .mobile-home-timeline-copy small {
@@ -6001,6 +6003,18 @@ button.person-chip:focus-visible {
   font-weight: 760;
   line-height: 1.2;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-home-timeline-duration {
+  justify-self: start;
+  border-radius: 999px;
+  background: #e7eff9;
+  color: #315f91;
+  padding: 3px 6px;
+  font-size: clamp(0.58rem, 2.7vw, 0.64rem);
+  font-weight: 850;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -7680,23 +7694,19 @@ button.person-chip:focus-visible {
 
   .mobile-home-timeline-page {
     gap: 6px;
-    min-height: 152px;
+    grid-auto-rows: minmax(96px, auto);
   }
 
   .mobile-home-timeline-card {
-    grid-template-columns: minmax(60px, 68px) minmax(0, 1fr);
-    gap: 6px;
-    min-height: 0;
-    padding: 6px 7px;
+    grid-template-columns: minmax(76px, 82px) minmax(0, 1fr);
+    gap: 8px;
+    min-height: 96px;
+    padding: 8px;
   }
 
   .mobile-home-timeline-card .mobile-home-assignment-icon {
-    width: 34px;
-    height: 34px;
-  }
-
-  .mobile-home-timeline-date small {
-    white-space: normal;
+    width: 44px;
+    height: 44px;
   }
 }
 
