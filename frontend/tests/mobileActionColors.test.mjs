@@ -118,3 +118,15 @@ test("mobile home follows the personal-file hierarchy and uses a construction ic
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
 });
+
+
+test("quick-action labels stay on one line without mid-word wrapping", () => {
+  assert.match(
+    styles,
+    /\.mobile-home-quick-actions \.mobile-action-card\.is-compact strong \{[^}]*font-size:\s*clamp\(10\.5px, 3vw, 13\.5px\);[^}]*overflow-wrap:\s*normal;[^}]*white-space:\s*nowrap;[^}]*word-break:\s*normal;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*gap:\s*clamp\(4px, 1\.5vw, 7px\);[^}]*padding:\s*8px clamp\(6px, 2vw, 9px\);/s,
+  );
+});

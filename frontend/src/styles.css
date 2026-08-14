@@ -7087,9 +7087,21 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-quick-actions .mobile-action-card {
+  gap: clamp(4px, 1.5vw, 7px);
   min-height: 78px;
   border-radius: 14px;
-  padding: 12px;
+  padding: 8px clamp(6px, 2vw, 9px);
+}
+
+.mobile-home-quick-actions .mobile-action-icon {
+  width: clamp(26px, 7.5vw, 32px);
+  height: clamp(26px, 7.5vw, 32px);
+  padding: clamp(7px, 2vw, 9px);
+}
+
+.mobile-home-quick-actions .mobile-action-chevron {
+  width: 14px;
+  height: 14px;
 }
 
 .mobile-home-secondary-actions {
@@ -7110,7 +7122,14 @@ button.person-chip:focus-visible {
 
 .mobile-action-card.is-compact strong {
   line-height: 1.2;
-  overflow-wrap: anywhere;
+}
+
+.mobile-home-quick-actions .mobile-action-card.is-compact strong {
+  font-size: clamp(10.5px, 3vw, 13.5px);
+  letter-spacing: -0.015em;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .mobile-focus-card {
