@@ -259,26 +259,16 @@ export function MobilePersonalFileAbsencePage({
           )}
 
           {data.weeks.length ? (
-            <div className={`mobile-personal-absence-weeks${isVacation ? " is-vacation" : ""}`}>
+            <div className="mobile-personal-absence-weeks">
               {data.weeks.map((week) => (
                 <section className="mobile-personal-absence-week" key={`${week.iso_year}-${week.iso_week}`}>
-                  {!isVacation ? (
-                    <header>
-                      <strong>KW {week.iso_week}</strong>
-                      <span>{formatCompactDateRange(week.week_start, week.week_end)}</span>
-                    </header>
-                  ) : null}
                   <div>
                     {week.entries.map((entry) => (
                       <article
                         className={`mobile-personal-absence-entry is-${entry.absence_type}`}
                         key={`${entry.source_id}-${week.iso_year}-${week.iso_week}`}
                       >
-                        {isVacation ? (
-                          <span className="mobile-personal-absence-entry-week">KW {week.iso_week}</span>
-                        ) : (
-                          <span className="mobile-personal-absence-entry-type">Krank</span>
-                        )}
+                        <span className="mobile-personal-absence-entry-week">KW {week.iso_week}</span>
                         <strong>{formatMobileAbsenceDateRange(entry.start_date, entry.end_date)}</strong>
                         <small>{formatDays(entry.day_count)}</small>
                       </article>
@@ -706,19 +696,6 @@ function formatMobileAbsenceDateRange(startDate: string, endDate: string): strin
     return formatGermanDate(startDate);
   }
   return `${formatGermanDate(startDate)} – ${formatGermanDate(endDate)}`;
-}
-
-
-function formatCompactDateRange(startDate: string, endDate: string): string {
-  const [startYear, startMonth, startDay] = startDate.split("-");
-  const [endYear, endMonth, endDay] = endDate.split("-");
-  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
-    return formatMobileAbsenceDateRange(startDate, endDate);
-  }
-  if (startYear === endYear) {
-    return `${startDay}.${startMonth}. – ${endDay}.${endMonth}.${endYear}`;
-  }
-  return `${startDay}.${startMonth}.${startYear} – ${endDay}.${endMonth}.${endYear}`;
 }
 
 

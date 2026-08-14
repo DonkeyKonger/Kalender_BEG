@@ -73,9 +73,9 @@ test("vacation and sickness cards open read-only weekly details", () => {
   assert.match(pageSource, /aria-label="Krankheitsdetails öffnen"[\s\S]*navigate\("\/me\/personal-file\/sickness"\)/);
   assert.match(pageSource, /export function MobilePersonalFileAbsencePage/);
   assert.match(pageSource, /data\.weeks\.map/);
-  assert.match(pageSource, /KW \{week\.iso_week\}/);
-  assert.match(pageSource, /\{!isVacation \? \([\s\S]*week\.week_start, week\.week_end/);
   assert.match(pageSource, /mobile-personal-absence-entry-week[\s\S]*KW \{week\.iso_week\}/);
+  assert.doesNotMatch(pageSource, /formatCompactDateRange/);
+  assert.doesNotMatch(pageSource, /mobile-personal-absence-entry-type/);
   assert.match(pageSource, /entry\.day_count/);
   assert.match(pageSource, /− \{formatDays\(data\.taken_vacation_days\)\}/);
   assert.match(pageSource, /\+ \{formatDays\(data\.vacation_carryover_days\)\}/);
@@ -89,10 +89,9 @@ test("vacation and sickness cards open read-only weekly details", () => {
 test("absence details use the established green and red status colors without horizontal scrolling", () => {
   assert.match(styles, /\.mobile-personal-absence-entry::before \{[^}]*background:\s*#16a34a/s);
   assert.match(styles, /\.mobile-personal-absence-entry\.is-sick::before \{[^}]*background:\s*#dc2626/s);
-  assert.match(styles, /\.mobile-personal-absence-entry-type \{[^}]*background:\s*#e7f7ed;[^}]*color:\s*#126b36/s);
-  assert.match(styles, /\.mobile-personal-absence-entry\.is-sick \.mobile-personal-absence-entry-type \{[^}]*background:\s*#fff1f0;[^}]*color:\s*#9f1d14/s);
   assert.match(styles, /\.mobile-personal-absence-entry-week \{[^}]*color:\s*#243f5f/s);
-  assert.match(styles, /\.mobile-personal-absence-weeks\.is-vacation \{[^}]*gap:\s*7px/s);
+  assert.match(styles, /\.mobile-personal-absence-weeks \{[^}]*gap:\s*7px/s);
+  assert.doesNotMatch(styles, /mobile-personal-absence-entry-type/);
   assert.doesNotMatch(styles, /\.mobile-personal-absence-(?:content|weeks|week|entry)[^{]*\{[^}]*overflow-x:\s*(?:auto|scroll)/s);
   assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation \{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
 });
