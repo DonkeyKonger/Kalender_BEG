@@ -13,16 +13,17 @@ const expectedAssignments = [
   ["FileText", "time", "Lohnzeit erfassen"],
   ["Plane", "vacation", "Urlaubsantrag"],
   ["HeartPulse", "sickness", "Krankmeldung"],
-  ["CalendarClock", "deployments", "Alle Einsätze anzeigen"],
   ["UserCircle", "profile", "Persönliche Akte"],
   ["Settings", "settings", "Einstellungen"],
 ];
+
+const expectedTones = ["time", "vacation", "sickness", "deployments", "profile", "settings"];
 
 
 test("mobile home actions use the semantic color variants", () => {
   for (const [icon, tone, title] of expectedAssignments) {
     const actionPattern = new RegExp(
-      `<PlaceholderAction\\s+icon=\\{${icon}\\}\\s+tone="${tone}"\\s+title="${title}"`,
+      `<PlaceholderAction[\\s\\S]*?icon=\\{${icon}\\}[\\s\\S]*?tone="${tone}"[\\s\\S]*?title="${title}"`,
     );
     assert.match(pageSource, actionPattern);
   }
@@ -32,7 +33,7 @@ test("mobile home actions use the semantic color variants", () => {
 
 
 test("mobile action colors are centralized as semantic design tokens", () => {
-  for (const [, tone] of expectedAssignments) {
+  for (const tone of expectedTones) {
     assert.match(styles, new RegExp(`--mobile-action-${tone}-icon:`));
     assert.match(styles, new RegExp(`--mobile-action-${tone}-background:`));
     assert.match(styles, new RegExp(`--mobile-action-${tone}-border:`));
@@ -74,9 +75,13 @@ test("mobile home keeps every action reachable below browser safe areas", () => 
     styles,
     /\.mobile-action-list \{[^}]*padding-bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/s,
   );
-  assert.doesNotMatch(
+  assert.match(
     styles,
-    /\.app-shell\.is-mobile-workspace \.mobile-action-list,[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
+    /\.mobile-home-quick-actions \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-secondary-actions \{[^}]*padding-bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/s,
   );
 });
 
@@ -88,7 +93,7 @@ test("mobile home stays compact across phone and tablet viewports", () => {
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-title-card \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-overview-header \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
   );
   assert.match(
     styles,
@@ -98,7 +103,18 @@ test("mobile home stays compact across phone and tablet viewports", () => {
 
 
 test("mobile home actions keep the established destinations and compact copy", () => {
-  assert.match(pageSource, /title="Alle Einsätze anzeigen"\s+text="Gesamte Einsatzübersicht öffnen\."\s+onOpen=\{\(\) => setActiveScreen\("assignments"\)\}/);
+  assert.match(pageSource, /className="mobile-home-all-assignments-button"[\s\S]*title="Alle Einsätze anzeigen"[\s\S]*onClick=\{\(\) => setActiveScreen\("assignments"\)\}/);
   assert.match(pageSource, /title="Persönliche Akte"\s+text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen\."\s+onOpen=\{\(\) => navigate\("\/me\/personal-file"\)\}/);
   assert.match(pageSource, /title="Einstellungen"\s+text="App-Einstellungen und persönliche Optionen\."\s+onOpen=\{\(\) => setActiveScreen\("settings"\)\}/);
+});
+
+
+test("mobile home follows the personal-file hierarchy and uses a construction icon", () => {
+  assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
+  assert.match(pageSource, /className="mobile-home-overview-panel is-featured"[\s\S]*>Nächster Einsatz<\/h2>/);
+  assert.match(pageSource, /className="mobile-home-overview-panel is-upcoming"[\s\S]*>Weitere Einsätze<\/h2>/);
+  assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
+  assert.equal(pageSource.match(/<HardHat aria-hidden="true"/g)?.length, 3);
+  assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
+  assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
 });

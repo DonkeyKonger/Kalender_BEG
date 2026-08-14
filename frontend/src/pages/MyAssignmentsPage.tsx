@@ -2,8 +2,8 @@ import {
   ArrowLeft,
   CalendarClock,
   ChevronRight,
-  Clock,
   FileText,
+  HardHat,
   HeartPulse,
   LogOut,
   MapPin,
@@ -476,8 +476,6 @@ export function MyAssignmentsPage() {
   const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
-  const greetingName = getGreetingName(user?.display_name || user?.username || "");
-
   useMobileScrollReset(activeScreen, activeScreen !== "home");
 
   if (activeScreen === "assignments") {
@@ -637,62 +635,82 @@ export function MyAssignmentsPage() {
 
   return (
     <section className="mobile-page mobile-home-page">
-      <div className="mobile-home-actions" aria-label="Startseitenaktionen">
-        <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
-          <RefreshCcw aria-hidden="true" size={17} />
-          <span>Aktualisieren</span>
-        </button>
-        <button className="icon-button" type="button" onClick={() => void handleLogout()}>
-          <LogOut aria-hidden="true" size={17} />
-          <span>Abmelden</span>
-        </button>
-      </div>
-
-      <header className="mobile-home-title-card">
-        <div className="mobile-home-title-main">
-          <span className="mobile-home-hero-icon"><CalendarClock aria-hidden="true" size={25} /></span>
-          <div>
-            <h1>Baustellenkalender</h1>
-            {loadedAt ? (
-              <p className="mobile-home-stand">
-                <Clock aria-hidden="true" size={15} />
-                <span>Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}</span>
-              </p>
-            ) : null}
-            <p className="mobile-home-greeting">Hallo {greetingName}</p>
-          </div>
+      <header className="mobile-home-overview-header">
+        <div>
+          <h1>Meine Übersicht</h1>
+          <p>{formatHomeOverviewDate(today)}</p>
+          {loadedAt ? (
+            <small>
+              Stand: {formatDateTime(loadedAt)}{isFromCache ? " · Lesecache" : ""}
+            </small>
+          ) : null}
         </div>
         <span className={isFromCache ? "mobile-home-status-badge is-cache" : "mobile-home-status-badge"}>
           {isFromCache ? "Offline" : "Online"}
         </span>
       </header>
 
+      <div className="mobile-home-actions" aria-label="Startseitenaktionen">
+        <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
+          <RefreshCcw aria-hidden="true" size={17} />
+          <span>Aktualisieren</span>
+        </button>
+        <button className="icon-button secondary" type="button" onClick={() => void handleLogout()}>
+          <LogOut aria-hidden="true" size={17} />
+          <span>Abmelden</span>
+        </button>
+      </div>
+
       {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}
       {isLoading && <div className="empty-panel">Einsätze werden geladen...</div>}
 
       {!isLoading && (
         <>
-          <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Nächste Einsätze</h2>
-            </div>
-            <div className="mobile-home-assignment-group">
-              {mobileHomeDays.map((date) => (
+          <section className="mobile-home-overview-panel is-featured" aria-labelledby="mobile-home-next-assignment-title">
+            <h2 id="mobile-home-next-assignment-title">Nächster Einsatz</h2>
+            {mobileHomeDays.slice(0, 1).map((date) => (
+              <DayFocusCard
+                date={date}
+                label={date === today ? "Heute" : formatWeekday(date)}
+                assignments={dailyByDate.get(date) ?? []}
+                key={date}
+                onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
+              />
+            ))}
+          </section>
+
+          <section className="mobile-home-overview-panel is-upcoming" aria-labelledby="mobile-home-upcoming-title">
+            <h2 id="mobile-home-upcoming-title">Weitere Einsätze</h2>
+            <div className="mobile-home-upcoming-list">
+              {mobileHomeDays.slice(1).map((date) => (
                 <DayFocusCard
                   date={date}
                   label={date === today ? "Heute" : formatWeekday(date)}
                   assignments={dailyByDate.get(date) ?? []}
-                  compact={date !== today}
+                  compact
                   key={date}
                   onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
                 />
               ))}
             </div>
+            <button
+              className="mobile-home-all-assignments-button"
+              title="Alle Einsätze anzeigen"
+              type="button"
+              onClick={() => setActiveScreen("assignments")}
+            >
+              <span>Alle Einsätze anzeigen</span>
+              <ChevronRight aria-hidden="true" size={18} />
+            </button>
           </section>
 
           <section className="mobile-home-section">
-            <div className="mobile-action-list">
+            <div className="mobile-section-heading">
+              <h2>Schnellzugriff</h2>
+            </div>
+            <div className="mobile-action-list mobile-home-quick-actions">
               <PlaceholderAction
+                compact
                 icon={FileText}
                 tone="time"
                 title="Lohnzeit erfassen"
@@ -700,6 +718,7 @@ export function MyAssignmentsPage() {
                 onOpen={() => navigate("/me/time-entry")}
               />
               <PlaceholderAction
+                compact
                 icon={Plane}
                 tone="vacation"
                 title="Urlaubsantrag"
@@ -710,6 +729,7 @@ export function MyAssignmentsPage() {
                 })}
               />
               <PlaceholderAction
+                compact
                 icon={HeartPulse}
                 tone="sickness"
                 title="Krankmeldung"
@@ -720,20 +740,17 @@ export function MyAssignmentsPage() {
                 })}
               />
               <PlaceholderAction
-                icon={CalendarClock}
-                tone="deployments"
-                title="Alle Einsätze anzeigen"
-                text="Gesamte Einsatzübersicht öffnen."
-                onOpen={() => setActiveScreen("assignments")}
-              />
-              <PlaceholderAction
+                compact
                 icon={UserCircle}
                 tone="profile"
                 title="Persönliche Akte"
                 text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen."
                 onOpen={() => navigate("/me/personal-file")}
               />
+            </div>
+            <div className="mobile-home-secondary-actions">
               <PlaceholderAction
+                compact
                 icon={Settings}
                 tone="settings"
                 title="Einstellungen"
@@ -815,14 +832,6 @@ function writePushNotificationPreference(isEnabled: boolean): void {
   }
 }
 
-function getGreetingName(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "zusammen";
-  }
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
 function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus | null): AndroidGpsPermissionPrompt | null {
   if (!permissions) {
     return null;
@@ -898,7 +907,7 @@ function DayFocusCard({
           onClick={() => onEmptyDaySelect?.(date, compact ? `${label} · ${formatShortDate(date)}` : "Heute")}
         >
           <span className="mobile-home-assignment-icon">
-            <CalendarClock aria-hidden="true" size={22} />
+            <HardHat aria-hidden="true" size={22} />
           </span>
           <span>
             <strong>{formatHomeAssignmentDateLabel(date)}</strong>
@@ -925,7 +934,7 @@ function CompactHomeAssignmentCard({
       state={{ assignment }}
     >
       <span className="mobile-home-assignment-icon">
-        <CalendarClock aria-hidden="true" size={20} />
+        <HardHat aria-hidden="true" size={20} />
       </span>
       <span>
         <strong>{formatHomeAssignmentDateLabel(date)}</strong>
@@ -953,7 +962,7 @@ function HomeAssignmentCard({
       state={{ assignment }}
     >
       <span className="mobile-home-assignment-icon">
-        <CalendarClock aria-hidden="true" size={22} />
+        <HardHat aria-hidden="true" size={22} />
       </span>
       <span>
         <strong>{formatHomeAssignmentDateLabel(date)}</strong>
@@ -1003,6 +1012,7 @@ function PlaceholderAction({
   title,
   text,
   onOpen,
+  compact = false,
   disabled = false,
 }: {
   icon: typeof FileText;
@@ -1010,11 +1020,13 @@ function PlaceholderAction({
   title: string;
   text: string;
   onOpen: () => void;
+  compact?: boolean;
   disabled?: boolean;
 }) {
   return (
     <button
-      className={`mobile-action-card mobile-action-card--${tone}`}
+      aria-label={`${title}: ${text}`}
+      className={`mobile-action-card mobile-action-card--${tone}${compact ? " is-compact" : ""}`}
       type="button"
       disabled={disabled}
       onClick={onOpen}
@@ -1400,6 +1412,16 @@ function formatWeekday(date: string): string {
 
 function formatHomeAssignmentDateLabel(date: string): string {
   return `${formatWeekday(date).replace(/\.$/, "")} · ${formatShortDate(date)}`;
+}
+
+function formatHomeOverviewDate(date: string): string {
+  const formatted = new Intl.DateTimeFormat("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parseIsoDate(date));
+  return `${formatted.charAt(0).toLocaleUpperCase("de-DE")}${formatted.slice(1)}`;
 }
 
 function formatDateTime(value: string): string {
