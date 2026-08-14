@@ -125,11 +125,15 @@ test("mobile home follows the personal-file hierarchy and uses a construction ic
 test("horizontal assignment timeline keeps every planned block beyond the legacy four-item limit", () => {
   assert.match(
     pageSource,
-    /getDayRange\(today, MOBILE_HOME_DAY_WINDOW\)\s*\.filter\([\s\S]*?shouldShowMobileUpcomingDay[\s\S]*?\),\s*\[dailyByDate, today\]/,
+    /const nextFourteenDays = useMemo\(\(\) => getDayRange\(today, 14\), \[today\]\)/,
+  );
+  assert.match(
+    pageSource,
+    /const mobileHomeDays = useMemo\([\s\S]*?\(\) => nextFourteenDays\s*\.filter\([\s\S]*?shouldShowMobileUpcomingDay[\s\S]*?\),\s*\[dailyByDate, nextFourteenDays\]/,
   );
   assert.doesNotMatch(
     pageSource,
-    /getDayRange\(today, MOBILE_HOME_DAY_WINDOW\)[\s\S]{0,300}\.slice\(/,
+    /MOBILE_HOME_DAY_WINDOW|getDayRange\(today, 7\)/,
   );
 
   for (const plannedCount of [3, 4, 8, 12, 20]) {
