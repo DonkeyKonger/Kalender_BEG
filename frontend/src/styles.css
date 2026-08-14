@@ -12321,6 +12321,10 @@ button.person-chip:focus-visible {
   border-right: 0;
 }
 
+.measurement-timesheet-table tbody tr:last-child td {
+  border-bottom: 1px solid #dbe2eb;
+}
+
 .measurement-timesheet-table tbody td:nth-child(2) strong {
   color: #1f2f46;
   font-weight: 700;

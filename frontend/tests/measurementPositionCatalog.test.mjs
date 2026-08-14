@@ -147,6 +147,13 @@ test("desktop execution status omits the remaining quantity column and captured-
   assert.doesNotMatch(stylesSource, /tr\.has-quantity td:nth-child\(2\)/);
 });
 
+test("desktop execution status closes the final position row with a bottom border", () => {
+  assert.match(
+    stylesSource,
+    /\.measurement-timesheet-table tbody tr:last-child td \{\s*border-bottom:\s*1px solid #dbe2eb;/s,
+  );
+});
+
 function sourceItem(id, position, sourceFileName, sourceInvoiceNumber) {
   return {
     id,
