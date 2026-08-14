@@ -5773,23 +5773,23 @@ button.person-chip:focus-visible {
   line-height: 1.2;
 }
 
-.mobile-home-upcoming-list {
+.mobile-home-assignment-list {
   display: grid;
 }
 
-.mobile-home-upcoming-list > .mobile-focus-card {
+.mobile-home-assignment-list > .mobile-focus-card {
   padding: 10px 0;
 }
 
-.mobile-home-upcoming-list > .mobile-focus-card:first-child {
+.mobile-home-assignment-list > .mobile-focus-card:first-child {
   padding-top: 0;
 }
 
-.mobile-home-upcoming-list > .mobile-focus-card:last-child {
+.mobile-home-assignment-list > .mobile-focus-card:last-child {
   padding-bottom: 0;
 }
 
-.mobile-home-upcoming-list > .mobile-focus-card + .mobile-focus-card {
+.mobile-home-assignment-list > .mobile-focus-card + .mobile-focus-card {
   border-top: 1px solid #e2e8f0;
 }
 
@@ -7227,24 +7227,6 @@ button.person-chip:focus-visible {
 
 .mobile-home-overview-panel .mobile-home-day-assignment-grid {
   grid-template-columns: minmax(0, 1fr);
-}
-
-.mobile-home-overview-panel.is-featured .mobile-home-assignment-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-}
-
-.mobile-home-overview-panel.is-featured .mobile-home-assignment-card b {
-  font-size: 1.05rem;
-}
-
-.mobile-home-overview-panel.is-featured .mobile-home-assignment-card strong {
-  font-size: 0.86rem;
-}
-
-.mobile-home-overview-panel.is-featured .mobile-home-assignment-card small {
-  font-size: 0.78rem;
 }
 
 .mobile-home-assignment-card:hover,

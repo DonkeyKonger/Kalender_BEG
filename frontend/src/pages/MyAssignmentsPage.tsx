@@ -666,23 +666,10 @@ export function MyAssignmentsPage() {
 
       {!isLoading && (
         <>
-          <section className="mobile-home-overview-panel is-featured" aria-labelledby="mobile-home-next-assignment-title">
-            <h2 id="mobile-home-next-assignment-title">Nächster Einsatz</h2>
-            {mobileHomeDays.slice(0, 1).map((date) => (
-              <DayFocusCard
-                date={date}
-                label={date === today ? "Heute" : formatWeekday(date)}
-                assignments={dailyByDate.get(date) ?? []}
-                key={date}
-                onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
-              />
-            ))}
-          </section>
-
-          <section className="mobile-home-overview-panel is-upcoming" aria-labelledby="mobile-home-upcoming-title">
-            <h2 id="mobile-home-upcoming-title">Weitere Einsätze</h2>
-            <div className="mobile-home-upcoming-list">
-              {mobileHomeDays.slice(1).map((date) => (
+          <section className="mobile-home-overview-panel" aria-labelledby="mobile-home-assignments-title">
+            <h2 id="mobile-home-assignments-title">Nächste Einsätze</h2>
+            <div className="mobile-home-assignment-list">
+              {mobileHomeDays.map((date) => (
                 <DayFocusCard
                   date={date}
                   label={date === today ? "Heute" : formatWeekday(date)}

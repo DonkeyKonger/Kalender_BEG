@@ -111,8 +111,10 @@ test("mobile home actions keep the established destinations and compact copy", (
 
 test("mobile home follows the personal-file hierarchy and uses a construction icon", () => {
   assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
-  assert.match(pageSource, /className="mobile-home-overview-panel is-featured"[\s\S]*>Nächster Einsatz<\/h2>/);
-  assert.match(pageSource, /className="mobile-home-overview-panel is-upcoming"[\s\S]*>Weitere Einsätze<\/h2>/);
+  assert.match(pageSource, /className="mobile-home-overview-panel"[\s\S]*>Nächste Einsätze<\/h2>/);
+  assert.match(pageSource, /className="mobile-home-assignment-list"[\s\S]*mobileHomeDays\.map\(\(date\) =>/);
+  assert.doesNotMatch(pageSource, /mobileHomeDays\.slice\(/);
+  assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
   assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
   assert.equal(pageSource.match(/<HardHat aria-hidden="true"/g)?.length, 3);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
