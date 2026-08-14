@@ -2841,7 +2841,7 @@ function MeasurementTab({
           }}
         >
           <UploadCloud aria-hidden="true" size={15} />
-          <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste-PDF importieren"}</span>
+          <span>{isDropTargetActive ? "PDF hier ablegen" : "Zeitenliste importieren"}</span>
           <input
             className="project-upload-input"
             type="file"
