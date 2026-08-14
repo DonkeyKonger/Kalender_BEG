@@ -77,7 +77,7 @@ test("mobile home keeps every action reachable below browser safe areas", () => 
   );
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s,
+    /\.mobile-home-quick-actions \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
   );
   assert.match(
     styles,
@@ -142,13 +142,17 @@ test("all rows in the combined assignment block use the former featured scale", 
 });
 
 
-test("quick-action labels stay on one line without mid-word wrapping", () => {
+test("quick actions stack at full width with restored readable sizing", () => {
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \.mobile-action-card\.is-compact strong \{[^}]*font-size:\s*clamp\(10\.5px, 3vw, 13\.5px\);[^}]*overflow-wrap:\s*normal;[^}]*white-space:\s*nowrap;[^}]*word-break:\s*normal;/s,
+    /\.mobile-home-quick-actions \.mobile-action-card\.is-compact strong \{[^}]*font-size:\s*clamp\(0\.92rem, 4vw, 1rem\);[^}]*overflow-wrap:\s*normal;[^}]*white-space:\s*nowrap;[^}]*word-break:\s*normal;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*gap:\s*clamp\(4px, 1\.5vw, 7px\);[^}]*padding:\s*8px clamp\(6px, 2vw, 9px\);/s,
+    /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*gap:\s*10px;[^}]*min-height:\s*68px;[^}]*padding:\s*12px;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-quick-actions \.mobile-action-icon \{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*padding:\s*9px;/s,
   );
 });

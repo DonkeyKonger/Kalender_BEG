@@ -7081,27 +7081,27 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-quick-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding-bottom: 0;
 }
 
 .mobile-home-quick-actions .mobile-action-card {
-  gap: clamp(4px, 1.5vw, 7px);
-  min-height: 78px;
+  gap: 10px;
+  min-height: 68px;
   border-radius: 14px;
-  padding: 8px clamp(6px, 2vw, 9px);
+  padding: 12px;
 }
 
 .mobile-home-quick-actions .mobile-action-icon {
-  width: clamp(26px, 7.5vw, 32px);
-  height: clamp(26px, 7.5vw, 32px);
-  padding: clamp(7px, 2vw, 9px);
+  width: 34px;
+  height: 34px;
+  padding: 9px;
 }
 
 .mobile-home-quick-actions .mobile-action-chevron {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 .mobile-home-secondary-actions {
@@ -7125,8 +7125,8 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-quick-actions .mobile-action-card.is-compact strong {
-  font-size: clamp(10.5px, 3vw, 13.5px);
-  letter-spacing: -0.015em;
+  font-size: clamp(0.92rem, 4vw, 1rem);
+  letter-spacing: 0;
   overflow-wrap: normal;
   white-space: nowrap;
   word-break: normal;
