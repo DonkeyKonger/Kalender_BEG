@@ -7315,6 +7315,31 @@ button.person-chip:focus-visible {
   margin-left: 0;
 }
 
+.mobile-home-overview-panel .mobile-home-assignment-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.mobile-home-overview-panel .mobile-home-assignment-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.mobile-home-overview-panel .mobile-home-assignment-card strong {
+  font-size: 0.86rem;
+}
+
+.mobile-home-overview-panel .mobile-home-assignment-card b,
+.mobile-home-overview-panel .mobile-home-assignment-card.is-day-cluster-item b {
+  font-size: 1.05rem;
+}
+
+.mobile-home-overview-panel .mobile-home-assignment-card small,
+.mobile-home-overview-panel .mobile-home-assignment-card.is-day-cluster-item small {
+  font-size: 0.78rem;
+}
+
 .mobile-home-assignment-card em {
   color: #143c6d;
   font-size: 0.8rem;

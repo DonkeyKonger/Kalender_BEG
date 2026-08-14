@@ -122,6 +122,26 @@ test("mobile home follows the personal-file hierarchy and uses a construction ic
 });
 
 
+test("all rows in the combined assignment block use the former featured scale", () => {
+  assert.match(
+    styles,
+    /\.mobile-home-overview-panel \.mobile-home-assignment-icon \{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border-radius:\s*12px;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-overview-panel \.mobile-home-assignment-card b,[\s\S]*?font-size:\s*1\.05rem;/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-overview-panel \.mobile-home-assignment-card small,[\s\S]*?font-size:\s*0\.78rem;/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-overview-panel \.mobile-home-assignment-icon svg \{[^}]*width:\s*22px;[^}]*height:\s*22px;/s,
+  );
+});
+
+
 test("quick-action labels stay on one line without mid-word wrapping", () => {
   assert.match(
     styles,
