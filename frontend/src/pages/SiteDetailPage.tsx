@@ -28,6 +28,7 @@ import {
 } from "../lib/projectDocumentSort";
 import { getProjectDocumentKind } from "../lib/projectFiles";
 import { buildMeasurementPositionCatalog, getMeasurementPositionCatalogKey } from "../lib/measurementPositionCatalog";
+import { buildDesktopMeasurementPositionGroups } from "../lib/measurementPositionGroups";
 import {
   extraWorkStatusPromotionOptions,
   measurementStatusPromotionOptions,
@@ -48,7 +49,6 @@ import type { EditableSite } from "./SitesPage";
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
 type MeasurementPdfMode = "checked" | "original";
-type MeasurementTimesheetFilter = "all" | "billed" | "unbilled";
 type SiteHoursComparisonStatus = "on_course" | "watch" | "critical" | "missing";
 type SiteHoursComparison = {
   offerMinutes: number | null;
@@ -2861,6 +2861,7 @@ function MeasurementTab({
       {activeSubtab === "timesheet" ? (
         <MeasurementTimesheetPanel
           timesheet={timesheet}
+          catalogItems={catalogItems}
           workerHeadCount={workerHeadCount}
           isLoading={isLoading}
           error={error}
@@ -3033,6 +3034,7 @@ function MeasurementTab({
 
 function MeasurementTimesheetPanel({
   timesheet,
+  catalogItems,
   workerHeadCount,
   isLoading,
   error,
@@ -3047,6 +3049,7 @@ function MeasurementTimesheetPanel({
   onHideItem,
 }: {
   timesheet: MeasurementTimesheet | null;
+  catalogItems: MeasurementItem[];
   workerHeadCount: number;
   isLoading: boolean;
   error: string | null;
@@ -3060,7 +3063,7 @@ function MeasurementTimesheetPanel({
   hidingItemId: number | null;
   onHideItem: (measurementItemId: number) => void;
 }) {
-  const [activeFilter, setActiveFilter] = useState<MeasurementTimesheetFilter>("all");
+  const [activePositionGroupKey, setActivePositionGroupKey] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isTableRenderReady, setIsTableRenderReady] = useState(false);
@@ -3137,44 +3140,54 @@ function MeasurementTimesheetPanel({
     const kpi = timesheet?.kpi;
     if (!kpi) {
       return {
-        total: 0,
         plannedMinutes: 0,
         measuredMinutes: 0,
         progressPercent: null,
         openMinutes: null,
         hasPlannedBasis: false,
-        withMeasurement: 0,
-        withoutMeasurement: 0,
       };
     }
 
     return {
-      total: kpi.position_count,
       plannedMinutes: getMeasurementNumericValue(kpi.planned_minutes),
       measuredMinutes: getMeasurementNumericValue(kpi.measured_minutes),
       progressPercent: kpi.progress_percent,
       openMinutes: kpi.open_minutes === null ? null : getMeasurementNumericValue(kpi.open_minutes),
       hasPlannedBasis: kpi.has_planned_basis,
-      withMeasurement: kpi.captured_count,
-      withoutMeasurement: kpi.not_captured_count,
     };
   }, [timesheet?.kpi]);
 
-  const filterOptions = useMemo(() => ([
-    { key: "all" as const, label: "Alle", count: projectPositionStats.total },
-    { key: "billed" as const, label: "Erfasst", count: projectPositionStats.withMeasurement },
-    { key: "unbilled" as const, label: "Noch nicht erfasst", count: projectPositionStats.withoutMeasurement },
-  ]), [projectPositionStats]);
+  const positionGroups = useMemo(() => {
+    const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+    const groupItems = projectPositionRows.map((row) => catalogById.get(row.positionId) ?? {
+      id: row.positionId,
+      position: row.positionNumber,
+      source_file_name: null,
+      source_invoice_number: null,
+      is_free_position: false,
+      is_hidden: false,
+    });
+    return buildDesktopMeasurementPositionGroups(groupItems);
+  }, [catalogItems, projectPositionRows]);
+
+  const activePositionGroup = useMemo(
+    () => positionGroups.find((group) => group.key === activePositionGroupKey) ?? positionGroups[0] ?? null,
+    [activePositionGroupKey, positionGroups],
+  );
+
+  useEffect(() => {
+    if (!positionGroups.some((group) => group.key === activePositionGroupKey)) {
+      setActivePositionGroupKey("all");
+    }
+  }, [activePositionGroupKey, positionGroups]);
 
   const filteredProjectPositionRows = useMemo(() => {
     const startedAt = startMeasurementTimesheetPerformanceTiming();
     const normalizedSearch = deferredSearchTerm.trim().toLocaleLowerCase("de-DE");
 
     const rows = projectPositionRows.filter((row) => {
-      const matchesFilter =
-        activeFilter === "all"
-        || (activeFilter === "billed" && row.measuredQuantity > 0)
-        || (activeFilter === "unbilled" && row.measuredQuantity <= 0);
+      const matchesFilter = activePositionGroup?.key === "all"
+        || activePositionGroup?.itemIds.has(row.positionId);
 
       if (!matchesFilter) {
         return false;
@@ -3188,15 +3201,15 @@ function MeasurementTimesheetPanel({
     logMeasurementTimesheetPerformance("Derived Tabellenfilter", startedAt, {
       rows: projectPositionRows.length,
       filteredRows: rows.length,
-      filter: activeFilter,
+      group: activePositionGroup?.key ?? "all",
       hasSearch: normalizedSearch.length > 0,
     });
     return rows;
-  }, [activeFilter, deferredSearchTerm, projectPositionRows]);
+  }, [activePositionGroup, deferredSearchTerm, projectPositionRows]);
 
   const tableResetKey = useMemo(
-    () => `${activeFilter}\u0000${deferredSearchTerm.trim().toLocaleLowerCase("de-DE")}`,
-    [activeFilter, deferredSearchTerm],
+    () => `${activePositionGroup?.key ?? "all"}\u0000${deferredSearchTerm.trim().toLocaleLowerCase("de-DE")}`,
+    [activePositionGroup?.key, deferredSearchTerm],
   );
 
   useEffect(() => {
@@ -3368,16 +3381,16 @@ function MeasurementTimesheetPanel({
 
             <section className="measurement-timesheet-table-panel" aria-label="Projektpositionen Tabelle">
               <div className="measurement-timesheet-filterbar">
-                <div className="measurement-timesheet-filter-group" aria-label="Zeitenliste filtern">
-                  {filterOptions.map((option) => (
+                <div className="measurement-timesheet-filter-group" aria-label="Positionsgruppen filtern">
+                  {positionGroups.map((group) => (
                     <button
-                      key={option.key}
+                      key={group.key}
                       type="button"
-                      className={activeFilter === option.key ? "is-active" : ""}
-                      onClick={() => setActiveFilter(option.key)}
+                      className={activePositionGroup?.key === group.key ? "is-active" : ""}
+                      onClick={() => setActivePositionGroupKey(group.key)}
                     >
-                      {option.label}
-                      <span>{option.count}</span>
+                      {group.label}
+                      <span>{group.count}</span>
                     </button>
                   ))}
                 </div>
@@ -3970,6 +3983,24 @@ function MeasurementReviewPanel({
       && normalizeMeasurementArea(batch.area_location ?? "") === areaKey
     )) ?? null;
   }, [batches, createAreaLocation, createMeasurementDate]);
+  const reviewPositionSuggestions = useMemo<MeasurementPositionSuggestion[]>(() => {
+    const suggestionsByPosition = new Map<string, MeasurementPositionSuggestion>();
+    const historicalSuggestions = buildMeasurementPositionCatalog(batchItems).map((item) => ({
+      ...item,
+      linkedItem: {
+        id: item.id,
+        position: item.position,
+      },
+    }));
+
+    for (const suggestion of [...historicalSuggestions, ...projectPositionSuggestions]) {
+      const positionKey = getMeasurementPositionCatalogKey(suggestion.position);
+      if (positionKey && !suggestionsByPosition.has(positionKey)) {
+        suggestionsByPosition.set(positionKey, suggestion);
+      }
+    }
+    return [...suggestionsByPosition.values()];
+  }, [batchItems, projectPositionSuggestions]);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -4311,7 +4342,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading ? (
           <MeasurementReviewTable
             items={tableItems}
-            positionSuggestions={projectPositionSuggestions}
+            positionSuggestions={reviewPositionSuggestions}
             freePositionOnly={isFreePositionOnlyBatch}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}

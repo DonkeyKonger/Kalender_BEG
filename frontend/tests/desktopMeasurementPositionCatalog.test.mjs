@@ -56,8 +56,9 @@ test("desktop review loads the active catalog independently from batch matrix ro
   );
   assert.match(
     sitePageSource,
-    /positionSuggestions=\{projectPositionSuggestions\}/,
+    /positionSuggestions=\{reviewPositionSuggestions\}/,
   );
+  assert.match(sitePageSource, /\.\.\.historicalSuggestions, \.\.\.projectPositionSuggestions/);
   assert.doesNotMatch(
     sitePageSource,
     /positionSuggestions=\{isFreePositionOnlyBatch[\s\S]*?batchItems\.filter\(\(item\) => !item\.is_free_position\)/,

@@ -431,17 +431,6 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
         measurement_base_id=base.id,
     )
     timesheet_ids = [row.position_id for row in service.get_site_measurement_timesheet(site.id).rows]
-    leaked_free_item = SiteMeasurementItem(
-        site=site,
-        measurement_base=base,
-        position="FREI-LEAK",
-        description="Darf nicht Teil des Angebotskatalogs sein",
-        unit="Stck",
-        is_free_position=True,
-        sort_order=10_000,
-    )
-    db.add(leaked_free_item)
-    db.commit()
     new_batch = service.create_mobile_batch(
         assignment_id=assignment.id,
         current_user=user,
@@ -449,10 +438,6 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
     db.expire_all()
 
     expected_ids = [item.id for item in [*main_items, *supplement_items]]
-    catalog_items = service._list_active_measurement_catalog_items(
-        site_id=site.id,
-        batch_id=existing_batch.id,
-    )
     existing_desktop_ids = [
         item.id
         for item in service.list_site_batch_items(site_id=site.id, batch_id=existing_batch.id)
@@ -478,14 +463,12 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
     assert len(supplement_items) == 5
     assert all(item.measurement_base_id == base.id for item in main_items)
     assert all(item.measurement_base_id == base.id for item in supplement_items)
-    assert [item.id for item in catalog_items] == expected_ids
-    assert leaked_free_item.id not in {item.id for item in catalog_items}
     assert timesheet_ids == expected_ids
     assert existing_desktop_ids == expected_ids
     assert existing_mobile_ids == expected_ids
     assert new_mobile_ids == expected_ids
-    assert [item.source_file_name for item in catalog_items[:20]] == ["Hauptangebot.pdf"] * 20
-    assert [item.source_file_name for item in catalog_items[20:]] == ["Nachtragsangebot.pdf"] * 5
+    assert [item.source_file_name for item in main_items] == ["Hauptangebot.pdf"] * 20
+    assert [item.source_file_name for item in supplement_items] == ["Nachtragsangebot.pdf"] * 5
     assert all(item.entries == [] for item in service.list_site_batch_items(
         site_id=site.id,
         batch_id=existing_batch.id,

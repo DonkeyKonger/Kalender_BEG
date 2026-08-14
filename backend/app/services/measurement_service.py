@@ -5,7 +5,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
@@ -2376,65 +2376,11 @@ class MeasurementService:
             base_ids.append(active_base_id)
         return tuple(base_ids)
 
-    def _list_measurement_catalog_items_for_base(
-        self,
-        *,
-        site_id: int,
-        measurement_base_id: int,
-        batch_id: int,
-    ) -> list[SiteMeasurementItem]:
-        """Load the imported, selectable positions of one measurement base.
-
-        A catalog position is owned by the base itself. Free/manual positions are
-        owned by a concrete batch and must never leak into the project catalog.
-        Entries are restricted to the requested batch so the same catalog query
-        can safely feed both the desktop review and the mobile editor.
-        """
-        return list(
-            self.db.scalars(
-                select(SiteMeasurementItem)
-                .options(
-                    selectinload(SiteMeasurementItem.entries).selectinload(
-                        SiteMeasurementEntry.created_by
-                    ),
-                    with_loader_criteria(
-                        SiteMeasurementEntry,
-                        SiteMeasurementEntry.measurement_batch_id == batch_id,
-                        include_aliases=True,
-                    ),
-                )
-                .where(
-                    SiteMeasurementItem.site_id == site_id,
-                    SiteMeasurementItem.measurement_base_id == measurement_base_id,
-                    SiteMeasurementItem.measurement_batch_id.is_(None),
-                    SiteMeasurementItem.is_free_position.is_(False),
-                    SiteMeasurementItem.is_hidden.is_(False),
-                )
-                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
-            ).all()
-        )
-
-    def _list_active_measurement_catalog_items(
-        self,
-        *,
-        site_id: int,
-        batch_id: int,
-    ) -> list[SiteMeasurementItem]:
-        """Load the complete currently released offer catalog for a batch view."""
-        active_base_id = self._get_active_measurement_base_id(site_id)
-        if active_base_id is None:
-            return []
-        return self._list_measurement_catalog_items_for_base(
-            site_id=site_id,
-            measurement_base_id=active_base_id,
-            batch_id=batch_id,
-        )
-
     def _list_batch_position_items(
         self,
         batch: SiteMeasurementBatch,
     ) -> list[SiteMeasurementItem]:
-        """Load persisted rows plus the active total catalog for a batch."""
+        """Load persisted rows plus the selectable catalog for an offer-based batch."""
         common_filters = [
             SiteMeasurementItem.site_id == batch.site_id,
             SiteMeasurementItem.is_hidden.is_(False),
@@ -2460,85 +2406,90 @@ class MeasurementService:
                 ).all()
             )
 
+        catalog_base_ids = self._measurement_catalog_base_ids(batch)
         batch_entry_item_ids = {entry.measurement_item_id for entry in batch.entries}
         batch_owned_item_ids = {item.id for item in batch.free_items}
         batch_specific_item_ids = batch_entry_item_ids | batch_owned_item_ids
 
-        batch_specific_items: list[SiteMeasurementItem] = []
-        if batch_specific_item_ids:
-            batch_specific_items = list(
-                self.db.scalars(
-                    select(SiteMeasurementItem)
-                    .options(
-                        selectinload(SiteMeasurementItem.entries).selectinload(
-                            SiteMeasurementEntry.created_by
-                        ),
-                        with_loader_criteria(
-                            SiteMeasurementEntry,
-                            SiteMeasurementEntry.measurement_batch_id == batch.id,
-                            include_aliases=True,
-                        ),
-                    )
-                    .where(
-                        *common_filters,
-                        SiteMeasurementItem.id.in_(batch_specific_item_ids),
-                    )
-                    .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
-                ).all()
-            )
+        if catalog_base_ids:
+            catalog_base_filter = SiteMeasurementItem.measurement_base_id.in_(catalog_base_ids)
+        else:
+            catalog_base_filter = SiteMeasurementItem.measurement_base_id.is_(None)
 
-        active_catalog_items = self._list_active_measurement_catalog_items(
-            site_id=batch.site_id,
-            batch_id=batch.id,
+        catalog_filter = and_(
+            catalog_base_filter,
+            or_(
+                SiteMeasurementItem.is_free_position.is_(False),
+                SiteMeasurementItem.measurement_batch_id.is_(None),
+                SiteMeasurementItem.measurement_batch_id == batch.id,
+            ),
         )
-        catalog_items: list[SiteMeasurementItem] = []
-        active_base_id = self._get_active_measurement_base_id(batch.site_id)
-        if (
-            batch.measurement_base_id is not None
-            and batch.measurement_base_id != active_base_id
-        ):
-            # Keep the original IDs of historical batches stable. The active total
-            # catalog is appended below and contributes every genuinely new
-            # position, including supplements added after the batch was created.
-            catalog_items.extend(self._list_measurement_catalog_items_for_base(
-                site_id=batch.site_id,
-                measurement_base_id=batch.measurement_base_id,
-                batch_id=batch.id,
-            ))
-        catalog_items.extend(active_catalog_items)
-        if not catalog_items and batch.measurement_base_id is not None:
-            catalog_items.extend(self._list_measurement_catalog_items_for_base(
-                site_id=batch.site_id,
-                measurement_base_id=batch.measurement_base_id,
-                batch_id=batch.id,
-            ))
+        item_scopes = [catalog_filter]
+        if batch_specific_item_ids:
+            item_scopes.append(SiteMeasurementItem.id.in_(batch_specific_item_ids))
+
+        items = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .options(
+                    selectinload(SiteMeasurementItem.entries).selectinload(
+                        SiteMeasurementEntry.created_by
+                    ),
+                    with_loader_criteria(
+                        SiteMeasurementEntry,
+                        SiteMeasurementEntry.measurement_batch_id == batch.id,
+                        include_aliases=True,
+                    ),
+                )
+                .where(*common_filters, or_(*item_scopes))
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            ).all()
+        )
 
         # Persisted batch items are always retained. A used non-free position from
-        # a historical base suppresses the same normalized position in the active
-        # total base. Unlinked free positions deliberately do not suppress it.
-        selected_items_by_id = {item.id: item for item in batch_specific_items}
+        # the historical base suppresses the same normalized position in a copied
+        # active base. Unlinked free positions deliberately do not suppress it.
+        selected_ids = set(batch_specific_item_ids)
         claimed_position_keys = {
             _measurement_position_key(item.position)
-            for item in batch_specific_items
+            for item in items
             if item.id in batch_entry_item_ids and not item.is_free_position
         }
         claimed_position_keys.discard("")
 
+        priority_by_base_id = {
+            base_id: priority for priority, base_id in enumerate(catalog_base_ids)
+        }
+        catalog_items = sorted(
+            (
+                item
+                for item in items
+                if item.id not in batch_owned_item_ids
+                and (
+                    item.measurement_base_id in catalog_base_ids
+                    or (not catalog_base_ids and item.measurement_base_id is None)
+                )
+            ),
+            key=lambda item: (
+                priority_by_base_id.get(item.measurement_base_id, len(catalog_base_ids)),
+                item.sort_order,
+                item.id,
+            ),
+        )
         selected_catalog_keys: set[str] = set()
         for item in catalog_items:
             position_key = _measurement_position_key(item.position)
             if position_key in claimed_position_keys:
+                if item.id in batch_entry_item_ids:
+                    selected_ids.add(item.id)
                 continue
             if position_key and position_key in selected_catalog_keys:
                 continue
-            selected_items_by_id[item.id] = item
+            selected_ids.add(item.id)
             if position_key:
                 selected_catalog_keys.add(position_key)
 
-        return sorted(
-            selected_items_by_id.values(),
-            key=lambda item: (item.sort_order, item.id),
-        )
+        return [item for item in items if item.id in selected_ids]
 
     def _measurement_item_is_available_for_batch(
         self,
@@ -2556,8 +2507,7 @@ class MeasurementService:
             return True
         return bool(
             item.measurement_base_id in self._measurement_catalog_base_ids(batch)
-            and item.measurement_batch_id is None
-            and not item.is_free_position
+            and (not item.is_free_position or item.measurement_batch_id is None)
         )
 
     def _get_measurement_catalog_item(

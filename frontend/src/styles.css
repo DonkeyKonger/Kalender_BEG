@@ -12014,7 +12014,13 @@ button.person-chip:focus-visible {
 .measurement-timesheet-filter-group {
   display: flex;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  align-content: flex-start;
   gap: 8px;
+  min-width: 0;
+  max-height: 112px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .measurement-timesheet-filter-group button {

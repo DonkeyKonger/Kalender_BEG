@@ -92,7 +92,7 @@ test("existing free positions reuse the shared offer autocomplete and stay in th
   assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
   assert.match(pageSource, /description: suggestion\.description/);
   assert.match(pageSource, /linked_measurement_item_id: suggestion\.id/);
-  assert.match(pageSource, /positionSuggestions=\{projectPositionSuggestions\}/);
+  assert.match(pageSource, /positionSuggestions=\{reviewPositionSuggestions\}/);
   assert.match(pageSource, /const usedPositionSuggestionIds = useMemo/);
   assert.match(pageSource, /item\.linked_measurement_item_id === null \? \[\] : \[item\.linked_measurement_item_id\]/);
   assert.match(pageSource, /\.filter\(\(item\) => !usedPositionSuggestionIds\.has\(item\.id\)\)/);

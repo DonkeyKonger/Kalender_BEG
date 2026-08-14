@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildMeasurementSourceDocumentGroups } from "../src/lib/measurementPositionGroups.ts";
+import {
+  buildDesktopMeasurementPositionGroups,
+  buildMeasurementSourceDocumentGroups,
+} from "../src/lib/measurementPositionGroups.ts";
 
 const sitePageSource = await readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
 const mobilePageSource = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
@@ -36,8 +39,15 @@ test("catalog refresh does not add empty offer positions to the correction matri
     sitePageSource,
     /const tableItems = isFreePositionOnlyBatch\s*\? batchItems\.filter\(hasMeaningfulFreeMeasurementData\)\s*: itemsWithEntries/,
   );
-  assert.match(sitePageSource, /positionSuggestions=\{projectPositionSuggestions\}/);
+  assert.match(sitePageSource, /positionSuggestions=\{reviewPositionSuggestions\}/);
   assert.match(sitePageSource, /buildMeasurementPositionCatalog\(catalogItems\)/);
+});
+
+test("desktop review keeps historical batch positions while extending suggestions from the active catalog", () => {
+  assert.match(sitePageSource, /const reviewPositionSuggestions = useMemo<MeasurementPositionSuggestion\[]>/);
+  assert.match(sitePageSource, /buildMeasurementPositionCatalog\(batchItems\)/);
+  assert.match(sitePageSource, /\[\.\.\.historicalSuggestions, \.\.\.projectPositionSuggestions\]/);
+  assert.match(sitePageSource, /getMeasurementPositionCatalogKey\(suggestion\.position\)/);
 });
 
 test("mobile keeps the existing position selection and grouping behavior", () => {
@@ -96,11 +106,52 @@ test("mobile can separate a legacy main offer from a sourced supplement", () => 
   assert.deepEqual(groups.map((group) => group.items.length), [2, 1]);
 });
 
+test("source grouping keeps supplements separate even when import metadata is identical or missing", () => {
+  const groups = buildMeasurementSourceDocumentGroups([
+    sourceItem(3, "N2.10", "Gesamtangebot.pdf", "A-100"),
+    sourceItem(2, "N1.10", "Gesamtangebot.pdf", "A-100"),
+    sourceItem(1, "1.10", "Gesamtangebot.pdf", "A-100"),
+    sourceItem(4, "N3.10", null, null),
+  ]);
+
+  assert.deepEqual(groups.map((group) => group.label), ["Hauptangebot", "N1", "N2", "N3"]);
+  assert.deepEqual(groups.map((group) => group.items.length), [1, 1, 1, 1]);
+});
+
+test("desktop replaces captured-state filters with offer groups and a manual-only group", () => {
+  const groups = buildDesktopMeasurementPositionGroups([
+    desktopItem(1, "1.10", "Hauptangebot.pdf", "A-100"),
+    desktopItem(2, "N1.10", "Nachtrag N1.pdf", "N1"),
+    desktopItem(3, "N1.20", "Nachtrag N1.pdf", "N1"),
+    desktopItem(4, "FREI-1", null, null, true),
+  ]);
+
+  assert.deepEqual(groups.map((group) => group.label), [
+    "Alle Positionen",
+    "Hauptangebot",
+    "N1",
+    "Manuell erfasst",
+  ]);
+  assert.deepEqual(groups.map((group) => group.count), [4, 1, 2, 1]);
+  assert.deepEqual([...groups.at(-1).itemIds], [4]);
+  assert.doesNotMatch(sitePageSource, /Noch nicht erfasst/);
+  assert.doesNotMatch(sitePageSource, /MeasurementTimesheetFilter/);
+  assert.match(sitePageSource, /buildDesktopMeasurementPositionGroups/);
+});
+
 function sourceItem(id, position, sourceFileName, sourceInvoiceNumber) {
   return {
     id,
     position,
     source_file_name: sourceFileName,
     source_invoice_number: sourceInvoiceNumber,
+  };
+}
+
+function desktopItem(id, position, sourceFileName, sourceInvoiceNumber, isFreePosition = false) {
+  return {
+    ...sourceItem(id, position, sourceFileName, sourceInvoiceNumber),
+    is_free_position: isFreePosition,
+    is_hidden: false,
   };
 }
