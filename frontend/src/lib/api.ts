@@ -1190,7 +1190,9 @@ export const api = {
       search.set("active_only", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`);
+    return request<MeasurementItem[]>(`/sites/${siteId}/measurement-items${suffix}`, {
+      cache: "no-store",
+    });
   },
 
   async measurementTimesheet(siteId: number): Promise<MeasurementTimesheet> {

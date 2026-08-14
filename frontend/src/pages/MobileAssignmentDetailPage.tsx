@@ -35,6 +35,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
+import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
@@ -6670,12 +6671,23 @@ function buildMeasurementTableDisplayItems(items: MobileMeasurementItem[], batch
 function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): MeasurementPositionGroup[] {
   const allMeasurementItems = items.filter((item) => !isInlineFreePositionDraftItem(item));
   const offerItems = items.filter((item) => !item.is_free_position && !isInlineFreePositionDraftItem(item));
-  if (offerItems.length < 30) {
+  const sourceDocumentGroups = buildMeasurementSourceDocumentGroups(offerItems);
+  const hasMultipleSourceDocuments = sourceDocumentGroups.length > 1;
+  if (offerItems.length < 30 && !hasMultipleSourceDocuments) {
     return [];
   }
   const capturedItems = items.filter(isMobileMeasurementItemCaptured);
   const freeItems = items.filter((item) => item.is_free_position);
-  const sourceSectionGroups = buildMeasurementSourceSectionGroups(offerItems);
+  const sourceGroups = hasMultipleSourceDocuments
+    ? sourceDocumentGroups.map((group) => createMeasurementPositionGroup(
+      group.label,
+      group.items,
+      group.key,
+    ))
+    : [];
+  const sourceSectionGroups = !hasMultipleSourceDocuments && offerItems.length >= 30
+    ? buildMeasurementSourceSectionGroups(offerItems)
+    : [];
   const root = createMeasurementPositionTreeNode([]);
   const miscellaneousItems: MobileMeasurementItem[] = [];
 
@@ -6688,9 +6700,11 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
     appendMeasurementPositionTreeItem(root, segments, item);
   });
 
-  const prefixGroups = sourceSectionGroups.length > 0
-    ? sourceSectionGroups
-    : [...root.children.values()]
+  const prefixGroups = hasMultipleSourceDocuments
+    ? []
+    : sourceSectionGroups.length > 0
+      ? sourceSectionGroups
+      : [...root.children.values()]
       .sort(compareMeasurementPositionTreeNodes)
       .flatMap((node) => chooseMeasurementPositionGroupNodes(node))
       .map((node) => {
@@ -6698,12 +6712,13 @@ function buildMeasurementPositionGroups(items: MobileMeasurementItem[]): Measure
         return createMeasurementPositionGroup(getMeasurementPositionGroupLabel(prefix, node.items), node.items, prefix);
       });
 
-  if (sourceSectionGroups.length === 0 && miscellaneousItems.length > 0) {
+  if (!hasMultipleSourceDocuments && sourceSectionGroups.length === 0 && miscellaneousItems.length > 0) {
     prefixGroups.push(createMeasurementPositionGroup("Sonstige", miscellaneousItems, "misc"));
   }
 
   const allPositionsGroup = createMeasurementPositionGroup("Alle Positionen", allMeasurementItems, "all");
-  const baseGroups = prefixGroups.length > 0 ? [allPositionsGroup, ...prefixGroups] : [allPositionsGroup];
+  const catalogGroups = [...sourceGroups, ...prefixGroups];
+  const baseGroups = catalogGroups.length > 0 ? [allPositionsGroup, ...catalogGroups] : [allPositionsGroup];
 
   return [
     ...baseGroups,

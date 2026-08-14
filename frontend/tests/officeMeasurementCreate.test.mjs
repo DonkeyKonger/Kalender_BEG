@@ -84,15 +84,15 @@ test("measurement columns use only the persisted order and append new office pos
 
 test("existing free positions reuse the shared offer autocomplete and stay in the same column", () => {
   assert.match(pageSource, /projectPositionSuggestions/);
-  assert.match(pageSource, /position: row\.position_number/);
-  assert.match(pageSource, /linkedItem: null/);
+  assert.match(pageSource, /buildMeasurementPositionCatalog\(catalogItems\)/);
+  assert.match(pageSource, /linkedItem: \{\s*id: item\.id,\s*position: item\.position/s);
   assert.match(pageSource, /item\.position\.toLocaleLowerCase\("de-DE"\)\.includes\(query\)/);
   assert.match(pageSource, /left\.position\.localeCompare\(right\.position, "de-DE", \{ numeric: true/);
   assert.match(pageSource, /setSuggestionState\(null\);\s*if \(existingItem\)/s);
   assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
   assert.match(pageSource, /description: suggestion\.description/);
   assert.match(pageSource, /linked_measurement_item_id: suggestion\.id/);
-  assert.match(pageSource, /batchItems\.filter\(\(item\) => !item\.is_free_position\)\.map/);
+  assert.match(pageSource, /positionSuggestions=\{projectPositionSuggestions\}/);
   assert.match(pageSource, /const usedPositionSuggestionIds = useMemo/);
   assert.match(pageSource, /item\.linked_measurement_item_id === null \? \[\] : \[item\.linked_measurement_item_id\]/);
   assert.match(pageSource, /\.filter\(\(item\) => !usedPositionSuggestionIds\.has\(item\.id\)\)/);

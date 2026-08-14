@@ -27,6 +27,7 @@ import {
   type ProjectDocumentSortKey,
 } from "../lib/projectDocumentSort";
 import { getProjectDocumentKind } from "../lib/projectFiles";
+import { buildMeasurementPositionCatalog, getMeasurementPositionCatalogKey } from "../lib/measurementPositionCatalog";
 import {
   extraWorkStatusPromotionOptions,
   measurementStatusPromotionOptions,
@@ -38,7 +39,7 @@ import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors"
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -155,6 +156,7 @@ export function SiteDetailPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
   const [measurementBases, setMeasurementBases] = useState<MeasurementBase[]>([]);
+  const [measurementCatalogItems, setMeasurementCatalogItems] = useState<MeasurementItem[]>([]);
   const [measurementTimesheet, setMeasurementTimesheet] = useState<MeasurementTimesheet | null>(null);
   const [measurementTimeAnalysis, setMeasurementTimeAnalysis] = useState<MeasurementTimeAnalysis | null>(null);
   const [measurementTimeAnalysisLoading, setMeasurementTimeAnalysisLoading] = useState(false);
@@ -273,6 +275,7 @@ export function SiteDetailPage() {
     setUploadMessage(null);
     setUploadError(null);
     setDragOverFolderKey(null);
+    setMeasurementCatalogItems([]);
     setMeasurementTimesheet(null);
     setMeasurementTimeAnalysis(null);
     setMeasurementTimeAnalysisLoading(false);
@@ -407,16 +410,19 @@ export function SiteDetailPage() {
       setMeasurementBatchesError(null);
       try {
         const initialRequestsStartedAt = startMeasurementTimesheetPerformanceTiming();
-        const [bases, timesheet] = await Promise.all([
+        const [bases, catalogItems, timesheet] = await Promise.all([
           api.measurementBases(site.id),
+          api.measurementItems(site.id, { activeOnly: true }),
           api.measurementTimesheet(site.id),
         ]);
         logMeasurementTimesheetPerformance("API Zeitenliste aggregiert", initialRequestsStartedAt, {
           bases: bases.length,
+          catalogItems: catalogItems.length,
           activeBatches: timesheet.active_batch_ids.length,
           rows: timesheet.rows.length,
         });
         setMeasurementBases(bases);
+        setMeasurementCatalogItems(catalogItems);
         setMeasurementTimesheet(timesheet);
         setMeasurementLoaded(true);
         logMeasurementTimesheetPerformance("Erstladen gesamt", loadStartedAt, {
@@ -956,6 +962,7 @@ export function SiteDetailPage() {
     try {
       const updated = await api.updateMeasurementBase(site.id, base.id, payload);
       setMeasurementBases((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setMeasurementCatalogItems(await api.measurementItems(site.id, { activeOnly: true }));
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktualisiert werden."));
     }
@@ -969,8 +976,12 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.activateMeasurementBase(site.id, base.id);
-      const timesheet = await api.measurementTimesheet(site.id);
+      const [catalogItems, timesheet] = await Promise.all([
+        api.measurementItems(site.id, { activeOnly: true }),
+        api.measurementTimesheet(site.id),
+      ]);
       setMeasurementBases(bases);
+      setMeasurementCatalogItems(catalogItems);
       setMeasurementTimesheet(timesheet);
       setMeasurementBatches([]);
       setMeasurementLoaded(true);
@@ -995,8 +1006,12 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const bases = await api.deleteMeasurementBase(site.id, base.id);
-      const timesheet = await api.measurementTimesheet(site.id);
+      const [catalogItems, timesheet] = await Promise.all([
+        api.measurementItems(site.id, { activeOnly: true }),
+        api.measurementTimesheet(site.id),
+      ]);
       setMeasurementBases(bases);
+      setMeasurementCatalogItems(catalogItems);
       setMeasurementTimesheet(timesheet);
       setMeasurementBatches([]);
       setMeasurementBatchesLoaded(false);
@@ -1015,11 +1030,13 @@ export function SiteDetailPage() {
     setMeasurementImportMessage(null);
     try {
       await api.hideMeasurementItem(site.id, measurementItemId);
-      const [bases, timesheet] = await Promise.all([
+      const [bases, catalogItems, timesheet] = await Promise.all([
         api.measurementBases(site.id),
+        api.measurementItems(site.id, { activeOnly: true }),
         api.measurementTimesheet(site.id),
       ]);
       setMeasurementBases(bases);
+      setMeasurementCatalogItems(catalogItems);
       setMeasurementTimesheet(timesheet);
       setMeasurementBatches([]);
       setMeasurementBatchesLoaded(false);
@@ -1040,14 +1057,16 @@ export function SiteDetailPage() {
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
       const selectedBatchId = selectedMeasurementBatch?.id ?? null;
-      const [bases, timesheet, selectedBatchItems] = await Promise.all([
+      const [bases, catalogItems, timesheet, selectedBatchItems] = await Promise.all([
         api.measurementBases(site.id),
+        api.measurementItems(site.id, { activeOnly: true }),
         api.measurementTimesheet(site.id),
         selectedBatchId === null
           ? Promise.resolve(null)
           : api.siteMeasurementBatchItems(site.id, selectedBatchId),
       ]);
       setMeasurementBases(bases);
+      setMeasurementCatalogItems(catalogItems);
       setMeasurementTimesheet(timesheet);
       if (selectedBatchItems !== null) {
         setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(selectedBatchItems));
@@ -1366,6 +1385,7 @@ export function SiteDetailPage() {
             }
           }}
           bases={measurementBases}
+          catalogItems={measurementCatalogItems}
           canCreateBatch={canEditSite}
           canPromoteStatus={canEditSite}
           timesheet={measurementTimesheet}
@@ -1387,6 +1407,7 @@ export function SiteDetailPage() {
           onHideItem={(measurementItemId) => void hideMeasurementItem(measurementItemId)}
           onRetry={() => {
             setMeasurementLoaded(false);
+            setMeasurementCatalogItems([]);
             setMeasurementTimesheet(null);
             setMeasurementError(null);
             setMeasurementHideError(null);
@@ -2570,6 +2591,7 @@ function MeasurementTab({
   activeSubtab,
   onSubtabChange,
   bases,
+  catalogItems,
   canCreateBatch,
   canPromoteStatus,
   timesheet,
@@ -2630,6 +2652,7 @@ function MeasurementTab({
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
+  catalogItems: MeasurementItem[];
   canCreateBatch: boolean;
   canPromoteStatus: boolean;
   timesheet: MeasurementTimesheet | null;
@@ -2695,14 +2718,14 @@ function MeasurementTab({
     [selectableBases],
   );
   const projectPositionSuggestions = useMemo<MeasurementPositionSuggestion[]>(
-    () => (timesheet?.rows ?? []).map((row) => ({
-      id: row.position_id,
-      position: row.position_number,
-      description: row.description,
-      unit: row.unit,
-      linkedItem: null,
+    () => buildMeasurementPositionCatalog(catalogItems).map((item) => ({
+      ...item,
+      linkedItem: {
+        id: item.id,
+        position: item.position,
+      },
     })),
-    [timesheet?.rows],
+    [catalogItems],
   );
   const suggestedBaseName = useMemo(() => getSuggestedMeasurementSheetName(siteNumber, bases.length + 1), [bases.length, siteNumber]);
   const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBase ? "append_existing" : "create_new");
@@ -3650,7 +3673,10 @@ type MeasurementPositionSuggestion = {
   position: string;
   description: string;
   unit: string | null;
-  linkedItem: MobileMeasurementItem | null;
+  linkedItem: {
+    id: number;
+    position: string;
+  } | null;
 };
 
 type MeasurementSuggestionState = {
@@ -4285,15 +4311,7 @@ function MeasurementReviewPanel({
         {!batchItemsLoading ? (
           <MeasurementReviewTable
             items={tableItems}
-            positionSuggestions={isFreePositionOnlyBatch
-              ? projectPositionSuggestions
-              : batchItems.filter((item) => !item.is_free_position).map((item) => ({
-                  id: item.id,
-                  position: getVisibleMeasurementPosition(item),
-                  description: item.description,
-                  unit: item.unit,
-                  linkedItem: item,
-                }))}
+            positionSuggestions={projectPositionSuggestions}
             freePositionOnly={isFreePositionOnlyBatch}
             canEditRows={canEditRows}
             reviewActionLoading={reviewActionLoading}
@@ -4639,7 +4657,7 @@ function MeasurementReviewTable({
   savingEntryId: number | null;
   onDraftSave: (entry: MobileMeasurementItem["entries"][number], draft: MeasurementEntryDraft | undefined) => void;
   onDraftReset: (entry: MobileMeasurementItem["entries"][number]) => void;
-  onCellCreate: (item: MobileMeasurementItem, areaLabel: string, quantity: number) => Promise<void>;
+  onCellCreate: (item: { id: number; position: string }, areaLabel: string, quantity: number) => Promise<void>;
   onFreeItemCreate: (payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onFreeItemUpdate: (item: MobileMeasurementItem, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
   onFreeItemDelete: (item: MobileMeasurementItem) => Promise<void>;
@@ -4660,6 +4678,13 @@ function MeasurementReviewTable({
       return [item.id];
     }
     return item.linked_measurement_item_id === null ? [] : [item.linked_measurement_item_id];
+  })), [items]);
+  const usedPositionSuggestionKeys = useMemo(() => new Set(items.flatMap((item) => {
+    if (item.is_free_position) {
+      return [];
+    }
+    const key = getMeasurementPositionCatalogKey(getVisibleMeasurementPosition(item));
+    return key ? [key] : [];
   })), [items]);
   const activeManualColumnIndexes = useMemo(() => Object.entries(manualColumnDrafts)
     .filter(([columnKey, draft]) => (
@@ -4746,13 +4771,14 @@ function MeasurementReviewTable({
     const query = suggestionState.query.trim().toLocaleLowerCase("de-DE");
     return positionSuggestions
       .filter((item) => !usedPositionSuggestionIds.has(item.id))
+      .filter((item) => !usedPositionSuggestionKeys.has(getMeasurementPositionCatalogKey(item.position)))
       .filter((item) => (
         item.position.toLocaleLowerCase("de-DE").includes(query)
         || item.description.toLocaleLowerCase("de-DE").includes(query)
       ))
       .sort((left, right) => left.position.localeCompare(right.position, "de-DE", { numeric: true, sensitivity: "base" }))
       .slice(0, 8);
-  }, [positionSuggestions, suggestionState, usedPositionSuggestionIds]);
+  }, [positionSuggestions, suggestionState, usedPositionSuggestionIds, usedPositionSuggestionKeys]);
   const tableStyle = useMemo(() => ({
     "--measurement-axis-width": `${MEASUREMENT_TABLE_AXIS_WIDTH}px`,
     "--measurement-position-width": `${MEASUREMENT_TABLE_POSITION_WIDTH}px`,
@@ -4833,7 +4859,7 @@ function MeasurementReviewTable({
     return manualColumnDrafts[columnKey] ?? { position: "", description: "", unit: "", linkedItemId: null };
   }
 
-  function getManualColumnItem(columnKey: string): MobileMeasurementItem | null {
+  function getManualColumnItem(columnKey: string): { id: number; position: string } | null {
     const linkedItemId = manualColumnDrafts[columnKey]?.linkedItemId;
     if (!linkedItemId || actualItemIds.has(linkedItemId)) {
       return null;
@@ -4963,7 +4989,7 @@ function MeasurementReviewTable({
   }
 
   async function saveNewCellDraft(
-    item: MobileMeasurementItem,
+    item: { id: number; position: string },
     area: MeasurementMatrixAreaRow,
     input: HTMLInputElement,
     sourceColumnKey?: string,

@@ -231,6 +231,32 @@ def parsed_timesheet_position(
     )
 
 
+def parsed_timesheet_positions(
+    *,
+    invoice_number: str,
+    positions: list[str],
+    description_prefix: str,
+) -> MeasurementTimesheetParseResult:
+    return MeasurementTimesheetParseResult(
+        source_project_number="8007 / P250092",
+        source_invoice_number=invoice_number,
+        source_customer_name="ebm elektro-bau-montage GmbH",
+        items=[
+            ParsedMeasurementItem(
+                position=position,
+                description=f"{description_prefix} {position}",
+                list_quantity=Decimal("10.00"),
+                unit="Stck",
+                minutes_per_unit=Decimal("10.00"),
+                list_minutes_total=Decimal("100.00"),
+                is_nep=False,
+                sort_order=index,
+            )
+            for index, position in enumerate(positions, start=1)
+        ],
+    )
+
+
 def test_measurement_archive_filename_uses_completion_date_site_name_and_number():
     site = Site(
         name="Schüchtermann Klinik",
@@ -342,16 +368,18 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
     db = db_session()
     site = create_site(db)
     base = create_measurement_base(db, site)
+    main_positions = [f"444.4.{index:03d}" for index in range(10, 210, 10)]
+    supplement_positions = [f"N1.{index}" for index in range(10, 60, 10)]
     parsed_by_content = {
-        b"main": parsed_timesheet_position(
+        b"main": parsed_timesheet_positions(
             invoice_number="MAIN-001",
-            position="444.4.310",
-            description="Position aus Hauptangebot",
+            positions=main_positions,
+            description_prefix="Position aus Hauptangebot",
         ),
-        b"supplement": parsed_timesheet_position(
+        b"supplement": parsed_timesheet_positions(
             invoice_number="N1-001",
-            position="N1.10",
-            description="Position aus Nachtragsangebot",
+            positions=supplement_positions,
+            description_prefix="Position aus Nachtragsangebot",
         ),
     }
     monkeypatch.setattr(
@@ -402,14 +430,29 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
         import_mode="append_existing",
         measurement_base_id=base.id,
     )
+    timesheet_ids = [row.position_id for row in service.get_site_measurement_timesheet(site.id).rows]
+    leaked_free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="FREI-LEAK",
+        description="Darf nicht Teil des Angebotskatalogs sein",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=10_000,
+    )
+    db.add(leaked_free_item)
+    db.commit()
     new_batch = service.create_mobile_batch(
         assignment_id=assignment.id,
         current_user=user,
     )
     db.expire_all()
 
-    expected_ids = [main_items[0].id, supplement_items[0].id]
-    timesheet_ids = [row.position_id for row in service.get_site_measurement_timesheet(site.id).rows]
+    expected_ids = [item.id for item in [*main_items, *supplement_items]]
+    catalog_items = service._list_active_measurement_catalog_items(
+        site_id=site.id,
+        batch_id=existing_batch.id,
+    )
     existing_desktop_ids = [
         item.id
         for item in service.list_site_batch_items(site_id=site.id, batch_id=existing_batch.id)
@@ -431,12 +474,18 @@ def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(mo
         )
     ]
 
-    assert main_items[0].measurement_base_id == base.id
-    assert supplement_items[0].measurement_base_id == base.id
+    assert len(main_items) == 20
+    assert len(supplement_items) == 5
+    assert all(item.measurement_base_id == base.id for item in main_items)
+    assert all(item.measurement_base_id == base.id for item in supplement_items)
+    assert [item.id for item in catalog_items] == expected_ids
+    assert leaked_free_item.id not in {item.id for item in catalog_items}
     assert timesheet_ids == expected_ids
     assert existing_desktop_ids == expected_ids
     assert existing_mobile_ids == expected_ids
     assert new_mobile_ids == expected_ids
+    assert [item.source_file_name for item in catalog_items[:20]] == ["Hauptangebot.pdf"] * 20
+    assert [item.source_file_name for item in catalog_items[20:]] == ["Nachtragsangebot.pdf"] * 5
     assert all(item.entries == [] for item in service.list_site_batch_items(
         site_id=site.id,
         batch_id=existing_batch.id,
