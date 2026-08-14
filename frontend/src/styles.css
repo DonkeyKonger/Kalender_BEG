@@ -12149,21 +12149,16 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table th:nth-child(7),
 .measurement-timesheet-table td:nth-child(7) {
-  width: 110px;
+  width: 100px;
 }
 
 .measurement-timesheet-table th:nth-child(8),
 .measurement-timesheet-table td:nth-child(8) {
-  width: 100px;
+  width: 130px;
 }
 
 .measurement-timesheet-table th:nth-child(9),
 .measurement-timesheet-table td:nth-child(9) {
-  width: 130px;
-}
-
-.measurement-timesheet-table th:nth-child(10),
-.measurement-timesheet-table td:nth-child(10) {
   width: 120px;
 }
 
@@ -12250,10 +12245,6 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table thead .measurement-timesheet-number {
   text-align: right;
-}
-
-.measurement-timesheet-table tbody tr.has-quantity td:nth-child(2) {
-  box-shadow: inset 2px 0 0 #9bb6d3;
 }
 
 .measurement-timesheet-table tbody tr.has-quantity .measurement-timesheet-number {

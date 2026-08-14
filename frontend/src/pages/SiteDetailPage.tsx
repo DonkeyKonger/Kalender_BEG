@@ -3111,7 +3111,6 @@ function MeasurementTimesheetPanel({
     const rows = (timesheet?.rows ?? []).map((row) => {
       const plannedQuantity = getMeasurementNumericValue(row.target_quantity);
       const measuredQuantity = getMeasurementNumericValue(row.measured_quantity);
-      const remainingQuantity = row.remaining_quantity === null ? null : getMeasurementNumericValue(row.remaining_quantity);
 
       return {
         positionId: row.position_id,
@@ -3122,7 +3121,6 @@ function MeasurementTimesheetPanel({
         plannedQuantity,
         hasPlannedQuantity: plannedQuantity > 0,
         measuredQuantity,
-        remainingQuantity,
         minutesPerUnit: getMeasurementNumericValue(row.minutes_per_unit),
         plannedMinutes: getMeasurementNumericValue(row.planned_minutes),
         measuredMinutes: getMeasurementNumericValue(row.measured_minutes),
@@ -3425,7 +3423,6 @@ function MeasurementTimesheetPanel({
                           <th>Einheit</th>
                           <th className="measurement-timesheet-number">Soll</th>
                           <th className="measurement-timesheet-number">Ist</th>
-                          <th className="measurement-timesheet-number">Restmenge</th>
                           <th className="measurement-timesheet-number">Minuten</th>
                           <th className="measurement-timesheet-number">Gesamt</th>
                           <th className="measurement-timesheet-number">Fortschritt</th>
@@ -3434,7 +3431,7 @@ function MeasurementTimesheetPanel({
                       <tbody>
                         {virtualProjectPositionRows.topSpacerHeight > 0 ? (
                           <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
-                            <td colSpan={10} style={{ height: virtualProjectPositionRows.topSpacerHeight }} />
+                            <td colSpan={9} style={{ height: virtualProjectPositionRows.topSpacerHeight }} />
                           </tr>
                         ) : null}
                         {virtualProjectPositionRows.rows.map((row) => (
@@ -3461,7 +3458,6 @@ function MeasurementTimesheetPanel({
                             <td>{row.unit ?? "-"}</td>
                             <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
-                            <td className="measurement-timesheet-number">{row.remainingQuantity !== null ? formatMeasurementNumber(row.remainingQuantity) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
                             <td className="measurement-timesheet-number measurement-timesheet-progress-cell">
@@ -3480,7 +3476,7 @@ function MeasurementTimesheetPanel({
                         ))}
                         {virtualProjectPositionRows.bottomSpacerHeight > 0 ? (
                           <tr className="measurement-timesheet-virtual-spacer" aria-hidden="true">
-                            <td colSpan={10} style={{ height: virtualProjectPositionRows.bottomSpacerHeight }} />
+                            <td colSpan={9} style={{ height: virtualProjectPositionRows.bottomSpacerHeight }} />
                           </tr>
                         ) : null}
                       </tbody>

@@ -10,6 +10,7 @@ import {
 const sitePageSource = await readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
 const mobilePageSource = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+const stylesSource = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
 test("every successful offer import refreshes the selected batch position catalog", () => {
   const importStart = sitePageSource.indexOf("async function importMeasurementTimesheet(");
@@ -137,6 +138,13 @@ test("desktop replaces captured-state filters with offer groups and a manual-onl
   assert.doesNotMatch(sitePageSource, /Noch nicht erfasst/);
   assert.doesNotMatch(sitePageSource, /MeasurementTimesheetFilter/);
   assert.match(sitePageSource, /buildDesktopMeasurementPositionGroups/);
+});
+
+test("desktop execution status omits the remaining quantity column and captured-row marker", () => {
+  assert.doesNotMatch(sitePageSource, />Restmenge</);
+  assert.doesNotMatch(sitePageSource, /row\.remainingQuantity/);
+  assert.equal([...sitePageSource.matchAll(/colSpan=\{9\}/g)].length, 2);
+  assert.doesNotMatch(stylesSource, /tr\.has-quantity td:nth-child\(2\)/);
 });
 
 function sourceItem(id, position, sourceFileName, sourceInvoiceNumber) {
