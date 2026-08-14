@@ -683,6 +683,34 @@ export function MyAssignmentsPage() {
               </p>
             ) : null}
           </section>
+
+          <section className="mobile-settings-system-actions" aria-label="Daten und Konto">
+            <button
+              className="mobile-settings-system-action"
+              disabled={isLoading}
+              type="button"
+              onClick={() => void loadAssignments()}
+            >
+              <RefreshCcw aria-hidden="true" size={18} />
+              <span>
+                <strong>{isLoading ? "Daten werden aktualisiert ..." : "Daten aktualisieren"}</strong>
+                <small>Einsatzdaten erneut laden</small>
+              </span>
+              <ChevronRight aria-hidden="true" size={18} />
+            </button>
+            <button
+              className="mobile-settings-system-action"
+              type="button"
+              onClick={() => void handleLogout()}
+            >
+              <LogOut aria-hidden="true" size={18} />
+              <span>
+                <strong>Abmelden</strong>
+                <small>Aktuelle Sitzung beenden</small>
+              </span>
+              <ChevronRight aria-hidden="true" size={18} />
+            </button>
+          </section>
         </div>
       </section>
     );
@@ -712,16 +740,6 @@ export function MyAssignmentsPage() {
           </div>
         </div>
 
-        <div className="mobile-home-actions" aria-label="Startseitenaktionen">
-          <button className="icon-button secondary" type="button" onClick={() => void loadAssignments()}>
-            <RefreshCcw aria-hidden="true" size={17} />
-            <span>Aktualisieren</span>
-          </button>
-          <button className="icon-button secondary" type="button" onClick={() => void handleLogout()}>
-            <LogOut aria-hidden="true" size={17} />
-            <span>Abmelden</span>
-          </button>
-        </div>
       </header>
 
       {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}

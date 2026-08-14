@@ -157,23 +157,32 @@ test("planned counter uses the grouped blocks rendered by the horizontal timelin
 });
 
 
-test("mobile home groups identity, status, metadata, and actions in one rounded header", () => {
+test("mobile home keeps a compact identity, status, and metadata header", () => {
   assert.match(
     pageSource,
-    /className="mobile-home-overview-header"[\s\S]*className="mobile-home-identity-row"[\s\S]*user\?\.display_name[\s\S]*className="mobile-home-title-copy"[\s\S]*Aktualisiert \{formatTime\(loadedAt\)\}[\s\S]*className="mobile-home-actions"/,
+    /className="mobile-home-overview-header"[\s\S]*className="mobile-home-identity-row"[\s\S]*user\?\.display_name[\s\S]*className="mobile-home-title-copy"[\s\S]*Aktualisiert \{formatTime\(loadedAt\)\}/,
   );
   assert.doesNotMatch(pageSource, /Persönlicher Bereich/i);
+  assert.doesNotMatch(pageSource, /className="mobile-home-actions"/);
   assert.match(
     styles,
     /\.mobile-home-overview-header \{[^}]*border-radius:\s*16px;[^}]*background:\s*#ffffff;[^}]*padding:\s*14px;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-actions \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s,
+    /\.app-shell\.is-mobile-workspace \.app-main:has\(\.mobile-home-overview-header\) > \.mobile-appshell-actions \{[^}]*display:\s*none;/s,
+  );
+});
+
+
+test("manual refresh and logout reuse their existing handlers in mobile settings", () => {
+  assert.match(
+    pageSource,
+    /className="mobile-settings-system-actions"[\s\S]*onClick=\{\(\) => void loadAssignments\(\)\}[\s\S]*Daten aktualisieren[\s\S]*onClick=\{\(\) => void handleLogout\(\)\}[\s\S]*Abmelden/,
   );
   assert.match(
     styles,
-    /\.app-shell\.is-mobile-workspace \.app-main:has\(\.mobile-home-overview-header\) > \.mobile-appshell-actions \{[^}]*display:\s*none;/s,
+    /\.mobile-settings-system-action \{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*52px;/s,
   );
 });
 
