@@ -11794,7 +11794,7 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table-panel {
   display: grid;
-  gap: 16px;
+  gap: 0;
   min-width: 0;
   border: 0;
   border-radius: 0;
@@ -12005,10 +12005,10 @@ button.person-chip:focus-visible {
   justify-content: space-between;
   gap: 16px;
   border: 1px solid #dce4ef;
-  border-radius: 2px;
+  border-radius: 2px 2px 0 0;
   background: #ffffff;
   margin-bottom: 0;
-  padding: 12px;
+  padding: 10px 12px;
 }
 
 .measurement-timesheet-filter-group {
@@ -12027,7 +12027,7 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 32px;
+  min-height: 30px;
   border: 1px solid #cad5e5;
   border-radius: 2px;
   background: #ffffff;
@@ -12050,9 +12050,9 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-filter-group button.is-active {
-  border-color: #b9c7da;
-  background: #f1f5f9;
-  color: #24476f;
+  border-color: #97b2e8;
+  background: #f7faff;
+  color: #1d4f91;
 }
 
 .measurement-timesheet-search {
@@ -12099,7 +12099,8 @@ button.person-chip:focus-visible {
 .measurement-timesheet-table-wrap {
   max-height: min(64vh, 680px);
   border: 1px solid #dce4ef;
-  border-radius: 2px;
+  border-top: 0;
+  border-radius: 0;
   background: #ffffff;
   overflow: auto;
 }
@@ -12108,16 +12109,22 @@ button.person-chip:focus-visible {
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 48px;
+  height: 38px;
+  border-right: 1px solid #d5dde8;
   border-bottom: 1px solid #d9e1ec;
-  background: #f5f8fc;
+  background: #eef2f6;
   color: #4d5e78;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
-  padding: 12px;
+  padding: 0 10px;
   vertical-align: middle;
   box-shadow: 0 1px 0 #d9e1ec;
+  white-space: nowrap;
+}
+
+.measurement-timesheet-table thead th:last-child {
+  border-right: 0;
 }
 
 .measurement-timesheet-table th:nth-child(1),
@@ -12166,22 +12173,27 @@ button.person-chip:focus-visible {
   background: #ffffff;
 }
 
-.measurement-timesheet-table tbody tr:nth-child(even) {
-  background: #fbfcfe;
-}
-
 .measurement-timesheet-table tbody tr:hover {
-  background: #f7fafe;
+  background: #f7faff;
 }
 
 .measurement-timesheet-table tbody td {
-  min-height: 52px;
-  border-bottom: 1px solid #e8edf4;
+  height: 38px;
+  max-height: 38px;
+  border-right: 1px solid #dbe2eb;
+  border-bottom: 1px solid #dbe2eb;
   color: #172033;
-  font-size: 14px;
-  line-height: 1.35;
-  padding: 12px;
-  vertical-align: top;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 0 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.measurement-timesheet-table tbody td:last-child {
+  border-right: 0;
 }
 
 .measurement-timesheet-table tbody td:nth-child(2) strong {
@@ -12191,6 +12203,10 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-table td:nth-child(3) {
   min-width: auto;
+}
+
+.measurement-timesheet-table tbody tr.has-quantity td:first-child {
+  box-shadow: inset 2px 0 0 #2e63d3;
 }
 
 .measurement-timesheet-remove-col,
@@ -12205,14 +12221,14 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border: 1px solid transparent;
   border-radius: 0;
   background: transparent;
   color: #8a97a8;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1;
 }
@@ -12232,9 +12248,12 @@ button.person-chip:focus-visible {
 .measurement-timesheet-description {
   min-width: 420px;
   color: #172033;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .measurement-timesheet-table .measurement-timesheet-number {
@@ -12262,7 +12281,9 @@ button.person-chip:focus-visible {
 
 .measurement-timesheet-cell-progress {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
   justify-items: end;
 }
 
@@ -12274,12 +12295,19 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-cell-progress-track {
+  grid-column: 1;
+  grid-row: 1;
   display: block;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
+  height: 3px;
+  border-radius: 0;
   background: #e6ecf5;
   overflow: hidden;
+}
+
+.measurement-timesheet-cell-progress-value {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .measurement-timesheet-cell-progress-track span {
@@ -12289,7 +12317,29 @@ button.person-chip:focus-visible {
   background: #2e63d3;
 }
 
+.measurement-timesheet-statusbar {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid #dce4ef;
+  border-top: 0;
+  border-radius: 0 0 2px 2px;
+  background: #eef2f6;
+  color: #607089;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  padding: 0 12px;
+}
+
+.measurement-timesheet-statusbar span + span::before {
+  content: "\00b7";
+  margin: 0 10px;
+  color: #93a1b4;
+}
+
 .measurement-timesheet-table .measurement-timesheet-virtual-spacer td {
+  max-height: none;
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;

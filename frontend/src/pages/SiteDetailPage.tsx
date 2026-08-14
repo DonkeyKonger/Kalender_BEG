@@ -72,7 +72,7 @@ const MEASUREMENT_BATCH_BEFORE_SUBMITTED_STATUSES = new Set(["draft"]);
 const MEASUREMENT_BATCH_REVIEWED_STATUSES = new Set(["reviewed", "checked"]);
 const MEASUREMENT_BATCH_BILLED_STATUSES = new Set(["billed", "approved", "closed", "completed", "finalized"]);
 const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
-const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 56;
+const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 38;
 const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
 const MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT = 560;
 
@@ -3155,6 +3155,15 @@ function MeasurementTimesheetPanel({
     };
   }, [timesheet?.kpi]);
 
+  const projectPositionCaptureStats = useMemo(() => {
+    const capturedPositions = projectPositionRows.filter((row) => row.measuredQuantity > 0).length;
+    return {
+      capturedPositions,
+      openPositions: projectPositionRows.length - capturedPositions,
+      totalPositions: projectPositionRows.length,
+    };
+  }, [projectPositionRows]);
+
   const positionGroups = useMemo(() => {
     const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
     const groupItems = projectPositionRows.map((row) => catalogById.get(row.positionId) ?? {
@@ -3454,7 +3463,7 @@ function MeasurementTimesheetPanel({
                               ) : null}
                             </td>
                             <td><strong>{row.positionNumber}</strong></td>
-                            <td className="measurement-timesheet-description">{row.description}</td>
+                            <td className="measurement-timesheet-description" title={row.description}>{row.description}</td>
                             <td>{row.unit ?? "-"}</td>
                             <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
                             <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
@@ -3481,6 +3490,11 @@ function MeasurementTimesheetPanel({
                         ) : null}
                       </tbody>
                     </table>
+                  </div>
+                  <div className="measurement-timesheet-statusbar" aria-label="Positionsstatus">
+                    <span>{projectPositionCaptureStats.totalPositions} Positionen</span>
+                    <span>{projectPositionCaptureStats.capturedPositions} erfasst</span>
+                    <span>{projectPositionCaptureStats.openPositions} offen</span>
                   </div>
                 </>
               )}
