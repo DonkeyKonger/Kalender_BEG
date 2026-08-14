@@ -6344,7 +6344,7 @@ button.person-chip:focus-visible {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 12px;
-  padding: 2px 2px 4px;
+  padding: 2px 2px 1px;
 }
 
 .mobile-personal-file-header button {
@@ -6372,13 +6372,13 @@ button.person-chip:focus-visible {
 
 .mobile-personal-file-header h1 {
   color: #111827;
-  font-size: 1.36rem;
+  font-size: 1.34rem;
   line-height: 1.15;
   letter-spacing: 0;
 }
 
 .mobile-personal-file-header p {
-  margin-top: 3px;
+  margin-top: 2px;
   color: #718097;
   font-size: 0.86rem;
   font-weight: 650;
@@ -6514,9 +6514,9 @@ button.person-chip:focus-visible {
   display: grid;
   align-content: center;
   min-width: 0;
-  min-height: 82px;
-  gap: 3px;
-  padding: 13px 15px;
+  min-height: 64px;
+  gap: 2px;
+  padding: 10px 13px;
 }
 
 .mobile-personal-absence-summary > div:not(.is-primary) + div:not(.is-primary) {
@@ -6525,9 +6525,13 @@ button.person-chip:focus-visible {
 
 .mobile-personal-absence-summary > .is-primary {
   grid-column: 1 / -1;
-  min-height: 105px;
+  min-height: 82px;
   border-bottom: 1px solid #e2e8f0;
   border-left: 4px solid #16a34a;
+}
+
+.mobile-personal-absence-summary.is-vacation > .is-primary strong {
+  font-size: 1.52rem;
 }
 
 .mobile-personal-absence-summary.is-sickness > .is-primary {
@@ -6543,10 +6547,19 @@ button.person-chip:focus-visible {
 }
 
 .mobile-personal-absence-summary strong {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   color: #111827;
   font-size: 1.35rem;
   line-height: 1.1;
+  white-space: nowrap;
+}
+
+.mobile-personal-absence-summary > .is-secondary {
+  gap: 3px;
+}
+
+.mobile-personal-absence-summary > .is-secondary strong {
+  font-size: 1.12rem;
 }
 
 .mobile-personal-absence-week {
