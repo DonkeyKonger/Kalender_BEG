@@ -12120,7 +12120,7 @@ button.person-chip:focus-visible {
 .measurement-timesheet-filter-group button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   min-height: 30px;
   border: 1px solid #cad5e5;
   border-radius: 2px;
@@ -12130,7 +12130,8 @@ button.person-chip:focus-visible {
   font: inherit;
   font-size: 14px;
   font-weight: 700;
-  padding: 0 12px;
+  padding: 0 4px 0 11px;
+  white-space: nowrap;
 }
 
 .measurement-timesheet-filter-group button:hover {
@@ -12138,14 +12139,30 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-filter-group button span {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  border: 1px solid #d9e1eb;
+  border-radius: 2px;
+  background: #eef2f6;
+  color: #607089;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 5px;
 }
 
 .measurement-timesheet-filter-group button.is-active {
   border-color: #97b2e8;
   background: #f7faff;
+  color: #1d4f91;
+}
+
+.measurement-timesheet-filter-group button.is-active span {
+  border-color: #bed0ee;
+  background: #dce9fb;
   color: #1d4f91;
 }
 

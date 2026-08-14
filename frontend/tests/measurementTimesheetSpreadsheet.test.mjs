@@ -43,3 +43,10 @@ test("measurement search starts on the same grid line as the hours summary", () 
   assert.match(styles, /\.measurement-timesheet-filterbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(240px, 320px\);[\s\S]*?padding:\s*10px 0 10px 12px;/);
   assert.match(styles, /\.measurement-timesheet-search\s*\{[\s\S]*?width:\s*auto;[\s\S]*?margin-right:\s*12px;/);
 });
+
+test("measurement category counts use distinct compact badges", () => {
+  assert.match(source, /aria-label=\{`\$\{group\.label\}, \$\{group\.count\} \$\{group\.count === 1 \? "Position" : "Positionen"\}`\}/);
+  assert.match(source, /<span aria-hidden="true">\{group\.count\}<\/span>/);
+  assert.match(styles, /\.measurement-timesheet-filter-group button span\s*\{[\s\S]*?min-width:\s*24px;[\s\S]*?background:\s*#eef2f6;[\s\S]*?font-size:\s*12px;/);
+  assert.match(styles, /\.measurement-timesheet-filter-group button\.is-active span\s*\{[\s\S]*?background:\s*#dce9fb;[\s\S]*?color:\s*#1d4f91;/);
+});

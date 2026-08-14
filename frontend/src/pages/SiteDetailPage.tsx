@@ -3397,10 +3397,11 @@ function MeasurementTimesheetPanel({
                       key={group.key}
                       type="button"
                       className={activePositionGroup?.key === group.key ? "is-active" : ""}
+                      aria-label={`${group.label}, ${group.count} ${group.count === 1 ? "Position" : "Positionen"}`}
                       onClick={() => setActivePositionGroupKey(group.key)}
                     >
                       {group.label}
-                      <span>{group.count}</span>
+                      <span aria-hidden="true">{group.count}</span>
                     </button>
                   ))}
                 </div>
