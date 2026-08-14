@@ -206,6 +206,31 @@ def parsed_timesheet() -> MeasurementTimesheetParseResult:
     )
 
 
+def parsed_timesheet_position(
+    *,
+    invoice_number: str,
+    position: str,
+    description: str,
+) -> MeasurementTimesheetParseResult:
+    return MeasurementTimesheetParseResult(
+        source_project_number="8007 / P250092",
+        source_invoice_number=invoice_number,
+        source_customer_name="ebm elektro-bau-montage GmbH",
+        items=[
+            ParsedMeasurementItem(
+                position=position,
+                description=description,
+                list_quantity=Decimal("10.00"),
+                unit="Stck",
+                minutes_per_unit=Decimal("10.00"),
+                list_minutes_total=Decimal("100.00"),
+                is_nep=False,
+                sort_order=1,
+            )
+        ],
+    )
+
+
 def test_measurement_archive_filename_uses_completion_date_site_name_and_number():
     site = Site(
         name="Schüchtermann Klinik",
@@ -308,6 +333,114 @@ def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypat
     assert len(all_items) == 2
     assert all_items[0].position == all_items[1].position
     assert all_items[0].measurement_base_id != all_items[1].measurement_base_id
+
+
+def test_appended_offer_extends_position_catalog_for_existing_and_new_batches(monkeypatch):
+    from app.models.assignment import Assignment
+    from app.models.enums import AssignmentType
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    parsed_by_content = {
+        b"main": parsed_timesheet_position(
+            invoice_number="MAIN-001",
+            position="444.4.310",
+            description="Position aus Hauptangebot",
+        ),
+        b"supplement": parsed_timesheet_position(
+            invoice_number="N1-001",
+            position="N1.10",
+            description="Position aus Nachtragsangebot",
+        ),
+    }
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda content: parsed_by_content[content],
+    )
+
+    service = MeasurementService(db)
+    _summary, main_items = service.import_timesheet(
+        site.id,
+        file_name="Hauptangebot.pdf",
+        pdf_content=b"main",
+        import_mode="append_existing",
+        measurement_base_id=base.id,
+    )
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="max-catalog",
+        display_name="Max Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    assignment = Assignment(
+        site=site,
+        person=person,
+        start_date=date(2026, 6, 15),
+        end_date=date(2026, 6, 15),
+        assignment_type=AssignmentType.REGULAR,
+    )
+    db.add_all([user, assignment])
+    db.commit()
+
+    existing_batch = service.create_mobile_batch(
+        assignment_id=assignment.id,
+        current_user=user,
+    )
+    _summary, supplement_items = service.import_timesheet(
+        site.id,
+        file_name="Nachtragsangebot.pdf",
+        pdf_content=b"supplement",
+        import_mode="append_existing",
+        measurement_base_id=base.id,
+    )
+    new_batch = service.create_mobile_batch(
+        assignment_id=assignment.id,
+        current_user=user,
+    )
+    db.expire_all()
+
+    expected_ids = [main_items[0].id, supplement_items[0].id]
+    timesheet_ids = [row.position_id for row in service.get_site_measurement_timesheet(site.id).rows]
+    existing_desktop_ids = [
+        item.id
+        for item in service.list_site_batch_items(site_id=site.id, batch_id=existing_batch.id)
+    ]
+    existing_mobile_ids = [
+        item.id
+        for item in service.list_mobile_batch_items(
+            assignment_id=assignment.id,
+            batch_id=existing_batch.id,
+            current_user=user,
+        )
+    ]
+    new_mobile_ids = [
+        item.id
+        for item in service.list_mobile_batch_items(
+            assignment_id=assignment.id,
+            batch_id=new_batch.id,
+            current_user=user,
+        )
+    ]
+
+    assert main_items[0].measurement_base_id == base.id
+    assert supplement_items[0].measurement_base_id == base.id
+    assert timesheet_ids == expected_ids
+    assert existing_desktop_ids == expected_ids
+    assert existing_mobile_ids == expected_ids
+    assert new_mobile_ids == expected_ids
+    assert all(item.entries == [] for item in service.list_site_batch_items(
+        site_id=site.id,
+        batch_id=existing_batch.id,
+    ))
 
 
 def test_mobile_free_measurement_item_is_stored_on_batch_base():

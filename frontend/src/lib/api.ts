@@ -1226,7 +1226,9 @@ export const api = {
   },
 
   async siteMeasurementBatchItems(siteId: number, batchId: number): Promise<MobileMeasurementItem[]> {
-    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`);
+    return request<MobileMeasurementItem[]>(`/sites/${siteId}/measurement-batches/${batchId}/items`, {
+      cache: "no-store",
+    });
   },
 
   async siteMeasurementWorkers(siteId: number): Promise<MeasurementWorkerOption[]> {
@@ -1761,7 +1763,9 @@ export const api = {
   },
 
   async mobileMeasurementBatchItems(assignmentId: number, batchId: number): Promise<MobileMeasurementItem[]> {
-    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`);
+    return request<MobileMeasurementItem[]>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/items`, {
+      cache: "no-store",
+    });
   },
 
   async createMobileMeasurementFreeItem(

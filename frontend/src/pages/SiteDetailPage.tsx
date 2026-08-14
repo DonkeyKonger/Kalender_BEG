@@ -1039,12 +1039,21 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     try {
       const result = await api.importMeasurementTimesheet(site.id, file, options);
-      const [bases, timesheet] = await Promise.all([
+      const selectedBatchId = selectedMeasurementBatch?.measurement_base_id === result.measurement_base.id
+        ? selectedMeasurementBatch.id
+        : null;
+      const [bases, timesheet, selectedBatchItems] = await Promise.all([
         api.measurementBases(site.id),
         api.measurementTimesheet(site.id),
+        selectedBatchId === null
+          ? Promise.resolve(null)
+          : api.siteMeasurementBatchItems(site.id, selectedBatchId),
       ]);
       setMeasurementBases(bases);
       setMeasurementTimesheet(timesheet);
+      if (selectedBatchItems !== null) {
+        setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(selectedBatchItems));
+      }
       setMeasurementBatches([]);
       setMeasurementLoaded(true);
       setMeasurementBatchesLoaded(false);
