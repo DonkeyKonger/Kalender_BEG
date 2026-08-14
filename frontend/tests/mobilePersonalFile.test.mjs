@@ -76,6 +76,8 @@ test("vacation and sickness cards open read-only weekly details", () => {
   assert.match(pageSource, /KW \{week\.iso_week\}/);
   assert.match(pageSource, /week\.week_start, week\.week_end/);
   assert.match(pageSource, /entry\.day_count/);
+  assert.match(pageSource, /Resturlaub \{data\.year - 1\}/);
+  assert.match(pageSource, /data\.vacation_carryover_days/);
   assert.match(pageSource, /Keine \{isVacation \? "Urlaubstage" : "Krankheitstage"\} in \{data\.year\}/);
   assert.doesNotMatch(pageSource, /MobilePersonalFileAbsencePage[\s\S]*Fehlzeit hinzufügen/);
 });
@@ -87,6 +89,7 @@ test("absence details use the established green and red status colors without ho
   assert.match(styles, /\.mobile-personal-absence-entry > span \{[^}]*background:\s*#e7f7ed;[^}]*color:\s*#126b36/s);
   assert.match(styles, /\.mobile-personal-absence-entry\.is-sick > span \{[^}]*background:\s*#fff1f0;[^}]*color:\s*#9f1d14/s);
   assert.doesNotMatch(styles, /\.mobile-personal-absence-(?:content|weeks|week|entry)[^{]*\{[^}]*overflow-x:\s*(?:auto|scroll)/s);
+  assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation \{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
 });
 
 

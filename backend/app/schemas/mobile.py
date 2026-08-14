@@ -134,5 +134,6 @@ class MobilePersonalFileAbsenceResponse(BaseModel):
     remaining_vacation_days: int
     total_vacation_days: int
     taken_vacation_days: int
+    vacation_carryover_days: int
     sick_days: int
     weeks: list[MobilePersonalFileAbsenceWeek]

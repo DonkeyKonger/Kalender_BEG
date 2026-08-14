@@ -221,17 +221,22 @@ class PersonYearAbsenceData:
 
 def count_absence_weekdays(start_date: date, end_date: date, year: int) -> int:
     """Count Monday through Friday within the selected calendar year, inclusively."""
+    return len(absence_weekdays(start_date, end_date, year))
+
+
+def absence_weekdays(start_date: date, end_date: date, year: int) -> tuple[date, ...]:
+    """Return the workdays used by the central yearly absence calculation."""
     clipped_start = max(start_date, date(year, 1, 1))
     clipped_end = min(end_date, date(year, 12, 31))
     if clipped_end < clipped_start:
-        return 0
-    count = 0
+        return ()
+    days: list[date] = []
     cursor = clipped_start
     while cursor <= clipped_end:
         if cursor.weekday() < 5:
-            count += 1
+            days.append(cursor)
         cursor += timedelta(days=1)
-    return count
+    return tuple(days)
 
 
 def absence_snapshot(absence: Absence) -> dict:

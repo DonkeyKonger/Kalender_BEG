@@ -275,10 +275,11 @@ def test_personal_file_absences_split_cross_week_entries_without_changing_day_to
     assert details.total_vacation_days == 32
     assert details.taken_vacation_days == 2
     assert details.remaining_vacation_days == 30
-    assert [week.iso_week for week in details.weeks] == [29, 28]
+    assert details.vacation_carryover_days == 2
+    assert [week.iso_week for week in details.weeks] == [28, 29]
     assert [(week.week_start, week.week_end) for week in details.weeks] == [
-        (date(2026, 7, 13), date(2026, 7, 19)),
         (date(2026, 7, 6), date(2026, 7, 12)),
+        (date(2026, 7, 13), date(2026, 7, 19)),
     ]
     assert [entry.day_count for week in details.weeks for entry in week.entries] == [1, 1]
     assert {entry.source_id for week in details.weeks for entry in week.entries} == {vacation.id}
@@ -313,6 +314,90 @@ def test_personal_file_absences_group_multiple_entries_once_per_week_and_sort_th
     ]
     assert details.taken_vacation_days == 4
     assert sum(entry.day_count for week in details.weeks for entry in week.entries) == 4
+    db.close()
+
+
+def test_personal_file_absences_merge_only_consecutive_days_inside_the_same_iso_week():
+    db, user, worker, _other = personal_file_context()
+    db.add_all(
+        [
+            Absence(
+                person_id=worker.id,
+                absence_type=AbsenceType.VACATION,
+                start_date=absence_day,
+                end_date=absence_day,
+                status=AbsenceStatus.ACTIVE,
+            )
+            for absence_day in (
+                date(2026, 2, 2),
+                date(2026, 2, 3),
+                date(2026, 2, 5),
+                date(2026, 2, 6),
+            )
+        ]
+    )
+    db.commit()
+
+    details = MobilePersonalFileService(db).get_absence_details(
+        current_user=user,
+        year=2026,
+        absence_type=AbsenceType.VACATION,
+    )
+
+    week_6 = next(week for week in details.weeks if week.iso_week == 6)
+    assert [(entry.start_date, entry.end_date, entry.day_count) for entry in week_6.entries] == [
+        (date(2026, 2, 2), date(2026, 2, 3), 2),
+        (date(2026, 2, 5), date(2026, 2, 6), 2),
+    ]
+    assert [week.week_start for week in details.weeks] == sorted(
+        week.week_start for week in details.weeks
+    )
+    db.close()
+
+
+def test_personal_file_absences_clip_year_boundaries_and_keep_iso_week_headers():
+    db, user, worker, _other = personal_file_context()
+    db.add_all(
+        [
+            Absence(
+                person_id=worker.id,
+                absence_type=AbsenceType.VACATION,
+                start_date=date(2025, 12, 31),
+                end_date=date(2026, 1, 2),
+                status=AbsenceStatus.ACTIVE,
+            ),
+            Absence(
+                person_id=worker.id,
+                absence_type=AbsenceType.VACATION,
+                start_date=date(2026, 12, 31),
+                end_date=date(2027, 1, 4),
+                status=AbsenceStatus.ACTIVE,
+            ),
+        ]
+    )
+    db.commit()
+
+    details = MobilePersonalFileService(db).get_absence_details(
+        current_user=user,
+        year=2026,
+        absence_type=AbsenceType.VACATION,
+    )
+
+    first_week = details.weeks[0]
+    last_week = details.weeks[-1]
+    assert (first_week.iso_year, first_week.iso_week, first_week.week_start, first_week.week_end) == (
+        2026,
+        1,
+        date(2025, 12, 29),
+        date(2026, 1, 4),
+    )
+    assert [(entry.start_date, entry.end_date, entry.day_count) for entry in first_week.entries] == [
+        (date(2026, 1, 1), date(2026, 1, 2), 2),
+    ]
+    assert (last_week.iso_year, last_week.iso_week) == (2026, 53)
+    assert [(entry.start_date, entry.end_date, entry.day_count) for entry in last_week.entries] == [
+        (date(2026, 12, 31), date(2026, 12, 31), 1),
+    ]
     db.close()
 
 

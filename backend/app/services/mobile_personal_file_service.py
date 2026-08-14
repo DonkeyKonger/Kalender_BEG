@@ -29,7 +29,7 @@ from app.schemas.mobile import (
     MobilePersonalFileVehicle,
     MobileToolIssueSummary,
 )
-from app.services.absence_service import AbsenceService
+from app.services.absence_service import AbsenceService, absence_weekdays
 from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.tool_material_service import natural_beg_number_key
 
@@ -84,14 +84,17 @@ class MobilePersonalFileService:
                 "In der persönlichen Akte sind nur Urlaub und Krankheit verfügbar.",
             )
         person = self._current_person(current_user)
-        absence_data = AbsenceService(self.db).get_person_year_data(person=person, year=year)
+        absence_service = AbsenceService(self.db)
+        absence_data = absence_service.get_person_year_data(person=person, year=year)
         summary = absence_data.summary
+        carryover = absence_service.get_vacation_carryover(person_id=person.id, year=year)
         return MobilePersonalFileAbsenceResponse(
             year=year,
             absence_type=absence_type,
             remaining_vacation_days=summary.remaining_vacation_days,
             total_vacation_days=summary.total_vacation_days,
             taken_vacation_days=summary.vacation_days,
+            vacation_carryover_days=carryover.carryover_days if carryover is not None else 0,
             sick_days=summary.sick_days,
             weeks=_build_absence_weeks(
                 absences=absence_data.absences,
@@ -224,39 +227,19 @@ def _build_absence_weeks(
     year: int,
     absence_type: AbsenceType,
 ) -> list[MobilePersonalFileAbsenceWeek]:
-    year_start = date(year, 1, 1)
-    year_end = date(year, 12, 31)
-    grouped_entries: dict[tuple[int, int, date, date], list[MobilePersonalFileAbsenceEntry]] = {}
+    days_by_week: dict[tuple[int, int, date, date], dict[date, int]] = {}
 
     for absence in absences:
         if absence.absence_type != absence_type:
             continue
-        clipped_start = max(absence.start_date, year_start)
-        clipped_end = min(absence.end_date, year_end)
-        cursor = clipped_start
-        while cursor <= clipped_end:
-            week_start = cursor - timedelta(days=cursor.weekday())
+        for absence_day in absence_weekdays(absence.start_date, absence.end_date, year):
+            week_start = absence_day - timedelta(days=absence_day.weekday())
             week_end = week_start + timedelta(days=6)
-            calendar_segment_start = max(clipped_start, week_start)
-            calendar_segment_end = min(clipped_end, week_end)
-            weekdays = [
-                calendar_segment_start + timedelta(days=offset)
-                for offset in range((calendar_segment_end - calendar_segment_start).days + 1)
-                if (calendar_segment_start + timedelta(days=offset)).weekday() < 5
-            ]
-            if weekdays:
-                iso_year, iso_week, _ = week_start.isocalendar()
-                key = (iso_year, iso_week, week_start, week_end)
-                grouped_entries.setdefault(key, []).append(
-                    MobilePersonalFileAbsenceEntry(
-                        source_id=absence.id,
-                        absence_type=absence.absence_type,
-                        start_date=weekdays[0],
-                        end_date=weekdays[-1],
-                        day_count=len(weekdays),
-                    )
-                )
-            cursor = week_end + timedelta(days=1)
+            iso_year, iso_week, _ = absence_day.isocalendar()
+            key = (iso_year, iso_week, week_start, week_end)
+            # Overlapping records represent the same displayed absence day and must
+            # not create duplicate cards. Keep one stable source id for the React key.
+            days_by_week.setdefault(key, {}).setdefault(absence_day, absence.id)
 
     weeks = [
         MobilePersonalFileAbsenceWeek(
@@ -264,11 +247,50 @@ def _build_absence_weeks(
             iso_week=iso_week,
             week_start=week_start,
             week_end=week_end,
-            entries=sorted(
-                entries,
-                key=lambda entry: (entry.start_date, entry.end_date, entry.source_id),
+            entries=_build_contiguous_absence_entries(
+                days=days,
+                absence_type=absence_type,
             ),
         )
-        for (iso_year, iso_week, week_start, week_end), entries in grouped_entries.items()
+        for (iso_year, iso_week, week_start, week_end), days in days_by_week.items()
     ]
-    return sorted(weeks, key=lambda week: (week.week_start, week.iso_week), reverse=True)
+    return sorted(weeks, key=lambda week: (week.week_start, week.iso_week))
+
+
+def _build_contiguous_absence_entries(
+    *,
+    days: dict[date, int],
+    absence_type: AbsenceType,
+) -> list[MobilePersonalFileAbsenceEntry]:
+    sorted_days = sorted(days)
+    if not sorted_days:
+        return []
+
+    entries: list[MobilePersonalFileAbsenceEntry] = []
+    segment_start = sorted_days[0]
+    segment_end = sorted_days[0]
+    source_ids = [days[sorted_days[0]]]
+
+    def append_segment() -> None:
+        entries.append(
+            MobilePersonalFileAbsenceEntry(
+                source_id=min(source_ids),
+                absence_type=absence_type,
+                start_date=segment_start,
+                end_date=segment_end,
+                day_count=(segment_end - segment_start).days + 1,
+            )
+        )
+
+    for absence_day in sorted_days[1:]:
+        if absence_day == segment_end + timedelta(days=1):
+            segment_end = absence_day
+            source_ids.append(days[absence_day])
+            continue
+        append_segment()
+        segment_start = absence_day
+        segment_end = absence_day
+        source_ids = [days[absence_day]]
+
+    append_segment()
+    return entries

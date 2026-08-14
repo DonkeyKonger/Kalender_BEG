@@ -6452,6 +6452,10 @@ button.person-chip:focus-visible {
   box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
 }
 
+.mobile-personal-absence-summary.is-vacation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mobile-personal-absence-summary > div {
   display: grid;
   align-content: center;
@@ -6461,7 +6465,7 @@ button.person-chip:focus-visible {
   padding: 13px 15px;
 }
 
-.mobile-personal-absence-summary > div:last-child:not(.is-primary) {
+.mobile-personal-absence-summary > div:not(.is-primary) + div:not(.is-primary) {
   border-left: 1px solid #e2e8f0;
 }
 
@@ -7137,26 +7141,6 @@ button.person-chip:focus-visible {
 
   .mobile-personal-stat-grid {
     grid-template-columns: 1fr;
-  }
-
-  .mobile-personal-absence-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .mobile-personal-absence-summary > div,
-  .mobile-personal-absence-summary > .is-primary {
-    grid-column: 1;
-    min-height: 78px;
-    border-left: 4px solid #16a34a;
-  }
-
-  .mobile-personal-absence-summary > div:not(.is-primary) {
-    border-top: 1px solid #e2e8f0;
-    border-left: 4px solid #16a34a;
-  }
-
-  .mobile-personal-absence-summary.is-sickness > .is-primary {
-    border-left-color: #dc2626;
   }
 
   .mobile-personal-hours-card,

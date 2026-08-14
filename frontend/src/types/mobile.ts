@@ -115,6 +115,7 @@ export type MobilePersonalFileAbsenceResponse = {
   remaining_vacation_days: number;
   total_vacation_days: number;
   taken_vacation_days: number;
+  vacation_carryover_days: number;
   sick_days: number;
   weeks: MobilePersonalFileAbsenceWeek[];
 };

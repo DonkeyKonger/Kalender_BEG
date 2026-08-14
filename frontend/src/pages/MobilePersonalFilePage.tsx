@@ -243,6 +243,10 @@ export function MobilePersonalFileAbsencePage({
                 <span>Genommener Urlaub</span>
                 <strong>{formatDays(data.taken_vacation_days)}</strong>
               </div>
+              <div>
+                <span>Resturlaub {data.year - 1}</span>
+                <strong>{formatDays(data.vacation_carryover_days)}</strong>
+              </div>
             </section>
           ) : (
             <section className="mobile-personal-absence-summary is-sickness" aria-label={`Krankheitsübersicht ${data.year}`}>
