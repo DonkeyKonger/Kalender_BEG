@@ -25960,6 +25960,57 @@ button.person-chip:focus-visible {
   border-radius: 2px;
 }
 
+@media (min-width: 900px) {
+  .site-detail-page.is-project-file-workspace.is-measurement-timesheet-workspace {
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace > .project-record-tab-panel {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    flex-direction: column;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .project-record-subtab-bar {
+    flex: 0 0 auto;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .measurement-timesheet-workspace {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .measurement-timesheet-progress-row {
+    flex: 0 0 auto;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .measurement-timesheet-table-panel {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .measurement-timesheet-table-wrap {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .site-detail-page.is-measurement-timesheet-workspace .measurement-timesheet-statusbar {
+    flex: 0 0 auto;
+  }
+}
+
 .site-detail-page.is-project-file-workspace .measurement-table th,
 .site-detail-page.is-project-file-workspace .measurement-table-view th {
   background: var(--pf-muted-surface);

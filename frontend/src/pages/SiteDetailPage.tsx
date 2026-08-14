@@ -1280,9 +1280,12 @@ export function SiteDetailPage() {
   }
 
   const isMeasurementReviewWorkspace = activeTab === "measurement" && measurementSubtab === "review";
+  const isMeasurementTimesheetWorkspace = activeTab === "measurement" && measurementSubtab === "timesheet";
 
   return (
-    <section className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}`}>
+    <section
+      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}`}
+    >
       <Link className="back-link" to={siteDetailBackPath}>
         <ArrowLeft aria-hidden="true" size={16} />
         <span>Baustellen</span>

@@ -29,3 +29,11 @@ test("measurement timesheet uses a compact continuous spreadsheet grid", () => {
   assert.match(styles, /\.measurement-timesheet-statusbar\s*\{[\s\S]*?background:\s*#eef2f6;/);
   assert.doesNotMatch(styles, /\.measurement-timesheet-table tbody tr:nth-child\(even\)/);
 });
+
+test("measurement timesheet keeps its status bar inside the desktop viewport", () => {
+  assert.match(source, /const isMeasurementTimesheetWorkspace = activeTab === "measurement" && measurementSubtab === "timesheet"/);
+  assert.match(source, /isMeasurementTimesheetWorkspace \? " is-measurement-timesheet-workspace" : ""/);
+  assert.match(styles, /\.site-detail-page\.is-project-file-workspace\.is-measurement-timesheet-workspace\s*\{[\s\S]*?height:\s*calc\(100dvh - 48px\);[\s\S]*?grid-template-rows:\s*auto auto auto minmax\(0, 1fr\);/);
+  assert.match(styles, /\.site-detail-page\.is-measurement-timesheet-workspace \.measurement-timesheet-table-panel\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\) auto;[\s\S]*?overflow:\s*hidden;/);
+  assert.match(styles, /\.site-detail-page\.is-measurement-timesheet-workspace \.measurement-timesheet-table-wrap\s*\{[\s\S]*?height:\s*100%;[\s\S]*?max-height:\s*none;[\s\S]*?overflow:\s*auto;/);
+});
