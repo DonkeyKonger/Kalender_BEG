@@ -113,12 +113,43 @@ test("mobile home follows the personal-file hierarchy and uses a construction ic
   assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
   assert.match(pageSource, /className="mobile-home-overview-panel"[\s\S]*>Nächste Einsätze<\/h2>/);
   assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelinePages\.map\(\(page\) =>[\s\S]*page\.map\(\(item\) =>/);
-  assert.doesNotMatch(pageSource, /mobileHomeDays\.slice\(/);
+  assert.doesNotMatch(pageSource, /MOBILE_HOME_VISIBLE_DAY_COUNT|\.slice\(\s*0\s*,\s*4\s*\)/);
   assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
   assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
   assert.equal(pageSource.match(/<HardHat size=\{22\}/g)?.length, 1);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
+});
+
+
+test("horizontal assignment timeline keeps every planned block beyond the legacy four-item limit", () => {
+  assert.match(
+    pageSource,
+    /getDayRange\(today, MOBILE_HOME_DAY_WINDOW\)\s*\.filter\([\s\S]*?shouldShowMobileUpcomingDay[\s\S]*?\),\s*\[dailyByDate, today\]/,
+  );
+  assert.doesNotMatch(
+    pageSource,
+    /getDayRange\(today, MOBILE_HOME_DAY_WINDOW\)[\s\S]{0,300}\.slice\(/,
+  );
+
+  for (const plannedCount of [3, 4, 8, 12, 20]) {
+    const renderedItems = Array.from({ length: plannedCount }, (_, index) => ({ id: index + 1 }));
+    const pages = [];
+    for (let index = 0; index < renderedItems.length; index += 2) {
+      pages.push(renderedItems.slice(index, index + 2));
+    }
+    assert.equal(pages.flat().length, plannedCount);
+  }
+});
+
+
+test("planned counter uses the grouped blocks rendered by the horizontal timeline", () => {
+  assert.match(
+    pageSource,
+    /mobileHomeTimelineItems\.filter\(\(item\) => item\.assignment !== null\)\.length/,
+  );
+  assert.match(pageSource, /function buildMobileHomeTimelineItems\(/);
+  assert.match(pageSource, /continuesPrevious[\s\S]*previous\.dayCount \+= 1/);
 });
 
 

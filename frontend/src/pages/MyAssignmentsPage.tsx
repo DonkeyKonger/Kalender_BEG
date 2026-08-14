@@ -41,7 +41,6 @@ const CACHE_KEY_PREFIX = "kb_mobile_assignments_cache_v2";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_DAY_WINDOW = 7;
-const MOBILE_HOME_VISIBLE_DAY_COUNT = 4;
 const MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE = 2;
 
 type MobileViewMode = "two_weeks" | "year";
@@ -473,8 +472,7 @@ export function MyAssignmentsPage() {
   const dailyByDate = useMemo(() => groupDailyAssignments(dailyAssignments), [dailyAssignments]);
   const mobileHomeDays = useMemo(
     () => getDayRange(today, MOBILE_HOME_DAY_WINDOW)
-      .filter((date) => shouldShowMobileUpcomingDay(date, dailyByDate.get(date) ?? []))
-      .slice(0, MOBILE_HOME_VISIBLE_DAY_COUNT),
+      .filter((date) => shouldShowMobileUpcomingDay(date, dailyByDate.get(date) ?? [])),
     [dailyByDate, today],
   );
   const mobileHomeTimelineItems = useMemo(
@@ -486,11 +484,8 @@ export function MyAssignmentsPage() {
     [mobileHomeTimelineItems],
   );
   const mobileHomePlannedCount = useMemo(
-    () => mobileHomeDays.reduce(
-      (count, date) => count + (dailyByDate.get(date) ?? []).filter(hasRealDailyAssignment).length,
-      0,
-    ),
-    [dailyByDate, mobileHomeDays],
+    () => mobileHomeTimelineItems.filter((item) => item.assignment !== null).length,
+    [mobileHomeTimelineItems],
   );
   const yearGroups = useMemo(
     () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
