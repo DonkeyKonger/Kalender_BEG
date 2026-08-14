@@ -11999,16 +11999,15 @@ button.person-chip:focus-visible {
 }
 
 .measurement-timesheet-filterbar {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   border: 1px solid #dce4ef;
   border-radius: 2px 2px 0 0;
   background: #ffffff;
   margin-bottom: 0;
-  padding: 10px 12px;
+  padding: 10px 0 10px 12px;
 }
 
 .measurement-timesheet-filter-group {
@@ -12059,14 +12058,27 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 340px;
-  width: 340px;
+  width: auto;
+  min-width: 0;
   min-height: 34px;
+  margin-right: 12px;
   border: 1px solid #d3dce8;
   border-radius: 2px;
   background: #ffffff;
   color: #7a8799;
   padding: 0 12px;
+}
+
+@media (max-width: 640px) {
+  .measurement-timesheet-filterbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px 12px;
+  }
+
+  .measurement-timesheet-search {
+    width: 100%;
+    margin-right: 0;
+  }
 }
 
 .measurement-timesheet-search:focus-within {

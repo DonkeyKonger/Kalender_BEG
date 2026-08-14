@@ -37,3 +37,9 @@ test("measurement timesheet keeps its status bar inside the desktop viewport", (
   assert.match(styles, /\.site-detail-page\.is-measurement-timesheet-workspace \.measurement-timesheet-table-panel\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\) auto;[\s\S]*?overflow:\s*hidden;/);
   assert.match(styles, /\.site-detail-page\.is-measurement-timesheet-workspace \.measurement-timesheet-table-wrap\s*\{[\s\S]*?height:\s*100%;[\s\S]*?max-height:\s*none;[\s\S]*?overflow:\s*auto;/);
 });
+
+test("measurement search starts on the same grid line as the hours summary", () => {
+  assert.match(styles, /\.measurement-timesheet-progress-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(240px, 320px\);/);
+  assert.match(styles, /\.measurement-timesheet-filterbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(240px, 320px\);[\s\S]*?padding:\s*10px 0 10px 12px;/);
+  assert.match(styles, /\.measurement-timesheet-search\s*\{[\s\S]*?width:\s*auto;[\s\S]*?margin-right:\s*12px;/);
+});
