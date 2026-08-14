@@ -112,11 +112,11 @@ test("mobile home actions keep the established destinations and compact copy", (
 test("mobile home follows the personal-file hierarchy and uses a construction icon", () => {
   assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
   assert.match(pageSource, /className="mobile-home-overview-panel"[\s\S]*>Nächste Einsätze<\/h2>/);
-  assert.match(pageSource, /className="mobile-home-assignment-list"[\s\S]*mobileHomeDays\.map\(\(date\) =>/);
+  assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelineItems\.map\(\(item\) =>/);
   assert.doesNotMatch(pageSource, /mobileHomeDays\.slice\(/);
   assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
   assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
-  assert.equal(pageSource.match(/<HardHat aria-hidden="true"/g)?.length, 3);
+  assert.equal(pageSource.match(/<HardHat size=\{22\}/g)?.length, 1);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
 });
@@ -143,22 +143,36 @@ test("mobile home groups identity, status, metadata, and actions in one rounded 
 });
 
 
-test("all rows in the combined assignment block use the former featured scale", () => {
+test("the assignment timeline scales its cards and copy for narrow mobile viewports", () => {
   assert.match(
     styles,
     /\.mobile-home-overview-panel \.mobile-home-assignment-icon \{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border-radius:\s*12px;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-overview-panel \.mobile-home-assignment-card b,[\s\S]*?font-size:\s*1\.05rem;/,
+    /\.mobile-home-timeline-card \{[^}]*min-height:\s*clamp\(148px, 42vw, 174px\);[^}]*padding:\s*clamp\(12px, 4vw, 16px\);/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-overview-panel \.mobile-home-assignment-card small,[\s\S]*?font-size:\s*0\.78rem;/,
+    /\.mobile-home-timeline-copy b \{[^}]*font-size:\s*clamp\(1rem, 5vw, 1\.14rem\);/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-overview-panel \.mobile-home-assignment-icon svg \{[^}]*width:\s*22px;[^}]*height:\s*22px;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-card \{[^}]*min-height:\s*142px;[^}]*padding:\s*11px;/s,
+  );
+});
+
+
+test("the home assignment block is a snap timeline with grouped consecutive assignment days", () => {
+  assert.match(pageSource, /function buildMobileHomeTimelineItems\([\s\S]*latestItemByAssignmentId\.get\(daily\.assignment\.id\)[\s\S]*previous\.dayCount \+= 1/);
+  assert.match(pageSource, /className="mobile-home-timeline-pagination"[\s\S]*scrollMobileHomeTimelineTo\(index\)/);
+  assert.match(
+    styles,
+    /\.mobile-home-timeline-track \{[^}]*grid-auto-columns:\s*calc\(100% - clamp\(24px, 8vw, 42px\)\);[^}]*overflow-x:\s*auto;[^}]*overscroll-behavior-inline:\s*contain;[^}]*scroll-snap-type:\s*x mandatory;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-timeline-card \{[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
   );
 });
 

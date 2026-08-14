@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { UIEvent as ReactUIEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -56,6 +57,15 @@ type DailyAssignment = {
   assignment: MobileAssignment;
 };
 
+type MobileHomeTimelineItem = {
+  key: string;
+  start: string;
+  end: string;
+  dayCount: number;
+  assignment: MobileAssignment | null;
+  order: number;
+};
+
 type PlaceholderContent = {
   title: string;
   text: string;
@@ -94,7 +104,9 @@ export function MyAssignmentsPage() {
   const [isTogglingPushNotifications, setIsTogglingPushNotifications] = useState(false);
   const [pushNotificationMessage, setPushNotificationMessage] = useState<string | null>(null);
   const [pushNotificationMessageTone, setPushNotificationMessageTone] = useState<"info" | "error">("info");
+  const [activeHomeTimelineIndex, setActiveHomeTimelineIndex] = useState(0);
   const assignmentLoadRequestIdRef = useRef(0);
+  const mobileHomeTimelineRef = useRef<HTMLDivElement | null>(null);
 
   const range = useMemo(() => getRange(mode), [mode]);
   const assignmentCacheKey = useMemo(
@@ -464,6 +476,17 @@ export function MyAssignmentsPage() {
       .slice(0, MOBILE_HOME_VISIBLE_DAY_COUNT),
     [dailyByDate, today],
   );
+  const mobileHomeTimelineItems = useMemo(
+    () => buildMobileHomeTimelineItems(mobileHomeDays, dailyByDate),
+    [dailyByDate, mobileHomeDays],
+  );
+  const mobileHomePlannedCount = useMemo(
+    () => mobileHomeDays.reduce(
+      (count, date) => count + (dailyByDate.get(date) ?? []).filter(hasRealDailyAssignment).length,
+      0,
+    ),
+    [dailyByDate, mobileHomeDays],
+  );
   const yearGroups = useMemo(
     () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
     [data?.assignments, range.end, range.start],
@@ -477,6 +500,39 @@ export function MyAssignmentsPage() {
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
   useMobileScrollReset(activeScreen, activeScreen !== "home");
+
+  useEffect(() => {
+    setActiveHomeTimelineIndex(0);
+    if (mobileHomeTimelineRef.current) {
+      mobileHomeTimelineRef.current.scrollLeft = 0;
+    }
+  }, [mobileHomeTimelineItems]);
+
+  const handleMobileHomeTimelineScroll = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
+    const timeline = event.currentTarget;
+    const items = Array.from(
+      timeline.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-item]"),
+    );
+    if (!items.length) {
+      return;
+    }
+    const closestIndex = items.reduce((bestIndex, item, index) => (
+      Math.abs(item.offsetLeft - timeline.scrollLeft)
+        < Math.abs(items[bestIndex].offsetLeft - timeline.scrollLeft)
+        ? index
+        : bestIndex
+    ), 0);
+    setActiveHomeTimelineIndex((current) => current === closestIndex ? current : closestIndex);
+  }, []);
+
+  const scrollMobileHomeTimelineTo = useCallback((index: number) => {
+    const timeline = mobileHomeTimelineRef.current;
+    const item = timeline?.querySelectorAll<HTMLElement>("[data-mobile-home-timeline-item]").item(index);
+    if (!timeline || !item) {
+      return;
+    }
+    timeline.scrollTo({ left: item.offsetLeft, behavior: "smooth" });
+  }, []);
 
   if (activeScreen === "assignments") {
     return (
@@ -675,19 +731,43 @@ export function MyAssignmentsPage() {
       {!isLoading && (
         <>
           <section className="mobile-home-overview-panel" aria-labelledby="mobile-home-assignments-title">
-            <h2 id="mobile-home-assignments-title">Nächste Einsätze</h2>
-            <div className="mobile-home-assignment-list">
-              {mobileHomeDays.map((date) => (
-                <DayFocusCard
-                  date={date}
-                  label={date === today ? "Heute" : formatWeekday(date)}
-                  assignments={dailyByDate.get(date) ?? []}
-                  compact
-                  key={date}
+            <div className="mobile-home-timeline-heading">
+              <h2 id="mobile-home-assignments-title">Nächste Einsätze</h2>
+              <span>{mobileHomePlannedCount} geplant</span>
+            </div>
+            <div
+              aria-label="Nächste Einsätze als wischbare Timeline"
+              className="mobile-home-timeline-track"
+              ref={mobileHomeTimelineRef}
+              role="region"
+              onScroll={handleMobileHomeTimelineScroll}
+            >
+              {mobileHomeTimelineItems.map((item) => (
+                <MobileHomeTimelineCard
+                  item={item}
+                  key={item.key}
+                  today={today}
                   onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
                 />
               ))}
             </div>
+            {mobileHomeTimelineItems.length > 1 ? (
+              <div className="mobile-home-timeline-pagination" aria-label="Position in der Einsatz-Timeline">
+                {mobileHomeTimelineItems.map((item, index) => (
+                  <button
+                    aria-current={activeHomeTimelineIndex === index ? "true" : undefined}
+                    aria-label={`Einsatz ${index + 1} von ${mobileHomeTimelineItems.length} anzeigen`}
+                    className={activeHomeTimelineIndex === index ? "is-active" : ""}
+                    key={item.key}
+                    type="button"
+                    onClick={() => scrollMobileHomeTimelineTo(index)}
+                  />
+                ))}
+                <span aria-live="polite">
+                  {activeHomeTimelineIndex + 1} / {mobileHomeTimelineItems.length}
+                </span>
+              </div>
+            ) : null}
             <button
               className="mobile-home-all-assignments-button"
               title="Alle Einsätze anzeigen"
@@ -858,116 +938,72 @@ function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus |
   return null;
 }
 
-function DayFocusCard({
-  date,
-  label,
-  assignments,
-  compact = false,
+function MobileHomeTimelineCard({
+  item,
+  today,
   onEmptyDaySelect,
 }: {
-  date: string;
-  label: string;
-  assignments: DailyAssignment[];
-  compact?: boolean;
+  item: MobileHomeTimelineItem;
+  today: string;
   onEmptyDaySelect?: (date: string, label: string) => void;
 }) {
-  if (assignments.length > 1) {
+  const assignment = item.assignment;
+  const isToday = item.start === today;
+  const dateLabel = formatHomeTimelineDateRange(item.start, item.end);
+  const weekdayLabel = formatHomeTimelineWeekdayRange(item.start, item.end);
+  const secondaryText = assignment
+    ? [assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")
+    : "Antippen, falls du trotzdem auf Baustelle bist.";
+  const cardContent = (
+    <>
+      <span className={`mobile-home-timeline-date${isToday ? " is-today" : ""}`}>
+        {isToday ? <em>Heute</em> : null}
+        <strong>{weekdayLabel}</strong>
+        <span>{dateLabel}</span>
+        {item.dayCount > 1 ? <small>{item.dayCount} Einsatztage</small> : null}
+      </span>
+      <span className="mobile-home-timeline-main">
+        <span className="mobile-home-assignment-icon" aria-hidden="true">
+          <HardHat size={22} />
+        </span>
+        <span className="mobile-home-timeline-copy">
+          <b>{assignment?.site.name ?? "Kein Einsatz geplant."}</b>
+          <small>{secondaryText}</small>
+        </span>
+        <span className="assignment-card-affordance">
+          <ChevronRight aria-hidden="true" size={18} />
+        </span>
+      </span>
+    </>
+  );
+
+  if (assignment) {
     return (
-      <article className={`mobile-focus-card mobile-home-day-assignment-cluster${compact ? " is-upcoming" : ""}`}>
-        <div className="mobile-home-day-assignment-grid">
-          {assignments.map((daily) => (
-            <CompactHomeAssignmentCard
-              assignment={daily.assignment}
-              date={date}
-              key={daily.key}
-            />
-          ))}
-        </div>
-      </article>
+      <Link
+        aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}`}
+        className={`mobile-home-timeline-card${isToday ? " is-today" : ""}`}
+        data-mobile-home-timeline-item
+        state={{ assignment }}
+        to={`/me/assignments/${assignment.id}`}
+      >
+        {cardContent}
+      </Link>
     );
   }
 
   return (
-    <article className={`mobile-focus-card${compact ? " is-upcoming" : ""}`}>
-      {assignments.length ? assignments.map((daily) => (
-        <HomeAssignmentCard
-          assignment={daily.assignment}
-          date={date}
-          key={daily.key}
-        />
-      )) : (
-        <button
-          className="mobile-home-empty-day"
-          type="button"
-          onClick={() => onEmptyDaySelect?.(date, compact ? `${label} · ${formatShortDate(date)}` : "Heute")}
-        >
-          <span className="mobile-home-assignment-icon">
-            <HardHat aria-hidden="true" size={22} />
-          </span>
-          <span>
-            <strong>{formatHomeAssignmentDateLabel(date)}</strong>
-            <b>Kein Einsatz geplant.</b>
-            <small>Antippen, falls du trotzdem auf Baustelle bist.</small>
-          </span>
-        </button>
+    <button
+      aria-label={`${formatDate(item.start)}: Kein Einsatz geplant. Einsatz nachtragen`}
+      className="mobile-home-timeline-card is-empty"
+      data-mobile-home-timeline-item
+      type="button"
+      onClick={() => onEmptyDaySelect?.(
+        item.start,
+        isToday ? `Heute · ${formatShortDate(item.start)}` : formatHomeAssignmentDateLabel(item.start),
       )}
-    </article>
-  );
-}
-
-function CompactHomeAssignmentCard({
-  assignment,
-  date,
-}: {
-  assignment: MobileAssignment;
-  date: string;
-}) {
-  return (
-    <Link
-      className="mobile-home-assignment-card is-day-cluster-item"
-      to={`/me/assignments/${assignment.id}`}
-      state={{ assignment }}
     >
-      <span className="mobile-home-assignment-icon">
-        <HardHat aria-hidden="true" size={20} />
-      </span>
-      <span>
-        <strong>{formatHomeAssignmentDateLabel(date)}</strong>
-        <b>{assignment.site.name}</b>
-        <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
-      </span>
-      <span className="assignment-card-affordance">
-        <ChevronRight aria-hidden="true" size={15} />
-      </span>
-    </Link>
-  );
-}
-
-function HomeAssignmentCard({
-  assignment,
-  date,
-}: {
-  assignment: MobileAssignment;
-  date: string;
-}) {
-  return (
-    <Link
-      className="mobile-home-assignment-card"
-      to={`/me/assignments/${assignment.id}`}
-      state={{ assignment }}
-    >
-      <span className="mobile-home-assignment-icon">
-        <HardHat aria-hidden="true" size={22} />
-      </span>
-      <span>
-        <strong>{formatHomeAssignmentDateLabel(date)}</strong>
-        <b>{assignment.site.name}</b>
-        <small>{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</small>
-      </span>
-      <span className="assignment-card-affordance">
-        <ChevronRight aria-hidden="true" size={17} />
-      </span>
-    </Link>
+      {cardContent}
+    </button>
   );
 }
 
@@ -1223,6 +1259,60 @@ function groupDailyAssignments(entries: DailyAssignment[]): Map<string, DailyAss
   return grouped;
 }
 
+function buildMobileHomeTimelineItems(
+  dates: string[],
+  assignmentsByDate: Map<string, DailyAssignment[]>,
+): MobileHomeTimelineItem[] {
+  const items: MobileHomeTimelineItem[] = [];
+  const latestItemByAssignmentId = new Map<number, MobileHomeTimelineItem>();
+  let order = 0;
+
+  for (const date of dates) {
+    const assignments = (assignmentsByDate.get(date) ?? []).filter(hasRealDailyAssignment);
+    if (!assignments.length) {
+      items.push({
+        key: `empty:${date}`,
+        start: date,
+        end: date,
+        dayCount: 1,
+        assignment: null,
+        order,
+      });
+      order += 1;
+      continue;
+    }
+
+    for (const daily of assignments) {
+      const previous = latestItemByAssignmentId.get(daily.assignment.id);
+      const continuesPrevious = previous
+        && toIsoDate(addDays(parseIsoDate(previous.end), 1)) === date;
+      if (continuesPrevious) {
+        previous.end = date;
+        previous.dayCount += 1;
+        previous.key = `assignment:${daily.assignment.id}:${previous.start}:${date}`;
+        continue;
+      }
+
+      const item: MobileHomeTimelineItem = {
+        key: `assignment:${daily.assignment.id}:${date}`,
+        start: date,
+        end: date,
+        dayCount: 1,
+        assignment: daily.assignment,
+        order,
+      };
+      items.push(item);
+      latestItemByAssignmentId.set(daily.assignment.id, item);
+      order += 1;
+    }
+  }
+
+  return items.sort((left, right) => (
+    left.start.localeCompare(right.start)
+    || left.order - right.order
+  ));
+}
+
 function groupAssignmentsForLongView(assignments: MobileAssignment[], start: string, end: string): AssignmentRangeGroup[] {
   const startDate = parseIsoDate(start);
   const endDate = parseIsoDate(end);
@@ -1407,6 +1497,26 @@ function formatWeekday(date: string): string {
 
 function formatHomeAssignmentDateLabel(date: string): string {
   return `${formatWeekday(date).replace(/\.$/, "")} · ${formatShortDate(date)}`;
+}
+
+function formatHomeTimelineWeekdayRange(start: string, end: string): string {
+  const first = formatWeekday(start).replace(/\.$/, "");
+  if (start === end) {
+    return first;
+  }
+  return `${first}–${formatWeekday(end).replace(/\.$/, "")}`;
+}
+
+function formatHomeTimelineDateRange(start: string, end: string): string {
+  if (start === end) {
+    return formatShortDate(start);
+  }
+  const first = parseIsoDate(start);
+  const last = parseIsoDate(end);
+  if (first.getFullYear() === last.getFullYear() && first.getMonth() === last.getMonth()) {
+    return `${String(first.getDate()).padStart(2, "0")}.–${formatShortDate(end)}`;
+  }
+  return `${formatShortDate(start)}–${formatShortDate(end)}`;
 }
 
 function formatHomeOverviewDate(date: string): string {
