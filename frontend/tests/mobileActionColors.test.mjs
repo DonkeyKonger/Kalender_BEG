@@ -109,7 +109,7 @@ test("mobile home stays compact across phone and tablet viewports", () => {
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-overview-header \{[^}]*padding:\s*12px;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-overview-header \{[^}]*padding:\s*10px;/s,
   );
   assert.match(
     styles,
@@ -182,7 +182,7 @@ test("mobile home keeps a compact identity, status, and metadata header", () => 
   assert.doesNotMatch(pageSource, /className="mobile-home-actions"/);
   assert.match(
     styles,
-    /\.mobile-home-overview-header \{[^}]*border-radius:\s*16px;[^}]*background:\s*#ffffff;[^}]*padding:\s*14px;/s,
+    /\.mobile-home-overview-header \{[^}]*gap:\s*8px;[^}]*border-radius:\s*16px;[^}]*background:\s*#ffffff;[^}]*padding:\s*12px;/s,
   );
   assert.match(
     styles,
@@ -210,19 +210,19 @@ test("the assignment timeline scales its cards and copy for narrow mobile viewpo
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(100px, 28vw, 116px\), auto\);[^}]*align-content:\s*start;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), auto\);[^}]*align-content:\s*start;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*clamp\(104px, 30vw, 122px\) minmax\(0, 1fr\);[^}]*min-height:\s*clamp\(100px, 28vw, 116px\);[^}]*padding:\s*0;/s,
+    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*clamp\(92px, 27vw, 106px\) minmax\(0, 1fr\);[^}]*min-height:\s*clamp\(84px, 24vw, 98px\);[^}]*padding:\s*0;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-copy b \{[^}]*display:\s*-webkit-box;[^}]*font-size:\s*clamp\(1rem, 4\.7vw, 1\.14rem\);[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/s,
+    /\.mobile-home-timeline-copy b \{[^}]*display:\s*-webkit-box;[^}]*font-size:\s*clamp\(0\.94rem, 4\.4vw, 1\.06rem\);[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/s,
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(96px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*102px minmax\(0, 1fr\);[^}]*min-height:\s*96px;[^}]*padding:\s*0;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(82px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*88px minmax\(0, 1fr\);[^}]*min-height:\s*82px;[^}]*padding:\s*0;/s,
   );
 });
 
@@ -254,22 +254,34 @@ test("the home assignment block is a snap timeline with grouped consecutive assi
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(100px, 28vw, 116px\), auto\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), auto\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
   );
 });
 
 
-test("quick actions stack at full width with restored readable sizing", () => {
+test("quick actions stay full width with compact readable sizing", () => {
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \.mobile-action-card\.is-compact strong \{[^}]*font-size:\s*clamp\(0\.92rem, 4vw, 1rem\);[^}]*overflow-wrap:\s*normal;[^}]*white-space:\s*nowrap;[^}]*word-break:\s*normal;/s,
+    /\.mobile-home-quick-actions \.mobile-action-card\.is-compact strong \{[^}]*font-size:\s*clamp\(0\.87rem, 3\.7vw, 0\.94rem\);[^}]*overflow-wrap:\s*normal;[^}]*white-space:\s*nowrap;[^}]*word-break:\s*normal;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*gap:\s*10px;[^}]*min-height:\s*68px;[^}]*padding:\s*12px;/s,
+    /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*gap:\s*8px;[^}]*min-height:\s*56px;[^}]*padding:\s*9px;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-quick-actions \.mobile-action-icon \{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*padding:\s*9px;/s,
+    /\.mobile-home-quick-actions \.mobile-action-icon \{[^}]*width:\s*30px;[^}]*height:\s*30px;[^}]*padding:\s*8px;/s,
   );
+});
+
+
+test("mobile home compaction uses real layout values instead of global scaling", () => {
+  const mobileHomeStyles = styles.slice(
+    styles.indexOf(".mobile-home-page"),
+    styles.indexOf(".mobile-bottom-sheet-backdrop"),
+  );
+
+  assert.doesNotMatch(mobileHomeStyles, /\bzoom\s*:|transform\s*:\s*scale\(/);
+  assert.match(styles, /\.mobile-home-quick-actions \.mobile-action-card \{[^}]*min-height:\s*56px;/s);
+  assert.match(styles, /\.mobile-home-all-assignments-button \{[^}]*min-height:\s*44px;/s);
 });

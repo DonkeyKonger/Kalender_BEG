@@ -5626,7 +5626,7 @@ button.person-chip:focus-visible {
 .mobile-home-page {
   width: min(100%, 560px);
   max-width: 560px;
-  gap: 12px;
+  gap: 10px;
   background: #f5f8fc;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   overflow: visible;
@@ -5651,11 +5651,11 @@ button.person-chip:focus-visible {
 
 .mobile-home-overview-header {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid #d8e3ef;
   border-radius: 16px;
   background: #ffffff;
-  padding: 14px;
+  padding: 12px;
   box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
 }
 
@@ -5671,8 +5671,8 @@ button.person-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 9px;
   background: #eaf2fb;
   color: #16467b;
@@ -5682,7 +5682,7 @@ button.person-chip:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: #52627a;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 750;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -5717,7 +5717,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-overview-header h1 {
   color: #111827;
-  font-size: clamp(1.4rem, 6vw, 1.7rem);
+  font-size: clamp(1.32rem, 5.6vw, 1.58rem);
   line-height: 1.12;
   letter-spacing: 0;
 }
@@ -5728,7 +5728,7 @@ button.person-chip:focus-visible {
   gap: 5px 12px;
   min-width: 0;
   color: #718097;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.25;
   flex-wrap: wrap;
@@ -5755,16 +5755,16 @@ button.person-chip:focus-visible {
   border-radius: 999px;
   background: #dcfce7;
   color: #16733d;
-  padding: 4px 8px;
-  font-size: 0.68rem;
+  padding: 3px 7px;
+  font-size: 0.64rem;
   font-weight: 900;
   line-height: 1;
 }
 
 .mobile-home-status-badge::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -5780,16 +5780,16 @@ button.person-chip:focus-visible {
 
 .mobile-home-section {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .mobile-home-overview-panel {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid #d8e3ef;
   border-radius: 14px;
   background: #ffffff;
-  padding: 14px;
+  padding: 12px;
   box-shadow: 0 8px 20px rgb(18 29 52 / 5%);
   overflow: hidden;
 }
@@ -5804,7 +5804,7 @@ button.person-chip:focus-visible {
 .mobile-home-timeline-heading h2 {
   margin: 0;
   color: #65738a;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -5814,8 +5814,8 @@ button.person-chip:focus-visible {
   border-radius: 999px;
   background: #f1f5f9;
   color: #40526b;
-  padding: 4px 8px;
-  font-size: 0.68rem;
+  padding: 3px 7px;
+  font-size: 0.64rem;
   font-weight: 850;
   line-height: 1;
 }
@@ -5825,12 +5825,12 @@ button.person-chip:focus-visible {
   display: grid;
   grid-auto-columns: calc(100% - clamp(8px, 3vw, 14px));
   grid-auto-flow: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   margin: -2px -2px 0;
-  padding: 2px 2px 8px;
+  padding: 2px 2px 5px;
   scroll-padding-inline: 2px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
@@ -5844,9 +5844,9 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-page {
   display: grid;
-  grid-auto-rows: minmax(clamp(100px, 28vw, 116px), auto);
+  grid-auto-rows: minmax(clamp(84px, 24vw, 98px), auto);
   align-content: start;
-  gap: clamp(8px, 2.5vw, 12px);
+  gap: clamp(6px, 2vw, 8px);
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
@@ -5854,11 +5854,11 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-card {
   display: grid;
-  grid-template-columns: clamp(104px, 30vw, 122px) minmax(0, 1fr);
+  grid-template-columns: clamp(92px, 27vw, 106px) minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   min-width: 0;
-  min-height: clamp(100px, 28vw, 116px);
+  min-height: clamp(84px, 24vw, 98px);
   border: 1px solid #cfdaea;
   border-radius: 12px;
   background: #ffffff;
@@ -5892,15 +5892,15 @@ button.person-chip:focus-visible {
   display: grid;
   align-content: center;
   justify-items: start;
-  gap: 4px;
+  gap: 3px;
   width: calc(100% + 18px);
   min-width: 0;
   border: 0;
   border-radius: 0;
   background: linear-gradient(135deg, #edf3fa 0%, #dbe7f4 100%);
   color: #315f91;
-  padding: 10px 28px 10px 10px;
-  font-size: clamp(0.7rem, 3.2vw, 0.8rem);
+  padding: 8px 24px 8px 9px;
+  font-size: clamp(0.66rem, 3vw, 0.74rem);
   font-style: normal;
   font-weight: 850;
   line-height: 1.15;
@@ -5918,8 +5918,8 @@ button.person-chip:focus-visible {
   border-radius: 5px;
   background: rgb(255 255 255 / 78%);
   color: #1d5c99;
-  padding: 4px 6px;
-  font-size: clamp(0.56rem, 2.6vw, 0.66rem);
+  padding: 3px 5px;
+  font-size: clamp(0.54rem, 2.4vw, 0.62rem);
   font-style: normal;
   font-weight: 900;
   letter-spacing: 0.01em;
@@ -5929,7 +5929,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-date strong {
   color: #234f7d;
-  font-size: clamp(0.72rem, 3.4vw, 0.82rem);
+  font-size: clamp(0.68rem, 3vw, 0.76rem);
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -5948,15 +5948,15 @@ button.person-chip:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(8px, 2.5vw, 12px);
+  gap: clamp(6px, 2vw, 9px);
   min-width: 0;
-  padding: clamp(10px, 3vw, 14px) clamp(10px, 3vw, 14px) clamp(10px, 3vw, 14px) clamp(24px, 7vw, 30px);
+  padding: clamp(8px, 2.5vw, 11px) clamp(8px, 2.5vw, 11px) clamp(8px, 2.5vw, 11px) clamp(21px, 6vw, 26px);
 }
 
 .mobile-home-timeline-copy {
   display: grid;
   min-width: 0;
-  gap: 4px;
+  gap: 3px;
 }
 
 .mobile-home-timeline-copy b,
@@ -5969,7 +5969,7 @@ button.person-chip:focus-visible {
   display: -webkit-box;
   overflow: hidden;
   color: #111827;
-  font-size: clamp(1rem, 4.7vw, 1.14rem);
+  font-size: clamp(0.94rem, 4.4vw, 1.06rem);
   font-weight: 850;
   line-height: 1.14;
   white-space: normal;
@@ -5981,7 +5981,7 @@ button.person-chip:focus-visible {
   display: block;
   overflow: hidden;
   color: #65738a;
-  font-size: clamp(0.66rem, 3.2vw, 0.76rem);
+  font-size: clamp(0.62rem, 2.9vw, 0.7rem);
   font-weight: 760;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -5993,8 +5993,8 @@ button.person-chip:focus-visible {
   border-radius: 999px;
   background: #e7eff9;
   color: #315f91;
-  padding: 3px 6px;
-  font-size: clamp(0.58rem, 2.7vw, 0.64rem);
+  padding: 2px 5px;
+  font-size: clamp(0.54rem, 2.5vw, 0.59rem);
   font-weight: 850;
   line-height: 1;
   white-space: nowrap;
@@ -6012,8 +6012,8 @@ button.person-chip:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 18px;
+  gap: 5px;
+  min-height: 14px;
 }
 
 .mobile-home-timeline-pagination button {
@@ -6028,7 +6028,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-pagination button.is-active {
-  width: 20px;
+  width: 18px;
   background: #315f91;
 }
 
@@ -6041,7 +6041,7 @@ button.person-chip:focus-visible {
   min-width: 32px;
   margin-left: 2px;
   color: #718097;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -6052,15 +6052,15 @@ button.person-chip:focus-visible {
   justify-content: center;
   gap: 10px;
   width: auto;
-  min-height: 42px;
-  margin: 2px -14px -14px;
+  min-height: 44px;
+  margin: 0 -12px -12px;
   border: 0;
   border-top: 1px solid #e2e8f0;
   border-radius: 0;
   background: #f9fbfe;
   color: #16467b;
-  padding: 10px 14px;
-  font-size: 0.82rem;
+  padding: 7px 12px;
+  font-size: 0.78rem;
   font-weight: 850;
   cursor: pointer;
 }
@@ -6085,7 +6085,7 @@ button.person-chip:focus-visible {
 
 .mobile-section-heading h2 {
   color: #111827;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
   letter-spacing: 0;
 }
 
@@ -7403,26 +7403,26 @@ button.person-chip:focus-visible {
 
 .mobile-home-quick-actions {
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   padding-bottom: 0;
 }
 
 .mobile-home-quick-actions .mobile-action-card {
-  gap: 10px;
-  min-height: 68px;
+  gap: 8px;
+  min-height: 56px;
   border-radius: 14px;
-  padding: 12px;
-}
-
-.mobile-home-quick-actions .mobile-action-icon {
-  width: 34px;
-  height: 34px;
   padding: 9px;
 }
 
+.mobile-home-quick-actions .mobile-action-icon {
+  width: 30px;
+  height: 30px;
+  padding: 8px;
+}
+
 .mobile-home-quick-actions .mobile-action-chevron {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .mobile-home-secondary-actions {
@@ -7446,7 +7446,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-quick-actions .mobile-action-card.is-compact strong {
-  font-size: clamp(0.92rem, 4vw, 1rem);
+  font-size: clamp(0.87rem, 3.7vw, 0.94rem);
   letter-spacing: 0;
   overflow-wrap: normal;
   white-space: nowrap;
@@ -7718,7 +7718,7 @@ button.person-chip:focus-visible {
 
 @media (max-width: 390px) {
   .mobile-home-overview-header h1 {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .mobile-home-assignment-card,
@@ -7739,18 +7739,18 @@ button.person-chip:focus-visible {
 
 @media (max-width: 340px) {
   .mobile-home-overview-header {
-    padding: 12px;
+    padding: 10px;
   }
 
   .mobile-home-timeline-page {
-    gap: 6px;
-    grid-auto-rows: minmax(96px, auto);
+    gap: 5px;
+    grid-auto-rows: minmax(82px, auto);
   }
 
   .mobile-home-timeline-card {
-    grid-template-columns: 102px minmax(0, 1fr);
+    grid-template-columns: 88px minmax(0, 1fr);
     gap: 0;
-    min-height: 96px;
+    min-height: 82px;
     padding: 0;
   }
 }
