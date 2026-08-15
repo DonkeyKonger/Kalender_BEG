@@ -3,7 +3,6 @@ import {
   CalendarClock,
   ChevronRight,
   FileText,
-  HardHat,
   HeartPulse,
   LogOut,
   MapPin,
@@ -767,6 +766,7 @@ export function MyAssignmentsPage() {
                 >
                   {page.map((item) => (
                     <MobileHomeTimelineCard
+                      isNext={item.key === mobileHomeTimelineItems[0]?.key}
                       item={item}
                       key={item.key}
                       today={today}
@@ -964,10 +964,12 @@ function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus |
 }
 
 function MobileHomeTimelineCard({
+  isNext,
   item,
   today,
   onEmptyDaySelect,
 }: {
+  isNext: boolean;
   item: MobileHomeTimelineItem;
   today: string;
   onEmptyDaySelect?: (date: string, label: string) => void;
@@ -981,14 +983,12 @@ function MobileHomeTimelineCard({
     : "Antippen, falls du trotzdem auf Baustelle bist.";
   const cardContent = (
     <>
-      <span className={`mobile-home-timeline-date${isToday ? " is-today" : ""}`}>
-        {isToday ? <em>Heute</em> : <strong>{weekdayLabel}</strong>}
-        <span>{isToday ? `${weekdayLabel} ${dateLabel}` : dateLabel}</span>
+      <span className={`mobile-home-timeline-date${isNext ? " is-next" : ""}`}>
+        <em>{isNext ? "Als nächstes" : "Danach"}</em>
+        <strong>{weekdayLabel}</strong>
+        <span>{dateLabel}</span>
       </span>
       <span className="mobile-home-timeline-main">
-        <span className="mobile-home-assignment-icon" aria-hidden="true">
-          <HardHat size={22} />
-        </span>
         <span className="mobile-home-timeline-copy">
           <b title={assignment?.site.name ?? "Kein Einsatz geplant."}>
             {assignment?.site.name ?? "Kein Einsatz geplant."}
@@ -1009,7 +1009,7 @@ function MobileHomeTimelineCard({
     return (
       <Link
         aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}`}
-        className={`mobile-home-timeline-card${isToday ? " is-today" : ""}`}
+        className={`mobile-home-timeline-card${isNext ? " is-next" : ""}`}
         data-mobile-home-timeline-item
         state={{ assignment }}
         to={`/me/assignments/${assignment.id}`}
@@ -1022,7 +1022,7 @@ function MobileHomeTimelineCard({
   return (
     <button
       aria-label={`${formatDate(item.start)}: Kein Einsatz geplant. Einsatz nachtragen`}
-      className="mobile-home-timeline-card is-empty"
+      className={`mobile-home-timeline-card is-empty${isNext ? " is-next" : ""}`}
       data-mobile-home-timeline-item
       type="button"
       onClick={() => onEmptyDaySelect?.(

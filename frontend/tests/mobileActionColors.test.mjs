@@ -125,14 +125,14 @@ test("mobile home actions keep the established destinations and compact copy", (
 });
 
 
-test("mobile home follows the personal-file hierarchy and uses a construction icon", () => {
+test("mobile home follows the personal-file hierarchy", () => {
   assert.match(pageSource, /className="mobile-home-overview-header"[\s\S]*<h1>Meine Übersicht<\/h1>/);
   assert.match(pageSource, /className="mobile-home-overview-panel"[\s\S]*>Nächste Einsätze<\/h2>/);
   assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelinePages\.map\(\(page\) =>[\s\S]*page\.map\(\(item\) =>/);
   assert.doesNotMatch(pageSource, /MOBILE_HOME_VISIBLE_DAY_COUNT|\.slice\(\s*0\s*,\s*4\s*\)/);
   assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
   assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
-  assert.equal(pageSource.match(/<HardHat size=\{22\}/g)?.length, 1);
+  assert.doesNotMatch(pageSource, /HardHat|mobile-home-assignment-icon/);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);
 });
@@ -206,7 +206,7 @@ test("manual refresh and logout reuse their existing handlers in mobile settings
 test("the assignment timeline scales its cards and copy for narrow mobile viewports", () => {
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \.mobile-home-assignment-icon \{[^}]*width:\s*clamp\(48px, 14vw, 54px\);[^}]*height:\s*clamp\(48px, 14vw, 54px\);[^}]*border-radius:\s*12px;/s,
+    /\.mobile-home-timeline-date \{[^}]*width:\s*calc\(100% \+ 18px\);[^}]*clip-path:\s*polygon\(0 0, calc\(100% - 18px\) 0, 100% 50%, calc\(100% - 18px\) 100%, 0 100%\);/s,
   );
   assert.match(
     styles,
@@ -214,15 +214,30 @@ test("the assignment timeline scales its cards and copy for narrow mobile viewpo
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*clamp\(85px, 23vw, 95px\) minmax\(0, 1fr\);[^}]*min-height:\s*clamp\(100px, 28vw, 116px\);[^}]*padding:\s*clamp\(10px, 3vw, 14px\);/s,
+    /\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*clamp\(104px, 30vw, 122px\) minmax\(0, 1fr\);[^}]*min-height:\s*clamp\(100px, 28vw, 116px\);[^}]*padding:\s*0;/s,
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-copy b \{[^}]*display:\s*-webkit-box;[^}]*font-size:\s*clamp\(0\.92rem, 4\.4vw, 1\.05rem\);[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/s,
+    /\.mobile-home-timeline-copy b \{[^}]*display:\s*-webkit-box;[^}]*font-size:\s*clamp\(1rem, 4\.7vw, 1\.14rem\);[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/s,
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(96px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*minmax\(76px, 82px\) minmax\(0, 1fr\);[^}]*min-height:\s*96px;[^}]*padding:\s*8px;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(96px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*102px minmax\(0, 1fr\);[^}]*min-height:\s*96px;[^}]*padding:\s*0;/s,
+  );
+});
+
+
+test("assignment cards use blue next/later wedges without the construction icon", () => {
+  assert.match(pageSource, /isNext=\{item\.key === mobileHomeTimelineItems\[0\]\?\.key\}/);
+  assert.match(pageSource, /<em>\{isNext \? "Als nächstes" : "Danach"\}<\/em>/);
+  assert.doesNotMatch(pageSource, /HardHat|mobile-home-assignment-icon/);
+  assert.match(
+    styles,
+    /\.mobile-home-timeline-date\.is-next \{[^}]*linear-gradient\(135deg, #28639f 0%, #174a7d 100%\);[^}]*color:\s*#ffffff;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-home-timeline-date \{[^}]*linear-gradient\(135deg, #edf3fa 0%, #dbe7f4 100%\);/s,
   );
 });
 

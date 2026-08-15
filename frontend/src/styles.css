@@ -5854,27 +5854,29 @@ button.person-chip:focus-visible {
 
 .mobile-home-timeline-card {
   display: grid;
-  grid-template-columns: clamp(85px, 23vw, 95px) minmax(0, 1fr);
+  grid-template-columns: clamp(104px, 30vw, 122px) minmax(0, 1fr);
   align-items: stretch;
-  gap: clamp(10px, 3vw, 14px);
+  gap: 0;
   min-width: 0;
   min-height: clamp(100px, 28vw, 116px);
   border: 1px solid #cfdaea;
   border-radius: 12px;
-  background: #f9fbfe;
+  background: #ffffff;
   color: inherit;
-  padding: clamp(10px, 3vw, 14px);
+  padding: 0;
   font: inherit;
   text-align: left;
   text-decoration: none;
   box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
   cursor: pointer;
+  overflow: hidden;
   transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
-.mobile-home-timeline-card.is-today {
-  border-color: #b8cce4;
-  background: #f9fbfe;
+.mobile-home-timeline-card.is-next {
+  border-color: #9ebbdc;
+  background: #fbfdff;
+  box-shadow: 0 10px 22px rgb(29 79 130 / 10%);
 }
 
 .mobile-home-timeline-card:hover,
@@ -5890,39 +5892,43 @@ button.person-chip:focus-visible {
   display: grid;
   align-content: center;
   justify-items: start;
-  gap: 5px;
-  width: 100%;
+  gap: 4px;
+  width: calc(100% + 18px);
   min-width: 0;
-  border: 1px solid #d8e3ef;
-  border-radius: 10px;
-  background: #f3f6fa;
-  color: #52627a;
-  padding: 8px 9px;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(135deg, #edf3fa 0%, #dbe7f4 100%);
+  color: #315f91;
+  padding: 10px 28px 10px 10px;
   font-size: clamp(0.7rem, 3.2vw, 0.8rem);
   font-style: normal;
   font-weight: 850;
   line-height: 1.15;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+  -webkit-clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
 }
 
-.mobile-home-timeline-date.is-today {
-  border-color: #17436f;
-  background: #1d4f82;
+.mobile-home-timeline-date.is-next {
+  background: linear-gradient(135deg, #28639f 0%, #174a7d 100%);
   color: #ffffff;
 }
 
 .mobile-home-timeline-date em {
   justify-self: start;
-  color: #ffffff;
-  font-size: clamp(0.66rem, 3vw, 0.74rem);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 78%);
+  color: #1d5c99;
+  padding: 4px 6px;
+  font-size: clamp(0.56rem, 2.6vw, 0.66rem);
   font-style: normal;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   line-height: 1;
-  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .mobile-home-timeline-date strong {
-  color: #143c6d;
+  color: #234f7d;
   font-size: clamp(0.72rem, 3.4vw, 0.82rem);
   font-weight: 900;
   line-height: 1;
@@ -5930,25 +5936,21 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-date > span {
-  color: #64748b;
+  color: #526b89;
 }
 
-.mobile-home-timeline-date.is-today > span {
+.mobile-home-timeline-date.is-next strong,
+.mobile-home-timeline-date.is-next > span {
   color: #ffffff;
 }
 
 .mobile-home-timeline-main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(8px, 2.5vw, 11px);
+  gap: clamp(8px, 2.5vw, 12px);
   min-width: 0;
-}
-
-.mobile-home-timeline-card .mobile-home-assignment-icon {
-  width: clamp(48px, 14vw, 54px);
-  height: clamp(48px, 14vw, 54px);
-  border-radius: 12px;
+  padding: clamp(10px, 3vw, 14px) clamp(10px, 3vw, 14px) clamp(10px, 3vw, 14px) clamp(24px, 7vw, 30px);
 }
 
 .mobile-home-timeline-copy {
@@ -5967,7 +5969,7 @@ button.person-chip:focus-visible {
   display: -webkit-box;
   overflow: hidden;
   color: #111827;
-  font-size: clamp(0.92rem, 4.4vw, 1.05rem);
+  font-size: clamp(1rem, 4.7vw, 1.14rem);
   font-weight: 850;
   line-height: 1.14;
   white-space: normal;
@@ -5999,7 +6001,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-card .assignment-card-affordance {
-  color: #8392a8;
+  color: #657b96;
 }
 
 .mobile-home-timeline-card.is-empty {
@@ -6055,7 +6057,7 @@ button.person-chip:focus-visible {
   border: 0;
   border-top: 1px solid #e2e8f0;
   border-radius: 0;
-  background: transparent;
+  background: #f9fbfe;
   color: #16467b;
   padding: 10px 14px;
   font-size: 0.82rem;
@@ -6065,7 +6067,7 @@ button.person-chip:focus-visible {
 
 .mobile-home-all-assignments-button:hover,
 .mobile-home-all-assignments-button:focus-visible {
-  background: #f6f9fd;
+  background: #edf4fb;
   outline: none;
 }
 
@@ -7746,15 +7748,10 @@ button.person-chip:focus-visible {
   }
 
   .mobile-home-timeline-card {
-    grid-template-columns: minmax(76px, 82px) minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: 102px minmax(0, 1fr);
+    gap: 0;
     min-height: 96px;
-    padding: 8px;
-  }
-
-  .mobile-home-timeline-card .mobile-home-assignment-icon {
-    width: 44px;
-    height: 44px;
+    padding: 0;
   }
 }
 
