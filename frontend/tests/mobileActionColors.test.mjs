@@ -131,7 +131,8 @@ test("mobile home follows the personal-file hierarchy", () => {
   assert.match(pageSource, /className="mobile-home-timeline-track"[\s\S]*mobileHomeTimelinePages\.map\(\(page\) =>[\s\S]*page\.map\(\(item\) =>/);
   assert.doesNotMatch(pageSource, /MOBILE_HOME_VISIBLE_DAY_COUNT|\.slice\(\s*0\s*,\s*4\s*\)/);
   assert.doesNotMatch(pageSource, /mobile-home-overview-panel is-featured|mobile-home-overview-panel is-upcoming/);
-  assert.match(pageSource, /<h2>Schnellzugriff<\/h2>/);
+  assert.doesNotMatch(pageSource, /<h2>Schnellzugriff<\/h2>/);
+  assert.match(pageSource, /<\/section>\s*<section className="mobile-home-section">\s*<div className="mobile-action-list mobile-home-quick-actions">/);
   assert.doesNotMatch(pageSource, /HardHat|mobile-home-assignment-icon/);
   assert.doesNotMatch(pageSource, /mobile-home-hero-icon/);
   assert.doesNotMatch(pageSource, /title="Alle Einsätze anzeigen"\s+text=/);

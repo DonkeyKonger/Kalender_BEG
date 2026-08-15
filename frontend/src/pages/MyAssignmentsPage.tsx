@@ -805,9 +805,6 @@ export function MyAssignmentsPage() {
           </section>
 
           <section className="mobile-home-section">
-            <div className="mobile-section-heading">
-              <h2>Schnellzugriff</h2>
-            </div>
             <div className="mobile-action-list mobile-home-quick-actions">
               <PlaceholderAction
                 compact
