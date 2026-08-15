@@ -6510,6 +6510,17 @@ button.person-chip:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.mobile-personal-absence-summary.is-vacation > div {
+  min-height: 64px;
+  gap: 2px;
+  padding: 10px 9px;
+}
+
+.mobile-personal-absence-summary.is-vacation > .is-primary {
+  min-height: 82px;
+  padding-inline: 13px;
+}
+
 .mobile-personal-absence-summary > div {
   display: grid;
   align-content: center;
@@ -6547,6 +6558,12 @@ button.person-chip:focus-visible {
   color: #111827;
   font-size: 1.35rem;
   line-height: 1.1;
+}
+
+.mobile-personal-absence-summary.is-vacation > div:not(.is-primary) strong {
+  overflow-wrap: normal;
+  font-size: clamp(0.94rem, 4.6vw, 1.1rem);
+  white-space: nowrap;
 }
 
 .mobile-personal-absence-week {

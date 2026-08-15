@@ -240,12 +240,12 @@ export function MobilePersonalFileAbsencePage({
                 <span>Jahresurlaub</span>
               </div>
               <div>
-                <strong>− {formatDays(data.taken_vacation_days)}</strong>
-                <span>Genommen</span>
-              </div>
-              <div>
                 <strong>+ {formatDays(data.vacation_carryover_days)}</strong>
                 <span>Übertrag {data.year - 1}</span>
+              </div>
+              <div>
+                <strong>− {formatDays(data.taken_vacation_days)}</strong>
+                <span>Genommen</span>
               </div>
             </section>
           ) : (

@@ -1,7 +1,7 @@
 import { LogOut } from "lucide-react";
 import { useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, PointerEvent } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canShowNavItem } from "../auth/permissions";
@@ -11,9 +11,12 @@ import { useDashboardMessageCount } from "../messages/DashboardMessageCountConte
 export function AppShell() {
   const { user, logout } = useAuth();
   const { count: dashboardMessageCount } = useDashboardMessageCount();
+  const { pathname } = useLocation();
   const [sidebarMode, setSidebarMode] = useState<"collapsed" | "pointer" | "keyboard">("collapsed");
   const lastSidebarInputRef = useRef<"pointer" | "keyboard">("pointer");
   const visibleItems = navigationItems.filter((item) => user && canShowNavItem(user, item));
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  const isMobileDetailRoute = normalizedPathname.startsWith("/me/") && normalizedPathname !== "/me/assignments";
 
   function handleSidebarPointerEnter() {
     lastSidebarInputRef.current = "pointer";
@@ -124,9 +127,9 @@ export function AppShell() {
       </aside>
 
       <div className="app-main">
-        {user ? (
+        {user && !isMobileDetailRoute ? (
           <div className="mobile-appshell-actions" aria-label="Mobile App-Aktionen">
-            <span className="mobile-appshell-user">Angemeldet als {user?.display_name}</span>
+            <span className="mobile-appshell-user">Angemeldet als {user.display_name}</span>
             {user.role !== "monteur" ? (
               <button className="icon-button" type="button" onClick={() => void logout()}>
                 <LogOut aria-hidden="true" size={17} />

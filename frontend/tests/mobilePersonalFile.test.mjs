@@ -8,10 +8,11 @@ import {
 } from "../src/lib/toolMaterialCategories.ts";
 
 
-const [pageSource, homeSource, appSource, apiSource, mobileTypesSource, styles, toolFormSource] = await Promise.all([
+const [pageSource, homeSource, appSource, appShellSource, apiSource, mobileTypesSource, styles, toolFormSource] = await Promise.all([
   readFile(new URL("../src/pages/MobilePersonalFilePage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/MyAssignmentsPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/layout/AppShell.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/types/mobile.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
@@ -77,12 +78,19 @@ test("vacation and sickness cards open read-only weekly details", () => {
   assert.doesNotMatch(pageSource, /formatCompactDateRange/);
   assert.doesNotMatch(pageSource, /mobile-personal-absence-entry-type/);
   assert.match(pageSource, /entry\.day_count/);
-  assert.match(pageSource, /− \{formatDays\(data\.taken_vacation_days\)\}/);
-  assert.match(pageSource, /\+ \{formatDays\(data\.vacation_carryover_days\)\}/);
+  assert.match(pageSource, /Jahresurlaub[\s\S]*\+ \{formatDays\(data\.vacation_carryover_days\)\}[\s\S]*− \{formatDays\(data\.taken_vacation_days\)\}/);
   assert.match(pageSource, /Übertrag \{data\.year - 1\}/);
   assert.match(pageSource, /data\.vacation_carryover_days/);
   assert.match(pageSource, /Keine \{isVacation \? "Urlaubstage" : "Krankheitstage"\} in \{data\.year\}/);
   assert.doesNotMatch(pageSource, /MobilePersonalFileAbsencePage[\s\S]*Fehlzeit hinzufügen/);
+});
+
+
+test("mobile detail pages omit the redundant shell identity while the mobile home keeps it", () => {
+  assert.match(appShellSource, /normalizedPathname\.startsWith\("\/me\/"\)/);
+  assert.match(appShellSource, /normalizedPathname !== "\/me\/assignments"/);
+  assert.match(appShellSource, /user && !isMobileDetailRoute/);
+  assert.match(appShellSource, /Angemeldet als \{user\.display_name\}/);
 });
 
 
@@ -94,6 +102,9 @@ test("absence details use the established green and red status colors without ho
   assert.doesNotMatch(styles, /mobile-personal-absence-entry-type/);
   assert.doesNotMatch(styles, /\.mobile-personal-absence-(?:content|weeks|week|entry)[^{]*\{[^}]*overflow-x:\s*(?:auto|scroll)/s);
   assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation \{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+  assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation > div \{[^}]*min-height:\s*64px;[^}]*padding:\s*10px 9px/s);
+  assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation > \.is-primary \{[^}]*min-height:\s*82px/s);
+  assert.match(styles, /\.mobile-personal-absence-summary\.is-vacation > div:not\(\.is-primary\) strong \{[^}]*white-space:\s*nowrap/s);
 });
 
 
