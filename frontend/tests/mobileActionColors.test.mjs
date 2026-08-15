@@ -10,10 +10,10 @@ const [pageSource, styles] = await Promise.all([
 
 
 const expectedAssignments = [
-  ["FileText", "time", "Lohnzeit erfassen"],
+  ["FileText", "time", "Arbeitszeit erfassen"],
+  ["UserCircle", "profile", "Persönliche Akte"],
   ["Plane", "vacation", "Urlaubsantrag"],
   ["HeartPulse", "sickness", "Krankmeldung"],
-  ["UserCircle", "profile", "Persönliche Akte"],
   ["Settings", "settings", "Einstellungen"],
 ];
 
@@ -29,6 +29,22 @@ test("mobile home actions use the semantic color variants", () => {
   }
 
   assert.match(pageSource, /mobile-action-card mobile-action-card--\$\{tone\}/);
+});
+
+
+test("mobile quick actions keep the intended order", () => {
+  const labels = [
+    "Arbeitszeit erfassen",
+    "Persönliche Akte",
+    "Urlaubsantrag",
+    "Krankmeldung",
+    "Einstellungen",
+  ];
+
+  for (let index = 1; index < labels.length; index += 1) {
+    assert.ok(pageSource.indexOf(`title="${labels[index - 1]}"`) < pageSource.indexOf(`title="${labels[index]}"`));
+  }
+  assert.doesNotMatch(pageSource, /title="Lohnzeit erfassen"/);
 });
 
 

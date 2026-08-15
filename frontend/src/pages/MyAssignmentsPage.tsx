@@ -813,9 +813,17 @@ export function MyAssignmentsPage() {
                 compact
                 icon={FileText}
                 tone="time"
-                title="Lohnzeit erfassen"
+                title="Arbeitszeit erfassen"
                 text="Arbeitszeit tagesbezogen eintragen oder ändern."
                 onOpen={() => navigate("/me/time-entry")}
+              />
+              <PlaceholderAction
+                compact
+                icon={UserCircle}
+                tone="profile"
+                title="Persönliche Akte"
+                text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen."
+                onOpen={() => navigate("/me/personal-file")}
               />
               <PlaceholderAction
                 compact
@@ -838,14 +846,6 @@ export function MyAssignmentsPage() {
                   title: "Krankmeldung",
                   text: "Hier werden später Krankmeldungen erfasst und mit der persönlichen Akte verknüpft.",
                 })}
-              />
-              <PlaceholderAction
-                compact
-                icon={UserCircle}
-                tone="profile"
-                title="Persönliche Akte"
-                text="Urlaub, Kranktage, Fahrzeug und Werkzeuge anzeigen."
-                onOpen={() => navigate("/me/personal-file")}
               />
             </div>
             <div className="mobile-home-secondary-actions">
