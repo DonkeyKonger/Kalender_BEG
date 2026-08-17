@@ -2321,7 +2321,7 @@ def test_site_free_items_append_to_persisted_batch_order_and_keep_it_when_linked
     ]
 
 
-def test_existing_free_measurement_item_links_to_offer_item_without_changing_quantities():
+def test_existing_free_measurement_item_keeps_matrix_totals_separate_and_aggregates_timesheet():
     from app.schemas.measurement import MeasurementItemUpdate
     from app.services.measurement_pdf_service import MeasurementPdfService
 
@@ -2348,6 +2348,18 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
         list_minutes_total=Decimal("500"),
         is_nep=False,
         sort_order=10,
+    )
+    alternate_target_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=batch_base,
+        position="1.02",
+        description="Alternative Angebotsposition",
+        list_quantity=Decimal("50"),
+        unit="m",
+        minutes_per_unit=Decimal("6"),
+        list_minutes_total=Decimal("300"),
+        is_nep=False,
+        sort_order=11,
     )
     wrong_base_item = SiteMeasurementItem(
         site=site,
@@ -2395,7 +2407,24 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
             ("2. OG", Decimal("10")),
         )
     ]
-    db.add_all([other_base, target_item, wrong_base_item, batch, free_item, *entries])
+    target_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=target_item,
+        site=site,
+        quantity=Decimal("11"),
+        area_or_comment="EG",
+        status="submitted",
+    )
+    db.add_all([
+        other_base,
+        target_item,
+        alternate_target_item,
+        wrong_base_item,
+        batch,
+        free_item,
+        target_entry,
+        *entries,
+    ])
     db.commit()
     service = MeasurementService(db)
     free_item_id = free_item.id
@@ -2411,15 +2440,45 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
     assert wrong_base_error.value.status_code == 400
     assert db.get(SiteMeasurementItem, free_item.id).linked_measurement_item_id is None
 
-    with pytest.raises(HTTPException) as typed_only_error:
-        service.update_site_free_item(
-            site_id=site.id,
-            batch_id=batch.id,
-            measurement_item_id=free_item.id,
-            payload=MeasurementItemUpdate(position=target_item.position),
-        )
-    assert typed_only_error.value.status_code == 409
-    assert db.get(SiteMeasurementItem, free_item.id).linked_measurement_item_id is None
+    typed_update = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(position=target_item.position),
+    )
+    assert typed_update.linked_measurement_item_id == target_item.id
+    assert typed_update.position == "1.01"
+    assert typed_update.description == "Freie Kabelrinne"
+    assert typed_update.unit == "lfm"
+
+    reassigned = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=alternate_target_item.id),
+    )
+    assert reassigned.linked_measurement_item_id == alternate_target_item.id
+    assert reassigned.position == "1.02"
+
+    reassigned_back = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(position=target_item.position),
+    )
+    assert reassigned_back.linked_measurement_item_id == target_item.id
+    assert reassigned_back.position == "1.01"
+
+    cleared = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=None),
+    )
+    assert cleared.linked_measurement_item_id is None
+    assert cleared.position == "FREI-1"
+    assert cleared.description == "Freie Kabelrinne"
+    assert cleared.unit == "lfm"
 
     updated = service.update_site_free_item(
         site_id=site.id,
@@ -2437,8 +2496,8 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
     assert updated.is_free_position is True
     assert updated.linked_measurement_item_id == target_item.id
     assert updated.position == "1.01"
-    assert updated.description == "Kabelrinne 60/200"
-    assert updated.unit == "m"
+    assert updated.description == "Freie Kabelrinne"
+    assert updated.unit == "lfm"
     assert updated.sort_order == 20
     assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in updated.entries] == entry_state
     assert updated.reported_quantity == Decimal("45")
@@ -2457,10 +2516,14 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
         mode="checked",
     )
     assert [(position.item_id, position.position, position.description, position.unit) for position in positions] == [
-        (free_item_id, "1.01", "Kabelrinne 60/200", "m"),
+        (target_item.id, "1.01", "Kabelrinne 60/200", "m"),
+        (free_item_id, "1.01", "Freie Kabelrinne", "lfm"),
     ]
-    assert [area.label for area in areas] == ["1. OG", "2. OG", "EG"]
-    assert totals == {free_item_id: Decimal("45")}
+    assert [area.label for area in areas] == ["EG", "1. OG", "2. OG"]
+    assert totals == {
+        target_item.id: Decimal("11"),
+        free_item_id: Decimal("45"),
+    }
 
     batch_base.status = "active"
     batch_base.released_to_mobile = True
@@ -2470,11 +2533,12 @@ def test_existing_free_measurement_item_links_to_offer_item_without_changing_qua
     db.commit()
     timesheet = service.get_site_measurement_timesheet(site.id)
     target_row = next(row for row in timesheet.rows if row.position_id == target_item.id)
-    assert target_row.measured_quantity == Decimal("45")
-    assert target_row.measured_minutes == Decimal("225")
+    assert target_row.description == "Kabelrinne 60/200"
+    assert target_row.measured_quantity == Decimal("56")
+    assert target_row.measured_minutes == Decimal("280")
 
 
-def test_free_measurement_link_reuses_duplicate_and_status_guards():
+def test_multiple_free_measurements_can_share_a_used_target_and_keep_status_guards():
     from app.schemas.measurement import MeasurementItemUpdate
 
     db = db_session()
@@ -2509,6 +2573,16 @@ def test_free_measurement_link_reuses_duplicate_and_status_guards():
         is_free_position=True,
         sort_order=20,
     )
+    second_free_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        measurement_batch=batch,
+        position="FREI-2",
+        description="Weitere freie Position",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=21,
+    )
     existing_target_entry = SiteMeasurementEntry(
         measurement_batch=batch,
         measurement_item=target_item,
@@ -2517,21 +2591,61 @@ def test_free_measurement_link_reuses_duplicate_and_status_guards():
         area_or_comment="EG",
         status="submitted",
     )
-    db.add_all([target_item, batch, free_item, existing_target_entry])
+    first_free_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=free_item,
+        site=site,
+        quantity=Decimal("5"),
+        area_or_comment="1. OG",
+        status="submitted",
+    )
+    second_free_entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=second_free_item,
+        site=site,
+        quantity=Decimal("3"),
+        area_or_comment="2. OG",
+        status="submitted",
+    )
+    db.add_all([
+        target_item,
+        batch,
+        free_item,
+        second_free_item,
+        existing_target_entry,
+        first_free_entry,
+        second_free_entry,
+    ])
     db.commit()
     service = MeasurementService(db)
 
-    with pytest.raises(HTTPException) as duplicate_error:
-        service.update_site_free_item(
-            site_id=site.id,
-            batch_id=batch.id,
-            measurement_item_id=free_item.id,
-            payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
-        )
-    assert duplicate_error.value.status_code == 409
-    assert duplicate_error.value.detail == "Diese Positionsnummer existiert in diesem Aufmaß bereits."
+    first_link = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
+    )
+    second_link = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=second_free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
+    )
+    assert first_link.linked_measurement_item_id == target_item.id
+    assert second_link.linked_measurement_item_id == target_item.id
+    assert first_link.description == "Freie Position"
+    assert second_link.description == "Weitere freie Position"
 
-    db.delete(existing_target_entry)
+    batch.status = "billed"
+    db.commit()
+    target_row = next(
+        row
+        for row in service.get_site_measurement_timesheet(site.id).rows
+        if row.position_id == target_item.id
+    )
+    assert target_row.measured_quantity == Decimal("11")
+    assert target_row.measured_minutes == Decimal("44")
+
     batch.status = "customer_signed"
     batch.customer_signed_at = datetime.now(timezone.utc)
     db.commit()

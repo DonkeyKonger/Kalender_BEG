@@ -4718,19 +4718,6 @@ function MeasurementReviewTable({
   const [savingPositionItemId, setSavingPositionItemId] = useState<number | null>(null);
   const areaRows = useMemo(() => buildMeasurementMatrixAreaRows(items), [items]);
   const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
-  const usedPositionSuggestionIds = useMemo(() => new Set(items.flatMap((item) => {
-    if (!item.is_free_position) {
-      return [item.id];
-    }
-    return item.linked_measurement_item_id === null ? [] : [item.linked_measurement_item_id];
-  })), [items]);
-  const usedPositionSuggestionKeys = useMemo(() => new Set(items.flatMap((item) => {
-    if (item.is_free_position) {
-      return [];
-    }
-    const key = getMeasurementPositionCatalogKey(getVisibleMeasurementPosition(item));
-    return key ? [key] : [];
-  })), [items]);
   const activeManualColumnIndexes = useMemo(() => Object.entries(manualColumnDrafts)
     .filter(([columnKey, draft]) => (
       columnKey.startsWith(`${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-`)
@@ -4815,15 +4802,13 @@ function MeasurementReviewTable({
     }
     const query = suggestionState.query.trim().toLocaleLowerCase("de-DE");
     return positionSuggestions
-      .filter((item) => !usedPositionSuggestionIds.has(item.id))
-      .filter((item) => !usedPositionSuggestionKeys.has(getMeasurementPositionCatalogKey(item.position)))
       .filter((item) => (
         item.position.toLocaleLowerCase("de-DE").includes(query)
         || item.description.toLocaleLowerCase("de-DE").includes(query)
       ))
       .sort((left, right) => left.position.localeCompare(right.position, "de-DE", { numeric: true, sensitivity: "base" }))
       .slice(0, 8);
-  }, [positionSuggestions, suggestionState, usedPositionSuggestionIds, usedPositionSuggestionKeys]);
+  }, [positionSuggestions, suggestionState]);
   const tableStyle = useMemo(() => ({
     "--measurement-axis-width": `${MEASUREMENT_TABLE_AXIS_WIDTH}px`,
     "--measurement-position-width": `${MEASUREMENT_TABLE_POSITION_WIDTH}px`,
@@ -4936,8 +4921,6 @@ function MeasurementReviewTable({
       try {
         await onFreeItemUpdate(existingItem, {
           position: suggestion.position,
-          description: suggestion.description,
-          unit: normalizeMeasurementUnitDisplay(suggestion.unit),
           linked_measurement_item_id: suggestion.id,
         });
       } finally {

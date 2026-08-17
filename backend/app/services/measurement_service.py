@@ -598,8 +598,23 @@ class MeasurementService:
         if payload.quantity < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
 
+        measurement_base_ids = self._measurement_catalog_base_ids(batch)
         position = payload.position.strip() if payload.position else ""
-        if position:
+        linked_measurement_item = self._get_measurement_catalog_item(
+            site_id=site_id,
+            measurement_item_id=payload.linked_measurement_item_id,
+            measurement_base_ids=measurement_base_ids,
+        )
+        if linked_measurement_item is None and position:
+            linked_measurement_item = self._find_measurement_catalog_item_by_position(
+                site_id=site_id,
+                position=position,
+                measurement_base_ids=measurement_base_ids,
+            )
+
+        if linked_measurement_item is not None:
+            position = linked_measurement_item.position
+        elif position:
             position_scope = [SiteMeasurementItem.site_id == batch.site_id]
             if is_blank_batch:
                 position_scope.append(SiteMeasurementItem.measurement_batch_id == batch.id)
@@ -620,11 +635,6 @@ class MeasurementService:
             position = self._next_free_measurement_position(batch)
 
         next_sort_order = self._next_site_batch_column_sort_order(batch)
-        linked_measurement_item = self._get_measurement_catalog_item(
-            site_id=site_id,
-            measurement_item_id=payload.linked_measurement_item_id,
-            measurement_base_ids=self._measurement_catalog_base_ids(batch),
-        )
 
         item = SiteMeasurementItem(
             site_id=batch.site_id,
@@ -690,32 +700,34 @@ class MeasurementService:
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
 
+        measurement_base_ids = self._measurement_catalog_base_ids(batch)
+        position_was_submitted = "position" in payload.model_fields_set
+        link_was_submitted = "linked_measurement_item_id" in payload.model_fields_set
         linked_measurement_item = None
         if (
-            "linked_measurement_item_id" in payload.model_fields_set
+            link_was_submitted
             and payload.linked_measurement_item_id is not None
         ):
             linked_measurement_item = self._get_measurement_catalog_item(
                 site_id=site_id,
                 measurement_item_id=payload.linked_measurement_item_id,
-                measurement_base_ids=self._measurement_catalog_base_ids(batch),
+                measurement_base_ids=measurement_base_ids,
             )
-            self._ensure_measurement_target_is_available_for_batch(
-                batch=batch,
-                target_item=linked_measurement_item,
-                source_item_id=item.id,
+        elif position_was_submitted and payload.position:
+            linked_measurement_item = self._find_measurement_catalog_item_by_position(
+                site_id=site_id,
+                position=payload.position,
+                measurement_base_ids=measurement_base_ids,
             )
 
         if linked_measurement_item is not None:
-            # The selected offer item is the canonical source for position metadata.
-            # The free item itself remains in place so all existing entry foreign keys
-            # and quantities stay untouched.
+            # The target only defines the billing position.  The free item remains a
+            # distinct matrix column with its original worker description, unit and
+            # entries so review and PDF totals keep using the concrete item id.
             item.linked_measurement_item_id = linked_measurement_item.id
             item.position = linked_measurement_item.position
-            item.description = linked_measurement_item.description
-            item.unit = linked_measurement_item.unit
-        elif payload.position is not None:
-            position = payload.position.strip()
+        elif position_was_submitted:
+            position = payload.position.strip() if payload.position else ""
             if position:
                 position_scope = [
                     SiteMeasurementItem.site_id == batch.site_id,
@@ -742,8 +754,11 @@ class MeasurementService:
             elif not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
-            if "linked_measurement_item_id" not in payload.model_fields_set:
-                item.linked_measurement_item_id = None
+            item.linked_measurement_item_id = None
+        elif link_was_submitted and payload.linked_measurement_item_id is None:
+            item.linked_measurement_item_id = None
+            if not _is_technical_free_measurement_position(item.position):
+                item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
         if linked_measurement_item is None and payload.description is not None:
             description = " ".join(payload.description.split())
@@ -755,12 +770,6 @@ class MeasurementService:
             if not unit and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
             item.unit = unit
-        if (
-            linked_measurement_item is None
-            and "linked_measurement_item_id" in payload.model_fields_set
-        ):
-            item.linked_measurement_item_id = None
-
         self.db.commit()
         self.db.refresh(item)
         return self._build_mobile_item(item, batch.id)
@@ -2537,6 +2546,60 @@ class MeasurementService:
             )
         return item
 
+    def _find_measurement_catalog_item_by_position(
+        self,
+        *,
+        site_id: int,
+        position: str,
+        measurement_base_ids: tuple[int, ...],
+    ) -> SiteMeasurementItem | None:
+        """Resolve an exact catalog position without treating it as a duplicate.
+
+        The base order is significant: the batch's persisted base wins over a
+        newer active copy.  Ambiguous positions within the same base are not
+        guessed; callers then retain the regular duplicate validation.
+        """
+        position_key = _measurement_position_key(position)
+        if not position_key:
+            return None
+
+        filters = [
+            SiteMeasurementItem.site_id == site_id,
+            SiteMeasurementItem.measurement_base_id.is_not(None),
+            SiteMeasurementItem.measurement_batch_id.is_(None),
+            SiteMeasurementItem.is_free_position.is_(False),
+            SiteMeasurementItem.is_hidden.is_(False),
+        ]
+        if measurement_base_ids:
+            filters.append(SiteMeasurementItem.measurement_base_id.in_(measurement_base_ids))
+        candidates = list(
+            self.db.scalars(
+                select(SiteMeasurementItem)
+                .where(*filters)
+                .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
+            ).all()
+        )
+
+        base_ids = measurement_base_ids or tuple(
+            dict.fromkeys(
+                item.measurement_base_id
+                for item in candidates
+                if item.measurement_base_id is not None
+            )
+        )
+        for base_id in base_ids:
+            matches = [
+                item
+                for item in candidates
+                if item.measurement_base_id == base_id
+                and _measurement_position_key(item.position) == position_key
+            ]
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                return None
+        return None
+
     def _next_site_batch_column_sort_order(self, batch: SiteMeasurementBatch) -> int:
         """Append a new office position after this batch's persisted columns.
 
@@ -2575,35 +2638,6 @@ class MeasurementService:
             select(func.max(SiteMeasurementItem.sort_order)).where(*item_filters)
         )
         return 1 if current_max is None else current_max + 1
-
-    def _ensure_measurement_target_is_available_for_batch(
-        self,
-        *,
-        batch: SiteMeasurementBatch,
-        target_item: SiteMeasurementItem,
-        source_item_id: int,
-    ) -> None:
-        existing_entry = self.db.scalar(
-            select(SiteMeasurementEntry.id)
-            .join(
-                SiteMeasurementItem,
-                SiteMeasurementEntry.measurement_item_id == SiteMeasurementItem.id,
-            )
-            .where(
-                SiteMeasurementEntry.measurement_batch_id == batch.id,
-                SiteMeasurementItem.id != source_item_id,
-                or_(
-                    SiteMeasurementItem.id == target_item.id,
-                    SiteMeasurementItem.linked_measurement_item_id == target_item.id,
-                ),
-            )
-            .limit(1)
-        )
-        if existing_entry is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Diese Positionsnummer existiert in diesem Aufmaß bereits.",
-            )
 
     def _ensure_site_batch_can_be_edited_in_office(
         self,

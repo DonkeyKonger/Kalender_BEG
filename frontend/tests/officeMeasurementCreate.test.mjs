@@ -89,13 +89,10 @@ test("existing free positions reuse the shared offer autocomplete and stay in th
   assert.match(pageSource, /item\.position\.toLocaleLowerCase\("de-DE"\)\.includes\(query\)/);
   assert.match(pageSource, /left\.position\.localeCompare\(right\.position, "de-DE", \{ numeric: true/);
   assert.match(pageSource, /setSuggestionState\(null\);\s*if \(existingItem\)/s);
-  assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{/);
-  assert.match(pageSource, /description: suggestion\.description/);
-  assert.match(pageSource, /linked_measurement_item_id: suggestion\.id/);
+  assert.match(pageSource, /await onFreeItemUpdate\(existingItem, \{\s*position: suggestion\.position,\s*linked_measurement_item_id: suggestion\.id,\s*\}\)/s);
   assert.match(pageSource, /positionSuggestions=\{reviewPositionSuggestions\}/);
-  assert.match(pageSource, /const usedPositionSuggestionIds = useMemo/);
-  assert.match(pageSource, /item\.linked_measurement_item_id === null \? \[\] : \[item\.linked_measurement_item_id\]/);
-  assert.match(pageSource, /\.filter\(\(item\) => !usedPositionSuggestionIds\.has\(item\.id\)\)/);
+  assert.doesNotMatch(pageSource, /usedPositionSuggestionIds/);
+  assert.doesNotMatch(pageSource, /usedPositionSuggestionKeys/);
   assert.doesNotMatch(pageSource, /onChange=\{\(event\) => \{\s*if \(!freePositionOnly\) \{\s*return;/s);
   assert.match(pageSource, /closeSuggestionOnOutsidePointer/);
 });

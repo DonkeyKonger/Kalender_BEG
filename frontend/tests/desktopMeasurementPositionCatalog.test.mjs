@@ -69,9 +69,10 @@ test("desktop review loads the active catalog independently from batch matrix ro
   );
 });
 
-test("historical and active catalog copies share one stable position key", () => {
+test("historical and active catalog copies share one stable position key without hiding assigned targets", () => {
   assert.equal(getMeasurementPositionCatalogKey("  N1.10  "), "n1.10");
   assert.equal(getMeasurementPositionCatalogKey("444.4.310"), "444.4.310");
-  assert.match(sitePageSource, /usedPositionSuggestionKeys/);
-  assert.match(sitePageSource, /getMeasurementPositionCatalogKey\(item\.position\)/);
+  assert.doesNotMatch(sitePageSource, /usedPositionSuggestionKeys/);
+  assert.doesNotMatch(sitePageSource, /usedPositionSuggestionIds/);
+  assert.match(sitePageSource, /return positionSuggestions\s*\.filter\(\(item\) => \(/s);
 });
