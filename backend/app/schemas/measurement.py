@@ -79,7 +79,7 @@ class MobileMeasurementFreeItemCreate(BaseModel):
     description: str = Field(default="", max_length=2000)
     unit: str = Field(default="", max_length=40)
     linked_measurement_item_id: int | None = Field(default=None, gt=0)
-    quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    quantity: Decimal = Field(default=Decimal("0"))
     area_or_comment: str | None = Field(default=None, max_length=1000)
 
     @field_validator("position", "description", "unit", "area_or_comment", mode="before")
@@ -92,7 +92,7 @@ class MobileMeasurementFreeItemCreate(BaseModel):
 
 class MeasurementEntryCreate(BaseModel):
     area_or_comment: str = Field(..., min_length=1, max_length=1000)
-    quantity: Decimal = Field(..., gt=0)
+    quantity: Decimal = Field(...)
 
 
 class MeasurementEntryRead(BaseModel):

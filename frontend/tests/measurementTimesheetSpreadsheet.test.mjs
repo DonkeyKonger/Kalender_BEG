@@ -15,7 +15,7 @@ test("measurement timesheet keeps category filters above and capture totals belo
   assert.ok(filterbarIndex >= 0);
   assert.ok(tableIndex > filterbarIndex);
   assert.ok(statusbarIndex > tableIndex);
-  assert.match(source, /const capturedPositions = projectPositionRows\.filter\(\(row\) => row\.measuredQuantity > 0\)\.length/);
+  assert.match(source, /const capturedPositions = projectPositionRows\.filter\(\(row\) => row\.isCaptured\)\.length/);
   assert.match(source, /projectPositionCaptureStats\.totalPositions\} Positionen/);
   assert.match(source, /projectPositionCaptureStats\.capturedPositions\} erfasst/);
   assert.match(source, /projectPositionCaptureStats\.openPositions\} offen/);

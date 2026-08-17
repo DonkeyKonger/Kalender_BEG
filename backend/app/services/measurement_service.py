@@ -595,9 +595,6 @@ class MeasurementService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
         if not unit and not is_blank_batch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
-        if payload.quantity < 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
-
         measurement_base_ids = self._measurement_catalog_base_ids(batch)
         position = payload.position.strip() if payload.position else ""
         linked_measurement_item = self._get_measurement_catalog_item(
@@ -662,7 +659,7 @@ class MeasurementService:
         self.db.add(item)
         self.db.flush()
 
-        if payload.quantity > 0:
+        if payload.quantity != 0 or payload.area_or_comment is not None:
             comment = " ".join((payload.area_or_comment or "").split()) or "Allgemein"
             entry = SiteMeasurementEntry(
                 measurement_batch_id=batch.id,
@@ -883,9 +880,6 @@ class MeasurementService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
         if not unit:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
-        if payload.quantity < 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Menge darf nicht negativ sein.")
-
         position = payload.position.strip() if payload.position else ""
         if position:
             existing_position = self.db.scalar(
@@ -934,7 +928,7 @@ class MeasurementService:
         self.db.add(item)
         self.db.flush()
 
-        if payload.quantity > 0:
+        if payload.quantity != 0 or payload.area_or_comment is not None:
             comment = " ".join((payload.area_or_comment or "").split()) or "Allgemein"
             entry = SiteMeasurementEntry(
                 measurement_batch_id=batch.id,
@@ -1431,8 +1425,8 @@ class MeasurementService:
             for position_key, item_ids in target_ids_by_position.items()
             if len(item_ids) == 1
         }
-
         measured_by_item_id: dict[int, Decimal] = {}
+        captured_item_ids: set[int] = set()
         if completed_entries:
             for entry in completed_entries:
                 source_item = entry.measurement_item
@@ -1451,6 +1445,7 @@ class MeasurementService:
                 )
                 if target_item_id is None:
                     continue
+                captured_item_ids.add(target_item_id)
                 measured_by_item_id[target_item_id] = (
                     measured_by_item_id.get(target_item_id, Decimal("0")) + entry.quantity
                 )
@@ -1473,7 +1468,7 @@ class MeasurementService:
             measured_quantity = measured_by_item_id.get(item.id, Decimal("0"))
             measured_minutes = (
                 measured_quantity * minutes_per_unit
-                if measured_quantity > 0 and minutes_per_unit > 0
+                if minutes_per_unit > 0
                 else Decimal("0")
             )
             remaining_quantity = planned_quantity - measured_quantity if planned_quantity > 0 else None
@@ -1482,7 +1477,7 @@ class MeasurementService:
                 if planned_minutes > 0
                 else None
             )
-            is_captured = measured_quantity > 0
+            is_captured = item.id in captured_item_ids
 
             if is_captured:
                 captured_count += 1

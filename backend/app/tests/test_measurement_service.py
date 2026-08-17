@@ -27,7 +27,11 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.user import User
-from app.schemas.measurement import MobileMeasurementFreeItemCreate, OfficeMeasurementBatchCreate
+from app.schemas.measurement import (
+    MeasurementEntryCreate,
+    MobileMeasurementFreeItemCreate,
+    OfficeMeasurementBatchCreate,
+)
 from app.services.measurement_service import MeasurementService, _measurement_archive_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
@@ -63,6 +67,21 @@ def create_measurement_base(db: Session, site: Site) -> SiteMeasurementBase:
     db.add(base)
     db.flush()
     return base
+
+
+def test_measurement_payloads_accept_signed_quantities():
+    entry = MeasurementEntryCreate(
+        area_or_comment="Korrektur EG",
+        quantity=Decimal("-8.50"),
+    )
+    free_item = MobileMeasurementFreeItemCreate(
+        description="Korrekturposition",
+        unit="m",
+        quantity=Decimal("-3.25"),
+    )
+
+    assert entry.quantity == Decimal("-8.50")
+    assert free_item.quantity == Decimal("-3.25")
 
 
 def test_manual_measurement_status_promotion_only_moves_up_and_never_fakes_signature(monkeypatch):
@@ -724,7 +743,7 @@ def test_mobile_free_measurement_item_is_stored_on_batch_base():
         payload=MobileMeasurementFreeItemCreate(
             description="Zusätzliche Kabelbefestigung",
             unit="Stck",
-            quantity=Decimal("2.00"),
+            quantity=Decimal("-2.00"),
             area_or_comment="2. OG",
         ),
     )
@@ -739,11 +758,11 @@ def test_mobile_free_measurement_item_is_stored_on_batch_base():
     assert stored_item.is_free_position is True
     assert stored_item.source_file_name is None
     assert item.is_free_position is True
-    assert item.reported_quantity == Decimal("2.00")
+    assert item.reported_quantity == Decimal("-2.00")
     assert stored_entry is not None
     assert stored_entry.measurement_batch_id == batch.id
     assert stored_entry.area_or_comment == "2. OG"
-    assert stored_entry.quantity == Decimal("2.00")
+    assert stored_entry.quantity == Decimal("-2.00")
 
 
 def test_new_measurement_base_import_becomes_only_active_base(monkeypatch):
@@ -1123,8 +1142,6 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     from app.models.person import Person
     from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
     from app.models.user import User
-    from app.schemas.measurement import MeasurementEntryCreate
-
     db = db_session()
     site = create_site(db)
     base = create_measurement_base(db, site)
@@ -1173,6 +1190,16 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
         current_user=user,
         payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
     )
+    correction_entry = service.create_mobile_entry(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        measurement_item_id=item.id,
+        current_user=user,
+        payload=MeasurementEntryCreate(
+            area_or_comment="Korrektur 1. OG",
+            quantity=Decimal("-12.50"),
+        ),
+    )
     mobile_items = service.list_mobile_batch_items(
         assignment_id=assignment.id,
         batch_id=batch.id,
@@ -1183,6 +1210,7 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     stored_item = db.get(SiteMeasurementItem, item.id)
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     stored_entry = db.get(SiteMeasurementEntry, entry.id)
+    stored_correction_entry = db.get(SiteMeasurementEntry, correction_entry.id)
     assert stored_item is not None
     assert stored_item.list_quantity == Decimal("0.00")
     assert stored_batch is not None
@@ -1191,12 +1219,22 @@ def test_mobile_measurement_entry_keeps_imported_item_and_summarizes_quantity():
     assert stored_entry is not None
     assert stored_entry.measurement_batch_id == batch.id
     assert stored_entry.area_or_comment == "1. OG Flur"
-    assert mobile_items[0].reported_quantity == Decimal("10.00")
-    assert mobile_items[0].reported_minutes == Decimal("198.0000")
+    assert stored_correction_entry is not None
+    assert stored_correction_entry.quantity == Decimal("-12.50")
+    assert mobile_items[0].reported_quantity == Decimal("-2.50")
+    assert mobile_items[0].reported_minutes == Decimal("-49.5000")
     assert mobile_items[0].mobile_status == "edited"
-    assert mobile_batches[0].entry_count == 1
+    assert mobile_batches[0].entry_count == 2
     assert mobile_batches[0].position_count == 1
-    assert mobile_batches[0].reported_minutes == Decimal("198.0000")
+    assert mobile_batches[0].reported_minutes == Decimal("-49.5000")
+
+    submitted = service.submit_mobile_batch(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        current_user=user,
+    )
+    assert submitted.status == "submitted"
+    assert db.get(SiteMeasurementEntry, correction_entry.id).quantity == Decimal("-12.50")
 
 
 def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
@@ -1259,7 +1297,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
         batch_id=batch.id,
         measurement_item_id=item.id,
         current_user=user,
-        payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("10.00")),
+        payload=MeasurementEntryCreate(area_or_comment="1. OG Flur", quantity=Decimal("-10.00")),
     )
     submitted = service.submit_mobile_batch(assignment_id=assignment.id, batch_id=batch.id, current_user=user)
 
@@ -1273,7 +1311,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
             batch_id=batch.id,
             measurement_item_id=item.id,
             current_user=user,
-            payload=MeasurementEntryCreate(area_or_comment="2. OG", quantity=Decimal("5.00")),
+            payload=MeasurementEntryCreate(area_or_comment="2. OG", quantity=Decimal("-5.00")),
         )
     assert locked.value.status_code == 409
 
@@ -2537,6 +2575,87 @@ def test_existing_free_measurement_item_keeps_matrix_totals_separate_and_aggrega
     assert target_row.measured_quantity == Decimal("56")
     assert target_row.measured_minutes == Decimal("280")
 
+    correction_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=batch_base,
+        number=2,
+        title="Korrekturaufmaß",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    correction_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=batch_base,
+        measurement_batch=correction_batch,
+        linked_measurement_item=target_item,
+        position=target_item.position,
+        description="Korrektur Kabelrinne",
+        unit="m",
+        is_free_position=True,
+        sort_order=20,
+    )
+    negative_entry = SiteMeasurementEntry(
+        measurement_batch=correction_batch,
+        measurement_item=correction_item,
+        site=site,
+        quantity=Decimal("-60"),
+        area_or_comment="Korrektur EG",
+        status="billed",
+    )
+    db.add_all([correction_batch, correction_item, negative_entry])
+    db.commit()
+
+    negative_timesheet = service.get_site_measurement_timesheet(site.id)
+    negative_target_row = next(
+        row for row in negative_timesheet.rows if row.position_id == target_item.id
+    )
+    assert negative_target_row.measured_quantity == Decimal("-4")
+    assert negative_target_row.measured_minutes == Decimal("-20")
+    assert negative_target_row.remaining_quantity == Decimal("104")
+    assert negative_target_row.progress_percent == pytest.approx(-4.0)
+    assert negative_target_row.is_captured is True
+
+    zero_batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=batch_base,
+        number=3,
+        title="Ausgleichsaufmaß",
+        status="billed",
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    zero_item = SiteMeasurementItem(
+        site=site,
+        measurement_base=batch_base,
+        measurement_batch=zero_batch,
+        linked_measurement_item=target_item,
+        position=target_item.position,
+        description="Ausgleich Kabelrinne",
+        unit="m",
+        is_free_position=True,
+        sort_order=20,
+    )
+    zero_entry = SiteMeasurementEntry(
+        measurement_batch=zero_batch,
+        measurement_item=zero_item,
+        site=site,
+        quantity=Decimal("4"),
+        area_or_comment="Ausgleich EG",
+        status="billed",
+    )
+    db.add_all([zero_batch, zero_item, zero_entry])
+    db.commit()
+
+    zero_timesheet = service.get_site_measurement_timesheet(site.id)
+    zero_target_row = next(
+        row for row in zero_timesheet.rows if row.position_id == target_item.id
+    )
+    assert zero_target_row.measured_quantity == Decimal("0")
+    assert zero_target_row.measured_minutes == Decimal("0")
+    assert zero_target_row.remaining_quantity == Decimal("100")
+    assert zero_target_row.progress_percent == pytest.approx(0.0)
+    assert zero_target_row.is_captured is True
 
 def test_multiple_free_measurements_can_share_a_used_target_and_keep_status_guards():
     from app.schemas.measurement import MeasurementItemUpdate
@@ -2820,6 +2939,53 @@ def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted
         "8007.SZ03",
         "8007.SZ04",
     ]
+
+
+def test_measurement_time_analysis_preserves_signed_measurement_minutes():
+    from app.models.site_measurement_item import SiteMeasurementEntry
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="K1",
+        description="Korrektur Montage",
+        list_quantity=Decimal("10"),
+        unit="m",
+        minutes_per_unit=Decimal("12"),
+        list_minutes_total=Decimal("120"),
+        is_nep=False,
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=1,
+        title="Korrekturaufmaß",
+        status="submitted",
+        submitted_at=datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc),
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("-8.50"),
+        area_or_comment="Korrektur EG",
+        status="submitted",
+    )
+    db.add_all([item, batch, entry])
+    db.commit()
+
+    analysis = MeasurementService(db).get_site_measurement_time_analysis(site.id)
+
+    assert analysis.rows[0].measurement_minutes == Decimal("-102.00")
+    assert analysis.rows[0].planned_minutes == Decimal("-102.00")
+    assert analysis.rows[0].deviation_minutes == Decimal("-102.00")
+    assert analysis.rows[0].consumption_percent is None
+    assert analysis.totals.planned_minutes == Decimal("-102.00")
+    assert analysis.totals.deviation_minutes == Decimal("-102.00")
 
 
 def test_measurement_time_analysis_counts_external_planned_people_like_execution_progress():

@@ -14015,6 +14015,11 @@ button.person-chip:focus-visible {
   text-align: right;
 }
 
+.measurement-negative-quantity,
+.measurement-negative-quantity input {
+  color: #8b3f46 !important;
+}
+
 .measurement-table-input:focus {
   border-color: #8bb4e8;
   background: #ffffff;

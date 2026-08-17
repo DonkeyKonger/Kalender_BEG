@@ -101,6 +101,24 @@ def test_measurement_pdf_filters_positions_and_totals_per_logical_block():
     assert Decimal("35") not in blocks[1].totals_by_position.values()
 
 
+def test_measurement_pdf_totals_signed_quantities_algebraically():
+    areas = _areas(3)
+    [position] = _positions(1)
+    cells = {
+        (areas[0].key, position.item_id): MatrixCellValue(quantity=Decimal("10.50")),
+        (areas[1].key, position.item_id): MatrixCellValue(quantity=Decimal("-8.50")),
+        (areas[2].key, position.item_id): MatrixCellValue(quantity=Decimal("-2.00")),
+    }
+
+    [block] = _build_logical_measurement_blocks(
+        positions=[position],
+        areas=areas,
+        cells=cells,
+    )
+
+    assert block.totals_by_position == {position.item_id: Decimal("0.00")}
+
+
 def test_measurement_pdf_keeps_removed_correction_visible_but_ignores_plain_zero():
     [area] = _areas(1)
     positions = _positions(2)
@@ -232,3 +250,69 @@ def test_rendered_measurement_pdf_uses_block_totals_instead_of_global_total():
     assert "Fortsetzung auf folgendem Blatt" in page_texts[0]
     assert "Fortsetzung auf folgendem Blatt" not in page_texts[1]
     assert "Name Auftraggeber (Kunde):" in page_texts[1]
+
+
+def test_rendered_measurement_pdf_preserves_negative_entries_and_total():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    site = Site(
+        name="Testbaustelle",
+        site_number="8007",
+        status=SiteStatus.ACTIVE,
+        location_status=SiteLocationStatus.UNCHECKED,
+    )
+    base = SiteMeasurementBase(
+        site=site,
+        name="Aufmaßbasis Bestand",
+        base_type="mixed",
+        status="active",
+        released_to_mobile=True,
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_base=base,
+        position="P1",
+        description="Kabelkorrektur",
+        unit="m",
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        measurement_base=base,
+        number=2,
+        title="Aufmaß 2",
+        status="reviewed",
+    )
+    rows = [
+        SiteMeasurementAreaRow(
+            measurement_batch=batch,
+            site=site,
+            area_or_comment=area,
+            sort_order=index,
+        )
+        for index, area in enumerate(("EG", "1. OG"), start=1)
+    ]
+    entries = [
+        SiteMeasurementEntry(
+            measurement_batch=batch,
+            measurement_item=item,
+            site=site,
+            quantity=quantity,
+            area_or_comment=area,
+            status="submitted",
+        )
+        for area, quantity in (
+            ("EG", Decimal("2.50")),
+            ("1. OG", Decimal("-8.50")),
+        )
+    ]
+    db.add_all([site, base, item, batch, *rows, *entries])
+    db.commit()
+
+    content = MeasurementPdfService(db)._render_batch_pdf_content(batch=batch, mode="checked")
+    page_text = PdfReader(BytesIO(content)).pages[0].extract_text() or ""
+
+    assert "2,50" in page_text
+    assert "-8,50" in page_text
+    assert "-6,00" in page_text

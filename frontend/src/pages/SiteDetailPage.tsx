@@ -3128,6 +3128,7 @@ function MeasurementTimesheetPanel({
         plannedMinutes: getMeasurementNumericValue(row.planned_minutes),
         measuredMinutes: getMeasurementNumericValue(row.measured_minutes),
         progressPercent: row.progress_percent,
+        isCaptured: row.is_captured,
       };
     });
     logMeasurementTimesheetPerformance("Derived Positionszeilen", startedAt, {
@@ -3159,7 +3160,7 @@ function MeasurementTimesheetPanel({
   }, [timesheet?.kpi]);
 
   const projectPositionCaptureStats = useMemo(() => {
-    const capturedPositions = projectPositionRows.filter((row) => row.measuredQuantity > 0).length;
+    const capturedPositions = projectPositionRows.filter((row) => row.isCaptured).length;
     return {
       capturedPositions,
       openPositions: projectPositionRows.length - capturedPositions,
@@ -3358,7 +3359,11 @@ function MeasurementTimesheetPanel({
                     <h3>Rechnerischer Ausführungsstand</h3>
                     <p>Aufmaß-/Leistungsfortschritt auf Basis von Montagezeiten und erfassten Aufmaßmengen.</p>
                   </div>
-                  {projectPositionStats.progressPercent !== null ? <strong>{formatMeasurementPercent(projectPositionStats.progressPercent)}</strong> : null}
+                  {projectPositionStats.progressPercent !== null ? (
+                    <strong className={projectPositionStats.progressPercent < 0 ? "measurement-negative-quantity" : undefined}>
+                      {formatMeasurementPercent(projectPositionStats.progressPercent)}
+                    </strong>
+                  ) : null}
                 </div>
                 {projectPositionStats.progressPercent !== null ? (
                   <>
@@ -3380,11 +3385,15 @@ function MeasurementTimesheetPanel({
                 </div>
                 <div>
                   <span>Geleistete Stunden</span>
-                  <strong>{formatMeasurementDuration(projectPositionStats.measuredMinutes)}</strong>
+                  <strong className={projectPositionStats.measuredMinutes < 0 ? "measurement-negative-quantity" : undefined}>
+                    {formatMeasurementDuration(projectPositionStats.measuredMinutes)}
+                  </strong>
                 </div>
                 <div>
                   <span>Offene Stunden</span>
-                  <strong>{projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}</strong>
+                  <strong className={projectPositionStats.openMinutes !== null && projectPositionStats.openMinutes < 0 ? "measurement-negative-quantity" : undefined}>
+                    {projectPositionStats.openMinutes !== null ? formatMeasurementDuration(projectPositionStats.openMinutes) : "Keine Sollbasis"}
+                  </strong>
                 </div>
               </aside>
             </div>
@@ -3450,7 +3459,7 @@ function MeasurementTimesheetPanel({
                         {virtualProjectPositionRows.rows.map((row) => (
                           <tr
                             key={row.positionId}
-                            className={row.measuredQuantity > 0 ? "has-quantity" : ""}
+                            className={row.isCaptured ? "has-quantity" : undefined}
                           >
                             <td className="measurement-timesheet-remove-cell">
                               {canHideItems ? (
@@ -3470,10 +3479,14 @@ function MeasurementTimesheetPanel({
                             <td className="measurement-timesheet-description" title={row.description}>{row.description}</td>
                             <td>{row.unit ?? "-"}</td>
                             <td className="measurement-timesheet-number">{row.hasPlannedQuantity ? formatMeasurementNumber(row.plannedQuantity) : "-"}</td>
-                            <td className="measurement-timesheet-number">{row.measuredQuantity > 0 ? formatMeasurementNumber(row.measuredQuantity) : "-"}</td>
+                            <td className={`measurement-timesheet-number${row.measuredQuantity < 0 ? " measurement-negative-quantity" : ""}`}>
+                              {row.isCaptured ? formatMeasurementNumber(row.measuredQuantity) : "-"}
+                            </td>
                             <td className="measurement-timesheet-number">{row.minutesPerUnit > 0 ? formatMeasurementNumber(row.minutesPerUnit) : "-"}</td>
-                            <td className="measurement-timesheet-number">{row.measuredMinutes > 0 ? formatMeasurementDuration(row.measuredMinutes) : "-"}</td>
-                            <td className="measurement-timesheet-number measurement-timesheet-progress-cell">
+                            <td className={`measurement-timesheet-number${row.measuredMinutes < 0 ? " measurement-negative-quantity" : ""}`}>
+                              {row.isCaptured ? formatMeasurementDuration(row.measuredMinutes) : "-"}
+                            </td>
+                            <td className={`measurement-timesheet-number measurement-timesheet-progress-cell${row.progressPercent !== null && row.progressPercent < 0 ? " measurement-negative-quantity" : ""}`}>
                               {row.progressPercent !== null ? (
                                 <span className="measurement-timesheet-cell-progress">
                                   <span className="measurement-timesheet-cell-progress-value">{formatMeasurementPercent(row.progressPercent)}</span>
@@ -3848,7 +3861,7 @@ function recalculateMeasurementItemTotals(item: MobileMeasurementItem, entries: 
     reported_quantity: reportedQuantity,
     reported_minutes: reportedMinutes,
     reported_hours: reportedHours,
-    mobile_status: reportedQuantity > 0 ? "edited" : "open",
+    mobile_status: entries.length > 0 ? "edited" : "open",
   };
 }
 
@@ -4132,8 +4145,8 @@ function MeasurementReviewPanel({
       resetEntryDraft(entry);
       return;
     }
-    if (quantity === null || quantity <= 0) {
-      setInlineError("Bitte eine gültige Menge größer 0 eingeben.");
+    if (quantity === null) {
+      setInlineError("Bitte eine gültige Menge eingeben.");
       resetEntryDraft(entry);
       return;
     }
@@ -5028,7 +5041,7 @@ function MeasurementReviewTable({
     if (value.trim() === "") {
       return;
     }
-    if (!areaLabel || quantity === null || quantity <= 0) {
+    if (!areaLabel || quantity === null) {
       input.value = "";
       return;
     }
@@ -5072,7 +5085,7 @@ function MeasurementReviewTable({
     if (value.trim() === "") {
       return;
     }
-    if (!areaLabel || quantity === null || quantity <= 0) {
+    if (!areaLabel || quantity === null) {
       input.value = "";
       updateManualColumnTotal(columnKey);
       return;
@@ -5521,7 +5534,10 @@ function MeasurementReviewTable({
                           disabled={!canEditRows || reviewActionLoading}
                           inputMode="decimal"
                           aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${manualItem.position}`}
-                          onInput={() => updateManualColumnTotal(column.key)}
+                          onInput={(event) => {
+                            syncMeasurementNegativeInputClass(event.currentTarget);
+                            updateManualColumnTotal(column.key);
+                          }}
                           onBlur={(event) => {
                             updateManualColumnTotal(column.key);
                             void saveNewCellDraft(manualItem, area, event.currentTarget, column.key);
@@ -5550,7 +5566,10 @@ function MeasurementReviewTable({
                         inputMode="decimal"
                         aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} in Büro-Zusatzspalte`}
                         title="Büro-Zusatzposition: Pos.-Nr., Beschreibung und Einheit oben eintragen, danach Menge speichern."
-                        onInput={() => updateManualColumnTotal(column.key)}
+                        onInput={(event) => {
+                          syncMeasurementNegativeInputClass(event.currentTarget);
+                          updateManualColumnTotal(column.key);
+                        }}
                         onBlur={(event) => {
                           updateManualColumnTotal(column.key);
                           void saveOfficeExtraCellDraft(column.key, area, event.currentTarget);
@@ -5580,6 +5599,7 @@ function MeasurementReviewTable({
                         disabled={!canEditRows || reviewActionLoading}
                         inputMode="decimal"
                         aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
+                        onInput={(event) => syncMeasurementNegativeInputClass(event.currentTarget)}
                         onBlur={(event) => void saveNewCellDraft(item, area, event.currentTarget)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
@@ -5596,7 +5616,7 @@ function MeasurementReviewTable({
                 }
                 if (entries.length > 1) {
                   return (
-                    <td className="measurement-matrix-quantity-cell is-combined" key={item.id}>
+                    <td className={`measurement-matrix-quantity-cell is-combined${getMeasurementCellQuantity(entries) < 0 ? " measurement-negative-quantity" : ""}`} key={item.id}>
                       <strong>{formatMeasurementNumber(getMeasurementCellQuantity(entries))}</strong>
                     </td>
                   );
@@ -5605,14 +5625,15 @@ function MeasurementReviewTable({
                 const displayedQuantity = formatMeasurementDraftQuantity(entry.quantity);
                 const isSaving = savingEntryId === entry.id;
                 return (
-                  <td className="measurement-matrix-quantity-cell" key={column.key}>
+                  <td className={`measurement-matrix-quantity-cell${Number(entry.quantity) < 0 ? " measurement-negative-quantity" : ""}`} key={column.key}>
                     <input
                       key={`${entry.id}-${entry.updated_at}-${entry.quantity}`}
-                      className="measurement-table-input is-quantity"
+                      className={`measurement-table-input is-quantity${Number(entry.quantity) < 0 ? " measurement-negative-quantity" : ""}`}
                       defaultValue={displayedQuantity}
                       disabled={!canEditRows || reviewActionLoading || isSaving}
                       inputMode="decimal"
                       aria-label={`Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
+                      onInput={(event) => syncMeasurementNegativeInputClass(event.currentTarget)}
                       onBlur={(event) => saveExistingQuantityDraft(entry, event.currentTarget)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
@@ -5636,14 +5657,16 @@ function MeasurementReviewTable({
           <tr className="measurement-matrix-total-row">
             <th className="measurement-matrix-axis" scope="row">Gesamt</th>
             {displayColumns.map((column) => column.kind === "item" ? (
-              <td className="measurement-matrix-quantity-cell" key={column.key}>
+              <td className={`measurement-matrix-quantity-cell${(totalsByItemId.get(column.item.id) ?? 0) < 0 ? " measurement-negative-quantity" : ""}`} key={column.key}>
                 <strong>{formatMeasurementNumber(totalsByItemId.get(column.item.id) ?? 0)}</strong>
               </td>
             ) : column.kind === "placeholder" ? (
               <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell" key={column.key} />
             ) : (
               <td className="measurement-matrix-quantity-cell measurement-matrix-placeholder-cell is-office-extra-column" key={column.key}>
-                <strong>{(manualColumnTotals[column.key] ?? 0) > 0 ? formatMeasurementNumber(manualColumnTotals[column.key] ?? 0) : ""}</strong>
+                <strong className={(manualColumnTotals[column.key] ?? 0) < 0 ? "measurement-negative-quantity" : undefined}>
+                  {manualColumnTotals[column.key] !== undefined ? formatMeasurementNumber(manualColumnTotals[column.key]) : ""}
+                </strong>
               </td>
             ))}
           </tr>
@@ -5686,7 +5709,12 @@ function MeasurementTimeAnalysisPanel({
       ) : analysis && analysis.rows.length > 0 ? (
         <>
           <div className="measurement-evaluation-grid">
-            <div><span>Soll gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.planned_minutes))}</strong></div>
+            <div>
+              <span>Soll gesamt</span>
+              <strong className={getMeasurementNumericValue(analysis.totals.planned_minutes) < 0 ? "measurement-negative-quantity" : undefined}>
+                {formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.planned_minutes))}
+              </strong>
+            </div>
             <div><span>Ist gesamt</span><strong>{formatMeasurementDuration(getMeasurementNumericValue(analysis.totals.actual_minutes))}</strong></div>
             <div>
               <span>Abweichung</span>
@@ -5723,9 +5751,13 @@ function MeasurementTimeAnalysisPanel({
                         <MeasurementTimeAnalysisExtraWorkDropdown tickets={row.extra_work_tickets} />
                       ) : "-"}
                     </td>
-                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.measurement_minutes))}</td>
+                    <td className={`measurement-timesheet-number${getMeasurementNumericValue(row.measurement_minutes) < 0 ? " measurement-negative-quantity" : ""}`}>
+                      {formatMeasurementDuration(getMeasurementNumericValue(row.measurement_minutes))}
+                    </td>
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.extra_work_minutes))}</td>
-                    <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.planned_minutes))}</td>
+                    <td className={`measurement-timesheet-number${getMeasurementNumericValue(row.planned_minutes) < 0 ? " measurement-negative-quantity" : ""}`}>
+                      {formatMeasurementDuration(getMeasurementNumericValue(row.planned_minutes))}
+                    </td>
                     <td className="measurement-timesheet-number">{formatMeasurementDuration(getMeasurementNumericValue(row.actual_minutes))}</td>
                     <td className="measurement-timesheet-number">
                       <span className={signedMeasurementDurationClassName(getMeasurementNumericValue(row.deviation_minutes))}>
@@ -5929,7 +5961,7 @@ function SiteWorkTimesPanel({
             <div className="site-times-summary-list site-times-comparison-list">
               <div className="site-times-summary-row">
                 <span>Stunden abgerechnet</span>
-                <strong>
+                <strong className={hoursComparison.valuedMeasurementMinutes !== null && hoursComparison.valuedMeasurementMinutes < 0 ? "measurement-negative-quantity" : undefined}>
                   {hoursComparison.valuedMeasurementMinutes !== null
                     ? formatMeasurementDuration(hoursComparison.valuedMeasurementMinutes)
                     : "Keine gewerteten Aufmaße"}
@@ -7334,12 +7366,20 @@ function formatMeasurementDraftQuantity(value: string | number | null): string {
 }
 
 function parseMeasurementQuantityInput(value: string): number | null {
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const trimmed = value.trim();
+  const normalized = trimmed.includes(",")
+    ? trimmed.replace(/\./g, "").replace(",", ".")
+    : trimmed;
   if (!normalized) {
     return null;
   }
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function syncMeasurementNegativeInputClass(input: HTMLInputElement): void {
+  const quantity = parseMeasurementQuantityInput(input.value);
+  input.classList.toggle("measurement-negative-quantity", quantity !== null && quantity < 0);
 }
 
 function getMeasurementBatchSortTime(batch: MobileMeasurementBatch): number {

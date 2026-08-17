@@ -3451,8 +3451,8 @@ function MobileMeasurementTab({
       setFreePositionError("Bitte Bereich / Ort angeben.");
       return;
     }
-    if (quantity === null || quantity < 0) {
-      setFreePositionError("Bitte eine gültige Menge ab 0,00 eintragen.");
+    if (quantity === null) {
+      setFreePositionError("Bitte eine gültige Menge eintragen.");
       return;
     }
 
@@ -3488,7 +3488,8 @@ function MobileMeasurementTab({
     }
     const quantity = getMobileMeasurementAreaQuantity(item, area);
     setInlineCell({ itemId: item.id, area, mode });
-    setInlineQuantity(mode === "add-row" ? "" : quantity > 0 ? formatMeasurementNumber(quantity) : "");
+    const hasExistingEntry = item.entries.some((entry) => getMeasurementAreaKey(entry.area_or_comment) === getMeasurementAreaKey(area));
+    setInlineQuantity(mode === "add-row" ? "" : hasExistingEntry ? formatMeasurementNumber(quantity) : "");
     setInlineError(null);
   }
 
@@ -3556,17 +3557,13 @@ function MobileMeasurementTab({
     const quantity = parseOptionalMeasurementQuantity(inlineQuantity);
     const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(inlineCell.area));
     const isDraftFreePosition = isInlineFreePositionDraftItem(item);
-    if (quantity === null || quantity < 0) {
-      setInlineError("Bitte eine gültige Menge ab 0,00 eingeben.");
+    if (quantity === null) {
+      setInlineError("Bitte eine gültige Menge eingeben.");
       return false;
     }
     if (isAddRow && !hasInlineQuantityInput) {
       cancelInlineMeasurementEdit();
       return true;
-    }
-    if (isAddRow && quantity <= 0) {
-      setInlineError("Bitte eine Menge größer 0 eingeben.");
-      return false;
     }
     if (!normalizedArea) {
       setInlineError("Bitte Bereich oder Kommentar angeben.");
@@ -3607,7 +3604,7 @@ function MobileMeasurementTab({
         await Promise.all(existingEntries.map((entry) => api.deleteMobileMeasurementEntry(assignment.id, selectedBatch.id, entry.id)));
       }
       let createdEntry: MeasurementEntry | null = null;
-      if (quantity > 0) {
+      if (hasInlineQuantityInput) {
         createdEntry = await api.createMobileMeasurementEntry(assignment.id, selectedBatch.id, item.id, {
           area_or_comment: normalizedArea,
           quantity,
@@ -3714,10 +3711,10 @@ function MobileMeasurementTab({
           }
         }}
         onSave={async () => {
-          const quantity = Number(formQuantity.replace(",", "."));
+          const quantity = parseOptionalMeasurementQuantity(formQuantity);
           const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(formComment));
-          if (!Number.isFinite(quantity) || quantity <= 0) {
-            setFormError("Bitte eine gültige Menge größer 0 eingeben.");
+          if (quantity === null || !formQuantity.trim()) {
+            setFormError("Bitte eine gültige Menge eingeben.");
             return;
           }
           if (!normalizedArea) {
@@ -4013,7 +4010,9 @@ function MobileMeasurementTab({
                 <MobileCustomerEmailStatus item={batch} />
                 <span className="mobile-measurement-card-footer">
                   <span className="mobile-measurement-card-date">{batch.created_by_name ? `Ersteller: ${batch.created_by_name}` : "Ohne Ersteller"}</span>
-                  <span className="mobile-measurement-card-hours">Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+                  <span className={`mobile-measurement-card-hours${Number(batch.reported_hours) < 0 ? " measurement-negative-quantity" : ""}`}>
+                    Stunden: {formatMeasurementNumber(batch.reported_hours)}
+                  </span>
                 </span>
               </button>
             );
@@ -4170,7 +4169,9 @@ function MeasurementBatchOverview({
         <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
         <span className="mobile-measurement-card-meta">
           <span>Positionen: {batch.position_count}</span>
-          <span>Stunden: {formatMeasurementNumber(batch.reported_hours)}</span>
+          <span className={Number(batch.reported_hours) < 0 ? "measurement-negative-quantity" : undefined}>
+            Stunden: {formatMeasurementNumber(batch.reported_hours)}
+          </span>
         </span>
       </div>
       {batch.is_locked_for_worker ? (
@@ -4779,7 +4780,7 @@ function MeasurementBatchDetail({
                     {positionLabel ? <strong className="mobile-measurement-row-position">{positionLabel}</strong> : null}
                     {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
                   </span>
-                  <strong className="mobile-measurement-row-quantity">{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
+                  <strong className={`mobile-measurement-row-quantity${Number(item.reported_quantity) < 0 ? " measurement-negative-quantity" : ""}`}>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
                 </div>
                 <span className="mobile-measurement-row-description">{item.description}</span>
               </button>
@@ -4948,6 +4949,7 @@ function MeasurementFreePositionForm({
             value={draft.quantity || "0,00"}
             aria-label={quantityLabel}
             placeholder="0,00"
+            className={Number(parseOptionalMeasurementQuantity(draft.quantity)) < 0 ? "measurement-negative-quantity" : undefined}
           />
           <MeasurementQuantityKeypad
             disabled={isSaving}
@@ -5162,6 +5164,11 @@ function MobileMeasurementTable({
       handleQuantityKey(event.key as MeasurementQuantityKey);
       return;
     }
+    if (event.key === "-" || event.key === "Subtract") {
+      event.preventDefault();
+      handleQuantityKey("minus");
+      return;
+    }
     if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault();
       handleQuantityKey("backspace");
@@ -5188,7 +5195,7 @@ function MobileMeasurementTable({
     return (
       <button
         autoFocus
-        className="measurement-matrix-active-cell"
+        className={`measurement-matrix-active-cell${Number(parseOptionalMeasurementQuantity(displayValue)) < 0 ? " measurement-negative-quantity" : ""}`}
         type="button"
         aria-label={`Aktive Menge ${item.position} ${area}`}
         onKeyDown={(event) => handleActiveCellKeyDown(event, item, area, mode)}
@@ -5409,8 +5416,10 @@ function MobileMeasurementTable({
                   {displayItems.map((item) => {
                     const quantity = getMobileMeasurementAreaQuantity(item, area);
                     const isActive = isInlineCellActive(item, area, "cell");
+                    const hasEntries = item.entries.some((entry) => getMeasurementAreaKey(entry.area_or_comment) === getMeasurementAreaKey(area));
                     const cellClassName = [
-                      quantity > 0 ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell",
+                      hasEntries ? "measurement-matrix-quantity-cell" : "measurement-matrix-empty-cell",
+                      quantity < 0 ? "measurement-negative-quantity" : "",
                       isInlineEditingEnabled ? "is-tablet-editable" : "",
                       isActive ? "is-inline-editing" : "",
                     ].filter(Boolean).join(" ");
@@ -5428,7 +5437,7 @@ function MobileMeasurementTable({
                               onSelectItem(item);
                             }}
                           >
-                            {quantity > 0 ? formatMeasurementNumber(quantity) : ""}
+                            {hasEntries ? formatMeasurementNumber(quantity) : ""}
                           </button>
                         )}
                       </td>
@@ -5449,7 +5458,7 @@ function MobileMeasurementTable({
             <tr className="measurement-matrix-total-row">
               <th className="measurement-matrix-axis">Gesamt</th>
               {displayItems.map((item) => (
-                <td className={getMeasurementMatrixCellClassName(item, "measurement-matrix-quantity-cell")} key={item.id}>
+                <td className={getMeasurementMatrixCellClassName(item, `measurement-matrix-quantity-cell${Number(item.reported_quantity) < 0 ? " measurement-negative-quantity" : ""}`)} key={item.id}>
                   <button className="measurement-matrix-cell-button" type="button" onClick={() => onSelectItem(item)}>
                     <strong>{formatMeasurementNumber(item.reported_quantity)}</strong>
                   </button>
@@ -5497,6 +5506,7 @@ function MeasurementTableFixedKeypad({
     { key: ",", label: "," },
     { key: "0", label: "0" },
     { key: ".", label: "." },
+    { key: "minus", label: "−", ariaLabel: "Vorzeichen wechseln" },
     { key: "backspace", label: "Zurück", className: "is-muted", ariaLabel: "Letzte Ziffer entfernen" },
     { key: "clear", label: "Leeren", className: "is-muted", ariaLabel: "Menge leeren" },
   ];
@@ -5645,6 +5655,7 @@ function MeasurementDetail({
                 readOnly
                 value={formQuantity}
                 aria-label={`Menge in ${item.unit ?? "Einheit"}`}
+                className={Number(parseOptionalMeasurementQuantity(formQuantity)) < 0 ? "measurement-negative-quantity" : undefined}
               />
               <MeasurementQuantityKeypad
                 disabled={isSaving}
@@ -5671,7 +5682,7 @@ function MeasurementDetail({
         {measuredAreas.map((area) => (
           <article className="mobile-measurement-entry" key={area.key}>
             <strong>{area.label}</strong>
-            <span>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</span>
+            <span className={area.quantity < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</span>
             {isEditable ? (
               <button
                 aria-label={`Aufmaß für ${area.label} löschen`}
@@ -5693,14 +5704,16 @@ function MeasurementDetail({
           <span>Aufmaßnummer <strong>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</strong></span>
           <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
           <span>Menge laut Angebot <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
-          <span>Menge nach Aufmaß <strong>{formatMeasurementNumber(measuredQuantity)}</strong></span>
+          <span>
+            Menge nach Aufmaß <strong className={measuredQuantity < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(measuredQuantity)}</strong>
+          </span>
         </div>
         <div className="mobile-measurement-detail-areas">
           <strong>Verbaute Orte:</strong>
           {measuredAreas.length > 0 ? measuredAreas.map((area) => (
             <span key={area.key}>
               <span>{area.label}:</span>
-              <strong>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</strong>
+              <strong className={area.quantity < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</strong>
             </span>
           )) : <span>Noch keine Orte erfasst.</span>}
         </div>
@@ -5709,7 +5722,7 @@ function MeasurementDetail({
   );
 }
 
-type MeasurementQuantityKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "," | "." | "backspace" | "clear";
+type MeasurementQuantityKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "," | "." | "minus" | "backspace" | "clear";
 
 function MeasurementQuantityKeypad({
   disabled,
@@ -5731,8 +5744,9 @@ function MeasurementQuantityKeypad({
     { key: "0", label: "0" },
     { key: ",", label: "," },
     { key: ".", label: "." },
+    { key: "minus", label: "−", ariaLabel: "Vorzeichen wechseln" },
     { key: "backspace", label: "Zurück", className: "is-muted", ariaLabel: "Letzte Ziffer entfernen" },
-    { key: "clear", label: "Leeren", className: "is-muted is-wide", ariaLabel: "Menge leeren" },
+    { key: "clear", label: "Leeren", className: "is-muted", ariaLabel: "Menge leeren" },
   ];
 
   return (
@@ -7002,7 +7016,7 @@ function recalculateMobileMeasurementItemTotals(item: MobileMeasurementItem, ent
     reported_quantity: reportedQuantity,
     reported_minutes: reportedMinutes,
     reported_hours: reportedHours,
-    mobile_status: reportedQuantity > 0 ? "edited" : "open",
+    mobile_status: entries.length > 0 ? "edited" : "open",
   };
 }
 
@@ -7047,13 +7061,19 @@ function applyMeasurementQuantityKey(value: string, key: MeasurementQuantityKey)
   if (key === "backspace") {
     return normalizedValue.slice(0, -1);
   }
+  if (key === "minus") {
+    return normalizedValue.startsWith("-") ? normalizedValue.slice(1) : `-${normalizedValue}`;
+  }
   if (key === "," || key === ".") {
     if (normalizedValue.includes(",")) {
       return normalizedValue;
     }
-    return normalizedValue ? `${normalizedValue},` : "0,";
+    return normalizedValue === "-" ? "-0," : normalizedValue ? `${normalizedValue},` : "0,";
   }
 
+  if (normalizedValue === "-0") {
+    return key === "0" ? normalizedValue : `-${key}`;
+  }
   if (normalizedValue === "0") {
     return key === "0" ? normalizedValue : key;
   }
@@ -7740,5 +7760,5 @@ function mobileStatusLabel(status: string): string {
 
 function isMobileMeasurementItemCaptured(item: MobileMeasurementItem): boolean {
   const reportedQuantity = Number(item.reported_quantity);
-  return item.entries.length > 0 || (Number.isFinite(reportedQuantity) && reportedQuantity > 0);
+  return item.entries.length > 0 || (Number.isFinite(reportedQuantity) && reportedQuantity !== 0);
 }

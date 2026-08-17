@@ -57,6 +57,14 @@ test("mobile keeps the existing position selection and grouping behavior", () =>
   assert.match(mobilePageSource, /return capturedGroup\.key/);
 });
 
+test("mobile measurement entry supports signed quantities through keypad and physical keyboard", () => {
+  assert.match(mobilePageSource, /type MeasurementQuantityKey = [^;]*\| "minus" \| "backspace" \| "clear";/);
+  assert.equal((mobilePageSource.match(/key: "minus", label: "−"/g) ?? []).length, 2);
+  assert.match(mobilePageSource, /if \(event\.key === "-" \|\| event\.key === "Subtract"\)/);
+  assert.match(mobilePageSource, /if \(key === "minus"\)/);
+  assert.match(stylesSource, /\.measurement-negative-quantity,\s*\.measurement-negative-quantity input \{\s*color: #8b3f46 !important;/s);
+});
+
 test("mobile groups a main offer and appended supplement even below thirty positions", () => {
   const items = [
     ...Array.from({ length: 20 }, (_, index) => sourceItem(
