@@ -3539,6 +3539,7 @@ function buildMissingTimeReviewEntry(worker: TimeReviewWorkerSummary | null, wor
     original_site_number: null,
     assignment_id: null,
     work_date: workDate,
+    overnight_status: null,
     original_work_date: null,
     start_time: null,
     end_time: null,

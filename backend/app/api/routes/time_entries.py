@@ -17,6 +17,7 @@ from app.schemas.time_entry import (
     TimeEntryPayrollWeekDayRead,
     TimeEntryPayrollWeekPersonRead,
     TimeEntryPayrollWeekRead,
+    PersonWorkDayRead,
     TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
@@ -168,6 +169,25 @@ def list_time_entries(
             for index, stay in enumerate(gps_suggestions)
         )
     return response_entries
+
+
+@router.get("/day-status", response_model=PersonWorkDayRead)
+def get_time_entry_day_status(
+    person_id: int,
+    work_date: date,
+    current_user: User = Depends(CAN_ACCESS),
+    db: Session = Depends(get_db),
+) -> PersonWorkDayRead:
+    overnight_status = TimeEntryService(db).get_overnight_status(
+        current_user=current_user,
+        person_id=person_id,
+        work_date=work_date,
+    )
+    return PersonWorkDayRead(
+        person_id=person_id,
+        work_date=work_date,
+        overnight_status=overnight_status,
+    )
 
 
 @router.post("", response_model=TimeEntryRead, status_code=201)
@@ -438,6 +458,7 @@ def time_entry_read(
         original_site_number=entry.original_site.site_number if entry.original_site else None,
         assignment_id=entry.assignment_id,
         work_date=entry.work_date,
+        overnight_status=entry.work_day.overnight_status if entry.work_day else None,
         original_work_date=entry.original_work_date,
         start_time=entry.start_time,
         end_time=entry.end_time,
@@ -509,6 +530,7 @@ def gps_suggestion_read(stay: GpsSiteStay, *, synthetic_id: int) -> TimeEntryRea
         original_site_number=stay.site_number,
         assignment_id=None,
         work_date=stay.work_date,
+        overnight_status=None,
         original_work_date=None,
         start_time=None,
         end_time=None,

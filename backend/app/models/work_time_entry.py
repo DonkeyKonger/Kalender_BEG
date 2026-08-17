@@ -1,9 +1,10 @@
 from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, Time
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, Time, and_
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.person_work_day import PersonWorkDay
 
 
 class WorkTimeEntry(TimestampMixin, Base):
@@ -71,3 +72,12 @@ class WorkTimeEntry(TimestampMixin, Base):
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
     payroll_reviewed_by = relationship("User", foreign_keys=[payroll_reviewed_by_user_id])
+    work_day = relationship(
+        PersonWorkDay,
+        primaryjoin=lambda: and_(
+            foreign(WorkTimeEntry.person_id) == PersonWorkDay.person_id,
+            foreign(WorkTimeEntry.work_date) == PersonWorkDay.work_date,
+        ),
+        uselist=False,
+        viewonly=True,
+    )

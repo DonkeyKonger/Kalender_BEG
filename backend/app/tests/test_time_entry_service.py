@@ -3,16 +3,19 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.routes.time_entries import time_entry_read
 from app.models import Base
 from app.models.absence import Absence
 from app.models.assignment import Assignment
-from app.models.enums import AbsenceStatus, AbsenceType, PersonType, SiteStatus, UserRole
+from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus, PersonType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
+from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
@@ -342,6 +345,205 @@ def test_old_time_entry_without_site_is_serialized_without_guessed_site():
     assert response.site_id is None
     assert response.site_name is None
     assert response.site_number is None
+
+
+@pytest.mark.parametrize(
+    "overnight_status",
+    [OvernightStatus.NONE, OvernightStatus.SELF_PAID, OvernightStatus.BEG_PAID],
+)
+def test_mobile_time_entry_persists_valid_overnight_status(overnight_status: OvernightStatus):
+    db = db_session()
+    person = Person(
+        first_name="Status",
+        last_name="Monteur",
+        display_name="Status Monteur",
+        short_code="SM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username=f"worker-{overnight_status.value}",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    db.add_all([person, user])
+    db.commit()
+
+    entry = TimeEntryService(db).create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=date(2026, 8, 17),
+        start_time=time(8, 0),
+        end_time=time(10, 0),
+        break_minutes=0,
+        work_minutes=120,
+        overnight_status=overnight_status,
+    ), user)
+
+    work_days = list(db.scalars(select(PersonWorkDay)))
+    assert len(work_days) == 1
+    assert work_days[0].overnight_status == overnight_status.value
+    assert time_entry_read(entry).overnight_status == overnight_status
+
+
+def test_invalid_overnight_status_is_rejected_by_schema():
+    with pytest.raises(ValidationError):
+        TimeEntryCreate(
+            person_id=1,
+            work_date=date(2026, 8, 17),
+            work_minutes=60,
+            overnight_status="somebody_else_paid",
+        )
+
+
+def test_same_person_and_work_date_can_only_have_one_work_day_row():
+    db = db_session()
+    person = Person(
+        first_name="Unique",
+        last_name="Monteur",
+        display_name="Unique Monteur",
+        short_code="UM",
+        person_type=PersonType.INTERNAL,
+    )
+    db.add(person)
+    db.flush()
+    db.add_all([
+        PersonWorkDay(person_id=person.id, work_date=date(2026, 8, 17), overnight_status="none"),
+        PersonWorkDay(person_id=person.id, work_date=date(2026, 8, 17), overnight_status="self_paid"),
+    ])
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_second_time_entry_updates_shared_work_day_status_instead_of_inserting_row():
+    db = db_session()
+    person = Person(
+        first_name="Mehrfach",
+        last_name="Monteur",
+        display_name="Mehrfach Monteur",
+        short_code="MM2",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="worker-multiple-overnight",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    db.add_all([person, user])
+    db.commit()
+    item = TimeEntryService(db)
+    work_date = date(2026, 8, 17)
+
+    item.create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=work_date,
+        start_time=time(7, 0),
+        end_time=time(12, 0),
+        work_minutes=300,
+        overnight_status=OvernightStatus.SELF_PAID,
+    ), user)
+    item.create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=work_date,
+        start_time=time(13, 0),
+        end_time=time(17, 0),
+        work_minutes=240,
+        overnight_status=OvernightStatus.BEG_PAID,
+    ), user)
+
+    work_days = list(db.scalars(select(PersonWorkDay)))
+    assert len(work_days) == 1
+    assert work_days[0].overnight_status == OvernightStatus.BEG_PAID.value
+    reloaded = item.list_entries(
+        current_user=user,
+        person_id=person.id,
+        date_from=work_date,
+        date_to=work_date,
+    )
+    assert len(reloaded) == 2
+    assert {time_entry_read(entry).overnight_status for entry in reloaded} == {
+        OvernightStatus.BEG_PAID,
+    }
+
+
+def test_next_work_date_does_not_inherit_previous_overnight_status():
+    db = db_session()
+    person = Person(
+        first_name="Folgetag",
+        last_name="Monteur",
+        display_name="Folgetag Monteur",
+        short_code="FM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="worker-next-day-overnight",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    db.add_all([person, user])
+    db.commit()
+    item = TimeEntryService(db)
+
+    for work_date, overnight_status in [
+        (date(2026, 8, 17), OvernightStatus.SELF_PAID),
+        (date(2026, 8, 18), OvernightStatus.NONE),
+    ]:
+        item.create_entry(TimeEntryCreate(
+            person_id=person.id,
+            work_date=work_date,
+            work_minutes=60,
+            overnight_status=overnight_status,
+        ), user)
+
+    assert item.get_overnight_status(
+        current_user=user,
+        person_id=person.id,
+        work_date=date(2026, 8, 17),
+    ) == OvernightStatus.SELF_PAID
+    assert item.get_overnight_status(
+        current_user=user,
+        person_id=person.id,
+        work_date=date(2026, 8, 18),
+    ) == OvernightStatus.NONE
+
+
+def test_historical_time_entry_without_work_day_keeps_unknown_status():
+    db = db_session()
+    person = Person(
+        first_name="Historisch",
+        last_name="Monteur",
+        display_name="Historisch Monteur",
+        short_code="HM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="historical-office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    entry = WorkTimeEntry(
+        person=person,
+        work_date=date(2026, 8, 1),
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        source="manual",
+        status="draft",
+        created_by=user,
+    )
+    db.add_all([person, user, entry])
+    db.commit()
+
+    loaded = TimeEntryService(db).list_entries(
+        current_user=user,
+        person_id=person.id,
+        date_from=entry.work_date,
+        date_to=entry.work_date,
+    )[0]
+
+    assert list(db.scalars(select(PersonWorkDay))) == []
+    assert time_entry_read(loaded).overnight_status is None
 
 
 def test_monteur_cannot_create_office_manual_time_entry():

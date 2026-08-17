@@ -2,13 +2,15 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
 from app.models.assignment import Assignment
-from app.models.enums import AbsenceStatus, PersonType, SiteStatus, UserRole
+from app.models.enums import AbsenceStatus, OvernightStatus, PersonType, SiteStatus, UserRole
 from app.models.person import Person
+from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
@@ -61,6 +63,7 @@ class TimeEntryService:
                 selectinload(WorkTimeEntry.person),
                 selectinload(WorkTimeEntry.site),
                 selectinload(WorkTimeEntry.original_site),
+                selectinload(WorkTimeEntry.work_day),
             )
             .order_by(WorkTimeEntry.work_date.desc(), WorkTimeEntry.id.desc())
         )
@@ -84,6 +87,7 @@ class TimeEntryService:
         self._ensure_site_exists(payload.site_id)
         self._ensure_assignment_matches(payload.assignment_id, payload.person_id, payload.site_id)
         values = payload.model_dump()
+        overnight_status = values.pop("overnight_status", None)
         values["break_minutes"] = values.get("break_minutes") or 0
         values["travel_minutes"] = values.get("travel_minutes") or 0
         values["work_minutes"] = self._resolve_work_minutes(
@@ -108,6 +112,12 @@ class TimeEntryService:
         values["original_site_id"] = values.get("site_id")
         entry = WorkTimeEntry(**values, created_by_user_id=current_user.id)
         self.db.add(entry)
+        if overnight_status is not None:
+            self._set_overnight_status(
+                person_id=payload.person_id,
+                work_date=payload.work_date,
+                overnight_status=overnight_status,
+            )
         self.db.commit()
         return self._load_entry_for_read(entry.id)
 
@@ -115,6 +125,7 @@ class TimeEntryService:
         entry = self._get_entry(entry_id)
         self._ensure_can_write_person(current_user, entry.person_id)
         values = payload.model_dump(exclude_unset=True)
+        overnight_status = values.pop("overnight_status", None)
         next_person_id = values.get("person_id", entry.person_id)
         next_site_id = values.get("site_id", entry.site_id)
         if "person_id" in values:
@@ -160,6 +171,13 @@ class TimeEntryService:
         if entry.status == "reviewed" and entry.reviewed_by_user_id is None:
             entry.reviewed_by_user_id = current_user.id
             entry.reviewed_at = datetime.now().astimezone()
+
+        if overnight_status is not None:
+            self._set_overnight_status(
+                person_id=next_person_id,
+                work_date=next_work_date,
+                overnight_status=overnight_status,
+            )
 
         self.db.commit()
         return self._load_entry_for_read(entry.id)
@@ -704,6 +722,7 @@ class TimeEntryService:
                 selectinload(WorkTimeEntry.person),
                 selectinload(WorkTimeEntry.site),
                 selectinload(WorkTimeEntry.original_site),
+                selectinload(WorkTimeEntry.work_day),
             )
             .where(WorkTimeEntry.id == entry_id)
             .execution_options(populate_existing=True)
@@ -711,6 +730,72 @@ class TimeEntryService:
         if entry is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Arbeitszeit nicht gefunden.")
         return entry
+
+    def get_overnight_status(
+        self,
+        *,
+        current_user: User,
+        person_id: int,
+        work_date: date,
+    ) -> OvernightStatus | None:
+        effective_person_id = self._effective_person_id(current_user, person_id)
+        if effective_person_id is None:
+            effective_person_id = person_id
+        work_day = self.db.scalar(
+            select(PersonWorkDay)
+            .where(PersonWorkDay.person_id == effective_person_id)
+            .where(PersonWorkDay.work_date == work_date)
+        )
+        if work_day is None or work_day.overnight_status is None:
+            return None
+        return OvernightStatus(work_day.overnight_status)
+
+    def _set_overnight_status(
+        self,
+        *,
+        person_id: int,
+        work_date: date,
+        overnight_status: OvernightStatus,
+    ) -> PersonWorkDay:
+        if self.db.get_bind().dialect.name == "postgresql":
+            self.db.execute(
+                postgresql_insert(PersonWorkDay)
+                .values(
+                    person_id=person_id,
+                    work_date=work_date,
+                    overnight_status=overnight_status.value,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_person_work_days_person_date",
+                    set_={
+                        "overnight_status": overnight_status.value,
+                        "updated_at": func.now(),
+                    },
+                )
+            )
+            return self.db.scalar(
+                select(PersonWorkDay)
+                .where(PersonWorkDay.person_id == person_id)
+                .where(PersonWorkDay.work_date == work_date)
+                .execution_options(populate_existing=True)
+            )
+
+        work_day = self.db.scalar(
+            select(PersonWorkDay)
+            .where(PersonWorkDay.person_id == person_id)
+            .where(PersonWorkDay.work_date == work_date)
+            .with_for_update()
+        )
+        if work_day is None:
+            work_day = PersonWorkDay(
+                person_id=person_id,
+                work_date=work_date,
+                overnight_status=overnight_status.value,
+            )
+            self.db.add(work_day)
+        else:
+            work_day.overnight_status = overnight_status.value
+        return work_day
 
     def _effective_person_id(self, current_user: User, requested_person_id: int | None) -> int | None:
         if current_user.role != UserRole.MONTEUR:

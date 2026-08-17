@@ -12,6 +12,12 @@ class UserRole(StrEnum):
     MONTEUR = "monteur"
 
 
+class OvernightStatus(StrEnum):
+    NONE = "none"
+    SELF_PAID = "self_paid"
+    BEG_PAID = "beg_paid"
+
+
 class MeasurementBatchOrigin(StrEnum):
     MONTEUR = "MONTEUR"
     OFFICE = "OFFICE"

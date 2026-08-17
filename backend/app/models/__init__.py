@@ -11,6 +11,7 @@ from app.models.operational_absence import OperationalAbsence
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.person_vacation_carryover import PersonVacationCarryover
+from app.models.person_work_day import PersonWorkDay
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.project_folder import ProjectFolder
 from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
@@ -55,6 +56,7 @@ __all__ = [
     "Person",
     "PersonHoursAccountEntry",
     "PersonVacationCarryover",
+    "PersonWorkDay",
     "PlanningCellMark",
     "PendingPlanPushNotification",
     "ProjectFolder",

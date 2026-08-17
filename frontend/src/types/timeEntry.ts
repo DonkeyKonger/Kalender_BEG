@@ -4,6 +4,7 @@ export type TimeEntryGpsStatus = "not_checkable" | "missing" | "partial" | "matc
 export type TimeReviewStatus = "open" | "manually_approved" | "corrected" | "not_verifiable" | "clarification" | "auto_closed_by_deadline";
 export type TimeReviewMethod = "accept_manual" | "accept_gps" | "manual_confirmed" | "manual_correction" | "assign_site" | "mark_not_verifiable" | "clarification" | "deadline";
 export type TimeReviewDecision = "accept_manual" | "accept_gps" | "corrected" | "assign_site" | "mark_not_verifiable" | "mark_clarification";
+export type OvernightStatus = "none" | "self_paid" | "beg_paid";
 
 export type TimeEntry = {
   id: number;
@@ -18,6 +19,7 @@ export type TimeEntry = {
   original_site_number: string | null;
   assignment_id: number | null;
   work_date: string;
+  overnight_status: OvernightStatus | null;
   original_work_date: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -90,6 +92,13 @@ export type TimeEntryCreate = {
   note?: string | null;
   source?: "manual";
   status?: TimeEntryStatus;
+  overnight_status?: OvernightStatus;
+};
+
+export type PersonWorkDay = {
+  person_id: number;
+  work_date: string;
+  overnight_status: OvernightStatus | null;
 };
 
 export type TimeEntryUpdate = Partial<TimeEntryCreate>;

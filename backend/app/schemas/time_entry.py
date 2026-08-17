@@ -4,6 +4,8 @@ from datetime import date as Date, datetime, time as Time
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.models.enums import OvernightStatus
+
 
 TIME_ENTRY_STATUSES = {"draft", "submitted", "reviewed"}
 TIME_ENTRY_SOURCES = {"manual"}
@@ -48,6 +50,7 @@ class TimeEntryBase(BaseModel):
     note: str | None = None
     source: str = "manual"
     status: str = "draft"
+    overnight_status: OvernightStatus | None = None
 
     @field_validator("source")
     @classmethod
@@ -89,6 +92,7 @@ class TimeEntryUpdate(BaseModel):
     note: str | None = None
     source: str | None = None
     status: str | None = None
+    overnight_status: OvernightStatus | None = None
 
     @field_validator("source")
     @classmethod
@@ -221,6 +225,7 @@ class TimeEntryRead(BaseModel):
     original_site_number: str | None = None
     assignment_id: int | None = None
     work_date: Date
+    overnight_status: OvernightStatus | None = None
     original_work_date: Date | None = None
     start_time: Time | None = None
     end_time: Time | None = None
@@ -275,3 +280,9 @@ class TimeEntryRead(BaseModel):
     mismatch_notice: str | None = None
     review_notices: list[str] = Field(default_factory=list)
     payroll_review_state: TimeEntryPayrollReviewStateRead
+
+
+class PersonWorkDayRead(BaseModel):
+    person_id: int
+    work_date: Date
+    overnight_status: OvernightStatus | None = None

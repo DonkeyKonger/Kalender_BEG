@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Car, ChevronLeft, ChevronRight, Clock3, Pencil, Pause } from "lucide-react";
+import { ArrowLeft, BedDouble, BriefcaseBusiness, Building2, Car, Check, ChevronLeft, ChevronRight, Clock3, Coffee, Hotel, Pause, Pencil, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,8 +10,9 @@ import {
   formatHoursFromMinutes,
 } from "../lib/formatters";
 import { useMobileScrollReset } from "../lib/mobileScroll";
+import { applyOvernightStatusToWorkDate, resolveOvernightStatusForWorkDate } from "../lib/overnightStatus";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
-import type { TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { OvernightStatus, TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type MobileTimeView = "month" | "day";
 
@@ -68,6 +69,11 @@ const BREAK_THRESHOLD_MINUTES = 510;
 const BREAK_OPTION_MINUTES = [0, 15, 30, 45, 60, 90];
 const TIME_PICKER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const TIME_PICKER_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
+const OVERNIGHT_OPTIONS = [
+  { value: "none", label: "Keine Übernachtung", icon: BedDouble, tone: "blue" },
+  { value: "self_paid", label: "Hotel selbst bezahlt", icon: ReceiptText, tone: "green" },
+  { value: "beg_paid", label: "Hotel durch BEG bezahlt", icon: Hotel, tone: "gold" },
+] as const;
 
 export function MobileTimeEntryPage() {
   const navigate = useNavigate();
@@ -89,7 +95,7 @@ export function MobileTimeEntryPage() {
   const [isBreakPickerOpen, setIsBreakPickerOpen] = useState(false);
   const [manualSiteText, setManualSiteText] = useState("");
   const [timeConflict, setTimeConflict] = useState<TimeOverlapConflict | null>(null);
-  const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
+  const [overnightStatus, setOvernightStatus] = useState<OvernightStatus>("none");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -104,6 +110,7 @@ export function MobileTimeEntryPage() {
   const minuteWheelRef = useRef<HTMLDivElement | null>(null);
   const hourWheelScrollTimeoutRef = useRef<number | null>(null);
   const minuteWheelScrollTimeoutRef = useRef<number | null>(null);
+  const overnightLoadTokenRef = useRef(0);
 
   useMobileScrollReset("time-entry");
 
@@ -301,6 +308,32 @@ export function MobileTimeEntryPage() {
     await saveCurrentForm();
   }
 
+  function initializeOvernightStatus(preferredStatus?: OvernightStatus | null): void {
+    const persistedStatus = preferredStatus
+      ?? selectedDateEntries.find((entry) => entry.overnight_status !== null)?.overnight_status
+      ?? null;
+    setOvernightStatus(resolveOvernightStatusForWorkDate({
+      entries: selectedDateEntries,
+      workDate: selectedDate,
+      preferredStatus,
+    }));
+
+    const requestToken = overnightLoadTokenRef.current + 1;
+    overnightLoadTokenRef.current = requestToken;
+    if (persistedStatus !== null || personId === null) {
+      return;
+    }
+    void api.timeEntryDayStatus({ personId, workDate: selectedDate })
+      .then((workDay) => {
+        if (overnightLoadTokenRef.current === requestToken) {
+          setOvernightStatus(workDay.overnight_status ?? "none");
+        }
+      })
+      .catch(() => {
+        // The explicit default is still stored atomically when the time entry is saved.
+      });
+  }
+
   function openSiteEntry(siteId: number) {
     if (isSelectedWeekLocked) {
       return;
@@ -315,8 +348,8 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: null,
     });
     setManualSiteText("");
+    initializeOvernightStatus();
     setSheetMode("site");
-    setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
     setTimeConflict(null);
     setIsBreakPickerOpen(false);
@@ -336,8 +369,8 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: null,
     });
     setManualSiteText(initialText);
+    initializeOvernightStatus();
     setSheetMode("manual");
-    setSuggestionMessage(suggestedStart && suggestedEnd ? "Zeiten vom letzten Eintrag vorgeschlagen." : null);
     setFormError(null);
     setTimeConflict(null);
     setIsBreakPickerOpen(false);
@@ -356,8 +389,8 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: 0,
     });
     setManualSiteText("");
+    initializeOvernightStatus();
     setSheetMode("travel");
-    setSuggestionMessage(null);
     setFormError(null);
     setTimeConflict(null);
     setIsBreakPickerOpen(false);
@@ -369,7 +402,8 @@ export function MobileTimeEntryPage() {
     setForm({ siteId: "", startTime: "", endTime: "", breakMinutesOverride: null });
     setIsBreakPickerOpen(false);
     setManualSiteText("");
-    setSuggestionMessage(null);
+    setOvernightStatus("none");
+    overnightLoadTokenRef.current += 1;
     setFormError(null);
     setTimeConflict(null);
     setTimePickerTarget(null);
@@ -452,6 +486,7 @@ export function MobileTimeEntryPage() {
       note: nextNote,
       source: "manual",
       status: "submitted",
+      overnight_status: overnightStatus,
     };
 
     setIsSaving(true);
@@ -459,7 +494,7 @@ export function MobileTimeEntryPage() {
       const savedEntry = targetEntryId
         ? await api.updateTimeEntry(targetEntryId, payload)
         : await api.createTimeEntry(payload);
-      setEntries((currentEntries) => upsertEntry(currentEntries, savedEntry));
+      setEntries((currentEntries) => upsertEntryAndDayStatus(currentEntries, savedEntry));
       closeTimeEntrySheet();
     } catch (error) {
       const apiConflict = parseApiOverlapConflict(error, siteById);
@@ -512,8 +547,8 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: entry.break_minutes === automaticEntryBreakMinutes ? null : entry.break_minutes,
     });
     setManualSiteText(entry.site_id === null ? extractManualSiteText(entry.note) : "");
+    initializeOvernightStatus(entry.overnight_status);
     setSheetMode(isTravelOnlyTimeEntry(entry) ? "travel" : entry.site_id === null ? "manual" : "site");
-    setSuggestionMessage(null);
     setFormError(null);
     setTimeConflict(null);
     setIsBreakPickerOpen(false);
@@ -849,7 +884,6 @@ export function MobileTimeEntryPage() {
                 <div className="mobile-project-email-dialog-head mobile-time-sheet-heading">
                   <span>{editingEntry ? "Eintrag bearbeiten" : "Zeit erfassen"}</span>
                   <h2 id="mobile-time-sheet-title">{sheetSiteLabel}</h2>
-                  {suggestionMessage ? <p>{suggestionMessage}</p> : null}
                 </div>
 
                 <form className="mobile-time-form" onSubmit={(event) => void handleSave(event)}>
@@ -874,13 +908,15 @@ export function MobileTimeEntryPage() {
                     <div className="mobile-time-field">
                       <span>Startzeit</span>
                       <button className="mobile-time-value-button" type="button" onClick={() => openTimePicker("start")}>
-                        {form.startTime || "--:--"}
+                        <span className="mobile-time-value-icon"><Clock3 size={19} aria-hidden="true" /></span>
+                        <strong>{form.startTime || "--:--"}</strong>
                       </button>
                     </div>
                     <div className="mobile-time-field">
                       <span>Endzeit</span>
                       <button className="mobile-time-value-button" type="button" onClick={() => openTimePicker("end")}>
-                        {form.endTime || "--:--"}
+                        <span className="mobile-time-value-icon"><Clock3 size={19} aria-hidden="true" /></span>
+                        <strong>{form.endTime || "--:--"}</strong>
                       </button>
                     </div>
                   </div>
@@ -899,19 +935,52 @@ export function MobileTimeEntryPage() {
                         type="button"
                         onClick={() => setIsBreakPickerOpen(true)}
                       >
-                        <span>{form.breakMinutesOverride === null ? "Pause automatisch" : "Pause manuell"}</span>
-                        <strong>{breakMinutes !== null ? formatBreakHoursFromMinutes(breakMinutes) : "-"}</strong>
+                        <span className="mobile-time-summary-icon is-break"><Coffee size={20} aria-hidden="true" /></span>
+                        <span className="mobile-time-summary-copy">
+                          <span>Pause</span>
+                          <strong>{breakMinutes !== null ? formatBreakHoursFromMinutes(breakMinutes) : "-"}</strong>
+                        </span>
                       </button>
                       <div>
-                        <span>Arbeitszeit netto</span>
-                        <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
-                      </div>
-                      <div>
-                        <span>Brutto</span>
-                        <strong>{grossMinutes !== null ? formatHoursFromMinutes(grossMinutes) : "-"}</strong>
+                        <span className="mobile-time-summary-icon is-work"><BriefcaseBusiness size={20} aria-hidden="true" /></span>
+                        <span className="mobile-time-summary-copy">
+                          <span>Arbeitszeit</span>
+                          <strong>{netMinutes !== null ? formatHoursFromMinutes(netMinutes) : "-"}</strong>
+                        </span>
                       </div>
                     </div>
                   )}
+
+                  <fieldset className="mobile-time-overnight">
+                    <legend>Übernachtung</legend>
+                    <p>Bitte eine Option auswählen</p>
+                    <div className="mobile-time-overnight-options">
+                      {OVERNIGHT_OPTIONS.map((option) => {
+                        const OptionIcon = option.icon;
+                        const isSelected = overnightStatus === option.value;
+                        return (
+                          <label className={`mobile-time-overnight-card is-${option.tone}${isSelected ? " is-selected" : ""}`} key={option.value}>
+                            <input
+                              checked={isSelected}
+                              name="overnight-status"
+                              type="radio"
+                              value={option.value}
+                              onChange={() => {
+                                overnightLoadTokenRef.current += 1;
+                                setOvernightStatus(option.value);
+                              }}
+                            />
+                            <span className="mobile-time-overnight-icon"><OptionIcon size={22} aria-hidden="true" /></span>
+                            <strong>{option.label}</strong>
+                            {option.value === "none" ? <small>Standard</small> : null}
+                            <span className="mobile-time-overnight-check" aria-hidden="true">
+                              {isSelected ? <Check size={18} strokeWidth={3} /> : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
                   {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
                   {breakValidationMessage ? <p className="form-error">{breakValidationMessage}</p> : null}
                   {formError ? <p className="form-error">{formError}</p> : null}
@@ -1258,8 +1327,11 @@ function timeOverlapConflictEntry(entry: TimeEntry, siteById: Map<number, Mobile
   };
 }
 
-function upsertEntry(entries: TimeEntry[], savedEntry: TimeEntry): TimeEntry[] {
-  const nextEntries = entries.filter((entry) => entry.id !== savedEntry.id);
+function upsertEntryAndDayStatus(entries: TimeEntry[], savedEntry: TimeEntry): TimeEntry[] {
+  const nextEntries = applyOvernightStatusToWorkDate(
+    entries.filter((entry) => entry.id !== savedEntry.id),
+    savedEntry,
+  );
   nextEntries.push(savedEntry);
   return nextEntries.filter(isEditableManualEntry).sort(compareEntries);
 }
