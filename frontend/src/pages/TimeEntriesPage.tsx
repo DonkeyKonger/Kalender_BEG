@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
+import { OvernightStatusIndicator } from "../components/OvernightStatusIndicator";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -40,7 +41,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
+import type { OvernightStatus, TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "gpsVerification" | "evaluation";
 type TimeReviewIssue = {
@@ -132,6 +133,7 @@ type TimeReviewWeekDay = {
   date: string;
   weekdayLabel: string;
   absenceType: AbsenceType | null;
+  overnightStatus: OvernightStatus | null;
   vacationCreditMinutes: number;
   entries: TimeReviewEntryCheck[];
 };
@@ -1795,6 +1797,7 @@ export function TimeEntriesPage() {
                     <span role="columnheader" aria-label="Tag ändern"></span>
                     <span role="columnheader">Tag</span>
                     <span role="columnheader">Baustelle</span>
+                    <span className="time-review-week-overnight" role="columnheader">ÜN</span>
                     <span role="columnheader">Montagebeginn</span>
                     <span role="columnheader">Montageende</span>
                     <span role="columnheader">Pause</span>
@@ -1846,6 +1849,9 @@ export function TimeEntriesPage() {
                             </StatusBadge>
                           )}
                         </div>
+                        <div className="time-review-week-overnight" role="cell">
+                          <OvernightStatusIndicator status={day.overnightStatus} />
+                        </div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
                         <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
@@ -1889,6 +1895,7 @@ export function TimeEntriesPage() {
                               <strong>Keine Zeitmeldung</strong>
                             )}
                           </div>
+                          <div className="time-review-week-overnight" role="cell" aria-label="Keine Zeitmeldung"></div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
@@ -3502,10 +3509,12 @@ function buildTimeReviewWeekDays(
     const date = addDaysToDateInput(weekStart, dayOffset);
     const dayEntries = (entriesByDate.get(date) ?? []).slice().sort(compareTimeReviewWorkerEntries);
     const absenceType = personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date);
+    const overnightStatus = dayEntries.find((entry) => entry.overnight_status !== null)?.overnight_status ?? null;
     return {
       date,
       weekdayLabel: formatWeekday(date),
       absenceType,
+      overnightStatus,
       vacationCreditMinutes: vacationCreditMinutesForDate(payrollWeekPerson, date),
       entries: dayEntries
         .map((entry) => ({

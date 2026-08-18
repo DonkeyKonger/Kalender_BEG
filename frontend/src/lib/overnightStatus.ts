@@ -1,7 +1,51 @@
 import type { OvernightStatus, TimeEntry } from "../types/timeEntry";
 
 
+export type OvernightStatusPresentation = {
+  badge: "MA" | "BEG" | null;
+  label: string;
+  marker: "–" | "?" | null;
+  tone: "none" | "self-paid" | "beg-paid" | "unknown";
+};
+
+
 export const DEFAULT_OVERNIGHT_STATUS: OvernightStatus = "none";
+
+
+export function getOvernightStatusPresentation(
+  status: OvernightStatus | null | undefined,
+): OvernightStatusPresentation {
+  if (status === "none") {
+    return {
+      badge: null,
+      label: "Keine Übernachtung",
+      marker: "–",
+      tone: "none",
+    };
+  }
+  if (status === "self_paid") {
+    return {
+      badge: "MA",
+      label: "Übernachtung – Hotel vom Monteur bezahlt",
+      marker: null,
+      tone: "self-paid",
+    };
+  }
+  if (status === "beg_paid") {
+    return {
+      badge: "BEG",
+      label: "Übernachtung – Hotel durch BEG bezahlt",
+      marker: null,
+      tone: "beg-paid",
+    };
+  }
+  return {
+    badge: null,
+    label: "Übernachtungsstatus nicht erfasst",
+    marker: "?",
+    tone: "unknown",
+  };
+}
 
 
 export function resolveOvernightStatusForWorkDate(params: {

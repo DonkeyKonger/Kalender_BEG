@@ -17389,10 +17389,10 @@ body.mobile-modal-scroll-locked {
 .time-review-week-check-head,
 .time-review-week-check-row {
   display: grid;
-  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
+  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) 58px repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
   gap: 8px;
   align-items: center;
-  min-width: 858px;
+  min-width: 924px;
   border-bottom: 1px solid #e2e8f0;
   padding: 8px 10px;
 }
@@ -17426,9 +17426,76 @@ body.mobile-modal-scroll-locked {
 .time-review-week-day,
 .time-review-week-move,
 .time-review-week-site,
+.time-review-week-overnight,
 .time-review-week-time {
   display: grid;
   min-width: 0;
+}
+
+.time-review-week-overnight {
+  place-items: center;
+}
+
+.time-review-overnight-indicator {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.time-review-overnight-indicator.is-none,
+.time-review-overnight-indicator.is-unknown {
+  border: 1px solid #d7e1ee;
+  border-radius: 2px;
+  background: #fbfcfe;
+}
+
+.time-review-overnight-indicator.is-unknown {
+  border-style: dashed;
+  color: #7b8798;
+}
+
+.time-review-overnight-bed {
+  display: inline-grid;
+  width: 29px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #cbd7e6;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #173a63;
+}
+
+.time-review-overnight-badge {
+  display: inline-grid;
+  min-width: 22px;
+  height: 16px;
+  place-items: center;
+  margin-left: -1px;
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 0 3px;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.time-review-overnight-indicator.is-self-paid .time-review-overnight-badge {
+  border-color: #91cda2;
+  background: #d9f3df;
+  color: #166534;
+}
+
+.time-review-overnight-indicator.is-beg-paid .time-review-overnight-badge {
+  border-color: #deb33d;
+  background: #f8d761;
+  color: #614700;
 }
 
 .time-review-week-error {

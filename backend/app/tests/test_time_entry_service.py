@@ -546,6 +546,74 @@ def test_historical_time_entry_without_work_day_keeps_unknown_status():
     assert time_entry_read(loaded).overnight_status is None
 
 
+def test_payroll_week_entry_feed_reuses_daily_overnight_status_for_every_time_entry():
+    db = db_session()
+    person = Person(
+        first_name="Lohnprüfung",
+        last_name="Monteur",
+        display_name="Lohnprüfung Monteur",
+        short_code="LM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="payroll-overnight", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    monday = date(2026, 8, 10)
+    statuses_by_date = {
+        monday: OvernightStatus.NONE,
+        monday + timedelta(days=1): OvernightStatus.SELF_PAID,
+        monday + timedelta(days=2): OvernightStatus.BEG_PAID,
+    }
+    db.add_all([person, user])
+    db.flush()
+    db.add_all([
+        PersonWorkDay(person_id=person.id, work_date=work_date, overnight_status=overnight_status.value)
+        for work_date, overnight_status in statuses_by_date.items()
+    ])
+    db.add_all([
+        WorkTimeEntry(
+            person_id=person.id,
+            work_date=work_date,
+            start_time=time(6 + entry_index, 0),
+            end_time=time(7 + entry_index, 0),
+            work_minutes=60,
+            break_minutes=0,
+            travel_minutes=0,
+            source="manual",
+            status="draft",
+            created_by_user_id=user.id,
+        )
+        for work_date, entry_index in [
+            (monday, 0),
+            (monday + timedelta(days=1), 0),
+            (monday + timedelta(days=1), 2),
+            (monday + timedelta(days=2), 0),
+            (monday + timedelta(days=3), 0),
+        ]
+    ])
+    db.commit()
+
+    responses = [
+        time_entry_read(entry)
+        for entry in TimeEntryService(db).list_entries(
+            current_user=user,
+            person_id=person.id,
+            date_from=monday,
+            date_to=monday + timedelta(days=4),
+        )
+    ]
+    statuses_in_feed = {
+        work_date: {response.overnight_status for response in responses if response.work_date == work_date}
+        for work_date in [monday + timedelta(days=offset) for offset in range(4)]
+    }
+
+    assert statuses_in_feed == {
+        monday: {OvernightStatus.NONE},
+        monday + timedelta(days=1): {OvernightStatus.SELF_PAID},
+        monday + timedelta(days=2): {OvernightStatus.BEG_PAID},
+        monday + timedelta(days=3): {None},
+    }
+    assert len(list(db.scalars(select(PersonWorkDay)))) == 3
+
+
 def test_monteur_cannot_create_office_manual_time_entry():
     db = db_session()
     person = Person(
