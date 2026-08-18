@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
-import { OvernightStatusIndicator } from "../components/OvernightStatusIndicator";
+import { PayrollOvernightStatusControl } from "../components/PayrollOvernightStatusControl";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -30,6 +30,7 @@ import {
   formatHalfHourFromMinutes as formatHalfHour,
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
+import { applyOvernightStatusToWorkDate } from "../lib/overnightStatus";
 import {
   payrollWeekPersonsById,
   payrollWeekTotalMinutes,
@@ -249,6 +250,7 @@ export function TimeEntriesPage() {
   const [payrollReviewActionEntryId, setPayrollReviewActionEntryId] = useState<number | null>(null);
   const [payrollDateActionEntryId, setPayrollDateActionEntryId] = useState<number | null>(null);
   const [payrollDateError, setPayrollDateError] = useState<string | null>(null);
+  const [payrollOvernightSavingKey, setPayrollOvernightSavingKey] = useState<string | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
@@ -514,6 +516,7 @@ export function TimeEntriesPage() {
     setLocationReviewPopupTop(null);
     setPayrollDateError(null);
     setPayrollDateActionEntryId(null);
+    setPayrollOvernightSavingKey(null);
     setPayrollDeleteDialog(null);
     setPayrollDeleteError(null);
     setIsDeletingPayrollEntry(false);
@@ -1374,6 +1377,51 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function updatePayrollOvernightStatus(
+    personId: number,
+    workDate: string,
+    overnightStatus: OvernightStatus,
+  ): Promise<void> {
+    const dayKey = `${personId}:${workDate}`;
+    if (
+      !canManageTimeEntries
+      || selectedReviewWorker?.personId !== personId
+      || selectedReviewWorker.isReviewed
+      || payrollOvernightSavingKey !== null
+    ) {
+      return;
+    }
+    setPayrollOvernightSavingKey(dayKey);
+    setReviewActionError(null);
+    try {
+      const savedDay = await api.setTimeEntryDayOvernightStatus({
+        personId,
+        workDate,
+        overnightStatus,
+      });
+      setReviewEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
+      setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
+    } catch (requestError) {
+      setReviewActionError(readApiError(requestError, "Übernachtungsstatus konnte nicht gespeichert werden."));
+      const [dayStatusResult, weeklyReviewsResult] = await Promise.allSettled([
+        api.timeEntryDayStatus({ personId, workDate }),
+        api.timeEntryWeeklyReviews({
+          isoYear: selectedReviewWeek.year,
+          isoWeek: selectedReviewWeek.week,
+        }),
+      ]);
+      if (dayStatusResult.status === "fulfilled") {
+        setReviewEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
+        setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
+      }
+      if (weeklyReviewsResult.status === "fulfilled") {
+        setReviewWeeklyReviews(weeklyReviewsResult.value);
+      }
+    } finally {
+      setPayrollOvernightSavingKey(null);
+    }
+  }
+
   async function savePayrollTimeCorrection(): Promise<void> {
     if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection) {
       return;
@@ -1850,7 +1898,16 @@ export function TimeEntriesPage() {
                           )}
                         </div>
                         <div className="time-review-week-overnight" role="cell">
-                          <OvernightStatusIndicator status={day.overnightStatus} />
+                          <PayrollOvernightStatusControl
+                            editable={canManageTimeEntries && !selectedReviewWorker.isReviewed}
+                            saving={payrollOvernightSavingKey === `${selectedReviewWorker.personId}:${day.date}`}
+                            status={day.overnightStatus}
+                            onChange={(overnightStatus) => updatePayrollOvernightStatus(
+                              selectedReviewWorker.personId,
+                              day.date,
+                              overnightStatus,
+                            )}
+                          />
                         </div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>

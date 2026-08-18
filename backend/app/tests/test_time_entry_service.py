@@ -386,6 +386,165 @@ def test_mobile_time_entry_persists_valid_overnight_status(overnight_status: Ove
     assert time_entry_read(entry).overnight_status == overnight_status
 
 
+@pytest.mark.parametrize(
+    ("existing_status", "updated_status"),
+    [
+        (OvernightStatus.NONE, OvernightStatus.SELF_PAID),
+        (OvernightStatus.SELF_PAID, OvernightStatus.BEG_PAID),
+        (OvernightStatus.BEG_PAID, OvernightStatus.NONE),
+        (None, OvernightStatus.NONE),
+    ],
+)
+def test_payroll_can_update_daily_overnight_status_in_open_week(
+    existing_status: OvernightStatus | None,
+    updated_status: OvernightStatus,
+):
+    db = db_session()
+    person = Person(
+        first_name="Lohn",
+        last_name="Korrektur",
+        display_name="Lohn Korrektur",
+        short_code="LK",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="payroll-overnight-update", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 8, 18)
+    db.add_all([person, user])
+    db.flush()
+    if existing_status is not None:
+        db.add(PersonWorkDay(
+            person_id=person.id,
+            work_date=work_date,
+            overnight_status=existing_status.value,
+        ))
+    db.commit()
+
+    result = TimeEntryService(db).set_payroll_overnight_status(
+        current_user=user,
+        person_id=person.id,
+        work_date=work_date,
+        overnight_status=updated_status,
+    )
+
+    work_days = list(db.scalars(select(PersonWorkDay)))
+    assert result == updated_status
+    assert len(work_days) == 1
+    assert work_days[0].person_id == person.id
+    assert work_days[0].work_date == work_date
+    assert work_days[0].overnight_status == updated_status.value
+
+
+def test_payroll_cannot_update_overnight_status_in_reviewed_week():
+    db = db_session()
+    person = Person(
+        first_name="Geprüfte",
+        last_name="Woche",
+        display_name="Geprüfte Woche",
+        short_code="GW",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="payroll-reviewed-overnight", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 8, 18)
+    iso_year, iso_week, _ = work_date.isocalendar()
+    db.add_all([person, user])
+    db.flush()
+    db.add_all([
+        PersonWorkDay(
+            person_id=person.id,
+            work_date=work_date,
+            overnight_status=OvernightStatus.SELF_PAID.value,
+        ),
+        TimeEntryWeeklyReview(
+            person_id=person.id,
+            iso_year=iso_year,
+            iso_week=iso_week,
+            status="reviewed",
+            reviewed_by_user_id=user.id,
+            reviewed_at=datetime.now().astimezone(),
+        ),
+    ])
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        TimeEntryService(db).set_payroll_overnight_status(
+            current_user=user,
+            person_id=person.id,
+            work_date=work_date,
+            overnight_status=OvernightStatus.BEG_PAID,
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Geprüfte Woche zuerst zurücksetzen."
+    work_day = db.scalar(select(PersonWorkDay))
+    assert work_day is not None
+    assert work_day.overnight_status == OvernightStatus.SELF_PAID.value
+
+
+def test_payroll_overnight_update_remains_one_daily_status_for_multiple_entries():
+    db = db_session()
+    person = Person(
+        first_name="Mehrere",
+        last_name="Zeilen",
+        display_name="Mehrere Zeilen",
+        short_code="MZ",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="payroll-multiple-overnight", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 8, 19)
+    db.add_all([person, user])
+    db.flush()
+    db.add(PersonWorkDay(
+        person_id=person.id,
+        work_date=work_date,
+        overnight_status=OvernightStatus.BEG_PAID.value,
+    ))
+    db.add_all([
+        WorkTimeEntry(
+            person_id=person.id,
+            work_date=work_date,
+            start_time=time(8, 0),
+            end_time=time(12, 0),
+            break_minutes=0,
+            travel_minutes=0,
+            work_minutes=240,
+            source="manual",
+            status="submitted",
+            created_by_user_id=user.id,
+        ),
+        WorkTimeEntry(
+            person_id=person.id,
+            work_date=work_date,
+            start_time=time(13, 0),
+            end_time=time(17, 0),
+            break_minutes=0,
+            travel_minutes=0,
+            work_minutes=240,
+            source="manual",
+            status="submitted",
+            created_by_user_id=user.id,
+        ),
+    ])
+    db.commit()
+    service = TimeEntryService(db)
+
+    service.set_payroll_overnight_status(
+        current_user=user,
+        person_id=person.id,
+        work_date=work_date,
+        overnight_status=OvernightStatus.SELF_PAID,
+    )
+    entries = service.list_entries(
+        current_user=user,
+        person_id=person.id,
+        date_from=work_date,
+        date_to=work_date,
+    )
+
+    assert len(list(db.scalars(select(PersonWorkDay)))) == 1
+    assert len(entries) == 2
+    assert {time_entry_read(entry).overnight_status for entry in entries} == {OvernightStatus.SELF_PAID}
+
+
 @pytest.mark.parametrize("existing_status", [OvernightStatus.SELF_PAID, OvernightStatus.BEG_PAID])
 def test_travel_time_does_not_overwrite_existing_overnight_status(existing_status: OvernightStatus):
     db = db_session()

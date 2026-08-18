@@ -71,7 +71,7 @@ export function resolveOvernightStatusForWorkDate(params: {
 
 export function applyOvernightStatusToWorkDate(
   entries: TimeEntry[],
-  savedEntry: TimeEntry,
+  savedEntry: Pick<TimeEntry, "person_id" | "work_date" | "overnight_status">,
 ): TimeEntry[] {
   return entries.map((entry) => (
     entry.person_id === savedEntry.person_id && entry.work_date === savedEntry.work_date

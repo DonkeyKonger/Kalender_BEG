@@ -286,3 +286,7 @@ class PersonWorkDayRead(BaseModel):
     person_id: int
     work_date: Date
     overnight_status: OvernightStatus | None = None
+
+
+class PersonWorkDayOvernightUpdate(BaseModel):
+    overnight_status: OvernightStatus

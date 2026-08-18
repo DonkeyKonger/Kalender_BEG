@@ -17492,6 +17492,66 @@ body.mobile-modal-scroll-locked {
   color: #614700;
 }
 
+.time-review-overnight-trigger {
+  display: inline-flex;
+  width: 55px;
+  height: 28px;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.time-review-overnight-trigger:hover .time-review-overnight-indicator,
+.time-review-overnight-trigger:focus-visible .time-review-overnight-indicator {
+  box-shadow: 0 0 0 2px rgb(23 77 131 / 14%);
+}
+
+.time-review-overnight-trigger:focus-visible {
+  outline: 1px solid #174d83;
+  outline-offset: 2px;
+}
+
+.time-review-overnight-trigger:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.time-review-overnight-popover {
+  z-index: 90;
+  min-width: 250px;
+}
+
+.time-review-overnight-popover button {
+  display: grid;
+  grid-template-columns: 55px minmax(0, 1fr) 14px;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+}
+
+.time-review-overnight-popover button > span:nth-child(2) {
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.time-review-overnight-option-check {
+  color: #174d83;
+  font-size: 0.8rem;
+  font-weight: 950;
+  text-align: center;
+}
+
+.time-review-overnight-popover button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .time-review-week-error {
   margin: 0;
   border: 1px solid #f0c7c1;

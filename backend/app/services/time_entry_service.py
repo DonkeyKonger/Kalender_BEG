@@ -756,6 +756,25 @@ class TimeEntryService:
             return None
         return OvernightStatus(work_day.overnight_status)
 
+    def set_payroll_overnight_status(
+        self,
+        *,
+        current_user: User,
+        person_id: int,
+        work_date: date,
+        overnight_status: OvernightStatus,
+    ) -> OvernightStatus:
+        self._ensure_can_review_time(current_user)
+        self._ensure_person_exists(person_id)
+        self._ensure_week_is_open(person_id, work_date)
+        self._set_overnight_status(
+            person_id=person_id,
+            work_date=work_date,
+            overnight_status=overnight_status,
+        )
+        self.db.commit()
+        return overnight_status
+
     def _set_overnight_status(
         self,
         *,

@@ -18,6 +18,7 @@ from app.schemas.time_entry import (
     TimeEntryPayrollWeekPersonRead,
     TimeEntryPayrollWeekRead,
     PersonWorkDayRead,
+    PersonWorkDayOvernightUpdate,
     TimeEntryPayrollReviewUpdate,
     TimeEntryRead,
     TimeEntryReviewDecision,
@@ -182,6 +183,27 @@ def get_time_entry_day_status(
         current_user=current_user,
         person_id=person_id,
         work_date=work_date,
+    )
+    return PersonWorkDayRead(
+        person_id=person_id,
+        work_date=work_date,
+        overnight_status=overnight_status,
+    )
+
+
+@router.patch("/day-status", response_model=PersonWorkDayRead)
+def update_time_entry_day_overnight_status(
+    payload: PersonWorkDayOvernightUpdate,
+    person_id: int,
+    work_date: date,
+    current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> PersonWorkDayRead:
+    overnight_status = TimeEntryService(db).set_payroll_overnight_status(
+        current_user=current_user,
+        person_id=person_id,
+        work_date=work_date,
+        overnight_status=payload.overnight_status,
     )
     return PersonWorkDayRead(
         person_id=person_id,
