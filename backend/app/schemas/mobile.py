@@ -53,6 +53,22 @@ class MobileAssignmentsResponse(BaseModel):
     assignments: list[MobileAssignment]
 
 
+class MobileAssignmentSiteSummary(BaseModel):
+    site: MobileSite
+    last_assignment_date: Date
+
+
+class MobileAssignmentSitesResponse(BaseModel):
+    through_date: Date
+    sites: list[MobileAssignmentSiteSummary]
+
+
+class MobileAssignmentSiteHistoryResponse(BaseModel):
+    through_date: Date
+    site: MobileSite
+    assignments: list[MobileAssignment]
+
+
 class MobileSelfPlanRequest(BaseModel):
     site_id: int
     work_date: Date

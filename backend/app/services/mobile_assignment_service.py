@@ -2,7 +2,7 @@ import logging
 from datetime import date, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.assignment import Assignment
@@ -13,6 +13,9 @@ from app.models.user import User
 from app.schemas.assignment import AssignmentCreate
 from app.schemas.mobile import (
     MobileAssignment,
+    MobileAssignmentSiteHistoryResponse,
+    MobileAssignmentSiteSummary,
+    MobileAssignmentSitesResponse,
     MobileAssignmentsResponse,
     MobilePerson,
     MobileSelfPlanRequest,
@@ -62,6 +65,88 @@ class MobileAssignmentService:
             view="history",
         )
 
+    def list_own_assignment_sites(
+        self,
+        *,
+        current_user: User,
+        through_date: date,
+    ) -> MobileAssignmentSitesResponse:
+        person_id = self._require_person_id(current_user)
+        effective_end_date = case(
+            (Assignment.end_date > through_date, through_date),
+            else_=Assignment.end_date,
+        )
+        latest_assignment = (
+            select(
+                Assignment.site_id.label("site_id"),
+                func.max(effective_end_date).label("last_assignment_date"),
+            )
+            .where(
+                Assignment.person_id == person_id,
+                Assignment.start_date <= through_date,
+            )
+            .group_by(Assignment.site_id)
+            .subquery()
+        )
+        statement = (
+            select(Site, latest_assignment.c.last_assignment_date)
+            .join(latest_assignment, Site.id == latest_assignment.c.site_id)
+            .options(selectinload(Site.project_manager))
+            .order_by(latest_assignment.c.last_assignment_date.desc(), Site.id)
+        )
+        rows = self.db.execute(statement).all()
+        return MobileAssignmentSitesResponse(
+            through_date=through_date,
+            sites=[
+                MobileAssignmentSiteSummary(
+                    site=self._build_site(site),
+                    last_assignment_date=last_assignment_date,
+                )
+                for site, last_assignment_date in rows
+            ],
+        )
+
+    def get_own_assignment_site_history(
+        self,
+        *,
+        current_user: User,
+        site_id: int,
+        through_date: date,
+    ) -> MobileAssignmentSiteHistoryResponse:
+        person_id = self._require_person_id(current_user)
+        statement = (
+            select(Assignment)
+            .options(
+                selectinload(Assignment.person),
+                selectinload(Assignment.site).selectinload(Site.project_manager),
+            )
+            .where(
+                Assignment.person_id == person_id,
+                Assignment.site_id == site_id,
+                Assignment.start_date <= through_date,
+            )
+            .order_by(
+                Assignment.end_date.desc(),
+                Assignment.start_date.desc(),
+                Assignment.id.desc(),
+            )
+        )
+        assignments = list(self.db.scalars(statement))
+        if not assignments:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine Einsatzhistorie gefunden.")
+
+        return MobileAssignmentSiteHistoryResponse(
+            through_date=through_date,
+            site=self._build_site(assignments[0].site),
+            assignments=[
+                self._build_assignment(
+                    assignment,
+                    end_date=min(assignment.end_date, through_date),
+                )
+                for assignment in assignments
+            ],
+        )
+
     def _list_own_assignments(
         self,
         *,
@@ -71,11 +156,7 @@ class MobileAssignmentService:
         max_days: int,
         view: str,
     ) -> MobileAssignmentsResponse:
-        if current_user.person_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Dieser Benutzer ist keiner Person zugeordnet.",
-            )
+        person_id = self._require_person_id(current_user)
         if end < start:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
 
@@ -92,7 +173,7 @@ class MobileAssignmentService:
                 selectinload(Assignment.site).selectinload(Site.project_manager),
             )
             .where(
-                Assignment.person_id == current_user.person_id,
+                Assignment.person_id == person_id,
                 Assignment.start_date <= end,
                 Assignment.end_date >= start,
             )
@@ -253,11 +334,25 @@ class MobileAssignmentService:
     def _known_site_cutoff(*, months: int = KNOWN_SITE_LOOKBACK_MONTHS) -> date:
         return date.today() - timedelta(days=months * 31)
 
-    def _build_assignment(self, assignment: Assignment) -> MobileAssignment:
+    @staticmethod
+    def _require_person_id(current_user: User) -> int:
+        if current_user.person_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Dieser Benutzer ist keiner Person zugeordnet.",
+            )
+        return current_user.person_id
+
+    def _build_assignment(
+        self,
+        assignment: Assignment,
+        *,
+        end_date: date | None = None,
+    ) -> MobileAssignment:
         return MobileAssignment(
             id=assignment.id,
             start_date=assignment.start_date,
-            end_date=assignment.end_date,
+            end_date=end_date or assignment.end_date,
             assignment_type=assignment.assignment_type,
             note=assignment.note,
             person=self._build_person(assignment.person),

@@ -19,6 +19,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { buildMobileAssignmentHistoryWeeks } from "../lib/mobileAssignmentHistory";
 import {
   ANDROID_GPS_PING_INTERVAL_MS,
   checkAndroidGpsPermissions,
@@ -35,18 +36,21 @@ import { useMobileScrollReset } from "../lib/mobileScroll";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
-import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
+import type {
+  MobileAssignment,
+  MobileAssignmentSiteHistoryResponse,
+  MobileAssignmentSiteSummary,
+  MobileAssignmentsResponse,
+  MobileSite,
+} from "../types/mobile";
 
-const CACHE_KEY_PREFIX = "kb_mobile_assignments_cache_v2";
+const CACHE_KEY_PREFIX = "kb_mobile_assignments_cache_v3";
 const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE = 2;
 
-type MobileViewMode = "two_weeks" | "year";
-
 type CachePayload = {
   loadedAt: string;
-  mode: MobileViewMode;
   data: MobileAssignmentsResponse;
 };
 
@@ -78,7 +82,6 @@ type SelfPlanSheetState = {
 export function MyAssignmentsPage() {
   const navigate = useNavigate();
   const { logout, status, user } = useAuth();
-  const [mode, setMode] = useState<MobileViewMode>("two_weeks");
   const [data, setData] = useState<MobileAssignmentsResponse | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,13 +107,22 @@ export function MyAssignmentsPage() {
   const [pushNotificationMessage, setPushNotificationMessage] = useState<string | null>(null);
   const [pushNotificationMessageTone, setPushNotificationMessageTone] = useState<"info" | "error">("info");
   const [activeHomeTimelineIndex, setActiveHomeTimelineIndex] = useState(0);
+  const [assignmentSites, setAssignmentSites] = useState<MobileAssignmentSiteSummary[]>([]);
+  const [assignmentSitesLoaded, setAssignmentSitesLoaded] = useState(false);
+  const [assignmentSitesLoading, setAssignmentSitesLoading] = useState(false);
+  const [assignmentSitesError, setAssignmentSitesError] = useState<string | null>(null);
+  const [selectedAssignmentSite, setSelectedAssignmentSite] = useState<MobileAssignmentSiteSummary | null>(null);
+  const [assignmentSiteHistory, setAssignmentSiteHistory] = useState<MobileAssignmentSiteHistoryResponse | null>(null);
+  const [assignmentSiteHistoryLoading, setAssignmentSiteHistoryLoading] = useState(false);
+  const [assignmentSiteHistoryError, setAssignmentSiteHistoryError] = useState<string | null>(null);
   const assignmentLoadRequestIdRef = useRef(0);
+  const assignmentSiteHistoryRequestIdRef = useRef(0);
   const mobileHomeTimelineRef = useRef<HTMLDivElement | null>(null);
 
-  const range = useMemo(() => getRange(mode), [mode]);
+  const range = useMemo(() => getUpcomingRange(), []);
   const assignmentCacheKey = useMemo(
-    () => getAssignmentsCacheKey(user?.id ?? null, mode),
-    [mode, user?.id],
+    () => getAssignmentsCacheKey(user?.id ?? null),
+    [user?.id],
   );
 
   const loadAssignments = useCallback(async () => {
@@ -119,14 +131,12 @@ export function MyAssignmentsPage() {
     setError(null);
     setIsFromCache(false);
     try {
-      const response = mode === "year"
-        ? await api.myAssignmentHistory(range)
-        : await api.myAssignments(range);
+      const response = await api.myAssignments(range);
       if (requestId !== assignmentLoadRequestIdRef.current) {
         return;
       }
       const timestamp = new Date().toISOString();
-      const cachePayload: CachePayload = { loadedAt: timestamp, mode, data: response };
+      const cachePayload: CachePayload = { loadedAt: timestamp, data: response };
       writeCache(assignmentCacheKey, cachePayload);
       setData(response);
       setLoadedAt(timestamp);
@@ -134,7 +144,7 @@ export function MyAssignmentsPage() {
       if (requestId !== assignmentLoadRequestIdRef.current) {
         return;
       }
-      const cached = readCache(assignmentCacheKey, mode);
+      const cached = readCache(assignmentCacheKey);
       if (cached) {
         setData(cached.data);
         setLoadedAt(cached.loadedAt);
@@ -150,7 +160,7 @@ export function MyAssignmentsPage() {
         setIsLoading(false);
       }
     }
-  }, [assignmentCacheKey, mode, range]);
+  }, [assignmentCacheKey, range]);
 
   useEffect(() => {
     void loadAssignments();
@@ -158,6 +168,27 @@ export function MyAssignmentsPage() {
       assignmentLoadRequestIdRef.current += 1;
     };
   }, [loadAssignments]);
+
+  const loadAssignmentSites = useCallback(async () => {
+    setAssignmentSitesLoading(true);
+    setAssignmentSitesError(null);
+    try {
+      const response = await api.myAssignmentSites();
+      setAssignmentSites(response.sites);
+      setAssignmentSitesLoaded(true);
+    } catch (requestError) {
+      setAssignmentSitesError(readApiError(requestError, "Einsatzhistorie konnte nicht geladen werden."));
+      setAssignmentSitesLoaded(true);
+    } finally {
+      setAssignmentSitesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeScreen === "assignments") {
+      void loadAssignmentSites();
+    }
+  }, [activeScreen, loadAssignmentSites]);
 
   const refreshAndroidGpsStatus = useCallback(async () => {
     if (!isAndroidAppContext()) {
@@ -400,17 +431,34 @@ export function MyAssignmentsPage() {
     await logout();
   }
 
-  function selectAssignmentMode(nextMode: MobileViewMode): void {
-    if (nextMode === mode) {
-      return;
+  async function openAssignmentSite(summary: MobileAssignmentSiteSummary): Promise<void> {
+    const requestId = ++assignmentSiteHistoryRequestIdRef.current;
+    setSelectedAssignmentSite(summary);
+    setAssignmentSiteHistory(null);
+    setAssignmentSiteHistoryError(null);
+    setAssignmentSiteHistoryLoading(true);
+    try {
+      const response = await api.myAssignmentSiteHistory(summary.site.id);
+      if (requestId === assignmentSiteHistoryRequestIdRef.current) {
+        setAssignmentSiteHistory(response);
+      }
+    } catch (requestError) {
+      if (requestId === assignmentSiteHistoryRequestIdRef.current) {
+        setAssignmentSiteHistoryError(readApiError(requestError, "Einsatzhistorie konnte nicht geladen werden."));
+      }
+    } finally {
+      if (requestId === assignmentSiteHistoryRequestIdRef.current) {
+        setAssignmentSiteHistoryLoading(false);
+      }
     }
-    assignmentLoadRequestIdRef.current += 1;
-    setIsLoading(true);
-    setError(null);
-    setIsFromCache(false);
-    setData(null);
-    setLoadedAt(null);
-    setMode(nextMode);
+  }
+
+  function closeAssignmentSiteHistory(): void {
+    assignmentSiteHistoryRequestIdRef.current += 1;
+    setSelectedAssignmentSite(null);
+    setAssignmentSiteHistory(null);
+    setAssignmentSiteHistoryError(null);
+    setAssignmentSiteHistoryLoading(false);
   }
 
   async function openSelfPlanSheet(workDate: string, label: string): Promise<void> {
@@ -449,9 +497,11 @@ export function MyAssignmentsPage() {
           current ?? { start_date: range.start, end_date: range.end, assignments: [] },
           assignment,
         );
-        writeCache(assignmentCacheKey, { loadedAt: timestamp, mode, data: nextData });
+        writeCache(assignmentCacheKey, { loadedAt: timestamp, data: nextData });
         return nextData;
       });
+      setAssignmentSites([]);
+      setAssignmentSitesLoaded(false);
       setLoadedAt(timestamp);
       setIsFromCache(false);
       setSelfPlanSheet(null);
@@ -486,10 +536,6 @@ export function MyAssignmentsPage() {
     () => mobileHomeTimelineItems.filter((item) => item.assignment !== null).length,
     [mobileHomeTimelineItems],
   );
-  const yearGroups = useMemo(
-    () => groupAssignmentsForLongView(data?.assignments ?? [], range.start, range.end),
-    [data?.assignments, range.end, range.start],
-  );
   const androidGpsPermissionPrompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
   const mobileGpsPlatform = getMobileGpsPlatform();
   const showGpsDebug = import.meta.env.DEV;
@@ -498,7 +544,10 @@ export function MyAssignmentsPage() {
   const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
-  useMobileScrollReset(activeScreen, activeScreen !== "home");
+  useMobileScrollReset(
+    `${activeScreen}:${selectedAssignmentSite?.site.id ?? "list"}`,
+    activeScreen !== "home",
+  );
 
   useEffect(() => {
     setActiveHomeTimelineIndex(0);
@@ -534,55 +583,54 @@ export function MyAssignmentsPage() {
   }, []);
 
   if (activeScreen === "assignments") {
-    return (
-      <section className="mobile-page mobile-home-page">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveScreen("home")}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Zurück</span>
-        </button>
+    if (selectedAssignmentSite) {
+      return (
+        <MobileAssignmentSiteHistory
+          error={assignmentSiteHistoryError}
+          history={assignmentSiteHistory}
+          isLoading={assignmentSiteHistoryLoading}
+          summary={selectedAssignmentSite}
+          onBack={closeAssignmentSiteHistory}
+          onRetry={() => void openAssignmentSite(selectedAssignmentSite)}
+        />
+      );
+    }
 
-        <header className="mobile-subpage-title">
-          <p className="eyebrow">Einsatzliste</p>
-          <h1>Meine Einsätze</h1>
+    return (
+      <section className="mobile-page mobile-home-page mobile-assignment-history-page">
+        <header className="mobile-assignment-history-header">
+          <button aria-label="Zurück zu Meine Übersicht" type="button" onClick={() => setActiveScreen("home")}>
+            <ArrowLeft aria-hidden="true" size={23} />
+          </button>
+          <div>
+            <h1>Meine Einsätze</h1>
+            <p>Alle Einsätze chronologisch</p>
+          </div>
         </header>
 
-        <div className="mobile-segment" role="group" aria-label="Zeitraum">
-          <button
-            className={mode === "two_weeks" ? "active" : ""}
-            type="button"
-            onClick={() => selectAssignmentMode("two_weeks")}
-          >
-            14 Tage
-          </button>
-          <button
-            className={mode === "year" ? "active" : ""}
-            type="button"
-            onClick={() => selectAssignmentMode("year")}
-          >
-            Jahr
-          </button>
-        </div>
-
-        {loadedAt && (
-          <p className={isFromCache ? "cache-note warning" : "cache-note"}>
-            Stand: {formatDateTime(loadedAt)}{isFromCache ? " - Lesecache" : ""}
-          </p>
-        )}
-        {error && <p className={isFromCache ? "form-info" : "form-error"}>{error}</p>}
-        {isLoading ? <div className="empty-panel">Einsätze werden geladen...</div> : null}
-
-        {!isLoading && mode === "two_weeks" ? (
-          <div className="mobile-day-list">
-            {nextFourteenDays.map((date) => (
-              <DayListCard date={date} assignments={dailyByDate.get(date) ?? []} key={date} />
-            ))}
-          </div>
+        {assignmentSitesError ? (
+          <MobileAssignmentHistoryState
+            actionLabel="Erneut versuchen"
+            message={assignmentSitesError}
+            tone="error"
+            onAction={() => void loadAssignmentSites()}
+          />
         ) : null}
-        {!isLoading && mode === "year" ? (
-          <div className="mobile-day-list">
-            {yearGroups.length ? yearGroups.map((group) => (
-              <AssignmentRangeCard group={group} key={group.key} />
-            )) : <p className="empty-inline">Keine Einsätze im Zeitraum.</p>}
+        {assignmentSitesLoading ? (
+          <MobileAssignmentHistoryState message="Einsätze werden geladen ..." />
+        ) : null}
+        {!assignmentSitesLoading && !assignmentSitesError && assignmentSitesLoaded && !assignmentSites.length ? (
+          <MobileAssignmentHistoryState message="Noch keine Einsätze vorhanden." />
+        ) : null}
+        {!assignmentSitesLoading && !assignmentSitesError && assignmentSites.length ? (
+          <div className="mobile-assignment-site-list">
+            {assignmentSites.map((summary) => (
+              <MobileAssignmentSiteCard
+                key={summary.site.id}
+                summary={summary}
+                onOpen={() => void openAssignmentSite(summary)}
+              />
+            ))}
           </div>
         ) : null}
       </section>
@@ -1033,33 +1081,112 @@ function MobileHomeTimelineCard({
   );
 }
 
-function DayListCard({ date, assignments }: { date: string; assignments: DailyAssignment[] }) {
+function MobileAssignmentSiteCard({
+  summary,
+  onOpen,
+}: {
+  summary: MobileAssignmentSiteSummary;
+  onOpen: () => void;
+}) {
+  const site = summary.site;
+  const metadata = [site.site_number, site.location || site.address, site.customer].filter(Boolean).join(" · ");
   return (
-    <article className="mobile-day-card">
-      <div className="mobile-day-card-date">
-        <strong>{formatWeekday(date)}</strong>
-        <span>{formatShortDate(date)}</span>
-      </div>
-      <div className="mobile-day-card-content">
-        {assignments.length ? assignments.map((daily) => (
-          <AssignmentCard assignment={daily.assignment} date={date} compact key={daily.key} />
-        )) : <span className="mobile-day-empty">Kein Einsatz geplant</span>}
-      </div>
-    </article>
+    <button className="mobile-assignment-site-card" type="button" onClick={onOpen}>
+      <span className="mobile-assignment-site-icon" aria-hidden="true">
+        <CalendarClock size={21} />
+      </span>
+      <span className="mobile-assignment-site-copy">
+        <strong>{formatAssignmentHistoryCardDate(summary.last_assignment_date)}</strong>
+        <b>{site.name}</b>
+        {metadata ? <small>{metadata}</small> : null}
+      </span>
+      <span className="mobile-assignment-site-actions">
+        <SiteStatusBadge status={site.status} />
+        <ChevronRight aria-hidden="true" size={21} />
+      </span>
+    </button>
   );
 }
 
-function AssignmentRangeCard({ group }: { group: AssignmentRangeGroup }) {
-  const site = group.assignment.site;
+function MobileAssignmentSiteHistory({
+  error,
+  history,
+  isLoading,
+  summary,
+  onBack,
+  onRetry,
+}: {
+  error: string | null;
+  history: MobileAssignmentSiteHistoryResponse | null;
+  isLoading: boolean;
+  summary: MobileAssignmentSiteSummary;
+  onBack: () => void;
+  onRetry: () => void;
+}) {
+  const site = history?.site ?? summary.site;
+  const metadata = [site.site_number, site.location || site.address, site.customer].filter(Boolean).join(" · ");
+  const weeks = buildMobileAssignmentHistoryWeeks(history?.assignments ?? []);
   return (
-    <Link className="assignment-card assignment-card-link mobile-range-card" to={`/me/assignments/${group.assignment.id}`} state={{ assignment: group.assignment }}>
-      <div>
-        <p className="assignment-date"><CalendarClock aria-hidden="true" size={15} />{formatRangeLabel(group.start, group.end)}</p>
-        <h3>{site.name}</h3>
-        <p className="muted-text">{[site.site_number, site.location || site.address, site.customer].filter(Boolean).join(" · ")}</p>
-      </div>
-      <SiteStatusBadge status={site.status} />
-    </Link>
+    <section className="mobile-page mobile-home-page mobile-assignment-history-page">
+      <header className="mobile-assignment-history-header">
+        <button aria-label="Zurück zu Meine Einsätze" type="button" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" size={23} />
+        </button>
+        <div>
+          <h1>{site.name}</h1>
+          {metadata ? <p>{metadata}</p> : null}
+        </div>
+      </header>
+
+      {error ? (
+        <MobileAssignmentHistoryState
+          actionLabel="Erneut versuchen"
+          message={error}
+          tone="error"
+          onAction={onRetry}
+        />
+      ) : null}
+      {isLoading ? <MobileAssignmentHistoryState message="Einsatzhistorie wird geladen ..." /> : null}
+      {!isLoading && !error && history && !weeks.length ? (
+        <MobileAssignmentHistoryState message="Für diese Baustelle sind keine Einsätze vorhanden." />
+      ) : null}
+      {!isLoading && !error && weeks.length ? (
+        <div className="mobile-assignment-week-list">
+          {weeks.map((week) => (
+            <article className="mobile-assignment-week-card" key={`${week.isoYear}-${week.isoWeek}`}>
+              <div className="mobile-assignment-week-heading">
+                <strong>KW {week.isoWeek}</strong>
+                <span>{week.isoYear}</span>
+              </div>
+              <div className="mobile-assignment-week-periods">
+                {week.periods.map((period) => (
+                  <p key={`${period.start}-${period.end}`}>{formatAssignmentHistoryPeriod(period.start, period.end)}</p>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MobileAssignmentHistoryState({
+  actionLabel,
+  message,
+  tone = "neutral",
+  onAction,
+}: {
+  actionLabel?: string;
+  message: string;
+  tone?: "neutral" | "error";
+  onAction?: () => void;
+}) {
+  return (
+    <div className={`mobile-assignment-history-state${tone === "error" ? " is-error" : ""}`}>
+      <p>{message}</p>
+      {actionLabel && onAction ? <button type="button" onClick={onAction}>{actionLabel}</button> : null}
+    </div>
   );
 }
 
@@ -1230,55 +1357,8 @@ function MobileGpsDebugCard({
   );
 }
 
-function AssignmentCard({ assignment, date, compact = false }: { assignment: MobileAssignment; date?: string; compact?: boolean }) {
-  return (
-    <Link className={`assignment-card assignment-card-link${compact ? " is-compact" : ""}`} to={`/me/assignments/${assignment.id}`} state={{ assignment }}>
-      <div className="assignment-card-main">
-        <div>
-          <p className="assignment-date">
-            <CalendarClock aria-hidden="true" size={15} />
-            {date ? formatShortDate(date) : formatAssignmentRange(assignment)}
-          </p>
-          <h3>{assignment.site.name}</h3>
-          <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
-        </div>
-        <span className="assignment-card-affordance">
-          <SiteStatusBadge status={assignment.site.status} />
-          <ChevronRight aria-hidden="true" size={17} />
-        </span>
-      </div>
-
-      {!compact ? (
-        <div className="assignment-detail-list">
-          {(assignment.site.location || assignment.site.address) && (
-            <p><MapPin aria-hidden="true" size={16} /><span>{[assignment.site.location, assignment.site.address].filter(Boolean).join(" - ")}</span></p>
-          )}
-          {assignment.site.project_manager && (
-            <p><UserRound aria-hidden="true" size={16} /><span>{assignment.site.project_manager.display_name}</span></p>
-          )}
-        </div>
-      ) : null}
-
-      {assignment.note && !compact ? <p className="assignment-note">{assignment.note}</p> : null}
-    </Link>
-  );
-}
-
-type AssignmentRangeGroup = {
-  key: string;
-  assignment: MobileAssignment;
-  start: string;
-  end: string;
-};
-
-function getRange(mode: MobileViewMode): { start: string; end: string } {
+function getUpcomingRange(): { start: string; end: string } {
   const today = startOfToday();
-  if (mode === "year") {
-    return {
-      start: toIsoDate(addCalendarMonths(today, -12)),
-      end: toIsoDate(today),
-    };
-  }
   return {
     start: toIsoDate(today),
     end: toIsoDate(addDays(today, 13)),
@@ -1375,56 +1455,6 @@ function chunkMobileHomeTimelineItems(items: MobileHomeTimelineItem[]): MobileHo
   return pages;
 }
 
-function groupAssignmentsForLongView(assignments: MobileAssignment[], start: string, end: string): AssignmentRangeGroup[] {
-  const startDate = parseIsoDate(start);
-  const endDate = parseIsoDate(end);
-  const candidates = assignments
-    .map((assignment) => ({
-      assignment,
-      start: toIsoDate(maxDate(parseIsoDate(assignment.start_date), startDate)),
-      end: toIsoDate(minDate(parseIsoDate(assignment.end_date), endDate)),
-    }))
-    .filter((group) => group.start <= group.end)
-    .sort((left, right) => (
-      left.assignment.site.id - right.assignment.site.id
-      || left.start.localeCompare(right.start)
-      || left.end.localeCompare(right.end)
-      || left.assignment.id - right.assignment.id
-    ));
-  const groups: AssignmentRangeGroup[] = [];
-
-  for (const candidate of candidates) {
-    const previous = groups.at(-1);
-    if (
-      !previous
-      || previous.assignment.site.id !== candidate.assignment.site.id
-      || candidate.start > toIsoDate(addDays(parseIsoDate(previous.end), 1))
-    ) {
-      groups.push({
-        key: `${candidate.assignment.site.id}:${candidate.start}:${candidate.end}:${candidate.assignment.id}`,
-        ...candidate,
-      });
-      continue;
-    }
-    previous.key = `${previous.key}:${candidate.assignment.id}`;
-    if (candidate.end > previous.end) {
-      previous.end = candidate.end;
-      previous.assignment = candidate.assignment;
-    }
-  }
-
-  return groups.sort((left, right) => (
-    right.end.localeCompare(left.end)
-    || right.start.localeCompare(left.start)
-    || (left.assignment.site.site_number ?? "").localeCompare(
-      right.assignment.site.site_number ?? "",
-      "de",
-      { numeric: true, sensitivity: "base" },
-    )
-    || left.assignment.site.name.localeCompare(right.assignment.site.name, "de", { sensitivity: "base" })
-  ));
-}
-
 function getDayRange(start: string, count: number): string[] {
   const startDate = parseIsoDate(start);
   return Array.from({ length: count }, (_, index) => toIsoDate(addDays(startDate, index)));
@@ -1443,11 +1473,11 @@ function isWeekendDay(date: string): boolean {
   return day === 0 || day === 6;
 }
 
-function getAssignmentsCacheKey(userId: number | null, mode: MobileViewMode): string | null {
-  return userId === null ? null : `${CACHE_KEY_PREFIX}:${userId}:${mode}`;
+function getAssignmentsCacheKey(userId: number | null): string | null {
+  return userId === null ? null : `${CACHE_KEY_PREFIX}:${userId}`;
 }
 
-function readCache(cacheKey: string | null, mode: MobileViewMode): CachePayload | null {
+function readCache(cacheKey: string | null): CachePayload | null {
   if (cacheKey === null) {
     return null;
   }
@@ -1458,8 +1488,7 @@ function readCache(cacheKey: string | null, mode: MobileViewMode): CachePayload 
     }
     const cached = JSON.parse(raw) as Partial<CachePayload>;
     if (
-      cached.mode !== mode
-      || typeof cached.loadedAt !== "string"
+      typeof cached.loadedAt !== "string"
       || !cached.data
       || !Array.isArray(cached.data.assignments)
     ) {
@@ -1520,16 +1549,6 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
-function addCalendarMonths(date: Date, months: number): Date {
-  const target = new Date(date);
-  const day = target.getDate();
-  target.setDate(1);
-  target.setMonth(target.getMonth() + months);
-  const lastDayOfTargetMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(day, lastDayOfTargetMonth));
-  return target;
-}
-
 function maxDate(left: Date, right: Date): Date {
   return left > right ? left : right;
 }
@@ -1555,6 +1574,14 @@ function formatShortDate(date: string): string {
 
 function formatWeekday(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(parseIsoDate(date));
+}
+
+function formatAssignmentHistoryCardDate(date: string): string {
+  return `${formatWeekday(date).replace(/\.$/, "")}, ${formatDate(date)}`;
+}
+
+function formatAssignmentHistoryPeriod(start: string, end: string): string {
+  return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
 }
 
 function formatHomeAssignmentDateLabel(date: string): string {
@@ -1612,8 +1639,4 @@ function formatYesNo(value: boolean | null | undefined): string {
 
 function formatRangeLabel(start: string, end: string): string {
   return start === end ? formatDate(start) : `${formatDate(start)} bis ${formatDate(end)}`;
-}
-
-function formatAssignmentRange(assignment: MobileAssignment): string {
-  return formatRangeLabel(assignment.start_date, assignment.end_date);
 }

@@ -40,6 +40,22 @@ export type MobileAssignmentsResponse = {
   assignments: MobileAssignment[];
 };
 
+export type MobileAssignmentSiteSummary = {
+  site: MobileSite;
+  last_assignment_date: string;
+};
+
+export type MobileAssignmentSitesResponse = {
+  through_date: string;
+  sites: MobileAssignmentSiteSummary[];
+};
+
+export type MobileAssignmentSiteHistoryResponse = {
+  through_date: string;
+  site: MobileSite;
+  assignments: MobileAssignment[];
+};
+
 export type MobilePersonalFileVehicle = {
   id: number;
   license_plate: string;

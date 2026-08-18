@@ -421,6 +421,169 @@ def test_assignment_routes_use_different_range_limits_for_upcoming_and_history()
     assert [item.id for item in response.assignments] == [assignment.id]
 
 
+def test_mobile_assignment_sites_groups_by_site_id_and_sorts_by_latest_day():
+    db, current_user, worker, _ = history_context()
+    older_site = Site(site_number="old", name="Gleicher Name", status=SiteStatus.PAUSED)
+    latest_site = Site(site_number="latest", name="Gleicher Name", status=SiteStatus.ACTIVE)
+    db.add_all([older_site, latest_site])
+    db.flush()
+    db.add_all([
+        Assignment(
+            site_id=older_site.id,
+            person_id=worker.id,
+            start_date=date(2024, 12, 2),
+            end_date=date(2024, 12, 4),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=latest_site.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 11),
+            end_date=date(2026, 8, 13),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=latest_site.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 17),
+            end_date=date(2026, 8, 18),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+    ])
+    db.commit()
+
+    response = MobileAssignmentService(db).list_own_assignment_sites(
+        current_user=current_user,
+        through_date=date(2026, 8, 18),
+    )
+
+    assert [item.site.id for item in response.sites] == [latest_site.id, older_site.id]
+    assert [item.last_assignment_date for item in response.sites] == [date(2026, 8, 18), date(2024, 12, 4)]
+    assert response.sites[0].site.status == SiteStatus.ACTIVE
+    assert response.sites[1].site.status == SiteStatus.PAUSED
+
+
+def test_mobile_assignment_sites_new_assignment_moves_existing_site_to_top():
+    db, current_user, worker, _ = history_context()
+    site_a = Site(site_number="A", name="Baustelle A", status=SiteStatus.ACTIVE)
+    site_b = Site(site_number="B", name="Baustelle B", status=SiteStatus.ACTIVE)
+    db.add_all([site_a, site_b])
+    db.flush()
+    db.add_all([
+        Assignment(
+            site_id=site_a.id,
+            person_id=worker.id,
+            start_date=date(2026, 5, 1),
+            end_date=date(2026, 5, 1),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=site_b.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 15),
+            end_date=date(2026, 8, 15),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+    ])
+    db.commit()
+    service = MobileAssignmentService(db)
+
+    before = service.list_own_assignment_sites(current_user=current_user, through_date=date(2026, 8, 18))
+    db.add(Assignment(
+        site_id=site_a.id,
+        person_id=worker.id,
+        start_date=date(2026, 8, 18),
+        end_date=date(2026, 8, 18),
+        assignment_type=AssignmentType.REGULAR,
+    ))
+    db.commit()
+    after = service.list_own_assignment_sites(current_user=current_user, through_date=date(2026, 8, 18))
+
+    assert [item.site.id for item in before.sites] == [site_b.id, site_a.id]
+    assert [item.site.id for item in after.sites] == [site_a.id, site_b.id]
+
+
+def test_mobile_assignment_sites_only_use_signed_in_person_id_and_exclude_future():
+    db, current_user, worker, other_worker = history_context()
+    own = add_history_assignment(
+        db,
+        person=worker,
+        site_number="own",
+        work_date=date(2025, 1, 2),
+    )
+    add_history_assignment(
+        db,
+        person=other_worker,
+        site_number="other",
+        work_date=date(2026, 8, 17),
+    )
+    add_history_assignment(
+        db,
+        person=worker,
+        site_number="future",
+        work_date=date(2026, 8, 19),
+    )
+
+    response = MobileAssignmentService(db).list_own_assignment_sites(
+        current_user=current_user,
+        through_date=date(2026, 8, 18),
+    )
+
+    assert [item.site.id for item in response.sites] == [own.site_id]
+
+
+def test_mobile_assignment_site_history_is_scoped_and_clips_ongoing_assignment():
+    db, current_user, worker, other_worker = history_context()
+    site = Site(site_number="history", name="Historie", status=SiteStatus.ACTIVE)
+    other_site = Site(site_number="other-site", name="Andere", status=SiteStatus.ACTIVE)
+    db.add_all([site, other_site])
+    db.flush()
+    own_assignments = [
+        Assignment(
+            site_id=site.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 11),
+            end_date=date(2026, 8, 13),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=site.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 17),
+            end_date=date(2026, 8, 21),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+    ]
+    db.add_all(own_assignments + [
+        Assignment(
+            site_id=site.id,
+            person_id=other_worker.id,
+            start_date=date(2026, 8, 10),
+            end_date=date(2026, 8, 10),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+        Assignment(
+            site_id=other_site.id,
+            person_id=worker.id,
+            start_date=date(2026, 8, 14),
+            end_date=date(2026, 8, 14),
+            assignment_type=AssignmentType.REGULAR,
+        ),
+    ])
+    db.commit()
+
+    response = MobileAssignmentService(db).get_own_assignment_site_history(
+        current_user=current_user,
+        site_id=site.id,
+        through_date=date(2026, 8, 18),
+    )
+
+    assert [item.id for item in response.assignments] == [own_assignments[1].id, own_assignments[0].id]
+    assert response.assignments[0].end_date == date(2026, 8, 18)
+    assert {item.person.id for item in response.assignments} == {worker.id}
+    assert {item.site.id for item in response.assignments} == {site.id}
+
+
 def test_mobile_active_sites_are_readable_for_assigned_monteur():
     site = Site(id=7, site_number="8007", name="Projekt X", status=SiteStatus.ACTIVE)
     service = MobileAssignmentService.__new__(MobileAssignmentService)

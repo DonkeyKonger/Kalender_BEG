@@ -37,6 +37,8 @@ from app.schemas.measurement import (
 )
 from app.schemas.mobile import (
     MobileAssignment,
+    MobileAssignmentSiteHistoryResponse,
+    MobileAssignmentSitesResponse,
     MobileAssignmentsResponse,
     MobilePersonalFileAbsenceResponse,
     MobilePersonalFileResponse,
@@ -155,6 +157,33 @@ def list_my_assignment_history(
         current_user=current_user,
         start=start,
         end=end,
+    )
+
+
+@router.get("/assignment-sites", response_model=MobileAssignmentSitesResponse)
+def list_my_assignment_sites(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileAssignmentSitesResponse:
+    return MobileAssignmentService(db).list_own_assignment_sites(
+        current_user=current_user,
+        through_date=date.today(),
+    )
+
+
+@router.get(
+    "/assignment-sites/{site_id}/history",
+    response_model=MobileAssignmentSiteHistoryResponse,
+)
+def get_my_assignment_site_history(
+    site_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileAssignmentSiteHistoryResponse:
+    return MobileAssignmentService(db).get_own_assignment_site_history(
+        current_user=current_user,
+        site_id=site_id,
+        through_date=date.today(),
     )
 
 

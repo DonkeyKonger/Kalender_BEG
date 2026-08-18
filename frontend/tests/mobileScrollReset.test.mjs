@@ -27,8 +27,8 @@ test("mobile scroll reset uses one frame sync and no timeout polling", () => {
 });
 
 
-test("mobile subpages reset scroll only when entering the subpage", () => {
-  assert.match(assignmentsSource, /useMobileScrollReset\(activeScreen,\s*activeScreen !== "home"\)/);
+test("mobile subpages reset scroll when entering the subpage or assignment-site detail", () => {
+  assert.match(assignmentsSource, /useMobileScrollReset\([\s\S]*selectedAssignmentSite\?\.site\.id[\s\S]*activeScreen !== "home"/);
   assert.match(assignmentsSource, /title="Alle Einsätze anzeigen"[\s\S]*setActiveScreen\("assignments"\)/);
   assert.match(assignmentsSource, /title="Einstellungen"[\s\S]*setActiveScreen\("settings"\)/);
   assert.match(personalFileSource, /useMobileScrollReset\("personal-file"\)/);
