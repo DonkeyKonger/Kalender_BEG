@@ -46,6 +46,7 @@ test("the indicator uses one bed icon, visible text badges and matching tooltip 
   assert.match(componentSource, /title=\{presentation\.label\}/);
   assert.match(componentSource, /role="img"/);
   assert.match(componentSource, /time-review-overnight-bed/);
+  assert.match(componentSource, /time-review-overnight-marker/);
   assert.match(componentSource, /\{presentation\.badge\}/);
   assert.doesNotMatch(componentSource, /🏨|🛏|💶|🧾/);
 });
@@ -79,8 +80,20 @@ test("the desktop table reserves one square-edged compact column without changin
     /\.time-review-week-check-head,[\s\S]*?grid-template-columns:[^;]*minmax\(140px, 1\.35fr\) 58px repeat\(4,/,
   );
   assert.match(styles, /\.time-review-week-check-(?:head|row)[\s\S]*?min-width:\s*924px/);
-  assert.match(styles, /\.time-review-overnight-indicator\.is-none,[\s\S]*?border-radius:\s*2px/);
+  assert.match(styles, /\.time-review-overnight-marker\s*\{[\s\S]*?border-radius:\s*2px/);
   assert.match(styles, /\.time-review-overnight-bed\s*\{[\s\S]*?border-radius:\s*2px/);
   assert.match(styles, /\.time-review-overnight-indicator\.is-self-paid \.time-review-overnight-badge\s*\{[^}]*background:\s*#d9f3df/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-beg-paid \.time-review-overnight-badge\s*\{[^}]*background:\s*#f8d761/s);
+});
+
+
+test("all payroll overnight states share one axis and paid badges align to the bed bottom edge", () => {
+  assert.match(
+    styles,
+    /\.time-review-overnight-indicator\s*\{[^}]*width:\s*55px;[^}]*height:\s*28px;[^}]*align-items:\s*flex-end;[^}]*justify-content:\s*flex-start/s,
+  );
+  assert.match(styles, /\.time-review-overnight-marker\s*\{[^}]*width:\s*29px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 29px/s);
+  assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*29px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 29px/s);
+  assert.match(styles, /\.time-review-overnight-badge\s*\{[^}]*height:\s*16px;[^}]*flex:\s*0 0 auto/s);
+  assert.doesNotMatch(styles, /\.time-review-overnight-indicator[^}]*transform:/s);
 });

@@ -15,7 +15,7 @@ export function OvernightStatusIndicator({ status }: { status: OvernightStatus |
         role="img"
         title={presentation.label}
       >
-        <span aria-hidden="true">{presentation.marker}</span>
+        <span className="time-review-overnight-marker" aria-hidden="true">{presentation.marker}</span>
       </span>
     );
   }

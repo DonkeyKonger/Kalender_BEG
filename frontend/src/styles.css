@@ -17431,24 +17431,28 @@ body.mobile-modal-scroll-locked {
 
 .time-review-overnight-indicator {
   display: inline-flex;
-  min-width: 28px;
+  width: 55px;
   height: 28px;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: flex-start;
   color: #64748b;
   font-size: 0.76rem;
   font-weight: 900;
   line-height: 1;
 }
 
-.time-review-overnight-indicator.is-none,
-.time-review-overnight-indicator.is-unknown {
+.time-review-overnight-marker {
+  display: inline-grid;
+  width: 29px;
+  height: 28px;
+  flex: 0 0 29px;
+  place-items: center;
   border: 1px solid #d7e1ee;
   border-radius: 2px;
   background: #fbfcfe;
 }
 
-.time-review-overnight-indicator.is-unknown {
+.time-review-overnight-indicator.is-unknown .time-review-overnight-marker {
   border-style: dashed;
   color: #7b8798;
 }
@@ -17457,6 +17461,7 @@ body.mobile-modal-scroll-locked {
   display: inline-grid;
   width: 29px;
   height: 28px;
+  flex: 0 0 29px;
   place-items: center;
   border: 1px solid #cbd7e6;
   border-radius: 2px;
@@ -17468,6 +17473,7 @@ body.mobile-modal-scroll-locked {
   display: inline-grid;
   min-width: 22px;
   height: 16px;
+  flex: 0 0 auto;
   place-items: center;
   margin-left: -1px;
   border: 1px solid;
