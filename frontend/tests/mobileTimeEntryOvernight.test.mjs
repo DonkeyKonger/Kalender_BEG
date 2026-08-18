@@ -86,6 +86,18 @@ test("the overnight choices render only outside the travel-time mode", () => {
 });
 
 
+test("the overnight choices follow their heading without redundant instruction copy", () => {
+  const redundantChoiceHint = ["Bitte", "eine", "Option", "auswählen"].join(" ");
+  assert.equal(pageSource.includes(redundantChoiceHint), false);
+  assert.match(
+    pageSource,
+    /<legend>Übernachtung<\/legend>\s*<div className="mobile-time-overnight-options">/,
+  );
+  assert.match(styles, /\.mobile-time-overnight legend \{[^}]*margin:\s*0 0 8px/s);
+  assert.doesNotMatch(styles, /\.mobile-time-overnight > p/);
+});
+
+
 test("the refreshed dialog removes legacy gross and suggestion copy and stays responsive", () => {
   const dialogStart = pageSource.indexOf('className="mobile-project-email-dialog mobile-time-sheet mobile-modal-scroll-region"');
   const dialogEnd = pageSource.indexOf("{isBreakPickerOpen", dialogStart);

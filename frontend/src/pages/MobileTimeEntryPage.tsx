@@ -976,7 +976,6 @@ export function MobileTimeEntryPage() {
                   {sheetMode !== "travel" ? (
                     <fieldset className="mobile-time-overnight">
                       <legend>Übernachtung</legend>
-                      <p>Bitte eine Option auswählen</p>
                       <div className="mobile-time-overnight-options">
                         {OVERNIGHT_OPTIONS.map((option) => {
                           const OptionIcon = option.icon;

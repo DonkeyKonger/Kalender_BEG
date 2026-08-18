@@ -8983,25 +8983,18 @@ body.mobile-modal-scroll-locked {
 .mobile-time-overnight {
   display: grid;
   min-width: 0;
-  gap: 4px;
   margin: 2px 0 0;
   border: 0;
   padding: 0;
 }
 
 .mobile-time-overnight legend {
+  margin: 0 0 8px;
   color: #65738a;
   font-size: 0.72rem;
   font-weight: 850;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-}
-
-.mobile-time-overnight > p {
-  margin: 0 0 4px;
-  color: #718096;
-  font-size: 0.8rem;
-  font-weight: 650;
 }
 
 .mobile-time-overnight-options {
