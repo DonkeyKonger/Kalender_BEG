@@ -4,8 +4,8 @@ import type { OvernightStatus, TimeEntry } from "../types/timeEntry";
 export type OvernightStatusPresentation = {
   badge: "MA" | "BEG" | null;
   label: string;
-  marker: "–" | "?" | null;
-  tone: "none" | "self-paid" | "beg-paid" | "unknown";
+  marker: "–" | null;
+  tone: "none" | "self-paid" | "beg-paid";
 };
 
 
@@ -50,8 +50,8 @@ export function getOvernightStatusPresentation(
   return {
     badge: null,
     label: "Übernachtungsstatus nicht erfasst",
-    marker: "?",
-    tone: "unknown",
+    marker: "–",
+    tone: "none",
   };
 }
 

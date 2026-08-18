@@ -34,9 +34,21 @@ test("payroll overnight states keep their compact marker, badge and accessible m
   assert.deepEqual(getOvernightStatusPresentation(null), {
     badge: null,
     label: "Übernachtungsstatus nicht erfasst",
-    marker: "?",
-    tone: "unknown",
+    marker: "–",
+    tone: "none",
   });
+  assert.deepEqual(
+    {
+      badge: getOvernightStatusPresentation(null).badge,
+      marker: getOvernightStatusPresentation(null).marker,
+      tone: getOvernightStatusPresentation(null).tone,
+    },
+    {
+      badge: getOvernightStatusPresentation("none").badge,
+      marker: getOvernightStatusPresentation("none").marker,
+      tone: getOvernightStatusPresentation("none").tone,
+    },
+  );
 });
 
 
@@ -96,4 +108,5 @@ test("all payroll overnight states share one axis and paid badges align to the b
   assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*29px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 29px/s);
   assert.match(styles, /\.time-review-overnight-badge\s*\{[^}]*height:\s*16px;[^}]*flex:\s*0 0 auto/s);
   assert.doesNotMatch(styles, /\.time-review-overnight-indicator[^}]*transform:/s);
+  assert.equal(styles.includes(["is", "unknown"].join("-")), false);
 });
