@@ -17429,6 +17429,10 @@ body.mobile-modal-scroll-locked {
   place-items: center;
 }
 
+.time-review-week-overnight[role="cell"] {
+  transform: translateX(-4px);
+}
+
 .time-review-overnight-indicator {
   display: inline-flex;
   width: 55px;
