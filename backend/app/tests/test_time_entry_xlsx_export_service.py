@@ -5,6 +5,8 @@ from zipfile import ZipFile
 
 import pytest
 
+from app.models.enums import OvernightStatus
+from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
@@ -13,6 +15,7 @@ from app.services.time_entry_xlsx_export_service import (
     build_weekly_workers_xlsx,
     build_weekly_worker_xlsx,
     excel_date_serial,
+    load_weekly_worker_template,
     unique_weekly_worker_sheet_names,
     weekly_worker_entry_has_hours,
     weekly_worker_break_minutes,
@@ -39,6 +42,7 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
         source="manual",
     )
     entry.site = Site(site_number="8008", name="Friedensschule Osnabrück")
+    attach_overnight_status(entry, OvernightStatus.SELF_PAID)
     friday_entry = WorkTimeEntry(
         work_date=date(2026, 6, 12),
         start_time=time(7, 0),
@@ -49,6 +53,7 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
         source="manual",
     )
     friday_entry.site = Site(site_number="1000", name="Büsum")
+    attach_overnight_status(friday_entry, OvernightStatus.BEG_PAID)
 
     content = build_weekly_worker_xlsx(
         person_name="Christopher Erichsen",
@@ -77,23 +82,43 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert "'Tabelle1'!$A$1:$O$29" in workbook_xml
     assert sheet.find("main:sheetPr/main:pageSetUpPr", NS).attrib["fitToPage"] == "1"
     page_setup = sheet.find("main:pageSetup", NS)
+    page_margins = sheet.find("main:pageMargins", NS)
+    assert page_setup is not None
+    assert page_margins is not None
+    assert page_setup.attrib["paperSize"] == "9"
+    assert page_setup.attrib["orientation"] == "landscape"
     assert page_setup.attrib["fitToWidth"] == "1"
     assert page_setup.attrib["fitToHeight"] == "1"
+    assert "scale" not in page_setup.attrib
+    assert page_margins.attrib == {
+        "left": "0.7",
+        "right": "0.7",
+        "top": "0.78740157499999996",
+        "bottom": "0.78740157499999996",
+        "header": "0.3",
+        "footer": "0.3",
+    }
     assert cell_text(sheet, "C5") == "08.06.2026"
     assert cell_text(sheet, "E5") == "14.06.2026"
     assert cell_text(sheet, "H5") == "24"
     assert cell_text(sheet, "B7") == "Christopher Erichsen"
+    assert cell_text(sheet, "F12") == "ÜN"
+    assert cell_style(sheet, "F12") == cell_style(sheet, "L12")
+    assert cell_style(sheet, "F13") == cell_style(sheet, "L13")
     assert cell_text(sheet, "A15") == "Mo"
     assert cell_number(sheet, "B15") == excel_date_serial(date(2026, 6, 8))
     assert cell_text(sheet, "C15") == "8008 - Friedensschule Osnabrück"
+    assert cell_text(sheet, "F15") == "MA"
     assert cell_number(sheet, "J15") == pytest.approx(7.5 / 24)
     assert cell_number(sheet, "K15") == pytest.approx(15.5 / 24)
     assert cell_number(sheet, "L15") == 0.5
     assert cell_text(sheet, "O15") == "8,50 h"
     assert cell_text(sheet, "A16") == "Di"
     assert cell_text(sheet, "C16") == "Keine Zeitmeldung"
+    assert cell_text(sheet, "F16") == "–"
     assert cell_text(sheet, "A19") == "Fr"
     assert cell_text(sheet, "C19") == "1000 - Büsum"
+    assert cell_text(sheet, "F19") == "BEG"
     assert cell_style(sheet, "J19") == "7"
     assert cell_style(sheet, "K19") == "7"
     assert cell_number(sheet, "J19") == pytest.approx(7 / 24)
@@ -102,6 +127,91 @@ def test_weekly_worker_xlsx_fills_master_template_with_checked_values():
     assert cell_text(sheet, "A20") == ""
     assert cell_text(sheet, "C20") == ""
     assert cell_text(sheet, "O26") == "16,50 h"
+
+    merge_refs = {
+        merge.attrib["ref"]
+        for merge in sheet.findall("main:mergeCells/main:mergeCell", NS)
+    }
+    assert "C12:E13" in merge_refs
+    assert "F12:F13" in merge_refs
+    assert "C15:E15" in merge_refs
+    assert "C12:F13" not in merge_refs
+    assert "C15:F15" not in merge_refs
+
+
+def test_weekly_worker_xlsx_exports_all_daily_overnight_states_with_print_styles():
+    start = date(2026, 8, 17)
+    none_entry = work_entry(start, "47900", "Neubau Stephanipstraße, Bretten")
+    attach_overnight_status(none_entry, OvernightStatus.NONE)
+    null_entry = work_entry(date(2026, 8, 18), "49017", "Aller Wiener Klink")
+    attach_overnight_status(null_entry, None)
+    self_paid_first = work_entry(date(2026, 8, 19), "26141", "Big Dutchman")
+    attach_overnight_status(self_paid_first, OvernightStatus.SELF_PAID)
+    self_paid_second = work_entry(date(2026, 8, 19), "49017", "Aller Wiener Klink")
+    beg_paid_entry = work_entry(date(2026, 8, 20), "26141", "Big Dutchman")
+    attach_overnight_status(beg_paid_entry, OvernightStatus.BEG_PAID)
+
+    rows = weekly_worker_rows(
+        start,
+        date(2026, 8, 23),
+        [none_entry, null_entry, self_paid_first, self_paid_second, beg_paid_entry],
+        {},
+    )
+    content = build_weekly_worker_xlsx(
+        person_name="Christopher Monteur",
+        week_number=34,
+        year=2026,
+        start=start,
+        end=date(2026, 8, 23),
+        rows=rows,
+    )
+
+    workbook, sheet = workbook_sheet(content)
+    styles = ET.fromstring(workbook.read("xl/styles.xml"))
+    template_workbook = ZipFile(BytesIO(load_weekly_worker_template()))
+    template_sheet = ET.fromstring(template_workbook.read("xl/worksheets/sheet1.xml"))
+
+    assert [row.overnight_status for row in rows[:5]] == [
+        OvernightStatus.NONE,
+        None,
+        OvernightStatus.SELF_PAID,
+        OvernightStatus.SELF_PAID,
+        OvernightStatus.BEG_PAID,
+    ]
+    assert [cell_text(sheet, f"F{row_number}") for row_number in range(15, 20)] == [
+        "–",
+        "–",
+        "MA",
+        "MA",
+        "BEG",
+    ]
+    assert cell_style(sheet, "F15") == cell_style(sheet, "F16")
+    assert cell_style(sheet, "F17") == cell_style(sheet, "F18")
+    assert len({cell_style(sheet, "F15"), cell_style(sheet, "F17"), cell_style(sheet, "F19")}) == 3
+    assert style_fill_rgb(styles, cell_style(sheet, "F17")) == "FFD9F3DF"
+    assert style_fill_rgb(styles, cell_style(sheet, "F19")) == "FFF8D761"
+    assert style_alignment(styles, cell_style(sheet, "F17")) == {
+        "horizontal": "center",
+        "vertical": "center",
+    }
+
+    old_e_width = column_width(template_sheet, 5)
+    old_f_width = column_width(template_sheet, 6)
+    old_i_width = column_width(template_sheet, 9)
+    new_e_width = column_width(sheet, 5)
+    new_f_width = column_width(sheet, 6)
+    new_i_width = column_width(sheet, 9)
+    assert old_e_width == pytest.approx(10.83203125)
+    assert old_f_width == pytest.approx(9.33203125)
+    assert old_i_width == pytest.approx(4.83203125)
+    assert new_e_width == pytest.approx(18.6640625)
+    assert new_f_width == pytest.approx(4.0)
+    assert new_i_width == pytest.approx(2.33203125)
+    assert new_e_width + new_f_width + new_i_width == pytest.approx(
+        old_e_width + old_f_width + old_i_width
+    )
+    assert sheet.findall(".//main:f", NS) == []
+    assert b"#REF!" not in content
 
 
 def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
@@ -140,7 +250,8 @@ def test_weekly_worker_xlsx_extends_template_rows_when_week_has_many_entries():
         merge.attrib["ref"]
         for merge in sheet.findall("main:mergeCells/main:mergeCell", NS)
     }
-    assert "C25:F25" in merge_refs
+    assert "C25:E25" in merge_refs
+    assert cell_text(sheet, "F25") == "–"
     assert "G25:I25" in merge_refs
     assert "L31:N31" in merge_refs
 
@@ -219,6 +330,7 @@ def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():
         source="manual",
     )
     erichsen_entry.site = Site(site_number="8008", name="Friedensschule Osnabrück")
+    attach_overnight_status(erichsen_entry, OvernightStatus.SELF_PAID)
     kramer_entry = WorkTimeEntry(
         work_date=date(2026, 6, 9),
         start_time=time(8, 0),
@@ -229,6 +341,7 @@ def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():
         source="manual",
     )
     kramer_entry.site = Site(site_number="4630", name="Neubau Volksbank Lathen")
+    attach_overnight_status(kramer_entry, OvernightStatus.BEG_PAID)
 
     content = build_weekly_workers_xlsx([
         WeeklyWorkerSheet(
@@ -273,8 +386,10 @@ def test_weekly_workers_xlsx_creates_one_template_sheet_per_worker():
     assert "/xl/drawings/drawing2.xml" in content_types
     assert cell_text(first_sheet, "B7") == "Christopher Erichsen"
     assert cell_text(first_sheet, "C15") == "8008 - Friedensschule Osnabrück"
+    assert cell_text(first_sheet, "F15") == "MA"
     assert cell_text(second_sheet, "B7") == "Christoph Kramer"
     assert cell_text(second_sheet, "C16") == "4630 - Neubau Volksbank Lathen"
+    assert cell_text(second_sheet, "F16") == "BEG"
 
 
 def test_weekly_worker_rows_skip_empty_weekends_but_keep_worked_weekends():
@@ -384,6 +499,63 @@ def workbook_sheet(content: bytes):
     workbook = ZipFile(BytesIO(content))
     sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
     return workbook, sheet
+
+
+def work_entry(work_date: date, site_number: str, site_name: str) -> WorkTimeEntry:
+    entry = WorkTimeEntry(
+        person_id=1,
+        work_date=work_date,
+        start_time=time(6, 0),
+        end_time=time(15, 0),
+        break_minutes=30,
+        work_minutes=510,
+        travel_minutes=0,
+        source="manual",
+    )
+    entry.site = Site(site_number=site_number, name=site_name)
+    return entry
+
+
+def attach_overnight_status(
+    entry: WorkTimeEntry,
+    overnight_status: OvernightStatus | None,
+) -> None:
+    entry.work_day = PersonWorkDay(
+        person_id=entry.person_id,
+        work_date=entry.work_date,
+        overnight_status=overnight_status.value if overnight_status else None,
+    )
+
+
+def column_width(sheet: ET.Element, column_index: int) -> float:
+    for column in sheet.findall("main:cols/main:col", NS):
+        if int(column.attrib["min"]) <= column_index <= int(column.attrib["max"]):
+            return float(column.attrib["width"])
+    raise AssertionError(f"Keine Spaltenbreite für Spalte {column_index}")
+
+
+def style_fill_rgb(styles: ET.Element, style_id: str | None) -> str | None:
+    assert style_id is not None
+    cell_xfs = styles.find("main:cellXfs", NS)
+    fills = styles.find("main:fills", NS)
+    assert cell_xfs is not None
+    assert fills is not None
+    style = list(cell_xfs)[int(style_id)]
+    fill = list(fills)[int(style.attrib["fillId"])]
+    color = fill.find("main:patternFill/main:fgColor", NS)
+    return color.attrib.get("rgb") if color is not None else None
+
+
+def style_alignment(styles: ET.Element, style_id: str | None) -> dict[str, str]:
+    assert style_id is not None
+    cell_xfs = styles.find("main:cellXfs", NS)
+    assert cell_xfs is not None
+    alignment = list(cell_xfs)[int(style_id)].find("main:alignment", NS)
+    assert alignment is not None
+    return {
+        "horizontal": alignment.attrib["horizontal"],
+        "vertical": alignment.attrib["vertical"],
+    }
 
 
 def cell(sheet: ET.Element, ref: str) -> ET.Element:

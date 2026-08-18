@@ -14,6 +14,7 @@ from xml.sax.saxutils import escape, quoteattr
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.models.enums import OvernightStatus
 from app.models.person import Person
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
@@ -69,6 +70,11 @@ WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT = (
 WEEKLY_WORKER_TEMPLATE_TOTAL_ROW = 26
 WEEKLY_WORKER_TEMPLATE_PRINT_END_ROW = 29
 WEEKLY_WORKER_TEMPLATE_SHEET_NAME = "Tabelle1"
+WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN = "F"
+WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN_WIDTH = 4.0
+WEEKLY_WORKER_TEMPLATE_CONTRACTOR_NAME_WIDTH_REDUCTION = 2.5
+WEEKLY_WORKER_TEMPLATE_OVERNIGHT_SELF_PAID_FILL = "FFD9F3DF"
+WEEKLY_WORKER_TEMPLATE_OVERNIGHT_BEG_PAID_FILL = "FFF8D761"
 WEEKLY_WORKER_TEMPLATE_DATA_STYLES = {
     "A": "19",
     "B": "5",
@@ -111,6 +117,7 @@ class TimeEntryExportRow:
 class WeeklyWorkerExportRow:
     work_date: date
     entry: WorkTimeEntry | None
+    overnight_status: OvernightStatus | None = None
     gps_evaluation: GpsPresenceEvaluation | None = None
     has_multiple_entries_on_day: bool = False
 
@@ -379,6 +386,9 @@ def build_weekly_workers_xlsx(sheets: list[WeeklyWorkerSheet]) -> bytes:
     output = BytesIO()
     with ZipFile(BytesIO(template), "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
         template_sheet = source.read("xl/worksheets/sheet1.xml")
+        template_styles, overnight_style_ids = weekly_worker_template_styles(
+            source.read("xl/styles.xml")
+        )
         template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
         template_drawing = source.read("xl/drawings/drawing1.xml")
         template_drawing_relationships = source.read("xl/drawings/_rels/drawing1.xml.rels")
@@ -388,6 +398,7 @@ def build_weekly_workers_xlsx(sheets: list[WeeklyWorkerSheet]) -> bytes:
                 "docProps/app.xml",
                 "xl/workbook.xml",
                 "xl/_rels/workbook.xml.rels",
+                "xl/styles.xml",
                 "xl/worksheets/sheet1.xml",
                 "xl/worksheets/_rels/sheet1.xml.rels",
                 "xl/drawings/drawing1.xml",
@@ -401,6 +412,7 @@ def build_weekly_workers_xlsx(sheets: list[WeeklyWorkerSheet]) -> bytes:
         archive.writestr("docProps/app.xml", weekly_worker_template_app_properties(source.read("docProps/app.xml"), [sheet.sheet_name for sheet in sheets]))
         archive.writestr("xl/workbook.xml", weekly_worker_template_workbook_xml(source.read("xl/workbook.xml"), sheets))
         archive.writestr("xl/_rels/workbook.xml.rels", weekly_worker_template_workbook_relationships(source.read("xl/_rels/workbook.xml.rels"), len(sheets)))
+        archive.writestr("xl/styles.xml", template_styles)
         for index, sheet in enumerate(sheets, start=1):
             archive.writestr(
                 f"xl/worksheets/sheet{index}.xml",
@@ -412,6 +424,7 @@ def build_weekly_workers_xlsx(sheets: list[WeeklyWorkerSheet]) -> bytes:
                     start=sheet.start,
                     end=sheet.end,
                     rows=sheet.rows,
+                    overnight_style_ids=overnight_style_ids,
                 ),
             )
             archive.writestr(
@@ -437,6 +450,125 @@ def load_weekly_worker_logo() -> bytes | None:
         return None
 
 
+def weekly_worker_template_styles(
+    styles_xml: bytes,
+) -> tuple[bytes, dict[OvernightStatus | None, str]]:
+    text = styles_xml.decode("utf-8")
+    fills_match = re.search(r'<fills count="(\d+)">', text)
+    cell_xfs_match = re.search(r'<cellXfs count="(\d+)">', text)
+    if fills_match is None or cell_xfs_match is None:
+        raise ValueError("Ungültige Wochenbericht-Vorlage: Excel-Styles fehlen.")
+
+    first_fill_id = int(fills_match.group(1))
+    first_style_id = int(cell_xfs_match.group(1))
+    overnight_fills = (
+        '<fill><patternFill patternType="solid">'
+        f'<fgColor rgb="{WEEKLY_WORKER_TEMPLATE_OVERNIGHT_SELF_PAID_FILL}"/>'
+        '<bgColor indexed="64"/>'
+        '</patternFill></fill>'
+        '<fill><patternFill patternType="solid">'
+        f'<fgColor rgb="{WEEKLY_WORKER_TEMPLATE_OVERNIGHT_BEG_PAID_FILL}"/>'
+        '<bgColor indexed="64"/>'
+        '</patternFill></fill>'
+    )
+    text = text.replace(
+        fills_match.group(0),
+        f'<fills count="{first_fill_id + 2}">',
+        1,
+    )
+    text = text.replace("</fills>", f"{overnight_fills}</fills>", 1)
+
+    def overnight_xf(fill_id: int) -> str:
+        apply_fill = ' applyFill="1"' if fill_id else ""
+        return (
+            '<xf numFmtId="0" fontId="3" '
+            f'fillId="{fill_id}" borderId="12" xfId="0" '
+            f'applyFont="1"{apply_fill} applyBorder="1" applyAlignment="1">'
+            '<alignment horizontal="center" vertical="center"/>'
+            '</xf>'
+        )
+
+    overnight_styles = (
+        overnight_xf(0)
+        + overnight_xf(first_fill_id)
+        + overnight_xf(first_fill_id + 1)
+    )
+    text = text.replace(
+        cell_xfs_match.group(0),
+        f'<cellXfs count="{first_style_id + 3}">',
+        1,
+    )
+    text = text.replace("</cellXfs>", f"{overnight_styles}</cellXfs>", 1)
+    style_ids = {
+        None: str(first_style_id),
+        OvernightStatus.NONE: str(first_style_id),
+        OvernightStatus.SELF_PAID: str(first_style_id + 1),
+        OvernightStatus.BEG_PAID: str(first_style_id + 2),
+    }
+    return text.encode("utf-8"), style_ids
+
+
+def configure_weekly_worker_template_layout(root: ET.Element) -> None:
+    columns = root.find(qname("cols"))
+    if columns is None:
+        raise ValueError("Ungültige Wochenbericht-Vorlage: Spaltenbreiten fehlen.")
+    site_compensation_column = find_column_definition(columns, 5)
+    overnight_column = find_column_definition(columns, 6)
+    contractor_name_column = find_column_definition(columns, 9)
+    if (
+        site_compensation_column is None
+        or overnight_column is None
+        or contractor_name_column is None
+    ):
+        raise ValueError("Ungültige Wochenbericht-Vorlage: Spalten E/F/I fehlen.")
+
+    previous_overnight_width = float(overnight_column.attrib["width"])
+    site_compensation_width = float(site_compensation_column.attrib["width"])
+    site_compensation_column.attrib["width"] = format_excel_number(
+        site_compensation_width
+        + previous_overnight_width
+        - WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN_WIDTH
+        + WEEKLY_WORKER_TEMPLATE_CONTRACTOR_NAME_WIDTH_REDUCTION
+    )
+    overnight_column.attrib["width"] = format_excel_number(
+        WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN_WIDTH
+    )
+    contractor_name_column.attrib["width"] = format_excel_number(
+        float(contractor_name_column.attrib["width"])
+        - WEEKLY_WORKER_TEMPLATE_CONTRACTOR_NAME_WIDTH_REDUCTION
+    )
+
+    merge_cells = root.find(qname("mergeCells"))
+    if merge_cells is None:
+        raise ValueError("Ungültige Wochenbericht-Vorlage: Zellverbünde fehlen.")
+    for merge_cell in merge_cells.findall(qname("mergeCell")):
+        merge_ref = merge_cell.attrib["ref"]
+        if merge_ref == "C12:F13":
+            merge_cell.attrib["ref"] = "C12:E13"
+            continue
+        data_merge = re.fullmatch(r"C(\d+):F\1", merge_ref)
+        if data_merge is not None:
+            row_number = int(data_merge.group(1))
+            if WEEKLY_WORKER_TEMPLATE_DATA_START_ROW <= row_number <= WEEKLY_WORKER_TEMPLATE_DATA_END_ROW:
+                merge_cell.attrib["ref"] = f"C{row_number}:E{row_number}"
+    ET.SubElement(merge_cells, qname("mergeCell"), {"ref": "F12:F13"})
+    merge_cells.attrib["count"] = str(len(merge_cells.findall(qname("mergeCell"))))
+
+    set_cell_style(root, "E12", "39")
+    set_cell_style(root, "E13", "42")
+    set_cell_style(root, "F12", "29")
+    set_cell_style(root, "F13", "41")
+    set_cell_string(root, "F12", "ÜN")
+    clear_cell(root, "F13")
+
+
+def find_column_definition(columns: ET.Element, column_index: int) -> ET.Element | None:
+    for column in columns.findall(qname("col")):
+        if int(column.attrib["min"]) <= column_index <= int(column.attrib["max"]):
+            return column
+    return None
+
+
 def fill_weekly_worker_template_sheet(
     sheet_xml: bytes,
     *,
@@ -446,8 +578,10 @@ def fill_weekly_worker_template_sheet(
     start: date,
     end: date,
     rows: list[WeeklyWorkerExportRow],
+    overnight_style_ids: dict[OvernightStatus | None, str],
 ) -> bytes:
     root = ET.fromstring(sheet_xml)
+    configure_weekly_worker_template_layout(root)
     extra_rows = weekly_worker_template_extra_rows(rows)
     if extra_rows:
         insert_weekly_worker_template_rows(root, extra_rows)
@@ -465,7 +599,7 @@ def fill_weekly_worker_template_sheet(
         + WEEKLY_WORKER_TEMPLATE_DATA_ROW_COUNT
         + extra_rows,
     ):
-        clear_weekly_worker_data_row(root, row_number)
+        clear_weekly_worker_data_row(root, row_number, overnight_style_ids)
 
     total_minutes = 0
     previous_date: date | None = None
@@ -477,6 +611,7 @@ def fill_weekly_worker_template_sheet(
             row_number,
             row,
             show_weekday=row.work_date != previous_date,
+            overnight_style_ids=overnight_style_ids,
         )
         previous_date = row.work_date
 
@@ -717,9 +852,13 @@ def insert_weekly_worker_template_rows(root: ET.Element, extra_rows: int) -> Non
     add_weekly_worker_data_merges(root, WEEKLY_WORKER_TEMPLATE_DATA_END_ROW + 1, extra_rows)
 
 
-def clear_weekly_worker_data_row(root: ET.Element, row_number: int) -> None:
-    apply_weekly_worker_data_row_styles(root, row_number)
-    for column in ["A", "B", "C", "G", "J", "K", "L", "M", "N", "O"]:
+def clear_weekly_worker_data_row(
+    root: ET.Element,
+    row_number: int,
+    overnight_style_ids: dict[OvernightStatus | None, str],
+) -> None:
+    apply_weekly_worker_data_row_styles(root, row_number, overnight_style_ids)
+    for column in ["A", "B", "C", "F", "G", "J", "K", "L", "M", "N", "O"]:
         clear_cell(root, f"{column}{row_number}")
 
 
@@ -729,14 +868,25 @@ def fill_weekly_worker_data_row(
     row: WeeklyWorkerExportRow,
     *,
     show_weekday: bool,
+    overnight_style_ids: dict[OvernightStatus | None, str],
 ) -> None:
-    apply_weekly_worker_data_row_styles(root, row_number)
+    apply_weekly_worker_data_row_styles(root, row_number, overnight_style_ids)
     set_cell_string(
         root,
         f"A{row_number}",
         GERMAN_WEEKDAYS[row.work_date.weekday()] if show_weekday else "",
     )
     set_cell_number(root, f"B{row_number}", excel_date_serial(row.work_date))
+    set_cell_string(
+        root,
+        f"{WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN}{row_number}",
+        weekly_worker_overnight_label(row.overnight_status),
+    )
+    set_cell_style(
+        root,
+        f"{WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN}{row_number}",
+        overnight_style_ids[row.overnight_status],
+    )
 
     entry = row.entry
     if entry is None:
@@ -750,9 +900,18 @@ def fill_weekly_worker_data_row(
     set_cell_string(root, f"O{row_number}", format_export_hours(weekly_worker_total_minutes(row)))
 
 
-def apply_weekly_worker_data_row_styles(root: ET.Element, row_number: int) -> None:
+def apply_weekly_worker_data_row_styles(
+    root: ET.Element,
+    row_number: int,
+    overnight_style_ids: dict[OvernightStatus | None, str],
+) -> None:
     for column, style_id in WEEKLY_WORKER_TEMPLATE_DATA_STYLES.items():
         set_cell_style(root, f"{column}{row_number}", style_id)
+    set_cell_style(
+        root,
+        f"{WEEKLY_WORKER_TEMPLATE_OVERNIGHT_COLUMN}{row_number}",
+        overnight_style_ids[None],
+    )
 
 
 def weekly_worker_site_label(entry: WorkTimeEntry) -> str:
@@ -761,6 +920,14 @@ def weekly_worker_site_label(entry: WorkTimeEntry) -> str:
     if number and name:
         return f"{number} - {name}"
     return name or number or "Keine Baustelle"
+
+
+def weekly_worker_overnight_label(status_value: OvernightStatus | None) -> str:
+    if status_value == OvernightStatus.SELF_PAID:
+        return "MA"
+    if status_value == OvernightStatus.BEG_PAID:
+        return "BEG"
+    return "–"
 
 
 def weekly_worker_start_time(entry: WorkTimeEntry) -> time | None:
@@ -866,7 +1033,7 @@ def add_weekly_worker_data_merges(root: ET.Element, start_row: int, count: int) 
     if merge_cells is None:
         return
     for row_number in range(start_row, start_row + count):
-        ET.SubElement(merge_cells, qname("mergeCell"), {"ref": f"C{row_number}:F{row_number}"})
+        ET.SubElement(merge_cells, qname("mergeCell"), {"ref": f"C{row_number}:E{row_number}"})
         ET.SubElement(merge_cells, qname("mergeCell"), {"ref": f"G{row_number}:I{row_number}"})
     merge_cells.attrib["count"] = str(len(merge_cells.findall(qname("mergeCell"))))
 
@@ -1029,10 +1196,12 @@ def weekly_worker_rows(
                 rows.append(WeeklyWorkerExportRow(work_date=cursor, entry=None))
         else:
             has_multiple = len(day_entries) > 1
+            overnight_status = weekly_worker_day_overnight_status(day_entries)
             rows.extend(
                 WeeklyWorkerExportRow(
                     work_date=cursor,
                     entry=entry,
+                    overnight_status=overnight_status,
                     gps_evaluation=gps_evaluations.get(entry.id),
                     has_multiple_entries_on_day=has_multiple,
                 )
@@ -1040,6 +1209,17 @@ def weekly_worker_rows(
             )
         cursor += timedelta(days=1)
     return rows
+
+
+def weekly_worker_day_overnight_status(
+    entries: list[WorkTimeEntry],
+) -> OvernightStatus | None:
+    for entry in entries:
+        work_day = getattr(entry, "work_day", None)
+        overnight_status = getattr(work_day, "overnight_status", None)
+        if overnight_status is not None:
+            return OvernightStatus(overnight_status)
+    return None
 
 
 def weekly_worker_row_values(row: WeeklyWorkerExportRow) -> list[object]:
