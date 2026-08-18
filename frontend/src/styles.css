@@ -7915,6 +7915,24 @@ button.person-chip:focus-visible {
   padding: 16px;
 }
 
+html.mobile-modal-scroll-locked,
+body.mobile-modal-scroll-locked {
+  overscroll-behavior: none;
+}
+
+.mobile-modal-layer {
+  overscroll-behavior: none;
+}
+
+.mobile-modal-layer[data-mobile-modal-active="false"] {
+  pointer-events: none;
+}
+
+.mobile-modal-scroll-region {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .mobile-placeholder-dialog {
   display: grid;
   gap: 12px;
@@ -24181,6 +24199,23 @@ button.person-chip:focus-visible {
   background: #ffffff;
   padding: 16px;
   box-shadow: 0 24px 55px rgb(15 23 42 / 20%);
+}
+
+/* The time sheet shares the email-dialog shell, but should use all genuinely
+   available viewport height before it becomes an internal scroll container. */
+.mobile-project-email-dialog.mobile-time-sheet {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - max(16px, env(safe-area-inset-top, 0px)) - max(16px, env(safe-area-inset-bottom, 0px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.mobile-time-break-modal,
+.mobile-time-picker-sheet {
+  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - max(18px, env(safe-area-inset-top, 0px)) - max(18px, env(safe-area-inset-bottom, 0px)));
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .mobile-project-email-dialog-head {

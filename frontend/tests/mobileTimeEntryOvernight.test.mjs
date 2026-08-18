@@ -64,7 +64,7 @@ test("the dialog uses one native radio group with the three stable values", () =
 
 
 test("the refreshed dialog removes legacy gross and suggestion copy and stays responsive", () => {
-  const dialogStart = pageSource.indexOf('className="mobile-project-email-dialog mobile-time-sheet"');
+  const dialogStart = pageSource.indexOf('className="mobile-project-email-dialog mobile-time-sheet mobile-modal-scroll-region"');
   const dialogEnd = pageSource.indexOf("{isBreakPickerOpen", dialogStart);
   const dialogSource = pageSource.slice(dialogStart, dialogEnd);
   assert.doesNotMatch(dialogSource, /Zeiten vom letzten Eintrag vorgeschlagen/);

@@ -11,6 +11,7 @@ import {
 } from "../lib/formatters";
 import { useMobileScrollReset } from "../lib/mobileScroll";
 import { applyOvernightStatusToWorkDate, resolveOvernightStatusForWorkDate } from "../lib/overnightStatus";
+import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
 import type { OvernightStatus, TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
 
@@ -111,6 +112,9 @@ export function MobileTimeEntryPage() {
   const hourWheelScrollTimeoutRef = useRef<number | null>(null);
   const minuteWheelScrollTimeoutRef = useRef<number | null>(null);
   const overnightLoadTokenRef = useRef(0);
+  const isTimeSheetTopModal = useMobileModalStack(sheetMode !== "closed");
+  const isBreakPickerTopModal = useMobileModalStack(isBreakPickerOpen && sheetMode !== "closed");
+  const isTimePickerTopModal = useMobileModalStack(timePickerTarget !== null);
 
   useMobileScrollReset("time-entry");
 
@@ -873,9 +877,16 @@ export function MobileTimeEntryPage() {
           </section>
 
           {sheetMode !== "closed" ? (
-            <div className="mobile-dialog-backdrop mobile-time-sheet-backdrop" role="presentation" onClick={closeTimeEntrySheet}>
+            <div
+              aria-hidden={!isTimeSheetTopModal}
+              className="mobile-dialog-backdrop mobile-time-sheet-backdrop mobile-modal-layer"
+              data-mobile-modal-active={isTimeSheetTopModal}
+              inert={!isTimeSheetTopModal}
+              role="presentation"
+              onClick={closeTimeEntrySheet}
+            >
               <div
-                className="mobile-project-email-dialog mobile-time-sheet"
+                className="mobile-project-email-dialog mobile-time-sheet mobile-modal-scroll-region"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="mobile-time-sheet-title"
@@ -1028,7 +1039,10 @@ export function MobileTimeEntryPage() {
 
           {isBreakPickerOpen && sheetMode !== "closed" ? (
             <div
-              className="mobile-time-break-modal-backdrop"
+              aria-hidden={!isBreakPickerTopModal}
+              className="mobile-time-break-modal-backdrop mobile-modal-layer"
+              data-mobile-modal-active={isBreakPickerTopModal}
+              inert={!isBreakPickerTopModal}
               role="presentation"
               onClick={(event) => {
                 event.stopPropagation();
@@ -1037,7 +1051,7 @@ export function MobileTimeEntryPage() {
               onPointerDown={(event) => event.stopPropagation()}
             >
               <div
-                className="mobile-time-break-modal"
+                className="mobile-time-break-modal mobile-modal-scroll-region"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="mobile-time-break-modal-title"
@@ -1092,7 +1106,10 @@ export function MobileTimeEntryPage() {
 
           {timePickerTarget ? (
             <div
-              className="mobile-time-picker-backdrop"
+              aria-hidden={!isTimePickerTopModal}
+              className="mobile-time-picker-backdrop mobile-modal-layer"
+              data-mobile-modal-active={isTimePickerTopModal}
+              inert={!isTimePickerTopModal}
               role="presentation"
               onClick={(event) => {
                 event.stopPropagation();
@@ -1102,7 +1119,7 @@ export function MobileTimeEntryPage() {
               onPointerDown={(event) => event.stopPropagation()}
             >
               <div
-                className="mobile-time-picker-sheet"
+                className="mobile-time-picker-sheet mobile-modal-scroll-region"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="mobile-time-picker-title"

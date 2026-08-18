@@ -33,6 +33,7 @@ import {
 } from "../lib/mobileGps";
 import { useMobileScrollReset } from "../lib/mobileScroll";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
+import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type { MobileAssignment, MobileAssignmentsResponse, MobileSite } from "../types/mobile";
 
@@ -1098,9 +1099,23 @@ function PlaceholderAction({
 }
 
 function MobilePlaceholderDialog({ content, onClose }: { content: PlaceholderContent; onClose: () => void }) {
+  const isTopModal = useMobileModalStack(true);
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
-      <div className="mobile-placeholder-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-placeholder-title" onClick={(event) => event.stopPropagation()}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="mobile-placeholder-dialog mobile-modal-scroll-region"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-placeholder-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <h2 id="mobile-placeholder-title">{content.title}</h2>
         <p>{content.text}</p>
         <button className="primary-action" type="button" onClick={onClose}>Schließen</button>
@@ -1126,9 +1141,23 @@ function MobileSelfPlanSheet({
   onClose: () => void;
   onSelectSite: (site: MobileSite) => void;
 }) {
+  const isTopModal = useMobileModalStack(true);
   return (
-    <div className="mobile-dialog-backdrop mobile-bottom-sheet-backdrop" role="presentation" onClick={onClose}>
-      <div className="mobile-bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-self-plan-title" onClick={(event) => event.stopPropagation()}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-bottom-sheet-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="mobile-bottom-sheet mobile-modal-scroll-region"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-self-plan-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mobile-bottom-sheet-head">
           <div>
             <h2 id="mobile-self-plan-title">Baustelle nachtragen</h2>

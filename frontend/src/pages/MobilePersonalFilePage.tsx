@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { ApiError, api } from "../lib/api";
 import { useMobileScrollReset } from "../lib/mobileScroll";
+import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type {
   MobilePersonalFile,
   MobilePersonalFileAbsenceResponse,
@@ -428,6 +429,7 @@ function MobileToolIssueAction({
   const [reason, setReason] = useState<MobileToolIssueReason | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isTopModal = useMobileModalStack(stage !== "closed");
 
   useEffect(() => {
     if (stage === "closed") return undefined;
@@ -477,13 +479,20 @@ function MobileToolIssueAction({
           : <MoreVertical aria-hidden="true" size={21} />}
       </button>
       {stage !== "closed" ? createPortal(
-        <div className="mobile-dialog-backdrop mobile-tool-issue-backdrop" role="presentation" onClick={() => !saving && setStage("closed")}>
+        <div
+          aria-hidden={!isTopModal}
+          className="mobile-dialog-backdrop mobile-tool-issue-backdrop mobile-modal-layer"
+          data-mobile-modal-active={isTopModal}
+          inert={!isTopModal}
+          role="presentation"
+          onClick={() => !saving && setStage("closed")}
+        >
           <section
             aria-label={stage === "menu"
               ? "Werkzeugproblem auswählen"
               : stage === "details" ? "Offene Werkzeugmeldungen" : reasonLabel}
             aria-modal="true"
-            className="mobile-tool-issue-sheet"
+            className="mobile-tool-issue-sheet mobile-modal-scroll-region"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
           >

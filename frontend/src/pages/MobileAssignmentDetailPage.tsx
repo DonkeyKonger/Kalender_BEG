@@ -37,6 +37,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
+import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../utils/dateRange";
@@ -1087,6 +1088,7 @@ function ExtraWorkTitleDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const canRename = order.status === "draft" && !order.customer_signed_at;
+  const isTopModal = useMobileModalStack(true);
 
   async function saveTitle(): Promise<void> {
     if (!canRename || isSaving) {
@@ -1106,9 +1108,16 @@ function ExtraWorkTitleDialog({
   }
 
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={onClose}
+    >
       <div
-        className="mobile-extra-work-title-dialog"
+        className="mobile-extra-work-title-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-extra-work-title-dialog-title"
@@ -1175,6 +1184,7 @@ function ExtraWorkDetailsDialog({
   const selectedWeekRange = selectedWeek
     ? getIsoWeekRange(selectedWeek.isoYear, selectedWeek.week)
     : null;
+  const isTopModal = useMobileModalStack(true);
 
   async function saveDetails(): Promise<void> {
     if (!canEdit || isSaving || !orderDate || !selectedWeek) {
@@ -1199,9 +1209,16 @@ function ExtraWorkDetailsDialog({
   }
 
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSaving ? undefined : onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSaving ? undefined : onClose}
+    >
       <div
-        className="mobile-extra-work-details-dialog"
+        className="mobile-extra-work-details-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-extra-work-details-dialog-title"
@@ -1295,10 +1312,19 @@ function DocumentEmailSendDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const isTopModal = useMobileModalStack(true);
+
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSending ? undefined : onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSending ? undefined : onClose}
+    >
       <div
-        className="mobile-project-email-dialog"
+        className="mobile-project-email-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-extra-work-email-send-title"
@@ -1359,6 +1385,7 @@ function ProjectEmailRecipientsModal({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const isTopModal = useMobileModalStack(true);
 
   useEffect(() => {
     let isActive = true;
@@ -1436,9 +1463,16 @@ function ProjectEmailRecipientsModal({
   }
 
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={onClose}
+    >
       <div
-        className="mobile-project-email-dialog"
+        className="mobile-project-email-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-project-email-dialog-title"
@@ -1527,6 +1561,7 @@ function ExtraWorkCustomerSignatureOverlay({
   const isDrawingRef = useRef(false);
   const isSigned = Boolean(activeOrder.customer_signed_at);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+  const isTopModal = useMobileModalStack(true);
 
   useEffect(() => {
     setActiveOrder(order);
@@ -1617,7 +1652,15 @@ function ExtraWorkCustomerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Kundenunterschrift">
+    <div
+      aria-hidden={!isTopModal}
+      aria-label="Kundenunterschrift"
+      aria-modal="true"
+      className="mobile-customer-signature-overlay mobile-modal-layer mobile-modal-scroll-region"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="dialog"
+    >
       <header className="mobile-customer-signature-header">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -1737,6 +1780,7 @@ function ExtraWorkWorkerSignatureOverlay({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+  const isTopModal = useMobileModalStack(true);
 
   useEffect(() => {
     drawSignatureCanvas(canvasRef.current, strokes);
@@ -1785,9 +1829,16 @@ function ExtraWorkWorkerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSavingSignature ? undefined : onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSavingSignature ? undefined : onClose}
+    >
       <div
-        className="mobile-project-email-dialog mobile-worker-signature-dialog"
+        className="mobile-project-email-dialog mobile-worker-signature-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-worker-signature-dialog-title"
@@ -2351,6 +2402,7 @@ function MobileProjectPhotoGallery({
   const [selectedPhoto, setSelectedPhoto] = useState<MobileProjectPhotoPreviewState | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const isPhotoPreviewTopModal = useMobileModalStack(selectedPhoto !== null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -2428,8 +2480,15 @@ function MobileProjectPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto ? (
-        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
-          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+        <div
+          aria-hidden={!isPhotoPreviewTopModal}
+          className="mobile-photo-preview-backdrop mobile-modal-layer"
+          data-mobile-modal-active={isPhotoPreviewTopModal}
+          inert={!isPhotoPreviewTopModal}
+          role="presentation"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
             <img alt={selectedPhoto.item.name} src={selectedPhoto.url} />
             <figcaption>
               <strong>{selectedPhoto.item.name}</strong>
@@ -2950,8 +3009,17 @@ function MobileDocumentPreview({
 }) {
   const canRenderInline = preview.status === "ready" && preview.url && isMobileInlineDocumentKind(preview.kind);
   const downloadLabel = preview.kind === "pdf" ? "PDF" : "Download";
+  const isTopModal = useMobileModalStack(true);
   return (
-    <section className="mobile-document-preview" role="dialog" aria-modal="true" aria-label="Dokumentenvorschau">
+    <section
+      aria-hidden={!isTopModal}
+      aria-label="Dokumentenvorschau"
+      aria-modal="true"
+      className="mobile-document-preview mobile-modal-layer mobile-modal-scroll-region"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="dialog"
+    >
       <div className="mobile-document-preview-head">
         <button className="icon-button secondary mobile-document-preview-back" type="button" onClick={onClose}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -3238,6 +3306,9 @@ function MobileMeasurementTab({
   const inlineFreePositionDraftIdRef = useRef(-1);
   const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
   const viewMode: MeasurementViewMode = canUseInlineMeasurementTable ? "table" : "list";
+  const isFreePositionDialogTopModal = useMobileModalStack(Boolean(
+    selectedBatch && isBatchPositionOverviewOpen && isFreePositionFormOpen && canUseInlineMeasurementTable
+  ));
 
   function mergeUpdatedBatch(updatedBatch: MobileMeasurementBatch): void {
     setBatches((currentBatches) => sortMobileMeasurementBatches(
@@ -3904,7 +3975,10 @@ function MobileMeasurementTab({
         />
         {isFreePositionFormOpen ? (
           <div
-            className="mobile-measurement-dialog-backdrop"
+            aria-hidden={!isFreePositionDialogTopModal}
+            className="mobile-measurement-dialog-backdrop mobile-modal-layer"
+            data-mobile-modal-active={isFreePositionDialogTopModal}
+            inert={!isFreePositionDialogTopModal}
             role="presentation"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
@@ -3914,7 +3988,7 @@ function MobileMeasurementTab({
               }
             }}
           >
-            <div className="mobile-measurement-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-measurement-position-dialog-title">
+            <div className="mobile-measurement-dialog mobile-modal-scroll-region" role="dialog" aria-modal="true" aria-labelledby="mobile-measurement-position-dialog-title">
               <MeasurementFreePositionForm
                 draft={freePositionDraft}
                 error={freePositionError}
@@ -4315,6 +4389,7 @@ function MeasurementPhotoGallery({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const isPhotoPreviewTopModal = useMobileModalStack(Boolean(selectedPhoto?.url));
   const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
@@ -4451,8 +4526,15 @@ function MeasurementPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto?.url ? (
-        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
-          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+        <div
+          aria-hidden={!isPhotoPreviewTopModal}
+          className="mobile-photo-preview-backdrop mobile-modal-layer"
+          data-mobile-modal-active={isPhotoPreviewTopModal}
+          inert={!isPhotoPreviewTopModal}
+          role="presentation"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
             <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
             <figcaption>
               <strong>{selectedPhoto.photo.filename}</strong>
@@ -4496,6 +4578,7 @@ function ExtraWorkPhotoGallery({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const isPhotoPreviewTopModal = useMobileModalStack(Boolean(selectedPhoto?.url));
   const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
@@ -4632,8 +4715,15 @@ function ExtraWorkPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto?.url ? (
-        <div className="mobile-photo-preview-backdrop" role="presentation" onClick={() => setSelectedPhoto(null)}>
-          <figure className="mobile-photo-preview" onClick={(event) => event.stopPropagation()}>
+        <div
+          aria-hidden={!isPhotoPreviewTopModal}
+          className="mobile-photo-preview-backdrop mobile-modal-layer"
+          data-mobile-modal-active={isPhotoPreviewTopModal}
+          inert={!isPhotoPreviewTopModal}
+          role="presentation"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
             <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
             <figcaption>
               <strong>{selectedPhoto.photo.filename}</strong>
@@ -6063,6 +6153,7 @@ function CustomerSignatureOverlay({
 
   const isSigned = Boolean(activeBatch.customer_signed_at);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+  const isTopModal = useMobileModalStack(true);
 
   useEffect(() => {
     setActiveBatch(batch);
@@ -6154,7 +6245,15 @@ function CustomerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-customer-signature-overlay" role="dialog" aria-modal="true" aria-label="Kundenunterschrift">
+    <div
+      aria-hidden={!isTopModal}
+      aria-label="Kundenunterschrift"
+      aria-modal="true"
+      className="mobile-customer-signature-overlay mobile-modal-layer mobile-modal-scroll-region"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="dialog"
+    >
       <header className="mobile-customer-signature-header">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -6276,6 +6375,7 @@ function WorkerSignatureOverlay({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const hasSignature = strokes.some((stroke) => stroke.length >= 2);
+  const isTopModal = useMobileModalStack(true);
 
   useEffect(() => {
     drawSignatureCanvas(canvasRef.current, strokes);
@@ -6322,9 +6422,16 @@ function WorkerSignatureOverlay({
   }
 
   return (
-    <div className="mobile-dialog-backdrop" role="presentation" onClick={isSavingSignature ? undefined : onClose}>
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSavingSignature ? undefined : onClose}
+    >
       <div
-        className="mobile-project-email-dialog mobile-worker-signature-dialog"
+        className="mobile-project-email-dialog mobile-worker-signature-dialog mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-measurement-worker-signature-dialog-title"
