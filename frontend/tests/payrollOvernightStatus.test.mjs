@@ -75,7 +75,7 @@ test("the narrow ÜN column follows the site and reuses one status for every ent
   assert.ok(tableEnd > tableStart);
   assert.match(
     tableSource,
-    /<span role="columnheader">Baustelle<\/span>\s*<span className="time-review-week-overnight" role="columnheader">ÜN<\/span>\s*<span role="columnheader">Montagebeginn<\/span>/,
+    /<span role="columnheader">Baustelle<\/span>\s*<span className="time-review-week-overnight" role="columnheader">\s*<span className="time-review-week-overnight-heading"><span>ÜN<\/span><\/span>\s*<\/span>\s*<span role="columnheader">Montagebeginn<\/span>/,
   );
   assert.match(tableSource, /<PayrollOvernightStatusControl/);
   assert.match(tableSource, /editable=\{canManageTimeEntries && !selectedReviewWorker\.isReviewed\}/);
@@ -104,16 +104,22 @@ test("the desktop table reserves one square-edged compact column without changin
 
 
 test("all payroll overnight states share one axis and paid badges align to the bed bottom edge", () => {
+  assert.match(styles, /--time-review-overnight-status-width:\s*55px/);
+  assert.match(styles, /--time-review-overnight-symbol-width:\s*29px/);
   assert.match(
     styles,
     /\.time-review-week-overnight\s*\{[^}]*place-items:\s*center;[^}]*transform:\s*translateX\(-4px\)/s,
   );
   assert.match(
     styles,
-    /\.time-review-overnight-indicator\s*\{[^}]*width:\s*55px;[^}]*height:\s*28px;[^}]*align-items:\s*flex-end;[^}]*justify-content:\s*flex-start/s,
+    /\.time-review-week-overnight-heading\s*\{[^}]*width:\s*var\(--time-review-overnight-status-width\);[^}]*grid-template-columns:\s*var\(--time-review-overnight-symbol-width\) minmax\(0, 1fr\)/s,
   );
-  assert.match(styles, /\.time-review-overnight-marker\s*\{[^}]*width:\s*29px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 29px/s);
-  assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*29px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 29px/s);
+  assert.match(
+    styles,
+    /\.time-review-overnight-indicator\s*\{[^}]*width:\s*var\(--time-review-overnight-status-width\);[^}]*height:\s*28px;[^}]*align-items:\s*flex-end;[^}]*justify-content:\s*flex-start/s,
+  );
+  assert.match(styles, /\.time-review-overnight-marker\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
+  assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
   assert.match(styles, /\.time-review-overnight-badge\s*\{[^}]*height:\s*16px;[^}]*flex:\s*0 0 auto/s);
   assert.doesNotMatch(styles, /\.time-review-overnight-indicator[^}]*transform:/s);
   assert.equal(styles.includes(["is", "unknown"].join("-")), false);
@@ -182,7 +188,7 @@ test("the payroll day API is dedicated, permission-backed and reloads canonical 
 
 
 test("the compact overnight editor preserves the existing column geometry", () => {
-  assert.match(styles, /\.time-review-overnight-trigger\s*\{[^}]*width:\s*55px;[^}]*height:\s*28px/s);
+  assert.match(styles, /\.time-review-overnight-trigger\s*\{[^}]*width:\s*var\(--time-review-overnight-status-width\);[^}]*height:\s*28px/s);
   assert.match(styles, /\.time-review-overnight-popover\s*\{[^}]*min-width:\s*250px/s);
-  assert.match(styles, /\.time-review-overnight-popover button\s*\{[^}]*grid-template-columns:\s*55px minmax\(0, 1fr\) 14px/s);
+  assert.match(styles, /\.time-review-overnight-popover button\s*\{[^}]*grid-template-columns:\s*var\(--time-review-overnight-status-width\) minmax\(0, 1fr\) 14px/s);
 });

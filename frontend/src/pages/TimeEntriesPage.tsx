@@ -1845,7 +1845,9 @@ export function TimeEntriesPage() {
                     <span role="columnheader" aria-label="Tag ändern"></span>
                     <span role="columnheader">Tag</span>
                     <span role="columnheader">Baustelle</span>
-                    <span className="time-review-week-overnight" role="columnheader">ÜN</span>
+                    <span className="time-review-week-overnight" role="columnheader">
+                      <span className="time-review-week-overnight-heading"><span>ÜN</span></span>
+                    </span>
                     <span role="columnheader">Montagebeginn</span>
                     <span role="columnheader">Montageende</span>
                     <span role="columnheader">Pause</span>

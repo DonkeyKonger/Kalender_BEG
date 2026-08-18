@@ -3,6 +3,8 @@
 }
 
 :root {
+  --time-review-overnight-status-width: 55px;
+  --time-review-overnight-symbol-width: 29px;
   --mobile-action-time-icon: #315f91;
   --mobile-action-time-background: #eaf1f8;
   --mobile-action-time-border: #9bb7d2;
@@ -17430,9 +17432,20 @@ body.mobile-modal-scroll-locked {
   transform: translateX(-4px);
 }
 
+.time-review-week-overnight-heading {
+  display: grid;
+  width: var(--time-review-overnight-status-width);
+  grid-template-columns: var(--time-review-overnight-symbol-width) minmax(0, 1fr);
+}
+
+.time-review-week-overnight-heading > span {
+  grid-column: 1;
+  justify-self: center;
+}
+
 .time-review-overnight-indicator {
   display: inline-flex;
-  width: 55px;
+  width: var(--time-review-overnight-status-width);
   height: 28px;
   align-items: flex-end;
   justify-content: flex-start;
@@ -17444,9 +17457,9 @@ body.mobile-modal-scroll-locked {
 
 .time-review-overnight-marker {
   display: inline-grid;
-  width: 29px;
+  width: var(--time-review-overnight-symbol-width);
   height: 28px;
-  flex: 0 0 29px;
+  flex: 0 0 var(--time-review-overnight-symbol-width);
   place-items: center;
   border: 1px solid #d7e1ee;
   border-radius: 2px;
@@ -17455,9 +17468,9 @@ body.mobile-modal-scroll-locked {
 
 .time-review-overnight-bed {
   display: inline-grid;
-  width: 29px;
+  width: var(--time-review-overnight-symbol-width);
   height: 28px;
-  flex: 0 0 29px;
+  flex: 0 0 var(--time-review-overnight-symbol-width);
   place-items: center;
   border: 1px solid #cbd7e6;
   border-radius: 2px;
@@ -17495,7 +17508,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-overnight-trigger {
   display: inline-flex;
-  width: 55px;
+  width: var(--time-review-overnight-status-width);
   height: 28px;
   align-items: center;
   justify-content: flex-start;
@@ -17528,7 +17541,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-overnight-popover button {
   display: grid;
-  grid-template-columns: 55px minmax(0, 1fr) 14px;
+  grid-template-columns: var(--time-review-overnight-status-width) minmax(0, 1fr) 14px;
   min-height: 38px;
   align-items: center;
   gap: 8px;
