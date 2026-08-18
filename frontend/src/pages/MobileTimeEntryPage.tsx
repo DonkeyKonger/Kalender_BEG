@@ -10,7 +10,11 @@ import {
   formatHoursFromMinutes,
 } from "../lib/formatters";
 import { useMobileScrollReset } from "../lib/mobileScroll";
-import { applyOvernightStatusToWorkDate, resolveOvernightStatusForWorkDate } from "../lib/overnightStatus";
+import {
+  applyOvernightStatusToWorkDate,
+  buildOvernightStatusPayload,
+  resolveOvernightStatusForWorkDate,
+} from "../lib/overnightStatus";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileSite } from "../types/mobile";
 import type { OvernightStatus, TimeEntry, TimeEntryCreate, TimeEntryWeeklyReview } from "../types/timeEntry";
@@ -393,7 +397,8 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: 0,
     });
     setManualSiteText("");
-    initializeOvernightStatus();
+    overnightLoadTokenRef.current += 1;
+    setOvernightStatus("none");
     setSheetMode("travel");
     setFormError(null);
     setTimeConflict(null);
@@ -490,7 +495,7 @@ export function MobileTimeEntryPage() {
       note: nextNote,
       source: "manual",
       status: "submitted",
-      overnight_status: overnightStatus,
+      ...buildOvernightStatusPayload(isTravelTimeEntry, overnightStatus),
     };
 
     setIsSaving(true);
@@ -551,8 +556,14 @@ export function MobileTimeEntryPage() {
       breakMinutesOverride: entry.break_minutes === automaticEntryBreakMinutes ? null : entry.break_minutes,
     });
     setManualSiteText(entry.site_id === null ? extractManualSiteText(entry.note) : "");
-    initializeOvernightStatus(entry.overnight_status);
-    setSheetMode(isTravelOnlyTimeEntry(entry) ? "travel" : entry.site_id === null ? "manual" : "site");
+    const isTravelTimeEntry = isTravelOnlyTimeEntry(entry);
+    if (isTravelTimeEntry) {
+      overnightLoadTokenRef.current += 1;
+      setOvernightStatus("none");
+    } else {
+      initializeOvernightStatus(entry.overnight_status);
+    }
+    setSheetMode(isTravelTimeEntry ? "travel" : entry.site_id === null ? "manual" : "site");
     setFormError(null);
     setTimeConflict(null);
     setIsBreakPickerOpen(false);
@@ -962,36 +973,38 @@ export function MobileTimeEntryPage() {
                     </div>
                   )}
 
-                  <fieldset className="mobile-time-overnight">
-                    <legend>Übernachtung</legend>
-                    <p>Bitte eine Option auswählen</p>
-                    <div className="mobile-time-overnight-options">
-                      {OVERNIGHT_OPTIONS.map((option) => {
-                        const OptionIcon = option.icon;
-                        const isSelected = overnightStatus === option.value;
-                        return (
-                          <label className={`mobile-time-overnight-card is-${option.tone}${isSelected ? " is-selected" : ""}`} key={option.value}>
-                            <input
-                              checked={isSelected}
-                              name="overnight-status"
-                              type="radio"
-                              value={option.value}
-                              onChange={() => {
-                                overnightLoadTokenRef.current += 1;
-                                setOvernightStatus(option.value);
-                              }}
-                            />
-                            <span className="mobile-time-overnight-icon"><OptionIcon size={22} aria-hidden="true" /></span>
-                            <strong>{option.label}</strong>
-                            {option.value === "none" ? <small>Standard</small> : null}
-                            <span className="mobile-time-overnight-check" aria-hidden="true">
-                              {isSelected ? <Check size={18} strokeWidth={3} /> : null}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
+                  {sheetMode !== "travel" ? (
+                    <fieldset className="mobile-time-overnight">
+                      <legend>Übernachtung</legend>
+                      <p>Bitte eine Option auswählen</p>
+                      <div className="mobile-time-overnight-options">
+                        {OVERNIGHT_OPTIONS.map((option) => {
+                          const OptionIcon = option.icon;
+                          const isSelected = overnightStatus === option.value;
+                          return (
+                            <label className={`mobile-time-overnight-card is-${option.tone}${isSelected ? " is-selected" : ""}`} key={option.value}>
+                              <input
+                                checked={isSelected}
+                                name="overnight-status"
+                                type="radio"
+                                value={option.value}
+                                onChange={() => {
+                                  overnightLoadTokenRef.current += 1;
+                                  setOvernightStatus(option.value);
+                                }}
+                              />
+                              <span className="mobile-time-overnight-icon"><OptionIcon size={22} aria-hidden="true" /></span>
+                              <strong>{option.label}</strong>
+                              {option.value === "none" ? <small>Standard</small> : null}
+                              <span className="mobile-time-overnight-check" aria-hidden="true">
+                                {isSelected ? <Check size={18} strokeWidth={3} /> : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ) : null}
                   {timeValidationMessage && form.startTime && form.endTime ? <p className="form-error">{timeValidationMessage}</p> : null}
                   {breakValidationMessage ? <p className="form-error">{breakValidationMessage}</p> : null}
                   {formError ? <p className="form-error">{formError}</p> : null}

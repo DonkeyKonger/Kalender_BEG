@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   applyOvernightStatusToWorkDate,
+  buildOvernightStatusPayload,
   DEFAULT_OVERNIGHT_STATUS,
   resolveOvernightStatusForWorkDate,
 } from "../src/lib/overnightStatus.ts";
@@ -59,7 +60,29 @@ test("the dialog uses one native radio group with the three stable values", () =
   assert.match(pageSource, /name="overnight-status"/);
   assert.match(pageSource, /type="radio"/);
   assert.match(pageSource, /checked=\{isSelected\}/);
-  assert.match(pageSource, /overnight_status: overnightStatus/);
+  assert.match(pageSource, /buildOvernightStatusPayload\(isTravelTimeEntry, overnightStatus\)/);
+});
+
+
+test("work entries send the selected overnight status and travel entries omit it", () => {
+  for (const overnightStatus of ["none", "self_paid", "beg_paid"]) {
+    assert.deepEqual(buildOvernightStatusPayload(false, overnightStatus), {
+      overnight_status: overnightStatus,
+    });
+    assert.deepEqual(buildOvernightStatusPayload(true, overnightStatus), {});
+  }
+});
+
+
+test("the overnight choices render only outside the travel-time mode", () => {
+  assert.match(
+    pageSource,
+    /\{sheetMode !== "travel" \? \(\s*<fieldset className="mobile-time-overnight">/,
+  );
+
+  const openTravelStart = pageSource.indexOf("function openTravelTimeEntry()");
+  const openTravelEnd = pageSource.indexOf("function closeTimeEntrySheet()", openTravelStart);
+  assert.doesNotMatch(pageSource.slice(openTravelStart, openTravelEnd), /initializeOvernightStatus/);
 });
 
 

@@ -20,7 +20,7 @@ from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
-from app.schemas.time_entry import TimeEntryCreate
+from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, effective_weekly_work_minutes
 from app.services.time_entry_service import TimeEntryService
 
@@ -384,6 +384,120 @@ def test_mobile_time_entry_persists_valid_overnight_status(overnight_status: Ove
     assert len(work_days) == 1
     assert work_days[0].overnight_status == overnight_status.value
     assert time_entry_read(entry).overnight_status == overnight_status
+
+
+@pytest.mark.parametrize("existing_status", [OvernightStatus.SELF_PAID, OvernightStatus.BEG_PAID])
+def test_travel_time_does_not_overwrite_existing_overnight_status(existing_status: OvernightStatus):
+    db = db_session()
+    person = Person(
+        first_name="Fahrt",
+        last_name="Monteur",
+        display_name="Fahrt Monteur",
+        short_code="FM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username=f"travel-existing-{existing_status.value}",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    work_date = date(2026, 8, 18)
+    db.add_all([person, user])
+    db.flush()
+    db.add(PersonWorkDay(
+        person_id=person.id,
+        work_date=work_date,
+        overnight_status=existing_status.value,
+    ))
+    db.commit()
+
+    entry = TimeEntryService(db).create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=work_date,
+        start_time=time(5, 0),
+        end_time=time(6, 0),
+        work_minutes=0,
+        travel_minutes=60,
+        overnight_status=OvernightStatus.NONE,
+    ), user)
+
+    work_day = db.scalar(select(PersonWorkDay))
+    assert work_day is not None
+    assert work_day.overnight_status == existing_status.value
+    assert time_entry_read(entry).overnight_status == existing_status
+
+
+def test_travel_time_does_not_create_default_overnight_status():
+    db = db_session()
+    person = Person(
+        first_name="Nur",
+        last_name="Fahrtzeit",
+        display_name="Nur Fahrtzeit",
+        short_code="NF",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="travel-without-status",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    db.add_all([person, user])
+    db.commit()
+
+    entry = TimeEntryService(db).create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=date(2026, 8, 18),
+        start_time=time(5, 0),
+        end_time=time(6, 0),
+        work_minutes=0,
+        travel_minutes=60,
+        overnight_status=OvernightStatus.NONE,
+    ), user)
+
+    assert list(db.scalars(select(PersonWorkDay))) == []
+    assert time_entry_read(entry).overnight_status is None
+
+
+def test_updating_travel_time_does_not_write_overnight_status():
+    db = db_session()
+    person = Person(
+        first_name="Fahrt",
+        last_name="Bearbeitung",
+        display_name="Fahrt Bearbeitung",
+        short_code="FB",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="travel-update-without-status",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    db.add_all([person, user])
+    db.commit()
+    service = TimeEntryService(db)
+    entry = service.create_entry(TimeEntryCreate(
+        person_id=person.id,
+        work_date=date(2026, 8, 18),
+        start_time=time(5, 0),
+        end_time=time(6, 0),
+        work_minutes=0,
+        travel_minutes=60,
+    ), user)
+
+    updated = service.update_entry(
+        entry.id,
+        TimeEntryUpdate(overnight_status=OvernightStatus.BEG_PAID),
+        user,
+    )
+
+    assert list(db.scalars(select(PersonWorkDay))) == []
+    assert time_entry_read(updated).overnight_status is None
 
 
 def test_invalid_overnight_status_is_rejected_by_schema():

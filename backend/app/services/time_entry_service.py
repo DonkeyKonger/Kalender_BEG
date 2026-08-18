@@ -112,7 +112,10 @@ class TimeEntryService:
         values["original_site_id"] = values.get("site_id")
         entry = WorkTimeEntry(**values, created_by_user_id=current_user.id)
         self.db.add(entry)
-        if overnight_status is not None:
+        if overnight_status is not None and not self._is_travel_only_time_entry(
+            work_minutes=entry.work_minutes,
+            travel_minutes=entry.travel_minutes,
+        ):
             self._set_overnight_status(
                 person_id=payload.person_id,
                 work_date=payload.work_date,
@@ -172,7 +175,10 @@ class TimeEntryService:
             entry.reviewed_by_user_id = current_user.id
             entry.reviewed_at = datetime.now().astimezone()
 
-        if overnight_status is not None:
+        if overnight_status is not None and not self._is_travel_only_time_entry(
+            work_minutes=entry.work_minutes,
+            travel_minutes=entry.travel_minutes,
+        ):
             self._set_overnight_status(
                 person_id=next_person_id,
                 work_date=next_work_date,
@@ -966,6 +972,10 @@ class TimeEntryService:
         if calculated < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pause darf die Arbeitszeit nicht uebersteigen.")
         return calculated
+
+    @staticmethod
+    def _is_travel_only_time_entry(*, work_minutes: int, travel_minutes: int) -> bool:
+        return work_minutes == 0 and travel_minutes > 0
 
     @staticmethod
     def _duration_minutes(

@@ -12,6 +12,14 @@ export type OvernightStatusPresentation = {
 export const DEFAULT_OVERNIGHT_STATUS: OvernightStatus = "none";
 
 
+export function buildOvernightStatusPayload(
+  isTravelTimeEntry: boolean,
+  overnightStatus: OvernightStatus,
+): { overnight_status?: OvernightStatus } {
+  return isTravelTimeEntry ? {} : { overnight_status: overnightStatus };
+}
+
+
 export function getOvernightStatusPresentation(
   status: OvernightStatus | null | undefined,
 ): OvernightStatusPresentation {
