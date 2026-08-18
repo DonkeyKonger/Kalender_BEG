@@ -456,10 +456,11 @@ def delete_measurement_base(
 @router.get("/{site_id}/extra-work-tickets", response_model=list[ExtraWorkTicketRead])
 def list_extra_work_tickets(
     site_id: int,
+    archived_only: bool = Query(default=False),
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[ExtraWorkTicketRead]:
-    return ExtraWorkService(db).list_site_tickets(site_id)
+    return ExtraWorkService(db).list_site_tickets(site_id, archived_only=archived_only)
 
 
 @router.post("/{site_id}/extra-work-tickets", response_model=ExtraWorkTicketRead, status_code=status.HTTP_201_CREATED)
@@ -487,6 +488,22 @@ def delete_extra_work_ticket(
         site_id=site_id,
         ticket_id=ticket_id,
         current_user=current_user,
+    )
+
+
+@router.post(
+    "/{site_id}/extra-work-tickets/{ticket_id}/restore",
+    response_model=ExtraWorkTicketRead,
+)
+def restore_extra_work_ticket(
+    site_id: int,
+    ticket_id: int,
+    _user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).restore_site_ticket(
+        site_id=site_id,
+        ticket_id=ticket_id,
     )
 
 

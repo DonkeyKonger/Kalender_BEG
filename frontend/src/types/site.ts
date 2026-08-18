@@ -391,6 +391,9 @@ export type MobileExtraWorkTicket = {
   customer_email_signature_present: boolean | null;
   worker_signature_name: string | null;
   worker_signed_at: string | null;
+  deleted_at: string | null;
+  deleted_by_user_id: number | null;
+  deleted_by_name: string | null;
   entry_count: number;
   photo_count: number;
   total_hours: MeasurementNumericValue;

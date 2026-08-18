@@ -192,8 +192,11 @@ export function SiteDetailPage() {
   const [extraWorkLoading, setExtraWorkLoading] = useState(false);
   const [extraWorkLoaded, setExtraWorkLoaded] = useState(false);
   const [extraWorkError, setExtraWorkError] = useState<string | null>(null);
+  const [extraWorkMessage, setExtraWorkMessage] = useState<string | null>(null);
+  const [extraWorkArchiveMode, setExtraWorkArchiveMode] = useState(false);
   const [extraWorkPdfAction, setExtraWorkPdfAction] = useState<string | null>(null);
   const [deletingExtraWorkTicketId, setDeletingExtraWorkTicketId] = useState<number | null>(null);
+  const [restoringExtraWorkTicketId, setRestoringExtraWorkTicketId] = useState<number | null>(null);
   const [extraWorkStatusActionId, setExtraWorkStatusActionId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -306,7 +309,12 @@ export function SiteDetailPage() {
     setExtraWorkLoading(false);
     setExtraWorkLoaded(false);
     setExtraWorkError(null);
+    setExtraWorkMessage(null);
+    setExtraWorkArchiveMode(false);
     setExtraWorkPdfAction(null);
+    setDeletingExtraWorkTicketId(null);
+    setRestoringExtraWorkTicketId(null);
+    setExtraWorkStatusActionId(null);
   }, [requestedMeasurementSubtab, requestedProjectTab, site?.id]);
 
   useEffect(() => {
@@ -526,7 +534,7 @@ export function SiteDetailPage() {
     }
 
     void loadExtraWorkTickets();
-  }, [activeTab, extraWorkLoaded, extraWorkLoading, site]);
+  }, [activeTab, extraWorkArchiveMode, extraWorkLoaded, extraWorkLoading, site]);
 
   async function loadMeasurementBatches(archivedOnly = measurementArchiveMode): Promise<void> {
     if (!site) {
@@ -575,14 +583,14 @@ export function SiteDetailPage() {
     return created;
   }
 
-  async function loadExtraWorkTickets(): Promise<void> {
+  async function loadExtraWorkTickets(archivedOnly = extraWorkArchiveMode): Promise<void> {
     if (!site) {
       return;
     }
     setExtraWorkLoading(true);
     setExtraWorkError(null);
     try {
-      setExtraWorkTickets(await api.siteExtraWorkTickets(site.id));
+      setExtraWorkTickets(await api.siteExtraWorkTickets(site.id, { archivedOnly }));
       setExtraWorkLoaded(true);
     } catch (requestError) {
       setExtraWorkError(readApiError(requestError, "Zusatzaufträge konnten nicht geladen werden."));
@@ -915,22 +923,50 @@ export function SiteDetailPage() {
       return;
     }
     const displayTitle = formatExtraWorkTicketTitle(ticket);
-    if (!window.confirm(`${displayTitle} wirklich löschen?`)) {
-      return;
-    }
-    if (!window.confirm("Endgültig löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.")) {
+    if (!window.confirm(`${displayTitle} wirklich löschen? Der Zusatzauftrag wird ins Archiv verschoben und kann wiederhergestellt werden.`)) {
       return;
     }
 
     setDeletingExtraWorkTicketId(ticket.id);
+    setExtraWorkMessage(null);
     setExtraWorkError(null);
     try {
       await api.deleteSiteExtraWorkTicket(site.id, ticket.id);
       setExtraWorkTickets((current) => current.filter((entry) => entry.id !== ticket.id));
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementTimeAnalysisError(null);
+      setExtraWorkMessage(`${displayTitle} wurde gelöscht.`);
     } catch (requestError) {
       setExtraWorkError(readApiError(requestError, "Zusatzauftrag konnte nicht gelöscht werden."));
     } finally {
       setDeletingExtraWorkTicketId(null);
+    }
+  }
+
+  async function restoreExtraWorkTicket(ticket: MobileExtraWorkTicket): Promise<void> {
+    if (!site || restoringExtraWorkTicketId !== null) {
+      return;
+    }
+    const displayTitle = formatExtraWorkTicketTitle(ticket);
+    setRestoringExtraWorkTicketId(ticket.id);
+    setExtraWorkMessage(null);
+    setExtraWorkError(null);
+    try {
+      await api.restoreSiteExtraWorkTicket(site.id, ticket.id);
+      setExtraWorkTickets((current) => current.filter((entry) => entry.id !== ticket.id));
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementTimeAnalysisError(null);
+      setExtraWorkMessage(`${displayTitle} wurde wiederhergestellt.`);
+    } catch (requestError) {
+      setExtraWorkError(readApiError(requestError, "Zusatzauftrag konnte nicht wiederhergestellt werden."));
+    } finally {
+      setRestoringExtraWorkTicketId(null);
     }
   }
 
@@ -1480,17 +1516,28 @@ export function SiteDetailPage() {
           tickets={extraWorkTickets}
           isLoading={extraWorkLoading}
           error={extraWorkError}
+          message={extraWorkMessage}
+          archiveMode={extraWorkArchiveMode}
           pdfAction={extraWorkPdfAction}
           deletingTicketId={deletingExtraWorkTicketId}
+          restoringTicketId={restoringExtraWorkTicketId}
           statusActionId={extraWorkStatusActionId}
           canPromoteStatus={canEditSite}
           onRetry={() => {
             setExtraWorkLoaded(false);
             setExtraWorkError(null);
           }}
+          onToggleArchive={() => {
+            setExtraWorkArchiveMode((current) => !current);
+            setExtraWorkTickets([]);
+            setExtraWorkLoaded(false);
+            setExtraWorkError(null);
+            setExtraWorkMessage(null);
+          }}
           onOpenPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "open")}
           onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
           onDeleteTicket={(ticket) => void deleteExtraWorkTicket(ticket)}
+          onRestoreTicket={(ticket) => void restoreExtraWorkTicket(ticket)}
           onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
         />
       ) : null}
@@ -2462,28 +2509,38 @@ function ExtraWorkTab({
   tickets,
   isLoading,
   error,
+  message,
+  archiveMode,
   pdfAction,
   deletingTicketId,
+  restoringTicketId,
   statusActionId,
   canPromoteStatus,
   onRetry,
+  onToggleArchive,
   onOpenPdf,
   onDownloadPdf,
   onDeleteTicket,
+  onRestoreTicket,
   onPromoteStatus,
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
   isLoading: boolean;
   error: string | null;
+  message: string | null;
+  archiveMode: boolean;
   pdfAction: string | null;
   deletingTicketId: number | null;
+  restoringTicketId: number | null;
   statusActionId: number | null;
   canPromoteStatus: boolean;
   onRetry: () => void;
+  onToggleArchive: () => void;
   onOpenPdf: (ticket: MobileExtraWorkTicket) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
   onDeleteTicket: (ticket: MobileExtraWorkTicket) => void;
+  onRestoreTicket: (ticket: MobileExtraWorkTicket) => void;
   onPromoteStatus: (ticket: MobileExtraWorkTicket, status: ExtraWorkManualStatus) => void;
 }) {
   const [openStatusTicketId, setOpenStatusTicketId] = useState<number | null>(null);
@@ -2494,12 +2551,27 @@ function ExtraWorkTab({
 
   return (
     <>
-      <div className="project-record-toolbar project-extra-work-toolbar">
-        <div>
-          <h2><FileText aria-hidden="true" size={18} />Zusatzaufträge</h2>
-          <p>Mobile Stundenzettel und Zusatzaufträge zu {site.name} zur Einsicht und PDF-Ausgabe.</p>
+      <header className="project-record-toolbar project-extra-work-toolbar measurement-review-toolbar">
+        <div className="measurement-review-header-copy">
+          <h2><FileText aria-hidden="true" size={18} />{archiveMode ? "Archivierte Zusatzaufträge" : "Zusatzaufträge"}</h2>
+          <p>
+            {archiveMode
+              ? "Gelöschte Zusatzaufträge können hier wiederhergestellt werden."
+              : `Mobile Stundenzettel und Zusatzaufträge zu ${site.name} zur Einsicht und PDF-Ausgabe.`}
+          </p>
         </div>
-      </div>
+        <div className="measurement-review-header-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={isLoading || deletingTicketId !== null || restoringTicketId !== null}
+            onClick={onToggleArchive}
+          >
+            {archiveMode ? "Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"}
+          </button>
+        </div>
+      </header>
+      {message ? <div className="project-record-empty-state is-success">{message}</div> : null}
       {isLoading ? <div className="matrix-state">Zusatzaufträge werden geladen...</div> : null}
       {error ? (
         <div className="project-record-empty-state is-error">
@@ -2508,7 +2580,9 @@ function ExtraWorkTab({
         </div>
       ) : null}
       {!isLoading && !error && sortedTickets.length === 0 ? (
-        <div className="project-record-empty-state">Noch keine Zusatzaufträge vorhanden.</div>
+        <div className="project-record-empty-state">
+          {archiveMode ? "Keine archivierten Zusatzaufträge vorhanden." : "Noch keine Zusatzaufträge vorhanden."}
+        </div>
       ) : null}
       {!isLoading && !error && sortedTickets.length > 0 ? (
         <div className="measurement-review-list project-extra-work-list">
@@ -2523,6 +2597,48 @@ function ExtraWorkTab({
             const statusOptions = canPromoteStatus
               ? extraWorkStatusPromotionOptions(ticket.status, ticket.customer_signed_at)
               : [];
+            if (archiveMode) {
+              return (
+                <div
+                  key={ticket.id}
+                  className="measurement-review-card project-extra-work-card has-delete-action is-archive"
+                >
+                  <div className="measurement-review-card-controls">
+                    <span className={`${statusBadge.className} has-delete-control`}>
+                      <span className="measurement-review-status-spacer" aria-hidden="true" />
+                      <span className="measurement-review-status-label">{statusBadge.label}</span>
+                    </span>
+                  </div>
+                  <div className="measurement-review-card-open">
+                    <div className="measurement-review-card-main">
+                      <div className="measurement-review-card-title-row">
+                        <strong>{formatExtraWorkTicketTitle(ticket)}</strong>
+                      </div>
+                      <CustomerEmailStatusLine item={ticket} />
+                      <small className="measurement-review-submitter-status">{formatExtraWorkTicketSubmitter(ticket)}</small>
+                      <small className="measurement-review-submitter-status">
+                        {ticket.entry_count} Einträge · {ticket.photo_count} Fotos
+                      </small>
+                      <small className="measurement-review-submitter-status">
+                        Gelöscht {ticket.deleted_at ? formatDateTime(ticket.deleted_at) : "ohne Datum"}
+                        {ticket.deleted_by_name ? ` · von ${ticket.deleted_by_name}` : " · ohne Benutzer"}
+                      </small>
+                    </div>
+                    <b>{formatExtraWorkTicketHours(ticket)}</b>
+                  </div>
+                  <div className="measurement-review-pdf-actions">
+                    <button
+                      type="button"
+                      className="measurement-review-pdf-action"
+                      disabled={restoringTicketId !== null}
+                      onClick={() => onRestoreTicket(ticket)}
+                    >
+                      {restoringTicketId === ticket.id ? "Stellt wieder her..." : "Wiederherstellen"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div
                 key={ticket.id}

@@ -71,14 +71,28 @@ class ExtraWorkService:
         self.db = db
         self.archive_service = archive_service or ExtraWorkArchiveService(db)
 
-    def list_site_tickets(self, site_id: int) -> list[ExtraWorkTicketRead]:
+    def list_site_tickets(
+        self,
+        site_id: int,
+        *,
+        archived_only: bool = False,
+    ) -> list[ExtraWorkTicketRead]:
         self._get_site(site_id)
+        statement = (
+            select(ExtraWorkTicket)
+            .options(
+                selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
+                selectinload(ExtraWorkTicket.deleted_by).selectinload(User.person),
+            )
+            .where(ExtraWorkTicket.site_id == site_id)
+        )
+        if archived_only:
+            statement = statement.where(ExtraWorkTicket.deleted_at.is_not(None))
+        else:
+            statement = statement.where(ExtraWorkTicket.deleted_at.is_(None))
         tickets = list(
             self.db.scalars(
-                select(ExtraWorkTicket)
-                .options(selectinload(ExtraWorkTicket.created_by).selectinload(User.person))
-                .where(ExtraWorkTicket.site_id == site_id)
-                .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
+                statement.order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
             ).all()
         )
         customer_email_statuses = self._latest_customer_email_statuses([ticket.id for ticket in tickets])
@@ -124,18 +138,34 @@ class ExtraWorkService:
 
     def delete_site_ticket(self, *, site_id: int, ticket_id: int, current_user: User) -> None:
         self._get_site(site_id)
-        ticket = self._get_ticket_for_site(ticket_id, site_id)
-        storage_service = ProjectStorageService() if ticket.photos else None
-        for photo in list(ticket.photos):
-            if storage_service is None:
-                continue
-            storage_service.delete_file_from_folder(
-                drive_id=photo.external_drive_id,
-                folder_item_id=self._get_photo_folder_item_id(photo, current_user),
-                item_id=photo.external_item_id,
-            )
-        self.db.delete(ticket)
+        ticket = self._get_ticket_for_site(ticket_id, site_id, for_update=True)
+        ticket.deleted_at = datetime.now(UTC)
+        ticket.deleted_by_user_id = current_user.id
+        self.db.add(ticket)
         self.db.commit()
+
+    def restore_site_ticket(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+    ) -> ExtraWorkTicketRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=True,
+            for_update=True,
+        )
+        if ticket.deleted_at is None:
+            return self._build_ticket_read(ticket)
+        ticket.deleted_at = None
+        ticket.deleted_by_user_id = None
+        ticket.deleted_by = None
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return self._build_ticket_read(ticket)
 
     def promote_site_ticket_status(
         self,
@@ -613,6 +643,7 @@ class ExtraWorkService:
         ticket_id: int,
         site_id: int,
         *,
+        include_deleted: bool = False,
         for_update: bool = False,
     ) -> ExtraWorkTicket:
         statement = (
@@ -620,6 +651,7 @@ class ExtraWorkService:
             .options(
                 selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
+                selectinload(ExtraWorkTicket.deleted_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.photos),
             )
             .where(
@@ -627,6 +659,8 @@ class ExtraWorkService:
                 ExtraWorkTicket.site_id == site_id,
             )
         )
+        if not include_deleted:
+            statement = statement.where(ExtraWorkTicket.deleted_at.is_(None))
         if for_update:
             statement = statement.with_for_update()
         ticket = self.db.scalar(statement)
@@ -641,6 +675,7 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketRead:
         result = ExtraWorkTicketRead.model_validate(ticket)
         result.created_by_name = self._format_user_display_name(ticket.created_by)
+        result.deleted_by_name = self._format_user_display_name(ticket.deleted_by)
         if customer_email_status is not None:
             result.customer_email_sent_at = customer_email_status[0]
             result.customer_email_signature_present = (

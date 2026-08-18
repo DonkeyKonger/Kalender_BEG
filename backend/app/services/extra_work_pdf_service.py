@@ -587,7 +587,11 @@ class ExtraWorkPdfService:
                     ExtraWorkTicketPhoto.uploaded_by
                 ).selectinload(User.person),
             )
-            .where(ExtraWorkTicket.id == ticket_id, ExtraWorkTicket.site_id == site_id)
+            .where(
+                ExtraWorkTicket.id == ticket_id,
+                ExtraWorkTicket.site_id == site_id,
+                ExtraWorkTicket.deleted_at.is_(None),
+            )
         )
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")

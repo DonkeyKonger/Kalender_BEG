@@ -157,6 +157,9 @@ class ExtraWorkTicketRead(BaseModel):
     customer_email_signature_present: bool | None = None
     worker_signature_name: str | None
     worker_signed_at: datetime | None
+    deleted_at: datetime | None = None
+    deleted_by_user_id: int | None = None
+    deleted_by_name: str | None = None
     entry_count: int
     photo_count: int
     total_hours: float

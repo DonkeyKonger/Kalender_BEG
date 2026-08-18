@@ -19,7 +19,7 @@ from app.models.audit_log import AuditLog
 from app.models.assignment import Assignment
 from app.models.customer import Customer, CustomerContact
 from app.models.enums import UserRole
-from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketPhoto
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.project_folder import ProjectFolder
 from app.models.site import Site
@@ -214,7 +214,7 @@ def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submit
     assert other_tickets == []
 
 
-def test_site_extra_work_ticket_can_be_deleted():
+def test_site_extra_work_ticket_delete_moves_ticket_to_archive():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -235,8 +235,12 @@ def test_site_extra_work_ticket_can_be_deleted():
 
     service.delete_site_ticket(site_id=site.id, ticket_id=ticket.id, current_user=current_user)
 
-    assert db.get(extra_work_module.ExtraWorkTicket, ticket.id) is None
+    persisted = db.get(extra_work_module.ExtraWorkTicket, ticket.id)
+    assert persisted is not None
+    assert persisted.deleted_at is not None
+    assert persisted.deleted_by_user_id == current_user.id
     assert service.list_site_tickets(site.id) == []
+    assert [entry.id for entry in service.list_site_tickets(site.id, archived_only=True)] == [ticket.id]
 
 
 def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatures():
@@ -1102,6 +1106,166 @@ def test_site_extra_work_tickets_include_customer_email_status():
     assert read_ticket.customer_email_signature_present is True
 
 
+def test_extra_work_ticket_archive_preserves_data_filters_mobile_and_restores_idempotently():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    deleting_user = User(
+        username="archive-admin",
+        display_name="Archiv Admin",
+        password_hash="test",
+        role=UserRole.ADMIN,
+        person_id=person.id,
+    )
+    second_user = User(
+        username="project-manager",
+        display_name="Projekt Leitung",
+        password_hash="test",
+        role=UserRole.PROJECT_MANAGER,
+    )
+    db.add_all([deleting_user, second_user])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 18),
+        end_date=date(2026, 8, 18),
+    )
+    ticket = ExtraWorkTicket(
+        site_id=site.id,
+        sequence_number=3,
+        display_number="8007.SZ03",
+        title="Brandschott nacharbeiten",
+        kind="billing",
+        status="signed",
+        created_by_user_id=deleting_user.id,
+        submitted_by_user_id=deleting_user.id,
+        submitted_at=datetime(2026, 8, 18, 8, 30, tzinfo=UTC),
+        notes="Abstimmung mit Bauleitung erfolgt.",
+        customer_signature_type="billing_customer",
+        customer_signature_name="Kunde Beispiel",
+        customer_signature_place="Bretten",
+        customer_signature_strokes=[[{"x": 0.1, "y": 0.2}]],
+        customer_signed_at=datetime(2026, 8, 18, 12, 0, tzinfo=UTC),
+        worker_signature_name="Max Monteur",
+        worker_signature_strokes=[[{"x": 0.2, "y": 0.3}]],
+        worker_signed_at=datetime(2026, 8, 18, 11, 50, tzinfo=UTC),
+    )
+    ticket.entries = [
+        ExtraWorkTicketEntry(
+            site_id=site.id,
+            component="Brandschott",
+            floor="2. OG",
+            room_number="204",
+            remarks="Nacharbeit",
+            material_text="Mörtel",
+            estimated_hours=2,
+            worker_rows=[{"worker_name": "Max Monteur", "monday_hours": 2.5}],
+            created_by_user_id=deleting_user.id,
+        )
+    ]
+    ticket.photos = [
+        ExtraWorkTicketPhoto(
+            site_id=site.id,
+            uploaded_by_user_id=deleting_user.id,
+            project_folder_key="fotos",
+            external_drive_id="drive-1",
+            external_item_id="photo-1",
+            external_web_url="https://example.test/photo-1",
+            filename="nacharbeit.jpg",
+            content_type="image/jpeg",
+            file_size_bytes=1234,
+        )
+    ]
+    db.add_all([assignment, ticket])
+    db.commit()
+    db.add(
+        AuditLog(
+            user_id=deleting_user.id,
+            action="extra_work.email_sent",
+            entity_type="extra_work_ticket",
+            entity_id=ticket.id,
+            old_value_json=None,
+            new_value_json={
+                "recipients": ["kunde@example.de"],
+                "customer_signature_present": True,
+            },
+        )
+    )
+    db.commit()
+
+    service = ExtraWorkService(db)
+    service.delete_site_ticket(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=deleting_user,
+    )
+
+    persisted = db.get(ExtraWorkTicket, ticket.id)
+    assert persisted is not None
+    assert persisted.deleted_at is not None
+    assert persisted.deleted_by_user_id == deleting_user.id
+    assert service.list_site_tickets(site.id) == []
+    assert service.list_mobile_tickets(
+        assignment_id=assignment.id,
+        current_user=deleting_user,
+    ) == []
+    [archived] = service.list_site_tickets(site.id, archived_only=True)
+    assert archived.id == ticket.id
+    assert archived.display_number == "8007.SZ03"
+    assert archived.status == "signed"
+    assert archived.entry_count == 1
+    assert archived.photo_count == 1
+    assert archived.total_hours == 2.5
+    assert archived.deleted_by_name == "Max Monteur"
+    assert archived.customer_email_sent_at is not None
+    assert archived.customer_email_signature_present is True
+
+    restored = service.restore_site_ticket(site_id=site.id, ticket_id=ticket.id)
+    restored_again = service.restore_site_ticket(site_id=site.id, ticket_id=ticket.id)
+
+    assert restored.id == ticket.id
+    assert restored_again.id == ticket.id
+    assert restored.display_number == "8007.SZ03"
+    assert restored.status == "signed"
+    assert restored.deleted_at is None
+    assert restored.deleted_by_user_id is None
+    assert restored.entry_count == 1
+    assert restored.photo_count == 1
+    assert restored.total_hours == 2.5
+    assert db.query(ExtraWorkTicket).filter_by(id=ticket.id).count() == 1
+    assert db.query(ExtraWorkTicketEntry).filter_by(ticket_id=ticket.id).count() == 1
+    assert db.query(ExtraWorkTicketPhoto).filter_by(extra_work_ticket_id=ticket.id).count() == 1
+    restored_model = db.get(ExtraWorkTicket, ticket.id)
+    assert restored_model is not None
+    assert restored_model.notes == "Abstimmung mit Bauleitung erfolgt."
+    assert restored_model.customer_signature_name == "Kunde Beispiel"
+    assert restored_model.worker_signature_name == "Max Monteur"
+
+    service.delete_site_ticket(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=second_user,
+    )
+    [archived_again] = service.list_site_tickets(site.id, archived_only=True)
+    assert archived_again.deleted_by_user_id == second_user.id
+    assert archived_again.deleted_by_name == "Projekt Leitung"
+    with pytest.raises(HTTPException) as exc_info:
+        service.delete_site_ticket(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            current_user=second_user,
+        )
+    assert exc_info.value.status_code == 404
+
+
 def test_mobile_extra_work_billing_customer_signature_persists_and_signs_ticket():
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
@@ -1569,6 +1733,69 @@ def test_mobile_extra_work_pdf_uses_manual_order_date_and_iso_week_period():
     assert "04.08.2026" in pdf_text
     assert "04.01.2027" in pdf_text
     assert "10.01.2027" in pdf_text
+
+
+def test_extra_work_pdf_is_available_again_after_restore():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 18),
+        end_date=date(2026, 8, 18),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="Brandschott",
+            floor="EG",
+            remarks="Nacharbeit",
+            worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5)],
+        ),
+    )
+    submitted = service.update_mobile_ticket_status(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        next_status="submitted",
+        current_user=current_user,
+    )
+    service.delete_site_ticket(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+
+    with pytest.raises(HTTPException) as archived_pdf_error:
+        ExtraWorkPdfService(db).build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)
+    assert archived_pdf_error.value.status_code == 404
+
+    restored = service.restore_site_ticket(site_id=site.id, ticket_id=ticket.id)
+    content, filename = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site.id,
+        ticket_id=ticket.id,
+    )
+
+    assert restored.id == submitted.id
+    assert restored.display_number == submitted.display_number
+    assert restored.status == submitted.status
+    assert restored.total_hours == 2.5
+    assert content.startswith(b"%PDF")
+    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):

@@ -2908,12 +2908,15 @@ def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted
         ]
         return item_ticket
 
+    archived_ticket = ticket(5, datetime(2026, 8, 13, 12, 0, tzinfo=timezone.utc), 99)
+    archived_ticket.deleted_at = datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc)
     db.add_all(
         [
             ticket(1, datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc), 3),
             ticket(2, datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc), 4),
             ticket(3, datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc), 5),
             ticket(4, datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc), 6),
+            archived_ticket,
         ]
     )
     db.commit()
@@ -3218,7 +3221,16 @@ def test_dashboard_submissions_include_submitted_extra_work_tickets():
         submitted_by=user,
         submitted_at=datetime(2026, 6, 19, 7, 30, tzinfo=timezone.utc),
     )
-    db.add_all([person, user, ticket])
+    archived_ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=2,
+        display_number="8007.SZ02",
+        status="submitted",
+        submitted_by=user,
+        submitted_at=datetime(2026, 6, 19, 8, 0, tzinfo=timezone.utc),
+        deleted_at=datetime(2026, 6, 19, 9, 0, tzinfo=timezone.utc),
+    )
+    db.add_all([person, user, ticket, archived_ticket])
     db.commit()
 
     service = MeasurementService(db)

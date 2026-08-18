@@ -1354,8 +1354,16 @@ export const api = {
     return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
   },
 
-  async siteExtraWorkTickets(siteId: number): Promise<MobileExtraWorkTicket[]> {
-    return request<MobileExtraWorkTicket[]>(`/sites/${siteId}/extra-work-tickets`);
+  async siteExtraWorkTickets(
+    siteId: number,
+    params: { archivedOnly?: boolean } = {},
+  ): Promise<MobileExtraWorkTicket[]> {
+    const search = new URLSearchParams();
+    if (params.archivedOnly) {
+      search.set("archived_only", "true");
+    }
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return request<MobileExtraWorkTicket[]>(`/sites/${siteId}/extra-work-tickets${suffix}`);
   },
 
   async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<Blob> {
@@ -1365,6 +1373,12 @@ export const api = {
   async deleteSiteExtraWorkTicket(siteId: number, ticketId: number): Promise<void> {
     await request<void>(`/sites/${siteId}/extra-work-tickets/${ticketId}`, {
       method: "DELETE",
+    });
+  },
+
+  async restoreSiteExtraWorkTicket(siteId: number, ticketId: number): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/sites/${siteId}/extra-work-tickets/${ticketId}/restore`, {
+      method: "POST",
     });
   },
 

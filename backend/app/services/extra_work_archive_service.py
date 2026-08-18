@@ -53,6 +53,7 @@ class ExtraWorkArchiveService:
             .where(
                 ExtraWorkTicket.id == ticket_id,
                 ExtraWorkTicket.site_id == site_id,
+                ExtraWorkTicket.deleted_at.is_(None),
             )
         )
         if ticket is None:

@@ -1617,7 +1617,10 @@ class MeasurementService:
             self.db.scalars(
                 select(ExtraWorkTicket)
                 .options(selectinload(ExtraWorkTicket.entries))
-                .where(ExtraWorkTicket.site_id == site_id)
+                .where(
+                    ExtraWorkTicket.site_id == site_id,
+                    ExtraWorkTicket.deleted_at.is_(None),
+                )
                 .where(ExtraWorkTicket.status != "draft")
                 .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
             ).all()
@@ -1944,6 +1947,7 @@ class MeasurementService:
             .where(
                 ExtraWorkTicket.status == "submitted",
                 ExtraWorkTicket.submitted_at.is_not(None),
+                ExtraWorkTicket.deleted_at.is_(None),
             )
         )
         if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
@@ -2028,6 +2032,7 @@ class MeasurementService:
         extra_work_filters = [
             ExtraWorkTicket.status == "submitted",
             ExtraWorkTicket.submitted_at.is_not(None),
+            ExtraWorkTicket.deleted_at.is_(None),
         ]
         if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
             extra_work_filters.append(Site.project_manager_person_id == current_user.person_id)
