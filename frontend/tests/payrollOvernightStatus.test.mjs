@@ -106,7 +106,7 @@ test("the desktop table reserves one square-edged compact column without changin
 test("all payroll overnight states share one axis and paid badges align to the bed bottom edge", () => {
   assert.match(
     styles,
-    /\.time-review-week-overnight\[role="cell"\]\s*\{[^}]*transform:\s*translateX\(-4px\)/s,
+    /\.time-review-week-overnight\s*\{[^}]*place-items:\s*center;[^}]*transform:\s*translateX\(-4px\)/s,
   );
   assert.match(
     styles,
