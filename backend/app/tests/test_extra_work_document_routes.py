@@ -14,6 +14,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketDocumentDatesRead,
     ExtraWorkTicketDocumentRead,
     ExtraWorkTicketDocumentWorkerSignatureRead,
+    ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
 )
 
@@ -90,6 +91,23 @@ def document_read(ticket: ExtraWorkTicketRead | None = None) -> ExtraWorkTicketD
     )
 
 
+def photo_read() -> ExtraWorkTicketPhotoRead:
+    now = datetime.now(timezone.utc)
+    return ExtraWorkTicketPhotoRead(
+        id=4,
+        site_id=8,
+        extra_work_ticket_id=12,
+        filename="baustelle.jpg",
+        content_type="image/jpeg",
+        file_size_bytes=128,
+        external_web_url=None,
+        uploaded_by_name="Büro Test",
+        taken_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 class FakeExtraWorkService:
     calls: list[tuple] = []
 
@@ -120,6 +138,29 @@ class FakeExtraWorkService:
         self.calls.append(("photos", site_id, ticket_id, include_deleted))
         return []
 
+    def upload_site_ticket_photo(
+        self,
+        *,
+        site_id,
+        ticket_id,
+        current_user,
+        filename,
+        content,
+        content_type,
+    ):
+        self.calls.append(
+            (
+                "upload-photo",
+                site_id,
+                ticket_id,
+                current_user.id,
+                filename,
+                content,
+                content_type,
+            )
+        )
+        return photo_read()
+
     def get_site_ticket_photo_content(
         self,
         *,
@@ -140,6 +181,18 @@ class FakeExtraWorkService:
             )
         )
         return b"photo", "image/jpeg", "baustelle.jpg"
+
+    def delete_site_ticket_photo(
+        self,
+        *,
+        site_id,
+        ticket_id,
+        photo_id,
+        current_user,
+    ):
+        self.calls.append(
+            ("delete-photo", site_id, ticket_id, photo_id, current_user.id)
+        )
 
 
 class FakeExtraWorkPdfService:
@@ -228,6 +281,61 @@ def test_calendar_only_office_keeps_legacy_create_but_cannot_update_document(mon
             {"title": None, "kind": None, "approval_ticket_id": None, "notes": None},
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.ADMIN),
+        current_user(UserRole.PROJECT_MANAGER),
+        current_user(UserRole.OFFICE, "sites"),
+    ],
+)
+def test_site_photo_upload_and_delete_require_sites_write(monkeypatch, user):
+    client = api_client(monkeypatch, user)
+
+    uploaded = client.post(
+        "/api/sites/8/extra-work-tickets/12/photos",
+        files={"file": ("baustelle.png", b"image-content", "image/png")},
+    )
+    deleted = client.delete("/api/sites/8/extra-work-tickets/12/photos/4")
+
+    assert uploaded.status_code == 201
+    assert uploaded.json()["filename"] == "baustelle.jpg"
+    assert deleted.status_code == 204
+    assert FakeExtraWorkService.calls == [
+        (
+            "upload-photo",
+            8,
+            12,
+            7,
+            "baustelle.png",
+            b"image-content",
+            "image/png",
+        ),
+        ("delete-photo", 8, 12, 4, 7),
+    ]
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.OFFICE),
+        current_user(UserRole.OFFICE, "calendar"),
+    ],
+)
+def test_site_photo_mutations_reject_users_without_sites_write(monkeypatch, user):
+    client = api_client(monkeypatch, user)
+
+    uploaded = client.post(
+        "/api/sites/8/extra-work-tickets/12/photos",
+        files={"file": ("baustelle.png", b"image-content", "image/png")},
+    )
+    deleted = client.delete("/api/sites/8/extra-work-tickets/12/photos/4")
+
+    assert uploaded.status_code == 403
+    assert deleted.status_code == 403
+    assert FakeExtraWorkService.calls == []
 
 
 def test_read_routes_forward_archive_flags_and_serve_sanitized_template(monkeypatch):

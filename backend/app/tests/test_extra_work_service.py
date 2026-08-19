@@ -781,6 +781,192 @@ def test_mobile_extra_work_photo_upload_blocks_after_five_photos():
     assert error.value.detail == "Maximal 5 Fotos erlaubt."
 
 
+def test_site_photo_upload_and_delete_share_mobile_attachment_rows(monkeypatch):
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    photo_folder = ProjectFolder(
+        site_id=site.id,
+        sort_order=14,
+        name="Fotos",
+        folder_key="fotos",
+        is_active=True,
+        external_drive_id="drive-1",
+        external_item_id="folder-1",
+    )
+    db.add_all([assignment, photo_folder])
+    db.commit()
+    office_user = SimpleNamespace(
+        id=7,
+        person_id=None,
+        role=UserRole.OFFICE,
+        person=None,
+        display_name="Büro Test",
+        username="office",
+    )
+    mobile_user = SimpleNamespace(
+        id=8,
+        person_id=person.id,
+        role=UserRole.MONTEUR,
+        person=person,
+        display_name="Max Monteur",
+        username="max",
+    )
+
+    class FakeProjectStorageService:
+        deleted_items: list[str] = []
+
+        def upload_file_to_folder(self, **kwargs):
+            return {
+                "id": "desktop-photo",
+                "name": kwargs["filename"],
+                "web_url": "https://example.invalid/desktop-photo",
+                "size": len(kwargs["content"]),
+            }
+
+        def delete_file_from_folder(self, **kwargs):
+            self.deleted_items.append(kwargs["item_id"])
+
+    monkeypatch.setattr(extra_work_module, "ProjectStorageService", FakeProjectStorageService)
+    service = ExtraWorkService(db)
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=office_user,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    uploaded = service.upload_site_ticket_photo(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=office_user,
+        filename="desktop.png",
+        content=sample_photo_bytes(),
+        content_type="image/png",
+    )
+    mobile_photos = service.list_mobile_ticket_photos(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=mobile_user,
+    )
+    service.delete_site_ticket_photo(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        photo_id=uploaded.id,
+        current_user=office_user,
+    )
+
+    assert [photo.id for photo in mobile_photos] == [uploaded.id]
+    assert mobile_photos[0].content_type == "image/jpeg"
+    assert FakeProjectStorageService.deleted_items == ["desktop-photo"]
+    assert service.list_mobile_ticket_photos(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=mobile_user,
+    ) == []
+
+
+def test_signed_ticket_blocks_site_and_mobile_photo_mutations(monkeypatch):
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    office_user = SimpleNamespace(id=7, person_id=None)
+    mobile_user = SimpleNamespace(id=8, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=office_user,
+        payload=ExtraWorkTicketCreate(),
+    )
+    photo = ExtraWorkTicketPhoto(
+        site_id=site.id,
+        extra_work_ticket_id=ticket.id,
+        uploaded_by_user_id=office_user.id,
+        project_folder_key="fotos",
+        external_drive_id="drive-1",
+        external_item_id="photo-1",
+        filename="photo.jpg",
+        content_type="image/jpeg",
+        file_size_bytes=100,
+    )
+    db.add(photo)
+    loaded_ticket = db.get(ExtraWorkTicket, ticket.id)
+    assert loaded_ticket is not None
+    loaded_ticket.customer_signed_at = datetime.now(UTC)
+    db.commit()
+
+    class FailingProjectStorageService:
+        def __getattr__(self, name):
+            raise AssertionError(f"Storage must not be called: {name}")
+
+    monkeypatch.setattr(extra_work_module, "ProjectStorageService", FailingProjectStorageService)
+
+    with pytest.raises(HTTPException) as site_upload_error:
+        service.upload_site_ticket_photo(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            current_user=office_user,
+            filename="blocked.jpg",
+            content=sample_photo_bytes(),
+            content_type="image/jpeg",
+        )
+    with pytest.raises(HTTPException) as mobile_upload_error:
+        service.upload_mobile_ticket_photo(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            current_user=mobile_user,
+            filename="blocked.jpg",
+            content=sample_photo_bytes(),
+            content_type="image/jpeg",
+        )
+    with pytest.raises(HTTPException) as site_delete_error:
+        service.delete_site_ticket_photo(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            photo_id=photo.id,
+            current_user=office_user,
+        )
+    with pytest.raises(HTTPException) as mobile_delete_error:
+        service.delete_mobile_ticket_photo(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            photo_id=photo.id,
+            current_user=mobile_user,
+        )
+
+    assert site_upload_error.value.status_code == 409
+    assert mobile_upload_error.value.status_code == 409
+    assert site_delete_error.value.status_code == 409
+    assert mobile_delete_error.value.status_code == 409
+
+
 def test_mobile_extra_work_email_send_requires_selected_recipients():
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")

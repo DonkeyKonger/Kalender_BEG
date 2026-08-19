@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, ExternalLink, FileImage, FileText, LockKeyhole, Save } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText, LoaderCircle, LockKeyhole, Save, Trash2, UploadCloud } from "lucide-react";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import {
@@ -7,11 +7,18 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
 import { ApiError, api } from "../lib/api";
+import {
+  EXTRA_WORK_PHOTO_ACCEPT,
+  MAX_EXTRA_WORK_PHOTOS,
+  getExtraWorkAttachmentKind,
+  validateExtraWorkPhotoFiles,
+} from "../lib/extraWorkAttachments";
 import {
   EXTRA_WORK_CHECKBOX_RECTS,
   EXTRA_WORK_DAYS,
@@ -35,7 +42,9 @@ import {
   type ExtraWorkHoursTier,
   type ExtraWorkPdfRect,
 } from "../lib/extraWorkDocument";
+import { containsDraggedFiles } from "../lib/fileDrag";
 import { formatGermanDateTimeShort } from "../lib/formatters";
+import { formatProjectFileSize } from "../lib/projectFiles";
 import {
   SIGNATURE_SVG_HEIGHT,
   SIGNATURE_SVG_WIDTH,
@@ -54,6 +63,13 @@ import type {
 } from "../types/site";
 
 let supplementaryOrderPdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
+
+type ExtraWorkAttachmentUpload = {
+  key: number;
+  name: string;
+  status: "queued" | "uploading" | "error";
+  error: string | null;
+};
 
 function loadSupplementaryOrderPdfJs(): Promise<typeof import("pdfjs-dist")> {
   if (!supplementaryOrderPdfJsLoader) {
@@ -105,8 +121,14 @@ export function SupplementaryOrderDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [openingPhotoId, setOpeningPhotoId] = useState<number | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const [attachmentUploads, setAttachmentUploads] = useState<ExtraWorkAttachmentUpload[]>([]);
+  const [isAttachmentDragActive, setIsAttachmentDragActive] = useState(false);
   const [isWorkerSignatureOpen, setIsWorkerSignatureOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const attachmentDragDepthRef = useRef(0);
+  const attachmentUploadPendingRef = useRef(false);
+  const attachmentUploadSequenceRef = useRef(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -120,6 +142,11 @@ export function SupplementaryOrderDetail({
     setDocumentData(null);
     setTemplateData(null);
     setPhotos([]);
+    setAttachmentUploads([]);
+    setIsAttachmentDragActive(false);
+    setDeletingPhotoId(null);
+    attachmentDragDepthRef.current = 0;
+    attachmentUploadPendingRef.current = false;
     setIsDirty(false);
     setExecutionRangeEdited(false);
     setDirtyFields(new Set());
@@ -189,6 +216,8 @@ export function SupplementaryOrderDetail({
     [draft?.entry.worker_rows],
   );
   const additionalWorkers = draft?.entry.worker_rows.slice(EXTRA_WORK_VISIBLE_WORKER_ROWS) ?? [];
+  const isAttachmentUploading = attachmentUploads.some((upload) => upload.status !== "error");
+  const isPhotoLimitReached = photos.length >= MAX_EXTRA_WORK_PHOTOS;
 
   function changeDraft(patch: Partial<ExtraWorkDocumentDraft>): void {
     if (isLocked) {
@@ -308,6 +337,142 @@ export function SupplementaryOrderDetail({
     }
   }
 
+  function updatePersistedPhotoCount(count: number): void {
+    const updatedTicket = { ...documentTicket, photo_count: count };
+    setDocumentTicket(updatedTicket);
+    onTicketUpdated(updatedTicket);
+  }
+
+  async function uploadAttachments(files: ArrayLike<File>): Promise<void> {
+    if (isLocked || attachmentUploadPendingRef.current || files.length === 0) {
+      return;
+    }
+    const candidates = validateExtraWorkPhotoFiles(files, photos.length);
+    const uploads = candidates.map((candidate) => ({
+      key: ++attachmentUploadSequenceRef.current,
+      name: candidate.file.name,
+      status: candidate.error ? "error" as const : "queued" as const,
+      error: candidate.error,
+    }));
+    setAttachmentUploads(uploads);
+    const uploadable = candidates.flatMap((candidate, index) => {
+      const upload = uploads[index];
+      return candidate.error || !upload ? [] : [{ candidate, upload }];
+    });
+    if (uploadable.length === 0) {
+      return;
+    }
+
+    attachmentUploadPendingRef.current = true;
+    setPhotoError(null);
+    let persistedPhotos = photos;
+    try {
+      for (const { candidate, upload } of uploadable) {
+        setAttachmentUploads((current) => current.map((item) => (
+          item.key === upload.key ? { ...item, status: "uploading" } : item
+        )));
+        try {
+          const storedPhoto = await api.uploadSiteExtraWorkTicketPhoto(
+            site.id,
+            documentTicket.id,
+            candidate.file,
+          );
+          persistedPhotos = [...persistedPhotos, storedPhoto];
+          setPhotos(persistedPhotos);
+          updatePersistedPhotoCount(persistedPhotos.length);
+          setAttachmentUploads((current) => current.filter((item) => item.key !== upload.key));
+        } catch (requestError) {
+          setAttachmentUploads((current) => current.map((item) => (
+            item.key === upload.key
+              ? {
+                  ...item,
+                  status: "error",
+                  error: readError(requestError, `${candidate.file.name} konnte nicht hochgeladen werden.`),
+                }
+              : item
+          )));
+        }
+      }
+    } finally {
+      attachmentUploadPendingRef.current = false;
+    }
+  }
+
+  async function deleteAttachment(photo: MobileExtraWorkTicketPhoto): Promise<void> {
+    if (
+      isLocked
+      || deletingPhotoId !== null
+      || !window.confirm(`„${photo.filename}“ wirklich löschen?`)
+    ) {
+      return;
+    }
+    setDeletingPhotoId(photo.id);
+    setPhotoError(null);
+    try {
+      await api.deleteSiteExtraWorkTicketPhoto(site.id, documentTicket.id, photo.id);
+      const persistedPhotos = photos.filter((item) => item.id !== photo.id);
+      setPhotos(persistedPhotos);
+      updatePersistedPhotoCount(persistedPhotos.length);
+    } catch (requestError) {
+      setPhotoError(readError(requestError, `${photo.filename} konnte nicht gelöscht werden.`));
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  }
+
+  function resetAttachmentDragState(): void {
+    attachmentDragDepthRef.current = 0;
+    setIsAttachmentDragActive(false);
+  }
+
+  function handleAttachmentDragEnter(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (isLocked || attachmentUploadPendingRef.current) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    attachmentDragDepthRef.current += 1;
+    setIsAttachmentDragActive(true);
+  }
+
+  function handleAttachmentDragOver(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = isLocked || attachmentUploadPendingRef.current ? "none" : "copy";
+  }
+
+  function handleAttachmentDragLeave(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    attachmentDragDepthRef.current = Math.max(0, attachmentDragDepthRef.current - 1);
+    if (attachmentDragDepthRef.current === 0) {
+      setIsAttachmentDragActive(false);
+    }
+  }
+
+  function handleAttachmentDrop(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    resetAttachmentDragState();
+    if (isLocked || attachmentUploadPendingRef.current || event.dataTransfer.files.length === 0) {
+      return;
+    }
+    void uploadAttachments(event.dataTransfer.files);
+  }
+
   if (isLoading) {
     return <div className="matrix-state">Zusatzauftrag wird geladen...</div>;
   }
@@ -424,18 +589,83 @@ export function SupplementaryOrderDetail({
           </SidebarSection>
 
           <SidebarSection title={`Fotos / Anlagen (${photos.length})`}>
-            {photoError ? <p className="form-error">{photoError}</p> : null}
-            {photos.length === 0 ? <p className="supplementary-order-sidebar-empty">Keine Fotos oder Anlagen vorhanden.</p> : (
-              <div className="supplementary-order-photo-list">
-                {photos.map((photo) => (
-                  <button key={photo.id} type="button" disabled={openingPhotoId !== null} onClick={() => void openPhoto(photo)}>
-                    <FileImage aria-hidden="true" size={15} />
-                    <span>{photo.filename}</span>
-                    <ExternalLink aria-hidden="true" size={13} />
-                  </button>
-                ))}
-              </div>
-            )}
+            <div
+              className={`supplementary-order-attachments${isAttachmentDragActive ? " is-drag-active" : ""}`}
+              onDragEnter={handleAttachmentDragEnter}
+              onDragOver={handleAttachmentDragOver}
+              onDragLeave={handleAttachmentDragLeave}
+              onDragEnd={resetAttachmentDragState}
+              onDrop={handleAttachmentDrop}
+            >
+              {photoError ? <p className="form-error">{photoError}</p> : null}
+              {photos.length === 0 && isLocked ? (
+                <p className="supplementary-order-sidebar-empty">Keine Fotos oder Anlagen vorhanden.</p>
+              ) : null}
+              {photos.length > 0 ? (
+                <div className="supplementary-order-photo-list">
+                  {photos.map((photo) => (
+                    <ExtraWorkAttachmentRow
+                      key={photo.id}
+                      siteId={site.id}
+                      ticketId={documentTicket.id}
+                      photo={photo}
+                      includeDeleted={includeDeleted}
+                      readOnly={isLocked}
+                      isOpening={openingPhotoId === photo.id}
+                      isDeleting={deletingPhotoId === photo.id}
+                      actionsDisabled={openingPhotoId !== null || deletingPhotoId !== null}
+                      onOpen={() => void openPhoto(photo)}
+                      onDelete={() => void deleteAttachment(photo)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {attachmentUploads.length > 0 ? (
+                <div className="supplementary-order-upload-list" aria-live="polite">
+                  {attachmentUploads.map((upload) => (
+                    <div key={upload.key} className={upload.status === "error" ? "is-error" : "is-pending"}>
+                      {upload.status === "error" ? <FileImage aria-hidden="true" size={16} /> : <LoaderCircle aria-hidden="true" className="is-spinning" size={16} />}
+                      <span>
+                        <strong title={upload.name}>{upload.name}</strong>
+                        <small>{upload.status === "queued" ? "Wartet auf Upload…" : upload.status === "uploading" ? "Wird hochgeladen…" : upload.error}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {!isLocked ? (
+                <label className={`supplementary-order-attachment-dropzone${photos.length > 0 ? " is-compact" : ""}${isAttachmentUploading || isPhotoLimitReached ? " is-disabled" : ""}`}>
+                  <UploadCloud aria-hidden="true" size={photos.length > 0 ? 17 : 22} />
+                  <span>
+                    <strong>{photos.length > 0 ? "Weitere Fotos hinzufügen" : "Datei hier ablegen"}</strong>
+                    <small>{photos.length > 0 ? "Ablegen oder auswählen" : "oder klicken zum Auswählen"}</small>
+                  </span>
+                  <input
+                    type="file"
+                    accept={EXTRA_WORK_PHOTO_ACCEPT}
+                    multiple
+                    disabled={isAttachmentUploading || isPhotoLimitReached}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void uploadAttachments(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                </label>
+              ) : null}
+              {!isLocked ? (
+                <p className={`supplementary-order-attachment-limit${isPhotoLimitReached ? " is-reached" : ""}`}>
+                  {isPhotoLimitReached ? "Maximal 5 Fotos erreicht." : "JPEG, PNG, WebP oder HEIC · max. 15 MB · 5 Fotos"}
+                </p>
+              ) : null}
+              {isAttachmentDragActive ? (
+                <div className="supplementary-order-attachment-drop-hint" role="status">
+                  <UploadCloud aria-hidden="true" size={24} />
+                  <strong>Fotos hier ablegen</strong>
+                </div>
+              ) : null}
+            </div>
           </SidebarSection>
 
           {additionalWorkers.length > 0 ? (
@@ -1009,6 +1239,96 @@ function PaperChoice({ rect, label, selected, disabled, onSelect }: {
     >
       {selected ? "✓" : ""}
     </button>
+  );
+}
+
+function ExtraWorkAttachmentRow({
+  siteId,
+  ticketId,
+  photo,
+  includeDeleted,
+  readOnly,
+  isOpening,
+  isDeleting,
+  actionsDisabled,
+  onOpen,
+  onDelete,
+}: {
+  siteId: number;
+  ticketId: number;
+  photo: MobileExtraWorkTicketPhoto;
+  includeDeleted: boolean;
+  readOnly: boolean;
+  isOpening: boolean;
+  isDeleting: boolean;
+  actionsDisabled: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const kind = getExtraWorkAttachmentKind(photo.content_type);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (kind !== "image") {
+      setThumbnailUrl(null);
+      return;
+    }
+    let active = true;
+    let objectUrl: string | null = null;
+    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, photo.id, { includeDeleted })
+      .then((blob) => {
+        if (!active) {
+          return;
+        }
+        objectUrl = window.URL.createObjectURL(blob);
+        setThumbnailUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setThumbnailUrl(null);
+        }
+      });
+    return () => {
+      active = false;
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [includeDeleted, kind, photo.id, siteId, ticketId]);
+
+  const typeLabel = kind === "image" ? "Foto" : kind === "pdf" ? "PDF" : "Datei";
+  const sizeLabel = formatProjectFileSize(photo.file_size_bytes);
+  return (
+    <div className="supplementary-order-attachment-row">
+      <button
+        type="button"
+        className="supplementary-order-attachment-open"
+        disabled={actionsDisabled}
+        title={photo.filename}
+        onClick={onOpen}
+      >
+        <span className="supplementary-order-attachment-preview" aria-hidden="true">
+          {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : kind === "image" ? <FileImage size={18} /> : kind === "pdf" ? <FileText size={18} /> : <FileIcon size={18} />}
+        </span>
+        <span className="supplementary-order-attachment-copy">
+          <strong>{photo.filename}</strong>
+          <small>{[typeLabel, sizeLabel].filter(Boolean).join(" · ")}{isOpening ? " · Wird geöffnet…" : ""}</small>
+        </span>
+        <ExternalLink aria-hidden="true" size={13} />
+      </button>
+      {!readOnly ? (
+        <button
+          type="button"
+          className="supplementary-order-attachment-delete"
+          aria-label={`${photo.filename} löschen`}
+          title={`${photo.filename} löschen`}
+          disabled={actionsDisabled}
+          onClick={onDelete}
+        >
+          {isDeleting ? <LoaderCircle aria-hidden="true" className="is-spinning" size={14} /> : <Trash2 aria-hidden="true" size={14} />}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
