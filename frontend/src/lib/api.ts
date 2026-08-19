@@ -6,7 +6,7 @@ import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user"
 import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite, MatrixVersionResponse } from "../types/matrix";
 import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursManualAdjustmentPayload, PersonHoursPayoutPayload, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonToolMaterialItem, PersonUpdate } from "../types/person";
-import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketDetailsUpdate, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
+import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketDocumentRead, ExtraWorkTicketDocumentUpdate, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketDetailsUpdate, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
 import type { MobileAssignment, MobileAssignmentSiteHistoryResponse, MobileAssignmentSitesResponse, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { OvernightStatus, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
@@ -1364,6 +1364,56 @@ export const api = {
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
     return request<MobileExtraWorkTicket[]>(`/sites/${siteId}/extra-work-tickets${suffix}`);
+  },
+
+  async createSiteExtraWorkTicket(siteId: number): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/sites/${siteId}/extra-work-tickets`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+
+  async siteExtraWorkTicketDocument(
+    siteId: number,
+    ticketId: number,
+    params: { includeDeleted?: boolean } = {},
+  ): Promise<ExtraWorkTicketDocumentRead> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return request<ExtraWorkTicketDocumentRead>(`/sites/${siteId}/extra-work-tickets/${ticketId}/document${suffix}`);
+  },
+
+  async saveSiteExtraWorkTicketDocument(
+    siteId: number,
+    ticketId: number,
+    payload: ExtraWorkTicketDocumentUpdate,
+  ): Promise<ExtraWorkTicketDocumentRead> {
+    return request<ExtraWorkTicketDocumentRead>(`/sites/${siteId}/extra-work-tickets/${ticketId}/document`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async siteExtraWorkTemplate(siteId: number): Promise<Blob> {
+    return requestBlob(`/sites/${siteId}/extra-work-template`);
+  },
+
+  async siteExtraWorkTicketPhotos(
+    siteId: number,
+    ticketId: number,
+    params: { includeDeleted?: boolean } = {},
+  ): Promise<MobileExtraWorkTicketPhoto[]> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return request<MobileExtraWorkTicketPhoto[]>(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos${suffix}`);
+  },
+
+  async siteExtraWorkTicketPhotoContent(
+    siteId: number,
+    ticketId: number,
+    photoId: number,
+    params: { includeDeleted?: boolean } = {},
+  ): Promise<Blob> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/content${suffix}`);
   },
 
   async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<Blob> {

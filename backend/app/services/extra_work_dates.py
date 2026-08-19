@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 @dataclass(frozen=True)
 class ExtraWorkDocumentDates:
     order_date: date
+    approval_date: date
     execution_start: date
     execution_end: date
 
@@ -32,11 +33,15 @@ def resolve_extra_work_document_dates(
     manual_order_date: date | None,
     manual_execution_week: int | None,
     manual_execution_week_year: int | None,
+    manual_execution_start: date | None = None,
+    manual_execution_end: date | None = None,
 ) -> ExtraWorkDocumentDates:
     automatic_order_date = created_at.date() if created_at else date.today()
     order_date = manual_order_date or automatic_order_date
 
-    if manual_execution_week is not None and manual_execution_week_year is not None:
+    if manual_execution_start is not None and manual_execution_end is not None:
+        execution_start, execution_end = manual_execution_start, manual_execution_end
+    elif manual_execution_week is not None and manual_execution_week_year is not None:
         execution_start, execution_end = iso_week_range(
             manual_execution_week_year,
             manual_execution_week,
@@ -48,6 +53,7 @@ def resolve_extra_work_document_dates(
 
     return ExtraWorkDocumentDates(
         order_date=order_date,
+        approval_date=automatic_order_date,
         execution_start=execution_start,
         execution_end=execution_end,
     )

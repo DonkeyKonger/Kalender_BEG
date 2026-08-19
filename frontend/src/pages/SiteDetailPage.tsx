@@ -12,6 +12,7 @@ import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
+import { SupplementaryOrderDetail } from "../components/SupplementaryOrderDetail";
 import { ApiError, api } from "../lib/api";
 import { containsDraggedFiles } from "../lib/fileDrag";
 import {
@@ -194,6 +195,10 @@ export function SiteDetailPage() {
   const [extraWorkError, setExtraWorkError] = useState<string | null>(null);
   const [extraWorkMessage, setExtraWorkMessage] = useState<string | null>(null);
   const [extraWorkArchiveMode, setExtraWorkArchiveMode] = useState(false);
+  const [selectedExtraWorkTicket, setSelectedExtraWorkTicket] = useState<MobileExtraWorkTicket | null>(null);
+  const [creatingExtraWorkTicket, setCreatingExtraWorkTicket] = useState(false);
+  const [extraWorkDocumentDirty, setExtraWorkDocumentDirty] = useState(false);
+  const extraWorkCreateInFlightRef = useRef(false);
   const [extraWorkPdfAction, setExtraWorkPdfAction] = useState<string | null>(null);
   const [deletingExtraWorkTicketId, setDeletingExtraWorkTicketId] = useState<number | null>(null);
   const [restoringExtraWorkTicketId, setRestoringExtraWorkTicketId] = useState<number | null>(null);
@@ -596,6 +601,51 @@ export function SiteDetailPage() {
       setExtraWorkError(readApiError(requestError, "Zusatzaufträge konnten nicht geladen werden."));
     } finally {
       setExtraWorkLoading(false);
+    }
+  }
+
+  async function createExtraWorkTicket(): Promise<void> {
+    if (!site || !canEditSite || extraWorkCreateInFlightRef.current) {
+      return;
+    }
+    extraWorkCreateInFlightRef.current = true;
+    setCreatingExtraWorkTicket(true);
+    setExtraWorkError(null);
+    setExtraWorkMessage(null);
+    try {
+      const created = await api.createSiteExtraWorkTicket(site.id);
+      setExtraWorkTickets((current) => [
+        created,
+        ...current.filter((entry) => entry.id !== created.id),
+      ]);
+      setSelectedExtraWorkTicket(created);
+      setExtraWorkDocumentDirty(false);
+    } catch (requestError) {
+      setExtraWorkError(readApiError(requestError, "Zusatzauftrag konnte nicht erstellt werden."));
+    } finally {
+      extraWorkCreateInFlightRef.current = false;
+      setCreatingExtraWorkTicket(false);
+    }
+  }
+
+  function updateExtraWorkTicket(ticket: MobileExtraWorkTicket): void {
+    setSelectedExtraWorkTicket(ticket);
+    setExtraWorkTickets((current) => current.map((entry) => (entry.id === ticket.id ? ticket : entry)));
+  }
+
+  function changeProjectRecordTab(nextTab: ProjectRecordTab): void {
+    if (
+      nextTab !== "extra-work"
+      && selectedExtraWorkTicket
+      && extraWorkDocumentDirty
+      && !window.confirm("Ungespeicherte Änderungen verwerfen und den Bereich wechseln?")
+    ) {
+      return;
+    }
+    setActiveTab(nextTab);
+    if (nextTab !== "extra-work") {
+      setSelectedExtraWorkTicket(null);
+      setExtraWorkDocumentDirty(false);
     }
   }
 
@@ -1317,12 +1367,21 @@ export function SiteDetailPage() {
 
   const isMeasurementReviewWorkspace = activeTab === "measurement" && measurementSubtab === "review";
   const isMeasurementTimesheetWorkspace = activeTab === "measurement" && measurementSubtab === "timesheet";
+  const isExtraWorkDetailWorkspace = activeTab === "extra-work" && selectedExtraWorkTicket !== null;
 
   return (
     <section
-      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}`}
+      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}${isExtraWorkDetailWorkspace ? " is-extra-work-detail-workspace" : ""}`}
     >
-      <Link className="back-link" to={siteDetailBackPath}>
+      <Link
+        className="back-link"
+        to={siteDetailBackPath}
+        onClick={(event) => {
+          if (extraWorkDocumentDirty && !window.confirm("Ungespeicherte Änderungen verwerfen und die Projektakte verlassen?")) {
+            event.preventDefault();
+          }
+        }}
+      >
         <ArrowLeft aria-hidden="true" size={16} />
         <span>Baustellen</span>
       </Link>
@@ -1360,7 +1419,7 @@ export function SiteDetailPage() {
         </div>
       </div>
 
-      <ProjectRecordTabs activeTab={activeTab} onChange={setActiveTab} />
+      <ProjectRecordTabs activeTab={activeTab} onChange={changeProjectRecordTab} />
 
       {activeTab === "overview" ? (
         <OverviewTab
@@ -1511,35 +1570,58 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "extra-work" ? (
-        <ExtraWorkTab
-          site={site}
-          tickets={extraWorkTickets}
-          isLoading={extraWorkLoading}
-          error={extraWorkError}
-          message={extraWorkMessage}
-          archiveMode={extraWorkArchiveMode}
-          pdfAction={extraWorkPdfAction}
-          deletingTicketId={deletingExtraWorkTicketId}
-          restoringTicketId={restoringExtraWorkTicketId}
-          statusActionId={extraWorkStatusActionId}
-          canPromoteStatus={canEditSite}
-          onRetry={() => {
-            setExtraWorkLoaded(false);
-            setExtraWorkError(null);
-          }}
-          onToggleArchive={() => {
-            setExtraWorkArchiveMode((current) => !current);
-            setExtraWorkTickets([]);
-            setExtraWorkLoaded(false);
-            setExtraWorkError(null);
-            setExtraWorkMessage(null);
-          }}
-          onOpenPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "open")}
-          onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
-          onDeleteTicket={(ticket) => void deleteExtraWorkTicket(ticket)}
-          onRestoreTicket={(ticket) => void restoreExtraWorkTicket(ticket)}
-          onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
-        />
+        selectedExtraWorkTicket ? (
+          <SupplementaryOrderDetail
+            site={site}
+            ticket={selectedExtraWorkTicket}
+            canEdit={canEditSite}
+            includeDeleted={extraWorkArchiveMode || Boolean(selectedExtraWorkTicket.deleted_at)}
+            pdfBusy={extraWorkPdfAction !== null}
+            actionError={extraWorkError}
+            onBack={() => {
+              setSelectedExtraWorkTicket(null);
+              setExtraWorkDocumentDirty(false);
+            }}
+            onDirtyChange={setExtraWorkDocumentDirty}
+            onTicketUpdated={updateExtraWorkTicket}
+            onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
+          />
+        ) : (
+          <ExtraWorkTab
+            site={site}
+            tickets={extraWorkTickets}
+            isLoading={extraWorkLoading}
+            error={extraWorkError}
+            message={extraWorkMessage}
+            archiveMode={extraWorkArchiveMode}
+            isCreating={creatingExtraWorkTicket}
+            pdfAction={extraWorkPdfAction}
+            deletingTicketId={deletingExtraWorkTicketId}
+            restoringTicketId={restoringExtraWorkTicketId}
+            statusActionId={extraWorkStatusActionId}
+            canCreate={canEditSite}
+            canPromoteStatus={canEditSite}
+            onCreate={() => void createExtraWorkTicket()}
+            onRetry={() => {
+              setExtraWorkLoaded(false);
+              setExtraWorkError(null);
+            }}
+            onToggleArchive={() => {
+              setExtraWorkArchiveMode((current) => !current);
+              setExtraWorkTickets([]);
+              setExtraWorkLoaded(false);
+              setExtraWorkError(null);
+              setExtraWorkMessage(null);
+              setSelectedExtraWorkTicket(null);
+              setExtraWorkDocumentDirty(false);
+            }}
+            onOpenTicket={setSelectedExtraWorkTicket}
+            onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
+            onDeleteTicket={(ticket) => void deleteExtraWorkTicket(ticket)}
+            onRestoreTicket={(ticket) => void restoreExtraWorkTicket(ticket)}
+            onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
+          />
+        )
       ) : null}
       {activeTab === "tools-material" ? (
         <PlaceholderTab
@@ -2511,14 +2593,17 @@ function ExtraWorkTab({
   error,
   message,
   archiveMode,
+  isCreating,
   pdfAction,
   deletingTicketId,
   restoringTicketId,
   statusActionId,
+  canCreate,
   canPromoteStatus,
+  onCreate,
   onRetry,
   onToggleArchive,
-  onOpenPdf,
+  onOpenTicket,
   onDownloadPdf,
   onDeleteTicket,
   onRestoreTicket,
@@ -2530,14 +2615,17 @@ function ExtraWorkTab({
   error: string | null;
   message: string | null;
   archiveMode: boolean;
+  isCreating: boolean;
   pdfAction: string | null;
   deletingTicketId: number | null;
   restoringTicketId: number | null;
   statusActionId: number | null;
+  canCreate: boolean;
   canPromoteStatus: boolean;
+  onCreate: () => void;
   onRetry: () => void;
   onToggleArchive: () => void;
-  onOpenPdf: (ticket: MobileExtraWorkTicket) => void;
+  onOpenTicket: (ticket: MobileExtraWorkTicket) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
   onDeleteTicket: (ticket: MobileExtraWorkTicket) => void;
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => void;
@@ -2561,10 +2649,20 @@ function ExtraWorkTab({
           </p>
         </div>
         <div className="measurement-review-header-actions">
+          {canCreate && !archiveMode ? (
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={isCreating || isLoading || deletingTicketId !== null || restoringTicketId !== null}
+              onClick={onCreate}
+            >
+              {isCreating ? "Wird erstellt..." : "+ Zusatzauftrag erstellen"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="secondary-action"
-            disabled={isLoading || deletingTicketId !== null || restoringTicketId !== null}
+            disabled={isCreating || isLoading || deletingTicketId !== null || restoringTicketId !== null}
             onClick={onToggleArchive}
           >
             {archiveMode ? "Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"}
@@ -2609,7 +2707,7 @@ function ExtraWorkTab({
                       <span className="measurement-review-status-label">{statusBadge.label}</span>
                     </span>
                   </div>
-                  <div className="measurement-review-card-open">
+                  <button type="button" className="measurement-review-card-open" onClick={() => onOpenTicket(ticket)}>
                     <div className="measurement-review-card-main">
                       <div className="measurement-review-card-title-row">
                         <strong>{formatExtraWorkTicketTitle(ticket)}</strong>
@@ -2625,7 +2723,7 @@ function ExtraWorkTab({
                       </small>
                     </div>
                     <b>{formatExtraWorkTicketHours(ticket)}</b>
-                  </div>
+                  </button>
                   <div className="measurement-review-pdf-actions">
                     <button
                       type="button"
@@ -2674,7 +2772,7 @@ function ExtraWorkTab({
                 <button
                   type="button"
                   className="measurement-review-card-open"
-                  onClick={() => onOpenPdf(ticket)}
+                  onClick={() => onOpenTicket(ticket)}
                 >
                   <div className="measurement-review-card-main">
                     <div className="measurement-review-card-title-row">

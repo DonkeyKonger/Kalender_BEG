@@ -12,7 +12,10 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkTicketCreate,
+    ExtraWorkTicketDocumentRead,
+    ExtraWorkTicketDocumentUpdate,
     ExtraWorkTicketManualStatusUpdate,
+    ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
 )
 from app.schemas.measurement import (
@@ -474,6 +477,105 @@ def create_extra_work_ticket(
         site_id=site_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.get(
+    "/{site_id}/extra-work-tickets/{ticket_id}/document",
+    response_model=ExtraWorkTicketDocumentRead,
+)
+def get_extra_work_ticket_document(
+    site_id: int,
+    ticket_id: int,
+    include_deleted: bool = Query(default=False),
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketDocumentRead:
+    return ExtraWorkService(db).get_site_ticket_document(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        include_deleted=include_deleted,
+    )
+
+
+@router.put(
+    "/{site_id}/extra-work-tickets/{ticket_id}/document",
+    response_model=ExtraWorkTicketDocumentRead,
+)
+def update_extra_work_ticket_document(
+    site_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketDocumentUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketDocumentRead:
+    return ExtraWorkService(db).update_site_ticket_document(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos",
+    response_model=list[ExtraWorkTicketPhotoRead],
+)
+def list_extra_work_ticket_photos(
+    site_id: int,
+    ticket_id: int,
+    include_deleted: bool = Query(default=False),
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> list[ExtraWorkTicketPhotoRead]:
+    return ExtraWorkService(db).list_site_ticket_photos(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        include_deleted=include_deleted,
+    )
+
+
+@router.get(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/content",
+)
+def download_extra_work_ticket_photo(
+    site_id: int,
+    ticket_id: int,
+    photo_id: int,
+    include_deleted: bool = Query(default=False),
+    current_user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, content_type, filename = ExtraWorkService(db).get_site_ticket_photo_content(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        current_user=current_user,
+        include_deleted=include_deleted,
+    )
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+        },
+    )
+
+
+@router.get("/{site_id}/extra-work-template")
+def download_extra_work_template(
+    site_id: int,
+    _user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    ExtraWorkService(db)._get_site(site_id)
+    content = ExtraWorkPdfService(db).build_clean_template_pdf()
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "inline; filename=Zusatzauftrag_Vorlage_BEG_Master.pdf",
+        },
     )
 
 

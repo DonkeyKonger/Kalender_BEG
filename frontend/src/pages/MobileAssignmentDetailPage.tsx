@@ -39,7 +39,7 @@ import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPosition
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
+import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../utils/dateRange";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -153,6 +153,23 @@ const EXTRA_WORK_WEEK_DAYS = [
   { key: "sunday_hours", label: "So" },
 ] as const;
 type ExtraWorkWeekdayKey = (typeof EXTRA_WORK_WEEK_DAYS)[number]["key"];
+const EXTRA_WORK_HIDDEN_SURCHARGE_KEYS = [
+  "monday_surcharge_25_hours",
+  "tuesday_surcharge_25_hours",
+  "wednesday_surcharge_25_hours",
+  "thursday_surcharge_25_hours",
+  "friday_surcharge_25_hours",
+  "saturday_surcharge_25_hours",
+  "sunday_surcharge_25_hours",
+  "monday_surcharge_50_hours",
+  "tuesday_surcharge_50_hours",
+  "wednesday_surcharge_50_hours",
+  "thursday_surcharge_50_hours",
+  "friday_surcharge_50_hours",
+  "saturday_surcharge_50_hours",
+  "sunday_surcharge_50_hours",
+] as const;
+type ExtraWorkHiddenSurchargeKey = (typeof EXTRA_WORK_HIDDEN_SURCHARGE_KEYS)[number];
 const EXTRA_WORK_DEFAULT_TITLE_SUFFIX = "Hauptauftrag";
 
 type LocationState = {
@@ -1923,7 +1940,8 @@ function ExtraWorkWorkerSignatureOverlay({
 type ExtraWorkWorkerHoursFormRow = {
   id: string;
   worker_name: string;
-} & Record<ExtraWorkWeekdayKey, string>;
+} & Record<ExtraWorkWeekdayKey, string>
+  & Pick<MobileExtraWorkWorkerHours, "person_id" | ExtraWorkHiddenSurchargeKey>;
 
 type ExtraWorkEntryFormState = {
   component: string;
@@ -2031,6 +2049,7 @@ function ExtraWorkEntryPage({
     const floor = form.floor.trim();
     const workerRows = form.worker_rows
       .map((row) => ({
+        person_id: row.person_id ?? null,
         worker_name: row.worker_name.trim(),
         monday_hours: parseExtraWorkHoursInput(row.monday_hours),
         tuesday_hours: parseExtraWorkHoursInput(row.tuesday_hours),
@@ -2039,8 +2058,22 @@ function ExtraWorkEntryPage({
         friday_hours: parseExtraWorkHoursInput(row.friday_hours),
         saturday_hours: parseExtraWorkHoursInput(row.saturday_hours),
         sunday_hours: parseExtraWorkHoursInput(row.sunday_hours),
+        monday_surcharge_25_hours: row.monday_surcharge_25_hours ?? null,
+        tuesday_surcharge_25_hours: row.tuesday_surcharge_25_hours ?? null,
+        wednesday_surcharge_25_hours: row.wednesday_surcharge_25_hours ?? null,
+        thursday_surcharge_25_hours: row.thursday_surcharge_25_hours ?? null,
+        friday_surcharge_25_hours: row.friday_surcharge_25_hours ?? null,
+        saturday_surcharge_25_hours: row.saturday_surcharge_25_hours ?? null,
+        sunday_surcharge_25_hours: row.sunday_surcharge_25_hours ?? null,
+        monday_surcharge_50_hours: row.monday_surcharge_50_hours ?? null,
+        tuesday_surcharge_50_hours: row.tuesday_surcharge_50_hours ?? null,
+        wednesday_surcharge_50_hours: row.wednesday_surcharge_50_hours ?? null,
+        thursday_surcharge_50_hours: row.thursday_surcharge_50_hours ?? null,
+        friday_surcharge_50_hours: row.friday_surcharge_50_hours ?? null,
+        saturday_surcharge_50_hours: row.saturday_surcharge_50_hours ?? null,
+        sunday_surcharge_50_hours: row.sunday_surcharge_50_hours ?? null,
       }))
-      .filter((row) => row.worker_name || calculateExtraWorkPayloadWorkerTotal(row) > 0);
+      .filter((row) => row.worker_name || row.person_id !== null || calculateExtraWorkPayloadWorkerTotal(row) > 0 || hasExtraWorkSurchargeHours(row));
     if (!component || !floor) {
       setError("Bitte Bauteil und Etage ausfüllen.");
       return;
@@ -2058,7 +2091,9 @@ function ExtraWorkEntryPage({
         axis: cleanOptionalFormText(form.axis),
         remarks: cleanOptionalFormText(form.remarks),
         material_text: cleanOptionalFormText(form.material_text),
-        estimated_hours: isApproval ? parseNullableExtraWorkHoursInput(form.estimated_hours) : null,
+        // Billing tickets do not expose this field in the compact mobile form,
+        // but a desktop-entered value still has to survive a mobile edit.
+        estimated_hours: parseNullableExtraWorkHoursInput(form.estimated_hours),
         worker_rows: workerRows,
       });
       await onSaved();
@@ -7384,6 +7419,7 @@ function createEmptyExtraWorkEntryForm(workerName = ""): ExtraWorkEntryFormState
 function createEmptyExtraWorkWorkerRow(workerName = ""): ExtraWorkWorkerHoursFormRow {
   return {
     id: createClientRowId(),
+    person_id: null,
     worker_name: workerName,
     monday_hours: "",
     tuesday_hours: "",
@@ -7392,6 +7428,20 @@ function createEmptyExtraWorkWorkerRow(workerName = ""): ExtraWorkWorkerHoursFor
     friday_hours: "",
     saturday_hours: "",
     sunday_hours: "",
+    monday_surcharge_25_hours: null,
+    tuesday_surcharge_25_hours: null,
+    wednesday_surcharge_25_hours: null,
+    thursday_surcharge_25_hours: null,
+    friday_surcharge_25_hours: null,
+    saturday_surcharge_25_hours: null,
+    sunday_surcharge_25_hours: null,
+    monday_surcharge_50_hours: null,
+    tuesday_surcharge_50_hours: null,
+    wednesday_surcharge_50_hours: null,
+    thursday_surcharge_50_hours: null,
+    friday_surcharge_50_hours: null,
+    saturday_surcharge_50_hours: null,
+    sunday_surcharge_50_hours: null,
   };
 }
 
@@ -7411,6 +7461,7 @@ function mapExtraWorkEntryToForm(
     worker_rows: entry.worker_rows.length > 0
       ? entry.worker_rows.map((row, index) => ({
         id: createClientRowId(),
+        person_id: row.person_id ?? null,
         worker_name: normalizeExtraWorkWorkerName(row.worker_name, defaultWorkerName, legacyWorkerNames, index),
         monday_hours: formatExtraWorkInputValue(row.monday_hours),
         tuesday_hours: formatExtraWorkInputValue(row.tuesday_hours),
@@ -7419,6 +7470,20 @@ function mapExtraWorkEntryToForm(
         friday_hours: formatExtraWorkInputValue(row.friday_hours),
         saturday_hours: formatExtraWorkInputValue(row.saturday_hours),
         sunday_hours: formatExtraWorkInputValue(row.sunday_hours),
+        monday_surcharge_25_hours: row.monday_surcharge_25_hours ?? null,
+        tuesday_surcharge_25_hours: row.tuesday_surcharge_25_hours ?? null,
+        wednesday_surcharge_25_hours: row.wednesday_surcharge_25_hours ?? null,
+        thursday_surcharge_25_hours: row.thursday_surcharge_25_hours ?? null,
+        friday_surcharge_25_hours: row.friday_surcharge_25_hours ?? null,
+        saturday_surcharge_25_hours: row.saturday_surcharge_25_hours ?? null,
+        sunday_surcharge_25_hours: row.sunday_surcharge_25_hours ?? null,
+        monday_surcharge_50_hours: row.monday_surcharge_50_hours ?? null,
+        tuesday_surcharge_50_hours: row.tuesday_surcharge_50_hours ?? null,
+        wednesday_surcharge_50_hours: row.wednesday_surcharge_50_hours ?? null,
+        thursday_surcharge_50_hours: row.thursday_surcharge_50_hours ?? null,
+        friday_surcharge_50_hours: row.friday_surcharge_50_hours ?? null,
+        saturday_surcharge_50_hours: row.saturday_surcharge_50_hours ?? null,
+        sunday_surcharge_50_hours: row.sunday_surcharge_50_hours ?? null,
       }))
       : [createEmptyExtraWorkWorkerRow(defaultWorkerName)],
   };
@@ -7540,11 +7605,36 @@ function formatExtraWorkHours(value: string | number | null | undefined): string
 }
 
 function calculateExtraWorkWorkerTotal(row: ExtraWorkWorkerHoursFormRow): number {
-  return EXTRA_WORK_WEEK_DAYS.reduce((sum, day) => sum + parseExtraWorkHoursInput(row[day.key]), 0);
+  const normalHours = EXTRA_WORK_WEEK_DAYS.reduce(
+    (sum, day) => sum + parseExtraWorkHoursInput(row[day.key]),
+    0,
+  );
+  const hiddenSurchargeHours = EXTRA_WORK_HIDDEN_SURCHARGE_KEYS.reduce(
+    (sum, key) => sum + parseExtraWorkStoredHours(row[key]),
+    0,
+  );
+  return normalHours + hiddenSurchargeHours;
 }
 
 function calculateExtraWorkPayloadWorkerTotal(row: Record<ExtraWorkWeekdayKey, number>): number {
   return EXTRA_WORK_WEEK_DAYS.reduce((sum, day) => sum + row[day.key], 0);
+}
+
+function hasExtraWorkSurchargeHours(
+  row: Pick<MobileExtraWorkWorkerHours, ExtraWorkHiddenSurchargeKey>,
+): boolean {
+  return EXTRA_WORK_HIDDEN_SURCHARGE_KEYS.some((key) => {
+    const value = row[key];
+    return value !== null && value !== undefined && value !== "";
+  });
+}
+
+function parseExtraWorkStoredHours(value: string | number | null | undefined): number {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+  const parsed = Number(String(value).trim().replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function formatMobileExtraWorkOrderDate(order: MobileExtraWorkTicket): string {

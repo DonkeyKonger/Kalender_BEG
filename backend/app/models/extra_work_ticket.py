@@ -2,7 +2,19 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -43,9 +55,22 @@ class ExtraWorkTicket(TimestampMixin, Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+    ordered_by_name: Mapped[str | None] = mapped_column(String(160))
+    ordered_by_company: Mapped[str | None] = mapped_column(String(200))
+    billing_type: Mapped[str | None] = mapped_column(String(32))
+    estimated_order_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    material_required: Mapped[bool | None] = mapped_column(Boolean)
+    material_separate_attachment: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    executed_by_lead_monteur: Mapped[bool | None] = mapped_column(Boolean)
+    executed_by_monteur: Mapped[bool | None] = mapped_column(Boolean)
+    executed_by_helper: Mapped[bool | None] = mapped_column(Boolean)
+    executor_other_name: Mapped[str | None] = mapped_column(String(160))
+    work_description: Mapped[str | None] = mapped_column(Text)
     manual_order_date: Mapped[date | None] = mapped_column(Date)
     manual_execution_week: Mapped[int | None] = mapped_column(Integer)
     manual_execution_week_year: Mapped[int | None] = mapped_column(Integer)
+    manual_execution_start: Mapped[date | None] = mapped_column(Date)
+    manual_execution_end: Mapped[date | None] = mapped_column(Date)
     customer_signature_type: Mapped[str | None] = mapped_column(String(60))
     customer_signature_name: Mapped[str | None] = mapped_column(String(160))
     customer_signature_place: Mapped[str | None] = mapped_column(String(160))
@@ -124,19 +149,25 @@ class ExtraWorkTicketEntry(TimestampMixin, Base):
     def total_hours(self) -> Decimal:
         total = Decimal("0")
         for row in self.worker_rows or []:
-            for key in (
-                "monday_hours",
-                "tuesday_hours",
-                "wednesday_hours",
-                "thursday_hours",
-                "friday_hours",
-                "saturday_hours",
-                "sunday_hours",
+            for weekday in (
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
             ):
-                try:
-                    total += Decimal(str(row.get(key) or 0))
-                except (ArithmeticError, TypeError, ValueError):
-                    continue
+                keys = (
+                    f"{weekday}_hours",
+                    f"{weekday}_surcharge_25_hours",
+                    f"{weekday}_surcharge_50_hours",
+                )
+                for key in keys:
+                    try:
+                        total += Decimal(str(row.get(key) or 0))
+                    except (ArithmeticError, TypeError, ValueError):
+                        continue
         return total
 
 

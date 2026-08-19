@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import UTC, datetime
 import logging
 
@@ -8,23 +9,35 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
+from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
     ExtraWorkTicketCreate,
+    ExtraWorkTicketDocumentCustomerSignatureRead,
+    ExtraWorkTicketDocumentDatesRead,
+    ExtraWorkTicketDocumentRead,
+    ExtraWorkTicketDocumentUpdate,
+    ExtraWorkTicketDocumentWorkerSignatureRead,
     ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketTitleUpdate,
+    ExtraWorkWorkerHours,
     ExtraWorkWorkerSignatureCreate,
 )
 from app.services.document_photo_optimizer import optimize_document_photo
 from app.services.extra_work_archive_service import (
     ExtraWorkArchiveService,
     is_extra_work_completed_status,
+)
+from app.services.extra_work_document_context import (
+    get_extra_work_assignment_context,
+    resolve_extra_work_approval_place,
+    resolve_extra_work_ticket_dates,
 )
 from app.services.photo_filename import (
     build_photo_filename,
@@ -111,7 +124,10 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkTicketCreate,
     ) -> ExtraWorkTicketRead:
-        site = self._get_site(site_id)
+        # Serialize sequence allocation per site. The existing unique constraint
+        # remains the final guard, while this row lock prevents ordinary office
+        # and mobile requests from selecting the same next number concurrently.
+        site = self._get_site(site_id, for_update=True)
         next_sequence = (
             self.db.scalar(
                 select(func.max(ExtraWorkTicket.sequence_number)).where(
@@ -125,7 +141,14 @@ class ExtraWorkService:
             sequence_number=next_sequence,
             display_number=self._build_display_number(site, next_sequence),
             title=payload.title.strip() if payload.title and payload.title.strip() else None,
-            kind=self._normalize_kind(payload.kind, default=EXTRA_WORK_BILLING_KIND),
+            kind=self._normalize_kind(
+                payload.kind,
+                default=(
+                    EXTRA_WORK_APPROVAL_KIND
+                    if site.requires_extra_work_approval
+                    else EXTRA_WORK_BILLING_KIND
+                ),
+            ),
             approval_ticket_id=self._validate_approval_ticket_id(site_id, payload.approval_ticket_id),
             status="draft",
             created_by_user_id=current_user.id,
@@ -135,6 +158,114 @@ class ExtraWorkService:
         self.db.commit()
         self.db.refresh(ticket)
         return self._build_ticket_read(ticket)
+
+    def get_site_ticket_document(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        include_deleted: bool = False,
+    ) -> ExtraWorkTicketDocumentRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=include_deleted,
+        )
+        entry = self._get_first_ticket_entry(ticket.id)
+        document_dates = resolve_extra_work_ticket_dates(
+            ticket,
+            get_extra_work_assignment_context(self.db, ticket),
+        )
+        return ExtraWorkTicketDocumentRead(
+            ticket=self._build_ticket_read(ticket),
+            entry=ExtraWorkTicketEntryRead.model_validate(entry) if entry else None,
+            resolved_dates=ExtraWorkTicketDocumentDatesRead(
+                order_date=document_dates.order_date,
+                approval_date=document_dates.approval_date,
+                approval_place=resolve_extra_work_approval_place(ticket),
+                execution_start=document_dates.execution_start,
+                execution_end=document_dates.execution_end,
+            ),
+            worker_signature=ExtraWorkTicketDocumentWorkerSignatureRead(
+                name=ticket.worker_signature_name,
+                signed_at=ticket.worker_signed_at,
+                strokes=ticket.worker_signature_strokes,
+            ),
+            customer_signature=ExtraWorkTicketDocumentCustomerSignatureRead(
+                type=ticket.customer_signature_type,
+                name=ticket.customer_signature_name,
+                place=ticket.customer_signature_place,
+                signed_at=ticket.customer_signed_at,
+                strokes=ticket.customer_signature_strokes,
+            ),
+        )
+
+    def update_site_ticket_document(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        current_user: User,
+        payload: ExtraWorkTicketDocumentUpdate,
+    ) -> ExtraWorkTicketDocumentRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(ticket_id, site_id, for_update=True)
+        self._ensure_ticket_content_editable(ticket)
+
+        ticket.title = self._clean_optional_text(payload.title)
+        ticket.ordered_by_name = self._clean_optional_text(payload.ordered_by_name)
+        ticket.ordered_by_company = self._clean_optional_text(payload.ordered_by_company)
+        ticket.billing_type = payload.billing_type
+        ticket.estimated_order_value = payload.estimated_order_value
+        ticket.material_required = payload.material_required
+        ticket.material_separate_attachment = payload.material_separate_attachment
+        ticket.executed_by_lead_monteur = payload.executed_by_lead_monteur
+        ticket.executed_by_monteur = payload.executed_by_monteur
+        ticket.executed_by_helper = payload.executed_by_helper
+        ticket.executor_other_name = self._clean_optional_text(payload.executor_other_name)
+        ticket.work_description = self._clean_optional_multiline(payload.work_description)
+        ticket.manual_order_date = payload.manual_order_date
+        if payload.manual_execution_start is not None:
+            ticket.manual_execution_week = None
+            ticket.manual_execution_week_year = None
+            ticket.manual_execution_start = payload.manual_execution_start
+            ticket.manual_execution_end = payload.manual_execution_end
+        else:
+            ticket.manual_execution_week = payload.manual_execution_week
+            ticket.manual_execution_week_year = payload.manual_execution_week_year
+            ticket.manual_execution_start = None
+            ticket.manual_execution_end = None
+        self.db.add(ticket)
+
+        if payload.entry is not None:
+            self._validate_worker_person_ids(payload.entry.worker_rows)
+            entry = self._get_first_ticket_entry(ticket.id, for_update=True)
+            worker_rows = [self._document_worker_row(row) for row in payload.entry.worker_rows]
+            values = {
+                "site_id": ticket.site_id,
+                "component": payload.entry.component.strip(),
+                "floor": payload.entry.floor.strip(),
+                "room_number": self._clean_optional_text(payload.entry.room_number),
+                "axis": self._clean_optional_text(payload.entry.axis),
+                "remarks": self._clean_optional_multiline(payload.entry.remarks),
+                "material_text": self._clean_optional_multiline(payload.entry.material_text),
+                "estimated_hours": payload.entry.estimated_hours,
+                "worker_rows": worker_rows,
+            }
+            if entry is None:
+                entry = ExtraWorkTicketEntry(
+                    ticket_id=ticket.id,
+                    created_by_user_id=current_user.id,
+                    **values,
+                )
+            else:
+                for key, value in values.items():
+                    setattr(entry, key, value)
+            self.db.add(entry)
+
+        self.db.commit()
+        return self.get_site_ticket_document(site_id=site_id, ticket_id=ticket_id)
 
     def delete_site_ticket(self, *, site_id: int, ticket_id: int, current_user: User) -> None:
         self._get_site(site_id)
@@ -290,16 +421,7 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
-        if ticket.customer_signed_at is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Der Name kann nach Kundenunterschrift nicht mehr geändert werden.",
-            )
-        if ticket.status != "draft":
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Der Name kann nur im Entwurf geändert werden.",
-            )
+        self._ensure_ticket_content_editable(ticket)
         ticket.title = self._clean_optional_text(payload.title)
         self.db.add(ticket)
         self.db.commit()
@@ -316,14 +438,12 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
-        if ticket.customer_signed_at is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Stundenzettel-Details können nach Kundenunterschrift nicht mehr geändert werden.",
-            )
+        self._ensure_ticket_content_editable(ticket)
         ticket.manual_order_date = payload.manual_order_date
         ticket.manual_execution_week = payload.manual_execution_week
         ticket.manual_execution_week_year = payload.manual_execution_week_year
+        ticket.manual_execution_start = None
+        ticket.manual_execution_end = None
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
@@ -355,23 +475,36 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketEntryRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
-        if ticket.status != "draft":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Eingaben können nur im Entwurf geändert werden.")
+        self._ensure_ticket_content_editable(ticket)
         entry = self.db.scalar(
             select(ExtraWorkTicketEntry)
             .where(ExtraWorkTicketEntry.ticket_id == ticket.id)
             .order_by(ExtraWorkTicketEntry.id)
         )
-        worker_rows = [row.model_dump() for row in payload.worker_rows]
+        self._validate_worker_person_ids(payload.worker_rows)
+        worker_rows = self._merge_mobile_worker_rows(
+            list(entry.worker_rows or []) if entry else [],
+            payload.worker_rows,
+        )
+        estimated_hours = payload.estimated_hours
+        if (
+            entry is not None
+            and estimated_hours is None
+            and (ticket.kind or EXTRA_WORK_BILLING_KIND) != EXTRA_WORK_APPROVAL_KIND
+        ):
+            # The compact mobile billing form has no editable hours-target
+            # control. Preserve a value entered in the desktop master sheet,
+            # including for older mobile clients that still submit null here.
+            estimated_hours = entry.estimated_hours
         values = {
             "site_id": ticket.site_id,
             "component": payload.component.strip(),
             "floor": payload.floor.strip(),
             "room_number": self._clean_optional_text(payload.room_number),
             "axis": self._clean_optional_text(payload.axis),
-            "remarks": self._clean_optional_text(payload.remarks),
-            "material_text": self._clean_optional_text(payload.material_text),
-            "estimated_hours": payload.estimated_hours,
+            "remarks": self._clean_optional_multiline(payload.remarks),
+            "material_text": self._clean_optional_multiline(payload.material_text),
+            "estimated_hours": estimated_hours,
             "worker_rows": worker_rows,
         }
         if entry is None:
@@ -398,7 +531,10 @@ class ExtraWorkService:
     ) -> ExtraWorkTicketRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
-        if ticket.customer_signed_at is not None:
+        if ticket.customer_signed_at is not None or (ticket.status or "").strip().lower() in {
+            "signed",
+            "customer_signed",
+        }:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Dieser Stundenzettel wurde bereits vom Kunden unterschrieben.",
@@ -476,7 +612,24 @@ class ExtraWorkService:
         current_user: User,
     ) -> list[ExtraWorkTicketPhotoRead]:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        return self.list_site_ticket_photos(
+            site_id=assignment.site_id,
+            ticket_id=ticket_id,
+        )
+
+    def list_site_ticket_photos(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        include_deleted: bool = False,
+    ) -> list[ExtraWorkTicketPhotoRead]:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=include_deleted,
+        )
         photos = list(
             self.db.scalars(
                 select(ExtraWorkTicketPhoto)
@@ -584,7 +737,28 @@ class ExtraWorkService:
         current_user: User,
     ) -> tuple[bytes, str, str]:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        return self.get_site_ticket_photo_content(
+            site_id=assignment.site_id,
+            ticket_id=ticket_id,
+            photo_id=photo_id,
+            current_user=current_user,
+        )
+
+    def get_site_ticket_photo_content(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        current_user: User,
+        include_deleted: bool = False,
+    ) -> tuple[bytes, str, str]:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=include_deleted,
+        )
         photo = self._get_photo_for_ticket(photo_id, ticket.id)
         downloaded = ProjectStorageService().download_file_from_folder(
             drive_id=photo.external_drive_id,
@@ -616,8 +790,11 @@ class ExtraWorkService:
         self.db.delete(photo)
         self.db.commit()
 
-    def _get_site(self, site_id: int) -> Site:
-        site = self.db.get(Site, site_id)
+    def _get_site(self, site_id: int, *, for_update: bool = False) -> Site:
+        statement = select(Site).where(Site.id == site_id)
+        if for_update:
+            statement = statement.with_for_update()
+        site = self.db.scalar(statement)
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         return site
@@ -652,6 +829,7 @@ class ExtraWorkService:
                 selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.deleted_by).selectinload(User.person),
+                selectinload(ExtraWorkTicket.entries),
                 selectinload(ExtraWorkTicket.photos),
             )
             .where(
@@ -667,6 +845,132 @@ class ExtraWorkService:
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
+
+    def _get_first_ticket_entry(
+        self,
+        ticket_id: int,
+        *,
+        for_update: bool = False,
+    ) -> ExtraWorkTicketEntry | None:
+        statement = (
+            select(ExtraWorkTicketEntry)
+            .where(ExtraWorkTicketEntry.ticket_id == ticket_id)
+            .order_by(ExtraWorkTicketEntry.id)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return self.db.scalar(statement)
+
+    @staticmethod
+    def _ensure_ticket_content_editable(ticket: ExtraWorkTicket) -> None:
+        if ticket.deleted_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Archivierte Zusatzaufträge können nicht bearbeitet werden.",
+            )
+        if ticket.customer_signed_at is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Der Zusatzauftrag kann nach Kundenunterschrift nicht mehr geändert werden.",
+            )
+        normalized_status = (ticket.status or "").strip().lower()
+        if normalized_status in {"signed", "customer_signed"} or is_extra_work_completed_status(
+            normalized_status
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Der abgeschlossene Zusatzauftrag kann nicht mehr geändert werden.",
+            )
+
+    def _validate_worker_person_ids(self, rows: list[ExtraWorkWorkerHours]) -> None:
+        requested_ids = {row.person_id for row in rows if row.person_id is not None}
+        if not requested_ids:
+            return
+        existing_ids = set(
+            self.db.scalars(select(Person.id).where(Person.id.in_(requested_ids))).all()
+        )
+        if existing_ids != requested_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "Mindestens ein ausgewählter Monteur ist nicht vorhanden.",
+            )
+
+    @staticmethod
+    def _document_worker_row(row: ExtraWorkWorkerHours) -> dict[str, object]:
+        values = row.model_dump(exclude_unset=True)
+        if "worker_name" in values:
+            values["worker_name"] = str(values["worker_name"] or "").strip()
+        return values
+
+    @classmethod
+    def _merge_mobile_worker_rows(
+        cls,
+        existing_rows: list[dict[str, object]],
+        payload_rows: list[ExtraWorkWorkerHours],
+    ) -> list[dict[str, object]]:
+        extension_keys = {
+            "person_id",
+            *{
+                f"{weekday}_surcharge_{percentage}_hours"
+                for weekday in (
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                )
+                for percentage in (25, 50)
+            },
+        }
+        existing_person_ids = [
+            value
+            for existing in existing_rows
+            if isinstance((value := existing.get("person_id")), int)
+            and not isinstance(value, bool)
+        ]
+        payload_person_ids = [
+            row.person_id for row in payload_rows if row.person_id is not None
+        ]
+        existing_person_id_counts = Counter(existing_person_ids)
+        payload_person_id_counts = Counter(payload_person_ids)
+        unique_existing_by_person_id = {
+            person_id: existing
+            for existing in existing_rows
+            if isinstance((person_id := existing.get("person_id")), int)
+            and not isinstance(person_id, bool)
+            and existing_person_id_counts[person_id] == 1
+            and payload_person_id_counts[person_id] == 1
+        }
+
+        existing_names = [
+            str(existing.get("worker_name") or "").strip()
+            for existing in existing_rows
+        ]
+        payload_names = [row.worker_name.strip() for row in payload_rows]
+        existing_name_counts = Counter(existing_names)
+        payload_name_counts = Counter(payload_names)
+        unique_existing_by_name = {
+            name: existing
+            for name, existing in zip(existing_names, existing_rows, strict=True)
+            if name
+            and existing_name_counts[name] == 1
+            and payload_name_counts[name] == 1
+        }
+
+        merged_rows: list[dict[str, object]] = []
+        for row in payload_rows:
+            values = cls._document_worker_row(row)
+            if row.person_id is not None:
+                existing = unique_existing_by_person_id.get(row.person_id, {})
+            else:
+                existing = unique_existing_by_name.get(row.worker_name.strip(), {})
+            for key in extension_keys:
+                if key not in values and key in existing:
+                    values[key] = existing[key]
+            merged_rows.append(values)
+        return merged_rows
 
     def _build_ticket_read(
         self,
@@ -811,6 +1115,13 @@ class ExtraWorkService:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @staticmethod
+    def _clean_optional_multiline(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+        return normalized if normalized.strip() else None
 
     @staticmethod
     def _build_display_number(site: Site, sequence_number: int) -> str:

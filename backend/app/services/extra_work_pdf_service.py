@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from io import BytesIO
 import logging
 from pathlib import Path
@@ -21,7 +22,11 @@ from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, 
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
-from app.services.extra_work_dates import resolve_extra_work_document_dates
+from app.services.extra_work_document_context import (
+    get_extra_work_assignment_context,
+    resolve_extra_work_approval_place,
+    resolve_extra_work_ticket_dates,
+)
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.project_storage_service import ProjectStorageService
 
@@ -29,14 +34,14 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v6"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v7-master"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
     / "templates"
     / "extra_work"
-    / "Zusatzauftrag_Vorlage_BEG_Intelligent.pdf"
+    / "Zusatzauftrag_Vorlage_BEG_Master.pdf"
 )
 WEEKDAY_KEYS = (
     "monday_hours",
@@ -47,6 +52,9 @@ WEEKDAY_KEYS = (
     "saturday_hours",
     "sunday_hours",
 )
+SURCHARGE_25_KEYS = tuple(key.replace("_hours", "_surcharge_25_hours") for key in WEEKDAY_KEYS)
+SURCHARGE_50_KEYS = tuple(key.replace("_hours", "_surcharge_50_hours") for key in WEEKDAY_KEYS)
+WORKER_HOUR_CATEGORY_KEYS = (WEEKDAY_KEYS, SURCHARGE_25_KEYS, SURCHARGE_50_KEYS)
 
 
 @dataclass(frozen=True)
@@ -73,6 +81,9 @@ FIELD_RECTS = {
     "Firma": FieldRect(84.57, 184.83, 351.48, 14.17),
     "KomNr": FieldRect(478.77, 184.80, 71.16, 14.17),
     "Stundenvorgabe": FieldRect(120.36, 243.75, 111.24, 11.34),
+    "ca Auftragswert": FieldRect(402.60, 243.75, 146.76, 11.34),
+    "Ausführender Freitext": FieldRect(353.27, 281.80, 97.80, 11.34),
+    "Arbeitsbeschreibung": FieldRect(62.68, 304.00, 488.00, 18.00),
     "Ort": FieldRect(62.42, 318.39, 124.68, 14.17),
     "Datum_2": FieldRect(240.32, 318.39, 124.68, 14.17),
     "Zusatzstundenachweis Nr": FieldRect(236.88, 351.12, 106.80, 17.01),
@@ -88,10 +99,16 @@ FIELD_RECTS = {
 }
 
 CHECKBOX_CENTERS = {
+    "flat_rate": (167.24, 223.12),
     "hourly": (238.05, 223.16),
+    "unit_price": (344.51, 223.20),
     "material_yes": (167.28, 269.67),
     "material_no": (190.31, 269.67),
+    "material_separate_attachment": (238.09, 269.67),
+    "lead_monteur": (167.15, 288.56),
     "monteur": (238.09, 288.52),
+    "helper": (299.86, 288.50),
+    "executor_other": (344.42, 288.50),
 }
 
 SIGNATURE_IMAGE_BOX_Y = 56.0
@@ -115,37 +132,27 @@ WORKER_NAME_RECTS = (
     FieldRect(57.48, 494.97, 101.76, 45.72),
     FieldRect(57.48, 542.97, 101.76, 45.72),
 )
-NORMAL_HOUR_FIELD_NAMES = (
-    ("S1", "S2", "S3", "S4", "S5", "S6", "S7", "G1"),
-    ("S22", "S23", "S24", "S25", "S26", "S27", "S28", "G4"),
-    ("S43", "S44", "S45", "S46", "S47", "S48", "S49", "G7"),
+HOUR_FIELD_NAMES = tuple(
+    tuple(
+        tuple(
+            [
+                *(f"S{worker_index * 21 + category_index * 7 + day_index + 1}" for day_index in range(7)),
+                f"G{worker_index * 3 + category_index + 1}",
+            ]
+        )
+        for category_index in range(3)
+    )
+    for worker_index in range(3)
 )
-HOUR_FIELD_RECTS = {
-    "S1": FieldRect(184.68, 446.25, 21.36, 14.52),
-    "S2": FieldRect(207.61, 446.25, 21.36, 14.52),
-    "S3": FieldRect(230.48, 446.25, 21.36, 14.52),
-    "S4": FieldRect(253.68, 446.25, 21.36, 14.52),
-    "S5": FieldRect(276.56, 446.25, 21.36, 14.52),
-    "S6": FieldRect(299.76, 446.25, 21.36, 14.52),
-    "S7": FieldRect(321.97, 446.25, 21.36, 14.52),
-    "G1": FieldRect(345.96, 446.25, 68.16, 14.52),
-    "S22": FieldRect(184.68, 494.25, 21.36, 14.52),
-    "S23": FieldRect(207.61, 494.25, 21.36, 14.52),
-    "S24": FieldRect(230.48, 494.25, 21.36, 14.52),
-    "S25": FieldRect(253.68, 494.25, 21.36, 14.52),
-    "S26": FieldRect(276.56, 494.25, 21.36, 14.52),
-    "S27": FieldRect(299.76, 494.25, 21.36, 14.52),
-    "S28": FieldRect(321.97, 494.25, 21.36, 14.52),
-    "G4": FieldRect(345.96, 494.25, 68.16, 14.52),
-    "S43": FieldRect(184.68, 542.25, 21.36, 14.52),
-    "S44": FieldRect(207.61, 542.25, 21.36, 14.52),
-    "S45": FieldRect(230.48, 542.25, 21.36, 14.52),
-    "S46": FieldRect(253.68, 542.25, 21.36, 14.52),
-    "S47": FieldRect(276.56, 542.25, 21.36, 14.52),
-    "S48": FieldRect(299.76, 542.25, 21.36, 14.52),
-    "S49": FieldRect(321.97, 542.25, 21.36, 14.52),
-    "G7": FieldRect(345.96, 542.25, 68.16, 14.52),
-}
+HOUR_DAY_X = (184.68, 207.61, 230.48, 253.68, 276.56, 299.76, 321.97)
+HOUR_FIELD_RECTS: dict[str, FieldRect] = {}
+for worker_index, worker_y in enumerate((446.25, 494.25, 542.25)):
+    for category_index in range(3):
+        row_y = worker_y + category_index * 16.08
+        names = HOUR_FIELD_NAMES[worker_index][category_index]
+        for day_index, day_x in enumerate(HOUR_DAY_X):
+            HOUR_FIELD_RECTS[names[day_index]] = FieldRect(day_x, row_y, 21.36, 14.52)
+        HOUR_FIELD_RECTS[names[-1]] = FieldRect(345.96, row_y, 68.16, 14.52)
 
 
 class ExtraWorkPdfService:
@@ -205,6 +212,15 @@ class ExtraWorkPdfService:
         )
         return content, filename
 
+    def build_clean_template_pdf(self) -> bytes:
+        """Return the shared visual master without interactive PDF state."""
+        if not TEMPLATE_PATH.exists():
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Zusatzauftrag-Vorlage fehlt.",
+            )
+        return _build_clean_template_pdf_cached(TEMPLATE_PATH, TEMPLATE_PATH.stat().st_mtime_ns)
+
     def _build_ticket_pdf_version_hash(self, ticket: ExtraWorkTicket, assignment: Assignment | None) -> str:
         return build_pdf_version_hash({
             "type": "extra_work",
@@ -220,6 +236,19 @@ class ExtraWorkPdfService:
                 "manual_order_date": ticket.manual_order_date,
                 "manual_execution_week": ticket.manual_execution_week,
                 "manual_execution_week_year": ticket.manual_execution_week_year,
+                "manual_execution_start": ticket.manual_execution_start,
+                "manual_execution_end": ticket.manual_execution_end,
+                "ordered_by_name": ticket.ordered_by_name,
+                "ordered_by_company": ticket.ordered_by_company,
+                "billing_type": ticket.billing_type,
+                "estimated_order_value": ticket.estimated_order_value,
+                "material_required": ticket.material_required,
+                "material_separate_attachment": ticket.material_separate_attachment,
+                "executed_by_lead_monteur": ticket.executed_by_lead_monteur,
+                "executed_by_monteur": ticket.executed_by_monteur,
+                "executed_by_helper": ticket.executed_by_helper,
+                "executor_other_name": ticket.executor_other_name,
+                "work_description": ticket.work_description,
                 "updated_at": ticket.updated_at,
                 "submitted_at": ticket.submitted_at,
                 "customer_signature_type": ticket.customer_signature_type,
@@ -291,18 +320,22 @@ class ExtraWorkPdfService:
         entry = entries[0] if entries else None
         worker_rows = list(entry.worker_rows or []) if entry else []
         chunks = _chunk(worker_rows or [], 3) or [[]]
-        template_reader = PdfReader(str(TEMPLATE_PATH))
+        clean_template = self.build_clean_template_pdf()
         overlay_reader = PdfReader(BytesIO(self._build_overlay_pdf(ticket, assignment, entry, chunks)))
         writer = PdfWriter()
-        template_page = template_reader.pages[0]
         for index, _chunk_rows in enumerate(chunks):
-            writer.add_page(deepcopy(template_page))
+            # A fresh reader per sheet is intentional: pypdf otherwise reuses
+            # translated indirect objects for repeated copies of the same
+            # template page. Merging a later overlay would then mutate the
+            # shared /Contents tree, stacking all overlays on page one and
+            # leaving following pages blank.
+            template_reader = PdfReader(BytesIO(clean_template))
+            writer.add_page(template_reader.pages[0])
             page = writer.pages[-1]
-            if "/Annots" in page:
-                del page["/Annots"]
             page.merge_page(overlay_reader.pages[index])
         self._append_photo_pages(writer, ticket)
         output = BytesIO()
+        _remove_interactive_pdf_state(writer)
         writer.write(output)
         content = output.getvalue()
         LOGGER.info(
@@ -390,7 +423,7 @@ class ExtraWorkPdfService:
             commands: list[bytes] = []
             self._draw_common_fields(commands, ticket, assignment, entry, page_index + 1, len(chunks))
             if ticket.kind == "approval":
-                self._draw_approval_fields(commands, ticket, entry)
+                self._draw_approval_fields(commands, ticket, assignment, entry)
             self._draw_billing_fields(commands, ticket, assignment, entry, rows)
             if page_index == len(chunks) - 1:
                 self._draw_signature_fields(commands, ticket)
@@ -407,29 +440,20 @@ class ExtraWorkPdfService:
         total_pages: int,
     ) -> None:
         site = ticket.site
-        document_dates = resolve_extra_work_document_dates(
-            created_at=ticket.created_at,
-            assignment_start_date=assignment.start_date if assignment else None,
-            manual_order_date=ticket.manual_order_date,
-            manual_execution_week=ticket.manual_execution_week,
-            manual_execution_week_year=ticket.manual_execution_week_year,
-        )
+        document_dates = resolve_extra_work_ticket_dates(ticket, assignment)
         _field(commands, FIELD_RECTS["Kunde"], site.customer or "")
         _field(commands, FIELD_RECTS["Projekt"], site.name)
         _field(commands, FIELD_RECTS["Datum"], _format_date(document_dates.order_date))
-        if ticket.customer_signature_name:
-            _text(
-                commands,
-                CUSTOMER_ORDERED_BY_NAME_X,
-                CUSTOMER_ORDERED_BY_NAME_Y,
-                _fit_text(
-                    ticket.customer_signature_name,
-                    CUSTOMER_ORDERED_BY_NAME_MAX_WIDTH,
-                    CUSTOMER_ORDERED_BY_NAME_FONT_SIZE,
-                ),
-                CUSTOMER_ORDERED_BY_NAME_FONT_SIZE,
-            )
-        _field(commands, FIELD_RECTS["Firma"], site.customer or "")
+        _field(
+            commands,
+            FIELD_RECTS["Herrn"],
+            ticket.ordered_by_name or ticket.customer_signature_name or "",
+        )
+        _field(
+            commands,
+            FIELD_RECTS["Firma"],
+            ticket.ordered_by_company or site.customer or "",
+        )
         _field(
             commands,
             FIELD_RECTS["KomNr"],
@@ -439,12 +463,74 @@ class ExtraWorkPdfService:
             font="F2",
             fill=BEG_PDF_RED,
         )
-        _checkbox(commands, *CHECKBOX_CENTERS["hourly"])
-        _checkbox(commands, *CHECKBOX_CENTERS["monteur"])
-        if entry and entry.material_text:
+        billing_type = ticket.billing_type or "hourly"
+        if billing_type in {"flat_rate", "hourly", "unit_price"}:
+            _checkbox(commands, *CHECKBOX_CENTERS[billing_type])
+        if ticket.estimated_order_value is not None:
+            _field(
+                commands,
+                FIELD_RECTS["ca Auftragswert"],
+                _format_currency(ticket.estimated_order_value),
+                size=8,
+                align="right",
+            )
+        estimated_hours = entry.estimated_hours if entry else None
+        if (
+            estimated_hours is None
+            and ticket.kind == "billing"
+            and ticket.approval_ticket_id
+            and ticket.approval_ticket
+        ):
+            estimated_hours = ticket.approval_ticket.estimated_hours
+        if estimated_hours is not None:
+            _field(
+                commands,
+                FIELD_RECTS["Stundenvorgabe"],
+                _format_decimal(estimated_hours),
+                size=8,
+            )
+
+        material_required = ticket.material_required
+        if material_required is None:
+            material_required = bool(entry and entry.material_text)
+        if material_required:
             _checkbox(commands, *CHECKBOX_CENTERS["material_yes"])
         else:
             _checkbox(commands, *CHECKBOX_CENTERS["material_no"])
+        if ticket.material_separate_attachment:
+            _checkbox(commands, *CHECKBOX_CENTERS["material_separate_attachment"])
+
+        executor_flags = (
+            ticket.executed_by_lead_monteur,
+            ticket.executed_by_monteur,
+            ticket.executed_by_helper,
+        )
+        use_legacy_monteur_default = all(
+            flag is None for flag in executor_flags
+        ) and not ticket.executor_other_name
+        if ticket.executed_by_lead_monteur:
+            _checkbox(commands, *CHECKBOX_CENTERS["lead_monteur"])
+        if ticket.executed_by_monteur or use_legacy_monteur_default:
+            _checkbox(commands, *CHECKBOX_CENTERS["monteur"])
+        if ticket.executed_by_helper:
+            _checkbox(commands, *CHECKBOX_CENTERS["helper"])
+        if ticket.executor_other_name:
+            _checkbox(commands, *CHECKBOX_CENTERS["executor_other"])
+            _field(
+                commands,
+                FIELD_RECTS["Ausführender Freitext"],
+                ticket.executor_other_name,
+                size=7.5,
+            )
+        if ticket.work_description:
+            _white_rect(commands, FIELD_RECTS["Arbeitsbeschreibung"])
+            _textarea(
+                commands,
+                FIELD_RECTS["Arbeitsbeschreibung"],
+                ticket.work_description,
+                size=5.2,
+                max_lines=2,
+            )
         _field(
             commands,
             FIELD_RECTS["Zusatzstundenachweis Nr"],
@@ -476,21 +562,35 @@ class ExtraWorkPdfService:
             _field(commands, _shift_rect(FIELD_RECTS["Raum Nr"], dy=2.0), entry.room_number or "", size=9)
             _field(commands, _shift_rect(FIELD_RECTS["Achse"], dy=2.0), entry.axis or "", size=9)
             _textarea(commands, FIELD_RECTS["BemerkungenRow1"], entry.remarks or "", size=7.5, max_lines=13)
-            _textarea(commands, FIELD_RECTS["Material"], entry.material_text or "", size=8, max_lines=3)
+            _textarea(
+                commands,
+                FIELD_RECTS["Material"],
+                entry.material_text or "",
+                size=8,
+                max_lines=3,
+                line_height=18,
+            )
 
     def _draw_approval_fields(
         self,
         commands: list[bytes],
         ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
         entry: ExtraWorkTicketEntry | None,
     ) -> None:
-        if entry and entry.estimated_hours is not None:
-            _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(entry.estimated_hours), size=8)
-        created_date = _date_from_datetime(ticket.created_at)
-        _field(commands, FIELD_RECTS["Ort"], ticket.site.city or ticket.site.location or "", size=8)
-        _field(commands, FIELD_RECTS["Datum_2"], _format_date(created_date), size=8)
-        if entry and entry.remarks:
-            _textarea(commands, FieldRect(62.68, 313.00, 480.00, 12.00), entry.remarks, size=7.5, max_lines=1)
+        document_dates = resolve_extra_work_ticket_dates(ticket, assignment)
+        _field(
+            commands,
+            FIELD_RECTS["Ort"],
+            resolve_extra_work_approval_place(ticket) or "",
+            size=8,
+        )
+        _field(
+            commands,
+            FIELD_RECTS["Datum_2"],
+            _format_date(document_dates.approval_date),
+            size=8,
+        )
 
     def _draw_billing_fields(
         self,
@@ -509,11 +609,13 @@ class ExtraWorkPdfService:
                 size=8.3,
                 max_lines=2,
             )
-            field_names = NORMAL_HOUR_FIELD_NAMES[index]
-            row_total = Decimal("0")
-            for weekday_index, key in enumerate(WEEKDAY_KEYS):
-                value = _decimal(row.get(key))
-                if value > 0:
+            for category_index, category_keys in enumerate(WORKER_HOUR_CATEGORY_KEYS):
+                field_names = HOUR_FIELD_NAMES[index][category_index]
+                category_total = Decimal("0")
+                for weekday_index, key in enumerate(category_keys):
+                    value = _decimal(row.get(key))
+                    if value <= 0:
+                        continue
                     _field(
                         commands,
                         HOUR_FIELD_RECTS[field_names[weekday_index]],
@@ -521,23 +623,18 @@ class ExtraWorkPdfService:
                         size=8,
                         align="center",
                     )
-                    row_total += value
-            if row_total > 0:
-                _field(
-                    commands,
-                    HOUR_FIELD_RECTS[field_names[-1]],
-                    _format_decimal(row_total),
-                    size=8,
-                    align="center",
-                )
-                total += row_total
-        if rows:
+                    category_total += value
+                if category_total > 0:
+                    _field(
+                        commands,
+                        HOUR_FIELD_RECTS[field_names[-1]],
+                        _format_decimal(category_total),
+                        size=8,
+                        align="center",
+                    )
+                    total += category_total
+        if total > 0:
             _field(commands, FIELD_RECTS["Gesamt Std"], _format_decimal(total), size=9, align="center")
-
-        if ticket.kind == "billing" and ticket.approval_ticket_id and ticket.approval_ticket:
-            approval_estimate = ticket.approval_ticket.estimated_hours
-            if approval_estimate is not None:
-                _field(commands, FIELD_RECTS["Stundenvorgabe"], _format_decimal(approval_estimate), size=8)
 
     def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket) -> None:
         worker_place = _format_site_signature_location(ticket.site)
@@ -598,26 +695,44 @@ class ExtraWorkPdfService:
         return ticket
 
     def _get_site_assignment_context(self, ticket: ExtraWorkTicket) -> Assignment | None:
-        person_id = ticket.created_by.person_id if ticket.created_by else None
-        query = (
-            select(Assignment)
-            .options(selectinload(Assignment.person))
-            .where(Assignment.site_id == ticket.site_id)
-        )
-        if person_id is not None:
-            query = query.where(Assignment.person_id == person_id)
-        return self.db.scalar(
-            query.order_by(
-                Assignment.start_date.desc(),
-                Assignment.id.desc(),
-            ).limit(1)
-        )
+        return get_extra_work_assignment_context(self.db, ticket)
 
     @staticmethod
     def _build_filename(ticket: ExtraWorkTicket) -> str:
         site_number = _safe_filename_part(ticket.site.site_number or "ohne-komnr")
         ticket_number = _safe_filename_part(ticket.display_number or str(ticket.sequence_number))
         return f"Zusatzauftrag_{site_number}_{ticket_number}.pdf"
+
+
+@lru_cache(maxsize=2)
+def _build_clean_template_pdf_cached(template_path: Path, _mtime_ns: int) -> bytes:
+    reader = PdfReader(str(template_path))
+    if not reader.pages:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Zusatzauftrag-Vorlage enthält keine Seite.",
+        )
+    writer = PdfWriter()
+    page = deepcopy(reader.pages[0])
+    _remove_page_annotations(page)
+    writer.add_page(page)
+    _remove_interactive_pdf_state(writer)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def _remove_page_annotations(page: Any) -> None:
+    for key in ("/Annots", "/AA"):
+        if key in page:
+            del page[key]
+
+
+def _remove_interactive_pdf_state(writer: PdfWriter) -> None:
+    root = writer._root_object
+    for key in ("/AcroForm", "/Names", "/OpenAction", "/AA"):
+        if key in root:
+            del root[key]
 
 
 class OverlayPdf:
@@ -632,6 +747,7 @@ class OverlayPdf:
             b"<< /Type /Catalog /Pages 2 0 R >>",
             b"",
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
         ]
         page_object_numbers: list[int] = []
         for page_stream in self.pages:
@@ -649,7 +765,7 @@ class OverlayPdf:
                 + _number(PAGE_WIDTH)
                 + b" "
                 + _number(PAGE_HEIGHT)
-                + b"] /Resources << /Font << /F1 3 0 R >> >> /Contents "
+                + b"] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents "
                 + str(stream_object_number).encode("ascii")
                 + b" 0 R >>"
             )
@@ -808,13 +924,21 @@ def _field(
     _text(commands, x, baseline, _fit_text(value, rect.width - 4, size), size, font=font, fill=fill)
 
 
-def _textarea(commands: list[bytes], rect: FieldRect, text: str, *, size: float, max_lines: int) -> None:
-    lines = _wrap_text(_clean_text(text), rect.width - 4, size, max_lines)
+def _textarea(
+    commands: list[bytes],
+    rect: FieldRect,
+    text: str,
+    *,
+    size: float,
+    max_lines: int,
+    line_height: float | None = None,
+) -> None:
+    lines = _wrap_text(_clean_multiline_text(text), rect.width - 4, size, max_lines)
     if not lines:
         return
-    line_height = size + 2.0
+    actual_line_height = line_height or size + 2.0
     for index, line in enumerate(lines):
-        baseline = PAGE_HEIGHT - rect.y - size - 2.0 - index * line_height
+        baseline = PAGE_HEIGHT - rect.y - size - 2.0 - index * actual_line_height
         if baseline < PAGE_HEIGHT - rect.y - rect.height + 2:
             break
         _text(commands, rect.x + 2.0, baseline, line, size)
@@ -836,6 +960,20 @@ def _centered_textarea(commands: list[bytes], rect: FieldRect, text: str, *, siz
 
 def _shift_rect(rect: FieldRect, *, dx: float = 0, dy: float = 0) -> FieldRect:
     return FieldRect(rect.x + dx, rect.y + dy, rect.width, rect.height)
+
+
+def _white_rect(commands: list[bytes], rect: FieldRect) -> None:
+    commands.append(
+        b"q 1 1 1 rg "
+        + _number(rect.x)
+        + b" "
+        + _number(PAGE_HEIGHT - rect.y - rect.height)
+        + b" "
+        + _number(rect.width)
+        + b" "
+        + _number(rect.height)
+        + b" re f Q"
+    )
 
 
 def _signature_stamp(
@@ -1110,25 +1248,38 @@ def _signature_place_short(place: str | None) -> str:
 
 
 def _wrap_text(text: str, width: float, size: float, max_lines: int) -> list[str]:
-    words = text.split()
     lines: list[str] = []
-    current = ""
-    for word in words:
-        next_line = f"{current} {word}".strip()
-        if _text_width(next_line, size) <= width:
-            current = next_line
+    truncated = False
+    paragraphs = text.split("\n")
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        words = paragraph.split()
+        if not words:
+            if paragraph_index > 0 and lines and len(lines) < max_lines:
+                lines.append("")
             continue
+        current = ""
+        for word_index, word in enumerate(words):
+            next_line = f"{current} {word}".strip()
+            if current and _text_width(next_line, size) > width:
+                lines.append(current)
+                current = word
+                if len(lines) >= max_lines:
+                    truncated = True
+                    break
+            else:
+                current = next_line
+        if truncated:
+            break
         if current:
             lines.append(current)
-        current = word
         if len(lines) >= max_lines:
+            truncated = paragraph_index < len(paragraphs) - 1
             break
-    if current and len(lines) < max_lines:
-        lines.append(current)
-    if len(lines) == max_lines and words:
-        joined = " ".join(words)
-        if " ".join(lines) != joined:
-            lines[-1] = _fit_text(lines[-1], width, size, suffix="...")
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        truncated = True
+    if truncated and lines:
+        lines[-1] = _fit_text(lines[-1], width, size, suffix="...")
     return lines
 
 
@@ -1161,6 +1312,12 @@ def _clean_text(value: str | None) -> str:
     return " ".join(str(value).replace("\r", " ").split())
 
 
+def _clean_multiline_text(value: str | None) -> str:
+    if value is None:
+        return ""
+    return str(value).replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _date_from_datetime(value: datetime | None) -> date:
     return value.date() if value else date.today()
 
@@ -1174,6 +1331,12 @@ def _format_decimal(value: Decimal | float | int | str) -> str:
     if decimal_value == decimal_value.to_integral():
         return str(decimal_value.quantize(Decimal("1"))).replace(".", ",")
     return f"{decimal_value.normalize():f}".replace(".", ",")
+
+
+def _format_currency(value: Decimal | float | int | str) -> str:
+    decimal_value = _decimal(value)
+    formatted = f"{decimal_value:,.2f}"
+    return formatted.replace(",", "_").replace(".", ",").replace("_", ".") + " €"
 
 
 def _decimal(value: Any) -> Decimal:

@@ -1,0 +1,934 @@
+import { ArrowLeft, Download, ExternalLink, FileImage, FileText, LockKeyhole, Save } from "lucide-react";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+
+import { ApiError, api } from "../lib/api";
+import {
+  EXTRA_WORK_CHECKBOX_RECTS,
+  EXTRA_WORK_DAYS,
+  EXTRA_WORK_PDF_FIELD_RECTS,
+  EXTRA_WORK_PDF_HEIGHT,
+  EXTRA_WORK_PDF_WIDTH,
+  EXTRA_WORK_VISIBLE_WORKER_ROWS,
+  buildExtraWorkDocumentPayload,
+  chunkExtraWorkWorkerRows,
+  createExtraWorkDocumentDraft,
+  extraWorkPdfRectToPercent,
+  getExtraWorkHourRect,
+  getExtraWorkOverallHours,
+  getExtraWorkRowTotalRect,
+  getExtraWorkWorkerNameRect,
+  getExtraWorkWorkerTierTotal,
+  isExtraWorkDocumentLocked,
+  type ExtraWorkDocumentDraft,
+  type ExtraWorkDocumentDirtyField,
+  type ExtraWorkHoursField,
+  type ExtraWorkHoursTier,
+  type ExtraWorkPdfRect,
+} from "../lib/extraWorkDocument";
+import { formatGermanDateTimeShort } from "../lib/formatters";
+import type {
+  CustomerSignatureStroke,
+  ExtraWorkTicketDocumentRead,
+  MobileExtraWorkTicket,
+  MobileExtraWorkTicketPhoto,
+  MobileExtraWorkWorkerHours,
+  Site,
+} from "../types/site";
+
+let supplementaryOrderPdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
+
+function loadSupplementaryOrderPdfJs(): Promise<typeof import("pdfjs-dist")> {
+  if (!supplementaryOrderPdfJsLoader) {
+    supplementaryOrderPdfJsLoader = import("pdfjs-dist").then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      return pdfjsLib;
+    });
+  }
+  return supplementaryOrderPdfJsLoader;
+}
+
+export function SupplementaryOrderDetail({
+  site,
+  ticket,
+  canEdit,
+  includeDeleted,
+  pdfBusy,
+  actionError,
+  onBack,
+  onDirtyChange,
+  onTicketUpdated,
+  onDownloadPdf,
+}: {
+  site: Site;
+  ticket: MobileExtraWorkTicket;
+  canEdit: boolean;
+  includeDeleted: boolean;
+  pdfBusy: boolean;
+  actionError: string | null;
+  onBack: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+  onTicketUpdated: (ticket: MobileExtraWorkTicket) => void;
+  onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
+}) {
+  const [documentTicket, setDocumentTicket] = useState(ticket);
+  const [documentData, setDocumentData] = useState<ExtraWorkTicketDocumentRead | null>(null);
+  const [draft, setDraft] = useState<ExtraWorkDocumentDraft | null>(null);
+  const [originalWorkerRowCount, setOriginalWorkerRowCount] = useState(0);
+  const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
+  const [templateData, setTemplateData] = useState<ArrayBuffer | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [executionRangeEdited, setExecutionRangeEdited] = useState(false);
+  const [dirtyFields, setDirtyFields] = useState<Set<ExtraWorkDocumentDirtyField>>(() => new Set());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [openingPhotoId, setOpeningPhotoId] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setIsLoading(true);
+    setLoadError(null);
+    setTemplateError(null);
+    setPhotoError(null);
+    setSaveError(null);
+    setSaveMessage(null);
+    setDraft(null);
+    setDocumentData(null);
+    setTemplateData(null);
+    setPhotos([]);
+    setIsDirty(false);
+    setExecutionRangeEdited(false);
+    setDirtyFields(new Set());
+
+    async function loadDocument(): Promise<void> {
+      const [documentResult, templateResult, photosResult] = await Promise.allSettled([
+        api.siteExtraWorkTicketDocument(site.id, ticket.id, { includeDeleted }),
+        api.siteExtraWorkTemplate(site.id),
+        api.siteExtraWorkTicketPhotos(site.id, ticket.id, { includeDeleted }),
+      ]);
+      if (isCancelled) {
+        return;
+      }
+
+      if (documentResult.status === "rejected") {
+        setLoadError(readError(documentResult.reason, "Zusatzauftrag konnte nicht geladen werden."));
+      } else {
+        setDocumentData(documentResult.value);
+        setDocumentTicket(documentResult.value.ticket);
+        setOriginalWorkerRowCount(documentResult.value.entry?.worker_rows.length ?? 0);
+        setDraft(createExtraWorkDocumentDraft(documentResult.value, {
+          orderedByNameFallback: documentResult.value.customer_signature.name,
+          orderedByCompanyFallback: site.customer,
+        }));
+      }
+
+      if (templateResult.status === "rejected") {
+        setTemplateError(readError(templateResult.reason, "Master-Vorlage konnte nicht geladen werden."));
+      } else {
+        setTemplateData(await templateResult.value.arrayBuffer());
+      }
+
+      if (photosResult.status === "rejected") {
+        setPhotoError(readError(photosResult.reason, "Fotos konnten nicht geladen werden."));
+      } else {
+        setPhotos(photosResult.value);
+      }
+      setIsLoading(false);
+    }
+
+    void loadDocument();
+    return () => {
+      isCancelled = true;
+    };
+  }, [includeDeleted, reloadKey, site.customer, site.id, ticket.id]);
+
+  useEffect(() => {
+    onDirtyChange(isDirty);
+    return () => onDirtyChange(false);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!isDirty) {
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  const isLocked = isExtraWorkDocumentLocked(documentTicket, canEdit);
+  const workerPages = useMemo(
+    () => chunkExtraWorkWorkerRows(draft?.entry.worker_rows ?? []),
+    [draft?.entry.worker_rows],
+  );
+  const additionalWorkers = draft?.entry.worker_rows.slice(EXTRA_WORK_VISIBLE_WORKER_ROWS) ?? [];
+
+  function changeDraft(patch: Partial<ExtraWorkDocumentDraft>): void {
+    if (isLocked) {
+      return;
+    }
+    setDraft((current) => current ? { ...current, ...patch } : current);
+    setDirtyFields((current) => {
+      const next = new Set(current);
+      Object.keys(patch).forEach((field) => {
+        if (field !== "entry") {
+          next.add(field as ExtraWorkDocumentDirtyField);
+        }
+      });
+      return next;
+    });
+    markDirty();
+  }
+
+  function changeEntry(patch: Partial<ExtraWorkDocumentDraft["entry"]>): void {
+    if (isLocked) {
+      return;
+    }
+    setDraft((current) => current ? { ...current, entry: { ...current.entry, ...patch } } : current);
+    markDirty();
+  }
+
+  function changeWorker(workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>): void {
+    if (isLocked) {
+      return;
+    }
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const workerRows = current.entry.worker_rows.map((row, index) => (
+        index === workerIndex ? { ...row, ...patch } : row
+      ));
+      return { ...current, entry: { ...current.entry, worker_rows: workerRows } };
+    });
+    markDirty();
+  }
+
+  function markDirty(): void {
+    setIsDirty(true);
+    setSaveMessage(null);
+    setSaveError(null);
+  }
+
+  function handleBack(): void {
+    if (isDirty && !window.confirm("Ungespeicherte Änderungen verwerfen und zur Liste zurückkehren?")) {
+      return;
+    }
+    onBack();
+  }
+
+  async function saveDocument(): Promise<void> {
+    if (!draft || isLocked || isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      const saved = await api.saveSiteExtraWorkTicketDocument(
+        site.id,
+        documentTicket.id,
+        buildExtraWorkDocumentPayload(draft, originalWorkerRowCount, {
+          executionRangeEdited,
+          originalTicket: documentTicket,
+          dirtyFields,
+        }),
+      );
+      setDocumentData(saved);
+      setDocumentTicket(saved.ticket);
+      setOriginalWorkerRowCount(saved.entry?.worker_rows.length ?? 0);
+      setDraft(createExtraWorkDocumentDraft(saved, {
+        orderedByNameFallback: saved.customer_signature.name,
+        orderedByCompanyFallback: site.customer,
+      }));
+      setIsDirty(false);
+      setExecutionRangeEdited(false);
+      setDirtyFields(new Set());
+      setSaveMessage("Zusatzauftrag wurde gespeichert.");
+      onTicketUpdated(saved.ticket);
+    } catch (requestError) {
+      setSaveError(readError(requestError, "Zusatzauftrag konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function openPhoto(photo: MobileExtraWorkTicketPhoto): Promise<void> {
+    if (openingPhotoId !== null) {
+      return;
+    }
+    if (photo.external_web_url) {
+      window.open(photo.external_web_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const openedWindow = window.open("about:blank", "_blank", "noopener,noreferrer");
+    setOpeningPhotoId(photo.id);
+    setPhotoError(null);
+    try {
+      const blob = await api.siteExtraWorkTicketPhotoContent(site.id, documentTicket.id, photo.id, { includeDeleted });
+      const url = window.URL.createObjectURL(blob);
+      if (openedWindow) {
+        openedWindow.location.href = url;
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (requestError) {
+      openedWindow?.close();
+      setPhotoError(readError(requestError, "Foto konnte nicht geöffnet werden."));
+    } finally {
+      setOpeningPhotoId(null);
+    }
+  }
+
+  if (isLoading) {
+    return <div className="matrix-state">Zusatzauftrag wird geladen...</div>;
+  }
+
+  if (loadError || !draft || !documentData) {
+    return (
+      <div className="project-record-empty-state is-error supplementary-order-load-error">
+        <strong>{loadError ?? "Zusatzauftrag konnte nicht geladen werden."}</strong>
+        <div>
+          <button type="button" className="secondary-action" onClick={onBack}>Zurück</button>
+          <button type="button" className="secondary-action" onClick={() => setReloadKey((value) => value + 1)}>Erneut laden</button>
+        </div>
+      </div>
+    );
+  }
+
+  const lockReason = getLockReason(documentTicket, canEdit);
+
+  return (
+    <div className="supplementary-order-detail">
+      <header className="supplementary-order-detail-header">
+        <div>
+          <button type="button" className="supplementary-order-back" onClick={handleBack}>
+            <ArrowLeft aria-hidden="true" size={16} />
+            Zurück zu Zusatzaufträgen
+          </button>
+          <h2><FileText aria-hidden="true" size={19} />{formatTicketTitle(documentTicket)}</h2>
+          <p>Digitales Zusatzauftragsblatt auf Basis der BEG-Mastervorlage</p>
+        </div>
+        <div className="supplementary-order-header-actions">
+          {!documentTicket.deleted_at ? (
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={pdfBusy || isDirty}
+              title={isDirty ? "Vor dem PDF-Download zuerst speichern." : undefined}
+              onClick={() => onDownloadPdf(documentTicket)}
+            >
+              <Download aria-hidden="true" size={15} />
+              {pdfBusy ? "PDF wird erstellt..." : isDirty ? "Zuerst speichern" : "PDF herunterladen"}
+            </button>
+          ) : null}
+          {!isLocked ? (
+            <button
+              type="button"
+              className="primary-action"
+              disabled={!isDirty || isSaving}
+              onClick={() => void saveDocument()}
+            >
+              <Save aria-hidden="true" size={15} />
+              {isSaving ? "Speichert..." : "Speichern"}
+            </button>
+          ) : null}
+        </div>
+      </header>
+
+      {lockReason ? (
+        <div className="supplementary-order-lock-note" role="status">
+          <LockKeyhole aria-hidden="true" size={16} />
+          <span><strong>Nur Lesen.</strong> {lockReason}</span>
+        </div>
+      ) : null}
+      {saveError ? <div className="project-record-empty-state is-error">{saveError}</div> : null}
+      {actionError ? <div className="project-record-empty-state is-error">{actionError}</div> : null}
+      {saveMessage ? <div className="project-record-empty-state is-success">{saveMessage}</div> : null}
+
+      <div className="supplementary-order-workspace">
+        <div className="supplementary-order-paper-viewport">
+          <div className="supplementary-order-paper-stack">
+            {workerPages.map((workers, pageIndex) => (
+              <SupplementaryOrderPaperPage
+                key={pageIndex}
+                site={site}
+                document={documentData}
+                draft={draft}
+                workers={workers}
+                pageIndex={pageIndex}
+                pageCount={workerPages.length}
+                templateData={templateData}
+                templateError={templateError}
+                readOnly={isLocked}
+                onDraftChange={changeDraft}
+                onEntryChange={changeEntry}
+                onWorkerChange={(localIndex, patch) => changeWorker((pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS) + localIndex, patch)}
+                onExecutionRangeEdited={() => setExecutionRangeEdited(true)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <aside className="supplementary-order-sidebar" aria-label="Digitale Zusatzinformationen">
+          <SidebarSection title="Status">
+            <span className={`supplementary-order-status is-${documentTicket.status.toLowerCase()}`}>
+              {formatStatus(documentTicket.status)}
+            </span>
+            <label className="supplementary-order-sidebar-field">
+              <span>Bezeichnung</span>
+              <input autoComplete="off" value={draft.title ?? ""} readOnly={isLocked} onChange={(event) => changeDraft({ title: event.target.value })} />
+            </label>
+          </SidebarSection>
+
+          <SidebarSection title="Ersteller / Zeit">
+            <dl className="supplementary-order-metadata">
+              <div><dt>Erstellt von</dt><dd>{documentTicket.created_by_name ?? "Nicht angegeben"}</dd></div>
+              <div><dt>Erstellt am</dt><dd>{formatGermanDateTimeShort(documentTicket.created_at)}</dd></div>
+              {documentTicket.submitted_at ? <div><dt>Eingereicht</dt><dd>{formatGermanDateTimeShort(documentTicket.submitted_at)}</dd></div> : null}
+            </dl>
+          </SidebarSection>
+
+          <SidebarSection title="Unterschriften">
+            <SignatureLine label="Monteur" name={documentData.worker_signature.name} signedAt={documentData.worker_signature.signed_at} />
+            <SignatureLine label="Besteller / Kunde" name={documentData.customer_signature.name} signedAt={documentData.customer_signature.signed_at} />
+          </SidebarSection>
+
+          <SidebarSection title={`Fotos / Anlagen (${photos.length})`}>
+            {photoError ? <p className="form-error">{photoError}</p> : null}
+            {photos.length === 0 ? <p className="supplementary-order-sidebar-empty">Keine Fotos oder Anlagen vorhanden.</p> : (
+              <div className="supplementary-order-photo-list">
+                {photos.map((photo) => (
+                  <button key={photo.id} type="button" disabled={openingPhotoId !== null} onClick={() => void openPhoto(photo)}>
+                    <FileImage aria-hidden="true" size={15} />
+                    <span>{photo.filename}</span>
+                    <ExternalLink aria-hidden="true" size={13} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </SidebarSection>
+
+          {additionalWorkers.length > 0 ? (
+            <SidebarSection title="Weitere Monteure">
+              <p className="supplementary-order-sidebar-empty">
+                {additionalWorkers.length} weitere {additionalWorkers.length === 1 ? "Zeile ist" : "Zeilen sind"} auf den folgenden Papierseiten vollständig sichtbar und bearbeitbar.
+              </p>
+              <ul className="supplementary-order-additional-workers">
+                {additionalWorkers.map((worker, index) => <li key={index}>{worker.worker_name || `Zeile ${index + 4}`}</li>)}
+              </ul>
+            </SidebarSection>
+          ) : null}
+
+          <SidebarSection title="PDF">
+            {documentTicket.deleted_at ? (
+              <p className="supplementary-order-sidebar-empty">Für die PDF-Ausgabe den Zusatzauftrag zuerst wiederherstellen.</p>
+            ) : (
+              <button
+                type="button"
+                className="secondary-action supplementary-order-sidebar-pdf"
+                disabled={pdfBusy || isDirty}
+                title={isDirty ? "Vor dem PDF-Download zuerst speichern." : undefined}
+                onClick={() => onDownloadPdf(documentTicket)}
+              >
+                <Download aria-hidden="true" size={15} />
+                {pdfBusy ? "Wird erstellt..." : isDirty ? "Zuerst speichern" : "Aktuelle PDF herunterladen"}
+              </button>
+            )}
+          </SidebarSection>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function SupplementaryOrderPaperPage({
+  site,
+  document,
+  draft,
+  workers,
+  pageIndex,
+  pageCount,
+  templateData,
+  templateError,
+  readOnly,
+  onDraftChange,
+  onEntryChange,
+  onWorkerChange,
+  onExecutionRangeEdited,
+}: {
+  site: Site;
+  document: ExtraWorkTicketDocumentRead;
+  draft: ExtraWorkDocumentDraft;
+  workers: MobileExtraWorkWorkerHours[];
+  pageIndex: number;
+  pageCount: number;
+  templateData: ArrayBuffer | null;
+  templateError: string | null;
+  readOnly: boolean;
+  onDraftChange: (patch: Partial<ExtraWorkDocumentDraft>) => void;
+  onEntryChange: (patch: Partial<ExtraWorkDocumentDraft["entry"]>) => void;
+  onWorkerChange: (workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>) => void;
+  onExecutionRangeEdited: () => void;
+}) {
+  const ticket = document.ticket;
+  const isLastPage = pageIndex === pageCount - 1;
+  const documentNumber = pageCount > 1
+    ? `${ticket.display_number} / Blatt ${pageIndex + 1}`
+    : ticket.display_number;
+  const pageHours = getExtraWorkOverallHours(workers);
+  const workerSignaturePlace = signaturePlaceShort(formatSiteSignatureLocation(site));
+  const customerSignaturePlace = signaturePlaceShort(document.customer_signature.place || formatSiteSignatureLocation(site));
+
+  return (
+    <div
+      className={`supplementary-order-paper${readOnly ? " is-read-only" : ""}`}
+      style={{ aspectRatio: `${EXTRA_WORK_PDF_WIDTH} / ${EXTRA_WORK_PDF_HEIGHT}` }}
+      data-page-number={pageIndex + 1}
+    >
+      {templateData ? <SupplementaryOrderPdfBackground data={templateData} /> : null}
+      {templateError ? <div className="supplementary-order-template-error">{templateError}</div> : null}
+      <div className="supplementary-order-overlay" aria-label={`Zusatzauftrag bearbeiten, Blatt ${pageIndex + 1}`}>
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customer} label="Kunde" value={site.customer ?? ""} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.project} label="Projekt" value={site.name} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.orderedByName} label="Anordnung von" value={draft.ordered_by_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ ordered_by_name: value })} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.manualOrderDate} label="Datum der Auftragserteilung" type="date" value={draft.manual_order_date ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ manual_order_date: value || null })} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.orderedByCompany} label="Firma" value={draft.ordered_by_company ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ ordered_by_company: value })} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.commissionNumber} label="Kommissionsnummer" value={site.site_number ?? ""} />
+
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.billingFlatRate} label="Pauschal" selected={draft.billing_type === "flat_rate"} disabled={readOnly} onSelect={() => onDraftChange({ billing_type: "flat_rate" })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.billingHourly} label="Nach Stundensätzen" selected={draft.billing_type === "hourly"} disabled={readOnly} onSelect={() => onDraftChange({ billing_type: "hourly" })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.billingUnitPrice} label="Nach Einheitspreisen" selected={draft.billing_type === "unit_price"} disabled={readOnly} onSelect={() => onDraftChange({ billing_type: "unit_price" })} />
+        <PaperNumberInput rect={EXTRA_WORK_PDF_FIELD_RECTS.estimatedHours} label="Stundenvorgabe" value={draft.entry.estimated_hours} readOnly={readOnly} onChange={(value) => onEntryChange({ estimated_hours: value })} />
+        <PaperNumberInput rect={EXTRA_WORK_PDF_FIELD_RECTS.estimatedOrderValue} label="Geschätzter Auftragswert" value={draft.estimated_order_value} readOnly={readOnly} onChange={(value) => onDraftChange({ estimated_order_value: value })} />
+
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.materialYes} label="Material ja" selected={draft.material_required} disabled={readOnly} onSelect={() => onDraftChange({ material_required: true })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.materialNo} label="Material nein" selected={!draft.material_required} disabled={readOnly} onSelect={() => onDraftChange({ material_required: false })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.materialAttachment} label="Material laut Anlage" selected={draft.material_separate_attachment} disabled={readOnly} onSelect={() => onDraftChange({ material_separate_attachment: !draft.material_separate_attachment })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.executedByLeadMonteur} label="Ausführung durch Obermonteur" selected={draft.executed_by_lead_monteur} disabled={readOnly} onSelect={() => onDraftChange({ executed_by_lead_monteur: !draft.executed_by_lead_monteur })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.executedByMonteur} label="Ausführung durch Monteur" selected={draft.executed_by_monteur} disabled={readOnly} onSelect={() => onDraftChange({ executed_by_monteur: !draft.executed_by_monteur })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.executedByHelper} label="Ausführung durch Helfer" selected={draft.executed_by_helper} disabled={readOnly} onSelect={() => onDraftChange({ executed_by_helper: !draft.executed_by_helper })} />
+        <PaperChoice rect={EXTRA_WORK_CHECKBOX_RECTS.executedByOther} label="Andere ausführende Person" selected={Boolean(draft.executor_other_name?.trim())} disabled={readOnly} onSelect={() => {
+          if (draft.executor_other_name?.trim()) {
+            onDraftChange({ executor_other_name: null });
+          }
+        }} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.executorOtherName} label="Andere ausführende Person" value={draft.executor_other_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ executor_other_name: value })} />
+        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.workDescription} label="Beschreibung der auszuführenden Arbeiten" value={draft.work_description ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ work_description: value })} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationPlace} label="Ort der Ausführungsgenehmigung" value={ticket.kind === "approval" ? (document.resolved_dates.approval_place ?? "") : ""} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationDate} label="Datum der Ausführungsgenehmigung" value={ticket.kind === "approval" ? formatPaperDate(document.resolved_dates.approval_date) : ""} />
+
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.documentNumber} label="Zusatzstundennachweis Nummer" value={documentNumber} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.title} label="Bezeichnung" value={draft.title ?? ""} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.executionStart} label="Ausführung von" type="date" value={draft.manual_execution_start ?? ""} readOnly={readOnly} onChange={(value) => {
+          onExecutionRangeEdited();
+          onDraftChange({ manual_execution_start: value || null, manual_execution_week: null, manual_execution_week_year: null });
+        }} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.executionEnd} label="Ausführung bis" type="date" value={draft.manual_execution_end ?? ""} readOnly={readOnly} onChange={(value) => {
+          onExecutionRangeEdited();
+          onDraftChange({ manual_execution_end: value || null, manual_execution_week: null, manual_execution_week_year: null });
+        }} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.component} label="Bauteil" value={draft.entry.component} readOnly={readOnly} onChange={(value) => onEntryChange({ component: value })} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.floor} label="Etage" value={draft.entry.floor} readOnly={readOnly} onChange={(value) => onEntryChange({ floor: value })} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.roomNumber} label="Raumnummer" value={draft.entry.room_number ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ room_number: value })} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.axis} label="Achse" value={draft.entry.axis ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ axis: value })} />
+
+        {workers.map((worker, localWorkerIndex) => (
+          <WorkerPaperFields
+            key={(pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS) + localWorkerIndex}
+            worker={worker}
+            workerIndex={localWorkerIndex}
+            readOnly={readOnly}
+            onChange={(patch) => onWorkerChange(localWorkerIndex, patch)}
+          />
+        ))}
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.overallHours} label="Gesamtstunden dieses Blatts" value={formatPaperHours(pageHours)} />
+        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.remarks} label="Bemerkungen" value={draft.entry.remarks ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ remarks: value })} />
+        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText} label="Material" value={draft.entry.material_text ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ material_text: value })} />
+
+        {isLastPage ? (
+          <>
+            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignaturePlace} label="Ort Monteurunterschrift" value={workerSignaturePlace} centered />
+            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignatureDate} label="Datum Monteurunterschrift" value={formatPaperDate(document.worker_signature.signed_at)} centered />
+            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignaturePlace} label="Ort Kundenunterschrift" value={customerSignaturePlace} centered />
+            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignatureDate} label="Datum Kundenunterschrift" value={formatPaperDate(document.customer_signature.signed_at)} centered />
+            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignature} label="Unterschrift Monteur" strokes={document.worker_signature.strokes} />
+            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignature} label="Unterschrift Besteller oder Kunde" strokes={document.customer_signature.strokes} />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SupplementaryOrderPdfBackground({ data }: { data: ArrayBuffer }) {
+  const paperRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [renderVersion, setRenderVersion] = useState(0);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const paper = paperRef.current;
+    if (!paper || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    let lastWidth = Math.round(paper.getBoundingClientRect().width);
+    let timer: number | null = null;
+    const observer = new ResizeObserver(([entry]) => {
+      const nextWidth = Math.round(entry.contentRect.width);
+      if (nextWidth <= 0 || Math.abs(nextWidth - lastWidth) < 4) {
+        return;
+      }
+      lastWidth = nextWidth;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(() => setRenderVersion((value) => value + 1), 120);
+    });
+    observer.observe(paper);
+    return () => {
+      observer.disconnect();
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const paper = paperRef.current;
+    const canvas = canvasRef.current;
+    if (!paper || !canvas) {
+      return;
+    }
+    const paperNode = paper;
+    const canvasNode = canvas;
+    let isCancelled = false;
+    let loadingTask: PDFDocumentLoadingTask | null = null;
+    let pdfDocument: PDFDocumentProxy | null = null;
+    setRenderError(null);
+
+    async function renderPage(): Promise<void> {
+      try {
+        const pdfjsLib = await loadSupplementaryOrderPdfJs();
+        loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
+        pdfDocument = await loadingTask.promise;
+        const page = await pdfDocument.getPage(1);
+        if (isCancelled) {
+          return;
+        }
+        const baseViewport = page.getViewport({ scale: 1 });
+        const cssScale = Math.max(paperNode.clientWidth, 1) / baseViewport.width;
+        const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+        const cssViewport = page.getViewport({ scale: cssScale });
+        const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
+        const context = canvasNode.getContext("2d", { alpha: false });
+        if (!context) {
+          throw new Error("Canvas konnte nicht initialisiert werden.");
+        }
+        canvasNode.width = Math.ceil(renderViewport.width);
+        canvasNode.height = Math.ceil(renderViewport.height);
+        canvasNode.style.width = `${cssViewport.width}px`;
+        canvasNode.style.height = `${cssViewport.height}px`;
+        await page.render({
+          canvas: canvasNode,
+          canvasContext: context,
+          viewport: renderViewport,
+          annotationMode: pdfjsLib.AnnotationMode.DISABLE,
+        }).promise;
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Supplementary order template render failed", error);
+          setRenderError("Master-Vorlage konnte nicht dargestellt werden.");
+        }
+      }
+    }
+
+    void renderPage();
+    return () => {
+      isCancelled = true;
+      void loadingTask?.destroy();
+      void pdfDocument?.cleanup();
+    };
+  }, [data, renderVersion]);
+
+  return (
+    <div className="supplementary-order-pdf-background" ref={paperRef} aria-hidden="true">
+      <canvas ref={canvasRef} />
+      {renderError ? <span>{renderError}</span> : null}
+    </div>
+  );
+}
+
+function WorkerPaperFields({
+  worker,
+  workerIndex,
+  readOnly,
+  onChange,
+}: {
+  worker: MobileExtraWorkWorkerHours;
+  workerIndex: number;
+  readOnly: boolean;
+  onChange: (patch: Partial<MobileExtraWorkWorkerHours>) => void;
+}) {
+  const tiers: Array<{ key: ExtraWorkHoursTier; field: "normal" | "surcharge25" | "surcharge50"; label: string }> = [
+    { key: "normal", field: "normal", label: "Normalstunden" },
+    { key: "surcharge25", field: "surcharge25", label: "25-Prozent-Zuschlag" },
+    { key: "surcharge50", field: "surcharge50", label: "50-Prozent-Zuschlag" },
+  ];
+  return (
+    <>
+      <PaperTextarea rect={getExtraWorkWorkerNameRect(workerIndex)} label={`Name Monteur ${workerIndex + 1}`} value={worker.worker_name} readOnly={readOnly} centered onChange={(value) => onChange({ worker_name: value })} />
+      {tiers.map((tier) => (
+        <span key={tier.key}>
+          {EXTRA_WORK_DAYS.map((day, dayIndex) => {
+            const field = day[tier.field] as ExtraWorkHoursField;
+            return (
+              <PaperNumberInput
+                key={field}
+                rect={getExtraWorkHourRect(workerIndex, tier.key, dayIndex)}
+                label={`${day.label}, ${tier.label}, Monteur ${workerIndex + 1}`}
+                value={worker[field]}
+                readOnly={readOnly}
+                compact
+                onChange={(value) => onChange({ [field]: value })}
+              />
+            );
+          })}
+          <PaperValue
+            rect={getExtraWorkRowTotalRect(workerIndex, tier.key)}
+            label={`Summe ${tier.label}, Monteur ${workerIndex + 1}`}
+            value={formatPaperHours(getExtraWorkWorkerTierTotal(worker, tier.key))}
+          />
+        </span>
+      ))}
+    </>
+  );
+}
+
+function PaperInput({ rect, label, value, readOnly, onChange, type = "text" }: {
+  rect: ExtraWorkPdfRect;
+  label: string;
+  value: string;
+  readOnly: boolean;
+  onChange: (value: string) => void;
+  type?: "text" | "date";
+}) {
+  return (
+    <label className="supplementary-order-paper-field" style={paperRectStyle(rect)} title={label}>
+      <span className="sr-only">{label}</span>
+      <input autoComplete="off" type={type} value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = false }: {
+  rect: ExtraWorkPdfRect;
+  label: string;
+  value: string | number | null | undefined;
+  readOnly: boolean;
+  onChange: (value: string | number | null) => void;
+  compact?: boolean;
+}) {
+  const visibleValue = compact && Number(String(value ?? "").replace(",", ".")) === 0
+    ? ""
+    : value ?? "";
+  return (
+    <label className={`supplementary-order-paper-field is-number${compact ? " is-compact" : ""}`} style={paperRectStyle(rect)} title={label}>
+      <span className="sr-only">{label}</span>
+      <input
+        type="text"
+        autoComplete="off"
+        inputMode="decimal"
+        pattern="[0-9]+([,.][0-9]+)?"
+        value={visibleValue}
+        readOnly={readOnly}
+        aria-label={label}
+        onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
+      />
+    </label>
+  );
+}
+
+function PaperTextarea({ rect, label, value, readOnly, onChange, centered = false }: {
+  rect: ExtraWorkPdfRect;
+  label: string;
+  value: string;
+  readOnly: boolean;
+  onChange: (value: string) => void;
+  centered?: boolean;
+}) {
+  return (
+    <label className={`supplementary-order-paper-field is-textarea${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
+      <span className="sr-only">{label}</span>
+      <textarea autoComplete="off" value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean }) {
+  return <span className={`supplementary-order-paper-value${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label} aria-label={`${label}: ${value || "Nicht angegeben"}`}>{value}</span>;
+}
+
+function PaperSignature({ rect, label, strokes }: {
+  rect: ExtraWorkPdfRect;
+  label: string;
+  strokes: CustomerSignatureStroke[] | null;
+}) {
+  if (!strokes?.some((stroke) => stroke.length > 0)) {
+    return null;
+  }
+  return (
+    <svg
+      className="supplementary-order-paper-signature"
+      style={paperRectStyle(rect)}
+      viewBox="0 0 1 1"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={label}
+    >
+      {strokes.map((stroke, index) => {
+        const points = stroke
+          .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+          .map((point) => `${clampSignaturePoint(point.x)},${clampSignaturePoint(point.y)}`)
+          .join(" ");
+        if (!points) {
+          return null;
+        }
+        return <polyline key={index} points={points} fill="none" vectorEffect="non-scaling-stroke" />;
+      })}
+    </svg>
+  );
+}
+
+function PaperChoice({ rect, label, selected, disabled, onSelect }: {
+  rect: ExtraWorkPdfRect;
+  label: string;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`supplementary-order-paper-choice${selected ? " is-selected" : ""}`}
+      style={paperRectStyle(rect)}
+      aria-label={label}
+      aria-pressed={selected}
+      title={label}
+      disabled={disabled}
+      onClick={onSelect}
+    >
+      {selected ? "✓" : ""}
+    </button>
+  );
+}
+
+function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="supplementary-order-sidebar-section"><h3>{title}</h3>{children}</section>;
+}
+
+function SignatureLine({ label, name, signedAt }: { label: string; name: string | null; signedAt: string | null }) {
+  return (
+    <div className={`supplementary-order-signature${signedAt ? " is-signed" : ""}`}>
+      <span>{label}</span>
+      <strong>{name || (signedAt ? "Unterschrieben" : "Noch nicht unterschrieben")}</strong>
+      {signedAt ? <small>{formatGermanDateTimeShort(signedAt)}</small> : null}
+    </div>
+  );
+}
+
+function paperRectStyle(rect: ExtraWorkPdfRect): CSSProperties {
+  const percent = extraWorkPdfRectToPercent(rect);
+  return {
+    left: `${percent.left}%`,
+    top: `${percent.top}%`,
+    width: `${percent.width}%`,
+    height: `${percent.height}%`,
+  };
+}
+
+function formatTicketTitle(ticket: MobileExtraWorkTicket): string {
+  const title = ticket.title?.trim();
+  return title ? `Zusatzauftrag ${ticket.display_number} - ${title}` : `Zusatzauftrag ${ticket.display_number}`;
+}
+
+function formatStatus(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "draft") return "Entwurf";
+  if (normalized === "submitted") return "Eingereicht";
+  if (normalized === "reviewed") return "Geprüft";
+  if (["signed", "customer_signed"].includes(normalized)) return "Unterschrieben";
+  if (["billed", "closed", "completed", "finalized", "approved", "abgeschlossen"].includes(normalized)) return "Abgeschlossen";
+  return status;
+}
+
+function getLockReason(ticket: MobileExtraWorkTicket, canEdit: boolean): string | null {
+  if (!canEdit) return "Für diese Projektakte besteht keine Bearbeitungsberechtigung.";
+  if (ticket.deleted_at) return "Archivierte Zusatzaufträge können erst nach der Wiederherstellung bearbeitet werden.";
+  if (ticket.customer_signed_at) return "Nach der Kundenunterschrift bleiben die erfassten Werte unverändert.";
+  if (isExtraWorkDocumentLocked(ticket, canEdit)) return "Der abgeschlossene Status sperrt die fachlichen Angaben.";
+  return null;
+}
+
+function formatPaperHours(value: number): string {
+  if (value <= 0) {
+    return "";
+  }
+  return value.toLocaleString("de-DE", { minimumFractionDigits: value % 1 === 0 ? 0 : 1, maximumFractionDigits: 2 });
+}
+
+function formatPaperDate(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : value;
+}
+
+function formatSiteSignatureLocation(site: Site): string {
+  const street = [site.street?.trim(), site.house_number?.trim()].filter(Boolean).join(" ");
+  const city = [site.postal_code?.trim(), site.city?.trim()].filter(Boolean).join(" ");
+  const structured = [street, city].filter(Boolean).join(", ");
+  return structured || site.address?.trim() || site.location?.trim() || site.city?.trim() || "";
+}
+
+function signaturePlaceShort(place: string | null): string {
+  const value = place?.trim() ?? "";
+  if (!value) {
+    return "";
+  }
+  const candidate = value.split(",").at(-1)?.trim() ?? value;
+  return candidate.replace(/^\d{5}\s+/, "") || candidate;
+}
+
+function clampSignaturePoint(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function readError(error: unknown, fallback: string): string {
+  if (error instanceof Error && !(error instanceof ApiError)) {
+    return error.message || fallback;
+  }
+  if (!(error instanceof ApiError)) {
+    return fallback;
+  }
+  return typeof error.detail === "string" ? error.detail : error.message;
+}

@@ -17,6 +17,7 @@ def test_extra_work_document_dates_keep_existing_automatic_defaults_for_old_reco
     )
 
     assert values.order_date == date(2026, 8, 11)
+    assert values.approval_date == date(2026, 8, 11)
     assert values.execution_start == date(2026, 8, 10)
     assert values.execution_end == date(2026, 8, 16)
 
@@ -38,6 +39,7 @@ def test_extra_work_document_dates_apply_order_and_iso_week_overrides_independen
     )
 
     assert only_order.order_date == date(2026, 8, 4)
+    assert only_order.approval_date == date(2026, 8, 11)
     assert (only_order.execution_start, only_order.execution_end) == (
         date(2026, 8, 10),
         date(2026, 8, 16),

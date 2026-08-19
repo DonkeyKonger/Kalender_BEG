@@ -49,3 +49,51 @@ test("details dialog stays touch-friendly and bounded on phones", () => {
   assert.match(styles, /\.mobile-extra-work-details-field input,[\s\S]*min-height:\s*48px/s);
   assert.match(styles, /@media \(max-width: 430px\)[\s\S]*\.mobile-extra-work-details-dialog/s);
 });
+
+test("mobile extra-work rows invisibly roundtrip identity and every desktop surcharge field", () => {
+  const hiddenFields = [
+    "monday_surcharge_25_hours",
+    "tuesday_surcharge_25_hours",
+    "wednesday_surcharge_25_hours",
+    "thursday_surcharge_25_hours",
+    "friday_surcharge_25_hours",
+    "saturday_surcharge_25_hours",
+    "sunday_surcharge_25_hours",
+    "monday_surcharge_50_hours",
+    "tuesday_surcharge_50_hours",
+    "wednesday_surcharge_50_hours",
+    "thursday_surcharge_50_hours",
+    "friday_surcharge_50_hours",
+    "saturday_surcharge_50_hours",
+    "sunday_surcharge_50_hours",
+  ];
+  const emptyRowSource = pageSource.slice(
+    pageSource.indexOf("function createEmptyExtraWorkWorkerRow"),
+    pageSource.indexOf("function mapExtraWorkEntryToForm"),
+  );
+  const loadSource = pageSource.slice(
+    pageSource.indexOf("function mapExtraWorkEntryToForm"),
+    pageSource.indexOf("function getExtraWorkDefaultWorkerName"),
+  );
+  const saveSource = pageSource.slice(
+    pageSource.indexOf("async function saveEntry"),
+    pageSource.indexOf("return (", pageSource.indexOf("async function saveEntry")),
+  );
+  assert.match(pageSource, /type ExtraWorkWorkerHoursFormRow =[\s\S]*"person_id" \| ExtraWorkHiddenSurchargeKey/);
+  assert.match(emptyRowSource, /person_id: null/);
+  assert.match(loadSource, /person_id: row\.person_id \?\? null/);
+  assert.match(saveSource, /person_id: row\.person_id \?\? null/);
+  assert.match(saveSource, /estimated_hours: parseNullableExtraWorkHoursInput\(form\.estimated_hours\)/);
+  assert.doesNotMatch(saveSource, /estimated_hours: isApproval \?/);
+  hiddenFields.forEach((field) => {
+    assert.match(emptyRowSource, new RegExp(`${field}: null`));
+    assert.match(loadSource, new RegExp(`${field}: row\\.${field} \\?\\? null`));
+    assert.match(saveSource, new RegExp(`${field}: row\\.${field} \\?\\? null`));
+  });
+  assert.match(pageSource, /worker_rows\.filter\(\(row\) => row\.id !== rowId\)/);
+});
+
+test("mobile visible totals include normal, 25-percent and 50-percent hours", () => {
+  assert.match(pageSource, /function calculateExtraWorkWorkerTotal[\s\S]*EXTRA_WORK_WEEK_DAYS\.reduce[\s\S]*EXTRA_WORK_HIDDEN_SURCHARGE_KEYS\.reduce[\s\S]*return normalHours \+ hiddenSurchargeHours/);
+  assert.match(pageSource, /calculateExtraWorkWorkerTotal\(row\)/);
+});

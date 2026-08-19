@@ -1,0 +1,312 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import {
+  EXTRA_WORK_PDF_FIELD_RECTS,
+  EXTRA_WORK_PDF_HEIGHT,
+  EXTRA_WORK_PDF_WIDTH,
+  buildExtraWorkDocumentPayload,
+  chunkExtraWorkWorkerRows,
+  createEmptyExtraWorkWorkerRow,
+  createExtraWorkDocumentDraft,
+  extraWorkPdfRectToPercent,
+  isExtraWorkDocumentLocked,
+  parseExtraWorkNumericValue,
+} from "../src/lib/extraWorkDocument.ts";
+
+const [pageSource, componentSource, apiSource, typeSource, styles] = await Promise.all([
+  readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/SupplementaryOrderDetail.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/types/site.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+]);
+
+function ticket(overrides = {}) {
+  return {
+    id: 7,
+    site_id: 3,
+    sequence_number: 1,
+    display_number: "9999.01",
+    title: null,
+    kind: "billing",
+    approval_ticket_id: null,
+    status: "draft",
+    created_by_user_id: 2,
+    created_by_name: "Büro Test",
+    submitted_by_user_id: null,
+    submitted_at: null,
+    notes: null,
+    ordered_by_name: null,
+    ordered_by_company: null,
+    billing_type: null,
+    estimated_order_value: null,
+    material_required: null,
+    material_separate_attachment: null,
+    executed_by_lead_monteur: null,
+    executed_by_monteur: null,
+    executed_by_helper: null,
+    executor_other_name: null,
+    work_description: null,
+    manual_order_date: null,
+    manual_execution_week: null,
+    manual_execution_week_year: null,
+    manual_execution_start: null,
+    manual_execution_end: null,
+    customer_signature_type: null,
+    customer_signature_name: null,
+    customer_signature_place: null,
+    customer_signed_at: null,
+    customer_email_sent_at: null,
+    customer_email_signature_present: null,
+    worker_signature_name: null,
+    worker_signed_at: null,
+    deleted_at: null,
+    deleted_by_user_id: null,
+    deleted_by_name: null,
+    entry_count: 0,
+    photo_count: 0,
+    total_hours: 0,
+    estimated_hours: null,
+    created_at: "2026-08-19T08:15:00Z",
+    updated_at: "2026-08-19T08:15:00Z",
+    ...overrides,
+  };
+}
+
+function entry(workerRows) {
+  return {
+    id: 11,
+    ticket_id: 7,
+    site_id: 3,
+    component: "",
+    floor: "",
+    room_number: null,
+    axis: null,
+    remarks: null,
+    material_text: null,
+    estimated_hours: null,
+    worker_rows: workerRows,
+    total_hours: 0,
+    created_by_user_id: 2,
+    created_at: "2026-08-19T08:15:00Z",
+    updated_at: "2026-08-19T08:15:00Z",
+  };
+}
+
+function documentRead(overrides = {}) {
+  return {
+    ticket: ticket(),
+    entry: null,
+    resolved_dates: {
+      order_date: "2026-08-20",
+      approval_date: "2026-08-19",
+      approval_place: "Bretten",
+      execution_start: "2026-08-17",
+      execution_end: "2026-08-23",
+    },
+    worker_signature: { name: null, signed_at: null, strokes: null },
+    customer_signature: { type: null, name: null, place: null, signed_at: null, strokes: null },
+    ...overrides,
+  };
+}
+
+test("desktop extra-work creation is permission-gated, persistent, double-click safe and opens the embedded detail", () => {
+  assert.match(pageSource, /extraWorkCreateInFlightRef\.current/);
+  assert.match(pageSource, /api\.createSiteExtraWorkTicket\(site\.id\)/);
+  assert.match(pageSource, /setSelectedExtraWorkTicket\(created\)/);
+  assert.match(pageSource, /canCreate=\{canEditSite\}/);
+  assert.match(pageSource, /"\+ Zusatzauftrag erstellen"/);
+  assert.match(pageSource, /<SupplementaryOrderDetail/);
+  assert.match(pageSource, /onOpenTicket=\{setSelectedExtraWorkTicket\}/);
+});
+
+test("site API uses one shared document, template and archived-photo contract", () => {
+  assert.match(apiSource, /createSiteExtraWorkTicket[\s\S]*method: "POST"[\s\S]*JSON\.stringify\(\{\}\)/);
+  assert.match(apiSource, /siteExtraWorkTicketDocument[\s\S]*\/document\$\{suffix\}/);
+  assert.match(apiSource, /saveSiteExtraWorkTicketDocument[\s\S]*method: "PUT"/);
+  assert.match(apiSource, /siteExtraWorkTemplate[\s\S]*extra-work-template/);
+  assert.match(apiSource, /siteExtraWorkTicketPhotos[\s\S]*include_deleted=true/);
+  assert.match(apiSource, /siteExtraWorkTicketPhotoContent[\s\S]*include_deleted=true/);
+  assert.match(typeSource, /type ExtraWorkTicketDocumentRead = \{[\s\S]*resolved_dates: ExtraWorkTicketResolvedDates;[\s\S]*worker_signature: ExtraWorkTicketWorkerSignatureRead;[\s\S]*customer_signature: ExtraWorkTicketCustomerSignatureRead;/);
+});
+
+test("PDF point rectangles convert proportionally to the A4 overlay coordinate system", () => {
+  assert.equal(EXTRA_WORK_PDF_WIDTH, 595.276);
+  assert.equal(EXTRA_WORK_PDF_HEIGHT, 841.89);
+  const customer = extraWorkPdfRectToPercent(EXTRA_WORK_PDF_FIELD_RECTS.customer);
+  assert.ok(Math.abs(customer.left - ((103.2 / 595.276) * 100)) < 1e-10);
+  assert.ok(Math.abs(customer.top - ((119.199 / 841.89) * 100)) < 1e-10);
+  assert.match(componentSource, /annotationMode: pdfjsLib\.AnnotationMode\.DISABLE/);
+  assert.match(styles, /\.supplementary-order-paper[\s\S]*container-type: inline-size/);
+});
+
+test("legacy defaults match the PDF fallback while visible dates come only from the server resolver", () => {
+  const draft = createExtraWorkDocumentDraft(documentRead(), {
+    orderedByCompanyFallback: "Kunde GmbH",
+    orderedByNameFallback: "Besteller Alt",
+  });
+  assert.equal(draft.billing_type, "hourly");
+  assert.equal(draft.material_required, false);
+  assert.equal(draft.executed_by_monteur, true);
+  assert.equal(draft.ordered_by_company, "Kunde GmbH");
+  assert.equal(draft.ordered_by_name, "Besteller Alt");
+  assert.equal(draft.manual_order_date, "2026-08-20");
+  assert.equal(draft.manual_execution_start, "2026-08-17");
+  assert.equal(draft.manual_execution_end, "2026-08-23");
+
+  const explicitLegacyFalseDraft = createExtraWorkDocumentDraft(documentRead({
+    ticket: ticket({
+      executed_by_lead_monteur: false,
+      executed_by_monteur: false,
+      executed_by_helper: false,
+    }),
+  }));
+  assert.equal(explicitLegacyFalseDraft.executed_by_monteur, false);
+
+  const weekTicket = ticket({ manual_execution_week: 1, manual_execution_week_year: 2025 });
+  const weekDraft = createExtraWorkDocumentDraft(documentRead({
+    ticket: weekTicket,
+    resolved_dates: { ...documentRead().resolved_dates, execution_start: "2024-12-30", execution_end: "2025-01-05" },
+  }));
+  assert.equal(weekDraft.manual_execution_start, "2024-12-30");
+  assert.equal(weekDraft.manual_execution_end, "2025-01-05");
+  const untouchedPayload = buildExtraWorkDocumentPayload(weekDraft, 0, {
+    originalTicket: weekTicket,
+    dirtyFields: new Set(),
+  });
+  assert.equal(untouchedPayload.manual_execution_week, 1);
+  assert.equal(untouchedPayload.manual_execution_week_year, 2025);
+  assert.equal(untouchedPayload.manual_execution_start, null);
+  assert.equal(untouchedPayload.manual_execution_end, null);
+  const editedPayload = buildExtraWorkDocumentPayload(weekDraft, 0, {
+    executionRangeEdited: true,
+    originalTicket: weekTicket,
+    dirtyFields: new Set(["manual_execution_start", "manual_execution_end"]),
+  });
+  assert.equal(editedPayload.manual_execution_week, null);
+  assert.equal(editedPayload.manual_execution_week_year, null);
+});
+
+test("German decimal input becomes numeric payload and multiline text is preserved exactly", () => {
+  const draft = createExtraWorkDocumentDraft(documentRead());
+  draft.estimated_order_value = "1234,50";
+  draft.entry.estimated_hours = "8,25";
+  draft.work_description = "  Erste Zeile\nZweite Zeile  ";
+  draft.entry.remarks = "  Hinweis\nmit Umbruch  ";
+  draft.entry.material_text = "  Kabel\nKlemmen  ";
+  draft.entry.worker_rows[0].worker_name = "Monteur Eins";
+  draft.entry.worker_rows[0].monday_hours = "1,5";
+  draft.entry.worker_rows[0].monday_surcharge_25_hours = "0,25";
+  const payload = buildExtraWorkDocumentPayload(draft, 0);
+
+  assert.equal(payload.estimated_order_value, 1234.5);
+  assert.equal(payload.entry.estimated_hours, 8.25);
+  assert.equal(payload.entry.worker_rows[0].monday_hours, 1.5);
+  assert.equal(payload.entry.worker_rows[0].monday_surcharge_25_hours, 0.25);
+  assert.equal(payload.work_description, draft.work_description);
+  assert.equal(payload.entry.remarks, draft.entry.remarks);
+  assert.equal(payload.entry.material_text, draft.entry.material_text);
+  assert.throws(() => parseExtraWorkNumericValue("1,2,3", "Stunden"), /gültige positive Zahl/);
+  assert.equal(parseExtraWorkNumericValue("1.250,50", "Auftragswert", { allowGermanGrouping: true }), 1250.5);
+});
+
+test("server numeric values are displayed in German without changing their numeric save value", () => {
+  const numericDraft = createExtraWorkDocumentDraft(documentRead({
+    ticket: ticket({ estimated_order_value: 1250.5 }),
+    entry: entry([{ ...createEmptyExtraWorkWorkerRow(), worker_name: "Marta", monday_hours: 8.5 }]),
+  }));
+  assert.equal(numericDraft.estimated_order_value, "1.250,50");
+  assert.equal(numericDraft.entry.worker_rows[0].monday_hours, "8,5");
+  const payload = buildExtraWorkDocumentPayload(numericDraft, 1);
+  assert.equal(payload.estimated_order_value, 1250.5);
+  assert.equal(payload.entry.worker_rows[0].monday_hours, 8.5);
+});
+
+test("display-only legacy fallbacks remain null when only the title is edited", () => {
+  const originalTicket = ticket();
+  const draft = createExtraWorkDocumentDraft(documentRead({ ticket: originalTicket }), {
+    orderedByNameFallback: "Besteller Alt",
+    orderedByCompanyFallback: "Kunde GmbH",
+  });
+  draft.title = "Neue Bezeichnung";
+  const payload = buildExtraWorkDocumentPayload(draft, 0, {
+    originalTicket,
+    dirtyFields: new Set(["title"]),
+  });
+  assert.equal(payload.title, "Neue Bezeichnung");
+  assert.equal(payload.ordered_by_name, null);
+  assert.equal(payload.ordered_by_company, null);
+  assert.equal(payload.billing_type, null);
+  assert.equal(payload.material_required, null);
+  assert.equal(payload.material_separate_attachment, null);
+  assert.equal(payload.executed_by_lead_monteur, null);
+  assert.equal(payload.executed_by_monteur, null);
+  assert.equal(payload.executed_by_helper, null);
+  assert.equal(payload.manual_order_date, null);
+});
+
+test("empty new worker slots are removed while all loaded rows beyond the paper remain intact", () => {
+  const originalRows = Array.from({ length: 4 }, (_, index) => ({
+    ...createEmptyExtraWorkWorkerRow(),
+    worker_name: index === 3 ? "Folgeseite" : `Monteur ${index + 1}`,
+  }));
+  const legacyDraft = createExtraWorkDocumentDraft(documentRead({ ticket: ticket(), entry: entry(originalRows) }));
+  legacyDraft.entry.worker_rows[3].monday_surcharge_50_hours = "1,5";
+  const pages = chunkExtraWorkWorkerRows(legacyDraft.entry.worker_rows);
+  assert.equal(pages.length, 2);
+  assert.equal(pages[1][0].worker_name, "Folgeseite");
+  assert.equal(pages[1][0].monday_surcharge_50_hours, "1,5");
+  const legacyPayload = buildExtraWorkDocumentPayload(legacyDraft, 4);
+  assert.equal(legacyPayload.entry.worker_rows.length, 4);
+  assert.equal(legacyPayload.entry.worker_rows[3].worker_name, "Folgeseite");
+  assert.equal(legacyPayload.entry.worker_rows[3].monday_surcharge_50_hours, 1.5);
+
+  const newDraft = createExtraWorkDocumentDraft(documentRead());
+  newDraft.entry.worker_rows[0].worker_name = "Neu";
+  const newPayload = buildExtraWorkDocumentPayload(newDraft, 0);
+  assert.equal(newPayload.entry.worker_rows.length, 1);
+});
+
+test("submitted and worker-signed records stay editable but permission, customer signature, archive and terminal status lock", () => {
+  assert.equal(isExtraWorkDocumentLocked(ticket({ status: "submitted" }), true), false);
+  assert.equal(isExtraWorkDocumentLocked(ticket({ worker_signed_at: "2026-08-19T09:00:00Z" }), true), false);
+  assert.equal(isExtraWorkDocumentLocked(ticket(), false), true);
+  assert.equal(isExtraWorkDocumentLocked(ticket({ customer_signed_at: "2026-08-19T09:00:00Z" }), true), true);
+  assert.equal(isExtraWorkDocumentLocked(ticket({ deleted_at: "2026-08-19T09:00:00Z" }), true), true);
+  assert.equal(isExtraWorkDocumentLocked(ticket({ status: "billed" }), true), true);
+});
+
+test("detail has explicit save, dirty guards, annotation-free canvas and no archived PDF action", () => {
+  assert.match(componentSource, /api\.saveSiteExtraWorkTicketDocument/);
+  assert.match(componentSource, /Ungespeicherte Änderungen verwerfen/);
+  assert.match(componentSource, /beforeunload/);
+  assert.equal(componentSource.match(/disabled=\{pdfBusy \|\| isDirty\}/g)?.length, 2);
+  assert.match(componentSource, /Vor dem PDF-Download zuerst speichern/);
+  assert.match(componentSource, /!documentTicket\.deleted_at \? \(/);
+  assert.match(componentSource, /Für die PDF-Ausgabe den Zusatzauftrag zuerst wiederherstellen/);
+  assert.match(componentSource, /siteExtraWorkTicketPhotos\(site\.id, ticket\.id, \{ includeDeleted \}\)/);
+  assert.match(componentSource, /type="text"[\s\S]*inputMode="decimal"[\s\S]*pattern="\[0-9\]\+\(\[,.\]\[0-9\]\+\)\?"/);
+});
+
+test("paper preview mirrors multi-page PDF chunks, document numbering, totals and signatures", () => {
+  assert.match(componentSource, /chunkExtraWorkWorkerRows\(draft\?\.entry\.worker_rows/);
+  assert.match(componentSource, /pageIndex \* EXTRA_WORK_VISIBLE_WORKER_ROWS/);
+  assert.match(componentSource, /getExtraWorkOverallHours\(workers\)/);
+  assert.match(componentSource, /`\$\{ticket\.display_number\} \/ Blatt \$\{pageIndex \+ 1\}`/);
+  assert.match(componentSource, /isLastPage \? \(/);
+  assert.match(componentSource, /function PaperSignature/);
+  assert.match(componentSource, /document\.worker_signature\.strokes/);
+  assert.match(componentSource, /document\.customer_signature\.strokes/);
+  assert.match(componentSource, /document\.resolved_dates\.approval_date/);
+  assert.match(componentSource, /EXTRA_WORK_PDF_FIELD_RECTS\.title/);
+  assert.match(componentSource, /if \(value <= 0\) \{\s*return "";/);
+});
+
+test("paper inputs stay transparent until interaction and suppress browser autofill", () => {
+  assert.match(styles, /\.supplementary-order-paper-field input,[\s\S]*border: 1px solid transparent;[\s\S]*background: transparent;/);
+  assert.match(styles, /\.supplementary-order-paper-field input:hover:not\(\[readonly\]\)[\s\S]*background: rgb\(255 255 255 \/ 88%\);/);
+  assert.match(componentSource, /autoComplete="off"/);
+  assert.match(componentSource, /className="supplementary-order-paper-signature"/);
+});

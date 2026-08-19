@@ -73,14 +73,56 @@ class ExtraWorkWorkerSignatureCreate(BaseModel):
 
 
 class ExtraWorkWorkerHours(BaseModel):
-    worker_name: str = Field(min_length=1, max_length=160)
-    monday_hours: float = Field(default=0, ge=0, le=24)
-    tuesday_hours: float = Field(default=0, ge=0, le=24)
-    wednesday_hours: float = Field(default=0, ge=0, le=24)
-    thursday_hours: float = Field(default=0, ge=0, le=24)
-    friday_hours: float = Field(default=0, ge=0, le=24)
-    saturday_hours: float = Field(default=0, ge=0, le=24)
-    sunday_hours: float = Field(default=0, ge=0, le=24)
+    person_id: int | None = Field(default=None, gt=0)
+    worker_name: str = Field(default="", max_length=160)
+    monday_hours: float | None = Field(default=None, ge=0, le=24)
+    tuesday_hours: float | None = Field(default=None, ge=0, le=24)
+    wednesday_hours: float | None = Field(default=None, ge=0, le=24)
+    thursday_hours: float | None = Field(default=None, ge=0, le=24)
+    friday_hours: float | None = Field(default=None, ge=0, le=24)
+    saturday_hours: float | None = Field(default=None, ge=0, le=24)
+    sunday_hours: float | None = Field(default=None, ge=0, le=24)
+    monday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    tuesday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    wednesday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    thursday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    friday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    saturday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    sunday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
+    monday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    tuesday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    wednesday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    thursday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    friday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    saturday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    sunday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+
+    @model_validator(mode="after")
+    def validate_worker_hours(self) -> "ExtraWorkWorkerHours":
+        for weekday in (
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ):
+            values = (
+                getattr(self, f"{weekday}_hours"),
+                getattr(self, f"{weekday}_surcharge_25_hours"),
+                getattr(self, f"{weekday}_surcharge_50_hours"),
+            )
+            if sum(value or 0 for value in values) > 24:
+                raise ValueError("Pro Monteur und Wochentag sind maximal 24 Stunden erlaubt.")
+        hour_values = [
+            value
+            for field_name, value in self.__dict__.items()
+            if field_name.endswith("_hours")
+        ]
+        if (self.person_id is not None or any(value is not None for value in hour_values)) and not self.worker_name.strip():
+            raise ValueError("Für erfasste Stunden ist ein Monteurname erforderlich.")
+        return self
 
 
 class ExtraWorkTicketEntryPayload(BaseModel):
@@ -92,6 +134,23 @@ class ExtraWorkTicketEntryPayload(BaseModel):
     material_text: str | None = Field(default=None, max_length=4000)
     estimated_hours: float | None = Field(default=None, ge=0, le=10000)
     worker_rows: list[ExtraWorkWorkerHours] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_mobile_workers(self) -> "ExtraWorkTicketEntryPayload":
+        if any(not row.worker_name.strip() for row in self.worker_rows):
+            raise ValueError("Für jeden Monteur ist ein Name erforderlich.")
+        return self
+
+
+class ExtraWorkTicketDocumentEntryUpdate(BaseModel):
+    component: str = Field(default="", max_length=160)
+    floor: str = Field(default="", max_length=120)
+    room_number: str | None = Field(default=None, max_length=80)
+    axis: str | None = Field(default=None, max_length=80)
+    remarks: str | None = Field(default=None, max_length=4000)
+    material_text: str | None = Field(default=None, max_length=4000)
+    estimated_hours: float | None = Field(default=None, ge=0, le=10000)
+    worker_rows: list[ExtraWorkWorkerHours] = Field(default_factory=list, max_length=20)
 
 
 class ExtraWorkTicketEntryRead(BaseModel):
@@ -146,9 +205,22 @@ class ExtraWorkTicketRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
+    ordered_by_name: str | None = None
+    ordered_by_company: str | None = None
+    billing_type: str | None = None
+    estimated_order_value: float | None = None
+    material_required: bool | None = None
+    material_separate_attachment: bool | None = None
+    executed_by_lead_monteur: bool | None = None
+    executed_by_monteur: bool | None = None
+    executed_by_helper: bool | None = None
+    executor_other_name: str | None = None
+    work_description: str | None = None
     manual_order_date: date | None
     manual_execution_week: int | None
     manual_execution_week_year: int | None
+    manual_execution_start: date | None = None
+    manual_execution_end: date | None = None
     customer_signature_type: str | None
     customer_signature_name: str | None
     customer_signature_place: str | None
@@ -166,6 +238,76 @@ class ExtraWorkTicketRead(BaseModel):
     estimated_hours: float | None
     created_at: datetime
     updated_at: datetime
+
+
+class ExtraWorkTicketDocumentDatesRead(BaseModel):
+    order_date: date
+    approval_date: date
+    approval_place: str | None
+    execution_start: date
+    execution_end: date
+
+
+class ExtraWorkTicketDocumentWorkerSignatureRead(BaseModel):
+    name: str | None
+    signed_at: datetime | None
+    strokes: list[list[ExtraWorkSignaturePoint]] | None
+
+
+class ExtraWorkTicketDocumentCustomerSignatureRead(BaseModel):
+    type: str | None
+    name: str | None
+    place: str | None
+    signed_at: datetime | None
+    strokes: list[list[ExtraWorkSignaturePoint]] | None
+
+
+class ExtraWorkTicketDocumentRead(BaseModel):
+    ticket: ExtraWorkTicketRead
+    entry: ExtraWorkTicketEntryRead | None
+    resolved_dates: ExtraWorkTicketDocumentDatesRead
+    worker_signature: ExtraWorkTicketDocumentWorkerSignatureRead
+    customer_signature: ExtraWorkTicketDocumentCustomerSignatureRead
+
+
+class ExtraWorkTicketDocumentUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=160)
+    ordered_by_name: str | None = Field(default=None, max_length=160)
+    ordered_by_company: str | None = Field(default=None, max_length=200)
+    billing_type: str | None = Field(
+        default=None,
+        pattern="^(flat_rate|hourly|unit_price)$",
+    )
+    estimated_order_value: float | None = Field(default=None, ge=0, le=9999999999.99)
+    material_required: bool | None = None
+    material_separate_attachment: bool | None = None
+    executed_by_lead_monteur: bool | None = None
+    executed_by_monteur: bool | None = None
+    executed_by_helper: bool | None = None
+    executor_other_name: str | None = Field(default=None, max_length=160)
+    work_description: str | None = Field(default=None, max_length=12000)
+    manual_order_date: date | None = None
+    manual_execution_week: int | None = Field(default=None, ge=1, le=53)
+    manual_execution_week_year: int | None = Field(default=None, ge=1, le=9999)
+    manual_execution_start: date | None = None
+    manual_execution_end: date | None = None
+    entry: ExtraWorkTicketDocumentEntryUpdate | None = None
+
+    @model_validator(mode="after")
+    def validate_document_dates(self) -> "ExtraWorkTicketDocumentUpdate":
+        if (self.manual_execution_week is None) != (self.manual_execution_week_year is None):
+            raise ValueError("Kalenderwoche und ISO-Jahr müssen gemeinsam angegeben werden.")
+        if self.manual_execution_week is not None and self.manual_execution_week_year is not None:
+            validate_iso_week(self.manual_execution_week_year, self.manual_execution_week)
+        if (self.manual_execution_start is None) != (self.manual_execution_end is None):
+            raise ValueError("Ausführungsbeginn und Ausführungsende müssen gemeinsam angegeben werden.")
+        if (
+            self.manual_execution_start is not None
+            and self.manual_execution_end is not None
+            and self.manual_execution_start > self.manual_execution_end
+        ):
+            raise ValueError("Ausführungsbeginn darf nicht nach dem Ausführungsende liegen.")
+        return self
 
 
 class ExtraWorkTicketEmailSendRead(BaseModel):

@@ -207,6 +207,8 @@ export type MeasurementImportOptions = {
 
 export type MeasurementNumericValue = string | number | null;
 
+export type ExtraWorkBillingType = "flat_rate" | "hourly" | "unit_price";
+
 export type MeasurementItem = {
   id: number;
   site_id: number;
@@ -380,9 +382,22 @@ export type MobileExtraWorkTicket = {
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;
+  ordered_by_name: string | null;
+  ordered_by_company: string | null;
+  billing_type: ExtraWorkBillingType | null;
+  estimated_order_value: MeasurementNumericValue | null;
+  material_required: boolean | null;
+  material_separate_attachment: boolean | null;
+  executed_by_lead_monteur: boolean | null;
+  executed_by_monteur: boolean | null;
+  executed_by_helper: boolean | null;
+  executor_other_name: string | null;
+  work_description: string | null;
   manual_order_date: string | null;
   manual_execution_week: number | null;
   manual_execution_week_year: number | null;
+  manual_execution_start: string | null;
+  manual_execution_end: string | null;
   customer_signature_type: "billing_customer" | "approval_customer" | string | null;
   customer_signature_name: string | null;
   customer_signature_place: string | null;
@@ -452,6 +467,7 @@ export type MobileExtraWorkTicketPhoto = {
 };
 
 export type MobileExtraWorkWorkerHours = {
+  person_id?: number | null;
   worker_name: string;
   monday_hours: MeasurementNumericValue;
   tuesday_hours: MeasurementNumericValue;
@@ -460,6 +476,20 @@ export type MobileExtraWorkWorkerHours = {
   friday_hours: MeasurementNumericValue;
   saturday_hours: MeasurementNumericValue;
   sunday_hours: MeasurementNumericValue;
+  monday_surcharge_25_hours?: MeasurementNumericValue;
+  tuesday_surcharge_25_hours?: MeasurementNumericValue;
+  wednesday_surcharge_25_hours?: MeasurementNumericValue;
+  thursday_surcharge_25_hours?: MeasurementNumericValue;
+  friday_surcharge_25_hours?: MeasurementNumericValue;
+  saturday_surcharge_25_hours?: MeasurementNumericValue;
+  sunday_surcharge_25_hours?: MeasurementNumericValue;
+  monday_surcharge_50_hours?: MeasurementNumericValue;
+  tuesday_surcharge_50_hours?: MeasurementNumericValue;
+  wednesday_surcharge_50_hours?: MeasurementNumericValue;
+  thursday_surcharge_50_hours?: MeasurementNumericValue;
+  friday_surcharge_50_hours?: MeasurementNumericValue;
+  saturday_surcharge_50_hours?: MeasurementNumericValue;
+  sunday_surcharge_50_hours?: MeasurementNumericValue;
 };
 
 export type MobileExtraWorkTicketEntryPayload = {
@@ -481,6 +511,57 @@ export type MobileExtraWorkTicketEntry = MobileExtraWorkTicketEntryPayload & {
   created_by_user_id: number | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ExtraWorkTicketResolvedDates = {
+  order_date: string;
+  approval_date: string;
+  approval_place: string | null;
+  execution_start: string;
+  execution_end: string;
+};
+
+export type ExtraWorkTicketWorkerSignatureRead = {
+  name: string | null;
+  signed_at: string | null;
+  strokes: CustomerSignatureStroke[] | null;
+};
+
+export type ExtraWorkTicketCustomerSignatureRead = {
+  type: string | null;
+  name: string | null;
+  place: string | null;
+  signed_at: string | null;
+  strokes: CustomerSignatureStroke[] | null;
+};
+
+export type ExtraWorkTicketDocumentRead = {
+  ticket: MobileExtraWorkTicket;
+  entry: MobileExtraWorkTicketEntry | null;
+  resolved_dates: ExtraWorkTicketResolvedDates;
+  worker_signature: ExtraWorkTicketWorkerSignatureRead;
+  customer_signature: ExtraWorkTicketCustomerSignatureRead;
+};
+
+export type ExtraWorkTicketDocumentUpdate = {
+  title: string | null;
+  ordered_by_name: string | null;
+  ordered_by_company: string | null;
+  billing_type: ExtraWorkBillingType | null;
+  estimated_order_value: number | null;
+  material_required: boolean | null;
+  material_separate_attachment: boolean | null;
+  executed_by_lead_monteur: boolean | null;
+  executed_by_monteur: boolean | null;
+  executed_by_helper: boolean | null;
+  executor_other_name: string | null;
+  work_description: string | null;
+  manual_order_date: string | null;
+  manual_execution_week: number | null;
+  manual_execution_week_year: number | null;
+  manual_execution_start: string | null;
+  manual_execution_end: string | null;
+  entry: MobileExtraWorkTicketEntryPayload;
 };
 
 export type CustomerSignaturePoint = {
