@@ -14,6 +14,7 @@ from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.extra_work import (
+    ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
     ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketDocumentEntryUpdate,
@@ -266,6 +267,8 @@ def test_document_response_contains_signatures_without_bloating_ticket_read():
     stored = db.get(ExtraWorkTicket, ticket.id)
     assert stored is not None
     stored.worker_signature_name = "Max Monteur"
+    stored.worker_signature_place = "Bad Rothenfelde"
+    stored.worker_signature_date = date(2026, 8, 18)
     stored.worker_signed_at = signed_at
     stored.worker_signature_strokes = [[{"x": 0.1, "y": 0.2}, {"x": 0.8, "y": 0.7}]]
     stored.customer_signature_type = "billing_customer"
@@ -278,6 +281,8 @@ def test_document_response_contains_signatures_without_bloating_ticket_read():
     document = service.get_site_ticket_document(site_id=site.id, ticket_id=ticket.id)
 
     assert document.worker_signature.name == "Max Monteur"
+    assert document.worker_signature.place == "Bad Rothenfelde"
+    assert document.worker_signature.date == date(2026, 8, 18)
     assert document.worker_signature.signed_at is not None
     assert document.worker_signature.signed_at.replace(tzinfo=UTC) == signed_at
     assert document.worker_signature.strokes is not None
@@ -294,6 +299,54 @@ def test_document_response_contains_signatures_without_bloating_ticket_read():
     assert "customer_signature" not in ticket_payload
     assert "worker_signature_strokes" not in ticket_payload
     assert "customer_signature_strokes" not in ticket_payload
+
+
+def test_desktop_worker_signature_uses_shared_strokes_and_persists_place_and_date():
+    db = db_session()
+    site = Site(
+        site_number="8015",
+        name="Projekt",
+        street="Am Kurpark",
+        house_number="1",
+        postal_code="49214",
+        city="Bad Rothenfelde",
+    )
+    actor = office_user()
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db)
+    ticket = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    saved = service.update_site_ticket_document(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=actor,
+        payload=ExtraWorkTicketDocumentUpdate(
+            worker_signature_name=" Max Monteur ",
+            worker_signature_place=" Bad Rothenfelde ",
+            worker_signature_date=date(2026, 8, 19),
+            worker_signature_strokes=[[
+                ExtraWorkSignaturePoint(x=0.1, y=0.2),
+                ExtraWorkSignaturePoint(x=0.8, y=0.7),
+            ]],
+        ),
+    )
+
+    stored = db.get(ExtraWorkTicket, ticket.id)
+    assert stored is not None
+    assert stored.worker_signature_name == "Max Monteur"
+    assert stored.worker_signature_place == "Bad Rothenfelde"
+    assert stored.worker_signature_date == date(2026, 8, 19)
+    assert stored.worker_signed_at is not None
+    assert stored.worker_signature_strokes == [[{"x": 0.1, "y": 0.2}, {"x": 0.8, "y": 0.7}]]
+    assert saved.worker_signature.name == "Max Monteur"
+    assert saved.worker_signature.place == "Bad Rothenfelde"
+    assert saved.worker_signature.date == date(2026, 8, 19)
+    assert saved.worker_signature.strokes is not None
 
 
 def test_office_person_assignment_is_not_used_for_document_dates():

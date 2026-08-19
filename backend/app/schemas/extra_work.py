@@ -1,3 +1,4 @@
+import datetime as dt
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -228,6 +229,8 @@ class ExtraWorkTicketRead(BaseModel):
     customer_email_sent_at: datetime | None = None
     customer_email_signature_present: bool | None = None
     worker_signature_name: str | None
+    worker_signature_place: str | None = None
+    worker_signature_date: date | None = None
     worker_signed_at: datetime | None
     deleted_at: datetime | None = None
     deleted_by_user_id: int | None = None
@@ -250,6 +253,8 @@ class ExtraWorkTicketDocumentDatesRead(BaseModel):
 
 class ExtraWorkTicketDocumentWorkerSignatureRead(BaseModel):
     name: str | None
+    place: str | None = None
+    date: dt.date | None = None
     signed_at: datetime | None
     strokes: list[list[ExtraWorkSignaturePoint]] | None
 
@@ -291,6 +296,10 @@ class ExtraWorkTicketDocumentUpdate(BaseModel):
     manual_execution_week_year: int | None = Field(default=None, ge=1, le=9999)
     manual_execution_start: date | None = None
     manual_execution_end: date | None = None
+    worker_signature_name: str | None = Field(default=None, max_length=160)
+    worker_signature_place: str | None = Field(default=None, max_length=160)
+    worker_signature_date: date | None = None
+    worker_signature_strokes: list[list[ExtraWorkSignaturePoint]] | None = None
     entry: ExtraWorkTicketDocumentEntryUpdate | None = None
 
     @model_validator(mode="after")
@@ -307,6 +316,11 @@ class ExtraWorkTicketDocumentUpdate(BaseModel):
             and self.manual_execution_start > self.manual_execution_end
         ):
             raise ValueError("Ausführungsbeginn darf nicht nach dem Ausführungsende liegen.")
+        if self.worker_signature_strokes is not None:
+            if not any(len(stroke) >= 2 for stroke in self.worker_signature_strokes):
+                raise ValueError("Monteursunterschrift ist erforderlich.")
+            if not self.worker_signature_name or not self.worker_signature_name.strip():
+                raise ValueError("Monteurname ist für die Unterschrift erforderlich.")
         return self
 
 

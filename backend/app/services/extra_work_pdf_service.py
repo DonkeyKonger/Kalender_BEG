@@ -34,7 +34,7 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v7-master"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v8-signature-details"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -257,6 +257,8 @@ class ExtraWorkPdfService:
                 "customer_signature_strokes": ticket.customer_signature_strokes,
                 "customer_signed_at": ticket.customer_signed_at,
                 "worker_signature_name": ticket.worker_signature_name,
+                "worker_signature_place": ticket.worker_signature_place,
+                "worker_signature_date": ticket.worker_signature_date,
                 "worker_signature_strokes": ticket.worker_signature_strokes,
                 "worker_signed_at": ticket.worker_signed_at,
             },
@@ -637,7 +639,10 @@ class ExtraWorkPdfService:
             _field(commands, FIELD_RECTS["Gesamt Std"], _format_decimal(total), size=9, align="center")
 
     def _draw_signature_fields(self, commands: list[bytes], ticket: ExtraWorkTicket) -> None:
-        worker_place = _format_site_signature_location(ticket.site)
+        worker_place = ticket.worker_signature_place or _format_site_signature_location(ticket.site)
+        worker_date = ticket.worker_signature_date or (
+            ticket.worker_signed_at.date() if ticket.worker_signed_at else None
+        )
         customer_place = ticket.customer_signature_place or worker_place
 
         _signature_stamp(
@@ -646,7 +651,7 @@ class ExtraWorkPdfService:
             image_box=MONTEUR_SIG_IMAGE_BOX,
             place_center_x=MONTEUR_PLACE_CENTER_X,
             date_center_x=MONTEUR_DATE_CENTER_X,
-            signed_at=ticket.worker_signed_at,
+            signature_date=worker_date,
             place=worker_place,
         )
         _signature_stamp(
@@ -655,7 +660,7 @@ class ExtraWorkPdfService:
             image_box=CUSTOMER_SIG_IMAGE_BOX,
             place_center_x=CUSTOMER_PLACE_CENTER_X,
             date_center_x=CUSTOMER_DATE_CENTER_X,
-            signed_at=ticket.customer_signed_at,
+            signature_date=ticket.customer_signed_at.date() if ticket.customer_signed_at else None,
             place=customer_place,
         )
 
@@ -983,7 +988,7 @@ def _signature_stamp(
     image_box: tuple[float, float, float, float],
     place_center_x: float,
     date_center_x: float,
-    signed_at: datetime | None,
+    signature_date: date | None,
     place: str,
 ) -> None:
     image_x, image_y, image_width, image_height = image_box
@@ -1000,7 +1005,7 @@ def _signature_stamp(
         commands,
         center_x=date_center_x,
         y=SIGNATURE_VALUE_BASELINE_Y,
-        text=_format_date_from_datetime(signed_at),
+        text=_format_signature_date(signature_date),
         max_width=SIGNATURE_DATE_MAX_WIDTH,
         size=SIGNATURE_VALUE_FONT_SIZE,
     )
@@ -1141,6 +1146,19 @@ def _draw_signature(
     if not strokes:
         return
 
+    source_aspect_ratio = 3.0
+    target_aspect_ratio = width / height if height > 0 else source_aspect_ratio
+    if target_aspect_ratio > source_aspect_ratio:
+        drawing_width = height * source_aspect_ratio
+        drawing_height = height
+        drawing_x = x + (width - drawing_width) / 2
+        drawing_y = y
+    else:
+        drawing_width = width
+        drawing_height = width / source_aspect_ratio
+        drawing_x = x
+        drawing_y = y + (height - drawing_height) / 2
+
     for stroke in strokes:
         points: list[tuple[float, float]] = []
         for point in stroke:
@@ -1153,7 +1171,12 @@ def _draw_signature(
                 continue
             if not (0 <= point_x <= 1 and 0 <= point_y <= 1):
                 continue
-            points.append((x + point_x * width, y + (1 - point_y) * height))
+            points.append(
+                (
+                    drawing_x + point_x * drawing_width,
+                    drawing_y + (1 - point_y) * drawing_height,
+                )
+            )
         if len(points) < 2:
             continue
 
@@ -1196,7 +1219,7 @@ def _format_datetime(value: datetime | None) -> str | None:
     return value.strftime("%d.%m.%Y, %H:%M")
 
 
-def _format_date_from_datetime(value: datetime | None) -> str:
+def _format_signature_date(value: date | None) -> str:
     if value is None:
         return ""
     return value.strftime("%d.%m.%Y")

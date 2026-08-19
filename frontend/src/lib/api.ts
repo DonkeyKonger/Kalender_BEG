@@ -1406,6 +1406,19 @@ export const api = {
     return request<MobileExtraWorkTicketPhoto[]>(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos${suffix}`);
   },
 
+  async uploadSiteExtraWorkTicketPhoto(
+    siteId: number,
+    ticketId: number,
+    file: File,
+  ): Promise<MobileExtraWorkTicketPhoto> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return request<MobileExtraWorkTicketPhoto>(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   async siteExtraWorkTicketPhotoContent(
     siteId: number,
     ticketId: number,
@@ -1414,6 +1427,16 @@ export const api = {
   ): Promise<Blob> {
     const suffix = params.includeDeleted ? "?include_deleted=true" : "";
     return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/content${suffix}`);
+  },
+
+  async deleteSiteExtraWorkTicketPhoto(
+    siteId: number,
+    ticketId: number,
+    photoId: number,
+  ): Promise<void> {
+    await request<void>(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}`, {
+      method: "DELETE",
+    });
   },
 
   async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<Blob> {

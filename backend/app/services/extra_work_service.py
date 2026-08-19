@@ -177,6 +177,14 @@ class ExtraWorkService:
             ticket,
             get_extra_work_assignment_context(self.db, ticket),
         )
+        worker_signature_place = (
+            ticket.worker_signature_place
+            or format_site_signature_location(ticket.site)
+        )
+        worker_signature_date = (
+            ticket.worker_signature_date
+            or (ticket.worker_signed_at.date() if ticket.worker_signed_at else None)
+        )
         return ExtraWorkTicketDocumentRead(
             ticket=self._build_ticket_read(ticket),
             entry=ExtraWorkTicketEntryRead.model_validate(entry) if entry else None,
@@ -189,6 +197,8 @@ class ExtraWorkService:
             ),
             worker_signature=ExtraWorkTicketDocumentWorkerSignatureRead(
                 name=ticket.worker_signature_name,
+                place=worker_signature_place,
+                date=worker_signature_date,
                 signed_at=ticket.worker_signed_at,
                 strokes=ticket.worker_signature_strokes,
             ),
@@ -226,6 +236,24 @@ class ExtraWorkService:
         ticket.executor_other_name = self._clean_optional_text(payload.executor_other_name)
         ticket.work_description = self._clean_optional_multiline(payload.work_description)
         ticket.manual_order_date = payload.manual_order_date
+        if "worker_signature_place" in payload.model_fields_set:
+            ticket.worker_signature_place = self._clean_optional_text(
+                payload.worker_signature_place
+            )
+        if "worker_signature_date" in payload.model_fields_set:
+            ticket.worker_signature_date = payload.worker_signature_date
+        if payload.worker_signature_strokes is not None:
+            worker_signature_strokes = [
+                [point.model_dump() for point in stroke]
+                for stroke in payload.worker_signature_strokes
+                if len(stroke) >= 2
+            ]
+            if worker_signature_strokes != (ticket.worker_signature_strokes or []):
+                ticket.worker_signed_at = datetime.now(UTC)
+            ticket.worker_signature_name = self._clean_optional_text(
+                payload.worker_signature_name
+            )
+            ticket.worker_signature_strokes = worker_signature_strokes
         if payload.manual_execution_start is not None:
             ticket.manual_execution_week = None
             ticket.manual_execution_week_year = None
@@ -593,12 +621,18 @@ class ExtraWorkService:
         if not valid_strokes:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unterschrift ist erforderlich.")
 
+        signed_at = datetime.now(UTC)
         ticket.worker_signature_name = worker_name
+        ticket.worker_signature_place = (
+            ticket.worker_signature_place
+            or self._clean_optional_text(format_site_signature_location(ticket.site))
+        )
+        ticket.worker_signature_date = signed_at.date()
         ticket.worker_signature_strokes = [
             [point.model_dump() for point in stroke]
             for stroke in valid_strokes
         ]
-        ticket.worker_signed_at = datetime.now(UTC)
+        ticket.worker_signed_at = signed_at
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
@@ -651,7 +685,55 @@ class ExtraWorkService:
         content_type: str | None,
     ) -> ExtraWorkTicketPhotoRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            assignment.site_id,
+            for_update=True,
+        )
+        self._ensure_ticket_content_editable(ticket)
+        return self._upload_ticket_photo(
+            ticket=ticket,
+            current_user=current_user,
+            filename=filename,
+            content=content,
+            content_type=content_type,
+        )
+
+    def upload_site_ticket_photo(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        current_user: User,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None,
+    ) -> ExtraWorkTicketPhotoRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=True,
+            for_update=True,
+        )
+        self._ensure_ticket_content_editable(ticket)
+        return self._upload_ticket_photo(
+            ticket=ticket,
+            current_user=current_user,
+            filename=filename,
+            content=content,
+            content_type=content_type,
+        )
+
+    def _upload_ticket_photo(
+        self,
+        *,
+        ticket: ExtraWorkTicket,
+        current_user: User,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None,
+    ) -> ExtraWorkTicketPhotoRead:
         current_photo_count = self.db.scalar(
             select(func.count(ExtraWorkTicketPhoto.id)).where(
                 ExtraWorkTicketPhoto.extra_work_ticket_id == ticket.id
@@ -679,7 +761,7 @@ class ExtraWorkService:
         )
 
         folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
-            assignment.site_id,
+            ticket.site_id,
             EXTRA_WORK_PHOTO_FOLDER_KEY,
             current_user,
         )
@@ -780,8 +862,40 @@ class ExtraWorkService:
         current_user: User,
     ) -> None:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            assignment.site_id,
+            for_update=True,
+        )
+        self._ensure_ticket_content_editable(ticket)
         photo = self._get_photo_for_ticket(photo_id, ticket.id)
+        self._delete_ticket_photo(photo=photo, current_user=current_user)
+
+    def delete_site_ticket_photo(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        current_user: User,
+    ) -> None:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=True,
+            for_update=True,
+        )
+        self._ensure_ticket_content_editable(ticket)
+        photo = self._get_photo_for_ticket(photo_id, ticket.id)
+        self._delete_ticket_photo(photo=photo, current_user=current_user)
+
+    def _delete_ticket_photo(
+        self,
+        *,
+        photo: ExtraWorkTicketPhoto,
+        current_user: User,
+    ) -> None:
         ProjectStorageService().delete_file_from_folder(
             drive_id=photo.external_drive_id,
             folder_item_id=self._get_photo_folder_item_id(photo, current_user),

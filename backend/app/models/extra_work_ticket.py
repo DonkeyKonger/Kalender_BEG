@@ -77,6 +77,8 @@ class ExtraWorkTicket(TimestampMixin, Base):
     customer_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
     customer_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_signature_name: Mapped[str | None] = mapped_column(String(160))
+    worker_signature_place: Mapped[str | None] = mapped_column(String(160))
+    worker_signature_date: Mapped[date | None] = mapped_column(Date)
     worker_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
     worker_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

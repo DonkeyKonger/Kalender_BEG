@@ -37,6 +37,7 @@ import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
+import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
@@ -6549,55 +6550,11 @@ function WorkerSignatureOverlay({
 }
 
 function getSignatureCanvasPoint(event: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
-  const rect = event.currentTarget.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return null;
-  }
-  return {
-    x: clampNumber((event.clientX - rect.left) / rect.width, 0, 1),
-    y: clampNumber((event.clientY - rect.top) / rect.height, 0, 1),
-  };
-}
-
-function drawSignatureCanvas(canvas: HTMLCanvasElement | null, strokes: CustomerSignatureStroke[]): void {
-  if (!canvas) {
-    return;
-  }
-  const rect = canvas.getBoundingClientRect();
-  const scale = window.devicePixelRatio || 1;
-  const width = Math.max(1, Math.floor(rect.width * scale));
-  const height = Math.max(1, Math.floor(rect.height * scale));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return;
-  }
-  context.clearRect(0, 0, width, height);
-  context.save();
-  context.scale(scale, scale);
-  context.lineWidth = 2;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.strokeStyle = "#0f2747";
-  for (const stroke of strokes) {
-    if (stroke.length < 2) {
-      continue;
-    }
-    const firstPoint = stroke[0];
-    if (!firstPoint) {
-      continue;
-    }
-    context.beginPath();
-    context.moveTo(firstPoint.x * rect.width, firstPoint.y * rect.height);
-    for (const point of stroke.slice(1)) {
-      context.lineTo(point.x * rect.width, point.y * rect.height);
-    }
-    context.stroke();
-  }
-  context.restore();
+  return getNormalizedSignaturePoint(
+    event.currentTarget,
+    event.clientX,
+    event.clientY,
+  );
 }
 
 function clampNumber(value: number, min: number, max: number): number {

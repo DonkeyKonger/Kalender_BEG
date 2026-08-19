@@ -405,6 +405,8 @@ export type MobileExtraWorkTicket = {
   customer_email_sent_at: string | null;
   customer_email_signature_present: boolean | null;
   worker_signature_name: string | null;
+  worker_signature_place: string | null;
+  worker_signature_date: string | null;
   worker_signed_at: string | null;
   deleted_at: string | null;
   deleted_by_user_id: number | null;
@@ -523,6 +525,8 @@ export type ExtraWorkTicketResolvedDates = {
 
 export type ExtraWorkTicketWorkerSignatureRead = {
   name: string | null;
+  place: string | null;
+  date: string | null;
   signed_at: string | null;
   strokes: CustomerSignatureStroke[] | null;
 };
@@ -561,6 +565,10 @@ export type ExtraWorkTicketDocumentUpdate = {
   manual_execution_week_year: number | null;
   manual_execution_start: string | null;
   manual_execution_end: string | null;
+  worker_signature_name: string | null;
+  worker_signature_place: string | null;
+  worker_signature_date: string | null;
+  worker_signature_strokes: CustomerSignatureStroke[] | null;
   entry: MobileExtraWorkTicketEntryPayload;
 };
 

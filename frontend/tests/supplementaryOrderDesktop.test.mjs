@@ -11,13 +11,21 @@ import {
   createEmptyExtraWorkWorkerRow,
   createExtraWorkDocumentDraft,
   extraWorkPdfRectToPercent,
+  formatExtraWorkSignaturePlace,
   isExtraWorkDocumentLocked,
   parseExtraWorkNumericValue,
 } from "../src/lib/extraWorkDocument.ts";
+import {
+  SIGNATURE_SVG_HEIGHT,
+  SIGNATURE_SVG_WIDTH,
+  signatureStrokeToSvgPoints,
+  validSignatureStrokes,
+} from "../src/lib/signatureCanvas.ts";
 
-const [pageSource, componentSource, apiSource, typeSource, styles] = await Promise.all([
+const [pageSource, componentSource, mobileSource, apiSource, typeSource, styles] = await Promise.all([
   readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/components/SupplementaryOrderDetail.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/types/site.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
@@ -61,6 +69,8 @@ function ticket(overrides = {}) {
     customer_email_sent_at: null,
     customer_email_signature_present: null,
     worker_signature_name: null,
+    worker_signature_place: null,
+    worker_signature_date: null,
     worker_signed_at: null,
     deleted_at: null,
     deleted_by_user_id: null,
@@ -106,7 +116,7 @@ function documentRead(overrides = {}) {
       execution_start: "2026-08-17",
       execution_end: "2026-08-23",
     },
-    worker_signature: { name: null, signed_at: null, strokes: null },
+    worker_signature: { name: null, place: "Bretten", date: null, signed_at: null, strokes: null },
     customer_signature: { type: null, name: null, place: null, signed_at: null, strokes: null },
     ...overrides,
   };
@@ -155,6 +165,8 @@ test("legacy defaults match the PDF fallback while visible dates come only from 
   assert.equal(draft.manual_order_date, "2026-08-20");
   assert.equal(draft.manual_execution_start, "2026-08-17");
   assert.equal(draft.manual_execution_end, "2026-08-23");
+  assert.equal(draft.worker_signature_place, "Bretten");
+  assert.equal(formatExtraWorkSignaturePlace("Am Kurpark 1, 49214 Bad Rothenfelde"), "Bad Rothenfelde");
 
   const explicitLegacyFalseDraft = createExtraWorkDocumentDraft(documentRead({
     ticket: ticket({
@@ -245,6 +257,9 @@ test("display-only legacy fallbacks remain null when only the title is edited", 
   assert.equal(payload.executed_by_monteur, null);
   assert.equal(payload.executed_by_helper, null);
   assert.equal(payload.manual_order_date, null);
+  assert.equal(payload.worker_signature_place, null);
+  assert.equal(payload.worker_signature_date, null);
+  assert.equal(payload.worker_signature_strokes, null);
 });
 
 test("empty new worker slots are removed while all loaded rows beyond the paper remain intact", () => {
@@ -297,16 +312,62 @@ test("paper preview mirrors multi-page PDF chunks, document numbering, totals an
   assert.match(componentSource, /`\$\{ticket\.display_number\} \/ Blatt \$\{pageIndex \+ 1\}`/);
   assert.match(componentSource, /isLastPage \? \(/);
   assert.match(componentSource, /function PaperSignature/);
-  assert.match(componentSource, /document\.worker_signature\.strokes/);
+  assert.match(componentSource, /draft\.worker_signature_strokes/);
   assert.match(componentSource, /document\.customer_signature\.strokes/);
   assert.match(componentSource, /document\.resolved_dates\.approval_date/);
   assert.match(componentSource, /EXTRA_WORK_PDF_FIELD_RECTS\.title/);
   assert.match(componentSource, /if \(value <= 0\) \{\s*return "";/);
 });
 
-test("paper inputs stay transparent until interaction and suppress browser autofill", () => {
+test("the incorrect upper work-description textarea is absent from both rects and the React tree", () => {
+  assert.equal("workDescription" in EXTRA_WORK_PDF_FIELD_RECTS, false);
+  assert.doesNotMatch(componentSource, /EXTRA_WORK_PDF_FIELD_RECTS\.workDescription/);
+  assert.doesNotMatch(componentSource, /label="Beschreibung der auszuführenden Arbeiten"/);
+});
+
+test("editable paper controls use one Acrobat-like highlight while read-only controls stay transparent", () => {
   assert.match(styles, /\.supplementary-order-paper-field input,[\s\S]*border: 1px solid transparent;[\s\S]*background: transparent;/);
-  assert.match(styles, /\.supplementary-order-paper-field input:hover:not\(\[readonly\]\)[\s\S]*background: rgb\(255 255 255 \/ 88%\);/);
+  assert.match(styles, /\.supplementary-order-paper-field\.is-editable input,[\s\S]*background: rgb\(190 215 250 \/ 26%\);/);
+  assert.match(styles, /\.supplementary-order-paper-field input:hover:not\(\[readonly\]\)[\s\S]*background: rgb\(180 210 250 \/ 40%\);/);
+  assert.match(styles, /\.supplementary-order-paper-field input\[readonly\],[\s\S]*background: transparent;/);
+  assert.match(styles, /\.supplementary-order-paper-choice\.is-editable[\s\S]*background: rgb\(190 215 250 \/ 26%\);/);
   assert.match(componentSource, /autoComplete="off"/);
   assert.match(componentSource, /className="supplementary-order-paper-signature"/);
+});
+
+test("desktop worker signature reuses normalized mobile strokes with a proportional non-black renderer", () => {
+  const strokes = validSignatureStrokes([
+    [{ x: 0.1, y: 0.2 }, { x: 0.75, y: 0.8 }],
+    [{ x: Number.NaN, y: 0.2 }],
+  ]);
+  assert.equal(strokes.length, 1);
+  assert.equal(SIGNATURE_SVG_WIDTH / SIGNATURE_SVG_HEIGHT, 3);
+  assert.equal(signatureStrokeToSvgPoints(strokes[0]), "120,80 900,320");
+  assert.match(componentSource, /preserveAspectRatio="xMidYMid meet"/);
+  assert.doesNotMatch(componentSource, /viewBox="0 0 1 1"/);
+  assert.match(componentSource, /function WorkerSignatureDialog/);
+  assert.match(componentSource, /onPointerDown=\{startStroke\}/);
+  assert.match(componentSource, /onPointerMove=\{appendPoint\}/);
+  assert.match(componentSource, /onPointerUp=\{finishStroke\}/);
+  assert.match(componentSource, /onPointerCancel=/);
+  assert.match(styles, /\.supplementary-order-signature-canvas[\s\S]*background: transparent;[\s\S]*touch-action: none;/);
+  assert.match(mobileSource, /import \{ drawSignatureCanvas, getNormalizedSignaturePoint \} from "\.\.\/lib\/signatureCanvas"/);
+});
+
+test("worker signature place, date and strokes share the existing document save payload", () => {
+  const originalTicket = ticket();
+  const draft = createExtraWorkDocumentDraft(documentRead({ ticket: originalTicket }));
+  draft.worker_signature_name = "Max Monteur";
+  draft.worker_signature_place = "Bad Rothenfelde";
+  draft.worker_signature_date = "2026-08-19";
+  draft.worker_signature_strokes = [[{ x: 0.1, y: 0.2 }, { x: 0.8, y: 0.7 }]];
+  const payload = buildExtraWorkDocumentPayload(draft, 0, {
+    originalTicket,
+    dirtyFields: new Set(["worker_signature_name", "worker_signature_place", "worker_signature_date", "worker_signature_strokes"]),
+  });
+  assert.equal(payload.worker_signature_name, "Max Monteur");
+  assert.equal(payload.worker_signature_place, "Bad Rothenfelde");
+  assert.equal(payload.worker_signature_date, "2026-08-19");
+  assert.deepEqual(payload.worker_signature_strokes, draft.worker_signature_strokes);
+  assert.match(componentSource, /worker_signature_date: draft\.worker_signature_date \|\| currentLocalDate\(\)/);
 });

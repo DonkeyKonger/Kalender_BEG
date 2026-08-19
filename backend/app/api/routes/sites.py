@@ -535,6 +535,28 @@ def list_extra_work_ticket_photos(
     )
 
 
+@router.post(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos",
+    response_model=ExtraWorkTicketPhotoRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_extra_work_ticket_photo(
+    site_id: int,
+    ticket_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketPhotoRead:
+    return ExtraWorkService(db).upload_site_ticket_photo(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        current_user=current_user,
+        filename=file.filename,
+        content=await file.read(),
+        content_type=file.content_type,
+    )
+
+
 @router.get(
     "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/content",
 )
@@ -559,6 +581,25 @@ def download_extra_work_ticket_photo(
         headers={
             "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
         },
+    )
+
+
+@router.delete(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_extra_work_ticket_photo(
+    site_id: int,
+    ticket_id: int,
+    photo_id: int,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> None:
+    ExtraWorkService(db).delete_site_ticket_photo(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        current_user=current_user,
     )
 
 

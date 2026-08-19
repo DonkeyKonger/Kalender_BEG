@@ -247,9 +247,48 @@ def test_pdf_cache_hash_changes_for_new_ticket_and_surcharge_fields():
         }
     ]
     surcharge_changed = service._build_ticket_pdf_version_hash(loaded, None)
+    loaded.worker_signature_place = "Bad Rothenfelde"
+    loaded.worker_signature_date = date(2026, 8, 19)
+    signature_details_changed = service._build_ticket_pdf_version_hash(loaded, None)
 
     assert initial != ticket_field_changed
     assert ticket_field_changed != surcharge_changed
+    assert surcharge_changed != signature_details_changed
+
+
+def test_worker_signature_place_date_and_vector_strokes_render_on_clean_pdf():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt", city="Fallbackstadt")
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="8015.SZ01",
+        kind="billing",
+        status="draft",
+        worker_signature_name="Max Monteur",
+        worker_signature_place="Bad Rothenfelde",
+        worker_signature_date=date(2026, 8, 19),
+        worker_signature_strokes=[[
+            {"x": 0.1, "y": 0.2},
+            {"x": 0.35, "y": 0.75},
+            {"x": 0.8, "y": 0.35},
+        ]],
+        worker_signed_at=datetime(2026, 8, 19, 10, 30, tzinfo=timezone.utc),
+    )
+    db.add(ticket)
+    db.commit()
+
+    rendered, _filename = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site.id,
+        ticket_id=ticket.id,
+    )
+    reader = PdfReader(BytesIO(rendered))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+
+    _assert_non_interactive(reader, rendered)
+    assert "Bad Rothenfelde" in text
+    assert "19.08.2026" in text
+    assert "Fallbackstadt" not in text
 
 
 def test_approval_pdf_keeps_created_approval_date_separate_from_manual_order_date():

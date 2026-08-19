@@ -1380,8 +1380,10 @@ def test_mobile_extra_work_worker_signature_persists_without_status_change():
 
     assert signed.status == "draft"
     assert signed.worker_signature_name == "Max Monteur"
+    assert signed.worker_signature_date is not None
     assert signed.worker_signed_at is not None
     assert reloaded.worker_signature_name == "Max Monteur"
+    assert reloaded.worker_signature_date == signed.worker_signature_date
     assert reloaded.worker_signed_at == signed.worker_signed_at
 
 

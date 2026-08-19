@@ -49,7 +49,15 @@ export type ExtraWorkDocumentDraft = Omit<ExtraWorkTicketDocumentUpdate, ExtraWo
   };
 };
 
-export type ExtraWorkDocumentDirtyField = Exclude<keyof ExtraWorkTicketDocumentUpdate, "entry">;
+export type ExtraWorkDocumentDirtyField = Exclude<
+  keyof ExtraWorkTicketDocumentUpdate,
+  "entry"
+>;
+
+type ExtraWorkDocumentPreservableField = Exclude<
+  ExtraWorkDocumentDirtyField,
+  "worker_signature_strokes"
+>;
 
 export type ExtraWorkDocumentDraftOptions = {
   orderedByNameFallback?: string | null;
@@ -72,7 +80,6 @@ export const EXTRA_WORK_PDF_FIELD_RECTS = {
   estimatedHours: { x: 120.36, y: 243.751, width: 111.24, height: 11.339 },
   estimatedOrderValue: { x: 402.6, y: 243.751, width: 146.76, height: 11.339 },
   executorOtherName: { x: 353.269, y: 281.802, width: 97.8, height: 11.339 },
-  workDescription: { x: 62.5, y: 300.5, width: 489, height: 17 },
   authorizationPlace: { x: 62.422, y: 318.393, width: 124.68, height: 14.173 },
   authorizationDate: { x: 240.316, y: 318.393, width: 124.68, height: 14.173 },
   documentNumber: { x: 236.88, y: 351.122, width: 106.8, height: 17.008 },
@@ -261,6 +268,12 @@ export function createExtraWorkDocumentDraft(
     manual_execution_week_year: ticket.manual_execution_week_year ?? null,
     manual_execution_start: document.resolved_dates.execution_start,
     manual_execution_end: document.resolved_dates.execution_end,
+    worker_signature_name: document.worker_signature.name,
+    worker_signature_place: formatExtraWorkSignaturePlace(
+      ticket.worker_signature_place ?? document.worker_signature.place,
+    ),
+    worker_signature_date: ticket.worker_signature_date ?? document.worker_signature.date,
+    worker_signature_strokes: document.worker_signature.strokes,
     entry,
   };
 }
@@ -327,6 +340,12 @@ export function buildExtraWorkDocumentPayload(
     manual_execution_week_year: usesExplicitExecutionRange ? null : draft.manual_execution_week_year,
     manual_execution_start: usesExplicitExecutionRange ? draft.manual_execution_start : null,
     manual_execution_end: usesExplicitExecutionRange ? draft.manual_execution_end : null,
+    worker_signature_name: toNullableText(draft.worker_signature_name),
+    worker_signature_place: toNullableText(draft.worker_signature_place),
+    worker_signature_date: draft.worker_signature_date,
+    worker_signature_strokes: !dirtyFields || dirtyFields.has("worker_signature_strokes")
+      ? draft.worker_signature_strokes
+      : null,
     entry: {
       ...draft.entry,
       room_number: toNullableText(draft.entry.room_number),
@@ -342,7 +361,7 @@ export function buildExtraWorkDocumentPayload(
     return normalizedPayload;
   }
 
-  const preserveWhenUntouched = <K extends ExtraWorkDocumentDirtyField>(
+  const preserveWhenUntouched = <K extends ExtraWorkDocumentPreservableField>(
     field: K,
     normalizedValue: ExtraWorkTicketDocumentUpdate[K],
   ): ExtraWorkTicketDocumentUpdate[K] => (
@@ -380,6 +399,9 @@ export function buildExtraWorkDocumentPayload(
     executor_other_name: preserveWhenUntouched("executor_other_name", normalizedPayload.executor_other_name),
     work_description: preserveWhenUntouched("work_description", normalizedPayload.work_description),
     manual_order_date: preserveWhenUntouched("manual_order_date", normalizedPayload.manual_order_date),
+    worker_signature_name: preserveWhenUntouched("worker_signature_name", normalizedPayload.worker_signature_name),
+    worker_signature_place: preserveWhenUntouched("worker_signature_place", normalizedPayload.worker_signature_place),
+    worker_signature_date: preserveWhenUntouched("worker_signature_date", normalizedPayload.worker_signature_date),
     ...executionValues,
   };
 }
@@ -493,6 +515,15 @@ export function formatExtraWorkDraftNumericValue(
     minimumFractionDigits: options.currency ? 2 : 0,
     maximumFractionDigits: options.currency ? 2 : 4,
   });
+}
+
+export function formatExtraWorkSignaturePlace(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) {
+    return null;
+  }
+  const candidate = normalized.split(",").at(-1)?.trim() ?? normalized;
+  return candidate.replace(/^\d{5}\s+/, "") || candidate;
 }
 
 function formatExtraWorkWorkerRowForDraft(row: MobileExtraWorkWorkerHours): MobileExtraWorkWorkerHours {

@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
@@ -35,6 +36,14 @@ import {
   type ExtraWorkPdfRect,
 } from "../lib/extraWorkDocument";
 import { formatGermanDateTimeShort } from "../lib/formatters";
+import {
+  SIGNATURE_SVG_HEIGHT,
+  SIGNATURE_SVG_WIDTH,
+  drawSignatureCanvas,
+  getNormalizedSignaturePoint,
+  signatureStrokeToSvgPoints,
+  validSignatureStrokes,
+} from "../lib/signatureCanvas";
 import type {
   CustomerSignatureStroke,
   ExtraWorkTicketDocumentRead,
@@ -96,6 +105,7 @@ export function SupplementaryOrderDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [openingPhotoId, setOpeningPhotoId] = useState<number | null>(null);
+  const [isWorkerSignatureOpen, setIsWorkerSignatureOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -383,6 +393,7 @@ export function SupplementaryOrderDetail({
                 onEntryChange={changeEntry}
                 onWorkerChange={(localIndex, patch) => changeWorker((pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS) + localIndex, patch)}
                 onExecutionRangeEdited={() => setExecutionRangeEdited(true)}
+                onEditWorkerSignature={() => setIsWorkerSignatureOpen(true)}
               />
             ))}
           </div>
@@ -456,6 +467,25 @@ export function SupplementaryOrderDetail({
           </SidebarSection>
         </aside>
       </div>
+
+      {isWorkerSignatureOpen ? (
+        <WorkerSignatureDialog
+          initialName={draft.worker_signature_name ?? draft.entry.worker_rows.find((row) => row.worker_name.trim())?.worker_name ?? ""}
+          initialStrokes={draft.worker_signature_strokes}
+          onCancel={() => setIsWorkerSignatureOpen(false)}
+          onApply={({ name, strokes }) => {
+            changeDraft({
+              worker_signature_name: name,
+              worker_signature_place: draft.worker_signature_place?.trim()
+                ? draft.worker_signature_place
+                : signaturePlaceShort(formatSiteSignatureLocation(site)),
+              worker_signature_date: draft.worker_signature_date || currentLocalDate(),
+              worker_signature_strokes: strokes,
+            });
+            setIsWorkerSignatureOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -474,6 +504,7 @@ function SupplementaryOrderPaperPage({
   onEntryChange,
   onWorkerChange,
   onExecutionRangeEdited,
+  onEditWorkerSignature,
 }: {
   site: Site;
   document: ExtraWorkTicketDocumentRead;
@@ -488,6 +519,7 @@ function SupplementaryOrderPaperPage({
   onEntryChange: (patch: Partial<ExtraWorkDocumentDraft["entry"]>) => void;
   onWorkerChange: (workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>) => void;
   onExecutionRangeEdited: () => void;
+  onEditWorkerSignature: () => void;
 }) {
   const ticket = document.ticket;
   const isLastPage = pageIndex === pageCount - 1;
@@ -495,7 +527,6 @@ function SupplementaryOrderPaperPage({
     ? `${ticket.display_number} / Blatt ${pageIndex + 1}`
     : ticket.display_number;
   const pageHours = getExtraWorkOverallHours(workers);
-  const workerSignaturePlace = signaturePlaceShort(formatSiteSignatureLocation(site));
   const customerSignaturePlace = signaturePlaceShort(document.customer_signature.place || formatSiteSignatureLocation(site));
 
   return (
@@ -532,7 +563,6 @@ function SupplementaryOrderPaperPage({
           }
         }} />
         <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.executorOtherName} label="Andere ausführende Person" value={draft.executor_other_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ executor_other_name: value })} />
-        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.workDescription} label="Beschreibung der auszuführenden Arbeiten" value={draft.work_description ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ work_description: value })} />
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationPlace} label="Ort der Ausführungsgenehmigung" value={ticket.kind === "approval" ? (document.resolved_dates.approval_place ?? "") : ""} />
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationDate} label="Datum der Ausführungsgenehmigung" value={ticket.kind === "approval" ? formatPaperDate(document.resolved_dates.approval_date) : ""} />
 
@@ -566,12 +596,12 @@ function SupplementaryOrderPaperPage({
 
         {isLastPage ? (
           <>
-            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignaturePlace} label="Ort Monteurunterschrift" value={workerSignaturePlace} centered />
-            <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignatureDate} label="Datum Monteurunterschrift" value={formatPaperDate(document.worker_signature.signed_at)} centered />
+            <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignaturePlace} label="Ort Monteur-Unterschrift" value={draft.worker_signature_place ?? ""} readOnly={readOnly} centered onChange={(value) => onDraftChange({ worker_signature_place: value })} />
+            <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignatureDate} label="Datum Monteur-Unterschrift" type="date" value={draft.worker_signature_date ?? ""} readOnly={readOnly} centered onChange={(value) => onDraftChange({ worker_signature_date: value || null })} />
             <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignaturePlace} label="Ort Kundenunterschrift" value={customerSignaturePlace} centered />
             <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignatureDate} label="Datum Kundenunterschrift" value={formatPaperDate(document.customer_signature.signed_at)} centered />
-            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignature} label="Unterschrift Monteur" strokes={document.worker_signature.strokes} />
-            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignature} label="Unterschrift Besteller oder Kunde" strokes={document.customer_signature.strokes} />
+            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.workerSignature} label="Unterschrift Monteur" strokes={draft.worker_signature_strokes} readOnly={readOnly} onEdit={onEditWorkerSignature} />
+            <PaperSignature rect={EXTRA_WORK_PDF_FIELD_RECTS.customerSignature} label="Unterschrift Besteller oder Kunde" strokes={document.customer_signature.strokes} readOnly />
           </>
         ) : null}
       </div>
@@ -723,16 +753,17 @@ function WorkerPaperFields({
   );
 }
 
-function PaperInput({ rect, label, value, readOnly, onChange, type = "text" }: {
+function PaperInput({ rect, label, value, readOnly, onChange, type = "text", centered = false }: {
   rect: ExtraWorkPdfRect;
   label: string;
   value: string;
   readOnly: boolean;
   onChange: (value: string) => void;
   type?: "text" | "date";
+  centered?: boolean;
 }) {
   return (
-    <label className="supplementary-order-paper-field" style={paperRectStyle(rect)} title={label}>
+    <label className={`supplementary-order-paper-field${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
       <span className="sr-only">{label}</span>
       <input autoComplete="off" type={type} value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
     </label>
@@ -751,7 +782,7 @@ function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = fa
     ? ""
     : value ?? "";
   return (
-    <label className={`supplementary-order-paper-field is-number${compact ? " is-compact" : ""}`} style={paperRectStyle(rect)} title={label}>
+    <label className={`supplementary-order-paper-field is-number${readOnly ? " is-read-only" : " is-editable"}${compact ? " is-compact" : ""}`} style={paperRectStyle(rect)} title={label}>
       <span className="sr-only">{label}</span>
       <input
         type="text"
@@ -776,7 +807,7 @@ function PaperTextarea({ rect, label, value, readOnly, onChange, centered = fals
   centered?: boolean;
 }) {
   return (
-    <label className={`supplementary-order-paper-field is-textarea${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
+    <label className={`supplementary-order-paper-field is-textarea${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
       <span className="sr-only">{label}</span>
       <textarea autoComplete="off" value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
     </label>
@@ -787,34 +818,174 @@ function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkP
   return <span className={`supplementary-order-paper-value${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label} aria-label={`${label}: ${value || "Nicht angegeben"}`}>{value}</span>;
 }
 
-function PaperSignature({ rect, label, strokes }: {
+function PaperSignature({ rect, label, strokes, readOnly, onEdit }: {
   rect: ExtraWorkPdfRect;
   label: string;
   strokes: CustomerSignatureStroke[] | null;
+  readOnly: boolean;
+  onEdit?: () => void;
 }) {
-  if (!strokes?.some((stroke) => stroke.length > 0)) {
+  const validStrokes = validSignatureStrokes(strokes);
+  if (validStrokes.length === 0 && readOnly) {
     return null;
   }
-  return (
+  const signature = validStrokes.length > 0 ? (
     <svg
       className="supplementary-order-paper-signature"
-      style={paperRectStyle(rect)}
-      viewBox="0 0 1 1"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={label}
+      viewBox={`0 0 ${SIGNATURE_SVG_WIDTH} ${SIGNATURE_SVG_HEIGHT}`}
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
     >
-      {strokes.map((stroke, index) => {
-        const points = stroke
-          .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-          .map((point) => `${clampSignaturePoint(point.x)},${clampSignaturePoint(point.y)}`)
-          .join(" ");
-        if (!points) {
-          return null;
-        }
-        return <polyline key={index} points={points} fill="none" vectorEffect="non-scaling-stroke" />;
-      })}
+      {validStrokes.map((stroke, index) => (
+        <polyline
+          key={index}
+          points={signatureStrokeToSvgPoints(stroke)}
+          fill="none"
+          strokeWidth="12"
+        />
+      ))}
     </svg>
+  ) : null;
+  if (readOnly || !onEdit) {
+    return (
+      <span className="supplementary-order-paper-signature-field is-read-only" style={paperRectStyle(rect)} role="img" aria-label={label}>
+        {signature}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={`supplementary-order-paper-signature-field is-editable${validStrokes.length > 0 ? " is-signed" : ""}`}
+      style={paperRectStyle(rect)}
+      aria-label={label}
+      title={validStrokes.length > 0 ? "Monteursunterschrift ersetzen" : "Monteursunterschrift eintragen"}
+      onClick={onEdit}
+    >
+      {signature}
+    </button>
+  );
+}
+
+function WorkerSignatureDialog({ initialName, initialStrokes, onCancel, onApply }: {
+  initialName: string;
+  initialStrokes: CustomerSignatureStroke[] | null;
+  onCancel: () => void;
+  onApply: (value: { name: string; strokes: CustomerSignatureStroke[] }) => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>(() => validSignatureStrokes(initialStrokes));
+  const [error, setError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => drawSignatureCanvas(canvasRef.current, strokes));
+    return () => window.cancelAnimationFrame(frame);
+  }, [strokes]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
+  function startStroke(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    isDrawingRef.current = true;
+    const point = getNormalizedSignaturePoint(event.currentTarget, event.clientX, event.clientY);
+    if (point) {
+      setStrokes((current) => [...current, [point]]);
+      setError(null);
+    }
+  }
+
+  function appendPoint(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (!isDrawingRef.current) {
+      return;
+    }
+    event.preventDefault();
+    const point = getNormalizedSignaturePoint(event.currentTarget, event.clientX, event.clientY);
+    if (!point) {
+      return;
+    }
+    setStrokes((current) => {
+      const next = current.slice();
+      const lastStroke = next.at(-1) ?? [];
+      next[next.length - 1] = [...lastStroke, point];
+      return next;
+    });
+  }
+
+  function finishStroke(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    isDrawingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function apply(): void {
+    const normalizedName = name.trim();
+    const normalizedStrokes = validSignatureStrokes(strokes);
+    if (!normalizedName) {
+      setError("Bitte Monteurnamen eintragen.");
+      return;
+    }
+    if (normalizedStrokes.length === 0) {
+      setError("Bitte eine Unterschrift zeichnen.");
+      return;
+    }
+    onApply({ name: normalizedName, strokes: normalizedStrokes });
+  }
+
+  return (
+    <div className="supplementary-order-signature-modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <section
+        className="supplementary-order-signature-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="supplementary-order-signature-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h3 id="supplementary-order-signature-title">Unterschrift Monteur</h3>
+          <p>Mit Maus, Touch oder Stift unterschreiben.</p>
+        </header>
+        <label>
+          <span>Monteur</span>
+          <input autoFocus autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <canvas
+          ref={canvasRef}
+          className="supplementary-order-signature-canvas"
+          aria-label="Zeichenfläche für die Monteurunterschrift"
+          onPointerDown={startStroke}
+          onPointerMove={appendPoint}
+          onPointerUp={finishStroke}
+          onPointerCancel={(event) => {
+            isDrawingRef.current = false;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+        />
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        <footer>
+          <button type="button" className="secondary-action" onClick={() => {
+            setStrokes([]);
+            setError(null);
+          }}>Löschen</button>
+          <span />
+          <button type="button" className="secondary-action" onClick={onCancel}>Abbrechen</button>
+          <button type="button" className="primary-action" onClick={apply}>Übernehmen</button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
@@ -828,7 +999,7 @@ function PaperChoice({ rect, label, selected, disabled, onSelect }: {
   return (
     <button
       type="button"
-      className={`supplementary-order-paper-choice${selected ? " is-selected" : ""}`}
+      className={`supplementary-order-paper-choice${disabled ? " is-read-only" : " is-editable"}${selected ? " is-selected" : ""}`}
       style={paperRectStyle(rect)}
       aria-label={label}
       aria-pressed={selected}
@@ -919,8 +1090,12 @@ function signaturePlaceShort(place: string | null): string {
   return candidate.replace(/^\d{5}\s+/, "") || candidate;
 }
 
-function clampSignaturePoint(value: number): number {
-  return Math.min(1, Math.max(0, value));
+function currentLocalDate(): string {
+  const now = new Date();
+  const year = String(now.getFullYear()).padStart(4, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function readError(error: unknown, fallback: string): string {

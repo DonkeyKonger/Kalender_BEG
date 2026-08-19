@@ -28353,6 +28353,12 @@ body.mobile-modal-scroll-locked {
   padding: 0 0.35cqw;
 }
 
+.supplementary-order-paper-field.is-editable input,
+.supplementary-order-paper-field.is-editable textarea {
+  border-color: rgb(74 129 190 / 38%);
+  background: rgb(190 215 250 / 26%);
+}
+
 .supplementary-order-paper-field textarea {
   display: block;
   overflow: hidden;
@@ -28362,15 +28368,15 @@ body.mobile-modal-scroll-locked {
 
 .supplementary-order-paper-field input:hover:not([readonly]),
 .supplementary-order-paper-field textarea:hover:not([readonly]) {
-  border-color: rgb(37 99 235 / 52%);
-  background: rgb(255 255 255 / 88%);
+  border-color: rgb(37 99 235 / 62%);
+  background: rgb(180 210 250 / 40%);
 }
 
 .supplementary-order-paper-field input:focus,
 .supplementary-order-paper-field textarea:focus {
   z-index: 3;
   border-color: #2563eb;
-  background: #fff;
+  background: rgb(225 238 255 / 88%);
   box-shadow: 0 0 0 2px rgb(37 99 235 / 22%);
 }
 
@@ -28393,9 +28399,14 @@ body.mobile-modal-scroll-locked {
 }
 
 .supplementary-order-paper-field.is-compact input {
-  border-color: transparent;
   font-size: clamp(6px, 1.05cqw, 9px);
   padding: 0 0.08cqw;
+  text-align: center;
+}
+
+.supplementary-order-paper-field.is-centered input {
+  padding-right: 0;
+  padding-left: 0;
   text-align: center;
 }
 
@@ -28424,16 +28435,45 @@ body.mobile-modal-scroll-locked {
   text-align: center;
 }
 
-.supplementary-order-paper-signature {
+.supplementary-order-paper-signature-field {
   position: absolute;
   z-index: 3;
-  overflow: visible;
+  box-sizing: border-box;
+  display: block;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  padding: 0;
+}
+
+button.supplementary-order-paper-signature-field.is-editable {
+  border-color: rgb(74 129 190 / 38%);
+  background: rgb(190 215 250 / 26%);
+  cursor: pointer;
+}
+
+button.supplementary-order-paper-signature-field.is-editable:hover,
+button.supplementary-order-paper-signature-field.is-editable:focus-visible {
+  border-color: rgb(37 99 235 / 68%);
+  background: rgb(180 210 250 / 40%);
+  outline: none;
+}
+
+button.supplementary-order-paper-signature-field.is-editable:focus-visible {
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 22%);
+}
+
+.supplementary-order-paper-signature {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .supplementary-order-paper-signature polyline {
   stroke: #111827;
-  stroke-width: 1.25px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -28454,11 +28494,95 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
+.supplementary-order-paper-choice.is-editable {
+  border-color: rgb(74 129 190 / 38%);
+  background: rgb(190 215 250 / 26%);
+}
+
 .supplementary-order-paper-choice:hover:not(:disabled),
 .supplementary-order-paper-choice:focus-visible:not(:disabled) {
   border-color: #2563eb;
-  background: rgb(219 234 254 / 54%);
+  background: rgb(180 210 250 / 44%);
   outline: none;
+}
+
+.supplementary-order-signature-modal-backdrop {
+  position: fixed;
+  z-index: 1500;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 46%);
+  padding: 20px;
+}
+
+.supplementary-order-signature-modal {
+  display: grid;
+  gap: 14px;
+  width: min(520px, 100%);
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 18px;
+  box-shadow: 0 24px 60px rgb(15 23 42 / 28%);
+}
+
+.supplementary-order-signature-modal header {
+  display: grid;
+  gap: 3px;
+}
+
+.supplementary-order-signature-modal h3,
+.supplementary-order-signature-modal p {
+  margin: 0;
+}
+
+.supplementary-order-signature-modal h3 {
+  color: #17233a;
+  font-size: 1rem;
+}
+
+.supplementary-order-signature-modal header p {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.supplementary-order-signature-modal label {
+  display: grid;
+  gap: 5px;
+  color: #42526b;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.supplementary-order-signature-modal input {
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #0f172a;
+  font: inherit;
+  padding: 8px 9px;
+}
+
+.supplementary-order-signature-modal input:focus {
+  border-color: #2563eb;
+  outline: 2px solid rgb(37 99 235 / 18%);
+}
+
+.supplementary-order-signature-canvas {
+  box-sizing: border-box;
+  width: 100%;
+  height: 170px;
+  border: 1px dashed #94a9c2;
+  border-radius: 4px;
+  background: transparent;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.supplementary-order-signature-modal footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
 }
 
 .supplementary-order-paper-choice:disabled {
