@@ -5,11 +5,13 @@ import test from "node:test";
 import {
   EXTRA_WORK_PDF_FIELD_RECTS,
   EXTRA_WORK_PDF_HEIGHT,
+  EXTRA_WORK_PDF_TEXTAREA_LAYOUTS,
   EXTRA_WORK_PDF_WIDTH,
   buildExtraWorkDocumentPayload,
   chunkExtraWorkWorkerRows,
   createEmptyExtraWorkWorkerRow,
   createExtraWorkDocumentDraft,
+  extraWorkPdfPointsToCqw,
   extraWorkPdfRectToPercent,
   formatExtraWorkSignaturePlace,
   isExtraWorkDocumentLocked,
@@ -22,13 +24,14 @@ import {
   validSignatureStrokes,
 } from "../src/lib/signatureCanvas.ts";
 
-const [pageSource, componentSource, mobileSource, apiSource, typeSource, styles] = await Promise.all([
+const [pageSource, componentSource, mobileSource, apiSource, typeSource, styles, pdfServiceSource] = await Promise.all([
   readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/components/SupplementaryOrderDetail.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/types/site.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+  readFile(new URL("../../backend/app/services/extra_work_pdf_service.py", import.meta.url), "utf8"),
 ]);
 
 function ticket(overrides = {}) {
@@ -150,6 +153,38 @@ test("PDF point rectangles convert proportionally to the A4 overlay coordinate s
   assert.ok(Math.abs(customer.top - ((119.199 / 841.89) * 100)) < 1e-10);
   assert.match(componentSource, /annotationMode: pdfjsLib\.AnnotationMode\.DISABLE/);
   assert.match(styles, /\.supplementary-order-paper[\s\S]*container-type: inline-size/);
+});
+
+test("the ruled material editor shares the final PDF typography and three-line capacity", () => {
+  const materialRect = EXTRA_WORK_PDF_FIELD_RECTS.materialText;
+  const materialLayout = EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.materialText;
+  assert.deepEqual(materialLayout, {
+    fontSize: 8,
+    lineHeight: 18,
+    paddingTop: 0,
+    paddingInline: 2,
+    maxLines: 3,
+  });
+  assert.ok(materialRect.height >= materialLayout.lineHeight * materialLayout.maxLines);
+  assert.ok(materialRect.height < materialLayout.lineHeight * (materialLayout.maxLines + 1));
+  assert.equal(extraWorkPdfPointsToCqw(18), (18 / EXTRA_WORK_PDF_WIDTH) * 100);
+  assert.match(
+    pdfServiceSource,
+    /FIELD_RECTS\["Material"\],[\s\S]*entry\.material_text or "",[\s\S]*size=8,[\s\S]*max_lines=3,[\s\S]*line_height=18/,
+  );
+});
+
+test("the material textarea scales with the paper, preserves wrapping and warns without clipping data", () => {
+  assert.match(componentSource, /layout=\{EXTRA_WORK_PDF_TEXTAREA_LAYOUTS\.materialText\}/);
+  assert.match(componentSource, /--pdf-textarea-font-size[\s\S]*extraWorkPdfPointsToCqw\(layout\.fontSize\)/);
+  assert.match(componentSource, /textarea\.scrollHeight > textarea\.clientHeight \+ 1/);
+  assert.match(componentSource, /new ResizeObserver\(updateOverflow\)/);
+  assert.match(componentSource, /Mehr als \{layout\?\.maxLines\} Druckzeilen/);
+  assert.match(styles, /\.supplementary-order-paper-field\.is-pdf-line-grid textarea \{[\s\S]*font-size: var\(--pdf-textarea-font-size\);[\s\S]*line-height: var\(--pdf-textarea-line-height\);[\s\S]*padding: var\(--pdf-textarea-padding-top\) var\(--pdf-textarea-padding-inline\) 0;[\s\S]*white-space: pre-wrap;/);
+  assert.match(styles, /\.supplementary-order-paper-field\.is-pdf-line-grid\.has-overflow textarea \{[\s\S]*overflow-y: auto;/);
+  assert.match(styles, /\.supplementary-order-paper-field textarea \{[\s\S]*resize: none;/);
+  const lineGridRule = styles.match(/\.supplementary-order-paper-field\.is-pdf-line-grid textarea \{([^}]*)\}/)?.[1] ?? "";
+  assert.doesNotMatch(lineGridRule, /background-image|linear-gradient/);
 });
 
 test("legacy defaults match the PDF fallback while visible dates come only from the server resolver", () => {
