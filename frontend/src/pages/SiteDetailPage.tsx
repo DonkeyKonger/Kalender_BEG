@@ -1365,13 +1365,32 @@ export function SiteDetailPage() {
     return <p className="form-error">{error ?? "Baustelle nicht gefunden."}</p>;
   }
 
+  if (activeTab === "extra-work" && selectedExtraWorkTicket) {
+    return (
+      <SupplementaryOrderDetail
+        site={site}
+        ticket={selectedExtraWorkTicket}
+        canEdit={canEditSite}
+        includeDeleted={extraWorkArchiveMode || Boolean(selectedExtraWorkTicket.deleted_at)}
+        pdfBusy={extraWorkPdfAction !== null}
+        actionError={extraWorkError}
+        onBack={() => {
+          setSelectedExtraWorkTicket(null);
+          setExtraWorkDocumentDirty(false);
+        }}
+        onDirtyChange={setExtraWorkDocumentDirty}
+        onTicketUpdated={updateExtraWorkTicket}
+        onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
+      />
+    );
+  }
+
   const isMeasurementReviewWorkspace = activeTab === "measurement" && measurementSubtab === "review";
   const isMeasurementTimesheetWorkspace = activeTab === "measurement" && measurementSubtab === "timesheet";
-  const isExtraWorkDetailWorkspace = activeTab === "extra-work" && selectedExtraWorkTicket !== null;
 
   return (
     <section
-      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}${isExtraWorkDetailWorkspace ? " is-extra-work-detail-workspace" : ""}`}
+      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}`}
     >
       <Link
         className="back-link"
@@ -1570,24 +1589,7 @@ export function SiteDetailPage() {
         />
       ) : null}
       {activeTab === "extra-work" ? (
-        selectedExtraWorkTicket ? (
-          <SupplementaryOrderDetail
-            site={site}
-            ticket={selectedExtraWorkTicket}
-            canEdit={canEditSite}
-            includeDeleted={extraWorkArchiveMode || Boolean(selectedExtraWorkTicket.deleted_at)}
-            pdfBusy={extraWorkPdfAction !== null}
-            actionError={extraWorkError}
-            onBack={() => {
-              setSelectedExtraWorkTicket(null);
-              setExtraWorkDocumentDirty(false);
-            }}
-            onDirtyChange={setExtraWorkDocumentDirty}
-            onTicketUpdated={updateExtraWorkTicket}
-            onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
-          />
-        ) : (
-          <ExtraWorkTab
+        <ExtraWorkTab
             site={site}
             tickets={extraWorkTickets}
             isLoading={extraWorkLoading}
@@ -1621,7 +1623,6 @@ export function SiteDetailPage() {
             onRestoreTicket={(ticket) => void restoreExtraWorkTicket(ticket)}
             onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
           />
-        )
       ) : null}
       {activeTab === "tools-material" ? (
         <PlaceholderTab

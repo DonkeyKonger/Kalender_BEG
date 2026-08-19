@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText, LoaderCircle, LockKeyhole, Save, Trash2, UploadCloud } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText, LoaderCircle, LockKeyhole, Paperclip, Save, Trash2, UploadCloud, X } from "lucide-react";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import {
@@ -9,7 +9,6 @@ import {
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 
 import { ApiError, api } from "../lib/api";
@@ -46,7 +45,6 @@ import {
   type ExtraWorkPdfTextareaLayout,
 } from "../lib/extraWorkDocument";
 import { containsDraggedFiles } from "../lib/fileDrag";
-import { formatGermanDateTimeShort } from "../lib/formatters";
 import { formatProjectFileSize } from "../lib/projectFiles";
 import {
   SIGNATURE_SVG_HEIGHT,
@@ -127,6 +125,7 @@ export function SupplementaryOrderDetail({
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [attachmentUploads, setAttachmentUploads] = useState<ExtraWorkAttachmentUpload[]>([]);
   const [isAttachmentDragActive, setIsAttachmentDragActive] = useState(false);
+  const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isWorkerSignatureOpen, setIsWorkerSignatureOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const attachmentDragDepthRef = useRef(0);
@@ -147,6 +146,7 @@ export function SupplementaryOrderDetail({
     setPhotos([]);
     setAttachmentUploads([]);
     setIsAttachmentDragActive(false);
+    setIsAttachmentsOpen(false);
     setDeletingPhotoId(null);
     attachmentDragDepthRef.current = 0;
     attachmentUploadPendingRef.current = false;
@@ -202,6 +202,15 @@ export function SupplementaryOrderDetail({
   }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
+    document.documentElement.classList.add("supplementary-order-document-open");
+    document.body.classList.add("supplementary-order-document-open");
+    return () => {
+      document.documentElement.classList.remove("supplementary-order-document-open");
+      document.body.classList.remove("supplementary-order-document-open");
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isDirty) {
       return;
     }
@@ -218,7 +227,6 @@ export function SupplementaryOrderDetail({
     () => chunkExtraWorkWorkerRows(draft?.entry.worker_rows ?? []),
     [draft?.entry.worker_rows],
   );
-  const additionalWorkers = draft?.entry.worker_rows.slice(EXTRA_WORK_VISIBLE_WORKER_ROWS) ?? [];
   const isAttachmentUploading = attachmentUploads.some((upload) => upload.status !== "error");
   const isPhotoLimitReached = photos.length >= MAX_EXTRA_WORK_PHOTOS;
 
@@ -477,16 +485,33 @@ export function SupplementaryOrderDetail({
   }
 
   if (isLoading) {
-    return <div className="matrix-state">Zusatzauftrag wird geladen...</div>;
+    return (
+      <div className="supplementary-order-detail supplementary-order-document-mode">
+        <header className="supplementary-order-document-toolbar">
+          <button type="button" className="supplementary-order-document-back" onClick={handleBack}>
+            <ArrowLeft aria-hidden="true" size={16} />
+            Zurück
+          </button>
+        </header>
+        <div className="supplementary-order-document-state matrix-state">Zusatzauftrag wird geladen...</div>
+      </div>
+    );
   }
 
   if (loadError || !draft || !documentData) {
     return (
-      <div className="project-record-empty-state is-error supplementary-order-load-error">
-        <strong>{loadError ?? "Zusatzauftrag konnte nicht geladen werden."}</strong>
-        <div>
-          <button type="button" className="secondary-action" onClick={onBack}>Zurück</button>
-          <button type="button" className="secondary-action" onClick={() => setReloadKey((value) => value + 1)}>Erneut laden</button>
+      <div className="supplementary-order-detail supplementary-order-document-mode">
+        <header className="supplementary-order-document-toolbar">
+          <button type="button" className="supplementary-order-document-back" onClick={handleBack}>
+            <ArrowLeft aria-hidden="true" size={16} />
+            Zurück
+          </button>
+        </header>
+        <div className="supplementary-order-document-state">
+          <div className="project-record-empty-state is-error supplementary-order-load-error">
+            <strong>{loadError ?? "Zusatzauftrag konnte nicht geladen werden."}</strong>
+            <button type="button" className="secondary-action" onClick={() => setReloadKey((value) => value + 1)}>Erneut laden</button>
+          </div>
         </div>
       </div>
     );
@@ -495,17 +520,23 @@ export function SupplementaryOrderDetail({
   const lockReason = getLockReason(documentTicket, canEdit);
 
   return (
-    <div className="supplementary-order-detail">
-      <header className="supplementary-order-detail-header">
-        <div>
-          <button type="button" className="supplementary-order-back" onClick={handleBack}>
-            <ArrowLeft aria-hidden="true" size={16} />
-            Zurück zu Zusatzaufträgen
+    <div className="supplementary-order-detail supplementary-order-document-mode">
+      <header className="supplementary-order-document-toolbar">
+        <button type="button" className="supplementary-order-document-back" onClick={handleBack}>
+          <ArrowLeft aria-hidden="true" size={16} />
+          Zurück
+        </button>
+        <div className="supplementary-order-document-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            aria-expanded={isAttachmentsOpen}
+            aria-controls="supplementary-order-attachment-panel"
+            onClick={() => setIsAttachmentsOpen(true)}
+          >
+            <Paperclip aria-hidden="true" size={15} />
+            Anlagen ({photos.length})
           </button>
-          <h2><FileText aria-hidden="true" size={19} />{formatTicketTitle(documentTicket)}</h2>
-          <p>Digitales Zusatzauftragsblatt auf Basis der BEG-Mastervorlage</p>
-        </div>
-        <div className="supplementary-order-header-actions">
           {!documentTicket.deleted_at ? (
             <button
               type="button"
@@ -532,15 +563,19 @@ export function SupplementaryOrderDetail({
         </div>
       </header>
 
-      {lockReason ? (
-        <div className="supplementary-order-lock-note" role="status">
-          <LockKeyhole aria-hidden="true" size={16} />
-          <span><strong>Nur Lesen.</strong> {lockReason}</span>
+      {lockReason || saveError || actionError || saveMessage ? (
+        <div className="supplementary-order-document-feedback">
+          {lockReason ? (
+            <div className="supplementary-order-lock-note" role="status">
+              <LockKeyhole aria-hidden="true" size={16} />
+              <span><strong>Nur Lesen.</strong> {lockReason}</span>
+            </div>
+          ) : null}
+          {saveError ? <div className="project-record-empty-state is-error">{saveError}</div> : null}
+          {actionError ? <div className="project-record-empty-state is-error">{actionError}</div> : null}
+          {saveMessage ? <div className="project-record-empty-state is-success">{saveMessage}</div> : null}
         </div>
       ) : null}
-      {saveError ? <div className="project-record-empty-state is-error">{saveError}</div> : null}
-      {actionError ? <div className="project-record-empty-state is-error">{actionError}</div> : null}
-      {saveMessage ? <div className="project-record-empty-state is-success">{saveMessage}</div> : null}
 
       <div className="supplementary-order-workspace">
         <div className="supplementary-order-paper-viewport">
@@ -567,31 +602,28 @@ export function SupplementaryOrderDetail({
           </div>
         </div>
 
-        <aside className="supplementary-order-sidebar" aria-label="Digitale Zusatzinformationen">
-          <SidebarSection title="Status">
-            <span className={`supplementary-order-status is-${documentTicket.status.toLowerCase()}`}>
-              {formatStatus(documentTicket.status)}
-            </span>
-            <label className="supplementary-order-sidebar-field">
-              <span>Bezeichnung</span>
-              <input autoComplete="off" value={draft.title ?? ""} readOnly={isLocked} onChange={(event) => changeDraft({ title: event.target.value })} />
-            </label>
-          </SidebarSection>
+      </div>
 
-          <SidebarSection title="Ersteller / Zeit">
-            <dl className="supplementary-order-metadata">
-              <div><dt>Erstellt von</dt><dd>{documentTicket.created_by_name ?? "Nicht angegeben"}</dd></div>
-              <div><dt>Erstellt am</dt><dd>{formatGermanDateTimeShort(documentTicket.created_at)}</dd></div>
-              {documentTicket.submitted_at ? <div><dt>Eingereicht</dt><dd>{formatGermanDateTimeShort(documentTicket.submitted_at)}</dd></div> : null}
-            </dl>
-          </SidebarSection>
-
-          <SidebarSection title="Unterschriften">
-            <SignatureLine label="Monteur" name={documentData.worker_signature.name} signedAt={documentData.worker_signature.signed_at} />
-            <SignatureLine label="Besteller / Kunde" name={documentData.customer_signature.name} signedAt={documentData.customer_signature.signed_at} />
-          </SidebarSection>
-
-          <SidebarSection title={`Fotos / Anlagen (${photos.length})`}>
+      {isAttachmentsOpen ? (
+        <div className="supplementary-order-attachment-panel-backdrop" onMouseDown={() => setIsAttachmentsOpen(false)}>
+          <aside
+            id="supplementary-order-attachment-panel"
+            className="supplementary-order-attachment-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="supplementary-order-attachment-panel-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <h2 id="supplementary-order-attachment-panel-title">Fotos / Anlagen</h2>
+                <p>{photos.length} von {MAX_EXTRA_WORK_PHOTOS} Anlagen</p>
+              </div>
+              <button type="button" aria-label="Anlagen schließen" onClick={() => setIsAttachmentsOpen(false)}>
+                <X aria-hidden="true" size={18} />
+              </button>
+            </header>
+            <div className="supplementary-order-attachment-panel-content">
             <div
               className={`supplementary-order-attachments${isAttachmentDragActive ? " is-drag-active" : ""}`}
               onDragEnter={handleAttachmentDragEnter}
@@ -669,37 +701,10 @@ export function SupplementaryOrderDetail({
                 </div>
               ) : null}
             </div>
-          </SidebarSection>
-
-          {additionalWorkers.length > 0 ? (
-            <SidebarSection title="Weitere Monteure">
-              <p className="supplementary-order-sidebar-empty">
-                {additionalWorkers.length} weitere {additionalWorkers.length === 1 ? "Zeile ist" : "Zeilen sind"} auf den folgenden Papierseiten vollständig sichtbar und bearbeitbar.
-              </p>
-              <ul className="supplementary-order-additional-workers">
-                {additionalWorkers.map((worker, index) => <li key={index}>{worker.worker_name || `Zeile ${index + 4}`}</li>)}
-              </ul>
-            </SidebarSection>
-          ) : null}
-
-          <SidebarSection title="PDF">
-            {documentTicket.deleted_at ? (
-              <p className="supplementary-order-sidebar-empty">Für die PDF-Ausgabe den Zusatzauftrag zuerst wiederherstellen.</p>
-            ) : (
-              <button
-                type="button"
-                className="secondary-action supplementary-order-sidebar-pdf"
-                disabled={pdfBusy || isDirty}
-                title={isDirty ? "Vor dem PDF-Download zuerst speichern." : undefined}
-                onClick={() => onDownloadPdf(documentTicket)}
-              >
-                <Download aria-hidden="true" size={15} />
-                {pdfBusy ? "Wird erstellt..." : isDirty ? "Zuerst speichern" : "Aktuelle PDF herunterladen"}
-              </button>
-            )}
-          </SidebarSection>
-        </aside>
-      </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
 
       {isWorkerSignatureOpen ? (
         <WorkerSignatureDialog
@@ -1374,20 +1379,6 @@ function ExtraWorkAttachmentRow({
   );
 }
 
-function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="supplementary-order-sidebar-section"><h3>{title}</h3>{children}</section>;
-}
-
-function SignatureLine({ label, name, signedAt }: { label: string; name: string | null; signedAt: string | null }) {
-  return (
-    <div className={`supplementary-order-signature${signedAt ? " is-signed" : ""}`}>
-      <span>{label}</span>
-      <strong>{name || (signedAt ? "Unterschrieben" : "Noch nicht unterschrieben")}</strong>
-      {signedAt ? <small>{formatGermanDateTimeShort(signedAt)}</small> : null}
-    </div>
-  );
-}
-
 function paperRectStyle(rect: ExtraWorkPdfRect): CSSProperties {
   const percent = extraWorkPdfRectToPercent(rect);
   return {
@@ -1418,21 +1409,6 @@ function paperTextareaStyle(
   style["--pdf-textarea-padding-top"] = `${extraWorkPdfPointsToCqw(layout.paddingTop)}cqw`;
   style["--pdf-textarea-padding-inline"] = `${extraWorkPdfPointsToCqw(layout.paddingInline)}cqw`;
   return style;
-}
-
-function formatTicketTitle(ticket: MobileExtraWorkTicket): string {
-  const title = ticket.title?.trim();
-  return title ? `Zusatzauftrag ${ticket.display_number} - ${title}` : `Zusatzauftrag ${ticket.display_number}`;
-}
-
-function formatStatus(status: string): string {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === "draft") return "Entwurf";
-  if (normalized === "submitted") return "Eingereicht";
-  if (normalized === "reviewed") return "Geprüft";
-  if (["signed", "customer_signed"].includes(normalized)) return "Unterschrieben";
-  if (["billed", "closed", "completed", "finalized", "approved", "abgeschlossen"].includes(normalized)) return "Abgeschlossen";
-  return status;
 }
 
 function getLockReason(ticket: MobileExtraWorkTicket, canEdit: boolean): string | null {
