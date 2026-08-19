@@ -147,6 +147,10 @@ test("opened extra-work records replace the project shell with one exclusive doc
   assert.match(componentSource, /supplementary-order-document-toolbar/);
   assert.doesNotMatch(componentSource, /supplementary-order-sidebar"/);
   assert.doesNotMatch(componentSource, /Zurück zu Zusatzaufträgen/);
+  assert.match(componentSource, /appSidebar\.inert = true;/);
+  assert.match(componentSource, /appSidebar\.setAttribute\("aria-hidden", "true"\);/);
+  assert.match(componentSource, /appSidebar\.inert = previousSidebarInert;/);
+  assert.match(styles, /body\.supplementary-order-document-open \.app-shell > \.sidebar,[\s\S]*visibility:\s*hidden;/);
 });
 
 test("document toolbar owns back, attachment, PDF and save actions without browser fullscreen", () => {

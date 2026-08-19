@@ -202,11 +202,26 @@ export function SupplementaryOrderDetail({
   }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
+    const appSidebar = document.querySelector<HTMLElement>(".app-shell > .sidebar");
+    const previousSidebarAriaHidden = appSidebar?.getAttribute("aria-hidden") ?? null;
+    const previousSidebarInert = appSidebar?.inert ?? false;
     document.documentElement.classList.add("supplementary-order-document-open");
     document.body.classList.add("supplementary-order-document-open");
+    if (appSidebar) {
+      appSidebar.inert = true;
+      appSidebar.setAttribute("aria-hidden", "true");
+    }
     return () => {
       document.documentElement.classList.remove("supplementary-order-document-open");
       document.body.classList.remove("supplementary-order-document-open");
+      if (appSidebar) {
+        appSidebar.inert = previousSidebarInert;
+        if (previousSidebarAriaHidden === null) {
+          appSidebar.removeAttribute("aria-hidden");
+        } else {
+          appSidebar.setAttribute("aria-hidden", previousSidebarAriaHidden);
+        }
+      }
     };
   }, []);
 

@@ -28180,6 +28180,11 @@ body.mobile-modal-scroll-locked {
   overflow: hidden !important;
 }
 
+body.supplementary-order-document-open .app-shell > .sidebar,
+body.supplementary-order-document-open .mobile-appshell-actions {
+  visibility: hidden;
+}
+
 .supplementary-order-detail.supplementary-order-document-mode {
   position: fixed;
   z-index: 1300;
