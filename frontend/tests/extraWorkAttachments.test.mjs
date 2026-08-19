@@ -78,6 +78,23 @@ test("attachment area reuses the project file drag guard and contains browser-sa
   assert.match(componentSource, /attachmentUploadPendingRef\.current/);
 });
 
+test("attachments move into one temporary document overlay without duplicating upload logic", () => {
+  const attachmentPanelSource = componentSource.slice(
+    componentSource.indexOf("{isAttachmentsOpen ? ("),
+    componentSource.indexOf("{isWorkerSignatureOpen ? ("),
+  );
+  assert.match(componentSource, /aria-controls="supplementary-order-attachment-panel"/);
+  assert.match(componentSource, /supplementary-order-attachment-panel-backdrop/);
+  assert.match(componentSource, /role="dialog"[\s\S]*aria-modal="true"/);
+  assert.match(componentSource, /onMouseDown=\{\(\) => setIsAttachmentsOpen\(false\)\}/);
+  assert.match(componentSource, /aria-label="Anlagen schließen"/);
+  assert.equal(componentSource.match(/onDrop=\{handleAttachmentDrop\}/g)?.length, 1);
+  assert.equal(componentSource.match(/api\.uploadSiteExtraWorkTicketPhoto\(/g)?.length, 1);
+  assert.doesNotMatch(attachmentPanelSource, /Escape/);
+  assert.match(styles, /\.supplementary-order-attachment-panel-backdrop \{[^}]*position:\s*fixed;[^}]*justify-content:\s*flex-end;/s);
+  assert.match(styles, /\.supplementary-order-attachment-panel-content \{[^}]*overflow-y:\s*auto;/s);
+});
+
 test("editable tickets show upload and delete while locked tickets retain only the list", () => {
   assert.match(componentSource, /!isLocked \? \([\s\S]*supplementary-order-attachment-dropzone/);
   assert.match(componentSource, /!readOnly \? \([\s\S]*supplementary-order-attachment-delete/);
@@ -91,4 +108,3 @@ test("compact attachment rows preserve thumbnail aspect ratio and truncate long 
   assert.match(styles, /\.supplementary-order-attachment-copy strong,[^{]*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s);
   assert.match(styles, /\.supplementary-order-attachment-drop-hint \{[^}]*position:\s*absolute;[^}]*pointer-events:\s*none/s);
 });
-

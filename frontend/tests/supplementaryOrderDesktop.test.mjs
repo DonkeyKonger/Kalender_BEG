@@ -125,7 +125,7 @@ function documentRead(overrides = {}) {
   };
 }
 
-test("desktop extra-work creation is permission-gated, persistent, double-click safe and opens the embedded detail", () => {
+test("desktop extra-work creation is permission-gated, persistent, double-click safe and opens the document detail", () => {
   assert.match(pageSource, /extraWorkCreateInFlightRef\.current/);
   assert.match(pageSource, /api\.createSiteExtraWorkTicket\(site\.id\)/);
   assert.match(pageSource, /setSelectedExtraWorkTicket\(created\)/);
@@ -133,6 +133,32 @@ test("desktop extra-work creation is permission-gated, persistent, double-click 
   assert.match(pageSource, /"\+ Zusatzauftrag erstellen"/);
   assert.match(pageSource, /<SupplementaryOrderDetail/);
   assert.match(pageSource, /onOpenTicket=\{setSelectedExtraWorkTicket\}/);
+});
+
+test("opened extra-work records replace the project shell with one exclusive document workspace", () => {
+  const exclusiveDetailReturn = pageSource.indexOf('if (activeTab === "extra-work" && selectedExtraWorkTicket)');
+  const projectShellReturn = pageSource.indexOf('<section\n      className={`site-detail-page');
+  assert.ok(exclusiveDetailReturn >= 0);
+  assert.ok(projectShellReturn > exclusiveDetailReturn);
+  assert.match(pageSource, /if \(activeTab === "extra-work" && selectedExtraWorkTicket\) \{[\s\S]*return \([\s\S]*<SupplementaryOrderDetail/);
+  assert.match(pageSource, /onBack=\{\(\) => \{\s*setSelectedExtraWorkTicket\(null\);\s*setExtraWorkDocumentDirty\(false\);/);
+  assert.doesNotMatch(pageSource, /is-extra-work-detail-workspace/);
+  assert.match(componentSource, /supplementary-order-detail supplementary-order-document-mode/);
+  assert.match(componentSource, /supplementary-order-document-toolbar/);
+  assert.doesNotMatch(componentSource, /supplementary-order-sidebar"/);
+  assert.doesNotMatch(componentSource, /Zurück zu Zusatzaufträgen/);
+});
+
+test("document toolbar owns back, attachment, PDF and save actions without browser fullscreen", () => {
+  assert.match(componentSource, /supplementary-order-document-back[\s\S]*Zurück/);
+  assert.match(componentSource, /Anlagen \(\{photos\.length\}\)/);
+  assert.match(componentSource, /PDF herunterladen/);
+  assert.match(componentSource, /isSaving \? "Speichert\.\.\." : "Speichern"/);
+  assert.match(componentSource, /Ungespeicherte Änderungen verwerfen und zur Liste zurückkehren/);
+  assert.doesNotMatch(componentSource, /requestFullscreen|exitFullscreen/);
+  assert.match(styles, /\.supplementary-order-detail\.supplementary-order-document-mode \{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
+  assert.match(styles, /\.supplementary-order-workspace \{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(styles, /\.supplementary-order-paper-viewport \{[^}]*overflow:\s*visible;/s);
 });
 
 test("site API uses one shared document, template and archived-photo contract", () => {
@@ -332,10 +358,9 @@ test("detail has explicit save, dirty guards, annotation-free canvas and no arch
   assert.match(componentSource, /api\.saveSiteExtraWorkTicketDocument/);
   assert.match(componentSource, /Ungespeicherte Änderungen verwerfen/);
   assert.match(componentSource, /beforeunload/);
-  assert.equal(componentSource.match(/disabled=\{pdfBusy \|\| isDirty\}/g)?.length, 2);
+  assert.equal(componentSource.match(/disabled=\{pdfBusy \|\| isDirty\}/g)?.length, 1);
   assert.match(componentSource, /Vor dem PDF-Download zuerst speichern/);
   assert.match(componentSource, /!documentTicket\.deleted_at \? \(/);
-  assert.match(componentSource, /Für die PDF-Ausgabe den Zusatzauftrag zuerst wiederherstellen/);
   assert.match(componentSource, /siteExtraWorkTicketPhotos\(site\.id, ticket\.id, \{ includeDeleted \}\)/);
   assert.match(componentSource, /type="text"[\s\S]*inputMode="decimal"[\s\S]*pattern="\[0-9\]\+\(\[,.\]\[0-9\]\+\)\?"/);
 });
