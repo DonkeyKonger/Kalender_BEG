@@ -28211,6 +28211,7 @@ body.supplementary-order-document-open .mobile-appshell-actions {
 }
 
 .supplementary-order-document-back,
+.supplementary-order-document-leading-actions,
 .supplementary-order-document-actions,
 .supplementary-order-document-actions button {
   display: flex;
@@ -28220,6 +28221,10 @@ body.supplementary-order-document-open .mobile-appshell-actions {
 
 .supplementary-order-document-actions {
   justify-content: flex-end;
+}
+
+.supplementary-order-document-leading-actions {
+  min-width: 0;
 }
 
 .supplementary-order-document-back {
@@ -28241,6 +28246,48 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   background: #f7f9fc;
   color: #1e3a5f;
   outline: none;
+}
+
+.supplementary-order-document-zoom {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.supplementary-order-document-zoom > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.supplementary-order-document-zoom select {
+  min-width: 78px;
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 7px 26px 7px 10px;
+}
+
+.supplementary-order-document-zoom select:hover,
+.supplementary-order-document-zoom select:focus-visible {
+  border-color: #8ca2bd;
+  background: #f7f9fc;
+  color: #1e3a5f;
+  outline: none;
+}
+
+.supplementary-order-document-zoom select:focus-visible {
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 18%);
 }
 
 .supplementary-order-document-feedback {
@@ -28295,7 +28342,7 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   display: grid;
   gap: 28px;
   width: min(100%, 1600px);
-  min-width: 760px;
+  min-width: 0;
   margin: 0 auto;
 }
 
@@ -29166,6 +29213,11 @@ button.supplementary-order-paper-signature-field.is-editable:focus-visible {
     align-items: stretch;
     flex-direction: column;
     padding: 8px 10px;
+  }
+
+  .supplementary-order-document-leading-actions {
+    justify-content: space-between;
+    width: 100%;
   }
 
   .supplementary-order-document-actions {

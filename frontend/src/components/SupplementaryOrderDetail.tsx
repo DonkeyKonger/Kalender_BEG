@@ -3,6 +3,7 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -47,6 +48,15 @@ import {
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { formatProjectFileSize } from "../lib/projectFiles";
 import {
+  SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS,
+  getSupplementaryOrderAutoFitWidth,
+  getSupplementaryOrderFinalPaperWidth,
+  normalizeSupplementaryOrderDocumentZoom,
+  readSupplementaryOrderDocumentZoom,
+  writeSupplementaryOrderDocumentZoom,
+  type SupplementaryOrderDocumentZoom,
+} from "../lib/supplementaryOrderZoom";
+import {
   SIGNATURE_SVG_HEIGHT,
   SIGNATURE_SVG_WIDTH,
   drawSignatureCanvas,
@@ -80,6 +90,17 @@ function loadSupplementaryOrderPdfJs(): Promise<typeof import("pdfjs-dist")> {
     });
   }
   return supplementaryOrderPdfJsLoader;
+}
+
+function getSupplementaryOrderZoomStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 export function SupplementaryOrderDetail({
@@ -126,11 +147,16 @@ export function SupplementaryOrderDetail({
   const [attachmentUploads, setAttachmentUploads] = useState<ExtraWorkAttachmentUpload[]>([]);
   const [isAttachmentDragActive, setIsAttachmentDragActive] = useState(false);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
+  const [documentZoom, setDocumentZoom] = useState<SupplementaryOrderDocumentZoom>(() => (
+    readSupplementaryOrderDocumentZoom(getSupplementaryOrderZoomStorage())
+  ));
+  const [autoFitPaperWidth, setAutoFitPaperWidth] = useState<number | null>(null);
   const [isWorkerSignatureOpen, setIsWorkerSignatureOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const attachmentDragDepthRef = useRef(0);
   const attachmentUploadPendingRef = useRef(false);
   const attachmentUploadSequenceRef = useRef(0);
+  const paperViewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -225,6 +251,25 @@ export function SupplementaryOrderDetail({
     };
   }, []);
 
+  useLayoutEffect(() => {
+    const viewport = paperViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    const updateAutoFitWidth = (availableWidth: number) => {
+      setAutoFitPaperWidth(getSupplementaryOrderAutoFitWidth(availableWidth));
+    };
+    updateAutoFitWidth(viewport.clientWidth);
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      updateAutoFitWidth(entry.contentRect.width);
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [isLoading, loadError]);
+
   useEffect(() => {
     if (!isDirty) {
       return;
@@ -244,6 +289,15 @@ export function SupplementaryOrderDetail({
   );
   const isAttachmentUploading = attachmentUploads.some((upload) => upload.status !== "error");
   const isPhotoLimitReached = photos.length >= MAX_EXTRA_WORK_PHOTOS;
+  const finalPaperWidth = autoFitPaperWidth === null
+    ? null
+    : getSupplementaryOrderFinalPaperWidth(autoFitPaperWidth, documentZoom);
+
+  function changeDocumentZoom(value: string): void {
+    const nextZoom = normalizeSupplementaryOrderDocumentZoom(value);
+    setDocumentZoom(nextZoom);
+    writeSupplementaryOrderDocumentZoom(getSupplementaryOrderZoomStorage(), nextZoom);
+  }
 
   function changeDraft(patch: Partial<ExtraWorkDocumentDraft>): void {
     if (isLocked) {
@@ -537,10 +591,24 @@ export function SupplementaryOrderDetail({
   return (
     <div className="supplementary-order-detail supplementary-order-document-mode">
       <header className="supplementary-order-document-toolbar">
-        <button type="button" className="supplementary-order-document-back" onClick={handleBack}>
-          <ArrowLeft aria-hidden="true" size={16} />
-          Zurück
-        </button>
+        <div className="supplementary-order-document-leading-actions">
+          <button type="button" className="supplementary-order-document-back" onClick={handleBack}>
+            <ArrowLeft aria-hidden="true" size={16} />
+            Zurück
+          </button>
+          <label className="supplementary-order-document-zoom">
+            <span>Dokumentzoom</span>
+            <select
+              aria-label="Dokumentzoom"
+              value={documentZoom}
+              onChange={(event) => changeDocumentZoom(event.target.value)}
+            >
+              {SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS.map((zoom) => (
+                <option key={zoom} value={zoom}>{zoom} %</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="supplementary-order-document-actions">
           <button
             type="button"
@@ -593,8 +661,12 @@ export function SupplementaryOrderDetail({
       ) : null}
 
       <div className="supplementary-order-workspace">
-        <div className="supplementary-order-paper-viewport">
-          <div className="supplementary-order-paper-stack">
+        <div className="supplementary-order-paper-viewport" ref={paperViewportRef}>
+          <div
+            className="supplementary-order-paper-stack"
+            data-document-zoom={documentZoom}
+            style={finalPaperWidth === null ? undefined : { width: `${finalPaperWidth}px` }}
+          >
             {workerPages.map((workers, pageIndex) => (
               <SupplementaryOrderPaperPage
                 key={pageIndex}
