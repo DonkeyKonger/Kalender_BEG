@@ -389,12 +389,16 @@ test("the incorrect upper work-description textarea is absent from both rects an
   assert.doesNotMatch(componentSource, /label="Beschreibung der auszuführenden Arbeiten"/);
 });
 
-test("editable paper controls use one Acrobat-like highlight while read-only controls stay transparent", () => {
+test("editable text fields keep their Acrobat highlight while paper choices stay transparent", () => {
   assert.match(styles, /\.supplementary-order-paper-field input,[\s\S]*border: 1px solid transparent;[\s\S]*background: transparent;/);
   assert.match(styles, /\.supplementary-order-paper-field\.is-editable input,[\s\S]*background: rgb\(190 215 250 \/ 26%\);/);
   assert.match(styles, /\.supplementary-order-paper-field input:hover:not\(\[readonly\]\)[\s\S]*background: rgb\(180 210 250 \/ 40%\);/);
   assert.match(styles, /\.supplementary-order-paper-field input\[readonly\],[\s\S]*background: transparent;/);
-  assert.match(styles, /\.supplementary-order-paper-choice\.is-editable[\s\S]*background: rgb\(190 215 250 \/ 26%\);/);
+  assert.match(styles, /\.supplementary-order-paper-choice\.is-editable \{[^}]*border-color: transparent;[^}]*background: transparent;/s);
+  assert.match(styles, /\.supplementary-order-paper-choice:hover:not\(:disabled\) \{[^}]*background: transparent;/s);
+  assert.match(styles, /\.supplementary-order-paper-choice:focus-visible:not\(:disabled\) \{[^}]*background: transparent;[^}]*outline: 1px solid/s);
+  assert.doesNotMatch(styles, /\.supplementary-order-paper-choice\.is-editable \{[^}]*rgb\(190 215 250/s);
+  assert.match(componentSource, /className=\{`supplementary-order-paper-choice[^`]*`\}[\s\S]*aria-pressed=\{selected\}[\s\S]*onClick=\{onSelect\}/);
   assert.match(componentSource, /autoComplete="off"/);
   assert.match(componentSource, /className="supplementary-order-paper-signature"/);
 });

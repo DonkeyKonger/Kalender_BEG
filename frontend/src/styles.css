@@ -28606,15 +28606,21 @@ button.supplementary-order-paper-signature-field.is-editable:focus-visible {
 }
 
 .supplementary-order-paper-choice.is-editable {
-  border-color: rgb(74 129 190 / 38%);
-  background: rgb(190 215 250 / 26%);
+  border-color: transparent;
+  background: transparent;
 }
 
-.supplementary-order-paper-choice:hover:not(:disabled),
-.supplementary-order-paper-choice:focus-visible:not(:disabled) {
-  border-color: #2563eb;
-  background: rgb(180 210 250 / 44%);
+.supplementary-order-paper-choice:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
   outline: none;
+}
+
+.supplementary-order-paper-choice:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  outline: 1px solid rgb(37 99 235 / 70%);
+  outline-offset: 1px;
 }
 
 .supplementary-order-signature-modal-backdrop {
