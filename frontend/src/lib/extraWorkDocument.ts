@@ -26,6 +26,14 @@ export type ExtraWorkPercentRect = {
   height: number;
 };
 
+export type ExtraWorkPdfTextareaLayout = {
+  fontSize: number;
+  lineHeight: number;
+  paddingTop: number;
+  paddingInline: number;
+  maxLines: number;
+};
+
 type ExtraWorkDocumentDisplayFields =
   | "billing_type"
   | "estimated_order_value"
@@ -101,6 +109,19 @@ export const EXTRA_WORK_PDF_FIELD_RECTS = {
   customerSignature: { x: 402, y: 761.89, width: 145, height: 24 },
 } satisfies Record<string, ExtraWorkPdfRect>;
 
+// These values intentionally mirror extra_work_pdf_service._textarea for the
+// ruled material area. Keeping them in PDF points lets the browser scale text
+// and the template together at every paper width.
+export const EXTRA_WORK_PDF_TEXTAREA_LAYOUTS = {
+  materialText: {
+    fontSize: 8,
+    lineHeight: 18,
+    paddingTop: 0,
+    paddingInline: 2,
+    maxLines: 3,
+  },
+} satisfies Record<string, ExtraWorkPdfTextareaLayout>;
+
 export const EXTRA_WORK_CHECKBOX_RECTS = {
   billingFlatRate: checkboxHitRect(163, 219),
   billingHourly: checkboxHitRect(234, 219),
@@ -149,6 +170,10 @@ export function extraWorkPdfRectToPercent(rect: ExtraWorkPdfRect): ExtraWorkPerc
     width: (rect.width / EXTRA_WORK_PDF_WIDTH) * 100,
     height: (rect.height / EXTRA_WORK_PDF_HEIGHT) * 100,
   };
+}
+
+export function extraWorkPdfPointsToCqw(points: number): number {
+  return (points / EXTRA_WORK_PDF_WIDTH) * 100;
 }
 
 export function getExtraWorkWorkerNameRect(workerIndex: number): ExtraWorkPdfRect {

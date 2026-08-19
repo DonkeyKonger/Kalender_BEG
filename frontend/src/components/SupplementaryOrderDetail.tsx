@@ -24,11 +24,13 @@ import {
   EXTRA_WORK_DAYS,
   EXTRA_WORK_PDF_FIELD_RECTS,
   EXTRA_WORK_PDF_HEIGHT,
+  EXTRA_WORK_PDF_TEXTAREA_LAYOUTS,
   EXTRA_WORK_PDF_WIDTH,
   EXTRA_WORK_VISIBLE_WORKER_ROWS,
   buildExtraWorkDocumentPayload,
   chunkExtraWorkWorkerRows,
   createExtraWorkDocumentDraft,
+  extraWorkPdfPointsToCqw,
   extraWorkPdfRectToPercent,
   getExtraWorkHourRect,
   getExtraWorkOverallHours,
@@ -41,6 +43,7 @@ import {
   type ExtraWorkHoursField,
   type ExtraWorkHoursTier,
   type ExtraWorkPdfRect,
+  type ExtraWorkPdfTextareaLayout,
 } from "../lib/extraWorkDocument";
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { formatGermanDateTimeShort } from "../lib/formatters";
@@ -822,7 +825,7 @@ function SupplementaryOrderPaperPage({
         ))}
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.overallHours} label="Gesamtstunden dieses Blatts" value={formatPaperHours(pageHours)} />
         <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.remarks} label="Bemerkungen" value={draft.entry.remarks ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ remarks: value })} />
-        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText} label="Material" value={draft.entry.material_text ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ material_text: value })} />
+        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText} layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.materialText} label="Material" value={draft.entry.material_text ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ material_text: value })} />
 
         {isLastPage ? (
           <>
@@ -1028,18 +1031,57 @@ function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = fa
   );
 }
 
-function PaperTextarea({ rect, label, value, readOnly, onChange, centered = false }: {
+function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centered = false }: {
   rect: ExtraWorkPdfRect;
+  layout?: ExtraWorkPdfTextareaLayout;
   label: string;
   value: string;
   readOnly: boolean;
   onChange: (value: string) => void;
   centered?: boolean;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !layout) {
+      setIsOverflowing(false);
+      return;
+    }
+    const updateOverflow = () => {
+      setIsOverflowing(textarea.scrollHeight > textarea.clientHeight + 1);
+    };
+    updateOverflow();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [layout, value]);
+
+  const overflowMessage = layout && isOverflowing
+    ? `${label}: Der Text überschreitet die ${layout.maxLines} druckbaren Zeilen.`
+    : null;
   return (
-    <label className={`supplementary-order-paper-field is-textarea${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
+    <label
+      className={`supplementary-order-paper-field is-textarea${layout ? " is-pdf-line-grid" : ""}${isOverflowing ? " has-overflow" : ""}${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`}
+      style={paperTextareaStyle(rect, layout)}
+      title={overflowMessage ?? label}
+    >
       <span className="sr-only">{label}</span>
-      <textarea autoComplete="off" value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
+      <textarea
+        ref={textareaRef}
+        autoComplete="off"
+        value={value}
+        readOnly={readOnly}
+        aria-label={label}
+        aria-invalid={isOverflowing || undefined}
+        data-max-lines={layout?.maxLines}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {overflowMessage ? <span className="supplementary-order-paper-overflow-note" role="status">Mehr als {layout?.maxLines} Druckzeilen</span> : null}
     </label>
   );
 }
@@ -1354,6 +1396,28 @@ function paperRectStyle(rect: ExtraWorkPdfRect): CSSProperties {
     width: `${percent.width}%`,
     height: `${percent.height}%`,
   };
+}
+
+type PaperTextareaStyle = CSSProperties & {
+  "--pdf-textarea-font-size"?: string;
+  "--pdf-textarea-line-height"?: string;
+  "--pdf-textarea-padding-top"?: string;
+  "--pdf-textarea-padding-inline"?: string;
+};
+
+function paperTextareaStyle(
+  rect: ExtraWorkPdfRect,
+  layout?: ExtraWorkPdfTextareaLayout,
+): PaperTextareaStyle {
+  const style: PaperTextareaStyle = paperRectStyle(rect);
+  if (!layout) {
+    return style;
+  }
+  style["--pdf-textarea-font-size"] = `${extraWorkPdfPointsToCqw(layout.fontSize)}cqw`;
+  style["--pdf-textarea-line-height"] = `${extraWorkPdfPointsToCqw(layout.lineHeight)}cqw`;
+  style["--pdf-textarea-padding-top"] = `${extraWorkPdfPointsToCqw(layout.paddingTop)}cqw`;
+  style["--pdf-textarea-padding-inline"] = `${extraWorkPdfPointsToCqw(layout.paddingInline)}cqw`;
+  return style;
 }
 
 function formatTicketTitle(ticket: MobileExtraWorkTicket): string {
