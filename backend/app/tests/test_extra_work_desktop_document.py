@@ -173,7 +173,7 @@ def test_document_put_persists_form_updates_first_entry_and_keeps_legacy_entry()
     assert document.ticket.manual_execution_start == date(2026, 8, 17)
     assert document.ticket.manual_execution_end == date(2026, 8, 20)
     assert document.resolved_dates.order_date == date(2026, 8, 19)
-    assert document.resolved_dates.approval_date == date(2026, 8, 19)
+    assert document.resolved_dates.approval_date == ticket.created_at.date()
     assert document.resolved_dates.execution_start == date(2026, 8, 17)
     assert document.resolved_dates.execution_end == date(2026, 8, 20)
     assert document.entry is not None
