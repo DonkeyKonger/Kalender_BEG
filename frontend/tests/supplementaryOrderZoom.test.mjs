@@ -33,9 +33,11 @@ function memoryStorage(initialValue = null) {
   };
 }
 
-test("supplementary-order zoom exposes only the six requested levels and safely normalizes old values", () => {
-  assert.deepEqual(SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS, [75, 90, 100, 110, 125, 150]);
+test("supplementary-order zoom exposes all requested levels down to 25 percent and safely normalizes old values", () => {
+  assert.deepEqual(SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS, [25, 50, 75, 90, 100, 110, 125, 150]);
   assert.equal(DEFAULT_SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM, 100);
+  assert.equal(normalizeSupplementaryOrderDocumentZoom("25"), 25);
+  assert.equal(normalizeSupplementaryOrderDocumentZoom("50"), 50);
   assert.equal(normalizeSupplementaryOrderDocumentZoom("125"), 125);
   assert.equal(normalizeSupplementaryOrderDocumentZoom("80"), 100);
   assert.equal(normalizeSupplementaryOrderDocumentZoom(null), 100);
@@ -55,10 +57,13 @@ test("user zoom multiplies the retained auto-fit width instead of being fitted d
   assert.equal(getSupplementaryOrderAutoFitWidth(1200), 1200);
   assert.equal(getSupplementaryOrderAutoFitWidth(400), 760);
   assert.equal(getSupplementaryOrderAutoFitWidth(2200), 1600);
+  assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 25), 300);
+  assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 50), 600);
   assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 75), 900);
   assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 100), 1200);
   assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 125), 1500);
   assert.equal(getSupplementaryOrderFinalPaperWidth(1200, 150), 1800);
+  assert.equal(getSupplementaryOrderFinalPaperWidth(getSupplementaryOrderAutoFitWidth(400), 25), 190);
 });
 
 test("toolbar, resize observer and paper stack share one persisted zoom width", () => {
@@ -72,5 +77,7 @@ test("toolbar, resize observer and paper stack share one persisted zoom width", 
   assert.match(componentSource, /data-document-zoom=\{documentZoom\}[\s\S]*width: `\$\{finalPaperWidth\}px`/);
   assert.doesNotMatch(componentSource, /style\.zoom|requestFullscreen|exitFullscreen/);
   assert.match(styles, /\.supplementary-order-workspace \{[^}]*overflow:\s*auto;/s);
-  assert.match(styles, /\.supplementary-order-document-zoom select \{[^}]*min-height:\s*34px;/s);
+  assert.match(styles, /\.supplementary-order-document-back \{[^}]*height:\s*34px;[^}]*border-radius:\s*2px;/s);
+  assert.match(styles, /\.supplementary-order-document-zoom select \{[^}]*height:\s*34px;[^}]*appearance:\s*none;[^}]*border-radius:\s*2px;/s);
+  assert.match(styles, /\.supplementary-order-document-actions \.secondary-action,[\s\S]*?height:\s*34px;[\s\S]*?border-radius:\s*2px;/);
 });

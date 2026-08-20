@@ -28223,11 +28223,26 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   justify-content: flex-end;
 }
 
+.supplementary-order-document-actions .secondary-action,
+.supplementary-order-document-actions .primary-action {
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 2px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 11px;
+  box-shadow: none;
+}
+
 .supplementary-order-document-leading-actions {
   min-width: 0;
 }
 
 .supplementary-order-document-back {
+  box-sizing: border-box;
+  height: 34px;
   min-height: 34px;
   border: 1px solid #cbd5e1;
   border-radius: 2px;
@@ -28236,7 +28251,8 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   cursor: pointer;
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 850;
+  font-weight: 800;
+  line-height: 1;
   padding: 7px 11px;
 }
 
@@ -28252,6 +28268,20 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   position: relative;
   display: block;
   flex: 0 0 auto;
+  color: #334155;
+}
+
+.supplementary-order-document-zoom::after {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
 }
 
 .supplementary-order-document-zoom > span {
@@ -28265,8 +28295,12 @@ body.supplementary-order-document-open .mobile-appshell-actions {
 }
 
 .supplementary-order-document-zoom select {
+  box-sizing: border-box;
   min-width: 78px;
+  height: 34px;
   min-height: 34px;
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid #cbd5e1;
   border-radius: 2px;
   background: #fff;
@@ -28275,6 +28309,7 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   font: inherit;
   font-size: 0.8rem;
   font-weight: 800;
+  line-height: 1;
   padding: 7px 26px 7px 10px;
 }
 
