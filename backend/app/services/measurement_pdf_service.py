@@ -13,7 +13,8 @@ from textwrap import wrap
 import zlib
 
 from fastapi import HTTPException, status
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
+from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -30,6 +31,11 @@ from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
+from app.services.photo_appendix_pdf_service import (
+    PhotoAppendixContext,
+    PhotoAppendixPdfService,
+    PhotoAppendixPhoto,
+)
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -90,7 +96,7 @@ MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v4"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v5-shared-photo-appendix"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -362,9 +368,7 @@ class MeasurementPdfService:
                     logo=logo,
                 )
             )
-        self._append_photo_pages(pdf, batch)
-
-        content = pdf.build()
+        content = self._append_photo_pages(pdf.build(), batch)
         LOGGER.info(
             "Measurement PDF generated: batch_id=%s mode=%s photos=%s bytes=%s duration_ms=%.1f",
             batch.id,
@@ -450,21 +454,23 @@ class MeasurementPdfService:
                     "filename": photo.filename,
                     "external_item_id": photo.external_item_id,
                     "file_size_bytes": photo.file_size_bytes,
+                    "caption": photo.caption,
                     "updated_at": photo.updated_at,
                 }
                 for photo in sorted(batch.photos or [], key=lambda photo: photo.id)
             ],
         })
 
-    def _append_photo_pages(self, pdf: SimplePdf, batch: SiteMeasurementBatch) -> None:
+    def _append_photo_pages(self, base_content: bytes, batch: SiteMeasurementBatch) -> bytes:
         photos = sorted(batch.photos, key=lambda photo: (photo.created_at, photo.id))
         if not photos:
-            return
+            return base_content
         folder_item_id = self._get_photo_folder_item_id(batch.site_id)
         if folder_item_id is None:
             LOGGER.warning("Measurement photo folder is not connected for site %s.", batch.site_id)
-            return
-        for index, photo in enumerate(photos, start=1):
+            return base_content
+        appendix_photos: list[PhotoAppendixPhoto] = []
+        for photo in photos:
             photo_started_at = perf_counter()
             try:
                 downloaded = ProjectStorageService().download_file_from_folder(
@@ -473,23 +479,52 @@ class MeasurementPdfService:
                     item_id=photo.external_item_id,
                 )
                 downloaded_content = downloaded["content"]
-                image = _load_uploaded_image_rgb(downloaded_content)
-            except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
-                LOGGER.warning("Measurement photo %s could not be added to PDF: %s", photo.id, error)
-                continue
+            except (HTTPException, OSError, ValueError) as error:
+                LOGGER.warning("Measurement photo %s could not be downloaded for PDF: %s", photo.id, error)
+                downloaded_content = b""
             LOGGER.info(
-                "Measurement PDF photo processed: batch_id=%s photo_id=%s source_bytes=%s image_bytes=%s dimensions=%sx%s duration_ms=%.1f",
+                "Measurement PDF photo loaded: batch_id=%s photo_id=%s source_bytes=%s duration_ms=%.1f",
                 batch.id,
                 photo.id,
                 len(downloaded_content),
-                len(image.data),
-                image.width,
-                image.height,
                 (perf_counter() - photo_started_at) * 1000,
             )
-            image_name = f"Photo{photo.id}"
-            pdf.add_image(image_name, image)
-            pdf.add_page(_render_photo_page(batch=batch, photo=photo, image=image, image_name=image_name, index=index, total=len(photos)))
+            appendix_photos.append(
+                PhotoAppendixPhoto(
+                    filename=photo.filename,
+                    content=downloaded_content,
+                    caption=photo.caption,
+                    uploaded_at=photo.created_at,
+                    monteur=_format_user(photo.uploaded_by),
+                )
+            )
+        if not appendix_photos:
+            return base_content
+
+        site = batch.site
+        appendix_content = PhotoAppendixPdfService().build(
+            context=PhotoAppendixContext(
+                document_type="Aufmaß",
+                site_name=site.name,
+                site_number=site.site_number,
+                site_address=_format_photo_appendix_site_address(site),
+                process_title=batch.title or "Aufmaß",
+                document_number_label="Aufmaß Nr.",
+                document_number=_format_batch_number(site.site_number, batch.number),
+                generated_at=datetime.now(),
+                uploaded_at=max(photo.created_at for photo in photos),
+                monteur=_common_measurement_photo_monteur(photos),
+            ),
+            photos=appendix_photos,
+        )
+        writer = PdfWriter()
+        for page in PdfReader(BytesIO(base_content)).pages:
+            writer.add_page(page)
+        for page in PdfReader(BytesIO(appendix_content)).pages:
+            writer.add_page(page)
+        output = BytesIO()
+        writer.write(output)
+        return output.getvalue()
 
     def _get_photo_folder_item_id(self, site_id: int) -> str | None:
         folder = self.db.scalar(
@@ -1440,6 +1475,40 @@ def _format_user(user: User | None) -> str | None:
     if user.person and user.person.display_name:
         return user.person.display_name
     return user.display_name
+
+
+def _common_measurement_photo_monteur(photos: list[SiteMeasurementBatchPhoto]) -> str | None:
+    names = {
+        name
+        for photo in photos
+        if (name := _format_user(photo.uploaded_by))
+    }
+    if len(names) == 1:
+        return next(iter(names))
+    if len(names) > 1:
+        return "Mehrere Monteure"
+    return None
+
+
+def _format_photo_appendix_site_address(site: object) -> str | None:
+    street = " ".join(
+        value.strip()
+        for value in (getattr(site, "street", None), getattr(site, "house_number", None))
+        if isinstance(value, str) and value.strip()
+    )
+    city = " ".join(
+        value.strip()
+        for value in (getattr(site, "postal_code", None), getattr(site, "city", None))
+        if isinstance(value, str) and value.strip()
+    )
+    structured = ", ".join(value for value in (street, city) if value)
+    if structured:
+        return structured
+    for attribute in ("address", "location"):
+        value = getattr(site, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _format_datetime(value: datetime | None) -> str | None:

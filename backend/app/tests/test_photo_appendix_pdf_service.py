@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
 from io import BytesIO
+from types import SimpleNamespace
 
 from PIL import Image
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
+
+from app.services import extra_work_pdf_service as extra_work_pdf_module
+from app.services import measurement_pdf_service as measurement_pdf_module
+from app.services.extra_work_pdf_service import ExtraWorkPdfService
+from app.services.measurement_pdf_service import MeasurementPdfService, SimplePdf
 
 from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
@@ -128,3 +134,105 @@ def test_photo_appendix_keeps_document_alive_when_one_image_cannot_be_decoded():
     )
 
     assert "Foto konnte nicht dargestellt werden." in _text(content)
+
+
+def test_extra_work_caller_uses_shared_photo_appendix(monkeypatch):
+    uploaded_at = datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc)
+    uploader = SimpleNamespace(
+        person=SimpleNamespace(display_name="Christopher Monteur"),
+        display_name="Christopher Monteur",
+    )
+    photo = SimpleNamespace(
+        id=1,
+        created_at=uploaded_at,
+        external_drive_id="drive-1",
+        external_item_id="photo-1",
+        filename="zusatzauftrag.jpg",
+        caption="Zusätzliche Kabelrinne montiert",
+        uploaded_by=uploader,
+    )
+    site = SimpleNamespace(
+        name="Testbaustelle Finienweg",
+        site_number="9999",
+        street="Finienweg",
+        house_number="10",
+        postal_code="28832",
+        city="Achim",
+    )
+    ticket = SimpleNamespace(
+        id=8,
+        site_id=9,
+        site=site,
+        photos=[photo],
+        title="Zusatzarbeiten",
+        display_number="9999.SZ08",
+        sequence_number=8,
+    )
+
+    class FakeStorage:
+        def download_file_from_folder(self, **_kwargs):
+            return {"content": _image_bytes(1600, 700, (185, 192, 200))}
+
+    monkeypatch.setattr(extra_work_pdf_module, "ProjectStorageService", FakeStorage)
+    service = ExtraWorkPdfService(SimpleNamespace())
+    monkeypatch.setattr(service, "_get_photo_folder_item_id", lambda _site_id: "folder-1")
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+
+    service._append_photo_pages(writer, ticket)
+    output = BytesIO()
+    writer.write(output)
+    reader = PdfReader(BytesIO(output.getvalue()))
+    appendix_text = reader.pages[1].extract_text() or ""
+
+    assert len(reader.pages) == 2
+    assert "Fotoanlage" in appendix_text
+    assert "Zusatzauftrag Nr.:" in appendix_text
+    assert "Zusätzliche Kabelrinne montiert" in appendix_text
+
+
+def test_measurement_caller_uses_shared_photo_appendix(monkeypatch):
+    uploaded_at = datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc)
+    uploader = SimpleNamespace(
+        person=SimpleNamespace(display_name="Christopher Monteur"),
+        display_name="Christopher Monteur",
+    )
+    photo = SimpleNamespace(
+        id=2,
+        created_at=uploaded_at,
+        external_drive_id="drive-1",
+        external_item_id="photo-2",
+        filename="aufmass.jpg",
+        caption="Deckendurchbruch dokumentiert",
+        uploaded_by=uploader,
+    )
+    site = SimpleNamespace(
+        name="Testbaustelle Finienweg",
+        site_number="9999",
+        street="Finienweg",
+        house_number="10",
+        postal_code="28832",
+        city="Achim",
+        address=None,
+        location=None,
+    )
+    batch = SimpleNamespace(id=4, site_id=9, site=site, photos=[photo], title="Aufmaß Technikraum", number=4)
+
+    class FakeStorage:
+        def download_file_from_folder(self, **_kwargs):
+            return {"content": _image_bytes(700, 1500, (185, 192, 200))}
+
+    monkeypatch.setattr(measurement_pdf_module, "ProjectStorageService", FakeStorage)
+    service = MeasurementPdfService(SimpleNamespace())
+    monkeypatch.setattr(service, "_get_photo_folder_item_id", lambda _site_id: "folder-1")
+    base_pdf = SimplePdf()
+    base_pdf.add_page([])
+
+    content = service._append_photo_pages(base_pdf.build(), batch)
+    reader = PdfReader(BytesIO(content))
+    appendix_text = reader.pages[1].extract_text() or ""
+
+    assert len(reader.pages) == 2
+    assert "Fotoanlage" in appendix_text
+    assert "Aufmaß Nr.:" in appendix_text
+    assert "Deckendurchbruch dokumentiert" in appendix_text

@@ -2055,6 +2055,7 @@ def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
             filename="baustelle.png",
             content_type="image/png",
             file_size_bytes=128,
+            caption="Kabeltrasse im 2. OG dokumentiert",
         )
     )
     db.commit()
@@ -2083,9 +2084,12 @@ def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 2
-    assert b"Fotoanlagen" in content
-    assert b"baustelle.png" in content
-    assert "Zusatzauftrag 8007.SZ01 - Zusatzarbeiten · Schüchtermann Klinik" in pdf_text
+    assert "Fotoanlage" in pdf_text
+    assert "Zusatzauftrag Nr.:" in pdf_text
+    assert "Kabeltrasse im 2. OG dokumentiert" in pdf_text
+    assert "baustelle.png" in pdf_text
+    assert "Zusatzarbeiten" in pdf_text
+    assert "Schüchtermann Klinik" in pdf_text
 
 
 def test_mobile_extra_work_pdf_splits_four_workers_to_second_template_page():

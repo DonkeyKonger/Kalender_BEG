@@ -12,7 +12,7 @@ from time import perf_counter
 from typing import Any
 
 from fastapi import HTTPException, status
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -28,13 +28,18 @@ from app.services.extra_work_document_context import (
     resolve_extra_work_ticket_dates,
 )
 from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
+from app.services.photo_appendix_pdf_service import (
+    PhotoAppendixContext,
+    PhotoAppendixPdfService,
+    PhotoAppendixPhoto,
+)
 from app.services.project_storage_service import ProjectStorageService
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v8-signature-details"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v9-shared-photo-appendix"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -308,6 +313,7 @@ class ExtraWorkPdfService:
                     "filename": photo.filename,
                     "external_item_id": photo.external_item_id,
                     "file_size_bytes": photo.file_size_bytes,
+                    "caption": photo.caption,
                     "updated_at": photo.updated_at,
                 }
                 for photo in sorted(ticket.photos or [], key=lambda photo: photo.id)
@@ -358,8 +364,7 @@ class ExtraWorkPdfService:
             LOGGER.warning("Extra work photo folder is not connected for site %s.", ticket.site_id)
             return
 
-        appendix_pdf = PhotoAppendixPdf()
-        appended_count = 0
+        appendix_photos: list[PhotoAppendixPhoto] = []
         for photo in photos:
             photo_started_at = perf_counter()
             try:
@@ -369,37 +374,45 @@ class ExtraWorkPdfService:
                     item_id=photo.external_item_id,
                 )
                 downloaded_content = downloaded["content"]
-                image = _load_uploaded_image_rgb(downloaded_content)
-            except (HTTPException, OSError, UnidentifiedImageError, ValueError) as error:
-                LOGGER.warning("Extra work photo %s could not be added to PDF: %s", photo.id, error)
-                continue
+            except (HTTPException, OSError, ValueError) as error:
+                LOGGER.warning("Extra work photo %s could not be downloaded for PDF: %s", photo.id, error)
+                downloaded_content = b""
             LOGGER.info(
-                "Extra work PDF photo processed: ticket_id=%s photo_id=%s source_bytes=%s image_bytes=%s dimensions=%sx%s duration_ms=%.1f",
+                "Extra work PDF photo loaded: ticket_id=%s photo_id=%s source_bytes=%s duration_ms=%.1f",
                 ticket.id,
                 photo.id,
                 len(downloaded_content),
-                len(image.data),
-                image.width,
-                image.height,
                 (perf_counter() - photo_started_at) * 1000,
             )
-            appended_count += 1
-            image_name = f"ExtraWorkPhoto{photo.id}"
-            appendix_pdf.add_image(image_name, image)
-            appendix_pdf.add_page(
-                _render_photo_attachment_page(
-                    ticket=ticket,
-                    photo=photo,
-                    image=image,
-                    image_name=image_name,
-                    index=appended_count,
-                    total=len(photos),
+            appendix_photos.append(
+                PhotoAppendixPhoto(
+                    filename=photo.filename,
+                    content=downloaded_content,
+                    caption=photo.caption,
+                    uploaded_at=photo.created_at,
+                    monteur=_format_user(photo.uploaded_by),
                 )
             )
-        if appended_count == 0:
+        if not appendix_photos:
             return
 
-        appendix_reader = PdfReader(BytesIO(appendix_pdf.build()))
+        site = ticket.site
+        appendix_content = PhotoAppendixPdfService().build(
+            context=PhotoAppendixContext(
+                document_type="Zusatzauftrag",
+                site_name=site.name,
+                site_number=site.site_number,
+                site_address=_format_site_signature_location(site),
+                process_title=_ticket_document_description(ticket),
+                document_number_label="Zusatzauftrag Nr.",
+                document_number=ticket.display_number or str(ticket.sequence_number),
+                generated_at=datetime.now(),
+                uploaded_at=max(photo.created_at for photo in photos),
+                monteur=_common_photo_monteur(photos),
+            ),
+            photos=appendix_photos,
+        )
+        appendix_reader = PdfReader(BytesIO(appendix_content))
         for page in appendix_reader.pages:
             writer.add_page(page)
 
@@ -1211,6 +1224,19 @@ def _format_user(user: User | None) -> str | None:
     if user.person and user.person.display_name:
         return user.person.display_name
     return user.display_name
+
+
+def _common_photo_monteur(photos: list[ExtraWorkTicketPhoto]) -> str | None:
+    names = {
+        name
+        for photo in photos
+        if (name := _format_user(photo.uploaded_by))
+    }
+    if len(names) == 1:
+        return next(iter(names))
+    if len(names) > 1:
+        return "Mehrere Monteure"
+    return None
 
 
 def _format_datetime(value: datetime | None) -> str | None:
