@@ -36,6 +36,14 @@ test("caption APIs and photo response types share the nullable caption property"
   assert.ok((typeSource.match(/caption: string \| null;/g)?.length ?? 0) >= 3);
 });
 
+test("the project photo gallery exposes the shared photo appendix PDF", () => {
+  assert.match(apiSource, /projectPhotoAppendixPdf\(siteId: number\)/);
+  assert.match(apiSource, /project-photos\/photo-appendix/);
+  assert.match(pageSource, /Fotoanlage PDF öffnen/);
+  assert.match(pageSource, /api\.projectPhotoAppendixPdf\(assignment\.site\.id\)/);
+  assert.match(styles, /\.mobile-project-photo-pdf-action/);
+});
+
 test("locked measurement and extra-work photos remain read-only", () => {
   assert.match(pageSource, /canEdit=\{!batch\.is_locked_for_worker\}/);
   assert.match(pageSource, /canEdit=\{canEditExtraWorkPhotoCaption\(order\)\}/);

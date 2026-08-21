@@ -235,6 +235,32 @@ def test_project_folder_document_content_rejects_invalid_disposition():
     assert error.value.status_code == 400
 
 
+def test_project_photo_appendix_returns_inline_pdf(monkeypatch):
+    calls = []
+
+    class FakeProjectPhotoPdfService:
+        def __init__(self, db):
+            assert db == "db"
+
+        def build_site_photo_appendix(self, *, site_id, current_user):
+            calls.append((site_id, current_user.role))
+            return b"%PDF-project-photos", "Fotoanlage_Projektfotos_9999.pdf"
+
+    monkeypatch.setattr(sites, "ProjectPhotoPdfService", FakeProjectPhotoPdfService)
+    response = sites.get_project_photo_appendix(
+        site_id=7,
+        current_user=SimpleNamespace(role=UserRole.MONTEUR),
+        db="db",
+    )
+
+    assert response.body == b"%PDF-project-photos"
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == (
+        "inline; filename*=UTF-8''Fotoanlage_Projektfotos_9999.pdf"
+    )
+    assert calls == [(7, UserRole.MONTEUR)]
+
+
 def test_project_folder_photo_upload_uses_clean_site_photo_filename(monkeypatch):
     calls = {"upload": []}
     date_prefix = datetime.now(PHOTO_FILENAME_TIMEZONE).strftime("%y%m%d")

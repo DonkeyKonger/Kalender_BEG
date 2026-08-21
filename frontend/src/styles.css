@@ -25232,6 +25232,23 @@ body.mobile-modal-scroll-locked {
   font-weight: 750;
 }
 
+.mobile-project-photo-pdf-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+  color: #143c6d;
+  font-weight: 800;
+}
+
+.mobile-project-photo-pdf-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .mobile-measurement-photo-empty {
   display: grid;
   gap: 10px;

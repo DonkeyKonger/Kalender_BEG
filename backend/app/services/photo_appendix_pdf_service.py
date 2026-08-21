@@ -134,6 +134,27 @@ def normalize_photo_caption(value: str | None) -> str | None:
     return normalized or None
 
 
+def format_photo_appendix_site_address(site: object) -> str | None:
+    street = " ".join(
+        value.strip()
+        for value in (getattr(site, "street", None), getattr(site, "house_number", None))
+        if isinstance(value, str) and value.strip()
+    )
+    city = " ".join(
+        value.strip()
+        for value in (getattr(site, "postal_code", None), getattr(site, "city", None))
+        if isinstance(value, str) and value.strip()
+    )
+    structured = ", ".join(value for value in (street, city) if value)
+    if structured:
+        return structured
+    for attribute in ("address", "location"):
+        value = getattr(site, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 def _prepare_photo(photo: PhotoAppendixPhoto) -> PreparedPhoto:
     caption = normalize_photo_caption(photo.caption)
     caption_lines = tuple(_wrap_text(caption or "", CONTENT_WIDTH - 20, "Helvetica-Bold", 9.5))

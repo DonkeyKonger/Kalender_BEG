@@ -1113,6 +1113,10 @@ export const api = {
     );
   },
 
+  async projectPhotoAppendixPdf(siteId: number): Promise<Blob> {
+    return requestBlob(`/sites/${encodeURIComponent(String(siteId))}/project-photos/photo-appendix`);
+  },
+
   async projectFolderItemChildren(
     siteId: number,
     folderKey: string,

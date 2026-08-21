@@ -71,6 +71,7 @@ from app.services.photo_filename import (
     user_photo_name,
 )
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_photo_pdf_service import ProjectPhotoPdfService
 from app.services.project_manager_service import ProjectManagerService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
@@ -183,6 +184,23 @@ def list_project_folders(
 ) -> list[ProjectFolderRead]:
     folders = ProjectFolderService(db).get_visible_project_folders_for_site(site_id, current_user)
     return [ProjectFolderRead.model_validate(folder) for folder in folders]
+
+
+@router.get("/{site_id}/project-photos/photo-appendix")
+def get_project_photo_appendix(
+    site_id: int,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, filename = ProjectPhotoPdfService(db).build_site_photo_appendix(
+        site_id=site_id,
+        current_user=current_user,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(filename, safe='')}"},
+    )
 
 
 @router.get(

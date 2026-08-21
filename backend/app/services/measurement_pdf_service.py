@@ -35,6 +35,7 @@ from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
     PhotoAppendixPdfService,
     PhotoAppendixPhoto,
+    format_photo_appendix_site_address,
 )
 from app.services.project_storage_service import ProjectStorageService
 
@@ -507,7 +508,7 @@ class MeasurementPdfService:
                 document_type="Aufmaß",
                 site_name=site.name,
                 site_number=site.site_number,
-                site_address=_format_photo_appendix_site_address(site),
+                site_address=format_photo_appendix_site_address(site),
                 process_title=batch.title or "Aufmaß",
                 document_number_label="Aufmaß Nr.",
                 document_number=_format_batch_number(site.site_number, batch.number),
@@ -1487,27 +1488,6 @@ def _common_measurement_photo_monteur(photos: list[SiteMeasurementBatchPhoto]) -
         return next(iter(names))
     if len(names) > 1:
         return "Mehrere Monteure"
-    return None
-
-
-def _format_photo_appendix_site_address(site: object) -> str | None:
-    street = " ".join(
-        value.strip()
-        for value in (getattr(site, "street", None), getattr(site, "house_number", None))
-        if isinstance(value, str) and value.strip()
-    )
-    city = " ".join(
-        value.strip()
-        for value in (getattr(site, "postal_code", None), getattr(site, "city", None))
-        if isinstance(value, str) and value.strip()
-    )
-    structured = ", ".join(value for value in (street, city) if value)
-    if structured:
-        return structured
-    for attribute in ("address", "location"):
-        value = getattr(site, attribute, None)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
     return None
 
 
