@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.build_info import get_build_revision
 from app.core.database import get_db
 from app.models.enums import SiteStatus
 from app.models.tool_material_item import ToolMaterialItem
@@ -17,6 +18,7 @@ def health() -> dict[str, object]:
     return {
         "status": "ok",
         "build": BACKEND_BUILD,
+        "revision": get_build_revision(),
         "site_status_values": [status.value for status in SiteStatus],
     }
 
