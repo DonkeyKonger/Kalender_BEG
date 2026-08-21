@@ -21,7 +21,9 @@ test("the shared viewer provides an explicit mobile dirty-save flow", () => {
   assert.match(viewerSource, /placeholder="Beschriftung hinzufügen …"/);
   assert.match(viewerSource, /<textarea[\s\S]*rows=\{3\}/);
   assert.match(viewerSource, /disabled=\{!isDirty \|\| isSaving\}/);
-  assert.match(viewerSource, /Beschriftung gespeichert\./);
+  assert.match(viewerSource, /await onSave\(normalizedDraft\);\s+onClose\(\);/);
+  assert.match(viewerSource, /catch \(error\) \{\s+setSaveError/);
+  assert.match(viewerSource, />Schließen<\/button>/);
   assert.match(viewerSource, /<time>\{dateLabel\}<\/time>/);
   assert.match(viewerSource, /<small title=\{filename\}>\{filename\}<\/small>/);
   assert.match(styles, /\.mobile-photo-caption-section textarea/);

@@ -31,7 +31,6 @@ export function MobilePhotoCaptionViewer({
   const [draft, setDraft] = useState(caption ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const isTopModal = useMobileModalStack(true);
   const normalizedDraft = useMemo(() => normalizeCaption(draft), [draft]);
   const isDirty = normalizedDraft !== normalizeCaption(caption ?? "");
@@ -39,7 +38,6 @@ export function MobilePhotoCaptionViewer({
   useEffect(() => {
     setDraft(caption ?? "");
     setSaveError(null);
-    setSaveMessage(null);
   }, [caption]);
 
   function closeViewer(): void {
@@ -58,10 +56,9 @@ export function MobilePhotoCaptionViewer({
     }
     setIsSaving(true);
     setSaveError(null);
-    setSaveMessage(null);
     try {
       await onSave(normalizedDraft);
-      setSaveMessage("Beschriftung gespeichert.");
+      onClose();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Beschriftung konnte nicht gespeichert werden.");
     } finally {
@@ -98,7 +95,6 @@ export function MobilePhotoCaptionViewer({
             onChange={(event) => {
               setDraft(event.target.value);
               setSaveError(null);
-              setSaveMessage(null);
             }}
           />
           {!canEdit ? <small>Dieses Dokument ist gesperrt. Die Beschriftung kann nur gelesen werden.</small> : null}
@@ -108,7 +104,6 @@ export function MobilePhotoCaptionViewer({
           <small title={filename}>{filename}</small>
         </div>
         {saveError ? <p className="form-error mobile-photo-caption-feedback" role="alert">{saveError}</p> : null}
-        {saveMessage ? <p className="form-info mobile-photo-caption-feedback" role="status">{saveMessage}</p> : null}
         <div className="mobile-photo-preview-actions">
           {canEdit ? (
             <button className="primary-action" type="button" disabled={!isDirty || isSaving} onClick={() => void saveCaption()}>
