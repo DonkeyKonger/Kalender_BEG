@@ -13,5 +13,6 @@ PyJWT>=2.10.1
 pydantic-settings>=2.5.2
 python-dotenv>=1.0.1
 python-multipart>=0.0.12
+reportlab>=4.2.5
 sqlalchemy>=2.0.35
 uvicorn[standard]>=0.30.6
