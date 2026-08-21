@@ -66,6 +66,7 @@ def test_photo_appendix_renders_landscape_caption_and_professional_document_stru
     assert reader.pages[0].mediabox.width == 595.2756
     assert reader.pages[0].mediabox.height == 841.8898
     assert "Fotoanlage" in text
+    assert "21.08.2026, 14:35" in text
     assert "Zusatzauftrag Nr.:" in text
     assert "Vorgangsnummer" not in text
     assert "Beschriftung" in text

@@ -5,6 +5,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from reportlab.lib.colors import HexColor
@@ -31,6 +32,7 @@ BEG_LINE = HexColor("#CBD5E1")
 BEG_YELLOW = HexColor("#FFD11A")
 TEXT_DARK = HexColor("#172033")
 TEXT_MUTED = HexColor("#65738A")
+DOCUMENT_TIMEZONE = ZoneInfo("Europe/Berlin")
 
 
 @dataclass(frozen=True)
@@ -333,6 +335,8 @@ def _draw_photo_block(
     badge_size = 20.0
     pdf.setFillColor(BEG_BLUE)
     pdf.roundRect(PAGE_MARGIN, top_y - badge_size, badge_size, badge_size, 2, stroke=0, fill=1)
+    pdf.setFillColor(BEG_YELLOW)
+    pdf.rect(PAGE_MARGIN, top_y - badge_size, 2.5, badge_size, stroke=0, fill=1)
     pdf.setFillColorRGB(1, 1, 1)
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawCentredString(PAGE_MARGIN + badge_size / 2, top_y - 14, str(index))
@@ -459,7 +463,10 @@ def _photo_index(photos: tuple[PreparedPhoto, ...], target: PreparedPhoto) -> in
 
 
 def _format_datetime(value: datetime | None) -> str:
-    return value.strftime("%d.%m.%Y, %H:%M") if value is not None else ""
+    if value is None:
+        return ""
+    localized = value.astimezone(DOCUMENT_TIMEZONE) if value.tzinfo else value
+    return localized.strftime("%d.%m.%Y, %H:%M")
 
 
 def _clean(value: str | None) -> str:
