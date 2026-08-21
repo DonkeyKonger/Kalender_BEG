@@ -8,6 +8,7 @@ from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from reportlab import rl_config
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -39,6 +40,10 @@ BEG_YELLOW = HexColor("#FFD11A")
 TEXT_DARK = HexColor("#172033")
 TEXT_MUTED = HexColor("#65738A")
 DOCUMENT_TIMEZONE = ZoneInfo("Europe/Berlin")
+
+# JPEG streams are already compressed. ASCII85 only wraps those binary bytes,
+# adding CPU and about 25% size without changing image quality or compatibility.
+rl_config.useA85 = 0
 
 
 @dataclass(frozen=True)

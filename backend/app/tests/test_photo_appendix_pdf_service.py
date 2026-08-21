@@ -78,6 +78,8 @@ def test_photo_appendix_renders_landscape_caption_and_professional_document_stru
     assert "BEG - Abrechnungsdokumentation" in text
     assert text.count("Hochgeladen am") == 1
     assert text.count("21.08.2026, 14:35") == 2
+    assert b"/ASCII85Decode" not in content
+    assert b"/DCTDecode" in content
 
 
 def test_photo_appendix_information_block_has_three_columns_and_wraps_full_site_details():
