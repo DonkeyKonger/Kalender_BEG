@@ -2433,6 +2433,7 @@ function MobileProjectPhotoGallery({
   const [photos, setPhotos] = useState<ProjectFolderDocumentItem[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<MobileProjectPhotoPreviewState | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
+  const [isOpeningPhotoAppendix, setIsOpeningPhotoAppendix] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -2483,6 +2484,32 @@ function MobileProjectPhotoGallery({
     }
   }
 
+  async function openProjectPhotoAppendix(): Promise<void> {
+    if (isOpeningPhotoAppendix) {
+      return;
+    }
+    setIsOpeningPhotoAppendix(true);
+    setPhotoError(null);
+    try {
+      const blob = await api.projectPhotoAppendixPdf(assignment.site.id);
+      const filename = `Fotoanlage_Projektfotos_${assignment.site.site_number || assignment.site.id}.pdf`;
+      if (isNativeAndroidApp()) {
+        await openAndroidPdfBlob(blob, filename);
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+        if (!openedWindow) {
+          downloadBlobFile(blob, filename);
+        }
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (requestError) {
+      setPhotoError(readApiError(requestError, "Fotoanlage konnte nicht geöffnet werden."));
+    } finally {
+      setIsOpeningPhotoAppendix(false);
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-photo-gallery mobile-project-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
@@ -2500,6 +2527,16 @@ function MobileProjectPhotoGallery({
         <h2>Projektfotos</h2>
         <p>{assignment.site.name}</p>
       </header>
+
+      <button
+        className="secondary-action mobile-project-photo-pdf-action"
+        type="button"
+        onClick={() => void openProjectPhotoAppendix()}
+        disabled={isLoadingPhotos || !photos.length || isOpeningPhotoAppendix}
+      >
+        <FileText aria-hidden="true" size={17} />
+        <span>{isOpeningPhotoAppendix ? "PDF wird erstellt..." : "Fotoanlage PDF öffnen"}</span>
+      </button>
 
       {message ? (
         <p className={messageTone === "error" ? "form-error mobile-project-photo-message" : "form-info mobile-project-photo-message"}>
