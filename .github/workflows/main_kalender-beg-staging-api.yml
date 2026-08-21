@@ -7,7 +7,17 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/main_kalender-beg-staging-api.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/main_kalender-beg-staging-api.yml"
   workflow_dispatch:
+
+concurrency:
+  group: backend-staging-api-deploy
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -33,12 +43,16 @@ jobs:
           CORS_ORIGINS: http://localhost:5173
         run: |
           python -m pip install --upgrade pip
+          python -m app.scripts.check_runtime_dependencies
+          python -m pip install -r requirements.txt
+          python -c "from app.main import app; assert app.title == 'Baustellenplaner API'"
           python -m pip install -e ".[dev]"
           python -m ruff check app
           python -m pytest
 
       - name: Create deployment package
         run: |
+          printf '%s\n' "$GITHUB_SHA" > backend/app/build_sha.txt
           cd backend
           zip -r ../backend-release.zip . \
             -x "*.pyc" \
@@ -99,12 +113,14 @@ jobs:
           PY
 
       - name: Upload artifact for deployment jobs
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: python-app
           path: backend-release.zip
 
   deploy:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: build
     permissions:
@@ -116,7 +132,18 @@ jobs:
         with:
           name: python-app
 
+      - name: Prepare deployment guard
+        run: python -m zipfile -e backend-release.zip deployment-source
+
+      - name: Capture current deployment for rollback
+        id: previous_deployment
+        working-directory: deployment-source
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+        run: python -m app.scripts.azure_deploy_guard capture
+
       - name: Deploy to Azure Web App
+        id: deploy
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
         run: |
@@ -171,92 +198,22 @@ jobs:
           PY
 
       - name: Verify deployed application
+        working-directory: deployment-source
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
-          EXPECTED_TOOL_SOURCE_SHA256: ${{ needs.build.outputs.tool_source_sha256 }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-          import time
-          import urllib.error
-          import urllib.request
-          import xml.etree.ElementTree as ET
+          python -m app.scripts.azure_deploy_guard verify \
+            --expected-revision "${{ github.sha }}" \
+            --expected-tool-source-sha256 "${{ needs.build.outputs.tool_source_sha256 }}"
 
-          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
-          profiles = root.findall("publishProfile")
-          profile = next(
-              (item for item in profiles if item.attrib.get("publishMethod") == "ZipDeploy"),
-              None,
-          )
-          if profile is None:
-              profile = next(
-                  (item for item in profiles if item.attrib.get("publishMethod") == "MSDeploy"),
-                  None,
-              )
-          if profile is None:
-              raise SystemExit("Publish profile does not contain ZipDeploy/MSDeploy credentials.")
-
-          username = profile.attrib["userName"]
-          password = profile.attrib["userPWD"]
-          print(f"::add-mask::{username}")
-          print(f"::add-mask::{password}")
-          destination = profile.attrib.get("destinationAppUrl", "").rstrip("/")
-          if not destination:
-              raise SystemExit("Publish profile does not contain destinationAppUrl.")
-          expected_sha256 = os.environ["EXPECTED_TOOL_SOURCE_SHA256"]
-          health_url = f"{destination}/api/health"
-          last_detail = "noch keine Antwort"
-          for attempt in range(90):
-              try:
-                  with urllib.request.urlopen(health_url, timeout=15) as response:
-                      health = json.load(response)
-                  if response.status == 200 and health.get("status") == "ok":
-                      print(json.dumps(health, ensure_ascii=False, sort_keys=True))
-                      break
-                  last_detail = json.dumps(health, ensure_ascii=False, sort_keys=True)
-              except urllib.error.HTTPError as error:
-                  last_detail = (
-                      f"HTTP {error.code}: "
-                      + error.read().decode(errors="replace")[-2000:]
-                  )
-              except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
-                  last_detail = str(error)
-              if attempt == 89:
-                  raise SystemExit(
-                      "Die deployte Azure-App hat ihre Health-Prüfung nicht bestätigt. "
-                      f"URL: {health_url}; letzte Antwort: {last_detail}"
-                  )
-              time.sleep(5)
-
-          tool_health_url = f"{destination}/api/health/tool-import"
-          tool_detail = "noch keine Antwort"
-          tool_ready = False
-          for attempt in range(12):
-              try:
-                  with urllib.request.urlopen(tool_health_url, timeout=15) as response:
-                      tool_health = json.load(response)
-                  tool_detail = json.dumps(tool_health, ensure_ascii=False, sort_keys=True)
-                  tool_ready = (
-                      response.status == 200
-                      and tool_health.get("status") == "ok"
-                      and tool_health.get("source_sha256") == expected_sha256
-                      and tool_health.get("imported_rows") == tool_health.get("expected_rows")
-                  )
-                  if tool_ready:
-                      print(tool_detail)
-                      break
-              except urllib.error.HTTPError as error:
-                  tool_detail = (
-                      f"HTTP {error.code}: "
-                      + error.read().decode(errors="replace")[-2000:]
-                  )
-              except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
-                  tool_detail = str(error)
-              time.sleep(5)
-          if not tool_ready:
-              print(
-                  "::warning::Werkzeugimport wurde nach dem Deploy noch nicht bestätigt. "
-                  f"URL: {tool_health_url}; letzte Antwort: {tool_detail}"
-              )
-          PY
+      - name: Restore previous deployment after failed verification
+        if: >-
+          ${{ failure() && steps.deploy.outcome == 'success' &&
+              steps.previous_deployment.outputs.deployment_id != '' }}
+        working-directory: deployment-source
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+        run: |
+          python -m app.scripts.azure_deploy_guard rollback \
+            --deployment-id "${{ steps.previous_deployment.outputs.deployment_id }}" \
+            --expected-revision "${{ steps.previous_deployment.outputs.revision }}"
