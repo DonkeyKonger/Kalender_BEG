@@ -12,7 +12,6 @@ from time import perf_counter
 from typing import Any
 
 from fastapi import HTTPException, status
-from PIL import Image, ImageOps
 from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -27,7 +26,6 @@ from app.services.extra_work_document_context import (
     resolve_extra_work_approval_place,
     resolve_extra_work_ticket_dates,
 )
-from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
     PhotoAppendixPdfService,
@@ -37,7 +35,6 @@ from app.services.project_storage_service import ProjectStorageService
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
-PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
 EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v9-shared-photo-appendix"
 LOGGER = logging.getLogger(__name__)
@@ -68,14 +65,6 @@ class FieldRect:
     y: float
     width: float
     height: float
-
-
-@dataclass(frozen=True)
-class PdfImage:
-    width: int
-    height: int
-    data: bytes
-    filter_name: str = "FlateDecode"
 
 
 FIELD_RECTS = {
@@ -820,106 +809,6 @@ class OverlayPdf:
         return buffer.getvalue()
 
 
-class PhotoAppendixPdf:
-    def __init__(self) -> None:
-        self.pages: list[bytes] = []
-        self.images: dict[str, PdfImage] = {}
-
-    def add_image(self, name: str, image: PdfImage) -> None:
-        self.images[name] = image
-
-    def add_page(self, commands: list[bytes]) -> None:
-        self.pages.append(b"\n".join(commands))
-
-    def build(self) -> bytes:
-        objects: list[bytes] = [
-            b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-        ]
-        image_object_numbers: dict[str, int] = {}
-        for name, image in self.images.items():
-            objects.append(
-                b"<< /Type /XObject /Subtype /Image /Width "
-                + str(image.width).encode("ascii")
-                + b" /Height "
-                + str(image.height).encode("ascii")
-                + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /"
-                + image.filter_name.encode("ascii")
-                + b" /Length "
-                + str(len(image.data)).encode("ascii")
-                + b" >>\nstream\n"
-                + image.data
-                + b"\nendstream"
-            )
-            image_object_numbers[name] = len(objects)
-
-        xobject_resource = b""
-        if image_object_numbers:
-            xobjects = b" ".join(
-                b"/" + name.encode("ascii") + b" " + str(number).encode("ascii") + b" 0 R"
-                for name, number in image_object_numbers.items()
-            )
-            xobject_resource = b" /XObject << " + xobjects + b" >>"
-
-        page_object_numbers: list[int] = []
-        for page_stream in self.pages:
-            stream_object_number = len(objects) + 1
-            objects.append(
-                b"<< /Length "
-                + str(len(page_stream)).encode("ascii")
-                + b" >>\nstream\n"
-                + page_stream
-                + b"\nendstream"
-            )
-            page_object_numbers.append(len(objects) + 1)
-            objects.append(
-                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "
-                + _number(PAGE_WIDTH)
-                + b" "
-                + _number(PAGE_HEIGHT)
-                + b"] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>"
-                + xobject_resource
-                + b" >> /Contents "
-                + str(stream_object_number).encode("ascii")
-                + b" 0 R >>"
-            )
-
-        kids = b" ".join(str(number).encode("ascii") + b" 0 R" for number in page_object_numbers)
-        objects[1] = (
-            b"<< /Type /Pages /Kids ["
-            + kids
-            + b"] /Count "
-            + str(len(page_object_numbers)).encode("ascii")
-            + b" >>"
-        )
-
-        buffer = BytesIO()
-        buffer.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-        offsets = [0]
-        for index, obj in enumerate(objects, start=1):
-            offsets.append(buffer.tell())
-            buffer.write(str(index).encode("ascii") + b" 0 obj\n")
-            buffer.write(obj)
-            buffer.write(b"\nendobj\n")
-        xref_start = buffer.tell()
-        buffer.write(b"xref\n")
-        buffer.write(f"0 {len(objects) + 1}\n".encode("ascii"))
-        buffer.write(b"0000000000 65535 f \n")
-        for offset in offsets[1:]:
-            buffer.write(f"{offset:010d} 00000 n \n".encode("ascii"))
-        buffer.write(b"trailer\n")
-        buffer.write(
-            b"<< /Size "
-            + str(len(objects) + 1).encode("ascii")
-            + b" /Root 1 0 R >>\nstartxref\n"
-            + str(xref_start).encode("ascii")
-            + b"\n%%EOF\n"
-        )
-        return buffer.getvalue()
-
-
 def _field(
     commands: list[bytes],
     rect: FieldRect,
@@ -1043,44 +932,6 @@ def _checkbox(commands: list[bytes], center_x: float, center_y_top: float) -> No
     _text(commands, center_x - 2.8, PAGE_HEIGHT - center_y_top - 3.3, "X", 7.5)
 
 
-def _render_photo_attachment_page(
-    *,
-    ticket: ExtraWorkTicket,
-    photo: ExtraWorkTicketPhoto,
-    image: PdfImage,
-    image_name: str,
-    index: int,
-    total: int,
-) -> list[bytes]:
-    ticket_label = _ticket_display_title(ticket)
-    uploaded_by = _format_user(photo.uploaded_by) or "-"
-    commands: list[bytes] = [b"1 1 1 rg 0 0 595.28 841.89 re f 0 0 0 RG 0 0 0 rg"]
-    _text(commands, 42, 782, "Fotoanlagen", 18, font="F2")
-    _text(commands, 42, 758, f"{ticket_label} · {ticket.site.name}", 9)
-    _text(commands, 42, 733, f"Foto {index} von {total}", 9, font="F2")
-    _text(commands, 42, 716, f"Datei: {photo.filename}", 8)
-    _text(commands, 42, 702, f"Hochgeladen: {_format_datetime(photo.created_at) or '-'}", 8)
-    _text(commands, 42, 688, f"Monteur: {uploaded_by}", 8)
-    _line(commands, 42, 672, 553, 672, 0.8)
-    _image_fit(commands, image_name, x=42, y=64, max_width=511, max_height=590, image=image)
-    return commands
-
-
-def _line(commands: list[bytes], x1: float, y1: float, x2: float, y2: float, width: float = 0.5) -> None:
-    commands.append(
-        _number(width)
-        + b" w "
-        + _number(x1)
-        + b" "
-        + _number(y1)
-        + b" m "
-        + _number(x2)
-        + b" "
-        + _number(y2)
-        + b" l S"
-    )
-
-
 def _text(
     commands: list[bytes],
     x: float,
@@ -1117,34 +968,6 @@ def _text(
         )
         return
     commands.append(text_command)
-
-
-def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:
-    commands.append(
-        b"q "
-        + b" ".join([_number(width), b"0", b"0", _number(height), _number(x), _number(y)])
-        + b" cm /"
-        + name.encode("ascii")
-        + b" Do Q"
-    )
-
-
-def _image_fit(
-    commands: list[bytes],
-    name: str,
-    *,
-    x: float,
-    y: float,
-    max_width: float,
-    max_height: float,
-    image: PdfImage,
-) -> None:
-    scale = min(max_width / image.width, max_height / image.height)
-    width = image.width * scale
-    height = image.height * scale
-    fitted_x = x + (max_width - width) / 2
-    fitted_y = y + (max_height - height) / 2
-    _image(commands, name, fitted_x, fitted_y, width, height)
 
 
 def _draw_signature(
@@ -1201,23 +1024,6 @@ def _draw_signature(
         commands.append(b"q 1.25 w 0.05 0.12 0.24 RG " + b" ".join(path_parts) + b" Q")
 
 
-def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
-    with Image.open(BytesIO(content)) as source:
-        image = ImageOps.exif_transpose(source)
-        if image.mode not in {"RGB", "RGBA"}:
-            image = image.convert("RGBA")
-        image.thumbnail((PHOTO_MAX_IMAGE_EDGE, PHOTO_MAX_IMAGE_EDGE))
-        rgb = Image.new("RGB", image.size, "white")
-        if image.mode == "RGBA":
-            rgb.paste(image, mask=image.getchannel("A"))
-        else:
-            rgb.paste(image)
-        width, height = rgb.size
-        output = BytesIO()
-        rgb.save(output, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
-        return PdfImage(width=width, height=height, data=output.getvalue(), filter_name="DCTDecode")
-
-
 def _format_user(user: User | None) -> str | None:
     if user is None:
         return None
@@ -1237,12 +1043,6 @@ def _common_photo_monteur(photos: list[ExtraWorkTicketPhoto]) -> str | None:
     if len(names) > 1:
         return "Mehrere Monteure"
     return None
-
-
-def _format_datetime(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.strftime("%d.%m.%Y, %H:%M")
 
 
 def _format_signature_date(value: date | None) -> str:
@@ -1398,11 +1198,6 @@ def _decimal(value: Any) -> Decimal:
 def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) -> str:
     number = ticket.display_number or str(ticket.sequence_number)
     return f"{number} / Blatt {page_number}" if total_pages > 1 else number
-
-
-def _ticket_display_title(ticket: ExtraWorkTicket) -> str:
-    number = ticket.display_number or str(ticket.sequence_number)
-    return f"Zusatzauftrag {number} - {_ticket_document_description(ticket)}"
 
 
 def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:

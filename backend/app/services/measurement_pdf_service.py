@@ -13,7 +13,6 @@ from textwrap import wrap
 import zlib
 
 from fastapi import HTTPException, status
-from PIL import Image, ImageOps
 from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -30,7 +29,6 @@ from app.models.enums import MeasurementBatchOrigin
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
-from app.services.photo_limits import MAX_PHOTO_DIMENSION, PHOTO_JPEG_QUALITY
 from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
     PhotoAppendixPdfService,
@@ -96,7 +94,6 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-PHOTO_MAX_IMAGE_EDGE = MAX_PHOTO_DIMENSION
 MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v5-shared-photo-appendix"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
@@ -879,29 +876,6 @@ def _template_header(
     _text(commands, 558, 456, date_label, 8)
 
 
-def _render_photo_page(
-    *,
-    batch: SiteMeasurementBatch,
-    photo: SiteMeasurementBatchPhoto,
-    image: PdfImage,
-    image_name: str,
-    index: int,
-    total: int,
-) -> list[bytes]:
-    site = batch.site
-    title = _format_batch_number(site.site_number if site else None, batch.number)
-    uploaded_by = _format_user(photo.uploaded_by) or "-"
-    commands: list[bytes] = [b"1 1 1 rg 0 0 841.89 595.28 re f 0 0 0 RG 0 0 0 rg"]
-    _text(commands, 50, 535, f"Hinterlegte Fotos - {title}", 17, "F2")
-    _line(commands, 50, 528, 790, 528, 1.0)
-    _text(commands, 50, 508, f"Foto {index} von {total}", 9, "F2", color=(0.08, 0.24, 0.43))
-    _text(commands, 50, 493, f"Datei: {photo.filename}", 8)
-    _text(commands, 50, 480, f"Hochgeladen: {_format_datetime(photo.created_at) or '-'}", 8)
-    _text(commands, 50, 467, f"Monteur: {uploaded_by}", 8)
-    _image_fit(commands, image_name, x=50, top_y=150, max_width=740, max_height=380, image=image)
-    return commands
-
-
 def _header_meta_row(
     commands: list[bytes],
     *,
@@ -1296,23 +1270,6 @@ def _load_png_rgb(path: Path) -> PdfImage | None:
         return PdfImage(width=crop_width, height=crop_height, data=zlib.compress(b"".join(rows), 9))
     except Exception:
         return None
-
-
-def _load_uploaded_image_rgb(content: bytes) -> PdfImage:
-    with Image.open(BytesIO(content)) as source:
-        image = ImageOps.exif_transpose(source)
-        if image.mode not in {"RGB", "RGBA"}:
-            image = image.convert("RGBA")
-        image.thumbnail((PHOTO_MAX_IMAGE_EDGE, PHOTO_MAX_IMAGE_EDGE))
-        rgb = Image.new("RGB", image.size, "white")
-        if image.mode == "RGBA":
-            rgb.paste(image, mask=image.getchannel("A"))
-        else:
-            rgb.paste(image)
-        width, height = rgb.size
-        output = BytesIO()
-        rgb.save(output, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
-        return PdfImage(width=width, height=height, data=output.getvalue(), filter_name="DCTDecode")
 
 
 def _build_logical_measurement_blocks(
