@@ -37,7 +37,7 @@ from app.services.project_storage_service import ProjectStorageService
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v9-shared-photo-appendix"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v10-optimized-photo-appendix"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (

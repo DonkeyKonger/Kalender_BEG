@@ -95,7 +95,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v5-shared-photo-appendix"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v6-optimized-photo-appendix"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 

@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
+import logging
 from math import ceil
 from pathlib import Path
 from typing import Iterable
+from time import perf_counter
 from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -43,6 +45,7 @@ BEG_YELLOW = HexColor("#FFD11A")
 TEXT_DARK = HexColor("#172033")
 TEXT_MUTED = HexColor("#65738A")
 DOCUMENT_TIMEZONE = ZoneInfo("Europe/Berlin")
+LOGGER = logging.getLogger(__name__)
 
 # JPEG streams are already compressed. ASCII85 only wraps those binary bytes,
 # adding CPU and about 25% size without changing image quality or compatibility.
@@ -141,9 +144,13 @@ class PhotoAppendixPdfService:
         context: PhotoAppendixContext,
         photos: Iterable[PhotoAppendixPhoto],
     ) -> bytes:
+        started_at = perf_counter()
+        image_processing_started_at = perf_counter()
         prepared = tuple(_prepare_photo(photo) for photo in photos)
+        image_processing_ms = (perf_counter() - image_processing_started_at) * 1000
         if not prepared:
             return b""
+        rendering_started_at = perf_counter()
         information_block = _prepare_information_block(context)
         first_page_content_top = (
             information_block.content_top if information_block.columns else FIRST_PAGE_CONTENT_TOP
@@ -177,7 +184,20 @@ class PhotoAppendixPdfService:
             _draw_footer(pdf, page_number, len(pages))
             pdf.showPage()
         pdf.save()
-        return output.getvalue()
+        content = output.getvalue()
+        LOGGER.info(
+            "Photo appendix PDF generated: photos=%s pages=%s source_bytes=%s work_bytes=%s "
+            "pdf_bytes=%s image_processing_ms=%.1f rendering_ms=%.1f total_ms=%.1f",
+            len(prepared),
+            len(pages),
+            sum(len(photo.source.content) for photo in prepared),
+            sum(len(photo.image_data or b"") for photo in prepared),
+            len(content),
+            image_processing_ms,
+            (perf_counter() - rendering_started_at) * 1000,
+            (perf_counter() - started_at) * 1000,
+        )
+        return content
 
 
 def normalize_photo_caption(value: str | None) -> str | None:
