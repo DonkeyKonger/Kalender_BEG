@@ -15,6 +15,7 @@ from app.services.photo_appendix_pdf_service import (
     PhotoAppendixPdfService,
     PhotoAppendixPhoto,
     _prepare_photo,
+    _prepare_information_block,
     normalize_photo_caption,
 )
 
@@ -72,6 +73,47 @@ def test_photo_appendix_renders_landscape_caption_and_professional_document_stru
     assert "Beschriftung" in text
     assert "2. OG - zusätzliche Kabelrinne im Flur Süd" in text
     assert "BEG - Abrechnungsdokumentation" in text
+    assert text.count("Hochgeladen am") == 1
+    assert text.count("21.08.2026, 14:35") == 2
+
+
+def test_photo_appendix_information_block_has_three_columns_and_wraps_full_site_details():
+    context = PhotoAppendixContext(
+        document_type="Zusatzauftrag",
+        site_name="Schüchtermann Klinik Erweiterungsbau Südflügel",
+        site_number="8007",
+        site_address="Ulmenallee 5, Gebäudeabschnitt Süd, 49214 Bad Rothenfelde",
+        process_title="Zusatzarbeiten",
+        document_number_label="Zusatzauftrag Nr.",
+        document_number="8007.SZ12",
+        generated_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
+        uploaded_at=datetime(2026, 8, 19, 11, 51, tzinfo=timezone.utc),
+        monteur="Christopher Monteur",
+    )
+    layout = _prepare_information_block(context)
+    content = PhotoAppendixPdfService().build(
+        context=context,
+        photos=[
+            PhotoAppendixPhoto(
+                filename="baustelle.jpg",
+                content=_image_bytes(1600, 700, (185, 192, 200)),
+                uploaded_at=datetime(2026, 8, 17, 10, 52, tzinfo=timezone.utc),
+                monteur="Christopher Monteur",
+            )
+        ],
+    )
+    text = _text(content)
+    normalized_text = " ".join(text.split())
+
+    assert [column.label for column in layout.columns] == ["Baustelle", "Vorgang", "Monteur"]
+    assert layout.height > 58
+    assert "Hochgeladen am" not in [column.label for column in layout.columns]
+    assert "Ulmenallee 5," in text
+    assert "Gebäudeabschnitt Süd," in text
+    assert "49214 Bad Rothenfelde" in normalized_text
+    assert "…" not in text
+    assert "19.08.2026, 13:51" not in text
+    assert "17.08.2026, 12:52" in text
 
 
 def test_photo_appendix_omits_empty_caption_blocks_for_none_whitespace_and_newlines():

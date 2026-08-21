@@ -23,6 +23,9 @@ CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN
 CONTENT_BOTTOM = 58.0
 FIRST_PAGE_CONTENT_TOP = 626.0
 FOLLOWING_PAGE_CONTENT_TOP = 748.0
+INFORMATION_BLOCK_TOP = 707.0
+INFORMATION_BLOCK_MIN_HEIGHT = 58.0
+INFORMATION_BLOCK_CONTENT_GAP = 23.0
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_full.png"
 
 BEG_BLUE = HexColor("#142A52")
@@ -92,6 +95,32 @@ class PlacedPhoto:
         return self.photo.fixed_height + self.image_height
 
 
+@dataclass(frozen=True)
+class InformationBlockLine:
+    text: str
+    bold: bool
+
+
+@dataclass(frozen=True)
+class InformationBlockColumn:
+    label: str
+    lines: tuple[InformationBlockLine, ...]
+
+
+@dataclass(frozen=True)
+class InformationBlockLayout:
+    columns: tuple[InformationBlockColumn, ...]
+    height: float
+
+    @property
+    def bottom(self) -> float:
+        return INFORMATION_BLOCK_TOP - self.height
+
+    @property
+    def content_top(self) -> float:
+        return self.bottom - INFORMATION_BLOCK_CONTENT_GAP
+
+
 class PhotoAppendixPdfService:
     """Build the one shared, portrait A4 photo appendix used by all document contexts."""
 
@@ -104,14 +133,25 @@ class PhotoAppendixPdfService:
         prepared = tuple(_prepare_photo(photo) for photo in photos)
         if not prepared:
             return b""
-        pages = _plan_pages(prepared)
+        information_block = _prepare_information_block(context)
+        first_page_content_top = (
+            information_block.content_top if information_block.columns else FIRST_PAGE_CONTENT_TOP
+        )
+        pages = _plan_pages(prepared, first_page_content_top=first_page_content_top)
         output = BytesIO()
         pdf = Canvas(output, pagesize=A4, pageCompression=1, invariant=1)
         logo = ImageReader(str(LOGO_PATH)) if LOGO_PATH.exists() else None
         for page_number, page in enumerate(pages, start=1):
             if page_number == 1:
-                _draw_full_header(pdf, context, logo, page_number, len(pages))
-                cursor_y = FIRST_PAGE_CONTENT_TOP
+                _draw_full_header(
+                    pdf,
+                    context,
+                    logo,
+                    page_number,
+                    len(pages),
+                    information_block,
+                )
+                cursor_y = first_page_content_top
             else:
                 _draw_compact_header(pdf, context, logo, page_number, len(pages))
                 cursor_y = FOLLOWING_PAGE_CONTENT_TOP
@@ -206,9 +246,13 @@ def _prepare_photo(photo: PhotoAppendixPhoto) -> PreparedPhoto:
     )
 
 
-def _plan_pages(photos: tuple[PreparedPhoto, ...]) -> tuple[tuple[PlacedPhoto, ...], ...]:
+def _plan_pages(
+    photos: tuple[PreparedPhoto, ...],
+    *,
+    first_page_content_top: float = FIRST_PAGE_CONTENT_TOP,
+) -> tuple[tuple[PlacedPhoto, ...], ...]:
     pages: list[list[PlacedPhoto]] = [[]]
-    remaining = FIRST_PAGE_CONTENT_TOP - CONTENT_BOTTOM
+    remaining = first_page_content_top - CONTENT_BOTTOM
     for photo in photos:
         desired_total = photo.fixed_height + photo.desired_image_height
         if pages[-1] and desired_total > remaining:
@@ -228,6 +272,7 @@ def _draw_full_header(
     logo: ImageReader | None,
     page_number: int,
     page_count: int,
+    information_block: InformationBlockLayout,
 ) -> None:
     _draw_logo_contained(pdf, logo, x=PAGE_MARGIN, y=735, max_width=105, max_height=72)
     pdf.setFillColor(BEG_BLUE)
@@ -253,7 +298,7 @@ def _draw_full_header(
     pdf.setStrokeColor(BEG_BLUE)
     pdf.setLineWidth(1.2)
     pdf.line(PAGE_MARGIN, 723, PAGE_WIDTH - PAGE_MARGIN, 723)
-    _draw_information_block(pdf, context)
+    _draw_information_block(pdf, information_block)
 
 
 def _draw_compact_header(
@@ -279,35 +324,65 @@ def _draw_compact_header(
     pdf.line(PAGE_MARGIN, 770, PAGE_WIDTH - PAGE_MARGIN, 770)
 
 
-def _draw_information_block(pdf: Canvas, context: PhotoAppendixContext) -> None:
-    items: list[tuple[str, list[str]]] = []
-    site_values = [_clean(context.site_name)]
-    if _clean(context.site_number):
-        site_values.append(_clean(context.site_number))
-    if _clean(context.site_address):
-        site_values.append(_clean(context.site_address))
-    if any(site_values):
-        items.append(("Baustelle", [value for value in site_values if value]))
+def _prepare_information_block(context: PhotoAppendixContext) -> InformationBlockLayout:
+    items: list[tuple[str, tuple[tuple[str, bool], ...]]] = []
+    site_values = tuple(
+        (value, index == 0)
+        for index, value in enumerate(
+            (
+                _clean(context.site_name),
+                _clean(context.site_number),
+                _clean(context.site_address),
+            )
+        )
+        if value
+    )
+    if site_values:
+        items.append(("Baustelle", site_values))
 
-    process_values = [_clean(context.process_title)]
-    if _clean(context.document_number):
-        process_values.append(_clean(context.document_number))
-    if any(process_values):
-        items.append(("Vorgang", [value for value in process_values if value]))
-    if context.uploaded_at:
-        items.append(("Hochgeladen am", [_format_datetime(context.uploaded_at)]))
+    process_values = tuple(
+        (value, index == 0)
+        for index, value in enumerate(
+            (_clean(context.process_title), _clean(context.document_number))
+        )
+        if value
+    )
+    if process_values:
+        items.append(("Vorgang", process_values))
     if _clean(context.monteur):
-        items.append(("Monteur", [_clean(context.monteur)]))
+        items.append(("Monteur", ((_clean(context.monteur), True),)))
     if not items:
+        return InformationBlockLayout(columns=(), height=0.0)
+
+    column_width = CONTENT_WIDTH / len(items)
+    text_width = column_width - 22
+    columns: list[InformationBlockColumn] = []
+    for label, values in items:
+        lines: list[InformationBlockLine] = []
+        for value, bold in values:
+            font = "Helvetica-Bold" if bold else "Helvetica"
+            lines.extend(
+                InformationBlockLine(text=line, bold=bold)
+                for line in _wrap_text(value, text_width, font, 7.4)
+            )
+        columns.append(InformationBlockColumn(label=label, lines=tuple(lines)))
+
+    maximum_line_count = max(len(column.lines) for column in columns)
+    height = max(INFORMATION_BLOCK_MIN_HEIGHT, 28.0 + maximum_line_count * 10.0)
+    return InformationBlockLayout(columns=tuple(columns), height=height)
+
+
+def _draw_information_block(pdf: Canvas, layout: InformationBlockLayout) -> None:
+    if not layout.columns:
         return
 
     x = PAGE_MARGIN
-    y = 649.0
-    height = 58.0
+    y = layout.bottom
+    height = layout.height
     pdf.setFillColor(BEG_PALE_BLUE)
     pdf.roundRect(x, y, CONTENT_WIDTH, height, 4, stroke=0, fill=1)
-    column_width = CONTENT_WIDTH / len(items)
-    for index, (label, values) in enumerate(items):
+    column_width = CONTENT_WIDTH / len(layout.columns)
+    for index, column in enumerate(layout.columns):
         column_x = x + index * column_width + 12
         if index:
             pdf.setStrokeColor(BEG_LINE)
@@ -315,12 +390,11 @@ def _draw_information_block(pdf: Canvas, context: PhotoAppendixContext) -> None:
             pdf.line(x + index * column_width, y + 9, x + index * column_width, y + height - 9)
         pdf.setFillColor(TEXT_MUTED)
         pdf.setFont("Helvetica", 7)
-        pdf.drawString(column_x, y + 41, label)
+        pdf.drawString(column_x, INFORMATION_BLOCK_TOP - 17, column.label)
         pdf.setFillColor(TEXT_DARK)
-        for value_index, value in enumerate(values[:3]):
-            pdf.setFont("Helvetica-Bold" if value_index == 0 else "Helvetica", 7.4)
-            fitted = _fit_text(value, column_width - 22, "Helvetica-Bold" if value_index == 0 else "Helvetica", 7.4)
-            pdf.drawString(column_x, y + 28 - value_index * 10, fitted)
+        for line_index, line in enumerate(column.lines):
+            pdf.setFont("Helvetica-Bold" if line.bold else "Helvetica", 7.4)
+            pdf.drawString(column_x, INFORMATION_BLOCK_TOP - 30 - line_index * 10, line.text)
 
 
 def _draw_photo_block(
