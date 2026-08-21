@@ -26,6 +26,9 @@ FOLLOWING_PAGE_CONTENT_TOP = 748.0
 INFORMATION_BLOCK_TOP = 707.0
 INFORMATION_BLOCK_MIN_HEIGHT = 58.0
 INFORMATION_BLOCK_CONTENT_GAP = 23.0
+COMPACT_LOGO_SCALE_FACTOR = 1.2
+COMPACT_LOGO_MAX_WIDTH = 56.0 * COMPACT_LOGO_SCALE_FACTOR
+COMPACT_LOGO_MAX_HEIGHT = 40.0 * COMPACT_LOGO_SCALE_FACTOR
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_full.png"
 
 BEG_BLUE = HexColor("#142A52")
@@ -308,7 +311,14 @@ def _draw_compact_header(
     page_number: int,
     page_count: int,
 ) -> None:
-    _draw_logo_contained(pdf, logo, x=PAGE_MARGIN, y=774, max_width=56, max_height=40)
+    _draw_logo_contained(
+        pdf,
+        logo,
+        x=PAGE_MARGIN,
+        y=772,
+        max_width=COMPACT_LOGO_MAX_WIDTH,
+        max_height=COMPACT_LOGO_MAX_HEIGHT,
+    )
     pdf.setFillColor(BEG_BLUE)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(101, 801, f"Fotoanlage - {_clean(context.document_type)}")

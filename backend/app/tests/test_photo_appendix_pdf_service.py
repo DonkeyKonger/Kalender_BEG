@@ -11,6 +11,9 @@ from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.measurement_pdf_service import MeasurementPdfService, SimplePdf
 
 from app.services.photo_appendix_pdf_service import (
+    COMPACT_LOGO_MAX_HEIGHT,
+    COMPACT_LOGO_MAX_WIDTH,
+    COMPACT_LOGO_SCALE_FACTOR,
     PhotoAppendixContext,
     PhotoAppendixPdfService,
     PhotoAppendixPhoto,
@@ -143,6 +146,12 @@ def test_photo_appendix_preserves_landscape_and_portrait_aspect_ratios():
     assert landscape.aspect_ratio == 2
     assert round(portrait.aspect_ratio, 2) == 0.47
     assert landscape.desired_image_height < portrait.desired_image_height
+
+
+def test_photo_appendix_compact_header_logo_is_twenty_percent_larger():
+    assert COMPACT_LOGO_SCALE_FACTOR == 1.2
+    assert COMPACT_LOGO_MAX_WIDTH == 67.2
+    assert COMPACT_LOGO_MAX_HEIGHT == 48
 
 
 def test_photo_appendix_handles_five_mixed_photos_long_caption_and_long_filename():
