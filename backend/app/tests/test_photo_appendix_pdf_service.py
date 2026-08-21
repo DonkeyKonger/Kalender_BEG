@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from pypdf import PdfReader, PdfWriter
 
 from app.services import extra_work_pdf_service as extra_work_pdf_module
@@ -14,11 +14,13 @@ from app.services.photo_appendix_pdf_service import (
     COMPACT_LOGO_MAX_HEIGHT,
     COMPACT_LOGO_MAX_WIDTH,
     COMPACT_LOGO_SCALE_FACTOR,
+    PDF_IMAGE_DPI,
     PhotoAppendixContext,
     PhotoAppendixPdfService,
     PhotoAppendixPhoto,
     _prepare_photo,
     _prepare_information_block,
+    _pdf_image_target_size,
     normalize_photo_caption,
 )
 
@@ -27,6 +29,34 @@ def _image_bytes(width: int, height: int, color: tuple[int, int, int]) -> bytes:
     image = Image.new("RGB", (width, height), color)
     output = BytesIO()
     image.save(output, format="JPEG", quality=92)
+    return output.getvalue()
+
+
+def _png_screenshot_bytes(width: int = 2048, height: int = 2732) -> bytes:
+    image = Image.new("RGB", (width, height), (246, 248, 251))
+    draw = ImageDraw.Draw(image)
+    for row in range(12):
+        top = 80 + row * 190
+        draw.rectangle((90, top, width - 90, top + 140), fill=(255, 255, 255))
+        draw.line((180, top + 45, width - 180, top + 45), fill=(20, 42, 82), width=6)
+    output = BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+def _exif_rotated_jpeg_bytes() -> bytes:
+    image = Image.new("RGB", (1600, 900), (80, 100, 120))
+    exif = Image.Exif()
+    exif[274] = 6
+    output = BytesIO()
+    image.save(output, format="JPEG", quality=92, exif=exif)
+    return output.getvalue()
+
+
+def _gif_bytes() -> bytes:
+    image = Image.new("P", (900, 600), 1)
+    output = BytesIO()
+    image.save(output, format="GIF")
     return output.getvalue()
 
 
@@ -148,6 +178,49 @@ def test_photo_appendix_preserves_landscape_and_portrait_aspect_ratios():
     assert landscape.aspect_ratio == 2
     assert round(portrait.aspect_ratio, 2) == 0.47
     assert landscape.desired_image_height < portrait.desired_image_height
+
+
+def test_photo_appendix_sizes_work_images_for_pdf_dpi_without_upscaling():
+    landscape = _prepare_photo(
+        PhotoAppendixPhoto(filename="quer.jpg", content=_image_bytes(4032, 3024, (20, 40, 80)))
+    )
+    small = _prepare_photo(
+        PhotoAppendixPhoto(filename="klein.jpg", content=_image_bytes(640, 480, (80, 40, 20)))
+    )
+
+    assert PDF_IMAGE_DPI == 160
+    assert _pdf_image_target_size(390) == (1172, 867)
+    assert (landscape.width, landscape.height) == (1156, 867)
+    assert (small.width, small.height) == (640, 480)
+
+
+def test_photo_appendix_keeps_png_work_image_lossless():
+    source = _png_screenshot_bytes()
+    prepared = _prepare_photo(PhotoAppendixPhoto(filename="screenshot.png", content=source))
+
+    assert prepared.error is None
+    assert prepared.image_data is not None
+    assert prepared.image_data.startswith(b"\x89PNG\r\n\x1a\n")
+    assert prepared.height <= 912
+
+
+def test_photo_appendix_normalizes_exif_orientation_before_sizing():
+    source = _exif_rotated_jpeg_bytes()
+    original = bytes(source)
+    prepared = _prepare_photo(PhotoAppendixPhoto(filename="smartphone.jpg", content=source))
+
+    assert prepared.error is None
+    assert prepared.height > prepared.width
+    assert (prepared.width, prepared.height) == (513, 912)
+    assert source == original
+
+
+def test_photo_appendix_converts_supported_gif_to_jpeg_work_image():
+    prepared = _prepare_photo(PhotoAppendixPhoto(filename="dokumentation.gif", content=_gif_bytes()))
+
+    assert prepared.error is None
+    assert prepared.image_data is not None
+    assert prepared.image_data.startswith(b"\xff\xd8\xff")
 
 
 def test_photo_appendix_compact_header_logo_is_twenty_percent_larger():

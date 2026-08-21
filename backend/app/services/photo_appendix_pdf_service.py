@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
+from math import ceil
 from pathlib import Path
 from typing import Iterable
 from zoneinfo import ZoneInfo
@@ -30,6 +31,8 @@ INFORMATION_BLOCK_CONTENT_GAP = 23.0
 COMPACT_LOGO_SCALE_FACTOR = 1.2
 COMPACT_LOGO_MAX_WIDTH = 56.0 * COMPACT_LOGO_SCALE_FACTOR
 COMPACT_LOGO_MAX_HEIGHT = 40.0 * COMPACT_LOGO_SCALE_FACTOR
+PDF_IMAGE_DPI = 160
+PDF_POINTS_PER_INCH = 72
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_full.png"
 
 BEG_BLUE = HexColor("#142A52")
@@ -215,18 +218,25 @@ def _prepare_photo(photo: PhotoAppendixPhoto) -> PreparedPhoto:
     metadata_height = 16.0 + value_line_count * 9.0
     try:
         with Image.open(BytesIO(photo.content)) as source:
+            source_format = (source.format or "").upper()
             image = ImageOps.exif_transpose(source)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            image.thumbnail((MAX_PHOTO_DIMENSION, MAX_PHOTO_DIMENSION), Image.Resampling.LANCZOS)
+            aspect_ratio = image.width / image.height if image.height else 1.0
+            max_pdf_height = 410.0 if aspect_ratio < 1 else 390.0
+            image.thumbnail(
+                _pdf_image_target_size(max_pdf_height),
+                Image.Resampling.LANCZOS,
+            )
             width, height = image.size
             image_output = BytesIO()
-            image.save(
-                image_output,
-                format="JPEG",
-                quality=max(88, round(PHOTO_JPEG_QUALITY * 100)),
-                optimize=True,
-            )
+            if source_format == "PNG":
+                image.save(image_output, format="PNG", optimize=True)
+            else:
+                _flatten_to_rgb(image).save(
+                    image_output,
+                    format="JPEG",
+                    quality=PHOTO_JPEG_QUALITY,
+                    optimize=True,
+                )
     except (OSError, UnidentifiedImageError, ValueError):
         return PreparedPhoto(
             source=photo,
@@ -252,6 +262,25 @@ def _prepare_photo(photo: PhotoAppendixPhoto) -> PreparedPhoto:
         metadata_height=metadata_height,
         desired_image_height=min(natural_height, max_height),
     )
+
+
+def _pdf_image_target_size(max_pdf_height: float) -> tuple[int, int]:
+    width = ceil(CONTENT_WIDTH / PDF_POINTS_PER_INCH * PDF_IMAGE_DPI)
+    height = ceil(max_pdf_height / PDF_POINTS_PER_INCH * PDF_IMAGE_DPI)
+    return min(MAX_PHOTO_DIMENSION, width), min(MAX_PHOTO_DIMENSION, height)
+
+
+def _flatten_to_rgb(image: Image.Image) -> Image.Image:
+    if image.mode == "RGB":
+        return image
+    if image.mode in {"RGBA", "LA"} or (
+        image.mode == "P" and "transparency" in image.info
+    ):
+        rgba = image.convert("RGBA")
+        flattened = Image.new("RGB", rgba.size, "white")
+        flattened.paste(rgba, mask=rgba.getchannel("A"))
+        return flattened
+    return image.convert("RGB")
 
 
 def _plan_pages(
