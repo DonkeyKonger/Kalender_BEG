@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 import re
+from time import perf_counter
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.services.photo_appendix_pdf_service import (
     PhotoAppendixPhoto,
     format_photo_appendix_site_address,
 )
+from app.services.photo_download_service import PhotoDownloadRequest, download_photo_files
 from app.services.project_folder_service import ProjectFolderService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
@@ -66,23 +68,39 @@ class ProjectPhotoPdfService:
         if not photo_items:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine Projektfotos vorhanden.")
 
-        appendix_photos: list[PhotoAppendixPhoto] = []
-        for item in photo_items:
-            item_id = str(item.get("id") or "")
-            try:
-                download = self.storage.download_file_from_folder(
+        download_started_at = perf_counter()
+        download_results = download_photo_files(
+            self.storage,
+            [
+                PhotoDownloadRequest(
                     drive_id=folder.external_drive_id,
                     folder_item_id=folder.external_item_id,
-                    item_id=item_id,
+                    item_id=str(item.get("id") or ""),
                 )
-                content = bytes(download["content"])
-            except (HTTPException, OSError, TypeError, ValueError) as error:
-                LOGGER.warning("Project photo %s could not be downloaded for PDF: %s", item_id, error)
-                content = b""
+                for item in photo_items
+            ],
+        )
+        LOGGER.info(
+            "Project photo PDF downloads finished: site_id=%s photos=%s bytes=%s duration_ms=%.1f",
+            site_id,
+            len(download_results),
+            sum(len(result.content) for result in download_results),
+            (perf_counter() - download_started_at) * 1000,
+        )
+
+        appendix_photos: list[PhotoAppendixPhoto] = []
+        for item, result in zip(photo_items, download_results, strict=True):
+            item_id = str(item.get("id") or "")
+            if result.error is not None:
+                LOGGER.warning(
+                    "Project photo %s could not be downloaded for PDF: %s",
+                    item_id,
+                    result.error,
+                )
             appendix_photos.append(
                 PhotoAppendixPhoto(
                     filename=str(item.get("name") or "Unbenanntes Foto"),
-                    content=content,
+                    content=result.content,
                     caption=item.get("caption") if isinstance(item.get("caption"), str) else None,
                     uploaded_at=_parse_document_datetime(
                         item.get("created_date_time") or item.get("last_modified_date_time")

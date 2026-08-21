@@ -4,6 +4,7 @@ import base64
 import json
 import re
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
 
@@ -42,6 +43,7 @@ class MicrosoftGraphClient:
         self.config = config
         self._access_token: str | None = None
         self._access_token_expires_at: datetime | None = None
+        self._access_token_lock = Lock()
         self._token_audience: str | None = None
         self.last_request_diagnostics: dict[str, Any] = {}
 
@@ -51,10 +53,22 @@ class MicrosoftGraphClient:
 
     def get_access_token(self) -> str:
         self._ensure_auth_config()
+        cached = self._valid_cached_access_token()
+        if cached:
+            return cached
+        with self._access_token_lock:
+            cached = self._valid_cached_access_token()
+            if cached:
+                return cached
+            return self._request_access_token()
+
+    def _valid_cached_access_token(self) -> str | None:
         if self._access_token and self._access_token_expires_at:
             if self._access_token_expires_at > datetime.now(UTC):
                 return self._access_token
+        return None
 
+    def _request_access_token(self) -> str:
         token_url = (
             f"https://login.microsoftonline.com/{self.config.ms_tenant_id}"
             "/oauth2/v2.0/token"

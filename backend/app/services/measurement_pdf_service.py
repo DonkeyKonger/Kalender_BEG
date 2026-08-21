@@ -35,6 +35,7 @@ from app.services.photo_appendix_pdf_service import (
     PhotoAppendixPhoto,
     format_photo_appendix_site_address,
 )
+from app.services.photo_download_service import PhotoDownloadRequest, download_photo_files
 from app.services.project_storage_service import ProjectStorageService
 
 
@@ -467,30 +468,46 @@ class MeasurementPdfService:
         if folder_item_id is None:
             LOGGER.warning("Measurement photo folder is not connected for site %s.", batch.site_id)
             return base_content
-        appendix_photos: list[PhotoAppendixPhoto] = []
-        for photo in photos:
-            photo_started_at = perf_counter()
-            try:
-                downloaded = ProjectStorageService().download_file_from_folder(
+        download_started_at = perf_counter()
+        storage = ProjectStorageService()
+        download_results = download_photo_files(
+            storage,
+            [
+                PhotoDownloadRequest(
                     drive_id=photo.external_drive_id,
                     folder_item_id=folder_item_id,
                     item_id=photo.external_item_id,
                 )
-                downloaded_content = downloaded["content"]
-            except (HTTPException, OSError, ValueError) as error:
-                LOGGER.warning("Measurement photo %s could not be downloaded for PDF: %s", photo.id, error)
-                downloaded_content = b""
+                for photo in photos
+            ],
+        )
+        LOGGER.info(
+            "Measurement PDF photos downloaded: batch_id=%s photos=%s bytes=%s duration_ms=%.1f",
+            batch.id,
+            len(download_results),
+            sum(len(result.content) for result in download_results),
+            (perf_counter() - download_started_at) * 1000,
+        )
+
+        appendix_photos: list[PhotoAppendixPhoto] = []
+        for photo, result in zip(photos, download_results, strict=True):
+            if result.error is not None:
+                LOGGER.warning(
+                    "Measurement photo %s could not be downloaded for PDF: %s",
+                    photo.id,
+                    result.error,
+                )
             LOGGER.info(
                 "Measurement PDF photo loaded: batch_id=%s photo_id=%s source_bytes=%s duration_ms=%.1f",
                 batch.id,
                 photo.id,
-                len(downloaded_content),
-                (perf_counter() - photo_started_at) * 1000,
+                len(result.content),
+                result.duration_ms,
             )
             appendix_photos.append(
                 PhotoAppendixPhoto(
                     filename=photo.filename,
-                    content=downloaded_content,
+                    content=result.content,
                     caption=photo.caption,
                     uploaded_at=photo.created_at,
                     monteur=_format_user(photo.uploaded_by),

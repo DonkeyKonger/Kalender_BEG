@@ -1,5 +1,8 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import json
+from threading import Lock
+from time import sleep
 from types import SimpleNamespace
 
 import httpx
@@ -96,3 +99,24 @@ def test_graph_client_safely_reports_www_authenticate_error_without_token(monkey
     assert access_token not in str(error.value)
     assert "super-secret-value" not in str(error.value)
     assert "token detail must stay hidden" not in str(error.value)
+
+
+def test_graph_client_reuses_one_token_during_parallel_requests(monkeypatch):
+    access_token = fake_jwt({"aud": "https://graph.microsoft.com"})
+    call_lock = Lock()
+    token_calls = 0
+
+    def fake_post(url, data, timeout):
+        nonlocal token_calls
+        with call_lock:
+            token_calls += 1
+        sleep(0.05)
+        return httpx.Response(200, json={"access_token": access_token, "expires_in": 3600})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = MicrosoftGraphClient(config=graph_config())
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        tokens = list(executor.map(lambda _index: client.get_access_token(), range(3)))
+
+    assert tokens == [access_token, access_token, access_token]
+    assert token_calls == 1
