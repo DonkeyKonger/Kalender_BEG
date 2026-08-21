@@ -24,11 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tool_source_sha256: ${{ steps.verify-tool-import.outputs.source_sha256 }}
+      previous_revision: ${{ steps.rollback-package.outputs.previous_revision }}
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python version
         uses: actions/setup-python@v5
@@ -61,6 +64,42 @@ jobs:
             -x ".ruff_cache/*" \
             -x "*.egg-info/*"
 
+      - name: Create rollback package from previous main revision
+        id: rollback-package
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from zipfile import ZipFile
+
+          revision = (os.environ.get("PR_BASE_SHA") or os.environ.get("EVENT_BEFORE") or "").strip()
+          if not re.fullmatch(r"[0-9a-f]{40}", revision) or revision == "0" * 40:
+              revision = subprocess.check_output(
+                  ["git", "rev-parse", "HEAD^"],
+                  text=True,
+              ).strip()
+          subprocess.run(
+              [
+                  "git",
+                  "archive",
+                  "--format=zip",
+                  "--output=backend-rollback.zip",
+                  f"{revision}:backend",
+              ],
+              check=True,
+          )
+          with ZipFile("backend-rollback.zip", "a") as archive:
+              archive.writestr("app/build_sha.txt", revision + "\n")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"previous_revision={revision}\n")
+          print(f"Rollback package created from {revision}.")
+          PY
+
       - name: Verify tool import files in deployment package
         id: verify-tool-import
         run: |
@@ -74,18 +113,21 @@ jobs:
           from zipfile import ZipFile
 
           required_files = {
+              "app/build_sha.txt",
               "app/import_data/BEG-Maschinen+Werkzeugliste.xlsx",
               "app/scripts/import_bundled_tools.py",
               "startup.sh",
           }
-          with ZipFile("backend-release.zip") as archive:
-              packaged_files = set(archive.namelist())
+          for package_name in ("backend-release.zip", "backend-rollback.zip"):
+              with ZipFile(package_name) as package:
+                  packaged_files = set(package.namelist())
               missing = sorted(required_files - packaged_files)
               if missing:
                   raise SystemExit(
-                      "Deployment-Paket enthält nicht alle Importdateien: "
+                      f"{package_name} enthält nicht alle Pflichtdateien: "
                       + ", ".join(missing)
                   )
+          with ZipFile("backend-release.zip") as archive:
               with TemporaryDirectory() as temporary_directory:
                   app_root = Path(temporary_directory).resolve()
                   archive.extractall(app_root)
@@ -117,7 +159,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: backend-release.zip
+          path: |
+            backend-release.zip
+            backend-rollback.zip
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -135,67 +179,12 @@ jobs:
       - name: Prepare deployment guard
         run: python -m zipfile -e backend-release.zip deployment-source
 
-      - name: Capture current deployment for rollback
-        id: previous_deployment
+      - name: Deploy to Azure Web App
+        id: deploy
         working-directory: deployment-source
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
-        run: python -m app.scripts.azure_deploy_guard capture
-
-      - name: Deploy to Azure Web App
-        id: deploy
-        env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
-        run: |
-          python - <<'PY'
-          import os
-          import subprocess
-          import xml.etree.ElementTree as ET
-
-          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
-          profiles = root.findall("publishProfile")
-          profile = next(
-              (item for item in profiles if item.attrib.get("publishMethod") == "ZipDeploy"),
-              None,
-          )
-          if profile is None:
-              profile = next(
-                  (item for item in profiles if item.attrib.get("publishMethod") == "MSDeploy"),
-                  None,
-              )
-          if profile is None:
-              raise SystemExit("Publish profile does not contain ZipDeploy/MSDeploy credentials.")
-
-          username = profile.attrib["userName"]
-          password = profile.attrib["userPWD"]
-          publish_url = profile.attrib["publishUrl"].strip()
-          if not publish_url.startswith(("http://", "https://")):
-              publish_url = f"https://{publish_url}"
-          publish_url = publish_url.rstrip("/")
-          if not publish_url.endswith("/api/zipdeploy"):
-              publish_url = f"{publish_url}/api/zipdeploy"
-
-          print(f"::add-mask::{username}")
-          print(f"::add-mask::{password}")
-          subprocess.run(
-              [
-                  "curl",
-                  "--fail",
-                  "--show-error",
-                  "--location",
-                  "--request",
-                  "POST",
-                  "--user",
-                  f"{username}:{password}",
-                  "--header",
-                  "Content-Type: application/zip",
-                  "--data-binary",
-                  "@backend-release.zip",
-                  publish_url,
-              ],
-              check=True,
-          )
-          PY
+        run: python -m app.scripts.azure_deploy_guard deploy --package ../backend-release.zip
 
       - name: Verify deployed application
         working-directory: deployment-source
@@ -208,12 +197,12 @@ jobs:
 
       - name: Restore previous deployment after failed verification
         if: >-
-          ${{ failure() && steps.deploy.outcome == 'success' &&
-              steps.previous_deployment.outputs.deployment_id != '' }}
+          ${{ failure() && (steps.deploy.outcome == 'success' ||
+              steps.deploy.outcome == 'failure') }}
         working-directory: deployment-source
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
         run: |
-          python -m app.scripts.azure_deploy_guard rollback \
-            --deployment-id "${{ steps.previous_deployment.outputs.deployment_id }}" \
-            --expected-revision "${{ steps.previous_deployment.outputs.revision }}"
+          python -m app.scripts.azure_deploy_guard restore \
+            --package ../backend-rollback.zip \
+            --expected-revision "${{ needs.build.outputs.previous_revision }}"

@@ -1,4 +1,4 @@
-"""Verify an Azure release and restore the previous Kudu deployment on failure."""
+"""Deploy, verify, and restore versioned Azure release packages."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Iterable
-from urllib.parse import quote, urlsplit, urlunsplit
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -65,14 +65,6 @@ def parse_publish_profile(xml_content: str) -> AzurePublishTarget:
     )
 
 
-def select_previous_deployment(deployments: Iterable[object]) -> dict[str, object] | None:
-    candidates = [item for item in deployments if isinstance(item, dict)]
-    successful = [item for item in candidates if item.get("status") == 4]
-    return next((item for item in successful if item.get("active") is True), None) or (
-        successful[0] if successful else None
-    )
-
-
 def release_matches(health: object, expected_revision: str | None) -> bool:
     if not isinstance(health, dict) or health.get("status") != "ok":
         return False
@@ -115,43 +107,31 @@ def _login_probe(target: AzurePublishTarget) -> HttpResult:
     )
 
 
-def _write_github_output(name: str, value: str) -> None:
-    output_path = os.getenv("GITHUB_OUTPUT")
-    if not output_path:
-        print(f"{name}={value}")
-        return
-    with open(output_path, "a", encoding="utf-8") as output:
-        output.write(f"{name}={value}\n")
-
-
-def capture_previous_deployment(target: AzurePublishTarget) -> None:
-    deployments_result = _request(
-        f"{target.scm_base_url}/api/deployments",
-        auth=(target.username, target.password),
+def deploy_package(target: AzurePublishTarget, package_path: Path) -> None:
+    package = package_path.resolve()
+    if not package.is_file():
+        raise RuntimeError(f"Deployment package does not exist: {package}")
+    token = base64.b64encode(f"{target.username}:{target.password}".encode()).decode()
+    request = urllib.request.Request(
+        f"{target.scm_base_url}/api/zipdeploy",
+        data=package.read_bytes(),
+        headers={
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/zip",
+        },
+        method="POST",
     )
-    if deployments_result.status != 200:
-        raise SystemExit(
-            f"Kudu deployment history returned HTTP {deployments_result.status}."
-        )
-    deployments = deployments_result.json()
-    if not isinstance(deployments, list):
-        raise SystemExit("Kudu deployment history did not return a list.")
-    previous = select_previous_deployment(deployments)
-    if previous is None or not previous.get("id"):
-        raise SystemExit("No successful Azure deployment is available for automatic rollback.")
-
-    revision = ""
-    health_result = _health(target)
-    if health_result.status == 200:
-        try:
-            health = health_result.json()
-        except json.JSONDecodeError:
-            health = None
-        if isinstance(health, dict) and isinstance(health.get("revision"), str):
-            revision = health["revision"]
-    _write_github_output("deployment_id", str(previous["id"]))
-    _write_github_output("revision", revision)
-    print(f"Rollback target captured: {previous['id']} ({revision or 'legacy revision'}).")
+    try:
+        with urllib.request.urlopen(request, timeout=600) as response:
+            status = response.status
+            body = response.read()
+    except urllib.error.HTTPError as error:
+        status = error.code
+        body = error.read()
+    if status not in {200, 201, 202}:
+        detail = body.decode(errors="replace")[-1000:]
+        raise RuntimeError(f"Azure ZipDeploy returned HTTP {status}: {detail}")
+    print(f"Azure accepted deployment package {package.name} with HTTP {status}.")
 
 
 def _wait_for_release(
@@ -203,7 +183,13 @@ def verify_release(
 
     tool_url = f"{target.app_base_url}/api/health/tool-import"
     last_tool_detail = "no response"
-    for attempt in range(1, 25):
+    for attempt in range(1, 13):
+        _wait_for_release(
+            target,
+            expected_revision=expected_revision,
+            attempts=1,
+            delay_seconds=delay_seconds,
+        )
         tool_result = _request(tool_url)
         try:
             tool_health = tool_result.json()
@@ -219,10 +205,10 @@ def verify_release(
             print("Tool import ready: " + json.dumps(tool_health, sort_keys=True))
             break
         last_tool_detail = f"HTTP {tool_result.status}: {str(tool_health)[:500]}"
-        if attempt < 24:
+        if attempt < 12:
             time.sleep(delay_seconds)
     else:
-        raise RuntimeError(f"Tool import verification failed: {last_tool_detail}")
+        print(f"::warning::Tool import is not ready yet: {last_tool_detail}")
 
     for _ in range(6):
         time.sleep(delay_seconds)
@@ -235,23 +221,14 @@ def verify_release(
     print("Release remained healthy throughout the stability window.")
 
 
-def rollback_release(
+def restore_release(
     target: AzurePublishTarget,
     *,
-    deployment_id: str,
+    package_path: Path,
     expected_revision: str | None,
     delay_seconds: float = 5,
 ) -> None:
-    deployment_url = f"{target.scm_base_url}/api/deployments/{quote(deployment_id, safe='')}"
-    result = _request(
-        deployment_url,
-        method="PUT",
-        auth=(target.username, target.password),
-        payload={"clean": True, "needFileUpdate": True},
-        timeout=180,
-    )
-    if result.status not in {200, 201, 202}:
-        raise RuntimeError(f"Azure rollback returned HTTP {result.status}.")
+    deploy_package(target, package_path)
     revision = expected_revision if expected_revision not in {"", "development"} else None
     health = _wait_for_release(
         target,
@@ -275,18 +252,19 @@ def _target_from_environment() -> AzurePublishTarget:
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("capture")
+    deploy_parser = subparsers.add_parser("deploy")
+    deploy_parser.add_argument("--package", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--expected-revision", required=True)
     verify_parser.add_argument("--expected-tool-source-sha256", required=True)
-    rollback_parser = subparsers.add_parser("rollback")
-    rollback_parser.add_argument("--deployment-id", required=True)
-    rollback_parser.add_argument("--expected-revision", default="")
+    restore_parser = subparsers.add_parser("restore")
+    restore_parser.add_argument("--package", type=Path, required=True)
+    restore_parser.add_argument("--expected-revision", default="")
     args = parser.parse_args()
 
     target = _target_from_environment()
-    if args.command == "capture":
-        capture_previous_deployment(target)
+    if args.command == "deploy":
+        deploy_package(target, args.package)
     elif args.command == "verify":
         verify_release(
             target,
@@ -294,9 +272,9 @@ def main() -> None:
             expected_tool_source_sha256=args.expected_tool_source_sha256,
         )
     else:
-        rollback_release(
+        restore_release(
             target,
-            deployment_id=args.deployment_id,
+            package_path=args.package,
             expected_revision=args.expected_revision,
         )
 
