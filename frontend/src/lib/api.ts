@@ -1151,6 +1151,22 @@ export const api = {
     return requestBlob(path);
   },
 
+  async updateProjectFolderDocumentCaption(
+    siteId: number,
+    folderKey: string,
+    itemId: string,
+    caption: string | null,
+  ): Promise<ProjectFolderDocumentItem> {
+    return request<ProjectFolderDocumentItem>(
+      `/sites/${encodeURIComponent(String(siteId))}/documents/folders/${encodeURIComponent(folderKey)}`
+      + `/items/${encodeURIComponent(itemId)}/caption`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ caption }),
+      },
+    );
+  },
+
   async projectFolderDocumentThumbnail(
     siteId: number,
     folderKey: string,
@@ -1856,6 +1872,21 @@ export const api = {
     });
   },
 
+  async updateMobileExtraWorkTicketPhotoCaption(
+    assignmentId: number,
+    ticketId: number,
+    photoId: number,
+    caption: string | null,
+  ): Promise<MobileExtraWorkTicketPhoto> {
+    return request<MobileExtraWorkTicketPhoto>(
+      `/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/photos/${photoId}/caption`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ caption }),
+      },
+    );
+  },
+
   async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<Blob> {
     return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
   },
@@ -1950,6 +1981,21 @@ export const api = {
     await request<void>(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos/${photoId}`, {
       method: "DELETE",
     });
+  },
+
+  async updateMobileMeasurementBatchPhotoCaption(
+    assignmentId: number,
+    batchId: number,
+    photoId: number,
+    caption: string | null,
+  ): Promise<MobileMeasurementBatchPhoto> {
+    return request<MobileMeasurementBatchPhoto>(
+      `/me/assignments/${assignmentId}/measurement-batches/${batchId}/photos/${photoId}/caption`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ caption }),
+      },
+    );
   },
 
   async createMobileMeasurementEntry(

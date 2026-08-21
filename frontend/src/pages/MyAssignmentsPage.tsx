@@ -1,8 +1,8 @@
 import {
-  ArrowLeft,
   CalendarClock,
   ChevronRight,
   FileText,
+  FolderOpen,
   HeartPulse,
   LogOut,
   MapPin,
@@ -17,6 +17,7 @@ import type { UIEvent as ReactUIEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { MobileBackButton } from "../components/MobileBackButton";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { buildMobileAssignmentHistoryWeeks } from "../lib/mobileAssignmentHistory";
@@ -591,6 +592,9 @@ export function MyAssignmentsPage() {
           isLoading={assignmentSiteHistoryLoading}
           summary={selectedAssignmentSite}
           onBack={closeAssignmentSiteHistory}
+          onOpenProjectFile={(assignment) => navigate(`/me/assignments/${assignment.id}`, {
+            state: { assignment },
+          })}
           onRetry={() => void openAssignmentSite(selectedAssignmentSite)}
         />
       );
@@ -599,9 +603,7 @@ export function MyAssignmentsPage() {
     return (
       <section className="mobile-page mobile-home-page mobile-assignment-history-page">
         <header className="mobile-assignment-history-header">
-          <button aria-label="Zurück zu Meine Übersicht" type="button" onClick={() => setActiveScreen("home")}>
-            <ArrowLeft aria-hidden="true" size={23} />
-          </button>
+          <MobileBackButton label="Zurück zu Meine Übersicht" onClick={() => setActiveScreen("home")} />
           <div>
             <h1>Meine Einsätze</h1>
             <p>Alle Einsätze chronologisch</p>
@@ -640,10 +642,7 @@ export function MyAssignmentsPage() {
   if (activeScreen === "settings") {
     return (
       <section className="mobile-page mobile-home-page">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveScreen("home")}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Zurück</span>
-        </button>
+        <MobileBackButton label="Zurück zu Meine Übersicht" onClick={() => setActiveScreen("home")} />
 
         <header className="mobile-subpage-title">
           <p className="eyebrow">Optionen</p>
@@ -1114,6 +1113,7 @@ function MobileAssignmentSiteHistory({
   isLoading,
   summary,
   onBack,
+  onOpenProjectFile,
   onRetry,
 }: {
   error: string | null;
@@ -1121,17 +1121,17 @@ function MobileAssignmentSiteHistory({
   isLoading: boolean;
   summary: MobileAssignmentSiteSummary;
   onBack: () => void;
+  onOpenProjectFile: (assignment: MobileAssignment) => void;
   onRetry: () => void;
 }) {
   const site = history?.site ?? summary.site;
   const metadata = [site.site_number, site.location || site.address, site.customer].filter(Boolean).join(" · ");
   const weeks = buildMobileAssignmentHistoryWeeks(history?.assignments ?? []);
+  const projectFileAssignment = history?.assignments[0] ?? null;
   return (
     <section className="mobile-page mobile-home-page mobile-assignment-history-page">
       <header className="mobile-assignment-history-header">
-        <button aria-label="Zurück zu Meine Einsätze" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={23} />
-        </button>
+        <MobileBackButton label="Zurück zu Meine Einsätze" onClick={onBack} />
         <div>
           <h1>{site.name}</h1>
           {metadata ? <p>{metadata}</p> : null}
@@ -1147,6 +1147,22 @@ function MobileAssignmentSiteHistory({
         />
       ) : null}
       {isLoading ? <MobileAssignmentHistoryState message="Einsatzhistorie wird geladen ..." /> : null}
+      {!isLoading && !error && projectFileAssignment ? (
+        <button
+          className="mobile-assignment-project-file-action"
+          type="button"
+          onClick={() => onOpenProjectFile(projectFileAssignment)}
+        >
+          <span className="mobile-assignment-project-file-icon" aria-hidden="true">
+            <FolderOpen size={23} />
+          </span>
+          <span className="mobile-assignment-project-file-copy">
+            <strong>Baustellenakte öffnen</strong>
+            <small>Ordner, Aufmaße und Stundenzettel</small>
+          </span>
+          <ChevronRight aria-hidden="true" size={21} />
+        </button>
+      ) : null}
       {!isLoading && !error && history && !weeks.length ? (
         <MobileAssignmentHistoryState message="Für diese Baustelle sind keine Einsätze vorhanden." />
       ) : null}

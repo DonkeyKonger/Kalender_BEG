@@ -1120,6 +1120,35 @@ def test_mobile_measurement_photo_upload_blocks_after_five_photos():
         )
     db.commit()
 
+    first_photo = db.scalar(
+        select(SiteMeasurementBatchPhoto)
+        .where(SiteMeasurementBatchPhoto.measurement_batch_id == batch.id)
+        .order_by(SiteMeasurementBatchPhoto.id)
+    )
+    assert first_photo is not None
+    updated_photo = service.update_mobile_batch_photo_caption(
+        assignment_id=assignment.id,
+        batch_id=batch.id,
+        photo_id=first_photo.id,
+        caption="Deckendurchbruch dokumentiert",
+        current_user=user,
+    )
+    assert updated_photo.caption == "Deckendurchbruch dokumentiert"
+
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    assert stored_batch is not None
+    stored_batch.customer_signed_at = datetime.now(timezone.utc)
+    db.commit()
+    with pytest.raises(HTTPException) as caption_error:
+        service.update_mobile_batch_photo_caption(
+            assignment_id=assignment.id,
+            batch_id=batch.id,
+            photo_id=first_photo.id,
+            caption="Nicht erlaubt",
+            current_user=user,
+        )
+    assert caption_error.value.status_code == 409
+
     with pytest.raises(HTTPException) as error:
         service.upload_mobile_batch_photo(
             assignment_id=assignment.id,

@@ -20,3 +20,23 @@ class ProjectFolder(TimestampMixin, Base):
     external_web_url: Mapped[str | None] = mapped_column(String(500))
 
     site = relationship("Site", back_populates="project_folders")
+
+
+class ProjectFolderDocumentCaption(TimestampMixin, Base):
+    __tablename__ = "project_folder_document_captions"
+    __table_args__ = (
+        UniqueConstraint(
+            "site_id",
+            "folder_key",
+            "external_item_id",
+            name="uq_project_folder_document_caption_item",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    folder_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_item_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    caption: Mapped[str | None] = mapped_column(String(500))

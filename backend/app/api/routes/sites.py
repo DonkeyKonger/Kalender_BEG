@@ -35,6 +35,7 @@ from app.schemas.measurement import (
     MobileMeasurementItemRead,
     OfficeMeasurementBatchCreate,
 )
+from app.schemas.photo import PhotoCaptionUpdate
 from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
@@ -201,6 +202,12 @@ def list_project_folder_documents(
         drive_id=folder.external_drive_id,
         folder_item_id=folder.external_item_id,
     )
+    if folder.folder_key == PHOTO_UPLOAD_FOLDER_KEY:
+        items = ProjectFolderService(db).add_document_captions(
+            site_id=site_id,
+            folder_key=folder.folder_key,
+            items=items,
+        )
     return ProjectFolderDocumentList(
         folder_key=folder.folder_key,
         folder_name=folder.name,
@@ -227,6 +234,12 @@ def list_project_folder_item_children(
         root_folder_item_id=folder.external_item_id,
         item_id=item_id,
     )
+    if folder.folder_key == PHOTO_UPLOAD_FOLDER_KEY:
+        items = ProjectFolderService(db).add_document_captions(
+            site_id=site_id,
+            folder_key=folder.folder_key,
+            items=items,
+        )
     return ProjectFolderDocumentList(
         folder_key=folder.folder_key,
         folder_name=folder.name,
@@ -297,6 +310,39 @@ def get_project_folder_document_content(
             )
         },
     )
+
+
+@router.patch(
+    "/{site_id}/documents/folders/{folder_key}/items/{item_id}/caption",
+    response_model=ProjectFolderDocumentItem,
+)
+def update_project_folder_document_caption(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    payload: PhotoCaptionUpdate,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentItem:
+    if folder_key != PHOTO_UPLOAD_FOLDER_KEY:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Beschriftungen sind nur für Projektfotos verfügbar.")
+    folder_service = ProjectFolderService(db)
+    folder = folder_service.get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    document = ProjectStorageService().get_file_item_from_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    mime_type = str(document.get("mime_type") or "").casefold()
+    if not mime_type.startswith("image/"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Beschriftungen sind nur für Fotos verfügbar.")
+    document["caption"] = folder_service.update_document_caption(
+        site_id=site_id,
+        folder_key=folder.folder_key,
+        item_id=item_id,
+        caption=payload.caption,
+    )
+    return ProjectFolderDocumentItem.model_validate(document)
 
 
 @router.get("/{site_id}/documents/folders/{folder_key}/items/{item_id}/thumbnail")
@@ -600,6 +646,26 @@ def delete_extra_work_ticket_photo(
         ticket_id=ticket_id,
         photo_id=photo_id,
         current_user=current_user,
+    )
+
+
+@router.patch(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/caption",
+    response_model=ExtraWorkTicketPhotoRead,
+)
+def update_extra_work_ticket_photo_caption(
+    site_id: int,
+    ticket_id: int,
+    photo_id: int,
+    payload: PhotoCaptionUpdate,
+    _current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketPhotoRead:
+    return ExtraWorkService(db).update_site_ticket_photo_caption(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        caption=payload.caption,
     )
 
 

@@ -32,6 +32,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Chang
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { MobileBackButton } from "../components/MobileBackButton";
+import { MobilePhotoCaptionViewer } from "../components/MobilePhotoCaptionViewer";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
@@ -224,10 +226,7 @@ export function MobileAssignmentDetailPage() {
   if (!assignment) {
     return (
       <section className="mobile-page mobile-detail-page">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Zurück</span>
-        </button>
+        <MobileBackButton label="Zurück zu Meine Einsätze" onClick={() => navigate("/me/assignments")} />
         <div className="empty-panel">Dieser Einsatz konnte nicht aus dem lokalen Verlauf geladen werden.</div>
       </section>
     );
@@ -296,10 +295,7 @@ export function MobileAssignmentDetailPage() {
         <MobileProjectFoldersHeader assignment={assignment} onBack={() => setActiveTab(null)} />
       ) : !isMeasurementFlow && !isExtraWorkFlow && !isProjectPhotosFlow ? (
         <>
-          <button className="icon-button secondary mobile-back-button" type="button" onClick={() => navigate("/me/assignments")}>
-            <ArrowLeft aria-hidden="true" size={17} />
-            <span>Zurück</span>
-          </button>
+          <MobileBackButton label="Zurück zu Meine Einsätze" onClick={() => navigate("/me/assignments")} />
 
           <header
             className="mobile-detail-hero mobile-detail-summary mobile-detail-summary-button"
@@ -2438,7 +2434,6 @@ function MobileProjectPhotoGallery({
   const [selectedPhoto, setSelectedPhoto] = useState<MobileProjectPhotoPreviewState | null>(null);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const isPhotoPreviewTopModal = useMobileModalStack(selectedPhoto !== null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -2469,6 +2464,24 @@ function MobileProjectPhotoGallery({
       isCurrent = false;
     };
   }, [assignment.site.id, refreshKey]);
+
+  async function saveProjectPhotoCaption(caption: string | null): Promise<void> {
+    if (!selectedPhoto) {
+      return;
+    }
+    try {
+      const updated = await api.updateProjectFolderDocumentCaption(
+        assignment.site.id,
+        "fotos",
+        selectedPhoto.item.id,
+        caption,
+      );
+      setPhotos((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setSelectedPhoto((current) => current ? { ...current, item: updated } : null);
+    } catch (requestError) {
+      throw new Error(readApiError(requestError, "Beschriftung konnte nicht gespeichert werden."));
+    }
+  }
 
   return (
     <div className="mobile-detail-panel mobile-measurement-photo-gallery mobile-project-photo-gallery">
@@ -2516,23 +2529,16 @@ function MobileProjectPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto ? (
-        <div
-          aria-hidden={!isPhotoPreviewTopModal}
-          className="mobile-photo-preview-backdrop mobile-modal-layer"
-          data-mobile-modal-active={isPhotoPreviewTopModal}
-          inert={!isPhotoPreviewTopModal}
-          role="presentation"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
-            <img alt={selectedPhoto.item.name} src={selectedPhoto.url} />
-            <figcaption>
-              <strong>{selectedPhoto.item.name}</strong>
-              <span>{formatProjectDocumentMeta(selectedPhoto.item, { includeFallbackType: false })}</span>
-            </figcaption>
-            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
-          </figure>
-        </div>
+        <MobilePhotoCaptionViewer
+          alt={selectedPhoto.item.name}
+          canEdit
+          caption={selectedPhoto.item.caption}
+          dateLabel={formatDateTimeLabel(selectedPhoto.item.created_date_time ?? selectedPhoto.item.last_modified_date_time)}
+          filename={selectedPhoto.item.name}
+          imageUrl={selectedPhoto.url}
+          onClose={() => setSelectedPhoto(null)}
+          onSave={saveProjectPhotoCaption}
+        />
       ) : null}
     </div>
   );
@@ -4425,7 +4431,6 @@ function MeasurementPhotoGallery({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
-  const isPhotoPreviewTopModal = useMobileModalStack(Boolean(selectedPhoto?.url));
   const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
@@ -4500,6 +4505,26 @@ function MeasurementPhotoGallery({
     }
   }
 
+  async function saveMeasurementPhotoCaption(caption: string | null): Promise<void> {
+    if (!selectedPhoto) {
+      return;
+    }
+    try {
+      const updated = await api.updateMobileMeasurementBatchPhotoCaption(
+        assignmentId,
+        batch.id,
+        selectedPhoto.photo.id,
+        caption,
+      );
+      setPhotos((current) => current.map((preview) => (
+        preview.photo.id === updated.id ? { ...preview, photo: updated } : preview
+      )));
+      setSelectedPhoto((current) => current ? { ...current, photo: updated } : null);
+    } catch (requestError) {
+      throw new Error(readApiError(requestError, "Beschriftung konnte nicht gespeichert werden."));
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
@@ -4562,23 +4587,16 @@ function MeasurementPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto?.url ? (
-        <div
-          aria-hidden={!isPhotoPreviewTopModal}
-          className="mobile-photo-preview-backdrop mobile-modal-layer"
-          data-mobile-modal-active={isPhotoPreviewTopModal}
-          inert={!isPhotoPreviewTopModal}
-          role="presentation"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
-            <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
-            <figcaption>
-              <strong>{selectedPhoto.photo.filename}</strong>
-              <span>{formatDateTimeLabel(selectedPhoto.photo.created_at)}</span>
-            </figcaption>
-            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
-          </figure>
-        </div>
+        <MobilePhotoCaptionViewer
+          alt={selectedPhoto.photo.filename}
+          canEdit={!batch.is_locked_for_worker}
+          caption={selectedPhoto.photo.caption}
+          dateLabel={formatDateTimeLabel(selectedPhoto.photo.created_at)}
+          filename={selectedPhoto.photo.filename}
+          imageUrl={selectedPhoto.url}
+          onClose={() => setSelectedPhoto(null)}
+          onSave={saveMeasurementPhotoCaption}
+        />
       ) : null}
     </div>
   );
@@ -4614,7 +4632,6 @@ function ExtraWorkPhotoGallery({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
-  const isPhotoPreviewTopModal = useMobileModalStack(Boolean(selectedPhoto?.url));
   const isPhotoLimitReached = photos.length >= photoLimit;
 
   useEffect(() => {
@@ -4689,6 +4706,26 @@ function ExtraWorkPhotoGallery({
     }
   }
 
+  async function saveExtraWorkPhotoCaption(caption: string | null): Promise<void> {
+    if (!selectedPhoto) {
+      return;
+    }
+    try {
+      const updated = await api.updateMobileExtraWorkTicketPhotoCaption(
+        assignmentId,
+        order.id,
+        selectedPhoto.photo.id,
+        caption,
+      );
+      setPhotos((current) => current.map((preview) => (
+        preview.photo.id === updated.id ? { ...preview, photo: updated } : preview
+      )));
+      setSelectedPhoto((current) => current ? { ...current, photo: updated } : null);
+    } catch (requestError) {
+      throw new Error(readApiError(requestError, "Beschriftung konnte nicht gespeichert werden."));
+    }
+  }
+
   return (
     <div className="mobile-detail-panel mobile-measurement-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
@@ -4751,23 +4788,16 @@ function ExtraWorkPhotoGallery({
         </div>
       ) : null}
       {selectedPhoto?.url ? (
-        <div
-          aria-hidden={!isPhotoPreviewTopModal}
-          className="mobile-photo-preview-backdrop mobile-modal-layer"
-          data-mobile-modal-active={isPhotoPreviewTopModal}
-          inert={!isPhotoPreviewTopModal}
-          role="presentation"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <figure className="mobile-photo-preview mobile-modal-scroll-region" onClick={(event) => event.stopPropagation()}>
-            <img alt={selectedPhoto.photo.filename} src={selectedPhoto.url} />
-            <figcaption>
-              <strong>{selectedPhoto.photo.filename}</strong>
-              <span>{formatDateTimeLabel(selectedPhoto.photo.created_at)}</span>
-            </figcaption>
-            <button className="secondary-action" type="button" onClick={() => setSelectedPhoto(null)}>Schließen</button>
-          </figure>
-        </div>
+        <MobilePhotoCaptionViewer
+          alt={selectedPhoto.photo.filename}
+          canEdit={canEditExtraWorkPhotoCaption(order)}
+          caption={selectedPhoto.photo.caption}
+          dateLabel={formatDateTimeLabel(selectedPhoto.photo.created_at)}
+          filename={selectedPhoto.photo.filename}
+          imageUrl={selectedPhoto.url}
+          onClose={() => setSelectedPhoto(null)}
+          onSave={saveExtraWorkPhotoCaption}
+        />
       ) : null}
     </div>
   );
@@ -7903,6 +7933,21 @@ function isSubmittedMobileMeasurementBatchStatus(status: string): boolean {
 
 function isCustomerSignedMobileMeasurementBatch(batch: MobileMeasurementBatch): boolean {
   return Boolean(batch.customer_signed_at || batch.customer_signature_name || batch.is_locked_for_worker);
+}
+
+function canEditExtraWorkPhotoCaption(order: MobileExtraWorkTicket): boolean {
+  const status = (order.status || "").trim().toLowerCase();
+  const completedStatuses = [
+    "billed",
+    "approved",
+    "closed",
+    "completed",
+    "finalized",
+    "abgeschlossen",
+  ];
+  return !order.deleted_at
+    && !order.customer_signed_at
+    && !["signed", "customer_signed", ...completedStatuses].includes(status);
 }
 
 function mobileStatusLabel(status: string): string {

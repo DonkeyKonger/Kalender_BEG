@@ -41,7 +41,7 @@ test("timeline pagination keeps compact dots inside accessible touch targets", (
 test("primary mobile controls meet the 44 pixel touch target", () => {
   assert.match(
     styles,
-    /\.mobile-personal-file-header button \{[^}]*width:\s*44px;[^}]*height:\s*44px;/s,
+    /\.mobile-back-icon-button \{[^}]*width:\s*44px;[^}]*height:\s*44px;/s,
   );
   assert.match(styles, /\.mobile-assignment-history-state button \{[^}]*min-height:\s*44px;/s);
   assert.match(styles, /\.mobile-segment button \{[^}]*min-height:\s*44px;/s);

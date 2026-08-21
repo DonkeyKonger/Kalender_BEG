@@ -48,6 +48,7 @@ from app.schemas.mobile import (
     MobileSelfPlanRequest,
     MobileSite,
 )
+from app.schemas.photo import PhotoCaptionUpdate
 from app.schemas.push import PushDeviceRead, PushDeviceRegister
 from app.schemas.site_email_recipient import SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate
 from app.schemas.time_entry import TimeEntryWeeklyReviewRead
@@ -618,6 +619,27 @@ def delete_my_assignment_extra_work_ticket_photo(
     )
 
 
+@router.patch(
+    "/assignments/{assignment_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/caption",
+    response_model=ExtraWorkTicketPhotoRead,
+)
+def update_my_assignment_extra_work_ticket_photo_caption(
+    assignment_id: int,
+    ticket_id: int,
+    photo_id: int,
+    payload: PhotoCaptionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketPhotoRead:
+    return ExtraWorkService(db).update_mobile_ticket_photo_caption(
+        assignment_id=assignment_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        caption=payload.caption,
+        current_user=current_user,
+    )
+
+
 @router.get("/assignments/{assignment_id}/measurement-batches/{batch_id}/pdf")
 def download_my_assignment_measurement_batch_pdf(
     assignment_id: int,
@@ -793,6 +815,27 @@ def delete_my_assignment_measurement_batch_photo(
         assignment_id=assignment_id,
         batch_id=batch_id,
         photo_id=photo_id,
+        current_user=current_user,
+    )
+
+
+@router.patch(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/photos/{photo_id}/caption",
+    response_model=MobileMeasurementBatchPhotoRead,
+)
+def update_my_assignment_measurement_batch_photo_caption(
+    assignment_id: int,
+    batch_id: int,
+    photo_id: int,
+    payload: PhotoCaptionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchPhotoRead:
+    return MeasurementService(db).update_mobile_batch_photo_caption(
+        assignment_id=assignment_id,
+        batch_id=batch_id,
+        photo_id=photo_id,
+        caption=payload.caption,
         current_user=current_user,
     )
 

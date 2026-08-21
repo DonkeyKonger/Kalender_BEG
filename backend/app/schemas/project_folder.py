@@ -30,6 +30,7 @@ class ProjectFolderDocumentItem(BaseModel):
     mime_type: str | None = None
     file_extension: str | None = None
     is_folder: bool = False
+    caption: str | None = None
 
 
 class ProjectFolderDocumentList(BaseModel):

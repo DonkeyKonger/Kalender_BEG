@@ -9,6 +9,7 @@ from app.models.project_folder import ProjectFolder
 from app.models.site import Site
 from app.models.user import User
 from app.services.project_folder_service import ProjectFolderService
+from app.schemas.photo import PhotoCaptionUpdate
 
 
 def db_session():
@@ -141,3 +142,45 @@ def test_attach_external_subfolders_updates_matching_logical_folders():
     assert angebote.external_item_id == "sp-folder-1"
     assert angebote.external_web_url == "https://example.invalid/01_Angebote"
     assert terminplan.external_web_url == "https://example.invalid/05_Terminplan"
+
+
+def test_project_document_captions_are_persisted_attached_and_removable():
+    db = db_session()
+    site = create_site(db)
+    service = ProjectFolderService(db)
+
+    saved = service.update_document_caption(
+        site_id=site.id,
+        folder_key="fotos",
+        item_id="sharepoint-photo-1",
+        caption="Montierte Kabelrinne",
+    )
+    items = service.add_document_captions(
+        site_id=site.id,
+        folder_key="fotos",
+        items=[
+            {"id": "sharepoint-photo-1", "name": "foto-1.jpg"},
+            {"id": "sharepoint-photo-2", "name": "foto-2.jpg"},
+        ],
+    )
+
+    assert saved == "Montierte Kabelrinne"
+    assert [item["caption"] for item in items] == ["Montierte Kabelrinne", None]
+
+    service.update_document_caption(
+        site_id=site.id,
+        folder_key="fotos",
+        item_id="sharepoint-photo-1",
+        caption=None,
+    )
+    cleared = service.add_document_captions(
+        site_id=site.id,
+        folder_key="fotos",
+        items=[{"id": "sharepoint-photo-1", "name": "foto-1.jpg"}],
+    )
+    assert cleared[0]["caption"] is None
+
+
+def test_photo_caption_payload_trims_text_and_keeps_empty_caption_optional():
+    assert PhotoCaptionUpdate(caption="  Zwei Zeilen\nDokumentation  ").caption == "Zwei Zeilen\nDokumentation"
+    assert PhotoCaptionUpdate(caption="   ").caption is None

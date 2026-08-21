@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   AlertTriangle,
   CarFront,
   ChevronRight,
@@ -16,6 +15,7 @@ import type { MutableRefObject } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
+import { MobileBackButton } from "../components/MobileBackButton";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { ApiError, api } from "../lib/api";
 import { useMobileScrollReset } from "../lib/mobileScroll";
@@ -373,9 +373,7 @@ function MobilePersonalFileHeader({
 }) {
   return (
     <header className="mobile-personal-file-header">
-      <button aria-label="Zurück" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={25} />
-      </button>
+      <MobileBackButton label="Zurück" onClick={onBack} />
       <div>
         <h1>{title}</h1>
         <p>{subtitle}</p>

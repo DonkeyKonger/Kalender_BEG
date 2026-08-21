@@ -4,8 +4,11 @@ import test from "node:test";
 
 import { buildMobileAssignmentHistoryWeeks } from "../src/lib/mobileAssignmentHistory.ts";
 
-const [pageSource, apiSource, styles] = await Promise.all([
+const [pageSource, personalFileSource, assignmentDetailSource, backButtonSource, apiSource, styles] = await Promise.all([
   readFile(new URL("../src/pages/MyAssignmentsPage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/MobilePersonalFilePage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/MobileBackButton.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
 ]);
@@ -69,4 +72,40 @@ test("new assignment cards use responsive grid columns without horizontal scroll
   assert.match(styles, /\.mobile-assignment-site-copy strong,[\s\S]*overflow-wrap:\s*anywhere/s);
   assert.doesNotMatch(styles, /\.mobile-assignment-(?:site|week|history)[^{]*\{[^}]*overflow-x:\s*(?:auto|scroll)/s);
   assert.match(styles, /:has\(\.mobile-assignment-history-page\) > \.mobile-appshell-actions \{[^}]*display:\s*none/s);
+});
+
+test("Meine Einsätze reuses the personal-file back button throughout the entry flow", () => {
+  assert.match(backButtonSource, /className="mobile-back-icon-button"/);
+  assert.match(backButtonSource, /<ArrowLeft aria-hidden="true" size=\{25\} \/>/);
+  assert.match(personalFileSource, /<MobileBackButton label="Zurück" onClick=\{onBack\} \/>/);
+  assert.match(pageSource, /<MobileBackButton label="Zurück zu Meine Übersicht"/);
+  assert.match(pageSource, /<MobileBackButton label="Zurück zu Meine Einsätze" onClick=\{onBack\} \/>/);
+  assert.match(assignmentDetailSource, /<MobileBackButton label="Zurück zu Meine Einsätze"/);
+  assert.match(
+    styles,
+    /\.mobile-back-icon-button \{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*0;[^}]*background:\s*transparent;/s,
+  );
+  assert.match(
+    styles,
+    /\.mobile-assignment-history-header \{[^}]*align-items:\s*start;[^}]*gap:\s*12px;[^}]*padding:\s*2px 2px 4px;/s,
+  );
+  assert.doesNotMatch(styles, /\.mobile-assignment-history-header > button/);
+});
+
+test("site history opens the matching mobile project file above unchanged week cards", () => {
+  assert.match(pageSource, /const projectFileAssignment = history\?\.assignments\[0\] \?\? null/);
+  assert.match(
+    pageSource,
+    /className="mobile-assignment-project-file-action"[\s\S]*onOpenProjectFile\(projectFileAssignment\)[\s\S]*Baustellenakte öffnen/,
+  );
+  assert.match(
+    pageSource,
+    /navigate\(`\/me\/assignments\/\$\{assignment\.id\}`,[\s\S]*state:\s*\{ assignment \}/,
+  );
+  assert.match(assignmentDetailSource, /const stateAssignment = \(location\.state as LocationState \| null\)\?\.assignment/);
+  assert.match(
+    styles,
+    /\.mobile-assignment-project-file-action \{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*76px;[^}]*border-radius:\s*10px;/s,
+  );
+  assert.match(pageSource, /mobile-assignment-project-file-action[\s\S]*mobile-assignment-week-list/);
 });

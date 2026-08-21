@@ -151,6 +151,7 @@ class MobileMeasurementBatchPhotoRead(BaseModel):
     file_size_bytes: int | None
     external_web_url: str | None
     uploaded_by_name: str | None = None
+    caption: str | None = None
     taken_at: datetime | None
     created_at: datetime
     updated_at: datetime

@@ -890,6 +890,45 @@ class ExtraWorkService:
         photo = self._get_photo_for_ticket(photo_id, ticket.id)
         self._delete_ticket_photo(photo=photo, current_user=current_user)
 
+    def update_mobile_ticket_photo_caption(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        photo_id: int,
+        caption: str | None,
+        current_user: User,
+    ) -> ExtraWorkTicketPhotoRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        return self.update_site_ticket_photo_caption(
+            site_id=assignment.site_id,
+            ticket_id=ticket_id,
+            photo_id=photo_id,
+            caption=caption,
+        )
+
+    def update_site_ticket_photo_caption(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        caption: str | None,
+    ) -> ExtraWorkTicketPhotoRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=True,
+            for_update=True,
+        )
+        self._ensure_ticket_content_editable(ticket)
+        photo = self._get_photo_for_ticket(photo_id, ticket.id)
+        photo.caption = caption
+        self.db.commit()
+        self.db.refresh(photo)
+        return self._build_mobile_photo(photo)
+
     def _delete_ticket_photo(
         self,
         *,
@@ -1139,6 +1178,7 @@ class ExtraWorkService:
             file_size_bytes=photo.file_size_bytes,
             external_web_url=photo.external_web_url,
             uploaded_by_name=self._format_user_display_name(photo.uploaded_by),
+            caption=photo.caption,
             taken_at=photo.taken_at,
             created_at=photo.created_at,
             updated_at=photo.updated_at,

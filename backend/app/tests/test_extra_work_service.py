@@ -706,6 +706,13 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         content=sample_photo_bytes(),
         content_type="image/jpeg",
     )
+    updated_photo = service.update_mobile_ticket_photo_caption(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        photo_id=photo.id,
+        caption="Zusätzliche Kabelrinne montiert",
+        current_user=current_user,
+    )
     photos = service.list_mobile_ticket_photos(
         assignment_id=assignment.id,
         ticket_id=ticket.id,
@@ -727,6 +734,8 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
     assert photo.extra_work_ticket_id == ticket.id
     assert photo.file_size_bytes is not None and photo.file_size_bytes > 0
     assert photo.external_web_url == "https://example.invalid/photo-1"
+    assert updated_photo.caption == "Zusätzliche Kabelrinne montiert"
+    assert photos[-1].caption == "Zusätzliche Kabelrinne montiert"
     assert [item.id for item in photos] == [existing_photo.id, photo.id]
     assert content == b"downloaded-image"
     assert content_type == "image/jpeg"
@@ -960,11 +969,28 @@ def test_signed_ticket_blocks_site_and_mobile_photo_mutations(monkeypatch):
             photo_id=photo.id,
             current_user=mobile_user,
         )
+    with pytest.raises(HTTPException) as site_caption_error:
+        service.update_site_ticket_photo_caption(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            photo_id=photo.id,
+            caption="Nicht erlaubt",
+        )
+    with pytest.raises(HTTPException) as mobile_caption_error:
+        service.update_mobile_ticket_photo_caption(
+            assignment_id=assignment.id,
+            ticket_id=ticket.id,
+            photo_id=photo.id,
+            caption="Nicht erlaubt",
+            current_user=mobile_user,
+        )
 
     assert site_upload_error.value.status_code == 409
     assert mobile_upload_error.value.status_code == 409
     assert site_delete_error.value.status_code == 409
     assert mobile_delete_error.value.status_code == 409
+    assert site_caption_error.value.status_code == 409
+    assert mobile_caption_error.value.status_code == 409
 
 
 def test_mobile_extra_work_email_send_requires_selected_recipients():

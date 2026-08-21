@@ -13,7 +13,7 @@ from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.person_vacation_carryover import PersonVacationCarryover
 from app.models.person_work_day import PersonWorkDay
 from app.models.planning_cell_mark import PlanningCellMark
-from app.models.project_folder import ProjectFolder
+from app.models.project_folder import ProjectFolder, ProjectFolderDocumentCaption
 from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
@@ -60,6 +60,7 @@ __all__ = [
     "PlanningCellMark",
     "PendingPlanPushNotification",
     "ProjectFolder",
+    "ProjectFolderDocumentCaption",
     "Site",
     "SiteEmailRecipient",
     "SiteMeasurementBase",

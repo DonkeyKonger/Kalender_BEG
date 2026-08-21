@@ -165,6 +165,7 @@ export type ProjectFolderDocumentItem = {
   mime_type: string | null;
   file_extension: string | null;
   is_folder: boolean;
+  caption: string | null;
 };
 
 export type ProjectFolderDocumentList = {
@@ -363,6 +364,7 @@ export type MobileMeasurementBatchPhoto = {
   file_size_bytes: number | null;
   external_web_url: string | null;
   uploaded_by_name: string | null;
+  caption: string | null;
   taken_at: string | null;
   created_at: string;
   updated_at: string;
@@ -463,6 +465,7 @@ export type MobileExtraWorkTicketPhoto = {
   file_size_bytes: number | null;
   external_web_url: string | null;
   uploaded_by_name: string | null;
+  caption: string | null;
   taken_at: string | null;
   created_at: string;
   updated_at: string;

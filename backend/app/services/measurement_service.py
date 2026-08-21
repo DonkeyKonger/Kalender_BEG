@@ -1249,6 +1249,24 @@ class MeasurementService:
         self.db.delete(photo)
         self.db.commit()
 
+    def update_mobile_batch_photo_caption(
+        self,
+        *,
+        assignment_id: int,
+        batch_id: int,
+        photo_id: int,
+        caption: str | None,
+        current_user: User,
+    ) -> MobileMeasurementBatchPhotoRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
+        photo = self._get_photo_for_batch(photo_id, batch.id)
+        photo.caption = caption
+        self.db.commit()
+        self.db.refresh(photo)
+        return self._build_mobile_photo(photo)
+
     def list_site_batches(
         self,
         site_id: int,
@@ -2876,6 +2894,7 @@ class MeasurementService:
             file_size_bytes=photo.file_size_bytes,
             external_web_url=photo.external_web_url,
             uploaded_by_name=self._format_user_display_name(photo.uploaded_by),
+            caption=photo.caption,
             taken_at=photo.taken_at,
             created_at=photo.created_at,
             updated_at=photo.updated_at,

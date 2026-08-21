@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.enums import UserRole
-from app.models.project_folder import ProjectFolder
+from app.models.project_folder import ProjectFolder, ProjectFolderDocumentCaption
 from app.models.site import Site
 from app.models.user import User
 from app.services.project_folder_template import (
@@ -110,6 +110,64 @@ class ProjectFolderService:
                 status.HTTP_403_FORBIDDEN, "Keine Berechtigung fuer diesen Projektordner."
             )
         return folder
+
+    def add_document_captions(
+        self,
+        *,
+        site_id: int,
+        folder_key: str,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        item_ids = [str(item.get("id")) for item in items if item.get("id")]
+        if not item_ids:
+            return [{**item, "caption": None} for item in items]
+        captions = self.db.scalars(
+            select(ProjectFolderDocumentCaption).where(
+                ProjectFolderDocumentCaption.site_id == site_id,
+                ProjectFolderDocumentCaption.folder_key == folder_key,
+                ProjectFolderDocumentCaption.external_item_id.in_(item_ids),
+            )
+        ).all()
+        caption_by_item_id = {
+            record.external_item_id: record.caption for record in captions
+        }
+        return [
+            {**item, "caption": caption_by_item_id.get(str(item.get("id")))}
+            for item in items
+        ]
+
+    def update_document_caption(
+        self,
+        *,
+        site_id: int,
+        folder_key: str,
+        item_id: str,
+        caption: str | None,
+    ) -> str | None:
+        record = self.db.scalar(
+            select(ProjectFolderDocumentCaption).where(
+                ProjectFolderDocumentCaption.site_id == site_id,
+                ProjectFolderDocumentCaption.folder_key == folder_key,
+                ProjectFolderDocumentCaption.external_item_id == item_id,
+            )
+        )
+        if caption is None:
+            if record is not None:
+                self.db.delete(record)
+                self.db.commit()
+            return None
+        if record is None:
+            record = ProjectFolderDocumentCaption(
+                site_id=site_id,
+                folder_key=folder_key,
+                external_item_id=item_id,
+                caption=caption,
+            )
+            self.db.add(record)
+        else:
+            record.caption = caption
+        self.db.commit()
+        return caption
 
     def _ensure_site_exists(self, site_id: int) -> None:
         if self.db.get(Site, site_id) is None:
