@@ -34,6 +34,27 @@ export type ExtraWorkPdfTextareaLayout = {
   maxLines: number;
 };
 
+export const EXTRA_WORK_PDF_FORM_LINE_Y = {
+  customer: 134.22,
+  orderedByName: 172.15,
+  orderedByCompany: 199.76,
+  estimatedHours: 255.86,
+  executorOtherName: 293.78,
+  authorizationPlace: 333.37,
+  documentNumber: 368.89,
+  component: 391.91,
+  signaturePlace: 747.61,
+} as const;
+
+export function extraWorkPdfLineRect(
+  x: number,
+  lineY: number,
+  width: number,
+  height: number,
+): ExtraWorkPdfRect {
+  return { x, y: lineY - height, width, height };
+}
+
 type ExtraWorkDocumentDisplayFields =
   | "billing_type"
   | "estimated_order_value"
@@ -79,32 +100,32 @@ export type ExtraWorkDocumentPayloadOptions = {
 };
 
 export const EXTRA_WORK_PDF_FIELD_RECTS = {
-  customer: { x: 103.2, y: 119.199, width: 204.72, height: 14.173 },
-  project: { x: 363.845, y: 119.199, width: 186.84, height: 14.173 },
-  orderedByName: { x: 84.189, y: 157.233, width: 351.607, height: 14.173 },
-  manualOrderDate: { x: 479.575, y: 157.2, width: 71.16, height: 14.174 },
-  orderedByCompany: { x: 84.567, y: 184.828, width: 351.48, height: 14.173 },
-  commissionNumber: { x: 478.767, y: 184.8, width: 71.16, height: 14.174 },
-  estimatedHours: { x: 120.36, y: 243.751, width: 111.24, height: 11.339 },
-  estimatedOrderValue: { x: 402.6, y: 243.751, width: 146.76, height: 11.339 },
-  executorOtherName: { x: 353.269, y: 281.802, width: 97.8, height: 11.339 },
-  authorizationPlace: { x: 62.422, y: 318.393, width: 124.68, height: 14.173 },
-  authorizationDate: { x: 240.316, y: 318.393, width: 124.68, height: 14.173 },
-  documentNumber: { x: 236.88, y: 351.122, width: 106.8, height: 17.008 },
+  customer: extraWorkPdfLineRect(103.2, EXTRA_WORK_PDF_FORM_LINE_Y.customer, 204.72, 14.173),
+  project: extraWorkPdfLineRect(363.845, EXTRA_WORK_PDF_FORM_LINE_Y.customer, 186.84, 14.173),
+  orderedByName: extraWorkPdfLineRect(84.189, EXTRA_WORK_PDF_FORM_LINE_Y.orderedByName, 351.607, 14.173),
+  manualOrderDate: extraWorkPdfLineRect(479.575, EXTRA_WORK_PDF_FORM_LINE_Y.orderedByName, 71.16, 14.174),
+  orderedByCompany: extraWorkPdfLineRect(84.567, EXTRA_WORK_PDF_FORM_LINE_Y.orderedByCompany, 351.48, 14.173),
+  commissionNumber: extraWorkPdfLineRect(478.767, EXTRA_WORK_PDF_FORM_LINE_Y.orderedByCompany, 71.16, 14.174),
+  estimatedHours: extraWorkPdfLineRect(120.36, EXTRA_WORK_PDF_FORM_LINE_Y.estimatedHours, 111.24, 11.339),
+  estimatedOrderValue: extraWorkPdfLineRect(402.6, EXTRA_WORK_PDF_FORM_LINE_Y.estimatedHours, 146.76, 11.339),
+  executorOtherName: extraWorkPdfLineRect(353.269, EXTRA_WORK_PDF_FORM_LINE_Y.executorOtherName, 97.8, 11.339),
+  authorizationPlace: extraWorkPdfLineRect(62.422, EXTRA_WORK_PDF_FORM_LINE_Y.authorizationPlace, 124.68, 14.173),
+  authorizationDate: extraWorkPdfLineRect(240.316, EXTRA_WORK_PDF_FORM_LINE_Y.authorizationPlace, 124.68, 14.173),
+  documentNumber: extraWorkPdfLineRect(236.88, EXTRA_WORK_PDF_FORM_LINE_Y.documentNumber, 106.8, 17.008),
   title: { x: 236.88, y: 366, width: 313, height: 10 },
-  executionStart: { x: 434.76, y: 356.791, width: 48.96, height: 11.339 },
-  executionEnd: { x: 502.08, y: 356.791, width: 48.96, height: 11.339 },
-  component: { x: 86.695, y: 379.591, width: 61.2, height: 11.339 },
-  floor: { x: 199.92, y: 379.591, width: 61.2, height: 11.339 },
-  roomNumber: { x: 328.08, y: 379.591, width: 55.68, height: 11.339 },
-  axis: { x: 440.16, y: 379.591, width: 61.08, height: 11.339 },
+  executionStart: extraWorkPdfLineRect(434.76, EXTRA_WORK_PDF_FORM_LINE_Y.documentNumber, 48.96, 11.339),
+  executionEnd: extraWorkPdfLineRect(502.08, EXTRA_WORK_PDF_FORM_LINE_Y.documentNumber, 48.96, 11.339),
+  component: extraWorkPdfLineRect(86.695, EXTRA_WORK_PDF_FORM_LINE_Y.component, 61.2, 11.339),
+  floor: extraWorkPdfLineRect(199.92, EXTRA_WORK_PDF_FORM_LINE_Y.component, 61.2, 11.339),
+  roomNumber: extraWorkPdfLineRect(328.08, EXTRA_WORK_PDF_FORM_LINE_Y.component, 55.68, 11.339),
+  axis: extraWorkPdfLineRect(440.16, EXTRA_WORK_PDF_FORM_LINE_Y.component, 61.08, 11.339),
   remarks: { x: 416.476, y: 445.923, width: 136.08, height: 176.76 },
   overallHours: { x: 345.96, y: 609.557, width: 68.16, height: 14.173 },
   materialText: { x: 62.76, y: 641.85, width: 484.92, height: 54.819 },
-  workerSignaturePlace: { x: 62.752, y: 727.007, width: 92.768, height: 19.843 },
-  workerSignatureDate: { x: 158.76, y: 727.007, width: 55.2, height: 19.843 },
-  customerSignaturePlace: { x: 396.592, y: 727.007, width: 92.768, height: 19.843 },
-  customerSignatureDate: { x: 492.6, y: 727.007, width: 55.2, height: 19.843 },
+  workerSignaturePlace: extraWorkPdfLineRect(62.752, EXTRA_WORK_PDF_FORM_LINE_Y.signaturePlace, 92.768, 19.843),
+  workerSignatureDate: extraWorkPdfLineRect(158.76, EXTRA_WORK_PDF_FORM_LINE_Y.signaturePlace, 55.2, 19.843),
+  customerSignaturePlace: extraWorkPdfLineRect(396.592, EXTRA_WORK_PDF_FORM_LINE_Y.signaturePlace, 92.768, 19.843),
+  customerSignatureDate: extraWorkPdfLineRect(492.6, EXTRA_WORK_PDF_FORM_LINE_Y.signaturePlace, 55.2, 19.843),
   workerSignature: { x: 68, y: 761.89, width: 145, height: 24 },
   customerSignature: { x: 402, y: 761.89, width: 145, height: 24 },
 } satisfies Record<string, ExtraWorkPdfRect>;

@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  EXTRA_WORK_CHECKBOX_RECTS,
   EXTRA_WORK_PDF_FIELD_RECTS,
+  EXTRA_WORK_PDF_FORM_LINE_Y,
   EXTRA_WORK_PDF_HEIGHT,
   EXTRA_WORK_PDF_TEXTAREA_LAYOUTS,
   EXTRA_WORK_PDF_WIDTH,
@@ -11,9 +13,12 @@ import {
   chunkExtraWorkWorkerRows,
   createEmptyExtraWorkWorkerRow,
   createExtraWorkDocumentDraft,
+  extraWorkPdfLineRect,
   extraWorkPdfPointsToCqw,
   extraWorkPdfRectToPercent,
   formatExtraWorkSignaturePlace,
+  getExtraWorkHourRect,
+  getExtraWorkWorkerNameRect,
   isExtraWorkDocumentLocked,
   parseExtraWorkNumericValue,
 } from "../src/lib/extraWorkDocument.ts";
@@ -180,9 +185,57 @@ test("PDF point rectangles convert proportionally to the A4 overlay coordinate s
   assert.equal(EXTRA_WORK_PDF_HEIGHT, 841.89);
   const customer = extraWorkPdfRectToPercent(EXTRA_WORK_PDF_FIELD_RECTS.customer);
   assert.ok(Math.abs(customer.left - ((103.2 / 595.276) * 100)) < 1e-10);
-  assert.ok(Math.abs(customer.top - ((119.199 / 841.89) * 100)) < 1e-10);
+  assert.ok(Math.abs(customer.top - (((EXTRA_WORK_PDF_FORM_LINE_Y.customer - 14.173) / 841.89) * 100)) < 1e-10);
   assert.match(componentSource, /annotationMode: pdfjsLib\.AnnotationMode\.DISABLE/);
   assert.match(styles, /\.supplementary-order-paper[\s\S]*container-type: inline-size/);
+});
+
+test("classic form-line fields use their PDF line as bottom anchor at every zoom", () => {
+  const anchoredFields = [
+    ["customer", "customer"],
+    ["project", "customer"],
+    ["orderedByName", "orderedByName"],
+    ["manualOrderDate", "orderedByName"],
+    ["orderedByCompany", "orderedByCompany"],
+    ["commissionNumber", "orderedByCompany"],
+    ["estimatedHours", "estimatedHours"],
+    ["estimatedOrderValue", "estimatedHours"],
+    ["executorOtherName", "executorOtherName"],
+    ["authorizationPlace", "authorizationPlace"],
+    ["authorizationDate", "authorizationPlace"],
+    ["documentNumber", "documentNumber"],
+    ["executionStart", "documentNumber"],
+    ["executionEnd", "documentNumber"],
+    ["component", "component"],
+    ["floor", "component"],
+    ["roomNumber", "component"],
+    ["axis", "component"],
+    ["workerSignaturePlace", "signaturePlace"],
+    ["workerSignatureDate", "signaturePlace"],
+    ["customerSignaturePlace", "signaturePlace"],
+    ["customerSignatureDate", "signaturePlace"],
+  ];
+  for (const [fieldName, lineName] of anchoredFields) {
+    const rect = EXTRA_WORK_PDF_FIELD_RECTS[fieldName];
+    const lineY = EXTRA_WORK_PDF_FORM_LINE_Y[lineName];
+    assert.ok(Math.abs((rect.y + rect.height) - lineY) < 1e-10, fieldName);
+    for (const zoom of [0.25, 0.5, 0.75, 1]) {
+      assert.ok(Math.abs(((rect.y + rect.height) * zoom) - (lineY * zoom)) < 1e-10, `${fieldName} at ${zoom}`);
+    }
+  }
+  assert.deepEqual(extraWorkPdfLineRect(10, 30, 40, 12), { x: 10, y: 18, width: 40, height: 12 });
+});
+
+test("line anchoring preserves box dimensions and leaves table and checkbox geometry unchanged", () => {
+  assert.equal(EXTRA_WORK_PDF_FIELD_RECTS.orderedByName.width, 351.607);
+  assert.equal(EXTRA_WORK_PDF_FIELD_RECTS.orderedByName.height, 14.173);
+  assert.equal(EXTRA_WORK_PDF_FIELD_RECTS.estimatedHours.width, 111.24);
+  assert.equal(EXTRA_WORK_PDF_FIELD_RECTS.estimatedHours.height, 11.339);
+  assert.deepEqual(getExtraWorkWorkerNameRect(0), { x: 57.48, y: 446.97, width: 101.76, height: 45.72 });
+  assert.deepEqual(getExtraWorkHourRect(0, "normal", 0), { x: 184.68, y: 446.25, width: 21.36, height: 14.52 });
+  assert.deepEqual(EXTRA_WORK_CHECKBOX_RECTS.billingHourly, { x: 230, y: 215, width: 16, height: 16 });
+  assert.deepEqual(EXTRA_WORK_PDF_FIELD_RECTS.remarks, { x: 416.476, y: 445.923, width: 136.08, height: 176.76 });
+  assert.deepEqual(EXTRA_WORK_PDF_FIELD_RECTS.materialText, { x: 62.76, y: 641.85, width: 484.92, height: 54.819 });
 });
 
 test("the ruled material editor shares the final PDF typography and three-line capacity", () => {
