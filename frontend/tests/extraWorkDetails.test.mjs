@@ -121,7 +121,7 @@ test("invalid daily hours stay visible, explain the limit and block saving", () 
   assert.match(pageSource, /aria-invalid=\{Boolean\(validationError\)\}/);
   assert.match(pageSource, /mobile-extra-work-hours-error/);
   assert.match(pageSource, /Bitte ungültige Tagesstunden korrigieren\./);
-  assert.match(pageSource, /disabled=\{isLoading \|\| isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}/);
+  assert.match(pageSource, /disabled=\{isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}/);
   assert.match(styles, /label\.is-invalid \.mobile-extra-work-hours-input input \{[^}]*border-color:\s*#c2414f/s);
 });
 
@@ -154,7 +154,6 @@ test("mobile performance entry has sticky back navigation and narrow touch-safe 
   assert.match(styles, /\.mobile-extra-work-location-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-grid \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-button \{[^}]*min-height:\s*44px;/s);
-  assert.match(styles, /\.mobile-extra-work-save-dock \{[^}]*position:\s*fixed;[^}]*bottom:\s*var\(--mobile-extra-work-keyboard-offset, 0px\);/s);
   assert.match(styles, /@media \(max-width: 375px\)[\s\S]*\.mobile-extra-work-week-grid/s);
 });
 
@@ -172,25 +171,20 @@ test("material quick rows stay local, editable and backward compatible", () => {
   assert.doesNotMatch(entrySource, /api\.[A-Za-z]+\([^\n]*materialQuickInput/);
 });
 
-test("save remains fixed above safe areas and visual keyboards", () => {
+test("save stays in normal form flow without keyboard positioning", () => {
   const entrySource = pageSource.slice(
     pageSource.indexOf("function ExtraWorkEntryPage"),
     pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
   );
-  assert.match(entrySource, /window\.innerHeight - visualViewport\.height - visualViewport\.offsetTop/);
-  assert.match(entrySource, /style\.setProperty\(\s*"--mobile-extra-work-keyboard-offset"/);
-  assert.match(entrySource, /form="mobile-extra-work-entry-form"/);
+  assert.match(entrySource, /<form[\s\S]*<div className="mobile-form-actions">[\s\S]*type="submit"[\s\S]*\{isSaving \? "Speichert\.\.\." : "Speichern"\}/);
   assert.match(entrySource, /await api\.saveMobileExtraWorkTicketEntry[\s\S]*await onSaved\(\)/);
   assert.match(pageSource, /onSaved=\{async \(\) => \{[\s\S]*await api\.mobileExtraWorkTicket[\s\S]*setIsEditingEntry\(false\)/);
   assert.match(entrySource, /catch \(requestError\) \{[\s\S]*setError\(readApiError/);
-  assert.match(styles, /\.mobile-extra-work-save-dock \{[^}]*position:\s*fixed;[^}]*env\(safe-area-inset-right[^}]*env\(safe-area-inset-left/s);
-  assert.match(styles, /\.mobile-extra-work-entry-page \{[^}]*padding-bottom:\s*calc\(\s*92px\s*\+ env\(safe-area-inset-bottom/s);
-  assert.match(styles, /\.mobile-extra-work-entry-page::after \{[^}]*position:\s*absolute;[^}]*height:\s*var\(--mobile-extra-work-keyboard-offset/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-form-actions \{[^}]*position:\s*static;[^}]*bottom:\s*auto;[^}]*z-index:\s*auto;[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \{[^}]*padding-bottom:\s*max\(14px, env\(safe-area-inset-bottom, 0px\)\);/s);
   assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-form input,[\s\S]*font-size:\s*1rem;/s);
-  assert.match(entrySource, /ensureActiveInputVisible/);
-  assert.match(entrySource, /window\.scrollBy\(\{ top: targetRect\.bottom - safeBottom, behavior: "auto" \}\)/);
-  assert.doesNotMatch(entrySource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
-  assert.doesNotMatch(entrySource, /setBottomOffset/);
+  assert.doesNotMatch(entrySource, /mobile-extra-work-save-dock|visualViewport|keyboard-offset|ensureActiveInputVisible|onFocusCapture/);
+  assert.doesNotMatch(styles, /mobile-extra-work-save-dock|--mobile-extra-work-keyboard-offset|\.mobile-extra-work-entry-page::after/);
 });
 
 test("mobile extra-work inputs avoid iOS focus zoom without locking viewport accessibility", () => {

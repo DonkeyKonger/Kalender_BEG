@@ -25774,27 +25774,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-entry-page {
-  position: relative;
   min-width: 0;
-  padding-bottom: calc(
-    92px
-    + env(safe-area-inset-bottom, 0px)
-  );
-  scroll-padding-bottom: calc(
-    92px
-    + var(--mobile-extra-work-keyboard-offset, 0px)
-    + env(safe-area-inset-bottom, 0px)
-  );
-}
-
-.mobile-extra-work-entry-page::after {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 1px;
-  height: var(--mobile-extra-work-keyboard-offset, 0px);
-  content: "";
-  pointer-events: none;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-extra-work-sticky-nav {
@@ -26342,22 +26323,16 @@ body.mobile-modal-scroll-locked {
   color: #0f468d;
 }
 
-.mobile-extra-work-save-dock {
-  position: fixed;
-  right: max(10px, env(safe-area-inset-right, 0px));
-  bottom: var(--mobile-extra-work-keyboard-offset, 0px);
-  left: max(10px, env(safe-area-inset-left, 0px));
-  z-index: 30;
-  display: grid;
-  width: auto;
-  max-width: 956px;
-  margin-right: auto;
-  margin-left: auto;
-  background: linear-gradient(180deg, rgb(245 248 252 / 28%), #f5f8fc 32%);
-  padding: 10px 0 max(10px, env(safe-area-inset-bottom, 0px));
+.mobile-extra-work-entry-page .mobile-form-actions {
+  position: static;
+  bottom: auto;
+  z-index: auto;
+  border-top: 0;
+  background: transparent;
+  padding-top: 0;
 }
 
-.mobile-extra-work-save-dock .primary-action {
+.mobile-extra-work-entry-page .mobile-form-actions .primary-action {
   min-height: 50px;
   border-radius: 10px;
   font-size: 1rem;

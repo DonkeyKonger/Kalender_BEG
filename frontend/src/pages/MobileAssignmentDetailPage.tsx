@@ -36,7 +36,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -2030,11 +2030,7 @@ function ExtraWorkEntryPage({
   const [materialQuickInput, setMaterialQuickInput] = useState("");
   const [materialEditDraft, setMaterialEditDraft] = useState<ExtraWorkMaterialEditDraft | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
-  const saveDockRef = useRef<HTMLDivElement>(null);
   const materialQuickInputRef = useRef<HTMLInputElement>(null);
-  const focusScrollTimeoutRef = useRef<number | null>(null);
-  const focusScrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -2069,67 +2065,6 @@ function ExtraWorkEntryPage({
   useEffect(() => {
     setVisibleWeekYear(selectedWeek.isoYear);
   }, [selectedWeek.isoYear]);
-
-  const ensureActiveInputVisible = useCallback((target: HTMLElement) => {
-    if (focusScrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(focusScrollFrameRef.current);
-    }
-    focusScrollFrameRef.current = window.requestAnimationFrame(() => {
-      const visualViewport = window.visualViewport;
-      const visibleTop = visualViewport?.offsetTop ?? 0;
-      const visibleBottom = visibleTop + (visualViewport?.height ?? window.innerHeight);
-      const dockTop = saveDockRef.current?.getBoundingClientRect().top ?? visibleBottom;
-      const targetRect = target.getBoundingClientRect();
-      const safeTop = visibleTop + 58;
-      const safeBottom = Math.min(visibleBottom, dockTop) - 12;
-      if (targetRect.bottom > safeBottom) {
-        window.scrollBy({ top: targetRect.bottom - safeBottom, behavior: "auto" });
-      } else if (targetRect.top < safeTop) {
-        window.scrollBy({ top: targetRect.top - safeTop, behavior: "auto" });
-      }
-      focusScrollFrameRef.current = null;
-    });
-  }, []);
-
-  useEffect(() => {
-    const visualViewport = window.visualViewport;
-    let viewportFrame = 0;
-    const syncViewport = () => {
-      window.cancelAnimationFrame(viewportFrame);
-      viewportFrame = window.requestAnimationFrame(() => {
-        const nextOffset = visualViewport
-          ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop)
-          : 0;
-        pageRef.current?.style.setProperty(
-          "--mobile-extra-work-keyboard-offset",
-          `${Math.round(nextOffset)}px`,
-        );
-        const activeElement = document.activeElement;
-        if (nextOffset > 0 && activeElement instanceof HTMLElement && pageRef.current?.contains(activeElement)) {
-          ensureActiveInputVisible(activeElement);
-        }
-      });
-    };
-    syncViewport();
-    visualViewport?.addEventListener("resize", syncViewport);
-    visualViewport?.addEventListener("scroll", syncViewport);
-    window.addEventListener("resize", syncViewport);
-    return () => {
-      window.cancelAnimationFrame(viewportFrame);
-      visualViewport?.removeEventListener("resize", syncViewport);
-      visualViewport?.removeEventListener("scroll", syncViewport);
-      window.removeEventListener("resize", syncViewport);
-    };
-  }, [ensureActiveInputVisible]);
-
-  useEffect(() => () => {
-    if (focusScrollTimeoutRef.current !== null) {
-      window.clearTimeout(focusScrollTimeoutRef.current);
-    }
-    if (focusScrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(focusScrollFrameRef.current);
-    }
-  }, []);
 
   const hasUnsavedHours = useMemo(
     () => getExtraWorkHoursFingerprint(form.worker_rows) !== savedHoursFingerprint,
@@ -2219,24 +2154,7 @@ function ExtraWorkEntryPage({
   }
 
   function focusMaterialQuickInput(): void {
-    materialQuickInputRef.current?.focus({ preventScroll: true });
-    if (materialQuickInputRef.current) {
-      ensureActiveInputVisible(materialQuickInputRef.current);
-    }
-  }
-
-  function handleFormFocus(event: ReactFocusEvent<HTMLFormElement>): void {
-    if (!(event.target instanceof HTMLElement)) {
-      return;
-    }
-    if (focusScrollTimeoutRef.current !== null) {
-      window.clearTimeout(focusScrollTimeoutRef.current);
-    }
-    const target = event.target;
-    focusScrollTimeoutRef.current = window.setTimeout(() => {
-      ensureActiveInputVisible(target);
-      focusScrollTimeoutRef.current = null;
-    }, 180);
+    materialQuickInputRef.current?.focus();
   }
 
   function getMaterialItemsForSave(): ExtraWorkMaterialFormItem[] | null {
@@ -2418,10 +2336,7 @@ function ExtraWorkEntryPage({
   }
 
   return (
-    <div
-      ref={pageRef}
-      className="mobile-measurement-entry-page mobile-extra-work-entry-page"
-    >
+    <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={20} />
@@ -2448,9 +2363,7 @@ function ExtraWorkEntryPage({
 
       {!isLoading ? (
         <form
-          id="mobile-extra-work-entry-form"
           className="mobile-measurement-form mobile-measurement-entry-form mobile-extra-work-form"
-          onFocusCapture={handleFormFocus}
           onSubmit={(event) => {
             event.preventDefault();
             void saveEntry();
@@ -2751,19 +2664,13 @@ function ExtraWorkEntryPage({
             <p className="mobile-extra-work-entry-locked-note">Dieser Zusatzauftrag ist abgeschlossen und kann nicht mehr bearbeitet werden.</p>
           ) : null}
 
+          <div className="mobile-form-actions">
+            <button className="primary-action" type="submit" disabled={isSaving || !canEdit || hasInvalidDailyHours}>
+              {isSaving ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
         </form>
       ) : null}
-
-      <div ref={saveDockRef} className="mobile-extra-work-save-dock">
-        <button
-          className="primary-action"
-          type="submit"
-          form="mobile-extra-work-entry-form"
-          disabled={isLoading || isSaving || !canEdit || hasInvalidDailyHours}
-        >
-          {isSaving ? "Speichert..." : "Speichern"}
-        </button>
-      </div>
 
       {isWeekDialogOpen ? (
         <ExtraWorkWeekPickerDialog
