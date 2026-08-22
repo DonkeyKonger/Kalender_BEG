@@ -81,3 +81,11 @@ test("toolbar, resize observer and paper stack share one persisted zoom width", 
   assert.match(styles, /\.supplementary-order-document-zoom select \{[^}]*height:\s*34px;[^}]*appearance:\s*none;[^}]*border-radius:\s*2px;/s);
   assert.match(styles, /\.supplementary-order-document-actions \.secondary-action,[\s\S]*?height:\s*34px;[\s\S]*?border-radius:\s*2px;/);
 });
+
+test("PDF canvas and HTML overlay resize synchronously at every document zoom", () => {
+  assert.match(componentSource, /canvasNode\.width = Math\.ceil\(renderViewport\.width\);/);
+  assert.match(componentSource, /canvasNode\.height = Math\.ceil\(renderViewport\.height\);/);
+  assert.doesNotMatch(componentSource, /canvasNode\.style\.(?:width|height)\s*=/);
+  assert.match(styles, /\.supplementary-order-pdf-background canvas \{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+  assert.match(styles, /\.supplementary-order-pdf-background,\s*\.supplementary-order-overlay \{[^}]*position:\s*absolute;[^}]*inset:\s*0;/s);
+});

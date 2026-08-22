@@ -992,7 +992,6 @@ function SupplementaryOrderPdfBackground({ data }: { data: ArrayBuffer }) {
         const baseViewport = page.getViewport({ scale: 1 });
         const cssScale = Math.max(paperNode.clientWidth, 1) / baseViewport.width;
         const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
-        const cssViewport = page.getViewport({ scale: cssScale });
         const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
         const context = canvasNode.getContext("2d", { alpha: false });
         if (!context) {
@@ -1000,8 +999,6 @@ function SupplementaryOrderPdfBackground({ data }: { data: ArrayBuffer }) {
         }
         canvasNode.width = Math.ceil(renderViewport.width);
         canvasNode.height = Math.ceil(renderViewport.height);
-        canvasNode.style.width = `${cssViewport.width}px`;
-        canvasNode.style.height = `${cssViewport.height}px`;
         await page.render({
           canvas: canvasNode,
           canvasContext: context,
