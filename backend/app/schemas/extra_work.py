@@ -1,4 +1,5 @@
 import datetime as dt
+import math
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -73,30 +74,60 @@ class ExtraWorkWorkerSignatureCreate(BaseModel):
         return strokes
 
 
-class ExtraWorkWorkerHours(BaseModel):
+EXTRA_WORK_DAILY_HOUR_FIELDS = tuple(
+    f"{weekday}{suffix}_hours"
+    for weekday in (
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    )
+    for suffix in ("", "_surcharge_25", "_surcharge_50")
+)
+
+
+class ExtraWorkWorkerHoursBase(BaseModel):
     person_id: int | None = Field(default=None, gt=0)
     worker_name: str = Field(default="", max_length=160)
-    monday_hours: float | None = Field(default=None, ge=0, le=24)
-    tuesday_hours: float | None = Field(default=None, ge=0, le=24)
-    wednesday_hours: float | None = Field(default=None, ge=0, le=24)
-    thursday_hours: float | None = Field(default=None, ge=0, le=24)
-    friday_hours: float | None = Field(default=None, ge=0, le=24)
-    saturday_hours: float | None = Field(default=None, ge=0, le=24)
-    sunday_hours: float | None = Field(default=None, ge=0, le=24)
-    monday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    tuesday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    wednesday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    thursday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    friday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    saturday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    sunday_surcharge_25_hours: float | None = Field(default=None, ge=0, le=24)
-    monday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    tuesday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    wednesday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    thursday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    friday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    saturday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
-    sunday_surcharge_50_hours: float | None = Field(default=None, ge=0, le=24)
+    monday_hours: float | None = None
+    tuesday_hours: float | None = None
+    wednesday_hours: float | None = None
+    thursday_hours: float | None = None
+    friday_hours: float | None = None
+    saturday_hours: float | None = None
+    sunday_hours: float | None = None
+    monday_surcharge_25_hours: float | None = None
+    tuesday_surcharge_25_hours: float | None = None
+    wednesday_surcharge_25_hours: float | None = None
+    thursday_surcharge_25_hours: float | None = None
+    friday_surcharge_25_hours: float | None = None
+    saturday_surcharge_25_hours: float | None = None
+    sunday_surcharge_25_hours: float | None = None
+    monday_surcharge_50_hours: float | None = None
+    tuesday_surcharge_50_hours: float | None = None
+    wednesday_surcharge_50_hours: float | None = None
+    thursday_surcharge_50_hours: float | None = None
+    friday_surcharge_50_hours: float | None = None
+    saturday_surcharge_50_hours: float | None = None
+    sunday_surcharge_50_hours: float | None = None
+
+
+class ExtraWorkWorkerHours(ExtraWorkWorkerHoursBase):
+    @field_validator(*EXTRA_WORK_DAILY_HOUR_FIELDS)
+    @classmethod
+    def validate_daily_hour_value(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
+        if not math.isfinite(value):
+            raise ValueError("Stunden müssen als endliche Zahl angegeben werden.")
+        if value < 0:
+            raise ValueError("Stunden dürfen nicht negativ sein.")
+        if value > 24:
+            raise ValueError("Pro Kalendertag sind maximal 24 Stunden zulässig.")
+        return value
 
     @model_validator(mode="after")
     def validate_worker_hours(self) -> "ExtraWorkWorkerHours":
@@ -115,7 +146,7 @@ class ExtraWorkWorkerHours(BaseModel):
                 getattr(self, f"{weekday}_surcharge_50_hours"),
             )
             if sum(value or 0 for value in values) > 24:
-                raise ValueError("Pro Monteur und Wochentag sind maximal 24 Stunden erlaubt.")
+                raise ValueError("Pro Kalendertag sind maximal 24 Stunden zulässig.")
         hour_values = [
             value
             for field_name, value in self.__dict__.items()
@@ -124,6 +155,10 @@ class ExtraWorkWorkerHours(BaseModel):
         if (self.person_id is not None or any(value is not None for value in hour_values)) and not self.worker_name.strip():
             raise ValueError("Für erfasste Stunden ist ein Monteurname erforderlich.")
         return self
+
+
+class ExtraWorkWorkerHoursRead(ExtraWorkWorkerHoursBase):
+    """Read model keeps legacy values visible until a user explicitly corrects them."""
 
 
 class ExtraWorkTicketEntryPayload(BaseModel):
@@ -167,7 +202,7 @@ class ExtraWorkTicketEntryRead(BaseModel):
     remarks: str | None
     material_text: str | None
     estimated_hours: float | None
-    worker_rows: list[ExtraWorkWorkerHours]
+    worker_rows: list[ExtraWorkWorkerHoursRead]
     total_hours: float
     created_by_user_id: int | None
     created_at: datetime

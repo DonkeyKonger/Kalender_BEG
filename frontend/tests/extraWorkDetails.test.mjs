@@ -109,6 +109,19 @@ test("mobile performance entry keeps all direct fields in one compact card flow"
   assert.match(pageSource, /placeholder="z\. B\. 1-2 \/ A-B"/);
   assert.match(pageSource, /placeholder="z\. B\. Beschreibung der Arbeiten, Besonderheiten \.\.\."/);
   assert.match(pageSource, /placeholder="z\. B\. Material, Mengen, Artikelnummern \.\.\."/);
+  assert.match(pageSource, /className="mobile-extra-work-location-label">Bauteil/);
+  assert.match(pageSource, /className="mobile-extra-work-location-input"/);
+  assert.match(styles, /\.mobile-extra-work-location-input \{[^}]*min-height:\s*48px;[^}]*border:\s*1px solid/s);
+  assert.match(styles, /\.mobile-extra-work-location-input:focus-within \{[^}]*border-color:\s*#4f83c2;[^}]*box-shadow:/s);
+});
+
+test("invalid daily hours stay visible, explain the limit and block saving", () => {
+  assert.match(pageSource, /getExtraWorkRowDailyHoursError\(row, day\)/);
+  assert.match(pageSource, /aria-invalid=\{Boolean\(validationError\)\}/);
+  assert.match(pageSource, /mobile-extra-work-hours-error/);
+  assert.match(pageSource, /Bitte ungültige Tagesstunden korrigieren\./);
+  assert.match(pageSource, /disabled=\{isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}/);
+  assert.match(styles, /label\.is-invalid \.mobile-extra-work-hours-input input \{[^}]*border-color:\s*#c2414f/s);
 });
 
 test("mobile execution week persists through the existing typed details endpoint", () => {

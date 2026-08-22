@@ -25784,10 +25784,10 @@ body.mobile-modal-scroll-locked {
   z-index: 20;
   display: flex;
   align-items: center;
-  min-height: 54px;
+  min-height: 48px;
   border-bottom: 1px solid rgb(216 227 239 / 88%);
   background: rgb(245 248 252 / 96%);
-  padding: max(4px, env(safe-area-inset-top, 0px)) 0 7px;
+  padding: max(2px, env(safe-area-inset-top, 0px)) 0 4px;
   backdrop-filter: blur(14px);
 }
 
@@ -25813,8 +25813,8 @@ body.mobile-modal-scroll-locked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
 }
 
 .mobile-extra-work-entry-header-card h1,
@@ -25830,7 +25830,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-entry-header-card p {
-  margin-top: 7px;
+  margin-top: 5px;
   color: #334155;
   font-size: 0.95rem;
 }
@@ -25838,7 +25838,7 @@ body.mobile-modal-scroll-locked {
 .mobile-extra-work-entry-header-meta {
   display: grid;
   justify-items: end;
-  gap: 12px;
+  gap: 9px;
 }
 
 .mobile-extra-work-entry-date {
@@ -25851,7 +25851,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-form {
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -25863,6 +25863,11 @@ body.mobile-modal-scroll-locked {
   display: grid;
   gap: 14px;
   padding: 14px;
+}
+
+.mobile-extra-work-location-card {
+  gap: 11px;
+  padding: 12px;
 }
 
 .mobile-extra-work-card-heading {
@@ -25885,70 +25890,74 @@ body.mobile-modal-scroll-locked {
 .mobile-extra-work-location-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 9px 8px;
   min-width: 0;
 }
 
-.mobile-measurement-form .mobile-extra-work-location-field {
+.mobile-measurement-form .mobile-extra-work-location-control {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
+  gap: 5px;
   min-width: 0;
-  min-height: 82px;
-  border: 1px solid #d8e3ef;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 10px;
 }
 
-.mobile-measurement-form .mobile-extra-work-location-field.is-wide {
+.mobile-measurement-form .mobile-extra-work-location-control.is-wide {
   grid-column: 1 / -1;
+}
+
+.mobile-extra-work-location-label {
+  color: #172033;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.mobile-extra-work-location-input {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #d8e3ef;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 5px 7px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .mobile-extra-work-location-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
   background: #f2f6fc;
-  color: #112a52;
+  color: #164b8b;
 }
 
-.mobile-extra-work-location-content {
-  display: grid;
+.mobile-measurement-form .mobile-extra-work-location-input input {
   min-width: 0;
-  gap: 4px;
-}
-
-.mobile-extra-work-location-content > span {
-  color: #172033;
-  font-size: 0.82rem;
-  font-weight: 850;
-}
-
-.mobile-measurement-form .mobile-extra-work-location-content input {
-  min-width: 0;
-  min-height: 28px;
+  min-height: 36px;
   border: 0;
   border-radius: 0;
   background: transparent;
   padding: 0;
   color: #172033;
-  font-size: 0.8rem;
+  font-size: clamp(0.72rem, 3.2vw, 0.82rem);
+  font-weight: 500;
   line-height: 1.2;
   outline: none;
 }
 
-.mobile-measurement-form .mobile-extra-work-location-content input::placeholder {
+.mobile-measurement-form .mobile-extra-work-location-input input::placeholder {
   color: #8da0bc;
+  font-weight: 500;
   opacity: 1;
 }
 
-.mobile-measurement-form .mobile-extra-work-location-field:focus-within {
-  border-color: #8eb4e3;
-  box-shadow: 0 0 0 3px rgb(92 143 204 / 12%);
+.mobile-measurement-form .mobile-extra-work-location-input:focus-within {
+  border-color: #4f83c2;
+  box-shadow: 0 0 0 3px rgb(79 131 194 / 13%);
 }
 
 .mobile-extra-work-section {
@@ -26103,6 +26112,21 @@ body.mobile-modal-scroll-locked {
   font-weight: 700;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+.mobile-extra-work-week-grid label.is-invalid .mobile-extra-work-hours-input input {
+  border-color: #c2414f;
+  background: #fff8f8;
+  box-shadow: 0 0 0 2px rgb(194 65 79 / 10%);
+}
+
+.mobile-extra-work-hours-error {
+  display: block;
+  color: #a52f3d;
+  font-size: 0.65rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .mobile-extra-work-worker-footer {
@@ -26262,23 +26286,24 @@ body.mobile-modal-scroll-locked {
     font-size: 0.78rem;
   }
 
-  .mobile-extra-work-card {
+  .mobile-extra-work-card:not(.mobile-extra-work-section) {
     padding: 12px;
   }
 
-  .mobile-measurement-form .mobile-extra-work-location-field {
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 7px;
-    padding: 8px;
+  .mobile-extra-work-location-input {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 5px;
+    padding-right: 5px;
+    padding-left: 5px;
   }
 
   .mobile-extra-work-location-icon {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
   }
 
-  .mobile-measurement-form .mobile-extra-work-location-content input {
-    font-size: 0.74rem;
+  .mobile-measurement-form .mobile-extra-work-location-input input {
+    font-size: 0.7rem;
   }
 
   .mobile-extra-work-worker-card {

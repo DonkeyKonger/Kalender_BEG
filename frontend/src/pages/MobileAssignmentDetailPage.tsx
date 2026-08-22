@@ -44,6 +44,7 @@ import { MobileBackButton } from "../components/MobileBackButton";
 import { MobilePhotoCaptionViewer } from "../components/MobilePhotoCaptionViewer";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
@@ -155,13 +156,13 @@ type PdfPinchState = {
 
 const TABLET_INLINE_MEASUREMENT_QUERY = "(min-width: 700px) and (max-width: 1199px)";
 const EXTRA_WORK_WEEK_DAYS = [
-  { key: "monday_hours", label: "Mo" },
-  { key: "tuesday_hours", label: "Di" },
-  { key: "wednesday_hours", label: "Mi" },
-  { key: "thursday_hours", label: "Do" },
-  { key: "friday_hours", label: "Fr" },
-  { key: "saturday_hours", label: "Sa" },
-  { key: "sunday_hours", label: "So" },
+  { key: "monday_hours", surcharge25Key: "monday_surcharge_25_hours", surcharge50Key: "monday_surcharge_50_hours", label: "Mo" },
+  { key: "tuesday_hours", surcharge25Key: "tuesday_surcharge_25_hours", surcharge50Key: "tuesday_surcharge_50_hours", label: "Di" },
+  { key: "wednesday_hours", surcharge25Key: "wednesday_surcharge_25_hours", surcharge50Key: "wednesday_surcharge_50_hours", label: "Mi" },
+  { key: "thursday_hours", surcharge25Key: "thursday_surcharge_25_hours", surcharge50Key: "thursday_surcharge_50_hours", label: "Do" },
+  { key: "friday_hours", surcharge25Key: "friday_surcharge_25_hours", surcharge50Key: "friday_surcharge_50_hours", label: "Fr" },
+  { key: "saturday_hours", surcharge25Key: "saturday_surcharge_25_hours", surcharge50Key: "saturday_surcharge_50_hours", label: "Sa" },
+  { key: "sunday_hours", surcharge25Key: "sunday_surcharge_25_hours", surcharge50Key: "sunday_surcharge_50_hours", label: "So" },
 ] as const;
 type ExtraWorkWeekdayKey = (typeof EXTRA_WORK_WEEK_DAYS)[number]["key"];
 const EXTRA_WORK_HIDDEN_SURCHARGE_KEYS = [
@@ -2052,6 +2053,12 @@ function ExtraWorkEntryPage({
     () => getExtraWorkHoursFingerprint(form.worker_rows) !== savedHoursFingerprint,
     [form.worker_rows, savedHoursFingerprint],
   );
+  const hasInvalidDailyHours = useMemo(
+    () => form.worker_rows.some((row) => (
+      EXTRA_WORK_WEEK_DAYS.some((day) => getExtraWorkRowDailyHoursError(row, day) !== null)
+    )),
+    [form.worker_rows],
+  );
 
   function updateField(key: keyof Omit<ExtraWorkEntryFormState, "worker_rows">, value: string): void {
     setForm((current) => ({ ...current, [key]: value }));
@@ -2127,6 +2134,10 @@ function ExtraWorkEntryPage({
       return;
     }
     setError(null);
+    if (hasInvalidDailyHours) {
+      setError("Bitte ungültige Tagesstunden korrigieren.");
+      return;
+    }
     const component = form.component.trim();
     const floor = form.floor.trim();
     const workerRows = form.worker_rows
@@ -2226,71 +2237,71 @@ function ExtraWorkEntryPage({
               <h2>Ort / Position</h2>
             </div>
             <div className="mobile-extra-work-location-grid">
-            <label className="mobile-extra-work-location-field">
-              <span className="mobile-extra-work-location-icon"><Building2 aria-hidden="true" size={20} /></span>
-              <span className="mobile-extra-work-location-content">
-                <span>Bauteil</span>
-                <input
-                  value={form.component}
-                  onChange={(event) => updateField("component", event.target.value)}
-                  placeholder="z. B. Halle A"
-                  disabled={!canEdit}
-                  required
-                />
-              </span>
-            </label>
-            <label className="mobile-extra-work-location-field">
-              <span className="mobile-extra-work-location-icon"><Layers3 aria-hidden="true" size={20} /></span>
-              <span className="mobile-extra-work-location-content">
-                <span>Etage</span>
-                <input
-                  value={form.floor}
-                  onChange={(event) => updateField("floor", event.target.value)}
-                  placeholder="z. B. EG"
-                  disabled={!canEdit}
-                  required
-                />
-              </span>
-            </label>
-            <label className="mobile-extra-work-location-field">
-              <span className="mobile-extra-work-location-icon"><DoorOpen aria-hidden="true" size={20} /></span>
-              <span className="mobile-extra-work-location-content">
-                <span>Raum Nr.</span>
-                <input
-                  value={form.room_number}
-                  onChange={(event) => updateField("room_number", event.target.value)}
-                  placeholder="z. B. A-B-5-5.1"
-                  disabled={!canEdit}
-                />
-              </span>
-            </label>
-            <label className="mobile-extra-work-location-field">
-              <span className="mobile-extra-work-location-icon"><Grid2X2 aria-hidden="true" size={20} /></span>
-              <span className="mobile-extra-work-location-content">
-                <span>Achse</span>
-                <input
-                  value={form.axis}
-                  onChange={(event) => updateField("axis", event.target.value)}
-                  placeholder="z. B. 1-2 / A-B"
-                  disabled={!canEdit}
-                />
-              </span>
-            </label>
-            {isApproval ? (
-              <label className="mobile-extra-work-location-field is-wide">
-                <span className="mobile-extra-work-location-icon"><ClipboardList aria-hidden="true" size={20} /></span>
-                <span className="mobile-extra-work-location-content">
-                  <span>Stundenvorgabe / geschätzt</span>
+              <label className="mobile-extra-work-location-control">
+                <span className="mobile-extra-work-location-label">Bauteil</span>
+                <span className="mobile-extra-work-location-input">
+                  <span className="mobile-extra-work-location-icon"><Building2 aria-hidden="true" size={18} /></span>
                   <input
-                    inputMode="decimal"
-                    value={form.estimated_hours}
-                    onChange={(event) => updateField("estimated_hours", event.target.value)}
-                    placeholder="z. B. 12,5"
+                    value={form.component}
+                    onChange={(event) => updateField("component", event.target.value)}
+                    placeholder="z. B. Halle A"
+                    disabled={!canEdit}
+                    required
+                  />
+                </span>
+              </label>
+              <label className="mobile-extra-work-location-control">
+                <span className="mobile-extra-work-location-label">Etage</span>
+                <span className="mobile-extra-work-location-input">
+                  <span className="mobile-extra-work-location-icon"><Layers3 aria-hidden="true" size={18} /></span>
+                  <input
+                    value={form.floor}
+                    onChange={(event) => updateField("floor", event.target.value)}
+                    placeholder="z. B. EG"
+                    disabled={!canEdit}
+                    required
+                  />
+                </span>
+              </label>
+              <label className="mobile-extra-work-location-control">
+                <span className="mobile-extra-work-location-label">Raum Nr.</span>
+                <span className="mobile-extra-work-location-input">
+                  <span className="mobile-extra-work-location-icon"><DoorOpen aria-hidden="true" size={18} /></span>
+                  <input
+                    value={form.room_number}
+                    onChange={(event) => updateField("room_number", event.target.value)}
+                    placeholder="z. B. A-B-5-5.1"
                     disabled={!canEdit}
                   />
                 </span>
               </label>
-            ) : null}
+              <label className="mobile-extra-work-location-control">
+                <span className="mobile-extra-work-location-label">Achse</span>
+                <span className="mobile-extra-work-location-input">
+                  <span className="mobile-extra-work-location-icon"><Grid2X2 aria-hidden="true" size={18} /></span>
+                  <input
+                    value={form.axis}
+                    onChange={(event) => updateField("axis", event.target.value)}
+                    placeholder="z. B. 1-2 / A-B"
+                    disabled={!canEdit}
+                  />
+                </span>
+              </label>
+              {isApproval ? (
+                <label className="mobile-extra-work-location-control is-wide">
+                  <span className="mobile-extra-work-location-label">Stundenvorgabe / geschätzt</span>
+                  <span className="mobile-extra-work-location-input">
+                    <span className="mobile-extra-work-location-icon"><ClipboardList aria-hidden="true" size={18} /></span>
+                    <input
+                      inputMode="decimal"
+                      value={form.estimated_hours}
+                      onChange={(event) => updateField("estimated_hours", event.target.value)}
+                      placeholder="z. B. 12,5"
+                      disabled={!canEdit}
+                    />
+                  </span>
+                </label>
+              ) : null}
             </div>
           </section>
 
@@ -2332,21 +2343,30 @@ function ExtraWorkEntryPage({
                     </label>
                   </div>
                   <div className="mobile-extra-work-week-grid">
-                    {EXTRA_WORK_WEEK_DAYS.map((day) => (
-                      <label key={day.key}>
-                        <span>{day.label}</span>
-                        <span className="mobile-extra-work-hours-input">
-                          <input
-                            inputMode="decimal"
-                            value={row[day.key]}
-                            onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
-                            placeholder="0,00"
-                            disabled={!canEdit}
-                          />
-                          <span aria-hidden="true">h</span>
-                        </span>
-                      </label>
-                    ))}
+                    {EXTRA_WORK_WEEK_DAYS.map((day) => {
+                      const validationError = getExtraWorkRowDailyHoursError(row, day);
+                      const errorId = `extra-work-hours-error-${row.id}-${day.key}`;
+                      return (
+                        <label className={validationError ? "is-invalid" : ""} key={day.key}>
+                          <span>{day.label}</span>
+                          <span className="mobile-extra-work-hours-input">
+                            <input
+                              inputMode="decimal"
+                              value={row[day.key]}
+                              onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
+                              placeholder="0,00"
+                              disabled={!canEdit}
+                              aria-invalid={Boolean(validationError)}
+                              aria-describedby={validationError ? errorId : undefined}
+                            />
+                            <span aria-hidden="true">h</span>
+                          </span>
+                          {validationError ? (
+                            <small className="mobile-extra-work-hours-error" id={errorId}>{validationError}</small>
+                          ) : null}
+                        </label>
+                      );
+                    })}
                   </div>
                   <div className="mobile-extra-work-worker-footer">
                     <p className="mobile-extra-work-worker-total">Summe: <strong>{formatExtraWorkHours(calculateExtraWorkWorkerTotal(row))} h</strong></p>
@@ -2405,7 +2425,7 @@ function ExtraWorkEntryPage({
           ) : null}
 
           <div className="mobile-form-actions">
-            <button className="primary-action" type="submit" disabled={isSaving || !canEdit}>
+            <button className="primary-action" type="submit" disabled={isSaving || !canEdit || hasInvalidDailyHours}>
               {isSaving ? "Speichert..." : "Speichern"}
             </button>
           </div>
@@ -7927,15 +7947,6 @@ function cleanOptionalFormText(value: string): string | null {
   return cleaned || null;
 }
 
-function parseExtraWorkHoursInput(value: string): number {
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) {
-    return 0;
-  }
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
 function parseNullableExtraWorkHoursInput(value: string): number | null {
   const normalized = value.trim().replace(",", ".");
   if (!normalized) {
@@ -7956,17 +7967,6 @@ function formatExtraWorkInputValue(value: string | number | null | undefined): s
   return String(numeric).replace(".", ",");
 }
 
-function formatExtraWorkHours(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === "") {
-    return "-";
-  }
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return "-";
-  }
-  return new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
-}
-
 function calculateExtraWorkWorkerTotal(row: ExtraWorkWorkerHoursFormRow): number {
   const normalHours = EXTRA_WORK_WEEK_DAYS.reduce(
     (sum, day) => sum + parseExtraWorkHoursInput(row[day.key]),
@@ -7977,6 +7977,17 @@ function calculateExtraWorkWorkerTotal(row: ExtraWorkWorkerHoursFormRow): number
     0,
   );
   return normalHours + hiddenSurchargeHours;
+}
+
+function getExtraWorkRowDailyHoursError(
+  row: ExtraWorkWorkerHoursFormRow,
+  day: (typeof EXTRA_WORK_WEEK_DAYS)[number],
+): string | null {
+  return getExtraWorkDailyHoursTotalError([
+    row[day.key],
+    row[day.surcharge25Key],
+    row[day.surcharge50Key],
+  ]);
 }
 
 function getExtraWorkHoursFingerprint(rows: ExtraWorkWorkerHoursFormRow[]): string {

@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
+from pydantic import ValidationError
 from pypdf import PdfReader
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -61,6 +62,52 @@ def sample_photo_bytes() -> bytes:
     buffer = BytesIO()
     Image.new("RGB", (48, 32), color=(36, 76, 128)).save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+@pytest.mark.parametrize("daily_hours", [0, 0.25, 1, 8, 12.5, 24])
+def test_extra_work_daily_hours_accept_values_up_to_24(daily_hours):
+    row = ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=daily_hours)
+
+    assert row.monday_hours == daily_hours
+
+
+@pytest.mark.parametrize(
+    ("daily_hours", "message"),
+    [
+        (24.01, "Pro Kalendertag sind maximal 24 Stunden zulässig"),
+        (55, "Pro Kalendertag sind maximal 24 Stunden zulässig"),
+        (-1, "Stunden dürfen nicht negativ sein"),
+    ],
+)
+def test_extra_work_daily_hours_reject_values_outside_zero_to_24(daily_hours, message):
+    with pytest.raises(ValidationError, match=message):
+        ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=daily_hours)
+
+
+def test_extra_work_daily_limit_does_not_cap_week_or_cross_worker_totals():
+    payload = ExtraWorkTicketEntryPayload(
+        component="BT A",
+        floor="EG",
+        worker_rows=[
+            ExtraWorkWorkerHours(
+                worker_name="Monteur A",
+                monday_hours=20,
+                tuesday_hours=20,
+                wednesday_hours=20,
+            ),
+            ExtraWorkWorkerHours(worker_name="Monteur B", monday_hours=20),
+        ],
+    )
+
+    assert sum(
+        value or 0
+        for value in (
+            payload.worker_rows[0].monday_hours,
+            payload.worker_rows[0].tuesday_hours,
+            payload.worker_rows[0].wednesday_hours,
+        )
+    ) == 60
+    assert payload.worker_rows[1].monday_hours == 20
 
 
 def test_mobile_assignment_email_recipients_use_customer_suggestions_and_persist_selection():
@@ -1823,6 +1870,69 @@ def test_mobile_extra_work_details_endpoint_rejects_invalid_weeks_and_customer_s
         assert "Kundenunterschrift" in locked_response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_mobile_extra_work_entry_api_rejects_55_hours_but_keeps_legacy_value_readable():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 8, 17),
+        end_date=date(2026, 8, 21),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(
+        id=7,
+        person_id=person.id,
+        role="monteur",
+        is_active=True,
+        must_change_password=False,
+    )
+    ticket = ExtraWorkService(db).create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+    legacy_entry = ExtraWorkTicketEntry(
+        ticket_id=ticket.id,
+        site_id=site.id,
+        component="BT A",
+        floor="EG",
+        worker_rows=[{"worker_name": "Altbestand", "monday_hours": 55}],
+        created_by_user_id=current_user.id,
+    )
+    db.add(legacy_entry)
+    db.commit()
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_app_user] = lambda: current_user
+    endpoint = f"/api/me/assignments/{assignment.id}/extra-work-tickets/{ticket.id}/entry"
+    try:
+        loaded_response = TestClient(app).get(endpoint)
+        rejected_response = TestClient(app).put(
+            endpoint,
+            json={
+                "component": "BT A",
+                "floor": "EG",
+                "worker_rows": [{"worker_name": "Altbestand", "monday_hours": 55}],
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert loaded_response.status_code == 200
+    assert loaded_response.json()["worker_rows"][0]["monday_hours"] == 55
+    assert rejected_response.status_code == 422
+    assert "Pro Kalendertag sind maximal 24 Stunden zulässig" in str(rejected_response.json())
+    db.refresh(legacy_entry)
+    assert legacy_entry.worker_rows[0]["monday_hours"] == 55
 
 
 def test_mobile_extra_work_customer_signature_rejects_empty_signature():
