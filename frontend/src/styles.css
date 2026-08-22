@@ -28600,6 +28600,7 @@ body.supplementary-order-document-open .mobile-appshell-actions {
 
 .supplementary-order-paper-field input,
 .supplementary-order-paper-field textarea {
+  display: block;
   box-sizing: border-box;
   width: 100%;
   height: 100%;

@@ -89,3 +89,7 @@ test("PDF canvas and HTML overlay resize synchronously at every document zoom", 
   assert.match(styles, /\.supplementary-order-pdf-background canvas \{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
   assert.match(styles, /\.supplementary-order-pdf-background,\s*\.supplementary-order-overlay \{[^}]*position:\s*absolute;[^}]*inset:\s*0;/s);
 });
+
+test("paper inputs use block layout so text baselines cannot move their boxes at small zooms", () => {
+  assert.match(styles, /\.supplementary-order-paper-field input,\s*\.supplementary-order-paper-field textarea \{[^}]*display:\s*block;[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+});
