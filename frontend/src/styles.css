@@ -25774,10 +25774,10 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-entry-page {
+  position: relative;
   min-width: 0;
   padding-bottom: calc(
     92px
-    + var(--mobile-extra-work-keyboard-offset, 0px)
     + env(safe-area-inset-bottom, 0px)
   );
   scroll-padding-bottom: calc(
@@ -25785,6 +25785,16 @@ body.mobile-modal-scroll-locked {
     + var(--mobile-extra-work-keyboard-offset, 0px)
     + env(safe-area-inset-bottom, 0px)
   );
+}
+
+.mobile-extra-work-entry-page::after {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 1px;
+  height: var(--mobile-extra-work-keyboard-offset, 0px);
+  content: "";
+  pointer-events: none;
 }
 
 .mobile-extra-work-sticky-nav {
@@ -26158,6 +26168,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-text-card textarea {
+  height: 76px;
   min-height: 76px;
   resize: vertical;
 }
@@ -26505,6 +26516,12 @@ body.mobile-modal-scroll-locked {
     padding-left: 4px;
     font-size: 0.78rem;
   }
+}
+
+.mobile-extra-work-entry-page .mobile-extra-work-form input,
+.mobile-extra-work-entry-page .mobile-extra-work-form textarea,
+.mobile-extra-work-entry-page .mobile-extra-work-form select {
+  font-size: 1rem;
 }
 
 .mobile-customer-signature-overlay {

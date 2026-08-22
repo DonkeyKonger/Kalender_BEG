@@ -4,11 +4,12 @@ import test from "node:test";
 
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../src/utils/dateRange.ts";
 
-const [pageSource, apiSource, typeSource, styles] = await Promise.all([
+const [pageSource, apiSource, typeSource, styles, indexHtml] = await Promise.all([
   readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/types/site.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+  readFile(new URL("../index.html", import.meta.url), "utf8"),
 ]);
 
 test("ISO week helpers handle year boundaries and years without week 53", () => {
@@ -176,13 +177,27 @@ test("save remains fixed above safe areas and visual keyboards", () => {
     pageSource.indexOf("function ExtraWorkEntryPage"),
     pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
   );
-  assert.match(pageSource, /function useVisualViewportBottomOffset/);
-  assert.match(pageSource, /window\.innerHeight - visualViewport\.height - visualViewport\.offsetTop/);
+  assert.match(entrySource, /window\.innerHeight - visualViewport\.height - visualViewport\.offsetTop/);
+  assert.match(entrySource, /style\.setProperty\(\s*"--mobile-extra-work-keyboard-offset"/);
   assert.match(entrySource, /form="mobile-extra-work-entry-form"/);
   assert.match(entrySource, /await api\.saveMobileExtraWorkTicketEntry[\s\S]*await onSaved\(\)/);
   assert.match(pageSource, /onSaved=\{async \(\) => \{[\s\S]*await api\.mobileExtraWorkTicket[\s\S]*setIsEditingEntry\(false\)/);
   assert.match(entrySource, /catch \(requestError\) \{[\s\S]*setError\(readApiError/);
   assert.match(styles, /\.mobile-extra-work-save-dock \{[^}]*position:\s*fixed;[^}]*env\(safe-area-inset-right[^}]*env\(safe-area-inset-left/s);
-  assert.match(styles, /\.mobile-extra-work-entry-page \{[^}]*padding-bottom:\s*calc\([\s\S]*--mobile-extra-work-keyboard-offset/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \{[^}]*padding-bottom:\s*calc\(\s*92px\s*\+ env\(safe-area-inset-bottom/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page::after \{[^}]*position:\s*absolute;[^}]*height:\s*var\(--mobile-extra-work-keyboard-offset/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-form input,[\s\S]*font-size:\s*1rem;/s);
   assert.match(entrySource, /ensureActiveInputVisible/);
+  assert.match(entrySource, /window\.scrollBy\(\{ top: targetRect\.bottom - safeBottom, behavior: "auto" \}\)/);
+  assert.doesNotMatch(entrySource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+  assert.doesNotMatch(entrySource, /setBottomOffset/);
+});
+
+test("mobile extra-work inputs avoid iOS focus zoom without locking viewport accessibility", () => {
+  assert.match(indexHtml, /name="viewport" content="width=device-width, initial-scale=1\.0"/);
+  assert.doesNotMatch(indexHtml, /user-scalable=no|maximum-scale=1/);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-form input,[\s\S]*\.mobile-extra-work-entry-page \.mobile-extra-work-form textarea,[\s\S]*font-size:\s*1rem;/s);
+  assert.match(styles, /\.mobile-extra-work-text-card textarea \{[^}]*height:\s*76px;[^}]*min-height:\s*76px;/s);
+  assert.match(styles, /\.mobile-measurement-form \.mobile-extra-work-location-input:focus-within \{[^}]*border-color:[^}]*box-shadow:/s);
+  assert.doesNotMatch(styles, /\.mobile-measurement-form \.mobile-extra-work-location-input:focus-within \{[^}]*transform:/s);
 });

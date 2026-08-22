@@ -36,7 +36,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -88,39 +88,6 @@ function useMediaQuery(query: string): boolean {
   }, [query]);
 
   return matches;
-}
-
-function useVisualViewportBottomOffset(): number {
-  const [bottomOffset, setBottomOffset] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    const visualViewport = window.visualViewport;
-    let animationFrame = 0;
-    const syncOffset = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        const nextOffset = visualViewport
-          ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop)
-          : 0;
-        setBottomOffset(Math.round(nextOffset));
-      });
-    };
-    syncOffset();
-    visualViewport?.addEventListener("resize", syncOffset);
-    visualViewport?.addEventListener("scroll", syncOffset);
-    window.addEventListener("resize", syncOffset);
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      visualViewport?.removeEventListener("resize", syncOffset);
-      visualViewport?.removeEventListener("scroll", syncOffset);
-      window.removeEventListener("resize", syncOffset);
-    };
-  }, []);
-
-  return bottomOffset;
 }
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools" | "photos";
@@ -2067,10 +2034,7 @@ function ExtraWorkEntryPage({
   const saveDockRef = useRef<HTMLDivElement>(null);
   const materialQuickInputRef = useRef<HTMLInputElement>(null);
   const focusScrollTimeoutRef = useRef<number | null>(null);
-  const visualViewportBottomOffset = useVisualViewportBottomOffset();
-  const pageStyle = {
-    "--mobile-extra-work-keyboard-offset": `${visualViewportBottomOffset}px`,
-  } as CSSProperties;
+  const focusScrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -2107,7 +2071,10 @@ function ExtraWorkEntryPage({
   }, [selectedWeek.isoYear]);
 
   const ensureActiveInputVisible = useCallback((target: HTMLElement) => {
-    window.requestAnimationFrame(() => {
+    if (focusScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusScrollFrameRef.current);
+    }
+    focusScrollFrameRef.current = window.requestAnimationFrame(() => {
       const visualViewport = window.visualViewport;
       const visibleTop = visualViewport?.offsetTop ?? 0;
       const visibleBottom = visibleTop + (visualViewport?.height ?? window.innerHeight);
@@ -2116,26 +2083,51 @@ function ExtraWorkEntryPage({
       const safeTop = visibleTop + 58;
       const safeBottom = Math.min(visibleBottom, dockTop) - 12;
       if (targetRect.bottom > safeBottom) {
-        window.scrollBy({ top: targetRect.bottom - safeBottom, behavior: "smooth" });
+        window.scrollBy({ top: targetRect.bottom - safeBottom, behavior: "auto" });
       } else if (targetRect.top < safeTop) {
-        window.scrollBy({ top: targetRect.top - safeTop, behavior: "smooth" });
+        window.scrollBy({ top: targetRect.top - safeTop, behavior: "auto" });
       }
+      focusScrollFrameRef.current = null;
     });
   }, []);
 
   useEffect(() => {
-    if (visualViewportBottomOffset <= 0) {
-      return;
-    }
-    const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement && pageRef.current?.contains(activeElement)) {
-      ensureActiveInputVisible(activeElement);
-    }
-  }, [ensureActiveInputVisible, visualViewportBottomOffset]);
+    const visualViewport = window.visualViewport;
+    let viewportFrame = 0;
+    const syncViewport = () => {
+      window.cancelAnimationFrame(viewportFrame);
+      viewportFrame = window.requestAnimationFrame(() => {
+        const nextOffset = visualViewport
+          ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop)
+          : 0;
+        pageRef.current?.style.setProperty(
+          "--mobile-extra-work-keyboard-offset",
+          `${Math.round(nextOffset)}px`,
+        );
+        const activeElement = document.activeElement;
+        if (nextOffset > 0 && activeElement instanceof HTMLElement && pageRef.current?.contains(activeElement)) {
+          ensureActiveInputVisible(activeElement);
+        }
+      });
+    };
+    syncViewport();
+    visualViewport?.addEventListener("resize", syncViewport);
+    visualViewport?.addEventListener("scroll", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      window.cancelAnimationFrame(viewportFrame);
+      visualViewport?.removeEventListener("resize", syncViewport);
+      visualViewport?.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, [ensureActiveInputVisible]);
 
   useEffect(() => () => {
     if (focusScrollTimeoutRef.current !== null) {
       window.clearTimeout(focusScrollTimeoutRef.current);
+    }
+    if (focusScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusScrollFrameRef.current);
     }
   }, []);
 
@@ -2228,7 +2220,9 @@ function ExtraWorkEntryPage({
 
   function focusMaterialQuickInput(): void {
     materialQuickInputRef.current?.focus({ preventScroll: true });
-    materialQuickInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (materialQuickInputRef.current) {
+      ensureActiveInputVisible(materialQuickInputRef.current);
+    }
   }
 
   function handleFormFocus(event: ReactFocusEvent<HTMLFormElement>): void {
@@ -2427,7 +2421,6 @@ function ExtraWorkEntryPage({
     <div
       ref={pageRef}
       className="mobile-measurement-entry-page mobile-extra-work-entry-page"
-      style={pageStyle}
     >
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
