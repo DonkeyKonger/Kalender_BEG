@@ -29,6 +29,7 @@ from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasuremen
 from app.models.user import User
 from app.schemas.extra_work import (
     ExtraWorkCustomerSignatureCreate,
+    ExtraWorkMaterialItem,
     ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
     ExtraWorkTicketDetailsUpdate,
@@ -586,6 +587,10 @@ def test_mobile_extra_work_ticket_entry_persists_and_updates_ticket_summary():
             axis="A-4",
             remarks="Kabeltrasse angepasst",
             material_text="Kabelrinne, Befestiger",
+            material_items=[
+                ExtraWorkMaterialItem(quantity=2, unit="x", description="Stiel US 5 bis 500"),
+                ExtraWorkMaterialItem(quantity=None, unit=None, description="Kleinmaterial Befestigung"),
+            ],
             worker_rows=[
                 ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5, tuesday_hours=1.25),
                 ExtraWorkWorkerHours(worker_name="Erika Elektro", wednesday_hours=3),
@@ -606,9 +611,60 @@ def test_mobile_extra_work_ticket_entry_persists_and_updates_ticket_summary():
     assert entry.component == "BT A"
     assert loaded_entry is not None
     assert loaded_entry.material_text == "Kabelrinne, Befestiger"
+    assert loaded_entry.material_items is not None
+    assert loaded_entry.material_items[0].quantity == 2
+    assert loaded_entry.material_items[0].description == "Stiel US 5 bis 500"
+    assert loaded_entry.material_items[1].quantity is None
+    assert loaded_entry.material_items[1].description == "Kleinmaterial Befestigung"
     assert loaded_entry.total_hours == 6.75
     assert reloaded_ticket.entry_count == 1
     assert reloaded_ticket.total_hours == 6.75
+
+
+def test_older_mobile_payload_preserves_existing_structured_material_items():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(assignment_id=assignment.id, current_user=current_user)
+    entry = ExtraWorkTicketEntry(
+        ticket_id=ticket.id,
+        site_id=site.id,
+        component="BT A",
+        floor="EG",
+        material_text="Alttext bleibt",
+        material_items=[{"quantity": 10, "unit": "m", "description": "Kabelrinne"}],
+        worker_rows=[{"worker_name": "Max Monteur", "monday_hours": 1}],
+    )
+    db.add(entry)
+    db.commit()
+
+    service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="BT A",
+            floor="EG",
+            material_text="Alttext bleibt",
+            worker_rows=[ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2)],
+        ),
+    )
+
+    db.refresh(entry)
+    assert entry.material_text == "Alttext bleibt"
+    assert entry.material_items == [{"quantity": 10, "unit": "m", "description": "Kabelrinne"}]
 
 
 def test_mobile_extra_work_approval_entry_accepts_estimated_hours():

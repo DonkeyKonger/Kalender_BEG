@@ -504,8 +504,15 @@ export type MobileExtraWorkTicketEntryPayload = {
   axis?: string | null;
   remarks?: string | null;
   material_text?: string | null;
+  material_items?: MobileExtraWorkMaterialItem[] | null;
   estimated_hours?: number | null;
   worker_rows: MobileExtraWorkWorkerHours[];
+};
+
+export type MobileExtraWorkMaterialItem = {
+  quantity: number | null;
+  unit: string | null;
+  description: string;
 };
 
 export type MobileExtraWorkTicketEntry = MobileExtraWorkTicketEntryPayload & {

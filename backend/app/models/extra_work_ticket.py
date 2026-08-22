@@ -137,6 +137,7 @@ class ExtraWorkTicketEntry(TimestampMixin, Base):
     axis: Mapped[str | None] = mapped_column(String(80))
     remarks: Mapped[str | None] = mapped_column(Text)
     material_text: Mapped[str | None] = mapped_column(Text)
+    material_items: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     estimated_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     worker_rows: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     created_by_user_id: Mapped[int | None] = mapped_column(

@@ -281,6 +281,10 @@ class ExtraWorkService:
                 "estimated_hours": payload.entry.estimated_hours,
                 "worker_rows": worker_rows,
             }
+            if payload.entry.material_items is not None:
+                values["material_items"] = [
+                    item.model_dump() for item in payload.entry.material_items
+                ]
             if entry is None:
                 entry = ExtraWorkTicketEntry(
                     ticket_id=ticket.id,
@@ -535,6 +539,10 @@ class ExtraWorkService:
             "estimated_hours": estimated_hours,
             "worker_rows": worker_rows,
         }
+        if payload.material_items is not None:
+            values["material_items"] = [
+                item.model_dump() for item in payload.material_items
+            ]
         if entry is None:
             entry = ExtraWorkTicketEntry(
                 ticket_id=ticket.id,

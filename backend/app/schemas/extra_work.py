@@ -161,6 +161,23 @@ class ExtraWorkWorkerHoursRead(ExtraWorkWorkerHoursBase):
     """Read model keeps legacy values visible until a user explicitly corrects them."""
 
 
+class ExtraWorkMaterialItem(BaseModel):
+    quantity: float | None = Field(default=None, ge=0, le=1_000_000)
+    unit: str | None = Field(default=None, max_length=16)
+    description: str = Field(min_length=1, max_length=500)
+
+    @field_validator("unit", mode="before")
+    @classmethod
+    def clean_unit(cls, value: str | None) -> str | None:
+        cleaned = value.strip() if value else ""
+        return cleaned or None
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def clean_description(cls, value: str) -> str:
+        return value.strip()
+
+
 class ExtraWorkTicketEntryPayload(BaseModel):
     component: str = Field(min_length=1, max_length=160)
     floor: str = Field(min_length=1, max_length=120)
@@ -168,6 +185,7 @@ class ExtraWorkTicketEntryPayload(BaseModel):
     axis: str | None = Field(default=None, max_length=80)
     remarks: str | None = Field(default=None, max_length=4000)
     material_text: str | None = Field(default=None, max_length=4000)
+    material_items: list[ExtraWorkMaterialItem] | None = Field(default=None, max_length=100)
     estimated_hours: float | None = Field(default=None, ge=0, le=10000)
     worker_rows: list[ExtraWorkWorkerHours] = Field(min_length=1, max_length=20)
 
@@ -185,6 +203,7 @@ class ExtraWorkTicketDocumentEntryUpdate(BaseModel):
     axis: str | None = Field(default=None, max_length=80)
     remarks: str | None = Field(default=None, max_length=4000)
     material_text: str | None = Field(default=None, max_length=4000)
+    material_items: list[ExtraWorkMaterialItem] | None = Field(default=None, max_length=100)
     estimated_hours: float | None = Field(default=None, ge=0, le=10000)
     worker_rows: list[ExtraWorkWorkerHours] = Field(default_factory=list, max_length=20)
 
@@ -201,6 +220,7 @@ class ExtraWorkTicketEntryRead(BaseModel):
     axis: str | None
     remarks: str | None
     material_text: str | None
+    material_items: list[ExtraWorkMaterialItem] | None
     estimated_hours: float | None
     worker_rows: list[ExtraWorkWorkerHoursRead]
     total_hours: float

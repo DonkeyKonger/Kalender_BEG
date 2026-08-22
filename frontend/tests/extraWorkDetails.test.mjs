@@ -108,7 +108,7 @@ test("mobile performance entry keeps all direct fields in one compact card flow"
   assert.match(pageSource, /placeholder="z\. B\. A-B-5-5\.1"/);
   assert.match(pageSource, /placeholder="z\. B\. 1-2 \/ A-B"/);
   assert.match(pageSource, /placeholder="z\. B\. Beschreibung der Arbeiten, Besonderheiten \.\.\."/);
-  assert.match(pageSource, /placeholder="z\. B\. Material, Mengen, Artikelnummern \.\.\."/);
+  assert.match(pageSource, /placeholder="z\. B\. 2x Stiel US 5 bis 500"/);
   assert.match(pageSource, /className="mobile-extra-work-location-label">Bauteil/);
   assert.match(pageSource, /className="mobile-extra-work-location-input"/);
   assert.match(styles, /\.mobile-extra-work-location-input \{[^}]*min-height:\s*48px;[^}]*border:\s*1px solid/s);
@@ -120,7 +120,7 @@ test("invalid daily hours stay visible, explain the limit and block saving", () 
   assert.match(pageSource, /aria-invalid=\{Boolean\(validationError\)\}/);
   assert.match(pageSource, /mobile-extra-work-hours-error/);
   assert.match(pageSource, /Bitte ungültige Tagesstunden korrigieren\./);
-  assert.match(pageSource, /disabled=\{isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}/);
+  assert.match(pageSource, /disabled=\{isLoading \|\| isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}/);
   assert.match(styles, /label\.is-invalid \.mobile-extra-work-hours-input input \{[^}]*border-color:\s*#c2414f/s);
 });
 
@@ -153,6 +153,36 @@ test("mobile performance entry has sticky back navigation and narrow touch-safe 
   assert.match(styles, /\.mobile-extra-work-location-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-grid \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-button \{[^}]*min-height:\s*44px;/s);
-  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-form-actions \{[^}]*position:\s*static;/s);
+  assert.match(styles, /\.mobile-extra-work-save-dock \{[^}]*position:\s*fixed;[^}]*bottom:\s*var\(--mobile-extra-work-keyboard-offset, 0px\);/s);
   assert.match(styles, /@media \(max-width: 375px\)[\s\S]*\.mobile-extra-work-week-grid/s);
+});
+
+test("material quick rows stay local, editable and backward compatible", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+  );
+  assert.match(entrySource, /parseExtraWorkMaterialInput\(materialQuickInput\)/);
+  assert.match(entrySource, /material_items: \[\.\.\.current\.material_items, \{ id: createClientRowId\(\), \.\.\.parsed \}\]/);
+  assert.match(entrySource, /startEditingMaterial\(item\)/);
+  assert.match(entrySource, /removeMaterialItem\(item\.id\)/);
+  assert.match(entrySource, /material_items: materialItems\.map/);
+  assert.match(entrySource, />Bisherige Materialangaben</);
+  assert.doesNotMatch(entrySource, /api\.[A-Za-z]+\([^\n]*materialQuickInput/);
+});
+
+test("save remains fixed above safe areas and visual keyboards", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+  );
+  assert.match(pageSource, /function useVisualViewportBottomOffset/);
+  assert.match(pageSource, /window\.innerHeight - visualViewport\.height - visualViewport\.offsetTop/);
+  assert.match(entrySource, /form="mobile-extra-work-entry-form"/);
+  assert.match(entrySource, /await api\.saveMobileExtraWorkTicketEntry[\s\S]*await onSaved\(\)/);
+  assert.match(pageSource, /onSaved=\{async \(\) => \{[\s\S]*await api\.mobileExtraWorkTicket[\s\S]*setIsEditingEntry\(false\)/);
+  assert.match(entrySource, /catch \(requestError\) \{[\s\S]*setError\(readApiError/);
+  assert.match(styles, /\.mobile-extra-work-save-dock \{[^}]*position:\s*fixed;[^}]*env\(safe-area-inset-right[^}]*env\(safe-area-inset-left/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \{[^}]*padding-bottom:\s*calc\([\s\S]*--mobile-extra-work-keyboard-offset/s);
+  assert.match(entrySource, /ensureActiveInputVisible/);
 });

@@ -253,7 +253,7 @@ test("the ruled material editor shares the final PDF typography and three-line c
   assert.equal(extraWorkPdfPointsToCqw(18), (18 / EXTRA_WORK_PDF_WIDTH) * 100);
   assert.match(
     pdfServiceSource,
-    /FIELD_RECTS\["Material"\],[\s\S]*entry\.material_text or "",[\s\S]*size=8,[\s\S]*max_lines=3,[\s\S]*line_height=18/,
+    /material_output = _format_extra_work_material\(entry\)[\s\S]*FIELD_RECTS\["Material"\],[\s\S]*material_output,[\s\S]*size=8,[\s\S]*max_lines=3,[\s\S]*line_height=18/,
   );
 });
 

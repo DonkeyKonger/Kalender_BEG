@@ -272,6 +272,7 @@ export function createExtraWorkDocumentDraft(
         axis: document.entry.axis ?? null,
         remarks: document.entry.remarks ?? null,
         material_text: document.entry.material_text ?? null,
+        material_items: document.entry.material_items ?? [],
         estimated_hours: formatExtraWorkDraftNumericValue(document.entry.estimated_hours),
         worker_rows: document.entry.worker_rows.map(formatExtraWorkWorkerRowForDraft),
       }
@@ -282,6 +283,7 @@ export function createExtraWorkDocumentDraft(
         axis: null,
         remarks: null,
         material_text: null,
+        material_items: [],
         estimated_hours: formatExtraWorkDraftNumericValue(ticket.estimated_hours),
         worker_rows: [],
       };
@@ -302,7 +304,9 @@ export function createExtraWorkDocumentDraft(
     ordered_by_company: ticket.ordered_by_company ?? options.orderedByCompanyFallback ?? null,
     billing_type: ticket.billing_type ?? "hourly",
     estimated_order_value: formatExtraWorkDraftNumericValue(ticket.estimated_order_value, { currency: true }),
-    material_required: ticket.material_required ?? Boolean(entry.material_text?.trim()),
+    material_required: ticket.material_required ?? Boolean(
+      entry.material_text?.trim() || entry.material_items?.length,
+    ),
     material_separate_attachment: ticket.material_separate_attachment ?? false,
     executed_by_lead_monteur: ticket.executed_by_lead_monteur ?? false,
     executed_by_monteur: ticket.executed_by_monteur ?? !hasExplicitExecutorSelection,

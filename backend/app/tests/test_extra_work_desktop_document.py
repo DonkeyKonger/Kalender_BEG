@@ -14,6 +14,7 @@ from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.extra_work import (
+    ExtraWorkMaterialItem,
     ExtraWorkSignaturePoint,
     ExtraWorkTicketCreate,
     ExtraWorkTicketDetailsUpdate,
@@ -441,6 +442,9 @@ def test_legacy_mobile_entry_update_preserves_desktop_surcharges_and_resets_expl
                 floor="EG",
                 remarks="Zeile eins\nZeile zwei",
                 material_text="Material eins\nMaterial zwei",
+                material_items=[
+                    ExtraWorkMaterialItem(quantity=2, unit="x", description="Stiel US 5 bis 500")
+                ],
                 estimated_hours=8.5,
                 worker_rows=[
                     ExtraWorkWorkerHours(
@@ -489,6 +493,8 @@ def test_legacy_mobile_entry_update_preserves_desktop_surcharges_and_resets_expl
     assert document.entry.total_hours == 9
     assert document.entry.remarks == "  Zeile eins\nZeile zwei  "
     assert document.entry.material_text == "  Material eins\nMaterial zwei  "
+    assert document.entry.material_items is not None
+    assert document.entry.material_items[0].description == "Stiel US 5 bis 500"
     assert document.entry.estimated_hours == 8.5
     assert document.ticket.manual_execution_start is None
     assert document.ticket.manual_execution_end is None

@@ -37,7 +37,7 @@ from app.services.project_storage_service import ProjectStorageService
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v10-optimized-photo-appendix"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v11-structured-material"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -279,6 +279,7 @@ class ExtraWorkPdfService:
                     "axis": entry.axis,
                     "remarks": entry.remarks,
                     "material_text": entry.material_text,
+                    "material_items": entry.material_items,
                     "estimated_hours": entry.estimated_hours,
                     "worker_rows": entry.worker_rows,
                     "updated_at": entry.updated_at,
@@ -511,9 +512,10 @@ class ExtraWorkPdfService:
                 size=8,
             )
 
+        material_output = _format_extra_work_material(entry)
         material_required = ticket.material_required
         if material_required is None:
-            material_required = bool(entry and entry.material_text)
+            material_required = bool(material_output)
         if material_required:
             _checkbox(commands, *CHECKBOX_CENTERS["material_yes"])
         else:
@@ -586,7 +588,7 @@ class ExtraWorkPdfService:
             _textarea(
                 commands,
                 FIELD_RECTS["Material"],
-                entry.material_text or "",
+                material_output,
                 size=8,
                 max_lines=3,
                 line_height=18,
@@ -1182,6 +1184,35 @@ def _clean_multiline_text(value: str | None) -> str:
     if value is None:
         return ""
     return str(value).replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _format_extra_work_material(entry: ExtraWorkTicketEntry | None) -> str:
+    if entry is None:
+        return ""
+    sections: list[str] = []
+    legacy_text = _clean_multiline_text(entry.material_text).strip()
+    if legacy_text:
+        sections.append(legacy_text)
+    item_lines: list[str] = []
+    for item in entry.material_items or []:
+        description = _clean_text(str(item.get("description") or ""))
+        if not description:
+            continue
+        quantity = item.get("quantity")
+        unit = _clean_text(str(item.get("unit") or ""))
+        if quantity is None:
+            item_lines.append(description)
+            continue
+        formatted_quantity = _format_decimal(quantity)
+        quantity_label = (
+            f"{formatted_quantity}x"
+            if unit.casefold() == "x"
+            else " ".join(part for part in (formatted_quantity, unit) if part)
+        )
+        item_lines.append(f"{quantity_label} {description}".strip())
+    if item_lines:
+        sections.append("\n".join(item_lines))
+    return "\n".join(sections)
 
 
 def _date_from_datetime(value: datetime | None) -> date:

@@ -43,6 +43,24 @@ def _assert_non_interactive(reader: PdfReader, content: bytes) -> None:
     assert b"/JS" not in content
 
 
+def test_structured_and_legacy_material_share_the_existing_pdf_output():
+    entry = ExtraWorkTicketEntry(
+        material_text="Legacy-Klemmen",
+        material_items=[
+            {"quantity": 2, "unit": "x", "description": "Stiel US 5 bis 500"},
+            {"quantity": 2.5, "unit": "m", "description": "Kabelrinne"},
+            {"quantity": None, "unit": None, "description": "Kleinmaterial Befestigung"},
+        ],
+    )
+
+    assert pdf_module._format_extra_work_material(entry) == (
+        "Legacy-Klemmen\n"
+        "2x Stiel US 5 bis 500\n"
+        "2,5 m Kabelrinne\n"
+        "Kleinmaterial Befestigung"
+    )
+
+
 def test_clean_master_template_is_cached_and_has_no_interactive_or_default_zero_values():
     service = ExtraWorkPdfService(db_session())
 

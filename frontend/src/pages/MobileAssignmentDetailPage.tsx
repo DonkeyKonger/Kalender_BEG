@@ -36,7 +36,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -45,13 +45,14 @@ import { MobilePhotoCaptionViewer } from "../components/MobilePhotoCaptionViewer
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
+import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity } from "../lib/extraWorkMaterial";
 import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
-import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
+import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkMaterialItem, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../utils/dateRange";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
@@ -87,6 +88,39 @@ function useMediaQuery(query: string): boolean {
   }, [query]);
 
   return matches;
+}
+
+function useVisualViewportBottomOffset(): number {
+  const [bottomOffset, setBottomOffset] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const visualViewport = window.visualViewport;
+    let animationFrame = 0;
+    const syncOffset = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const nextOffset = visualViewport
+          ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop)
+          : 0;
+        setBottomOffset(Math.round(nextOffset));
+      });
+    };
+    syncOffset();
+    visualViewport?.addEventListener("resize", syncOffset);
+    visualViewport?.addEventListener("scroll", syncOffset);
+    window.addEventListener("resize", syncOffset);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      visualViewport?.removeEventListener("resize", syncOffset);
+      visualViewport?.removeEventListener("scroll", syncOffset);
+      window.removeEventListener("resize", syncOffset);
+    };
+  }, []);
+
+  return bottomOffset;
 }
 
 type MobileDetailTab = "overview" | "folders" | "measurement" | "extra-work" | "tools" | "photos";
@@ -1951,6 +1985,17 @@ type ExtraWorkWorkerHoursFormRow = {
 } & Record<ExtraWorkWeekdayKey, string>
   & Pick<MobileExtraWorkWorkerHours, "person_id" | ExtraWorkHiddenSurchargeKey>;
 
+type ExtraWorkMaterialFormItem = MobileExtraWorkMaterialItem & {
+  id: string;
+};
+
+type ExtraWorkMaterialEditDraft = {
+  id: string;
+  quantity: string;
+  unit: string;
+  description: string;
+};
+
 type ExtraWorkEntryFormState = {
   component: string;
   floor: string;
@@ -1958,6 +2003,7 @@ type ExtraWorkEntryFormState = {
   axis: string;
   remarks: string;
   material_text: string;
+  material_items: ExtraWorkMaterialFormItem[];
   estimated_hours: string;
   worker_rows: ExtraWorkWorkerHoursFormRow[];
 };
@@ -2014,6 +2060,17 @@ function ExtraWorkEntryPage({
   const [pendingWeek, setPendingWeek] = useState<{ isoYear: number; week: number } | null>(null);
   const [isSavingWeek, setIsSavingWeek] = useState(false);
   const [weekError, setWeekError] = useState<string | null>(null);
+  const [materialQuickInput, setMaterialQuickInput] = useState("");
+  const [materialEditDraft, setMaterialEditDraft] = useState<ExtraWorkMaterialEditDraft | null>(null);
+  const [materialError, setMaterialError] = useState<string | null>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const saveDockRef = useRef<HTMLDivElement>(null);
+  const materialQuickInputRef = useRef<HTMLInputElement>(null);
+  const focusScrollTimeoutRef = useRef<number | null>(null);
+  const visualViewportBottomOffset = useVisualViewportBottomOffset();
+  const pageStyle = {
+    "--mobile-extra-work-keyboard-offset": `${visualViewportBottomOffset}px`,
+  } as CSSProperties;
 
   useEffect(() => {
     let isMounted = true;
@@ -2049,6 +2106,39 @@ function ExtraWorkEntryPage({
     setVisibleWeekYear(selectedWeek.isoYear);
   }, [selectedWeek.isoYear]);
 
+  const ensureActiveInputVisible = useCallback((target: HTMLElement) => {
+    window.requestAnimationFrame(() => {
+      const visualViewport = window.visualViewport;
+      const visibleTop = visualViewport?.offsetTop ?? 0;
+      const visibleBottom = visibleTop + (visualViewport?.height ?? window.innerHeight);
+      const dockTop = saveDockRef.current?.getBoundingClientRect().top ?? visibleBottom;
+      const targetRect = target.getBoundingClientRect();
+      const safeTop = visibleTop + 58;
+      const safeBottom = Math.min(visibleBottom, dockTop) - 12;
+      if (targetRect.bottom > safeBottom) {
+        window.scrollBy({ top: targetRect.bottom - safeBottom, behavior: "smooth" });
+      } else if (targetRect.top < safeTop) {
+        window.scrollBy({ top: targetRect.top - safeTop, behavior: "smooth" });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (visualViewportBottomOffset <= 0) {
+      return;
+    }
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && pageRef.current?.contains(activeElement)) {
+      ensureActiveInputVisible(activeElement);
+    }
+  }, [ensureActiveInputVisible, visualViewportBottomOffset]);
+
+  useEffect(() => () => {
+    if (focusScrollTimeoutRef.current !== null) {
+      window.clearTimeout(focusScrollTimeoutRef.current);
+    }
+  }, []);
+
   const hasUnsavedHours = useMemo(
     () => getExtraWorkHoursFingerprint(form.worker_rows) !== savedHoursFingerprint,
     [form.worker_rows, savedHoursFingerprint],
@@ -2060,8 +2150,135 @@ function ExtraWorkEntryPage({
     [form.worker_rows],
   );
 
-  function updateField(key: keyof Omit<ExtraWorkEntryFormState, "worker_rows">, value: string): void {
+  function updateField(
+    key: Exclude<keyof ExtraWorkEntryFormState, "worker_rows" | "material_items">,
+    value: string,
+  ): void {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function addMaterialFromQuickInput(): void {
+    const parsed = parseExtraWorkMaterialInput(materialQuickInput);
+    if (!parsed) {
+      materialQuickInputRef.current?.focus();
+      return;
+    }
+    if (form.material_items.length >= 100) {
+      setMaterialError("Maximal 100 Materialpositionen möglich.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      material_items: [...current.material_items, { id: createClientRowId(), ...parsed }],
+    }));
+    setMaterialQuickInput("");
+    setMaterialError(null);
+    window.requestAnimationFrame(() => materialQuickInputRef.current?.focus());
+  }
+
+  function startEditingMaterial(item: ExtraWorkMaterialFormItem): void {
+    setMaterialEditDraft({
+      id: item.id,
+      quantity: item.quantity === null ? "" : String(item.quantity).replace(".", ","),
+      unit: item.unit ?? "",
+      description: item.description,
+    });
+    setMaterialError(null);
+  }
+
+  function saveEditedMaterial(): void {
+    if (!materialEditDraft) {
+      return;
+    }
+    const quantity = parseExtraWorkMaterialQuantity(materialEditDraft.quantity);
+    const description = materialEditDraft.description.trim();
+    if (Number.isNaN(quantity)) {
+      setMaterialError("Bitte eine gültige, nicht negative Menge eingeben.");
+      return;
+    }
+    if (!description) {
+      setMaterialError("Bitte eine Materialbeschreibung eingeben.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      material_items: current.material_items.map((item) => (
+        item.id === materialEditDraft.id
+          ? {
+              ...item,
+              quantity,
+              unit: materialEditDraft.unit.trim() || null,
+              description,
+            }
+          : item
+      )),
+    }));
+    setMaterialEditDraft(null);
+    setMaterialError(null);
+  }
+
+  function removeMaterialItem(itemId: string): void {
+    setForm((current) => ({
+      ...current,
+      material_items: current.material_items.filter((item) => item.id !== itemId),
+    }));
+    setMaterialEditDraft((current) => current?.id === itemId ? null : current);
+    setMaterialError(null);
+  }
+
+  function focusMaterialQuickInput(): void {
+    materialQuickInputRef.current?.focus({ preventScroll: true });
+    materialQuickInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function handleFormFocus(event: ReactFocusEvent<HTMLFormElement>): void {
+    if (!(event.target instanceof HTMLElement)) {
+      return;
+    }
+    if (focusScrollTimeoutRef.current !== null) {
+      window.clearTimeout(focusScrollTimeoutRef.current);
+    }
+    const target = event.target;
+    focusScrollTimeoutRef.current = window.setTimeout(() => {
+      ensureActiveInputVisible(target);
+      focusScrollTimeoutRef.current = null;
+    }, 180);
+  }
+
+  function getMaterialItemsForSave(): ExtraWorkMaterialFormItem[] | null {
+    let items = form.material_items;
+    if (materialEditDraft) {
+      const quantity = parseExtraWorkMaterialQuantity(materialEditDraft.quantity);
+      const description = materialEditDraft.description.trim();
+      if (Number.isNaN(quantity)) {
+        setMaterialError("Bitte eine gültige, nicht negative Menge eingeben.");
+        return null;
+      }
+      if (!description) {
+        setMaterialError("Bitte eine Materialbeschreibung eingeben.");
+        return null;
+      }
+      items = items.map((item) => (
+        item.id === materialEditDraft.id
+          ? {
+              ...item,
+              quantity,
+              unit: materialEditDraft.unit.trim() || null,
+              description,
+            }
+          : item
+      ));
+    }
+    const pendingItem = parseExtraWorkMaterialInput(materialQuickInput);
+    if (pendingItem) {
+      if (items.length >= 100) {
+        setMaterialError("Maximal 100 Materialpositionen möglich.");
+        return null;
+      }
+      items = [...items, { id: createClientRowId(), ...pendingItem }];
+    }
+    setMaterialError(null);
+    return items;
   }
 
   function updateWorkerRow(rowId: string, key: "worker_name" | ExtraWorkWeekdayKey, value: string): void {
@@ -2138,6 +2355,10 @@ function ExtraWorkEntryPage({
       setError("Bitte ungültige Tagesstunden korrigieren.");
       return;
     }
+    const materialItems = getMaterialItemsForSave();
+    if (!materialItems) {
+      return;
+    }
     const component = form.component.trim();
     const floor = form.floor.trim();
     const workerRows = form.worker_rows
@@ -2184,6 +2405,11 @@ function ExtraWorkEntryPage({
         axis: cleanOptionalFormText(form.axis),
         remarks: cleanOptionalFormText(form.remarks),
         material_text: cleanOptionalFormText(form.material_text),
+        material_items: materialItems.map((item) => ({
+          quantity: item.quantity,
+          unit: item.unit,
+          description: item.description,
+        })),
         // Billing tickets do not expose this field in the compact mobile form,
         // but a desktop-entered value still has to survive a mobile edit.
         estimated_hours: parseNullableExtraWorkHoursInput(form.estimated_hours),
@@ -2198,7 +2424,11 @@ function ExtraWorkEntryPage({
   }
 
   return (
-    <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
+    <div
+      ref={pageRef}
+      className="mobile-measurement-entry-page mobile-extra-work-entry-page"
+      style={pageStyle}
+    >
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={20} />
@@ -2225,7 +2455,9 @@ function ExtraWorkEntryPage({
 
       {!isLoading ? (
         <form
+          id="mobile-extra-work-entry-form"
           className="mobile-measurement-form mobile-measurement-entry-form mobile-extra-work-form"
+          onFocusCapture={handleFormFocus}
           onSubmit={(event) => {
             event.preventDefault();
             void saveEntry();
@@ -2404,33 +2636,141 @@ function ExtraWorkEntryPage({
               />
             </label>
           </section>
-          <section className="mobile-extra-work-card mobile-extra-work-text-card">
-            <label>
-              <span className="mobile-extra-work-card-heading">
-                <Package aria-hidden="true" size={21} />
-                <span>Material</span>
-              </span>
-              <textarea
-                value={form.material_text}
-                onChange={(event) => updateField("material_text", event.target.value)}
-                placeholder="z. B. Material, Mengen, Artikelnummern ..."
+          <section className="mobile-extra-work-card mobile-extra-work-material-card">
+            <div className="mobile-extra-work-card-heading">
+              <Package aria-hidden="true" size={21} />
+              <h2>Material</h2>
+            </div>
+            <div className="mobile-extra-work-material-quick-input">
+              <input
+                ref={materialQuickInputRef}
+                value={materialQuickInput}
+                onChange={(event) => setMaterialQuickInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    addMaterialFromQuickInput();
+                  }
+                }}
+                placeholder="z. B. 2x Stiel US 5 bis 500"
+                enterKeyHint="done"
                 disabled={!canEdit}
-                rows={2}
+                maxLength={500}
               />
-            </label>
+              <button
+                type="button"
+                onClick={addMaterialFromQuickInput}
+                disabled={!canEdit || !materialQuickInput.trim()}
+                aria-label="Materialposition hinzufügen"
+              >
+                <Plus aria-hidden="true" size={20} />
+              </button>
+            </div>
+
+            {form.material_items.length > 0 ? (
+              <div className="mobile-extra-work-material-list">
+                {form.material_items.map((item) => {
+                  const quantityLabel = formatExtraWorkMaterialQuantity(item.quantity, item.unit);
+                  const isEditing = materialEditDraft?.id === item.id;
+                  return (
+                    <div className={`mobile-extra-work-material-item${quantityLabel ? "" : " has-no-quantity"}`} key={item.id}>
+                      {isEditing && materialEditDraft ? (
+                        <div className="mobile-extra-work-material-edit">
+                          <label>
+                            <span>Menge</span>
+                            <input
+                              inputMode="decimal"
+                              value={materialEditDraft.quantity}
+                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, quantity: event.target.value } : current)}
+                              placeholder="2"
+                            />
+                          </label>
+                          <label>
+                            <span>Einheit</span>
+                            <input
+                              value={materialEditDraft.unit}
+                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, unit: event.target.value } : current)}
+                              placeholder="x"
+                              maxLength={16}
+                            />
+                          </label>
+                          <label className="is-description">
+                            <span>Material</span>
+                            <input
+                              value={materialEditDraft.description}
+                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, description: event.target.value } : current)}
+                              placeholder="Materialbeschreibung"
+                              maxLength={500}
+                            />
+                          </label>
+                          <div className="mobile-extra-work-material-edit-actions">
+                            <button type="button" onClick={() => setMaterialEditDraft(null)} aria-label="Bearbeitung abbrechen">
+                              <X aria-hidden="true" size={18} />
+                            </button>
+                            <button type="button" onClick={saveEditedMaterial} aria-label="Materialposition übernehmen">
+                              <CheckCircle2 aria-hidden="true" size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {quantityLabel ? <span className="mobile-extra-work-material-quantity">{quantityLabel}</span> : null}
+                          <span className="mobile-extra-work-material-description">{item.description}</span>
+                          <div className="mobile-extra-work-material-actions">
+                            <button type="button" onClick={() => startEditingMaterial(item)} disabled={!canEdit} aria-label={`${item.description} bearbeiten`}>
+                              <Pencil aria-hidden="true" size={17} />
+                            </button>
+                            <button type="button" onClick={() => removeMaterialItem(item.id)} disabled={!canEdit} aria-label={`${item.description} löschen`}>
+                              <Trash2 aria-hidden="true" size={17} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {materialError ? <p className="mobile-extra-work-material-error">{materialError}</p> : null}
+
+            {form.material_text.trim() ? (
+              <label className="mobile-extra-work-legacy-material">
+                <span>Bisherige Materialangaben</span>
+                <textarea
+                  value={form.material_text}
+                  onChange={(event) => updateField("material_text", event.target.value)}
+                  disabled={!canEdit}
+                  rows={2}
+                />
+              </label>
+            ) : null}
+
+            {form.material_items.length > 0 ? (
+              <button className="secondary-action mobile-extra-work-add-material" type="button" onClick={focusMaterialQuickInput} disabled={!canEdit}>
+                <Plus aria-hidden="true" size={15} />
+                <span>Material hinzufügen</span>
+              </button>
+            ) : null}
           </section>
 
           {!canEdit ? (
             <p className="mobile-extra-work-entry-locked-note">Dieser Zusatzauftrag ist abgeschlossen und kann nicht mehr bearbeitet werden.</p>
           ) : null}
 
-          <div className="mobile-form-actions">
-            <button className="primary-action" type="submit" disabled={isSaving || !canEdit || hasInvalidDailyHours}>
-              {isSaving ? "Speichert..." : "Speichern"}
-            </button>
-          </div>
         </form>
       ) : null}
+
+      <div ref={saveDockRef} className="mobile-extra-work-save-dock">
+        <button
+          className="primary-action"
+          type="submit"
+          form="mobile-extra-work-entry-form"
+          disabled={isLoading || isSaving || !canEdit || hasInvalidDailyHours}
+        >
+          {isSaving ? "Speichert..." : "Speichern"}
+        </button>
+      </div>
 
       {isWeekDialogOpen ? (
         <ExtraWorkWeekPickerDialog
@@ -7794,6 +8134,7 @@ function createEmptyExtraWorkEntryForm(workerName = ""): ExtraWorkEntryFormState
     axis: "",
     remarks: "",
     material_text: "",
+    material_items: [],
     estimated_hours: "",
     worker_rows: [createEmptyExtraWorkWorkerRow(workerName)],
   };
@@ -7840,6 +8181,12 @@ function mapExtraWorkEntryToForm(
     axis: entry.axis ?? "",
     remarks: entry.remarks ?? "",
     material_text: entry.material_text ?? "",
+    material_items: (entry.material_items ?? []).map((item) => ({
+      id: createClientRowId(),
+      quantity: item.quantity ?? null,
+      unit: item.unit ?? null,
+      description: item.description,
+    })),
     estimated_hours: formatExtraWorkInputValue(entry.estimated_hours),
     worker_rows: entry.worker_rows.length > 0
       ? entry.worker_rows.map((row, index) => ({
