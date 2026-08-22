@@ -1,25 +1,33 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  Building2,
   Camera,
+  CalendarDays,
   CalendarClock,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
+  DoorOpen,
   Download,
   ExternalLink,
   FileText,
   FolderOpen,
+  Grid2X2,
   Hammer,
   Images,
+  Layers3,
   MapPin,
   Mail,
+  MessageSquare,
   Package,
   Pencil,
   Plus,
   ReceiptText,
   Search,
   Send,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -569,8 +577,10 @@ function MobileExtraWorkTab({
         <ExtraWorkEntryPage
           assignmentId={assignment.id}
           assignmentPerson={assignment.person}
+          assignmentStartDate={assignment.start_date}
           order={selectedOrder}
           onBack={() => setIsEditingEntry(false)}
+          onOrderUpdated={mergeUpdatedOrder}
           onSaved={async () => {
             const updatedOrder = await api.mobileExtraWorkTicket(assignment.id, selectedOrder.id);
             mergeUpdatedOrder(updatedOrder);
@@ -1954,19 +1964,37 @@ type ExtraWorkEntryFormState = {
 function ExtraWorkEntryPage({
   assignmentId,
   assignmentPerson,
+  assignmentStartDate,
   order,
   onBack,
+  onOrderUpdated,
   onSaved,
 }: {
   assignmentId: number;
   assignmentPerson: MobileAssignment["person"];
+  assignmentStartDate: string;
   order: MobileExtraWorkTicket;
   onBack: () => void;
+  onOrderUpdated: (order: MobileExtraWorkTicket) => void;
   onSaved: () => Promise<void>;
 }) {
   const { user } = useAuth();
   const isApproval = order.kind === "approval";
-  const kindLabel = formatMobileExtraWorkKindLabel(order.kind);
+  const automaticOrderDate = getExtraWorkAutomaticOrderDate(order.created_at);
+  const automaticWeek = useMemo(
+    () => getIsoWeekInfo(assignmentStartDate || automaticOrderDate),
+    [assignmentStartDate, automaticOrderDate],
+  );
+  const selectedWeek = useMemo(() => ({
+    isoYear: order.manual_execution_week_year ?? automaticWeek.isoYear,
+    week: order.manual_execution_week ?? automaticWeek.week,
+  }), [automaticWeek.isoYear, automaticWeek.week, order.manual_execution_week, order.manual_execution_week_year]);
+  const selectedWeekRange = useMemo(
+    () => getIsoWeekRange(selectedWeek.isoYear, selectedWeek.week),
+    [selectedWeek.isoYear, selectedWeek.week],
+  );
+  const statusBadge = getMobileExtraWorkOrderStatusBadge(order);
+  const canEdit = canEditMobileExtraWorkContent(order);
   const defaultWorkerName = useMemo(
     () => getExtraWorkDefaultWorkerName(assignmentPerson, user?.display_name || user?.username || ""),
     [assignmentPerson, user?.display_name, user?.username],
@@ -1979,6 +2007,12 @@ function ExtraWorkEntryPage({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedHoursFingerprint, setSavedHoursFingerprint] = useState("");
+  const [isWeekDialogOpen, setIsWeekDialogOpen] = useState(false);
+  const [visibleWeekYear, setVisibleWeekYear] = useState(selectedWeek.isoYear);
+  const [pendingWeek, setPendingWeek] = useState<{ isoYear: number; week: number } | null>(null);
+  const [isSavingWeek, setIsSavingWeek] = useState(false);
+  const [weekError, setWeekError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -1988,7 +2022,11 @@ function ExtraWorkEntryPage({
       try {
         const entry = await api.mobileExtraWorkTicketEntry(assignmentId, order.id);
         if (isMounted) {
-          setForm(entry ? mapExtraWorkEntryToForm(entry, defaultWorkerName, legacyWorkerNames) : createEmptyExtraWorkEntryForm(defaultWorkerName));
+          const nextForm = entry
+            ? mapExtraWorkEntryToForm(entry, defaultWorkerName, legacyWorkerNames)
+            : createEmptyExtraWorkEntryForm(defaultWorkerName);
+          setForm(nextForm);
+          setSavedHoursFingerprint(getExtraWorkHoursFingerprint(nextForm.worker_rows));
         }
       } catch (requestError) {
         if (isMounted) {
@@ -2006,9 +2044,13 @@ function ExtraWorkEntryPage({
     };
   }, [assignmentId, defaultWorkerName, legacyWorkerNames, order.id]);
 
-  const totalHours = useMemo(
-    () => form.worker_rows.reduce((sum, row) => sum + calculateExtraWorkWorkerTotal(row), 0),
-    [form.worker_rows],
+  useEffect(() => {
+    setVisibleWeekYear(selectedWeek.isoYear);
+  }, [selectedWeek.isoYear]);
+
+  const hasUnsavedHours = useMemo(
+    () => getExtraWorkHoursFingerprint(form.worker_rows) !== savedHoursFingerprint,
+    [form.worker_rows, savedHoursFingerprint],
   );
 
   function updateField(key: keyof Omit<ExtraWorkEntryFormState, "worker_rows">, value: string): void {
@@ -2040,7 +2082,50 @@ function ExtraWorkEntryPage({
     }));
   }
 
+  async function persistExecutionWeek(nextWeek: { isoYear: number; week: number }): Promise<void> {
+    if (!canEdit || isSavingWeek) {
+      return;
+    }
+    setIsSavingWeek(true);
+    setWeekError(null);
+    try {
+      const usesAutomaticWeek = nextWeek.isoYear === automaticWeek.isoYear
+        && nextWeek.week === automaticWeek.week;
+      const updatedOrder = await api.updateMobileExtraWorkTicketDetails(assignmentId, order.id, {
+        manual_order_date: order.manual_order_date,
+        manual_execution_week: usesAutomaticWeek ? null : nextWeek.week,
+        manual_execution_week_year: usesAutomaticWeek ? null : nextWeek.isoYear,
+      });
+      onOrderUpdated(updatedOrder);
+      setPendingWeek(null);
+      setIsWeekDialogOpen(false);
+    } catch (requestError) {
+      setPendingWeek(null);
+      setIsWeekDialogOpen(true);
+      setWeekError(readApiError(requestError, "Kalenderwoche konnte nicht gespeichert werden."));
+    } finally {
+      setIsSavingWeek(false);
+    }
+  }
+
+  function requestExecutionWeekChange(nextWeek: { isoYear: number; week: number }): void {
+    if (nextWeek.isoYear === selectedWeek.isoYear && nextWeek.week === selectedWeek.week) {
+      setIsWeekDialogOpen(false);
+      return;
+    }
+    if (hasUnsavedHours) {
+      setIsWeekDialogOpen(false);
+      setPendingWeek(nextWeek);
+      return;
+    }
+    void persistExecutionWeek(nextWeek);
+  }
+
   async function saveEntry(): Promise<void> {
+    if (!canEdit) {
+      setError("Dieser Zusatzauftrag kann nicht mehr bearbeitet werden.");
+      return;
+    }
     setError(null);
     const component = form.component.trim();
     const floor = form.floor.trim();
@@ -2103,17 +2188,25 @@ function ExtraWorkEntryPage({
 
   return (
     <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
-      <div className="mobile-measurement-detail-topbar">
+      <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>{kindLabel}</span>
+          <ArrowLeft aria-hidden="true" size={20} />
+          <span>Stundenzettel</span>
         </button>
-      </div>
+      </nav>
 
-      <header className="mobile-entry-head">
-        <p className="eyebrow">{kindLabel}</p>
-        <h1>{isApproval ? "Stundenfreigabe erfassen" : "Leistungen erfassen"}</h1>
-        <p>{formatMobileExtraWorkOrderTitle(order)}</p>
+      <header className="mobile-extra-work-entry-header-card">
+        <div>
+          <h1>{isApproval ? "Stundenfreigabe erfassen" : "Leistungen erfassen"}</h1>
+          <p>{formatMobileExtraWorkEntrySubtitle(order)}</p>
+        </div>
+        <div className="mobile-extra-work-entry-header-meta">
+          <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
+          <span className="mobile-extra-work-entry-date">
+            <CalendarDays aria-hidden="true" size={18} />
+            {formatGermanDateKey(order.manual_order_date ?? automaticOrderDate)}
+          </span>
+        </div>
       </header>
 
       {isLoading ? <div className="empty-panel">Eingaben werden geladen...</div> : null}
@@ -2127,101 +2220,339 @@ function ExtraWorkEntryPage({
             void saveEntry();
           }}
         >
-          <div className="mobile-measurement-form-grid">
-            <label>
-              <span>Bauteil</span>
-              <input value={form.component} onChange={(event) => updateField("component", event.target.value)} required />
+          <section className="mobile-extra-work-card mobile-extra-work-location-card">
+            <div className="mobile-extra-work-card-heading">
+              <MapPin aria-hidden="true" size={21} />
+              <h2>Ort / Position</h2>
+            </div>
+            <div className="mobile-extra-work-location-grid">
+            <label className="mobile-extra-work-location-field">
+              <span className="mobile-extra-work-location-icon"><Building2 aria-hidden="true" size={20} /></span>
+              <span className="mobile-extra-work-location-content">
+                <span>Bauteil</span>
+                <input
+                  value={form.component}
+                  onChange={(event) => updateField("component", event.target.value)}
+                  placeholder="z. B. Halle A"
+                  disabled={!canEdit}
+                  required
+                />
+              </span>
             </label>
-            <label>
-              <span>Etage</span>
-              <input value={form.floor} onChange={(event) => updateField("floor", event.target.value)} required />
+            <label className="mobile-extra-work-location-field">
+              <span className="mobile-extra-work-location-icon"><Layers3 aria-hidden="true" size={20} /></span>
+              <span className="mobile-extra-work-location-content">
+                <span>Etage</span>
+                <input
+                  value={form.floor}
+                  onChange={(event) => updateField("floor", event.target.value)}
+                  placeholder="z. B. EG"
+                  disabled={!canEdit}
+                  required
+                />
+              </span>
             </label>
-            <label>
-              <span>Raum Nr.</span>
-              <input value={form.room_number} onChange={(event) => updateField("room_number", event.target.value)} />
+            <label className="mobile-extra-work-location-field">
+              <span className="mobile-extra-work-location-icon"><DoorOpen aria-hidden="true" size={20} /></span>
+              <span className="mobile-extra-work-location-content">
+                <span>Raum Nr.</span>
+                <input
+                  value={form.room_number}
+                  onChange={(event) => updateField("room_number", event.target.value)}
+                  placeholder="z. B. A-B-5-5.1"
+                  disabled={!canEdit}
+                />
+              </span>
             </label>
-            <label>
-              <span>Achse</span>
-              <input value={form.axis} onChange={(event) => updateField("axis", event.target.value)} />
+            <label className="mobile-extra-work-location-field">
+              <span className="mobile-extra-work-location-icon"><Grid2X2 aria-hidden="true" size={20} /></span>
+              <span className="mobile-extra-work-location-content">
+                <span>Achse</span>
+                <input
+                  value={form.axis}
+                  onChange={(event) => updateField("axis", event.target.value)}
+                  placeholder="z. B. 1-2 / A-B"
+                  disabled={!canEdit}
+                />
+              </span>
             </label>
             {isApproval ? (
-              <label>
-                <span>Stundenvorgabe / geschätzt</span>
-                <input
-                  inputMode="decimal"
-                  value={form.estimated_hours}
-                  onChange={(event) => updateField("estimated_hours", event.target.value)}
-                  placeholder="z. B. 12,5"
-                />
+              <label className="mobile-extra-work-location-field is-wide">
+                <span className="mobile-extra-work-location-icon"><ClipboardList aria-hidden="true" size={20} /></span>
+                <span className="mobile-extra-work-location-content">
+                  <span>Stundenvorgabe / geschätzt</span>
+                  <input
+                    inputMode="decimal"
+                    value={form.estimated_hours}
+                    onChange={(event) => updateField("estimated_hours", event.target.value)}
+                    placeholder="z. B. 12,5"
+                    disabled={!canEdit}
+                  />
+                </span>
               </label>
             ) : null}
-          </div>
+            </div>
+          </section>
 
-          <section className="mobile-extra-work-section">
+          <section className="mobile-extra-work-card mobile-extra-work-section">
             <div className="mobile-extra-work-section-head">
-              <div>
+              <div className="mobile-extra-work-card-heading">
+                <UserRound aria-hidden="true" size={21} />
                 <h2>Monteure und Stunden</h2>
-                <p>Montag bis Sonntag</p>
               </div>
-              <strong>{formatExtraWorkHours(totalHours)} h</strong>
+              <button
+                className="mobile-extra-work-week-button"
+                type="button"
+                onClick={() => {
+                  setWeekError(null);
+                  setVisibleWeekYear(selectedWeek.isoYear);
+                  setIsWeekDialogOpen(true);
+                }}
+                disabled={!canEdit || isSavingWeek}
+                aria-label={`Kalenderwoche ändern, aktuell KW ${selectedWeek.week}`}
+              >
+                <span>KW {selectedWeek.week}</span>
+                <CalendarDays aria-hidden="true" size={20} />
+              </button>
             </div>
             <div className="mobile-extra-work-worker-list">
               {form.worker_rows.map((row, index) => (
                 <article className="mobile-extra-work-worker-card" key={row.id}>
                   <div className="mobile-extra-work-worker-head">
-                    <label>
-                      <span>Name des Monteurs</span>
+                    <label className="mobile-extra-work-worker-name">
+                      <UserRound aria-hidden="true" size={20} />
+                      <span className="visually-hidden">Name des Monteurs</span>
                       <input
                         value={row.worker_name}
                         onChange={(event) => updateWorkerRow(row.id, "worker_name", event.target.value)}
+                        placeholder="Name des Monteurs"
+                        disabled={!canEdit}
                         required
                       />
                     </label>
-                    {form.worker_rows.length > 1 ? (
-                      <button className="mobile-extra-work-remove-worker" type="button" onClick={() => removeWorkerRow(row.id)} aria-label={`Monteur ${index + 1} entfernen`}>
-                        <X aria-hidden="true" size={16} />
-                      </button>
-                    ) : null}
                   </div>
                   <div className="mobile-extra-work-week-grid">
                     {EXTRA_WORK_WEEK_DAYS.map((day) => (
                       <label key={day.key}>
                         <span>{day.label}</span>
-                        <input
-                          inputMode="decimal"
-                          value={row[day.key]}
-                          onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
-                          placeholder="0"
-                        />
+                        <span className="mobile-extra-work-hours-input">
+                          <input
+                            inputMode="decimal"
+                            value={row[day.key]}
+                            onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
+                            placeholder="0,00"
+                            disabled={!canEdit}
+                          />
+                          <span aria-hidden="true">h</span>
+                        </span>
                       </label>
                     ))}
                   </div>
-                  <p className="mobile-extra-work-worker-total">Summe: {formatExtraWorkHours(calculateExtraWorkWorkerTotal(row))} h</p>
+                  <div className="mobile-extra-work-worker-footer">
+                    <p className="mobile-extra-work-worker-total">Summe: <strong>{formatExtraWorkHours(calculateExtraWorkWorkerTotal(row))} h</strong></p>
+                    <button
+                      className="mobile-extra-work-remove-worker"
+                      type="button"
+                      onClick={() => removeWorkerRow(row.id)}
+                      disabled={!canEdit || form.worker_rows.length <= 1}
+                      aria-label={`Monteur ${index + 1} entfernen`}
+                    >
+                      <Trash2 aria-hidden="true" size={20} />
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
-            <button className="secondary-action mobile-extra-work-add-worker" type="button" onClick={addWorkerRow}>
+            <button className="secondary-action mobile-extra-work-add-worker" type="button" onClick={addWorkerRow} disabled={!canEdit}>
               <Plus aria-hidden="true" size={15} />
               <span>Monteur hinzufügen</span>
             </button>
           </section>
 
-          <label>
-            <span>Bemerkungen / ausgeführte Arbeiten</span>
-            <textarea value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} rows={4} />
-          </label>
-          <label>
-            <span>Material</span>
-            <textarea value={form.material_text} onChange={(event) => updateField("material_text", event.target.value)} rows={3} />
-          </label>
+          <section className="mobile-extra-work-card mobile-extra-work-text-card">
+            <label>
+              <span className="mobile-extra-work-card-heading">
+                <MessageSquare aria-hidden="true" size={21} />
+                <span>Bemerkungen / ausgeführte Arbeiten</span>
+              </span>
+              <textarea
+                value={form.remarks}
+                onChange={(event) => updateField("remarks", event.target.value)}
+                placeholder="z. B. Beschreibung der Arbeiten, Besonderheiten ..."
+                disabled={!canEdit}
+                rows={3}
+              />
+            </label>
+          </section>
+          <section className="mobile-extra-work-card mobile-extra-work-text-card">
+            <label>
+              <span className="mobile-extra-work-card-heading">
+                <Package aria-hidden="true" size={21} />
+                <span>Material</span>
+              </span>
+              <textarea
+                value={form.material_text}
+                onChange={(event) => updateField("material_text", event.target.value)}
+                placeholder="z. B. Material, Mengen, Artikelnummern ..."
+                disabled={!canEdit}
+                rows={2}
+              />
+            </label>
+          </section>
+
+          {!canEdit ? (
+            <p className="mobile-extra-work-entry-locked-note">Dieser Zusatzauftrag ist abgeschlossen und kann nicht mehr bearbeitet werden.</p>
+          ) : null}
 
           <div className="mobile-form-actions">
-            <button className="primary-action" type="submit" disabled={isSaving}>
+            <button className="primary-action" type="submit" disabled={isSaving || !canEdit}>
               {isSaving ? "Speichert..." : "Speichern"}
             </button>
           </div>
         </form>
       ) : null}
+
+      {isWeekDialogOpen ? (
+        <ExtraWorkWeekPickerDialog
+          selectedWeek={selectedWeek}
+          selectedWeekRange={selectedWeekRange}
+          visibleYear={visibleWeekYear}
+          isSaving={isSavingWeek}
+          error={weekError}
+          onVisibleYearChange={setVisibleWeekYear}
+          onSelect={requestExecutionWeekChange}
+          onClose={() => setIsWeekDialogOpen(false)}
+        />
+      ) : null}
+      {pendingWeek ? (
+        <ExtraWorkWeekChangeConfirmDialog
+          isSaving={isSavingWeek}
+          onCancel={() => setPendingWeek(null)}
+          onConfirm={() => void persistExecutionWeek(pendingWeek)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ExtraWorkWeekPickerDialog({
+  selectedWeek,
+  selectedWeekRange,
+  visibleYear,
+  isSaving,
+  error,
+  onVisibleYearChange,
+  onSelect,
+  onClose,
+}: {
+  selectedWeek: { isoYear: number; week: number };
+  selectedWeekRange: { start: string; end: string };
+  visibleYear: number;
+  isSaving: boolean;
+  error: string | null;
+  onVisibleYearChange: (year: number) => void;
+  onSelect: (week: { isoYear: number; week: number }) => void;
+  onClose: () => void;
+}) {
+  const isTopModal = useMobileModalStack(true);
+  const weeks = Array.from({ length: getIsoWeeksInYear(visibleYear) }, (_, index) => index + 1);
+
+  return (
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSaving ? undefined : onClose}
+    >
+      <div
+        className="mobile-extra-work-week-dialog mobile-modal-scroll-region"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-week-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mobile-extra-work-week-dialog-head">
+          <div>
+            <h2 id="mobile-extra-work-week-dialog-title">Kalenderwoche</h2>
+            <p>
+              KW {selectedWeek.week} · {formatGermanDateKey(selectedWeekRange.start)} – {formatGermanDateKey(selectedWeekRange.end)}
+            </p>
+          </div>
+          <button className="icon-button secondary" type="button" onClick={onClose} disabled={isSaving} aria-label="Schließen">
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+        <div className="mobile-extra-work-week-year-nav">
+          <button type="button" onClick={() => onVisibleYearChange(visibleYear - 1)} disabled={isSaving || visibleYear <= 1} aria-label="Vorheriges Jahr">
+            <ChevronLeft aria-hidden="true" size={20} />
+          </button>
+          <strong>{visibleYear}</strong>
+          <button type="button" onClick={() => onVisibleYearChange(visibleYear + 1)} disabled={isSaving || visibleYear >= 9999} aria-label="Nächstes Jahr">
+            <ChevronRight aria-hidden="true" size={20} />
+          </button>
+        </div>
+        <div className="mobile-extra-work-week-options" aria-label={`Kalenderwochen ${visibleYear}`}>
+          {weeks.map((week) => {
+            const isSelected = selectedWeek.isoYear === visibleYear && selectedWeek.week === week;
+            const range = getIsoWeekRange(visibleYear, week);
+            return (
+              <button
+                className={isSelected ? "is-selected" : ""}
+                type="button"
+                key={`${visibleYear}-${week}`}
+                onClick={() => onSelect({ isoYear: visibleYear, week })}
+                disabled={isSaving}
+                aria-pressed={isSelected}
+                title={`${formatGermanDateKey(range.start)} – ${formatGermanDateKey(range.end)}`}
+              >
+                KW {week}
+              </button>
+            );
+          })}
+        </div>
+        {error ? <p className="form-error">{error}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function ExtraWorkWeekChangeConfirmDialog({
+  isSaving,
+  onCancel,
+  onConfirm,
+}: {
+  isSaving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const isTopModal = useMobileModalStack(true);
+  return (
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isSaving ? undefined : onCancel}
+    >
+      <div
+        className="mobile-extra-work-week-confirm mobile-modal-scroll-region"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-week-confirm-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="mobile-extra-work-week-confirm-title">Kalenderwoche ändern?</h2>
+        <p>Bereits eingegebene, noch nicht gespeicherte Stunden beziehen sich auf die aktuelle KW.</p>
+        <div className="mobile-extra-work-week-confirm-actions">
+          <button className="secondary-action" type="button" onClick={onCancel} disabled={isSaving}>Abbrechen</button>
+          <button className="primary-action" type="button" onClick={onConfirm} disabled={isSaving}>
+            {isSaving ? "Speichert..." : "KW ändern"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -7342,6 +7673,14 @@ function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
   return `${getMobileExtraWorkOrderFixedTitle(order)} - ${getMobileExtraWorkOrderTitleSuffix(order)}`;
 }
 
+function formatMobileExtraWorkEntrySubtitle(order: MobileExtraWorkTicket): string {
+  const displayNumber = order.display_number?.trim() ?? "";
+  const suffixMatch = displayNumber.match(/(?:^|[.\s_-])(SZ[\w.-]*)$/i);
+  const sequenceLabel = suffixMatch?.[1]
+    ?? `SZ${String(order.sequence_number).padStart(2, "0")}`;
+  return `${order.kind === "approval" ? "Stundenfreigabe" : "Zusatzauftrag"} ${sequenceLabel.toUpperCase()}`;
+}
+
 function getMobileExtraWorkOrderFixedTitle(order: MobileExtraWorkTicket): string {
   return order.kind === "approval"
     ? `Stundenfreigabe ${order.sequence_number}`
@@ -7638,6 +7977,13 @@ function calculateExtraWorkWorkerTotal(row: ExtraWorkWorkerHoursFormRow): number
     0,
   );
   return normalHours + hiddenSurchargeHours;
+}
+
+function getExtraWorkHoursFingerprint(rows: ExtraWorkWorkerHoursFormRow[]): string {
+  const enteredRows = rows
+    .map((row) => EXTRA_WORK_WEEK_DAYS.map((day) => parseExtraWorkHoursInput(row[day.key])))
+    .filter((hours) => hours.some((value) => value > 0));
+  return JSON.stringify(enteredRows);
 }
 
 function calculateExtraWorkPayloadWorkerTotal(row: Record<ExtraWorkWeekdayKey, number>): number {
@@ -7972,7 +8318,7 @@ function isCustomerSignedMobileMeasurementBatch(batch: MobileMeasurementBatch): 
   return Boolean(batch.customer_signed_at || batch.customer_signature_name || batch.is_locked_for_worker);
 }
 
-function canEditExtraWorkPhotoCaption(order: MobileExtraWorkTicket): boolean {
+function canEditMobileExtraWorkContent(order: MobileExtraWorkTicket): boolean {
   const status = (order.status || "").trim().toLowerCase();
   const completedStatuses = [
     "billed",
@@ -7985,6 +8331,10 @@ function canEditExtraWorkPhotoCaption(order: MobileExtraWorkTicket): boolean {
   return !order.deleted_at
     && !order.customer_signed_at
     && !["signed", "customer_signed", ...completedStatuses].includes(status);
+}
+
+function canEditExtraWorkPhotoCaption(order: MobileExtraWorkTicket): boolean {
+  return canEditMobileExtraWorkContent(order);
 }
 
 function mobileStatusLabel(status: string): string {

@@ -97,3 +97,49 @@ test("mobile visible totals include normal, 25-percent and 50-percent hours", ()
   assert.match(pageSource, /function calculateExtraWorkWorkerTotal[\s\S]*EXTRA_WORK_WEEK_DAYS\.reduce[\s\S]*EXTRA_WORK_HIDDEN_SURCHARGE_KEYS\.reduce[\s\S]*return normalHours \+ hiddenSurchargeHours/);
   assert.match(pageSource, /calculateExtraWorkWorkerTotal\(row\)/);
 });
+
+test("mobile performance entry keeps all direct fields in one compact card flow", () => {
+  assert.match(pageSource, /className="mobile-extra-work-entry-header-card"/);
+  assert.match(pageSource, /formatMobileExtraWorkEntrySubtitle\(order\)/);
+  assert.doesNotMatch(pageSource, /<p className="eyebrow">\{kindLabel\}<\/p>[\s\S]{0,120}<h1>\{isApproval \? "Stundenfreigabe erfassen" : "Leistungen erfassen"\}<\/h1>/);
+  assert.match(pageSource, />Ort \/ Position</);
+  assert.match(pageSource, /placeholder="z\. B\. Halle A"/);
+  assert.match(pageSource, /placeholder="z\. B\. EG"/);
+  assert.match(pageSource, /placeholder="z\. B\. A-B-5-5\.1"/);
+  assert.match(pageSource, /placeholder="z\. B\. 1-2 \/ A-B"/);
+  assert.match(pageSource, /placeholder="z\. B\. Beschreibung der Arbeiten, Besonderheiten \.\.\."/);
+  assert.match(pageSource, /placeholder="z\. B\. Material, Mengen, Artikelnummern \.\.\."/);
+});
+
+test("mobile execution week persists through the existing typed details endpoint", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function OverviewPanel"),
+  );
+  assert.match(entrySource, /order\.manual_execution_week_year \?\? automaticWeek\.isoYear/);
+  assert.match(entrySource, /order\.manual_execution_week \?\? automaticWeek\.week/);
+  assert.match(entrySource, /api\.updateMobileExtraWorkTicketDetails\(assignmentId, order\.id/);
+  assert.match(entrySource, /manual_execution_week: usesAutomaticWeek \? null : nextWeek\.week/);
+  assert.match(entrySource, /manual_execution_week_year: usesAutomaticWeek \? null : nextWeek\.isoYear/);
+  assert.match(entrySource, /onOrderUpdated\(updatedOrder\)/);
+  assert.match(entrySource, /getIsoWeeksInYear\(visibleYear\)/);
+});
+
+test("changing week protects only unsaved hour input with an explicit confirmation", () => {
+  assert.match(pageSource, /getExtraWorkHoursFingerprint\(form\.worker_rows\) !== savedHoursFingerprint/);
+  assert.match(pageSource, /if \(hasUnsavedHours\) \{[\s\S]*setPendingWeek\(nextWeek\)/);
+  assert.match(pageSource, />Kalenderwoche ändern\?</);
+  assert.match(pageSource, /Bereits eingegebene, noch nicht gespeicherte Stunden beziehen sich auf die aktuelle KW\./);
+  assert.match(pageSource, />Abbrechen<\/button>/);
+  assert.match(pageSource, /"KW ändern"/);
+});
+
+test("mobile performance entry has sticky back navigation and narrow touch-safe grids", () => {
+  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<span>Stundenzettel<\/span>/);
+  assert.match(styles, /\.mobile-extra-work-sticky-nav \{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
+  assert.match(styles, /\.mobile-extra-work-location-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
+  assert.match(styles, /\.mobile-extra-work-week-grid \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s);
+  assert.match(styles, /\.mobile-extra-work-week-button \{[^}]*min-height:\s*44px;/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-form-actions \{[^}]*position:\s*static;/s);
+  assert.match(styles, /@media \(max-width: 375px\)[\s\S]*\.mobile-extra-work-week-grid/s);
+});

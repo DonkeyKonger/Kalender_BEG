@@ -25774,52 +25774,229 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-entry-page {
+  min-width: 0;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-extra-work-sticky-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  min-height: 54px;
+  border-bottom: 1px solid rgb(216 227 239 / 88%);
+  background: rgb(245 248 252 / 96%);
+  padding: max(4px, env(safe-area-inset-top, 0px)) 0 7px;
+  backdrop-filter: blur(14px);
+}
+
+.mobile-extra-work-sticky-nav .mobile-back-button {
+  min-height: 44px;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #143c6d;
+  padding: 9px 12px;
+  box-shadow: 0 5px 14px rgb(18 29 52 / 5%);
+}
+
+.mobile-extra-work-entry-header-card,
+.mobile-extra-work-card {
+  min-width: 0;
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgb(18 29 52 / 5%);
+}
+
+.mobile-extra-work-entry-header-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.mobile-extra-work-entry-header-card h1,
+.mobile-extra-work-entry-header-card p {
+  margin: 0;
+}
+
+.mobile-extra-work-entry-header-card h1 {
+  color: #111827;
+  font-size: clamp(1.35rem, 6vw, 1.72rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.mobile-extra-work-entry-header-card p {
+  margin-top: 7px;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.mobile-extra-work-entry-header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
+.mobile-extra-work-entry-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #172033;
+  font-size: 0.88rem;
+  white-space: nowrap;
 }
 
 .mobile-extra-work-form {
   gap: 12px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.mobile-extra-work-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.mobile-extra-work-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #0f468d;
+}
+
+.mobile-extra-work-card-heading h2,
+.mobile-extra-work-card-heading > span {
+  margin: 0;
+  color: inherit;
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.mobile-extra-work-location-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  min-width: 0;
+}
+
+.mobile-measurement-form .mobile-extra-work-location-field {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 82px;
+  border: 1px solid #d8e3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.mobile-measurement-form .mobile-extra-work-location-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.mobile-extra-work-location-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: #f2f6fc;
+  color: #112a52;
+}
+
+.mobile-extra-work-location-content {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.mobile-extra-work-location-content > span {
+  color: #172033;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.mobile-measurement-form .mobile-extra-work-location-content input {
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: #172033;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  outline: none;
+}
+
+.mobile-measurement-form .mobile-extra-work-location-content input::placeholder {
+  color: #8da0bc;
+  opacity: 1;
+}
+
+.mobile-measurement-form .mobile-extra-work-location-field:focus-within {
+  border-color: #8eb4e3;
+  box-shadow: 0 0 0 3px rgb(92 143 204 / 12%);
 }
 
 .mobile-extra-work-section {
-  display: grid;
-  gap: 10px;
-  border: 1px solid #d8e3ef;
-  border-radius: 8px;
-  background: #f8fbff;
-  padding: 10px;
+  background: #ffffff;
 }
 
 .mobile-extra-work-section-head {
   display: flex;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.mobile-extra-work-section-head h2,
-.mobile-extra-work-section-head p,
 .mobile-extra-work-worker-total {
   margin: 0;
 }
 
-.mobile-extra-work-section-head h2 {
-  color: #111827;
-  font-size: 0.96rem;
-  letter-spacing: 0;
-}
-
-.mobile-extra-work-section-head p,
 .mobile-extra-work-worker-total {
-  color: #65738a;
-  font-size: 0.76rem;
-  font-weight: 800;
+  color: #143c6d;
+  font-size: 0.82rem;
 }
 
-.mobile-extra-work-section-head strong {
+.mobile-extra-work-worker-total strong {
   color: #143c6d;
+  font-size: 0.86rem;
+}
+
+.mobile-extra-work-week-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #0f468d;
+  padding: 6px 2px 6px 9px;
+  font: inherit;
   font-size: 0.92rem;
+  font-weight: 900;
   white-space: nowrap;
+}
+
+.mobile-extra-work-week-button:hover,
+.mobile-extra-work-week-button:focus-visible {
+  background: #eef5fd;
+  outline: none;
 }
 
 .mobile-extra-work-worker-list {
@@ -25829,30 +26006,60 @@ body.mobile-modal-scroll-locked {
 
 .mobile-extra-work-worker-card {
   display: grid;
-  gap: 9px;
+  gap: 12px;
   border: 1px solid #d8e3ef;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 9px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+  padding: 12px;
 }
 
 .mobile-extra-work-worker-head {
+  min-width: 0;
+}
+
+.mobile-measurement-form .mobile-extra-work-worker-name {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 8px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: #285a96;
+}
+
+.mobile-extra-work-worker-name > svg {
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #eaf2fb;
+  padding: 8px;
+}
+
+.mobile-measurement-form .mobile-extra-work-worker-name input {
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 6px 0;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 850;
+  outline: none;
 }
 
 .mobile-extra-work-remove-worker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  min-height: 38px;
-  border: 1px solid #d4deeb;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #64748b;
+  width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #172033;
+}
+
+.mobile-extra-work-remove-worker:disabled {
+  opacity: 0.35;
 }
 
 .mobile-extra-work-week-grid {
@@ -25862,25 +26069,231 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-week-grid label {
+  display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.mobile-extra-work-week-grid label span {
-  color: #65738a;
-  font-size: 0.72rem;
+.mobile-extra-work-week-grid label > span:first-child {
+  color: #0f468d;
+  font-size: 0.78rem;
+  font-weight: 850;
   text-align: center;
 }
 
-.mobile-extra-work-week-grid input {
-  min-height: 38px;
-  padding: 7px 6px;
+.mobile-extra-work-hours-input {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.mobile-measurement-form .mobile-extra-work-hours-input input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 22px 8px 7px;
   text-align: center;
+}
+
+.mobile-extra-work-hours-input > span {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  color: #7f8fa8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mobile-extra-work-worker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid #e5ebf3;
+  padding-top: 7px;
 }
 
 .mobile-extra-work-add-worker {
   justify-self: stretch;
-  min-height: 40px;
+  min-height: 44px;
+  color: #0f468d;
+}
+
+.mobile-extra-work-text-card label {
+  gap: 11px;
+}
+
+.mobile-extra-work-text-card textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.mobile-extra-work-entry-page .mobile-form-actions {
+  position: static;
+  border-top: 0;
+  background: transparent;
+  padding-top: 0;
+}
+
+.mobile-extra-work-entry-page .mobile-form-actions .primary-action {
+  min-height: 50px;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.mobile-extra-work-entry-locked-note {
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 12px;
+  font-size: 0.84rem;
+}
+
+.mobile-extra-work-week-dialog,
+.mobile-extra-work-week-confirm {
+  display: grid;
+  width: min(calc(100% - 24px), 390px);
+  max-height: min(82dvh, 680px);
+  overflow: auto;
+  gap: 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 24px 60px rgb(15 23 42 / 30%);
+}
+
+.mobile-extra-work-week-dialog-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.mobile-extra-work-week-dialog h2,
+.mobile-extra-work-week-dialog p,
+.mobile-extra-work-week-confirm h2,
+.mobile-extra-work-week-confirm p {
+  margin: 0;
+}
+
+.mobile-extra-work-week-dialog h2,
+.mobile-extra-work-week-confirm h2 {
+  color: #111827;
+  font-size: 1.15rem;
+}
+
+.mobile-extra-work-week-dialog p,
+.mobile-extra-work-week-confirm p {
+  margin-top: 4px;
+  color: #65738a;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.mobile-extra-work-week-year-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-extra-work-week-year-nav strong {
+  color: #143c6d;
+  text-align: center;
+}
+
+.mobile-extra-work-week-year-nav button,
+.mobile-extra-work-week-options button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid #d5e1ee;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #143c6d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.mobile-extra-work-week-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.mobile-extra-work-week-options button.is-selected {
+  border-color: #143c6d;
+  background: #143c6d;
+  color: #ffffff;
+  box-shadow: 0 5px 12px rgb(20 60 109 / 20%);
+}
+
+.mobile-extra-work-week-confirm {
+  width: min(calc(100% - 32px), 360px);
+}
+
+.mobile-extra-work-week-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mobile-extra-work-week-confirm-actions button {
+  min-height: 44px;
+}
+
+@media (max-width: 375px) {
+  .mobile-extra-work-entry-header-card {
+    gap: 8px;
+    padding: 13px;
+  }
+
+  .mobile-extra-work-entry-header-card h1 {
+    font-size: 1.28rem;
+  }
+
+  .mobile-extra-work-entry-header-card p,
+  .mobile-extra-work-entry-date {
+    font-size: 0.78rem;
+  }
+
+  .mobile-extra-work-card {
+    padding: 12px;
+  }
+
+  .mobile-measurement-form .mobile-extra-work-location-field {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .mobile-extra-work-location-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mobile-measurement-form .mobile-extra-work-location-content input {
+    font-size: 0.74rem;
+  }
+
+  .mobile-extra-work-worker-card {
+    padding: 10px;
+  }
+
+  .mobile-extra-work-week-grid {
+    gap: 5px;
+  }
+
+  .mobile-measurement-form .mobile-extra-work-hours-input input {
+    padding-right: 19px;
+    padding-left: 4px;
+    font-size: 0.78rem;
+  }
 }
 
 .mobile-customer-signature-overlay {
