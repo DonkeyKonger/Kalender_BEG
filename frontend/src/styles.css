@@ -26362,6 +26362,28 @@ body.mobile-modal-scroll-locked {
   font-size: 1rem;
 }
 
+.mobile-extra-work-entry-page .mobile-extra-work-entry-actions {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.mobile-extra-work-entry-actions > button {
+  min-width: 0;
+}
+
+.mobile-extra-work-entry-actions .mobile-extra-work-photo-action {
+  min-height: 50px;
+  gap: 4px;
+  border-radius: 10px;
+  padding-inline: 5px;
+  font-size: clamp(0.72rem, 3.2vw, 0.86rem);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.mobile-extra-work-photo-action svg {
+  flex: 0 0 auto;
+}
+
 .mobile-extra-work-entry-locked-note {
   margin: 0;
   border: 1px solid #e2e8f0;
@@ -26373,7 +26395,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-week-dialog,
-.mobile-extra-work-week-confirm {
+.mobile-extra-work-week-confirm,
+.mobile-extra-work-photo-source-dialog {
   display: grid;
   width: min(calc(100% - 24px), 390px);
   max-height: min(82dvh, 680px);
@@ -26400,18 +26423,22 @@ body.mobile-modal-scroll-locked {
 .mobile-extra-work-week-dialog h2,
 .mobile-extra-work-week-dialog p,
 .mobile-extra-work-week-confirm h2,
-.mobile-extra-work-week-confirm p {
+.mobile-extra-work-week-confirm p,
+.mobile-extra-work-photo-source-dialog h2,
+.mobile-extra-work-photo-source-dialog p {
   margin: 0;
 }
 
 .mobile-extra-work-week-dialog h2,
-.mobile-extra-work-week-confirm h2 {
+.mobile-extra-work-week-confirm h2,
+.mobile-extra-work-photo-source-dialog h2 {
   color: #111827;
   font-size: 1.15rem;
 }
 
 .mobile-extra-work-week-dialog p,
-.mobile-extra-work-week-confirm p {
+.mobile-extra-work-week-confirm p,
+.mobile-extra-work-photo-source-dialog p {
   margin-top: 4px;
   color: #65738a;
   font-size: 0.84rem;
@@ -26478,6 +26505,27 @@ body.mobile-modal-scroll-locked {
 
 .mobile-extra-work-week-confirm {
   width: min(calc(100% - 32px), 360px);
+}
+
+.mobile-extra-work-photo-source-dialog {
+  width: min(calc(100% - 32px), 360px);
+}
+
+.mobile-extra-work-photo-source-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-extra-work-photo-source-actions button {
+  min-height: 48px;
+  gap: 8px;
+}
+
+.mobile-extra-work-photo-source-actions .mobile-extra-work-photo-source-cancel {
+  margin-top: 2px;
+  border-color: transparent;
+  background: transparent;
+  color: #65738a;
 }
 
 .mobile-extra-work-week-confirm-actions {

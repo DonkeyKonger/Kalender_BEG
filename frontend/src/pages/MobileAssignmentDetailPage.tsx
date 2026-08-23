@@ -444,6 +444,7 @@ function MobileExtraWorkTab({
   const [message, setMessage] = useState<string | null>(null);
   const [photoMessageTone, setPhotoMessageTone] = useState<"info" | "error">("info");
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
   const requiresApproval = assignment.site.requires_extra_work_approval;
   const primaryKind: "billing" | "approval" = requiresApproval ? "approval" : "billing";
 
@@ -504,7 +505,10 @@ function MobileExtraWorkTab({
     }
   }
 
-  function openPhotoCapture(order: MobileExtraWorkTicket): void {
+  function openPhotoInput(
+    order: MobileExtraWorkTicket,
+    inputRef: { current: HTMLInputElement | null },
+  ): void {
     if ((order.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
       setMessage("Maximal 5 Fotos pro Stundenzettel erlaubt.");
       setPhotoMessageTone("error");
@@ -513,7 +517,15 @@ function MobileExtraWorkTab({
     setPhotoUploadOrder(order);
     setMessage(null);
     setPhotoMessageTone("info");
-    photoInputRef.current?.click();
+    inputRef.current?.click();
+  }
+
+  function openPhotoCapture(order: MobileExtraWorkTicket): void {
+    openPhotoInput(order, photoInputRef);
+  }
+
+  function openPhotoLibrary(order: MobileExtraWorkTicket): void {
+    openPhotoInput(order, photoLibraryInputRef);
   }
 
   async function handlePhotoInputChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
@@ -576,21 +588,45 @@ function MobileExtraWorkTab({
     }
     if (isEditingEntry) {
       return (
-        <ExtraWorkEntryPage
-          assignmentId={assignment.id}
-          assignmentPerson={assignment.person}
-          assignmentStartDate={assignment.start_date}
-          order={selectedOrder}
-          onBack={() => setIsEditingEntry(false)}
-          onOrderUpdated={mergeUpdatedOrder}
-          onSaved={async () => {
-            const updatedOrder = await api.mobileExtraWorkTicket(assignment.id, selectedOrder.id);
-            mergeUpdatedOrder(updatedOrder);
-            setIsEditingEntry(false);
-            setPhotoMessageTone("info");
-            setMessage("Leistungen gespeichert.");
-          }}
-        />
+        <>
+          <ExtraWorkEntryPage
+            assignmentId={assignment.id}
+            assignmentPerson={assignment.person}
+            assignmentStartDate={assignment.start_date}
+            order={selectedOrder}
+            isUploadingPhoto={isUploadingPhoto}
+            photoCount={selectedOrder.photo_count ?? 0}
+            photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
+            photoMessage={message}
+            photoMessageTone={photoMessageTone}
+            onBack={() => setIsEditingEntry(false)}
+            onOrderUpdated={mergeUpdatedOrder}
+            onTakePhoto={() => openPhotoCapture(selectedOrder)}
+            onChoosePhoto={() => openPhotoLibrary(selectedOrder)}
+            onSaved={async () => {
+              const updatedOrder = await api.mobileExtraWorkTicket(assignment.id, selectedOrder.id);
+              mergeUpdatedOrder(updatedOrder);
+              setIsEditingEntry(false);
+              setPhotoMessageTone("info");
+              setMessage("Leistungen gespeichert.");
+            }}
+          />
+          <input
+            ref={photoInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => void handlePhotoInputChange(event)}
+          />
+          <input
+            ref={photoLibraryInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            onChange={(event) => void handlePhotoInputChange(event)}
+          />
+        </>
       );
     }
     return (
@@ -1980,16 +2016,30 @@ function ExtraWorkEntryPage({
   assignmentPerson,
   assignmentStartDate,
   order,
+  isUploadingPhoto,
+  photoCount,
+  photoLimit,
+  photoMessage,
+  photoMessageTone,
   onBack,
   onOrderUpdated,
+  onTakePhoto,
+  onChoosePhoto,
   onSaved,
 }: {
   assignmentId: number;
   assignmentPerson: MobileAssignment["person"];
   assignmentStartDate: string;
   order: MobileExtraWorkTicket;
+  isUploadingPhoto: boolean;
+  photoCount: number;
+  photoLimit: number;
+  photoMessage: string | null;
+  photoMessageTone: "info" | "error";
   onBack: () => void;
   onOrderUpdated: (order: MobileExtraWorkTicket) => void;
+  onTakePhoto: () => void;
+  onChoosePhoto: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { user } = useAuth();
@@ -2028,6 +2078,7 @@ function ExtraWorkEntryPage({
   const [visibleWeekYear, setVisibleWeekYear] = useState(selectedWeek.isoYear);
   const [pendingWeek, setPendingWeek] = useState<{ isoYear: number; week: number } | null>(null);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
+  const [isPhotoSourceDialogOpen, setIsPhotoSourceDialogOpen] = useState(false);
   const [materialQuickInput, setMaterialQuickInput] = useState("");
   const [materialEditDraft, setMaterialEditDraft] = useState<ExtraWorkMaterialEditDraft | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
@@ -2728,7 +2779,22 @@ function ExtraWorkEntryPage({
             <p className="mobile-extra-work-entry-locked-note">Dieser Zusatzauftrag ist abgeschlossen und kann nicht mehr bearbeitet werden.</p>
           ) : null}
 
-          <div className="mobile-form-actions">
+          {photoMessage ? (
+            <p className={photoMessageTone === "error" ? "form-error" : "form-info"} role="status">
+              {photoMessage}
+            </p>
+          ) : null}
+
+          <div className="mobile-form-actions mobile-extra-work-entry-actions">
+            <button
+              className="secondary-action mobile-extra-work-photo-action"
+              type="button"
+              onClick={() => setIsPhotoSourceDialogOpen(true)}
+              disabled={isSaving || isUploadingPhoto || !canEdit || photoCount >= photoLimit}
+            >
+              <Camera aria-hidden="true" size={17} />
+              <span>Foto hinzufügen</span>
+            </button>
             <button className="primary-action" type="submit" disabled={isSaving || !canEdit || hasInvalidDailyHours}>
               {isSaving ? "Speichert..." : "Speichern"}
             </button>
@@ -2758,6 +2824,20 @@ function ExtraWorkEntryPage({
         <ExtraWorkDiscardChangesDialog
           onCancel={() => setIsDiscardConfirmOpen(false)}
           onDiscard={onBack}
+        />
+      ) : null}
+      {isPhotoSourceDialogOpen ? (
+        <ExtraWorkPhotoSourceDialog
+          isUploading={isUploadingPhoto}
+          onTakePhoto={() => {
+            setIsPhotoSourceDialogOpen(false);
+            onTakePhoto();
+          }}
+          onChoosePhoto={() => {
+            setIsPhotoSourceDialogOpen(false);
+            onChoosePhoto();
+          }}
+          onClose={() => setIsPhotoSourceDialogOpen(false)}
         />
       ) : null}
     </div>
@@ -2960,6 +3040,56 @@ function ExtraWorkDiscardChangesDialog({
         <div className="mobile-extra-work-week-confirm-actions">
           <button className="secondary-action" type="button" onClick={onCancel}>Abbrechen</button>
           <button className="danger-action" type="button" onClick={onDiscard}>Verwerfen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtraWorkPhotoSourceDialog({
+  isUploading,
+  onTakePhoto,
+  onChoosePhoto,
+  onClose,
+}: {
+  isUploading: boolean;
+  onTakePhoto: () => void;
+  onChoosePhoto: () => void;
+  onClose: () => void;
+}) {
+  const isTopModal = useMobileModalStack(true);
+  return (
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={isUploading ? undefined : onClose}
+    >
+      <div
+        className="mobile-extra-work-photo-source-dialog mobile-modal-scroll-region"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-photo-source-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div>
+          <h2 id="mobile-extra-work-photo-source-title">Foto hinzufügen</h2>
+          <p>Wähle aus, woher das Foto kommen soll.</p>
+        </div>
+        <div className="mobile-extra-work-photo-source-actions">
+          <button className="secondary-action" type="button" onClick={onTakePhoto} disabled={isUploading}>
+            <Camera aria-hidden="true" size={19} />
+            <span>Foto aufnehmen</span>
+          </button>
+          <button className="secondary-action" type="button" onClick={onChoosePhoto} disabled={isUploading}>
+            <Images aria-hidden="true" size={19} />
+            <span>Aus Bibliothek auswählen</span>
+          </button>
+          <button className="secondary-action mobile-extra-work-photo-source-cancel" type="button" onClick={onClose} disabled={isUploading}>
+            Abbrechen
+          </button>
         </div>
       </div>
     </div>

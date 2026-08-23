@@ -269,7 +269,7 @@ test("save stays in normal form flow without keyboard positioning", () => {
     pageSource.indexOf("function ExtraWorkEntryPage"),
     pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
   );
-  assert.match(entrySource, /<form[\s\S]*<div className="mobile-form-actions">[\s\S]*type="submit"[\s\S]*\{isSaving \? "Speichert\.\.\." : "Speichern"\}/);
+  assert.match(entrySource, /<form[\s\S]*<div className="mobile-form-actions mobile-extra-work-entry-actions">[\s\S]*type="submit"[\s\S]*\{isSaving \? "Speichert\.\.\." : "Speichern"\}/);
   assert.match(entrySource, /await api\.saveMobileExtraWorkTicketEntry[\s\S]*await onSaved\(\)/);
   assert.match(pageSource, /onSaved=\{async \(\) => \{[\s\S]*await api\.mobileExtraWorkTicket[\s\S]*setIsEditingEntry\(false\)/);
   assert.match(entrySource, /catch \(requestError\) \{[\s\S]*setError\(readApiError/);
@@ -278,6 +278,64 @@ test("save stays in normal form flow without keyboard positioning", () => {
   assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-form input,[\s\S]*font-size:\s*1rem;/s);
   assert.doesNotMatch(entrySource, /mobile-extra-work-save-dock|visualViewport|keyboard-offset|ensureActiveInputVisible|onFocusCapture/);
   assert.doesNotMatch(styles, /mobile-extra-work-save-dock|--mobile-extra-work-keyboard-offset|\.mobile-extra-work-entry-page::after/);
+});
+
+test("mobile performance entry splits only the existing action content into secondary photo and primary save actions", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+  );
+  assert.match(entrySource, /className="mobile-form-actions mobile-extra-work-entry-actions"/);
+  assert.match(entrySource, /className="secondary-action mobile-extra-work-photo-action"[\s\S]*<Camera[\s\S]*<span>Foto hinzufügen<\/span>/);
+  assert.match(entrySource, /className="primary-action" type="submit" disabled=\{isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}[\s\S]*\{isSaving \? "Speichert\.\.\." : "Speichern"\}/);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-entry-actions \{[^}]*grid-template-columns:\s*minmax\(0, 2fr\) minmax\(0, 3fr\);/s);
+  assert.match(styles, /\.mobile-extra-work-entry-actions \.mobile-extra-work-photo-action \{[^}]*min-height:\s*50px;[^}]*white-space:\s*normal;/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-form-actions \.primary-action \{[^}]*min-height:\s*50px;/s);
+});
+
+test("mobile extra-work photos offer camera and library through the shared single-photo upload path", () => {
+  const editingBranchStart = pageSource.indexOf("if (isEditingEntry) {");
+  const editingBranch = pageSource.slice(
+    editingBranchStart,
+    pageSource.indexOf("<ExtraWorkOrderOverview", editingBranchStart),
+  );
+  const uploadSource = pageSource.slice(
+    pageSource.indexOf("function openPhotoInput"),
+    pageSource.indexOf("if (selectedOrder)"),
+  );
+  const libraryInputStart = editingBranch.indexOf("ref={photoLibraryInputRef}");
+  const libraryInput = editingBranch.slice(libraryInputStart, editingBranch.indexOf("/>", libraryInputStart));
+
+  assert.match(editingBranch, /ref=\{photoInputRef\}[\s\S]*accept="image\/\*"[\s\S]*capture="environment"/);
+  assert.match(libraryInput, /accept="image\/\*"/);
+  assert.doesNotMatch(libraryInput, /capture=/);
+  assert.equal((editingBranch.match(/handlePhotoInputChange\(event\)/g) ?? []).length, 2);
+  assert.match(uploadSource, /const file = event\.target\.files\?\.\[0\] \?\? null/);
+  assert.match(uploadSource, /await prepareMeasurementPhotoFile\(file\)/);
+  assert.match(uploadSource, /await api\.uploadMobileExtraWorkTicketPhoto\(assignment\.id, order\.id, uploadFile\)/);
+  assert.match(uploadSource, /updateOrderPhotoCount\(order\.id, \(order\.photo_count \?\? 0\) \+ 1\)/);
+});
+
+test("photo side action preserves entry state and reuses existing limit, lock and modal-scroll behavior", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+  );
+  const sourceDialog = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkPhotoSourceDialog"),
+    pageSource.indexOf("function OverviewPanel"),
+  );
+  assert.match(entrySource, /const \[isPhotoSourceDialogOpen, setIsPhotoSourceDialogOpen\] = useState\(false\)/);
+  assert.match(entrySource, /disabled=\{isSaving \|\| isUploadingPhoto \|\| !canEdit \|\| photoCount >= photoLimit\}/);
+  assert.match(entrySource, /<ExtraWorkPhotoSourceDialog[\s\S]*onTakePhoto[\s\S]*onChoosePhoto/);
+  assert.doesNotMatch(entrySource, /setIsEditingEntry|navigate\(|location\.|window\.location|<Navigate/);
+  assert.match(pageSource, /if \(\(order\.photo_count \?\? 0\) >= MOBILE_DOCUMENT_PHOTO_LIMIT\)[\s\S]*Maximal 5 Fotos pro Stundenzettel erlaubt\./);
+  assert.match(sourceDialog, /useMobileModalStack\(true\)/);
+  assert.match(sourceDialog, /className="mobile-dialog-backdrop mobile-modal-layer"/);
+  assert.match(sourceDialog, />Foto aufnehmen</);
+  assert.match(sourceDialog, />Aus Bibliothek auswählen</);
+  assert.match(sourceDialog, />\s*Abbrechen\s*</);
+  assert.doesNotMatch(entrySource, /visualViewport|keyboard-offset|ResizeObserver|addEventListener\("resize"/);
 });
 
 test("mobile extra-work inputs avoid iOS focus zoom without locking viewport accessibility", () => {
