@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { formatGermanDayMonth } from "../src/lib/formatters.ts";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../src/utils/dateRange.ts";
 
 const [pageSource, apiSource, typeSource, styles, indexHtml] = await Promise.all([
@@ -133,11 +134,14 @@ test("mobile execution week persists through the existing typed details endpoint
   );
   assert.match(entrySource, /order\.manual_execution_week_year \?\? automaticWeek\.isoYear/);
   assert.match(entrySource, /order\.manual_execution_week \?\? automaticWeek\.week/);
+  assert.match(entrySource, /setSelectedWeek\(nextWeek\)/);
   assert.match(entrySource, /api\.updateMobileExtraWorkTicketDetails\(assignmentId, order\.id/);
-  assert.match(entrySource, /manual_execution_week: usesAutomaticWeek \? null : nextWeek\.week/);
-  assert.match(entrySource, /manual_execution_week_year: usesAutomaticWeek \? null : nextWeek\.isoYear/);
+  assert.match(entrySource, /await api\.saveMobileExtraWorkTicketEntry[\s\S]*const executionWeekChanged[\s\S]*api\.updateMobileExtraWorkTicketDetails/);
+  assert.match(entrySource, /manual_execution_week: usesAutomaticWeek \? null : selectedWeek\.week/);
+  assert.match(entrySource, /manual_execution_week_year: usesAutomaticWeek \? null : selectedWeek\.isoYear/);
   assert.match(entrySource, /onOrderUpdated\(updatedOrder\)/);
   assert.match(entrySource, /getIsoWeeksInYear\(visibleYear\)/);
+  assert.doesNotMatch(entrySource, /function persistExecutionWeek/);
 });
 
 test("changing week protects only unsaved hour input with an explicit confirmation", () => {
@@ -150,7 +154,7 @@ test("changing week protects only unsaved hour input with an explicit confirmati
 });
 
 test("mobile performance entry has sticky back navigation and narrow touch-safe grids", () => {
-  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<MobileBackButton label="Zurück zum Stundenzettel" onClick=\{onBack\} \/>/);
+  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<MobileBackButton label="Zurück zum Stundenzettel" onClick=\{requestBack\} \/>/);
   assert.doesNotMatch(pageSource, /mobile-extra-work-sticky-nav[\s\S]{0,300}className="icon-button secondary mobile-back-button"/);
   assert.match(styles, /\.mobile-extra-work-sticky-nav \{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
   assert.doesNotMatch(styles, /\.mobile-extra-work-sticky-nav \.mobile-back-button/);
@@ -181,11 +185,56 @@ test("material quick rows stay local, editable and backward compatible", () => {
   );
   assert.match(entrySource, /parseExtraWorkMaterialInput\(materialQuickInput\)/);
   assert.match(entrySource, /material_items: \[\.\.\.current\.material_items, \{ id: createClientRowId\(\), \.\.\.parsed \}\]/);
+  assert.match(entrySource, /<div className="mobile-extra-work-material-list">[\s\S]*<div className=\{`mobile-extra-work-material-quick-input/);
+  assert.match(entrySource, /window\.requestAnimationFrame\(keepMaterialQuickInputActive\)/);
+  assert.match(entrySource, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(entrySource, /scrollIntoView\(\{ block: "nearest", inline: "nearest", behavior: "auto" \}\)/);
+  assert.match(entrySource, /onPointerDown=\{\(event\) => event\.preventDefault\(\)\}/);
   assert.match(entrySource, /startEditingMaterial\(item\)/);
   assert.match(entrySource, /removeMaterialItem\(item\.id\)/);
   assert.match(entrySource, /material_items: materialItems\.map/);
   assert.match(entrySource, />Bisherige Materialangaben</);
+  assert.doesNotMatch(entrySource, /mobile-extra-work-add-material|>Material hinzufügen<|focusMaterialQuickInput/);
+  assert.doesNotMatch(styles, /\.mobile-extra-work-add-material/);
   assert.doesNotMatch(entrySource, /api\.[A-Za-z]+\([^\n]*materialQuickInput/);
+});
+
+test("hours use one-time select-all and a continuous Monday-to-Sunday keyboard flow", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+  );
+  assert.match(entrySource, /function selectHoursInput[\s\S]*document\.activeElement === input[\s\S]*input\.select\(\)/);
+  assert.match(entrySource, /enterKeyHint=\{day\.key === "sunday_hours" \? "done" : "next"\}/);
+  assert.match(entrySource, /handleHoursInputKeyDown\(event, row\.id, day\.key\)/);
+  assert.match(entrySource, /hoursInputRefs\.current\.get\(`\$\{rowId\}:\$\{nextDay\.key\}`\)\?\.focus\(\)/);
+  assert.match(entrySource, /if \(!nextDay\) \{[\s\S]*event\.currentTarget\.blur\(\)/);
+  assert.doesNotMatch(entrySource, /handleHoursInputKeyDown[\s\S]{0,900}(?:saveEntry|type="submit")/);
+});
+
+test("dirty tracking warns only for changed form content and never after successful close", () => {
+  const entrySource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkEntryPage"),
+    pageSource.indexOf("function OverviewPanel"),
+  );
+  assert.match(entrySource, /setSavedEntryFingerprint\(getExtraWorkEntryFingerprint\(nextForm, loadedExecutionWeek\)\)/);
+  assert.match(entrySource, /currentEntryFingerprint !== savedEntryFingerprint[\s\S]*materialQuickInput\.trim\(\)[\s\S]*hasExtraWorkMaterialEditChanges/);
+  assert.match(entrySource, /function requestBack\(\)[\s\S]*if \(hasUnsavedChanges\)[\s\S]*setIsDiscardConfirmOpen\(true\)[\s\S]*onBack\(\)/);
+  assert.match(entrySource, />Änderungen verwerfen\?</);
+  assert.match(entrySource, />Abbrechen<\/button>[\s\S]*>Verwerfen<\/button>/);
+  assert.match(entrySource, /await onSaved\(\)/);
+  assert.match(pageSource, /setIsEditingEntry\(false\)[\s\S]*setMessage\("Leistungen gespeichert\."\)/);
+});
+
+test("remarks autosize only from content and week choices expose ISO date ranges", () => {
+  assert.equal(formatGermanDayMonth("2026-08-17"), "17.08.");
+  assert.equal(formatGermanDayMonth("2026-08-23"), "23.08.");
+  assert.match(pageSource, /useLayoutEffect\(\(\) => \{[\s\S]*resizeExtraWorkRemarksTextarea\(remarksTextareaRef\.current\)[\s\S]*\}, \[form\.remarks, isLoading\]\)/);
+  assert.match(pageSource, /rows=\{2\}/);
+  assert.match(pageSource, /formatGermanDayMonth\(range\.start\)[\s\S]*formatGermanDayMonth\(range\.end\)/);
+  assert.match(styles, /\.mobile-extra-work-text-card textarea \{[^}]*height:\s*56px;[^}]*min-height:\s*56px;[^}]*max-height:\s*118px;/s);
+  assert.match(styles, /\.mobile-extra-work-week-options button small \{[^}]*white-space:\s*nowrap/s);
+  assert.match(styles, /\.mobile-extra-work-entry-header-meta \.measurement-status \{[^}]*font-size:\s*0\.72rem/s);
 });
 
 test("save stays in normal form flow without keyboard positioning", () => {
@@ -208,7 +257,7 @@ test("mobile extra-work inputs avoid iOS focus zoom without locking viewport acc
   assert.match(indexHtml, /name="viewport" content="width=device-width, initial-scale=1\.0"/);
   assert.doesNotMatch(indexHtml, /user-scalable=no|maximum-scale=1/);
   assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-form input,[\s\S]*\.mobile-extra-work-entry-page \.mobile-extra-work-form textarea,[\s\S]*font-size:\s*1rem;/s);
-  assert.match(styles, /\.mobile-extra-work-text-card textarea \{[^}]*height:\s*76px;[^}]*min-height:\s*76px;/s);
+  assert.match(styles, /\.mobile-extra-work-text-card textarea \{[^}]*height:\s*56px;[^}]*min-height:\s*56px;/s);
   assert.match(styles, /\.mobile-measurement-form \.mobile-extra-work-location-input:focus-within \{[^}]*border-color:[^}]*box-shadow:/s);
   assert.doesNotMatch(styles, /\.mobile-measurement-form \.mobile-extra-work-location-input:focus-within \{[^}]*transform:/s);
 });

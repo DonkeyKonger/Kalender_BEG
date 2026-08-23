@@ -36,7 +36,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -46,7 +46,7 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
 import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity } from "../lib/extraWorkMaterial";
-import { formatGermanDateKey, formatGermanDateKeyRange } from "../lib/formatters";
+import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
@@ -588,7 +588,7 @@ function MobileExtraWorkTab({
             mergeUpdatedOrder(updatedOrder);
             setIsEditingEntry(false);
             setPhotoMessageTone("info");
-            setMessage("Eingaben gespeichert.");
+            setMessage("Leistungen gespeichert.");
           }}
         />
       );
@@ -1999,10 +1999,11 @@ function ExtraWorkEntryPage({
     () => getIsoWeekInfo(assignmentStartDate || automaticOrderDate),
     [assignmentStartDate, automaticOrderDate],
   );
-  const selectedWeek = useMemo(() => ({
+  const loadedExecutionWeek = useMemo(() => ({
     isoYear: order.manual_execution_week_year ?? automaticWeek.isoYear,
     week: order.manual_execution_week ?? automaticWeek.week,
   }), [automaticWeek.isoYear, automaticWeek.week, order.manual_execution_week, order.manual_execution_week_year]);
+  const [selectedWeek, setSelectedWeek] = useState(loadedExecutionWeek);
   const selectedWeekRange = useMemo(
     () => getIsoWeekRange(selectedWeek.isoYear, selectedWeek.week),
     [selectedWeek.isoYear, selectedWeek.week],
@@ -2021,16 +2022,18 @@ function ExtraWorkEntryPage({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedEntryFingerprint, setSavedEntryFingerprint] = useState<string | null>(null);
   const [savedHoursFingerprint, setSavedHoursFingerprint] = useState("");
   const [isWeekDialogOpen, setIsWeekDialogOpen] = useState(false);
   const [visibleWeekYear, setVisibleWeekYear] = useState(selectedWeek.isoYear);
   const [pendingWeek, setPendingWeek] = useState<{ isoYear: number; week: number } | null>(null);
-  const [isSavingWeek, setIsSavingWeek] = useState(false);
-  const [weekError, setWeekError] = useState<string | null>(null);
+  const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
   const [materialQuickInput, setMaterialQuickInput] = useState("");
   const [materialEditDraft, setMaterialEditDraft] = useState<ExtraWorkMaterialEditDraft | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
   const materialQuickInputRef = useRef<HTMLInputElement>(null);
+  const hoursInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const remarksTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -2044,7 +2047,13 @@ function ExtraWorkEntryPage({
             ? mapExtraWorkEntryToForm(entry, defaultWorkerName, legacyWorkerNames)
             : createEmptyExtraWorkEntryForm(defaultWorkerName);
           setForm(nextForm);
+          setSelectedWeek(loadedExecutionWeek);
+          setVisibleWeekYear(loadedExecutionWeek.isoYear);
+          setSavedEntryFingerprint(getExtraWorkEntryFingerprint(nextForm, loadedExecutionWeek));
           setSavedHoursFingerprint(getExtraWorkHoursFingerprint(nextForm.worker_rows));
+          setMaterialQuickInput("");
+          setMaterialEditDraft(null);
+          setIsDiscardConfirmOpen(false);
         }
       } catch (requestError) {
         if (isMounted) {
@@ -2060,15 +2069,28 @@ function ExtraWorkEntryPage({
     return () => {
       isMounted = false;
     };
-  }, [assignmentId, defaultWorkerName, legacyWorkerNames, order.id]);
+  }, [assignmentId, defaultWorkerName, legacyWorkerNames, loadedExecutionWeek, order.id]);
 
   useEffect(() => {
     setVisibleWeekYear(selectedWeek.isoYear);
   }, [selectedWeek.isoYear]);
 
+  useLayoutEffect(() => {
+    resizeExtraWorkRemarksTextarea(remarksTextareaRef.current);
+  }, [form.remarks, isLoading]);
+
   const hasUnsavedHours = useMemo(
     () => getExtraWorkHoursFingerprint(form.worker_rows) !== savedHoursFingerprint,
     [form.worker_rows, savedHoursFingerprint],
+  );
+  const currentEntryFingerprint = useMemo(
+    () => getExtraWorkEntryFingerprint(form, selectedWeek),
+    [form, selectedWeek],
+  );
+  const hasUnsavedChanges = savedEntryFingerprint !== null && (
+    currentEntryFingerprint !== savedEntryFingerprint
+    || Boolean(materialQuickInput.trim())
+    || hasExtraWorkMaterialEditChanges(materialEditDraft, form.material_items)
   );
   const hasInvalidDailyHours = useMemo(
     () => form.worker_rows.some((row) => (
@@ -2100,7 +2122,7 @@ function ExtraWorkEntryPage({
     }));
     setMaterialQuickInput("");
     setMaterialError(null);
-    window.requestAnimationFrame(() => materialQuickInputRef.current?.focus());
+    window.requestAnimationFrame(keepMaterialQuickInputActive);
   }
 
   function startEditingMaterial(item: ExtraWorkMaterialFormItem): void {
@@ -2153,8 +2175,13 @@ function ExtraWorkEntryPage({
     setMaterialError(null);
   }
 
-  function focusMaterialQuickInput(): void {
-    materialQuickInputRef.current?.focus();
+  function keepMaterialQuickInputActive(): void {
+    const input = materialQuickInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    input.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
   }
 
   function getMaterialItemsForSave(): ExtraWorkMaterialFormItem[] | null {
@@ -2202,6 +2229,33 @@ function ExtraWorkEntryPage({
     }));
   }
 
+  function selectHoursInput(event: ReactFocusEvent<HTMLInputElement>): void {
+    const input = event.currentTarget;
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === input) {
+        input.select();
+      }
+    });
+  }
+
+  function handleHoursInputKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement>,
+    rowId: string,
+    dayKey: ExtraWorkWeekdayKey,
+  ): void {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    const dayIndex = EXTRA_WORK_WEEK_DAYS.findIndex((day) => day.key === dayKey);
+    const nextDay = EXTRA_WORK_WEEK_DAYS[dayIndex + 1];
+    if (!nextDay) {
+      event.currentTarget.blur();
+      return;
+    }
+    hoursInputRefs.current.get(`${rowId}:${nextDay.key}`)?.focus();
+  }
+
   function addWorkerRow(): void {
     setForm((current) => ({
       ...current,
@@ -2218,30 +2272,14 @@ function ExtraWorkEntryPage({
     }));
   }
 
-  async function persistExecutionWeek(nextWeek: { isoYear: number; week: number }): Promise<void> {
-    if (!canEdit || isSavingWeek) {
+  function applyExecutionWeek(nextWeek: { isoYear: number; week: number }): void {
+    if (!canEdit || isSaving) {
       return;
     }
-    setIsSavingWeek(true);
-    setWeekError(null);
-    try {
-      const usesAutomaticWeek = nextWeek.isoYear === automaticWeek.isoYear
-        && nextWeek.week === automaticWeek.week;
-      const updatedOrder = await api.updateMobileExtraWorkTicketDetails(assignmentId, order.id, {
-        manual_order_date: order.manual_order_date,
-        manual_execution_week: usesAutomaticWeek ? null : nextWeek.week,
-        manual_execution_week_year: usesAutomaticWeek ? null : nextWeek.isoYear,
-      });
-      onOrderUpdated(updatedOrder);
-      setPendingWeek(null);
-      setIsWeekDialogOpen(false);
-    } catch (requestError) {
-      setPendingWeek(null);
-      setIsWeekDialogOpen(true);
-      setWeekError(readApiError(requestError, "Kalenderwoche konnte nicht gespeichert werden."));
-    } finally {
-      setIsSavingWeek(false);
-    }
+    setSelectedWeek(nextWeek);
+    setVisibleWeekYear(nextWeek.isoYear);
+    setPendingWeek(null);
+    setIsWeekDialogOpen(false);
   }
 
   function requestExecutionWeekChange(nextWeek: { isoYear: number; week: number }): void {
@@ -2254,7 +2292,18 @@ function ExtraWorkEntryPage({
       setPendingWeek(nextWeek);
       return;
     }
-    void persistExecutionWeek(nextWeek);
+    applyExecutionWeek(nextWeek);
+  }
+
+  function requestBack(): void {
+    if (isSaving) {
+      return;
+    }
+    if (hasUnsavedChanges) {
+      setIsDiscardConfirmOpen(true);
+      return;
+    }
+    onBack();
   }
 
   async function saveEntry(): Promise<void> {
@@ -2327,6 +2376,18 @@ function ExtraWorkEntryPage({
         estimated_hours: parseNullableExtraWorkHoursInput(form.estimated_hours),
         worker_rows: workerRows,
       });
+      const executionWeekChanged = selectedWeek.isoYear !== loadedExecutionWeek.isoYear
+        || selectedWeek.week !== loadedExecutionWeek.week;
+      if (executionWeekChanged) {
+        const usesAutomaticWeek = selectedWeek.isoYear === automaticWeek.isoYear
+          && selectedWeek.week === automaticWeek.week;
+        const updatedOrder = await api.updateMobileExtraWorkTicketDetails(assignmentId, order.id, {
+          manual_order_date: order.manual_order_date,
+          manual_execution_week: usesAutomaticWeek ? null : selectedWeek.week,
+          manual_execution_week_year: usesAutomaticWeek ? null : selectedWeek.isoYear,
+        });
+        onOrderUpdated(updatedOrder);
+      }
       await onSaved();
     } catch (requestError) {
       setError(readApiError(requestError, "Eingaben konnten nicht gespeichert werden."));
@@ -2338,7 +2399,7 @@ function ExtraWorkEntryPage({
   return (
     <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
-        <MobileBackButton label="Zurück zum Stundenzettel" onClick={onBack} />
+        <MobileBackButton label="Zurück zum Stundenzettel" onClick={requestBack} />
       </nav>
 
       <header className="mobile-extra-work-entry-header-card">
@@ -2450,11 +2511,10 @@ function ExtraWorkEntryPage({
                 className="mobile-extra-work-week-button"
                 type="button"
                 onClick={() => {
-                  setWeekError(null);
                   setVisibleWeekYear(selectedWeek.isoYear);
                   setIsWeekDialogOpen(true);
                 }}
-                disabled={!canEdit || isSavingWeek}
+                disabled={!canEdit || isSaving}
                 aria-label={`Kalenderwoche ändern, aktuell KW ${selectedWeek.week}`}
               >
                 <span>KW {selectedWeek.week}</span>
@@ -2486,9 +2546,20 @@ function ExtraWorkEntryPage({
                           <span>{day.label}</span>
                           <span className="mobile-extra-work-hours-input">
                             <input
+                              ref={(input) => {
+                                const inputKey = `${row.id}:${day.key}`;
+                                if (input) {
+                                  hoursInputRefs.current.set(inputKey, input);
+                                } else {
+                                  hoursInputRefs.current.delete(inputKey);
+                                }
+                              }}
                               inputMode="decimal"
+                              enterKeyHint={day.key === "sunday_hours" ? "done" : "next"}
                               value={row[day.key]}
                               onChange={(event) => updateWorkerRow(row.id, day.key, event.target.value)}
+                              onFocus={selectHoursInput}
+                              onKeyDown={(event) => handleHoursInputKeyDown(event, row.id, day.key)}
                               placeholder="0,00"
                               disabled={!canEdit}
                               aria-invalid={Boolean(validationError)}
@@ -2531,12 +2602,13 @@ function ExtraWorkEntryPage({
                 <span>Bemerkungen / ausgeführte Arbeiten</span>
               </span>
               <textarea
+                ref={remarksTextareaRef}
                 className={form.remarks.trim() ? "is-filled" : undefined}
                 value={form.remarks}
                 onChange={(event) => updateField("remarks", event.target.value)}
                 placeholder="z. B. Beschreibung der Arbeiten, Besonderheiten ..."
                 disabled={!canEdit}
-                rows={3}
+                rows={2}
               />
             </label>
           </section>
@@ -2545,6 +2617,69 @@ function ExtraWorkEntryPage({
               <Package aria-hidden="true" size={21} />
               <h2>Material</h2>
             </div>
+            <div className="mobile-extra-work-material-list">
+              {form.material_items.map((item) => {
+                const quantityLabel = formatExtraWorkMaterialQuantity(item.quantity, item.unit);
+                const isEditing = materialEditDraft?.id === item.id;
+                return (
+                  <div className={`mobile-extra-work-material-item${quantityLabel ? "" : " has-no-quantity"}`} key={item.id}>
+                    {isEditing && materialEditDraft ? (
+                      <div className="mobile-extra-work-material-edit">
+                        <label>
+                          <span>Menge</span>
+                          <input
+                            inputMode="decimal"
+                            value={materialEditDraft.quantity}
+                            onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, quantity: event.target.value } : current)}
+                            placeholder="2"
+                          />
+                        </label>
+                        <label>
+                          <span>Einheit</span>
+                          <input
+                            value={materialEditDraft.unit}
+                            onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, unit: event.target.value } : current)}
+                            placeholder="x"
+                            maxLength={16}
+                          />
+                        </label>
+                        <label className="is-description">
+                          <span>Material</span>
+                          <input
+                            value={materialEditDraft.description}
+                            onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, description: event.target.value } : current)}
+                            placeholder="Materialbeschreibung"
+                            maxLength={500}
+                          />
+                        </label>
+                        <div className="mobile-extra-work-material-edit-actions">
+                          <button type="button" onClick={() => setMaterialEditDraft(null)} aria-label="Bearbeitung abbrechen">
+                            <X aria-hidden="true" size={18} />
+                          </button>
+                          <button type="button" onClick={saveEditedMaterial} aria-label="Materialposition übernehmen">
+                            <CheckCircle2 aria-hidden="true" size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {quantityLabel ? <span className="mobile-extra-work-material-quantity">{quantityLabel}</span> : null}
+                        <span className="mobile-extra-work-material-description">{item.description}</span>
+                        <div className="mobile-extra-work-material-actions">
+                          <button type="button" onClick={() => startEditingMaterial(item)} disabled={!canEdit} aria-label={`${item.description} bearbeiten`}>
+                            <Pencil aria-hidden="true" size={17} />
+                          </button>
+                          <button type="button" onClick={() => removeMaterialItem(item.id)} disabled={!canEdit} aria-label={`${item.description} löschen`}>
+                            <Trash2 aria-hidden="true" size={17} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <div className={`mobile-extra-work-material-quick-input${materialQuickInput.trim() ? " is-filled" : ""}`}>
               <input
                 ref={materialQuickInputRef}
@@ -2563,6 +2698,7 @@ function ExtraWorkEntryPage({
               />
               <button
                 type="button"
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={addMaterialFromQuickInput}
                 disabled={!canEdit || !materialQuickInput.trim()}
                 aria-label="Materialposition hinzufügen"
@@ -2570,71 +2706,6 @@ function ExtraWorkEntryPage({
                 <Plus aria-hidden="true" size={20} />
               </button>
             </div>
-
-            {form.material_items.length > 0 ? (
-              <div className="mobile-extra-work-material-list">
-                {form.material_items.map((item) => {
-                  const quantityLabel = formatExtraWorkMaterialQuantity(item.quantity, item.unit);
-                  const isEditing = materialEditDraft?.id === item.id;
-                  return (
-                    <div className={`mobile-extra-work-material-item${quantityLabel ? "" : " has-no-quantity"}`} key={item.id}>
-                      {isEditing && materialEditDraft ? (
-                        <div className="mobile-extra-work-material-edit">
-                          <label>
-                            <span>Menge</span>
-                            <input
-                              inputMode="decimal"
-                              value={materialEditDraft.quantity}
-                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, quantity: event.target.value } : current)}
-                              placeholder="2"
-                            />
-                          </label>
-                          <label>
-                            <span>Einheit</span>
-                            <input
-                              value={materialEditDraft.unit}
-                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, unit: event.target.value } : current)}
-                              placeholder="x"
-                              maxLength={16}
-                            />
-                          </label>
-                          <label className="is-description">
-                            <span>Material</span>
-                            <input
-                              value={materialEditDraft.description}
-                              onChange={(event) => setMaterialEditDraft((current) => current ? { ...current, description: event.target.value } : current)}
-                              placeholder="Materialbeschreibung"
-                              maxLength={500}
-                            />
-                          </label>
-                          <div className="mobile-extra-work-material-edit-actions">
-                            <button type="button" onClick={() => setMaterialEditDraft(null)} aria-label="Bearbeitung abbrechen">
-                              <X aria-hidden="true" size={18} />
-                            </button>
-                            <button type="button" onClick={saveEditedMaterial} aria-label="Materialposition übernehmen">
-                              <CheckCircle2 aria-hidden="true" size={18} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {quantityLabel ? <span className="mobile-extra-work-material-quantity">{quantityLabel}</span> : null}
-                          <span className="mobile-extra-work-material-description">{item.description}</span>
-                          <div className="mobile-extra-work-material-actions">
-                            <button type="button" onClick={() => startEditingMaterial(item)} disabled={!canEdit} aria-label={`${item.description} bearbeiten`}>
-                              <Pencil aria-hidden="true" size={17} />
-                            </button>
-                            <button type="button" onClick={() => removeMaterialItem(item.id)} disabled={!canEdit} aria-label={`${item.description} löschen`}>
-                              <Trash2 aria-hidden="true" size={17} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
 
             {materialError ? <p className="mobile-extra-work-material-error">{materialError}</p> : null}
 
@@ -2650,12 +2721,6 @@ function ExtraWorkEntryPage({
               </label>
             ) : null}
 
-            {form.material_items.length > 0 ? (
-              <button className="secondary-action mobile-extra-work-add-material" type="button" onClick={focusMaterialQuickInput} disabled={!canEdit}>
-                <Plus aria-hidden="true" size={15} />
-                <span>Material hinzufügen</span>
-              </button>
-            ) : null}
           </section>
 
           {!canEdit ? (
@@ -2675,8 +2740,7 @@ function ExtraWorkEntryPage({
           selectedWeek={selectedWeek}
           selectedWeekRange={selectedWeekRange}
           visibleYear={visibleWeekYear}
-          isSaving={isSavingWeek}
-          error={weekError}
+          isSaving={isSaving}
           onVisibleYearChange={setVisibleWeekYear}
           onSelect={requestExecutionWeekChange}
           onClose={() => setIsWeekDialogOpen(false)}
@@ -2684,9 +2748,15 @@ function ExtraWorkEntryPage({
       ) : null}
       {pendingWeek ? (
         <ExtraWorkWeekChangeConfirmDialog
-          isSaving={isSavingWeek}
+          isSaving={isSaving}
           onCancel={() => setPendingWeek(null)}
-          onConfirm={() => void persistExecutionWeek(pendingWeek)}
+          onConfirm={() => applyExecutionWeek(pendingWeek)}
+        />
+      ) : null}
+      {isDiscardConfirmOpen ? (
+        <ExtraWorkDiscardChangesDialog
+          onCancel={() => setIsDiscardConfirmOpen(false)}
+          onDiscard={onBack}
         />
       ) : null}
     </div>
@@ -2698,7 +2768,6 @@ function ExtraWorkWeekPickerDialog({
   selectedWeekRange,
   visibleYear,
   isSaving,
-  error,
   onVisibleYearChange,
   onSelect,
   onClose,
@@ -2707,7 +2776,6 @@ function ExtraWorkWeekPickerDialog({
   selectedWeekRange: { start: string; end: string };
   visibleYear: number;
   isSaving: boolean;
-  error: string | null;
   onVisibleYearChange: (year: number) => void;
   onSelect: (week: { isoYear: number; week: number }) => void;
   onClose: () => void;
@@ -2765,12 +2833,12 @@ function ExtraWorkWeekPickerDialog({
                 aria-pressed={isSelected}
                 title={`${formatGermanDateKey(range.start)} – ${formatGermanDateKey(range.end)}`}
               >
-                KW {week}
+                <span>KW {week}</span>
+                <small>{formatGermanDayMonth(range.start)}–{formatGermanDayMonth(range.end)}</small>
               </button>
             );
           })}
         </div>
-        {error ? <p className="form-error">{error}</p> : null}
       </div>
     </div>
   );
@@ -2809,6 +2877,41 @@ function ExtraWorkWeekChangeConfirmDialog({
           <button className="primary-action" type="button" onClick={onConfirm} disabled={isSaving}>
             {isSaving ? "Speichert..." : "KW ändern"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtraWorkDiscardChangesDialog({
+  onCancel,
+  onDiscard,
+}: {
+  onCancel: () => void;
+  onDiscard: () => void;
+}) {
+  const isTopModal = useMobileModalStack(true);
+  return (
+    <div
+      aria-hidden={!isTopModal}
+      className="mobile-dialog-backdrop mobile-modal-layer"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onClick={onCancel}
+    >
+      <div
+        className="mobile-extra-work-week-confirm mobile-modal-scroll-region"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="mobile-extra-work-discard-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="mobile-extra-work-discard-title">Änderungen verwerfen?</h2>
+        <p>Deine noch nicht gespeicherten Eingaben gehen verloren.</p>
+        <div className="mobile-extra-work-week-confirm-actions">
+          <button className="secondary-action" type="button" onClick={onCancel}>Abbrechen</button>
+          <button className="danger-action" type="button" onClick={onDiscard}>Verwerfen</button>
         </div>
       </div>
     </div>
@@ -8240,6 +8343,58 @@ function getExtraWorkHoursFingerprint(rows: ExtraWorkWorkerHoursFormRow[]): stri
     .map((row) => EXTRA_WORK_WEEK_DAYS.map((day) => parseExtraWorkHoursInput(row[day.key])))
     .filter((hours) => hours.some((value) => value > 0));
   return JSON.stringify(enteredRows);
+}
+
+function getExtraWorkEntryFingerprint(
+  form: ExtraWorkEntryFormState,
+  executionWeek: { isoYear: number; week: number },
+): string {
+  return JSON.stringify({
+    component: form.component,
+    floor: form.floor,
+    room_number: form.room_number,
+    axis: form.axis,
+    remarks: form.remarks,
+    material_text: form.material_text,
+    material_items: form.material_items.map((item) => ({
+      quantity: item.quantity,
+      unit: item.unit,
+      description: item.description,
+    })),
+    estimated_hours: form.estimated_hours,
+    worker_rows: form.worker_rows.map((row) => ({ ...row, id: undefined })),
+    execution_week: executionWeek,
+  });
+}
+
+function hasExtraWorkMaterialEditChanges(
+  draft: ExtraWorkMaterialEditDraft | null,
+  items: ExtraWorkMaterialFormItem[],
+): boolean {
+  if (!draft) {
+    return false;
+  }
+  const item = items.find((candidate) => candidate.id === draft.id);
+  if (!item) {
+    return true;
+  }
+  const quantity = parseExtraWorkMaterialQuantity(draft.quantity);
+  return Number.isNaN(quantity)
+    || quantity !== item.quantity
+    || (draft.unit.trim() || null) !== item.unit
+    || draft.description.trim() !== item.description;
+}
+
+function resizeExtraWorkRemarksTextarea(textarea: HTMLTextAreaElement | null): void {
+  if (!textarea) {
+    return;
+  }
+  const minHeight = 56;
+  const maxHeight = 118;
+  textarea.style.height = "auto";
+  const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function calculateExtraWorkPayloadWorkerTotal(row: Record<ExtraWorkWeekdayKey, number>): number {

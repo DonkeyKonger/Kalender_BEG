@@ -8,6 +8,14 @@ export function formatGermanDateKey(value: string, year: DateKeyYearFormat = "2-
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year }).format(parsed);
 }
 
+export function formatGermanDayMonth(value: string): string {
+  const parsed = parseDateKey(value);
+  if (!parsed) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(parsed);
+}
+
 export function formatGermanDateKeyRange(start: string, end: string, year: DateKeyYearFormat = "2-digit"): string {
   return `${formatGermanDateKey(start, year)} bis ${formatGermanDateKey(end, year)}`;
 }

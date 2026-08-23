@@ -25832,6 +25832,14 @@ body.mobile-modal-scroll-locked {
   gap: 9px;
 }
 
+.mobile-extra-work-entry-header-meta .measurement-status {
+  min-height: 22px;
+  background-color: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 0.72rem;
+  font-weight: 750;
+  padding: 2px 7px;
+}
+
 .mobile-extra-work-entry-date {
   display: inline-flex;
   align-items: center;
@@ -26152,9 +26160,11 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-text-card textarea {
-  height: 76px;
-  min-height: 76px;
-  resize: vertical;
+  height: 56px;
+  min-height: 56px;
+  max-height: 118px;
+  overflow-y: hidden;
+  resize: none;
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -26341,11 +26351,6 @@ body.mobile-modal-scroll-locked {
   resize: vertical;
 }
 
-.mobile-extra-work-add-material {
-  min-height: 44px;
-  color: #0f468d;
-}
-
 .mobile-extra-work-entry-page .mobile-form-actions {
   position: static;
   bottom: auto;
@@ -26450,6 +26455,19 @@ body.mobile-modal-scroll-locked {
   background: #143c6d;
   color: #ffffff;
   box-shadow: 0 5px 12px rgb(20 60 109 / 20%);
+}
+
+.mobile-extra-work-week-options button {
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.05;
+}
+
+.mobile-extra-work-week-options button small {
+  font-size: 0.58rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0.82;
 }
 
 .mobile-extra-work-week-confirm {
