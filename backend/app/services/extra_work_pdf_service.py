@@ -9,10 +9,11 @@ from io import BytesIO
 import logging
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import HTTPException, status
 from pypdf import PdfReader, PdfWriter
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -37,7 +38,7 @@ from app.services.project_storage_service import ProjectStorageService
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v11-structured-material"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v12-compact-material"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -585,10 +586,10 @@ class ExtraWorkPdfService:
             _field(commands, _shift_rect(FIELD_RECTS["Raum Nr"], dy=2.0), entry.room_number or "", size=9)
             _field(commands, _shift_rect(FIELD_RECTS["Achse"], dy=2.0), entry.axis or "", size=9)
             _textarea(commands, FIELD_RECTS["BemerkungenRow1"], entry.remarks or "", size=7.5, max_lines=13)
-            _textarea(
+            _material_textarea(
                 commands,
                 FIELD_RECTS["Material"],
-                material_output,
+                entry,
                 size=8,
                 max_lines=3,
                 line_height=18,
@@ -860,6 +861,35 @@ def _textarea(
     line_height: float | None = None,
 ) -> None:
     lines = _wrap_text(_clean_multiline_text(text), rect.width - 4, size, max_lines)
+    _draw_textarea_lines(commands, rect, lines, size=size, line_height=line_height)
+
+
+def _material_textarea(
+    commands: list[bytes],
+    rect: FieldRect,
+    entry: ExtraWorkTicketEntry,
+    *,
+    size: float,
+    max_lines: int,
+    line_height: float | None = None,
+) -> None:
+    lines = _wrap_extra_work_material(
+        entry,
+        rect.width - 4,
+        size,
+        max_lines,
+    )
+    _draw_textarea_lines(commands, rect, lines, size=size, line_height=line_height)
+
+
+def _draw_textarea_lines(
+    commands: list[bytes],
+    rect: FieldRect,
+    lines: list[str],
+    *,
+    size: float,
+    line_height: float | None = None,
+) -> None:
     if not lines:
         return
     actual_line_height = line_height or size + 2.0
@@ -1115,53 +1145,111 @@ def _signature_place_short(place: str | None) -> str:
     return value
 
 
-def _wrap_text(text: str, width: float, size: float, max_lines: int) -> list[str]:
-    lines: list[str] = []
-    truncated = False
+TextWidthMeasure = Callable[[str, float], float]
+
+
+def _wrap_text(
+    text: str,
+    width: float,
+    size: float,
+    max_lines: int,
+    *,
+    text_width: TextWidthMeasure | None = None,
+) -> list[str]:
+    measure = text_width or _text_width
+    wrapped_lines: list[str] = []
     paragraphs = text.split("\n")
     for paragraph_index, paragraph in enumerate(paragraphs):
         words = paragraph.split()
         if not words:
-            if paragraph_index > 0 and lines and len(lines) < max_lines:
-                lines.append("")
+            if paragraph_index > 0 and wrapped_lines:
+                wrapped_lines.append("")
             continue
-        current = ""
-        for word_index, word in enumerate(words):
-            next_line = f"{current} {word}".strip()
-            if current and _text_width(next_line, size) > width:
-                lines.append(current)
-                current = word
-                if len(lines) >= max_lines:
-                    truncated = True
-                    break
-            else:
-                current = next_line
-        if truncated:
-            break
-        if current:
-            lines.append(current)
-        if len(lines) >= max_lines:
-            truncated = paragraph_index < len(paragraphs) - 1
-            break
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        truncated = True
+        wrapped_lines.extend(_wrap_words(words, width, size, measure))
+
+    truncated = len(wrapped_lines) > max_lines
+    lines = wrapped_lines[:max_lines]
     if truncated and lines:
-        lines[-1] = _fit_text(lines[-1], width, size, suffix="...")
+        lines[-1] = _fit_text(
+            lines[-1],
+            width,
+            size,
+            suffix="...",
+            text_width=measure,
+        )
     return lines
 
 
-def _fit_text(text: str, width: float, size: float, *, suffix: str = "") -> str:
-    if _text_width(text, size) <= width:
+def _wrap_words(
+    words: list[str],
+    width: float,
+    size: float,
+    measure: TextWidthMeasure,
+) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if measure(candidate, size) <= width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        if measure(word, size) <= width:
+            current = word
+            continue
+        fragments = _split_token_to_width(word, width, size, measure)
+        lines.extend(fragments[:-1])
+        current = fragments[-1] if fragments else ""
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _split_token_to_width(
+    token: str,
+    width: float,
+    size: float,
+    measure: TextWidthMeasure,
+) -> list[str]:
+    fragments: list[str] = []
+    current = ""
+    for character in token:
+        candidate = current + character
+        if current and measure(candidate, size) > width:
+            fragments.append(current)
+            current = character
+        else:
+            current = candidate
+    if current:
+        fragments.append(current)
+    return fragments
+
+
+def _fit_text(
+    text: str,
+    width: float,
+    size: float,
+    *,
+    suffix: str = "",
+    text_width: TextWidthMeasure | None = None,
+) -> str:
+    measure = text_width or _text_width
+    if measure(text, size) <= width:
         return text
     trimmed = text
-    while trimmed and _text_width(trimmed + suffix, size) > width:
+    while trimmed and measure(trimmed + suffix, size) > width:
         trimmed = trimmed[:-1]
     return (trimmed.rstrip() + suffix) if trimmed else ""
 
 
 def _text_width(text: str, size: float) -> float:
     return len(text) * size * 0.48
+
+
+def _pdf_font_text_width(text: str, size: float) -> float:
+    return stringWidth(text, "Helvetica", size)
 
 
 def _pdf_string(value: str) -> bytes:
@@ -1193,6 +1281,15 @@ def _format_extra_work_material(entry: ExtraWorkTicketEntry | None) -> str:
     legacy_text = _clean_multiline_text(entry.material_text).strip()
     if legacy_text:
         sections.append(legacy_text)
+    item_lines = _format_extra_work_material_items(entry)
+    if item_lines:
+        sections.append("; ".join(item_lines))
+    return "\n".join(sections)
+
+
+def _format_extra_work_material_items(entry: ExtraWorkTicketEntry | None) -> list[str]:
+    if entry is None:
+        return []
     item_lines: list[str] = []
     for item in entry.material_items or []:
         description = _clean_text(str(item.get("description") or ""))
@@ -1210,9 +1307,72 @@ def _format_extra_work_material(entry: ExtraWorkTicketEntry | None) -> str:
             else " ".join(part for part in (formatted_quantity, unit) if part)
         )
         item_lines.append(f"{quantity_label} {description}".strip())
+    return item_lines
+
+
+def _wrap_extra_work_material(
+    entry: ExtraWorkTicketEntry | None,
+    width: float,
+    size: float,
+    max_lines: int,
+) -> list[str]:
+    if entry is None:
+        return []
+    lines: list[str] = []
+    legacy_text = _clean_multiline_text(entry.material_text).strip()
+    if legacy_text:
+        lines.extend(
+            _wrap_text(
+                legacy_text,
+                width,
+                size,
+                max_lines=10_000,
+                text_width=_pdf_font_text_width,
+            )
+        )
+    item_lines = _format_extra_work_material_items(entry)
     if item_lines:
-        sections.append("\n".join(item_lines))
-    return "\n".join(sections)
+        lines.extend(_wrap_material_positions(item_lines, width, size))
+    if len(lines) <= max_lines:
+        return lines
+    visible_lines = lines[:max_lines]
+    visible_lines[-1] = _fit_text(
+        visible_lines[-1],
+        width,
+        size,
+        suffix="...",
+        text_width=_pdf_font_text_width,
+    )
+    return visible_lines
+
+
+def _wrap_material_positions(
+    positions: list[str],
+    width: float,
+    size: float,
+) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for index, position in enumerate(positions):
+        piece = position + (";" if index < len(positions) - 1 else "")
+        candidate = f"{current} {piece}".strip()
+        if _pdf_font_text_width(candidate, size) <= width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        wrapped_piece = _wrap_text(
+            piece,
+            width,
+            size,
+            max_lines=10_000,
+            text_width=_pdf_font_text_width,
+        )
+        lines.extend(wrapped_piece[:-1])
+        current = wrapped_piece[-1] if wrapped_piece else ""
+    if current:
+        lines.append(current)
+    return lines
 
 
 def _date_from_datetime(value: datetime | None) -> date:

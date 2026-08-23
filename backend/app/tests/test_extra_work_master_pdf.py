@@ -55,10 +55,83 @@ def test_structured_and_legacy_material_share_the_existing_pdf_output():
 
     assert pdf_module._format_extra_work_material(entry) == (
         "Legacy-Klemmen\n"
-        "2x Stiel US 5 bis 500\n"
-        "2,5 m Kabelrinne\n"
+        "2x Stiel US 5 bis 500; "
+        "2,5 m Kabelrinne; "
         "Kleinmaterial Befestigung"
     )
+
+
+def test_structured_material_formats_optional_quantity_and_unit_without_extra_spaces():
+    entry = ExtraWorkTicketEntry(
+        material_items=[
+            {"quantity": 100, "unit": "", "description": "  Schutzkappen  "},
+            {"quantity": None, "unit": "Stk", "description": "Kleinmaterial   Befestigung"},
+            {"quantity": 10, "unit": " m ", "description": " RKSM 610 "},
+        ],
+    )
+
+    assert pdf_module._format_extra_work_material(entry) == (
+        "100 Schutzkappen; Kleinmaterial Befestigung; 10 m RKSM 610"
+    )
+    assert not pdf_module._format_extra_work_material(entry).endswith(";")
+
+
+def test_material_wrap_uses_font_metrics_and_prefers_complete_position_boundaries():
+    positions = ["2x US 5 Stiel", "100 St RGV 60", "10 m RKSM 610"]
+    first_line = "2x US 5 Stiel; 100 St RGV 60;"
+    width = pdf_module._pdf_font_text_width(first_line, 8) + 0.1
+
+    assert pdf_module._pdf_font_text_width("WWWW", 8) > pdf_module._pdf_font_text_width("iiii", 8)
+    assert pdf_module._wrap_material_positions(positions, width, 8) == [
+        first_line,
+        "10 m RKSM 610",
+    ]
+
+
+def test_single_long_material_position_wraps_by_words_without_clipping_or_ellipsis():
+    position = (
+        "10 Stk sehr langer Materialname mit zusätzlicher technischer "
+        "Beschreibung für fachgerechte Montage"
+    )
+    lines = pdf_module._wrap_material_positions([position], 150, 8)
+
+    assert len(lines) > 1
+    assert " ".join(lines) == position
+    assert all(pdf_module._pdf_font_text_width(line, 8) <= 150 for line in lines)
+    assert all("..." not in line for line in lines)
+
+
+def test_twenty_short_material_positions_fit_the_existing_three_line_pdf_field():
+    entry = ExtraWorkTicketEntry(
+        material_items=[
+            {"quantity": index, "unit": "x", "description": f"M{index}"}
+            for index in range(1, 21)
+        ],
+    )
+    width = pdf_module.FIELD_RECTS["Material"].width - 4
+    lines = pdf_module._wrap_extra_work_material(entry, width, 8, max_lines=3)
+    expected = "; ".join(f"{index}x M{index}" for index in range(1, 21))
+
+    assert 1 < len(lines) <= 3
+    assert " ".join(lines) == expected
+    assert all(pdf_module._pdf_font_text_width(line, 8) <= width for line in lines)
+    assert all("..." not in line for line in lines)
+
+
+def test_legacy_material_line_breaks_and_empty_material_remain_compatible():
+    legacy_entry = ExtraWorkTicketEntry(
+        material_text="Kabelrinne alt\nBefestiger alt",
+        material_items=[{"quantity": 2, "unit": "x", "description": "Stiel neu"}],
+    )
+    width = pdf_module.FIELD_RECTS["Material"].width - 4
+
+    assert pdf_module._wrap_extra_work_material(legacy_entry, width, 8, max_lines=3) == [
+        "Kabelrinne alt",
+        "Befestiger alt",
+        "2x Stiel neu",
+    ]
+    assert pdf_module._format_extra_work_material(ExtraWorkTicketEntry()) == ""
+    assert pdf_module._wrap_extra_work_material(ExtraWorkTicketEntry(), width, 8, 3) == []
 
 
 def test_clean_master_template_is_cached_and_has_no_interactive_or_default_zero_values():
