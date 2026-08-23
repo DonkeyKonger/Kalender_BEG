@@ -53,7 +53,7 @@ import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatu
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkMaterialItem, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
-import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear } from "../utils/dateRange";
+import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -2783,6 +2783,25 @@ function ExtraWorkWeekPickerDialog({
 }) {
   const isTopModal = useMobileModalStack(true);
   const weeks = Array.from({ length: getIsoWeeksInYear(visibleYear) }, (_, index) => index + 1);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollTargetRef = useRef<HTMLButtonElement>(null);
+  const scrollTargetWeek = getExtraWorkWeekPickerTargetWeek(selectedWeek, visibleYear);
+
+  useLayoutEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    const scrollTarget = scrollTargetRef.current;
+    if (!scrollContainer || !scrollTarget) {
+      return;
+    }
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = scrollTarget.getBoundingClientRect();
+    const targetCenter = scrollContainer.scrollTop
+      + (targetRect.top - containerRect.top)
+      + (targetRect.height / 2);
+    const maxScrollTop = Math.max(scrollContainer.scrollHeight - scrollContainer.clientHeight, 0);
+    const centeredScrollTop = targetCenter - (scrollContainer.clientHeight / 2);
+    scrollContainer.scrollTop = Math.min(Math.max(centeredScrollTop, 0), maxScrollTop);
+  }, [scrollTargetWeek, visibleYear]);
 
   return (
     <div
@@ -2794,7 +2813,7 @@ function ExtraWorkWeekPickerDialog({
       onClick={isSaving ? undefined : onClose}
     >
       <div
-        className="mobile-extra-work-week-dialog mobile-modal-scroll-region"
+        className="mobile-extra-work-week-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-extra-work-week-dialog-title"
@@ -2820,12 +2839,17 @@ function ExtraWorkWeekPickerDialog({
             <ChevronRight aria-hidden="true" size={20} />
           </button>
         </div>
-        <div className="mobile-extra-work-week-options" aria-label={`Kalenderwochen ${visibleYear}`}>
+        <div
+          ref={scrollContainerRef}
+          className="mobile-extra-work-week-options mobile-modal-scroll-region"
+          aria-label={`Kalenderwochen ${visibleYear}`}
+        >
           {weeks.map((week) => {
             const isSelected = selectedWeek.isoYear === visibleYear && selectedWeek.week === week;
             const range = getIsoWeekRange(visibleYear, week);
             return (
               <button
+                ref={week === scrollTargetWeek ? scrollTargetRef : undefined}
                 className={isSelected ? "is-selected" : ""}
                 type="button"
                 key={`${visibleYear}-${week}`}
@@ -2842,6 +2866,29 @@ function ExtraWorkWeekPickerDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function getExtraWorkWeekPickerTargetWeek(
+  selectedWeek: { isoYear: number; week: number } | null | undefined,
+  visibleYear: number,
+): number {
+  const currentWeek = getIsoWeekInfo(toDateInputValue(new Date()));
+  const sourceWeek = isValidExtraWorkIsoWeek(selectedWeek) ? selectedWeek.week : currentWeek.week;
+  return Math.min(sourceWeek, getIsoWeeksInYear(visibleYear));
+}
+
+function isValidExtraWorkIsoWeek(
+  value: { isoYear: number; week: number } | null | undefined,
+): value is { isoYear: number; week: number } {
+  return Boolean(
+    value
+    && Number.isInteger(value.isoYear)
+    && value.isoYear >= 1
+    && value.isoYear <= 9999
+    && Number.isInteger(value.week)
+    && value.week >= 1
+    && value.week <= getIsoWeeksInYear(value.isoYear),
   );
 }
 

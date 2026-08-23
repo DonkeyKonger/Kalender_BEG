@@ -18,6 +18,8 @@ test("ISO week helpers handle year boundaries and years without week 53", () => 
   assert.deepEqual(getIsoWeekRange(2025, 1), { start: "2024-12-30", end: "2025-01-05" });
   assert.equal(getIsoWeeksInYear(2025), 52);
   assert.throws(() => getIsoWeekRange(2025, 53), /existiert im ISO-Jahr 2025 nicht/);
+  assert.equal(getIsoWeeksInYear(2026), 53);
+  assert.deepEqual(getIsoWeekRange(2026, 53), { start: "2026-12-28", end: "2027-01-03" });
 });
 
 test("the existing information card opens the compact details dialog without another action tile", () => {
@@ -151,6 +153,25 @@ test("changing week protects only unsaved hour input with an explicit confirmati
   assert.match(pageSource, /Bereits eingegebene, noch nicht gespeicherte Stunden beziehen sich auf die aktuelle KW\./);
   assert.match(pageSource, />Abbrechen<\/button>/);
   assert.match(pageSource, /"KW ändern"/);
+});
+
+test("week picker centers its relevant week only on open and real year changes", () => {
+  const dialogSource = pageSource.slice(
+    pageSource.indexOf("function ExtraWorkWeekPickerDialog"),
+    pageSource.indexOf("function ExtraWorkWeekChangeConfirmDialog"),
+  );
+  assert.match(dialogSource, /const scrollContainerRef = useRef<HTMLDivElement>\(null\)/);
+  assert.match(dialogSource, /const scrollTargetRef = useRef<HTMLButtonElement>\(null\)/);
+  assert.match(dialogSource, /getExtraWorkWeekPickerTargetWeek\(selectedWeek, visibleYear\)/);
+  assert.match(dialogSource, /useLayoutEffect\(\(\) => \{[\s\S]*scrollContainer\.scrollTop = Math\.min\(Math\.max\(centeredScrollTop, 0\), maxScrollTop\);[\s\S]*\}, \[scrollTargetWeek, visibleYear\]\)/);
+  assert.match(dialogSource, /ref=\{scrollContainerRef\}\s*className="mobile-extra-work-week-options mobile-modal-scroll-region"/);
+  assert.match(dialogSource, /ref=\{week === scrollTargetWeek \? scrollTargetRef : undefined\}/);
+  assert.match(dialogSource, /isValidExtraWorkIsoWeek\(selectedWeek\) \? selectedWeek\.week : currentWeek\.week/);
+  assert.match(dialogSource, /getIsoWeekInfo\(toDateInputValue\(new Date\(\)\)\)/);
+  assert.match(dialogSource, /Math\.min\(sourceWeek, getIsoWeeksInYear\(visibleYear\)\)/);
+  assert.doesNotMatch(dialogSource, /scrollIntoView|behavior:\s*"smooth"|setTimeout/);
+  assert.match(styles, /\.mobile-extra-work-week-dialog \{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.mobile-extra-work-week-options \{[^}]*min-height:\s*0;[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;/s);
 });
 
 test("mobile performance entry has sticky back navigation and narrow touch-safe grids", () => {
