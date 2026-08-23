@@ -2400,13 +2400,11 @@ function ExtraWorkEntryPage({
     <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
         <MobileBackButton label="Zurück zum Stundenzettel" onClick={requestBack} />
+        <h1>{isApproval ? "Stundenfreigabe erfassen" : "Leistungen erfassen"}</h1>
       </nav>
 
       <header className="mobile-extra-work-entry-header-card">
-        <div>
-          <h1>{isApproval ? "Stundenfreigabe erfassen" : "Leistungen erfassen"}</h1>
-          <p>{formatMobileExtraWorkEntrySubtitle(order)}</p>
-        </div>
+        <h2 className="mobile-extra-work-entry-title">{formatMobileExtraWorkEntrySubtitle(order)}</h2>
         <div className="mobile-extra-work-entry-header-meta">
           <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
           <span className="mobile-extra-work-entry-date">
@@ -2693,6 +2691,9 @@ function ExtraWorkEntryPage({
                 }}
                 placeholder="z. B. 2x Stiel US 5 bis 500"
                 enterKeyHint="done"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 disabled={!canEdit}
                 maxLength={500}
               />

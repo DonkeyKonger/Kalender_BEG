@@ -6405,11 +6405,13 @@ button.person-chip:focus-visible {
 }
 
 .mobile-personal-file-header h1,
-.mobile-personal-file-header p {
+.mobile-personal-file-header p,
+.mobile-extra-work-sticky-nav h1 {
   margin: 0;
 }
 
-.mobile-personal-file-header h1 {
+.mobile-personal-file-header h1,
+.mobile-extra-work-sticky-nav h1 {
   color: #111827;
   font-size: 1.36rem;
   line-height: 1.15;
@@ -25782,8 +25784,10 @@ body.mobile-modal-scroll-locked {
   position: sticky;
   top: 0;
   z-index: 20;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
   min-height: 48px;
   border-bottom: 1px solid rgb(216 227 239 / 88%);
   background: rgb(245 248 252 / 96%);
@@ -25808,22 +25812,14 @@ body.mobile-modal-scroll-locked {
   padding: 14px;
 }
 
-.mobile-extra-work-entry-header-card h1,
-.mobile-extra-work-entry-header-card p {
+.mobile-extra-work-entry-title {
   margin: 0;
-}
-
-.mobile-extra-work-entry-header-card h1 {
+  min-width: 0;
   color: #111827;
-  font-size: clamp(1.35rem, 6vw, 1.72rem);
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-}
-
-.mobile-extra-work-entry-header-card p {
-  margin-top: 5px;
-  color: #334155;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: 0;
 }
 
 .mobile-extra-work-entry-header-meta {
@@ -26490,11 +26486,6 @@ body.mobile-modal-scroll-locked {
     padding: 13px;
   }
 
-  .mobile-extra-work-entry-header-card h1 {
-    font-size: 1.28rem;
-  }
-
-  .mobile-extra-work-entry-header-card p,
   .mobile-extra-work-entry-date {
     font-size: 0.78rem;
   }

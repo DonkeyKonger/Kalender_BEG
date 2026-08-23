@@ -154,9 +154,12 @@ test("changing week protects only unsaved hour input with an explicit confirmati
 });
 
 test("mobile performance entry has sticky back navigation and narrow touch-safe grids", () => {
-  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<MobileBackButton label="Zurück zum Stundenzettel" onClick=\{requestBack\} \/>/);
+  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<MobileBackButton label="Zurück zum Stundenzettel" onClick=\{requestBack\} \/>\s*<h1>\{isApproval \? "Stundenfreigabe erfassen" : "Leistungen erfassen"\}<\/h1>/);
+  assert.match(pageSource, /<header className="mobile-extra-work-entry-header-card">\s*<h2 className="mobile-extra-work-entry-title">\{formatMobileExtraWorkEntrySubtitle\(order\)\}<\/h2>/);
   assert.doesNotMatch(pageSource, /mobile-extra-work-sticky-nav[\s\S]{0,300}className="icon-button secondary mobile-back-button"/);
-  assert.match(styles, /\.mobile-extra-work-sticky-nav \{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
+  assert.match(styles, /\.mobile-extra-work-sticky-nav \{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /\.mobile-personal-file-header h1,\s*\.mobile-extra-work-sticky-nav h1 \{[^}]*font-size:\s*1\.36rem;[^}]*line-height:\s*1\.15;/s);
+  assert.match(styles, /\.mobile-extra-work-entry-title \{[^}]*font-size:\s*1\.15rem;[^}]*font-weight:\s*850;/s);
   assert.doesNotMatch(styles, /\.mobile-extra-work-sticky-nav \.mobile-back-button/);
   assert.match(styles, /\.mobile-extra-work-location-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-grid \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s);
@@ -188,6 +191,9 @@ test("material quick rows stay local, editable and backward compatible", () => {
   assert.match(entrySource, /<div className="mobile-extra-work-material-list">[\s\S]*<div className=\{`mobile-extra-work-material-quick-input/);
   assert.match(entrySource, /window\.requestAnimationFrame\(keepMaterialQuickInputActive\)/);
   assert.match(entrySource, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(entrySource, /ref=\{materialQuickInputRef\}[\s\S]*?autoCapitalize="characters"[\s\S]*?autoCorrect="off"[\s\S]*?spellCheck=\{false\}/);
+  assert.equal((entrySource.match(/autoCapitalize="characters"/g) ?? []).length, 1);
+  assert.doesNotMatch(entrySource, /materialQuickInput[^\n]*\.toUpperCase\(/);
   assert.match(entrySource, /scrollIntoView\(\{ block: "nearest", inline: "nearest", behavior: "auto" \}\)/);
   assert.match(entrySource, /onPointerDown=\{\(event\) => event\.preventDefault\(\)\}/);
   assert.match(entrySource, /startEditingMaterial\(item\)/);
