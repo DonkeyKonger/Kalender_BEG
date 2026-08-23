@@ -2338,10 +2338,7 @@ function ExtraWorkEntryPage({
   return (
     <div className="mobile-measurement-entry-page mobile-extra-work-entry-page">
       <nav className="mobile-extra-work-sticky-nav" aria-label="Zurück zum Stundenzettel">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={20} />
-          <span>Stundenzettel</span>
-        </button>
+        <MobileBackButton label="Zurück zum Stundenzettel" onClick={onBack} />
       </nav>
 
       <header className="mobile-extra-work-entry-header-card">
@@ -2377,7 +2374,7 @@ function ExtraWorkEntryPage({
             <div className="mobile-extra-work-location-grid">
               <label className="mobile-extra-work-location-control">
                 <span className="mobile-extra-work-location-label">Bauteil</span>
-                <span className="mobile-extra-work-location-input">
+                <span className={`mobile-extra-work-location-input${form.component.trim() ? " is-filled" : ""}`}>
                   <span className="mobile-extra-work-location-icon"><Building2 aria-hidden="true" size={18} /></span>
                   <input
                     value={form.component}
@@ -2390,7 +2387,7 @@ function ExtraWorkEntryPage({
               </label>
               <label className="mobile-extra-work-location-control">
                 <span className="mobile-extra-work-location-label">Etage</span>
-                <span className="mobile-extra-work-location-input">
+                <span className={`mobile-extra-work-location-input${form.floor.trim() ? " is-filled" : ""}`}>
                   <span className="mobile-extra-work-location-icon"><Layers3 aria-hidden="true" size={18} /></span>
                   <input
                     value={form.floor}
@@ -2403,19 +2400,19 @@ function ExtraWorkEntryPage({
               </label>
               <label className="mobile-extra-work-location-control">
                 <span className="mobile-extra-work-location-label">Raum Nr.</span>
-                <span className="mobile-extra-work-location-input">
+                <span className={`mobile-extra-work-location-input${form.room_number.trim() ? " is-filled" : ""}`}>
                   <span className="mobile-extra-work-location-icon"><DoorOpen aria-hidden="true" size={18} /></span>
                   <input
                     value={form.room_number}
                     onChange={(event) => updateField("room_number", event.target.value)}
-                    placeholder="z. B. A-B-5-5.1"
+                    placeholder="z. B. 681"
                     disabled={!canEdit}
                   />
                 </span>
               </label>
               <label className="mobile-extra-work-location-control">
                 <span className="mobile-extra-work-location-label">Achse</span>
-                <span className="mobile-extra-work-location-input">
+                <span className={`mobile-extra-work-location-input${form.axis.trim() ? " is-filled" : ""}`}>
                   <span className="mobile-extra-work-location-icon"><Grid2X2 aria-hidden="true" size={18} /></span>
                   <input
                     value={form.axis}
@@ -2534,6 +2531,7 @@ function ExtraWorkEntryPage({
                 <span>Bemerkungen / ausgeführte Arbeiten</span>
               </span>
               <textarea
+                className={form.remarks.trim() ? "is-filled" : undefined}
                 value={form.remarks}
                 onChange={(event) => updateField("remarks", event.target.value)}
                 placeholder="z. B. Beschreibung der Arbeiten, Besonderheiten ..."
@@ -2547,7 +2545,7 @@ function ExtraWorkEntryPage({
               <Package aria-hidden="true" size={21} />
               <h2>Material</h2>
             </div>
-            <div className="mobile-extra-work-material-quick-input">
+            <div className={`mobile-extra-work-material-quick-input${materialQuickInput.trim() ? " is-filled" : ""}`}>
               <input
                 ref={materialQuickInputRef}
                 value={materialQuickInput}

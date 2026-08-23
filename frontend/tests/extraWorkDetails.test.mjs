@@ -106,12 +106,13 @@ test("mobile performance entry keeps all direct fields in one compact card flow"
   assert.match(pageSource, />Ort \/ Position</);
   assert.match(pageSource, /placeholder="z\. B\. Halle A"/);
   assert.match(pageSource, /placeholder="z\. B\. EG"/);
-  assert.match(pageSource, /placeholder="z\. B\. A-B-5-5\.1"/);
+  assert.match(pageSource, /placeholder="z\. B\. 681"/);
+  assert.doesNotMatch(pageSource, /placeholder="z\. B\. A-B-5-5\.1"/);
   assert.match(pageSource, /placeholder="z\. B\. 1-2 \/ A-B"/);
   assert.match(pageSource, /placeholder="z\. B\. Beschreibung der Arbeiten, Besonderheiten \.\.\."/);
   assert.match(pageSource, /placeholder="z\. B\. 2x Stiel US 5 bis 500"/);
   assert.match(pageSource, /className="mobile-extra-work-location-label">Bauteil/);
-  assert.match(pageSource, /className="mobile-extra-work-location-input"/);
+  assert.match(pageSource, /mobile-extra-work-location-input\$\{form\.component\.trim\(\) \? " is-filled" : ""\}/);
   assert.match(styles, /\.mobile-extra-work-location-input \{[^}]*min-height:\s*48px;[^}]*border:\s*1px solid/s);
   assert.match(styles, /\.mobile-extra-work-location-input:focus-within \{[^}]*border-color:\s*#4f83c2;[^}]*box-shadow:/s);
 });
@@ -149,12 +150,28 @@ test("changing week protects only unsaved hour input with an explicit confirmati
 });
 
 test("mobile performance entry has sticky back navigation and narrow touch-safe grids", () => {
-  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<span>Stundenzettel<\/span>/);
+  assert.match(pageSource, /<nav className="mobile-extra-work-sticky-nav"[\s\S]*<MobileBackButton label="Zurück zum Stundenzettel" onClick=\{onBack\} \/>/);
+  assert.doesNotMatch(pageSource, /mobile-extra-work-sticky-nav[\s\S]{0,300}className="icon-button secondary mobile-back-button"/);
   assert.match(styles, /\.mobile-extra-work-sticky-nav \{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
+  assert.doesNotMatch(styles, /\.mobile-extra-work-sticky-nav \.mobile-back-button/);
   assert.match(styles, /\.mobile-extra-work-location-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-grid \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s);
   assert.match(styles, /\.mobile-extra-work-week-button \{[^}]*min-height:\s*44px;/s);
   assert.match(styles, /@media \(max-width: 375px\)[\s\S]*\.mobile-extra-work-week-grid/s);
+});
+
+test("extra-work fields expose stable empty, filled and focus states", () => {
+  for (const field of ["component", "floor", "room_number", "axis"]) {
+    assert.match(pageSource, new RegExp(`mobile-extra-work-location-input\\$\\{form\\.${field}\\.trim\\(\\) \\? " is-filled" : ""\\}`));
+  }
+  assert.match(pageSource, /className=\{form\.remarks\.trim\(\) \? "is-filled" : undefined\}/);
+  assert.match(pageSource, /mobile-extra-work-material-quick-input\$\{materialQuickInput\.trim\(\) \? " is-filled" : ""\}/);
+  assert.match(styles, /\.mobile-extra-work-location-input\.is-filled \{[^}]*border-color:[^}]*background:/s);
+  assert.match(styles, /\.mobile-extra-work-location-input\.is-filled \.mobile-extra-work-location-icon \{[^}]*background:[^}]*color:/s);
+  assert.match(styles, /\.mobile-extra-work-text-card textarea\.is-filled \{[^}]*border-color:[^}]*background:/s);
+  assert.match(styles, /\.mobile-extra-work-material-quick-input\.is-filled input \{[^}]*border-color:[^}]*background:/s);
+  assert.doesNotMatch(styles, /\.mobile-extra-work-location-input\.is-filled \{[^}]*(?:border-width|transform):/s);
+  assert.match(styles, /\.mobile-extra-work-location-input:focus-within \{[^}]*border-color:\s*#4f83c2;[^}]*box-shadow:/s);
 });
 
 test("material quick rows stay local, editable and backward compatible", () => {

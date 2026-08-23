@@ -4,7 +4,34 @@ export type ExtraWorkMaterialItem = {
   description: string;
 };
 
-const EXTRA_WORK_MATERIAL_UNIT_PATTERN = "(?:stück|stk\\.?|mm|cm|kg|m|x)";
+const EXTRA_WORK_MATERIAL_UNIT_GROUPS = [
+  { canonical: "Stk", aliases: ["st", "stk", "stck", "stück", "stueck", "stückzahl", "stueckzahl"] },
+  { canonical: "x", aliases: ["x"] },
+  { canonical: "m", aliases: ["m", "meter", "lfm"] },
+  { canonical: "mm", aliases: ["mm"] },
+  { canonical: "cm", aliases: ["cm"] },
+  { canonical: "kg", aliases: ["kg"] },
+  { canonical: "g", aliases: ["g"] },
+  { canonical: "Std", aliases: ["h", "std", "stunde", "stunden"] },
+  { canonical: "Rolle", aliases: ["rolle", "rollen"] },
+  { canonical: "Bund", aliases: ["bund", "bünde", "buende"] },
+  { canonical: "Karton", aliases: ["karton", "kartons"] },
+  { canonical: "Paket", aliases: ["paket", "pakete"] },
+  { canonical: "Packung", aliases: ["packung", "packungen"] },
+  { canonical: "Set", aliases: ["set", "sets"] },
+  { canonical: "Satz", aliases: ["satz", "sätze", "saetze"] },
+  { canonical: "Paar", aliases: ["paar"] },
+] as const;
+
+const EXTRA_WORK_MATERIAL_UNIT_ALIASES = new Map<string, string>(
+  EXTRA_WORK_MATERIAL_UNIT_GROUPS.flatMap(({ canonical, aliases }) => (
+    aliases.map((alias) => [alias, canonical] as const)
+  )),
+);
+const EXTRA_WORK_MATERIAL_UNIT_PATTERN = `(?:${[...EXTRA_WORK_MATERIAL_UNIT_ALIASES.keys()]
+  .sort((left, right) => right.length - left.length)
+  .map((alias) => `${escapeRegularExpression(alias)}\\.?`)
+  .join("|")})`;
 const EXTRA_WORK_MATERIAL_PATTERN = new RegExp(
   `^\\s*(\\d+(?:[.,]\\d+)?)\\s*(${EXTRA_WORK_MATERIAL_UNIT_PATTERN})\\s+(.+?)\\s*$`,
   "iu",
@@ -56,8 +83,9 @@ export function formatExtraWorkMaterialQuantity(
 
 function normalizeExtraWorkMaterialUnit(value: string): string {
   const normalized = value.trim().replace(/\.$/, "").toLocaleLowerCase("de-DE");
-  if (normalized === "stück" || normalized === "stk") {
-    return "Stk";
-  }
-  return normalized;
+  return EXTRA_WORK_MATERIAL_UNIT_ALIASES.get(normalized) ?? normalized;
+}
+
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

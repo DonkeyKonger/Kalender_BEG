@@ -25787,17 +25787,8 @@ body.mobile-modal-scroll-locked {
   min-height: 48px;
   border-bottom: 1px solid rgb(216 227 239 / 88%);
   background: rgb(245 248 252 / 96%);
-  padding: max(2px, env(safe-area-inset-top, 0px)) 0 4px;
+  padding: max(2px, env(safe-area-inset-top, 0px)) 2px 4px;
   backdrop-filter: blur(14px);
-}
-
-.mobile-extra-work-sticky-nav .mobile-back-button {
-  min-height: 44px;
-  border-radius: 9px;
-  background: #ffffff;
-  color: #143c6d;
-  padding: 9px 12px;
-  box-shadow: 0 5px 14px rgb(18 29 52 / 5%);
 }
 
 .mobile-extra-work-entry-header-card,
@@ -25922,7 +25913,7 @@ body.mobile-modal-scroll-locked {
   border-radius: 9px;
   background: #ffffff;
   padding: 5px 7px;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .mobile-extra-work-location-icon {
@@ -25933,6 +25924,17 @@ body.mobile-modal-scroll-locked {
   border-radius: 7px;
   background: #f2f6fc;
   color: #164b8b;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.mobile-extra-work-location-input.is-filled {
+  border-color: #c2d3e6;
+  background: #f9fbfe;
+}
+
+.mobile-extra-work-location-input.is-filled .mobile-extra-work-location-icon {
+  background: #e8f0fa;
+  color: #123f76;
 }
 
 .mobile-measurement-form .mobile-extra-work-location-input input {
@@ -25957,6 +25959,7 @@ body.mobile-modal-scroll-locked {
 
 .mobile-measurement-form .mobile-extra-work-location-input:focus-within {
   border-color: #4f83c2;
+  background: #ffffff;
   box-shadow: 0 0 0 3px rgb(79 131 194 / 13%);
 }
 
@@ -26152,6 +26155,19 @@ body.mobile-modal-scroll-locked {
   height: 76px;
   min-height: 76px;
   resize: vertical;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.mobile-extra-work-text-card textarea.is-filled {
+  border-color: #c2d3e6;
+  background: #f9fbfe;
+}
+
+.mobile-measurement-form .mobile-extra-work-text-card textarea:focus {
+  border-color: #4f83c2;
+  background: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(79 131 194 / 13%);
 }
 
 .mobile-extra-work-material-card {
@@ -26174,10 +26190,17 @@ body.mobile-modal-scroll-locked {
   color: #172033;
   font-size: 1rem;
   outline: none;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.mobile-measurement-form .mobile-extra-work-material-quick-input.is-filled input {
+  border-color: #c2d3e6;
+  background: #f9fbfe;
 }
 
 .mobile-measurement-form .mobile-extra-work-material-quick-input input:focus {
   border-color: #4f83c2;
+  background: #ffffff;
   box-shadow: 0 0 0 3px rgb(79 131 194 / 13%);
 }
 
