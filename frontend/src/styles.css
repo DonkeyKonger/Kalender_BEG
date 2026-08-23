@@ -26363,7 +26363,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-entry-page .mobile-extra-work-entry-actions {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 9fr) minmax(0, 11fr);
 }
 
 .mobile-extra-work-entry-actions > button {
@@ -26372,12 +26372,12 @@ body.mobile-modal-scroll-locked {
 
 .mobile-extra-work-entry-actions .mobile-extra-work-photo-action {
   min-height: 50px;
-  gap: 4px;
+  gap: 5px;
   border-radius: 10px;
-  padding-inline: 5px;
-  font-size: clamp(0.72rem, 3.2vw, 0.86rem);
-  line-height: 1.15;
-  white-space: normal;
+  padding-inline: 6px;
+  font-size: 0.86rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .mobile-extra-work-photo-action svg {

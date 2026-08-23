@@ -288,8 +288,8 @@ test("mobile performance entry splits only the existing action content into seco
   assert.match(entrySource, /className="mobile-form-actions mobile-extra-work-entry-actions"/);
   assert.match(entrySource, /className="secondary-action mobile-extra-work-photo-action"[\s\S]*<Camera[\s\S]*<span>Foto hinzufügen<\/span>/);
   assert.match(entrySource, /className="primary-action" type="submit" disabled=\{isSaving \|\| !canEdit \|\| hasInvalidDailyHours\}[\s\S]*\{isSaving \? "Speichert\.\.\." : "Speichern"\}/);
-  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-entry-actions \{[^}]*grid-template-columns:\s*minmax\(0, 2fr\) minmax\(0, 3fr\);/s);
-  assert.match(styles, /\.mobile-extra-work-entry-actions \.mobile-extra-work-photo-action \{[^}]*min-height:\s*50px;[^}]*white-space:\s*normal;/s);
+  assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-extra-work-entry-actions \{[^}]*grid-template-columns:\s*minmax\(0, 9fr\) minmax\(0, 11fr\);/s);
+  assert.match(styles, /\.mobile-extra-work-entry-actions \.mobile-extra-work-photo-action \{[^}]*min-height:\s*50px;[^}]*font-size:\s*0\.86rem;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.mobile-extra-work-entry-page \.mobile-form-actions \.primary-action \{[^}]*min-height:\s*50px;/s);
 });
 
