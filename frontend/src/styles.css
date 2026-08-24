@@ -27656,6 +27656,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-detail {
+  --project-extra-work-detail-columns: minmax(0, 1fr) 180px 108px 100px;
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -27729,7 +27730,7 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-project-data,
 .project-extra-work-additional-data {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: var(--project-extra-work-detail-columns);
   margin: 0;
 }
 
@@ -27944,10 +27945,12 @@ body.mobile-modal-scroll-locked {
     flex-wrap: wrap;
   }
 
+  .project-extra-work-key-data,
   .project-extra-work-project-data {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .project-extra-work-key-data > div:nth-child(odd),
   .project-extra-work-project-data > div:nth-child(odd) {
     border-left: 0;
     padding-left: 0;
@@ -27996,11 +27999,13 @@ body.mobile-modal-scroll-locked {
     left: 0;
   }
 
+  .project-extra-work-key-data,
   .project-extra-work-project-data {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 8px;
   }
 
+  .project-extra-work-key-data > div:nth-child(n),
   .project-extra-work-project-data > div:nth-child(n) {
     border-left: 0;
     padding-left: 0;

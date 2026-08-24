@@ -118,9 +118,12 @@ test("additional information shows only the four location fields without removin
   for (const removedLabel of ["Material", "Ausführung", "Firma", "Monteure"]) {
     assert.doesNotMatch(additionalInformationSource, new RegExp(`<dt>${removedLabel}</dt>`));
   }
-  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.project-extra-work-detail \{[\s\S]*--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
+  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: var\(--project-extra-work-detail-columns\)/);
   assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*border-width: 1px 0/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 
   for (const field of ["ordered_by_name", "billing_type", "estimated_order_value", "estimated_hours"]) {
@@ -174,7 +177,8 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.site-detail-status-select \{[\s\S]*appearance: none;[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px 22px/);
   assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
-  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.project-extra-work-detail \{[\s\S]*--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
+  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: var\(--project-extra-work-detail-columns\)/);
   assert.doesNotMatch(styles, /\.project-extra-work-project-data \{[\s\S]*grid-template-columns: 1\.2fr/);
   assert.match(styles, /\.project-extra-work-detail dd \{[\s\S]*overflow-wrap: anywhere/);
   assert.match(styles, /\.project-extra-work-delivery-status\.is-not-sent \{[\s\S]*color: #b42318/);
