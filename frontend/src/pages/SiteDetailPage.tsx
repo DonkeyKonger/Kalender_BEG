@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
@@ -1462,19 +1462,22 @@ export function SiteDetailPage() {
         </div>
         <div className="site-detail-header-actions">
           {canEditSite ? (
-            <select
-              aria-label={`Status fuer ${site.name} aendern`}
-              className={`site-detail-status-select site-card-status-select status-badge-${site.status}`}
-              disabled={isSavingSiteStatus}
-              value={site.status}
-              onChange={(event) => void updateSiteHeaderStatus(event.target.value as Site["status"])}
-            >
-              {siteStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <span className={`site-detail-status-control status-badge-${site.status}`}>
+              <select
+                aria-label={`Status fuer ${site.name} aendern`}
+                className="site-detail-status-select"
+                disabled={isSavingSiteStatus}
+                value={site.status}
+                onChange={(event) => void updateSiteHeaderStatus(event.target.value as Site["status"])}
+              >
+                {siteStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" className="site-detail-status-caret" size={13} strokeWidth={2.2} />
+            </span>
           ) : (
             <SiteStatusBadge status={site.status} />
           )}

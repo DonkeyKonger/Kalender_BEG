@@ -171,7 +171,7 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions > \.secondary-action,[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*width: 1px;[\s\S]*background: var\(--pf-border\)/);
-  assert.match(styles, /\.site-detail-status-select \{[\s\S]*border-radius: 2px/);
+  assert.match(styles, /\.site-detail-status-select \{[\s\S]*appearance: none;[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px 22px/);
   assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
   assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
