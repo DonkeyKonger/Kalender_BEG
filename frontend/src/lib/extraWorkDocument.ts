@@ -135,6 +135,13 @@ export const EXTRA_WORK_PDF_FIELD_RECTS = {
 // ruled material area. Keeping them in PDF points lets the browser scale text
 // and the template together at every paper width.
 export const EXTRA_WORK_PDF_TEXTAREA_LAYOUTS = {
+  remarks: {
+    fontSize: 7.5,
+    lineHeight: 9.5,
+    paddingTop: 2,
+    paddingInline: 2,
+    maxLines: 18,
+  },
   materialText: {
     fontSize: 8,
     lineHeight: 18,
@@ -143,6 +150,175 @@ export const EXTRA_WORK_PDF_TEXTAREA_LAYOUTS = {
     maxLines: 3,
   },
 } satisfies Record<string, ExtraWorkPdfTextareaLayout>;
+
+const HELVETICA_WIDTH_GROUPS = [
+  [191, "'"],
+  [222, "ijl‚‘’"],
+  [260, "|¦"],
+  [278, " !,./:;I[\\]ft ·ÌÍÎÏìíîï"],
+  [333, "()-`r„ˆ‹“”˜›¡¨­¯²³´¸¹"],
+  [334, "{}"],
+  [350, "•"],
+  [355, "\""],
+  [365, "º"],
+  [370, "ª"],
+  [389, "*"],
+  [400, "°"],
+  [469, "^"],
+  [500, "Jcksvxyzšžçýÿ"],
+  [537, "¶"],
+  [556, "#$0123456789?L_abdeghnopqu€ƒ†‡–¢£¤¥§«µ»àáâãäåèéêëðñòóôõöùúûüþ"],
+  [584, "+<=>~¬±×÷"],
+  [611, "FTZŽ¿ßø"],
+  [667, "&ABEKPSVXYŠŸÀÁÂÃÄÅÈÉÊËÝÞ"],
+  [722, "CDHNRUwÇÐÑÙÚÛÜ"],
+  [737, "©®"],
+  [778, "GOQÒÓÔÕÖØ"],
+  [833, "Mm"],
+  [834, "¼½¾"],
+  [889, "%æ"],
+  [944, "Wœ"],
+  [1000, "…‰Œ—™Æ"],
+  [1015, "@"],
+] as const;
+const HELVETICA_CHARACTER_WIDTHS = new Map<string, number>(
+  HELVETICA_WIDTH_GROUPS.flatMap(([width, characters]) => (
+    Array.from(characters, (character) => [character, width] as const)
+  )),
+);
+
+export type ExtraWorkRemarksChange = {
+  value: string;
+  limited: boolean;
+};
+
+export function wrapExtraWorkRemarks(value: string | null | undefined): string[] {
+  const text = normalizeExtraWorkRemarks(value ?? "");
+  if (!text) {
+    return [];
+  }
+  return text.split("\n").flatMap((paragraph) => {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      return [""];
+    }
+    return wrapExtraWorkRemarksWords(words);
+  });
+}
+
+export function extraWorkRemarksFit(value: string | null | undefined): boolean {
+  return wrapExtraWorkRemarks(value).length <= EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.remarks.maxLines;
+}
+
+export function constrainExtraWorkRemarksChange(previous: string, requested: string): ExtraWorkRemarksChange {
+  const next = normalizeExtraWorkRemarks(requested);
+  if (extraWorkRemarksFit(next)) {
+    return { value: next, limited: false };
+  }
+
+  if (!extraWorkRemarksFit(previous)) {
+    const nextLines = wrapExtraWorkRemarks(next).length;
+    const previousLines = wrapExtraWorkRemarks(previous).length;
+    if (next.length < previous.length && nextLines <= previousLines) {
+      return { value: next, limited: false };
+    }
+    return { value: previous, limited: true };
+  }
+
+  let prefixLength = 0;
+  while (
+    prefixLength < previous.length
+    && prefixLength < next.length
+    && previous[prefixLength] === next[prefixLength]
+  ) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  while (
+    suffixLength < previous.length - prefixLength
+    && suffixLength < next.length - prefixLength
+    && previous[previous.length - suffixLength - 1] === next[next.length - suffixLength - 1]
+  ) {
+    suffixLength += 1;
+  }
+
+  const prefix = next.slice(0, prefixLength);
+  const suffix = previous.slice(previous.length - suffixLength);
+  const inserted = Array.from(next.slice(prefixLength, next.length - suffixLength));
+  let accepted = "";
+  for (const character of inserted) {
+    const candidate = prefix + accepted + character + suffix;
+    if (!extraWorkRemarksFit(candidate)) {
+      break;
+    }
+    accepted += character;
+  }
+  accepted = accepted.replace(/\s+$/u, "");
+  return { value: prefix + accepted + suffix, limited: true };
+}
+
+export function extraWorkRemarksTextWidth(value: string): number {
+  let units = 0;
+  for (const character of value) {
+    units += HELVETICA_CHARACTER_WIDTHS.get(character) ?? 556;
+  }
+  return units * EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.remarks.fontSize / 1000;
+}
+
+function wrapExtraWorkRemarksWords(words: string[]): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = `${current} ${word}`.trim();
+    if (extraWorkRemarksTextWidth(candidate) <= extraWorkRemarksInnerWidth()) {
+      current = candidate;
+      continue;
+    }
+    if (current) {
+      lines.push(current);
+      current = "";
+    }
+    if (extraWorkRemarksTextWidth(word) <= extraWorkRemarksInnerWidth()) {
+      current = word;
+      continue;
+    }
+    const fragments = splitExtraWorkRemarksToken(word);
+    lines.push(...fragments.slice(0, -1));
+    current = fragments.at(-1) ?? "";
+  }
+  if (current) {
+    lines.push(current);
+  }
+  return lines;
+}
+
+function splitExtraWorkRemarksToken(token: string): string[] {
+  const fragments: string[] = [];
+  let current = "";
+  for (const character of token) {
+    const candidate = current + character;
+    if (current && extraWorkRemarksTextWidth(candidate) > extraWorkRemarksInnerWidth()) {
+      fragments.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) {
+    fragments.push(current);
+  }
+  return fragments;
+}
+
+function extraWorkRemarksInnerWidth(): number {
+  const layout = EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.remarks;
+  return EXTRA_WORK_PDF_FIELD_RECTS.remarks.width - 2 * layout.paddingInline;
+}
+
+function normalizeExtraWorkRemarks(value: string): string {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
 
 export const EXTRA_WORK_CHECKBOX_RECTS = {
   billingFlatRate: checkboxHitRect(163, 219),

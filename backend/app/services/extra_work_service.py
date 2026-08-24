@@ -44,6 +44,7 @@ from app.services.extra_work_number import (
     build_extra_work_display_number,
     next_extra_work_sequence,
 )
+from app.services.extra_work_remarks import extra_work_remarks_fit
 from app.services.photo_filename import (
     build_photo_filename,
     extra_work_photo_document_label,
@@ -234,6 +235,21 @@ class ExtraWorkService:
         self._get_site(site_id)
         ticket = self._get_ticket_for_site(ticket_id, site_id, for_update=True)
         self._ensure_ticket_content_editable(ticket)
+        entry_to_update = (
+            self._get_first_ticket_entry(ticket.id, for_update=True)
+            if payload.entry is not None
+            else None
+        )
+        remarks = (
+            self._clean_optional_multiline(payload.entry.remarks)
+            if payload.entry is not None
+            else None
+        )
+        if payload.entry is not None:
+            self._validate_extra_work_remarks(
+                remarks,
+                entry_to_update.remarks if entry_to_update else None,
+            )
 
         ticket.title = self._clean_optional_text(payload.title)
         if "customer_name" in payload.model_fields_set:
@@ -282,7 +298,7 @@ class ExtraWorkService:
 
         if payload.entry is not None:
             self._validate_worker_person_ids(payload.entry.worker_rows)
-            entry = self._get_first_ticket_entry(ticket.id, for_update=True)
+            entry = entry_to_update
             worker_rows = [self._document_worker_row(row) for row in payload.entry.worker_rows]
             values = {
                 "site_id": ticket.site_id,
@@ -290,7 +306,7 @@ class ExtraWorkService:
                 "floor": payload.entry.floor.strip(),
                 "room_number": self._clean_optional_text(payload.entry.room_number),
                 "axis": self._clean_optional_text(payload.entry.axis),
-                "remarks": self._clean_optional_multiline(payload.entry.remarks),
+                "remarks": remarks,
                 "material_text": self._clean_optional_multiline(payload.entry.material_text),
                 "estimated_hours": payload.entry.estimated_hours,
                 "worker_rows": worker_rows,
@@ -527,6 +543,8 @@ class ExtraWorkService:
             .where(ExtraWorkTicketEntry.ticket_id == ticket.id)
             .order_by(ExtraWorkTicketEntry.id)
         )
+        remarks = self._clean_optional_multiline(payload.remarks)
+        self._validate_extra_work_remarks(remarks, entry.remarks if entry else None)
         self._validate_worker_person_ids(payload.worker_rows)
         worker_rows = self._merge_mobile_worker_rows(
             list(entry.worker_rows or []) if entry else [],
@@ -548,7 +566,7 @@ class ExtraWorkService:
             "floor": payload.floor.strip(),
             "room_number": self._clean_optional_text(payload.room_number),
             "axis": self._clean_optional_text(payload.axis),
-            "remarks": self._clean_optional_multiline(payload.remarks),
+            "remarks": remarks,
             "material_text": self._clean_optional_multiline(payload.material_text),
             "estimated_hours": estimated_hours,
             "worker_rows": worker_rows,
@@ -1332,6 +1350,20 @@ class ExtraWorkService:
             return None
         normalized = value.replace("\r\n", "\n").replace("\r", "\n")
         return normalized if normalized.strip() else None
+
+    @staticmethod
+    def _validate_extra_work_remarks(value: str | None, stored_value: str | None) -> None:
+        if extra_work_remarks_fit(value):
+            return
+        normalized_stored = ExtraWorkService._clean_optional_multiline(stored_value)
+        if value == normalized_stored:
+            # Preserve legacy overflow when another field is edited. The PDF
+            # endpoint reports it explicitly until the remark itself is shortened.
+            return
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Maximale Länge für die PDF erreicht. Bitte die Bemerkungen kürzen.",
+        )
 
     @staticmethod
     def _build_display_number(site: Site, sequence_number: int) -> str:

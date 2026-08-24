@@ -2,6 +2,8 @@ from datetime import date, datetime, timezone
 from io import BytesIO
 import re
 
+from fastapi import HTTPException
+import pytest
 from pypdf import PdfReader
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -19,6 +21,15 @@ from app.services.extra_work_pdf_service import (
     CHECKBOX_CENTERS,
     ExtraWorkPdfService,
     OverlayPdf,
+)
+from app.services.extra_work_remarks import (
+    EXTRA_WORK_REMARKS_FONT_SIZE,
+    EXTRA_WORK_REMARKS_INNER_WIDTH,
+    EXTRA_WORK_REMARKS_LINE_HEIGHT,
+    EXTRA_WORK_REMARKS_MAX_LINES,
+    extra_work_remarks_fit,
+    extra_work_remarks_width,
+    wrap_extra_work_remarks,
 )
 
 
@@ -41,6 +52,60 @@ def _assert_non_interactive(reader: PdfReader, content: bytes) -> None:
     assert all("/Annots" not in page and "/AA" not in page for page in reader.pages)
     assert b"/JavaScript" not in content
     assert b"/JS" not in content
+
+
+def _repeated_word_at_remarks_capacity(word: str = "Test") -> str:
+    words: list[str] = []
+    while extra_work_remarks_fit(" ".join([*words, word])):
+        words.append(word)
+    return " ".join(words)
+
+
+def test_remarks_capacity_uses_all_18_real_pdf_lines_with_exact_helvetica_metrics():
+    value = _repeated_word_at_remarks_capacity()
+    lines = wrap_extra_work_remarks(value)
+
+    assert EXTRA_WORK_REMARKS_MAX_LINES == 18
+    assert len(lines) == EXTRA_WORK_REMARKS_MAX_LINES
+    assert all(extra_work_remarks_width(line) <= EXTRA_WORK_REMARKS_INNER_WIDTH for line in lines)
+    assert extra_work_remarks_fit(value)
+    assert not extra_work_remarks_fit(f"{value} Test")
+
+    commands: list[bytes] = []
+    pdf_module._remarks_textarea(commands, pdf_module.FIELD_RECTS["BemerkungenRow1"], value)
+    assert len(commands) == EXTRA_WORK_REMARKS_MAX_LINES
+    final_baseline = float(re.search(rb" ([0-9.]+) Td ", commands[-1]).group(1))
+    rect = pdf_module.FIELD_RECTS["BemerkungenRow1"]
+    bottom_edge = pdf_module.PAGE_HEIGHT - rect.y - rect.height
+    assert final_baseline >= bottom_edge + 2
+    assert final_baseline - EXTRA_WORK_REMARKS_LINE_HEIGHT < bottom_edge + 2
+    assert f"/F1 {EXTRA_WORK_REMARKS_FONT_SIZE:g} Tf".encode() in commands[-1]
+
+
+def test_remarks_wrap_handles_manual_breaks_long_words_and_character_widths():
+    assert extra_work_remarks_fit("\n".join(["Zeile"] * 18))
+    assert not extra_work_remarks_fit("\n".join(["Zeile"] * 19))
+
+    long_word_lines = wrap_extra_work_remarks("W" * 400)
+    assert "".join(long_word_lines) == "W" * 400
+    assert all(extra_work_remarks_width(line) <= EXTRA_WORK_REMARKS_INNER_WIDTH for line in long_word_lines)
+    assert extra_work_remarks_width("Test") == 14.5875
+    assert extra_work_remarks_width("ÄÖÜ äöü ß €") == 43.77
+    assert len(wrap_extra_work_remarks("W" * 120)) > len(wrap_extra_work_remarks("i" * 120))
+    assert len(_repeated_word_at_remarks_capacity("i")) > len(
+        _repeated_word_at_remarks_capacity("W")
+    )
+
+
+def test_remarks_renderer_rejects_legacy_overflow_instead_of_silently_ellipsizing():
+    value = f"{_repeated_word_at_remarks_capacity()} Test"
+    commands: list[bytes] = []
+
+    with pytest.raises(HTTPException, match="gespeicherten Bemerkungen") as error:
+        pdf_module._remarks_textarea(commands, pdf_module.FIELD_RECTS["BemerkungenRow1"], value)
+
+    assert error.value.status_code == 422
+    assert commands == []
 
 
 def test_structured_and_legacy_material_share_the_existing_pdf_output():
@@ -230,6 +295,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
         component="BT A",
         floor="2. OG",
         estimated_hours=8.5,
+        remarks=_repeated_word_at_remarks_capacity(),
         worker_rows=[
             {
                 "person_id": worker.id,
@@ -256,6 +322,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
 
     assert filename == "Zusatzauftrag_8015_8015.SZ01.pdf"
     assert len(reader.pages) == 1
+    assert text.split().count("Test") == entry.remarks.split().count("Test")
     _assert_non_interactive(reader, rendered)
     for value in (
         "8015",

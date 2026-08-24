@@ -27,6 +27,14 @@ from app.services.extra_work_document_context import (
     resolve_extra_work_approval_place,
     resolve_extra_work_ticket_dates,
 )
+from app.services.extra_work_remarks import (
+    EXTRA_WORK_REMARKS_FIELD_HEIGHT,
+    EXTRA_WORK_REMARKS_FIELD_WIDTH,
+    EXTRA_WORK_REMARKS_FONT_SIZE,
+    EXTRA_WORK_REMARKS_LINE_HEIGHT,
+    EXTRA_WORK_REMARKS_MAX_LINES,
+    wrap_extra_work_remarks,
+)
 from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
     PhotoAppendixPdfService,
@@ -38,7 +46,7 @@ from app.services.project_storage_service import ProjectStorageService
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v12-compact-material"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v13-full-remarks"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -90,7 +98,12 @@ FIELD_RECTS = {
     "Raum Nr": FieldRect(328.08, 379.59, 55.68, 11.34),
     "Achse": FieldRect(440.16, 379.59, 61.08, 11.34),
     "Gesamt Std": FieldRect(345.96, 609.56, 68.16, 14.17),
-    "BemerkungenRow1": FieldRect(416.48, 445.92, 136.08, 176.76),
+    "BemerkungenRow1": FieldRect(
+        416.48,
+        445.92,
+        EXTRA_WORK_REMARKS_FIELD_WIDTH,
+        EXTRA_WORK_REMARKS_FIELD_HEIGHT,
+    ),
     "Material": FieldRect(62.76, 641.85, 484.92, 54.80),
 }
 
@@ -590,7 +603,7 @@ class ExtraWorkPdfService:
             _field(commands, _shift_rect(FIELD_RECTS["Etage"], dy=2.0), entry.floor, size=9)
             _field(commands, _shift_rect(FIELD_RECTS["Raum Nr"], dy=2.0), entry.room_number or "", size=9)
             _field(commands, _shift_rect(FIELD_RECTS["Achse"], dy=2.0), entry.axis or "", size=9)
-            _textarea(commands, FIELD_RECTS["BemerkungenRow1"], entry.remarks or "", size=7.5, max_lines=13)
+            _remarks_textarea(commands, FIELD_RECTS["BemerkungenRow1"], entry.remarks)
             _material_textarea(
                 commands,
                 FIELD_RECTS["Material"],
@@ -867,6 +880,23 @@ def _textarea(
 ) -> None:
     lines = _wrap_text(_clean_multiline_text(text), rect.width - 4, size, max_lines)
     _draw_textarea_lines(commands, rect, lines, size=size, line_height=line_height)
+
+
+def _remarks_textarea(commands: list[bytes], rect: FieldRect, text: str | None) -> None:
+    lines = wrap_extra_work_remarks(text)
+    if len(lines) > EXTRA_WORK_REMARKS_MAX_LINES:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Die gespeicherten Bemerkungen überschreiten den druckbaren PDF-Bereich. "
+            "Bitte den Alttext im Zusatzauftrag kürzen.",
+        )
+    _draw_textarea_lines(
+        commands,
+        rect,
+        lines,
+        size=EXTRA_WORK_REMARKS_FONT_SIZE,
+        line_height=EXTRA_WORK_REMARKS_LINE_HEIGHT,
+    )
 
 
 def _material_textarea(

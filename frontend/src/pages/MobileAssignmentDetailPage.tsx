@@ -45,6 +45,7 @@ import { MobilePhotoCaptionViewer } from "../components/MobilePhotoCaptionViewer
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
+import { constrainExtraWorkRemarksChange, extraWorkRemarksFit } from "../lib/extraWorkDocument";
 import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity } from "../lib/extraWorkMaterial";
 import { formatExtraWorkSequenceLabel } from "../lib/extraWorkNumber";
 import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
@@ -2083,6 +2084,7 @@ function ExtraWorkEntryPage({
   const [materialQuickInput, setMaterialQuickInput] = useState("");
   const [materialEditDraft, setMaterialEditDraft] = useState<ExtraWorkMaterialEditDraft | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
+  const [remarksLimitReached, setRemarksLimitReached] = useState(false);
   const materialQuickInputRef = useRef<HTMLInputElement>(null);
   const hoursInputRefs = useRef(new Map<string, HTMLInputElement>());
   const remarksTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -2105,6 +2107,7 @@ function ExtraWorkEntryPage({
           setSavedHoursFingerprint(getExtraWorkHoursFingerprint(nextForm.worker_rows));
           setMaterialQuickInput("");
           setMaterialEditDraft(null);
+          setRemarksLimitReached(false);
           setIsDiscardConfirmOpen(false);
         }
       } catch (requestError) {
@@ -2156,6 +2159,14 @@ function ExtraWorkEntryPage({
     value: string,
   ): void {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateRemarks(requested: string): void {
+    const constrained = constrainExtraWorkRemarksChange(form.remarks, requested);
+    setRemarksLimitReached(constrained.limited);
+    if (constrained.value !== form.remarks) {
+      updateField("remarks", constrained.value);
+    }
   }
 
   function addMaterialFromQuickInput(): void {
@@ -2655,11 +2666,17 @@ function ExtraWorkEntryPage({
                 ref={remarksTextareaRef}
                 className={form.remarks.trim() ? "is-filled" : undefined}
                 value={form.remarks}
-                onChange={(event) => updateField("remarks", event.target.value)}
+                aria-invalid={!extraWorkRemarksFit(form.remarks) || undefined}
+                onChange={(event) => updateRemarks(event.target.value)}
                 placeholder="z. B. Beschreibung der Arbeiten, Besonderheiten ..."
                 disabled={!canEdit}
                 rows={2}
               />
+              {!extraWorkRemarksFit(form.remarks) ? (
+                <small className="mobile-extra-work-remarks-limit" role="status">Gespeicherter Alttext ist zu lang für die PDF. Bitte kürzen; unverändert bleibt er erhalten.</small>
+              ) : remarksLimitReached ? (
+                <small className="mobile-extra-work-remarks-limit" role="status">Maximale Länge für die PDF erreicht</small>
+              ) : null}
             </label>
           </section>
           <section className="mobile-extra-work-card mobile-extra-work-material-card">

@@ -31,6 +31,7 @@ import {
   EXTRA_WORK_VISIBLE_WORKER_ROWS,
   buildExtraWorkDocumentPayload,
   chunkExtraWorkWorkerRows,
+  constrainExtraWorkRemarksChange,
   createExtraWorkDocumentDraft,
   extraWorkPdfPointsToCqw,
   extraWorkPdfRectToPercent,
@@ -39,6 +40,7 @@ import {
   getExtraWorkRowTotalRect,
   getExtraWorkWorkerNameRect,
   getExtraWorkWorkerTierTotal,
+  extraWorkRemarksFit,
   isExtraWorkDocumentLocked,
   type ExtraWorkDocumentDraft,
   type ExtraWorkDocumentDirtyField,
@@ -1168,7 +1170,7 @@ function SupplementaryOrderPaperPage({
           />
         ))}
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.overallHours} label="Gesamtstunden dieses Blatts" value={formatPaperHours(pageHours)} />
-        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.remarks} label="Bemerkungen" value={draft.entry.remarks ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ remarks: value })} />
+        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.remarks} layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.remarks} pdfCapacity="remarks" label="Bemerkungen" value={draft.entry.remarks ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ remarks: value })} />
         <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText} layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.materialText} label="Material" value={draft.entry.material_text ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ material_text: value })} />
 
         {isLastPage ? (
@@ -1324,11 +1326,14 @@ type PaperTextareaProps = {
   readOnly: boolean;
   onChange: (value: string) => void;
   centered?: boolean;
+  pdfCapacity?: "remarks";
 };
 
-const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centered = false }: PaperTextareaProps) {
+const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centered = false, pdfCapacity }: PaperTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [capacityReached, setCapacityReached] = useState(false);
+  const hasLegacyOverflow = pdfCapacity === "remarks" && !extraWorkRemarksFit(value);
 
   const updateOverflow = useCallback(() => {
     const textarea = textareaRef.current;
@@ -1357,11 +1362,17 @@ const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, 
   const overflowMessage = layout && isOverflowing
     ? `${label}: Der Text überschreitet die ${layout.maxLines} druckbaren Zeilen.`
     : null;
+  const capacityMessage = hasLegacyOverflow
+    ? "Gespeicherter Alttext ist zu lang für die PDF. Bitte kürzen; unverändert bleibt er erhalten."
+    : capacityReached
+      ? "Maximale Länge für die PDF erreicht"
+      : null;
+  const feedbackMessage = capacityMessage ?? overflowMessage;
   return (
     <label
-      className={`supplementary-order-paper-field is-textarea${layout ? " is-pdf-line-grid" : ""}${isOverflowing ? " has-overflow" : ""}${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`}
+      className={`supplementary-order-paper-field is-textarea${layout ? " is-pdf-line-grid" : ""}${isOverflowing || hasLegacyOverflow ? " has-overflow" : ""}${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`}
       style={paperTextareaStyle(rect, layout)}
-      title={overflowMessage ?? label}
+      title={feedbackMessage ?? label}
     >
       <span className="sr-only">{label}</span>
       <textarea
@@ -1370,11 +1381,25 @@ const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, 
         value={value}
         readOnly={readOnly}
         aria-label={label}
-        aria-invalid={isOverflowing || undefined}
+        aria-invalid={isOverflowing || hasLegacyOverflow || undefined}
         data-max-lines={layout?.maxLines}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          if (pdfCapacity === "remarks") {
+            const constrained = constrainExtraWorkRemarksChange(value, event.target.value);
+            setCapacityReached(constrained.limited);
+            if (constrained.value !== value) {
+              onChange(constrained.value);
+            }
+            return;
+          }
+          onChange(event.target.value);
+        }}
       />
-      {overflowMessage ? <span className="supplementary-order-paper-overflow-note" role="status">Mehr als {layout?.maxLines} Druckzeilen</span> : null}
+      {capacityMessage ? (
+        <span className="supplementary-order-paper-overflow-note" role="status">{capacityMessage}</span>
+      ) : overflowMessage ? (
+        <span className="supplementary-order-paper-overflow-note" role="status">Mehr als {layout?.maxLines} Druckzeilen</span>
+      ) : null}
     </label>
   );
 }, (previous, next) => (
@@ -1384,6 +1409,7 @@ const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, 
   && previous.value === next.value
   && previous.readOnly === next.readOnly
   && previous.centered === next.centered
+  && previous.pdfCapacity === next.pdfCapacity
 ));
 
 const PaperValue = memo(function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean }) {

@@ -29994,6 +29994,15 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   white-space: nowrap;
 }
 
+.mobile-extra-work-remarks-limit {
+  display: block;
+  margin-top: 6px;
+  color: #8a5200;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 .supplementary-order-paper-field input:hover:not([readonly]),
 .supplementary-order-paper-field textarea:hover:not([readonly]) {
   border-color: rgb(37 99 235 / 62%);

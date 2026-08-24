@@ -24,6 +24,7 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerHours,
 )
 from app.services.extra_work_service import ExtraWorkService
+from app.services.extra_work_remarks import extra_work_remarks_fit
 
 
 def db_session() -> Session:
@@ -44,6 +45,72 @@ def office_user(username: str = "office") -> User:
         role=UserRole.OFFICE,
         office_page_permissions=["sites"],
     )
+
+
+def _overflowing_legacy_remarks() -> str:
+    words: list[str] = []
+    while extra_work_remarks_fit(" ".join([*words, "Test"])):
+        words.append("Test")
+    return " ".join([*words, "Test"])
+
+
+def test_document_rejects_new_remarks_overflow_but_preserves_unchanged_legacy_text():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt")
+    actor = office_user()
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="8015.SZ01",
+        kind="billing",
+        status="draft",
+        created_by=actor,
+    )
+    legacy_remarks = _overflowing_legacy_remarks()
+    entry = ExtraWorkTicketEntry(
+        ticket=ticket,
+        site=site,
+        component="BT A",
+        floor="EG",
+        remarks=legacy_remarks,
+        worker_rows=[],
+    )
+    db.add_all([site, actor, ticket, entry])
+    db.commit()
+    service = ExtraWorkService(db)
+
+    preserved = service.update_site_ticket_document(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        current_user=actor,
+        payload=ExtraWorkTicketDocumentUpdate(
+            title="Andere Korrektur",
+            entry=ExtraWorkTicketDocumentEntryUpdate(
+                component="BT A",
+                floor="EG",
+                remarks=legacy_remarks,
+            ),
+        ),
+    )
+    assert preserved.entry is not None
+    assert preserved.entry.remarks == legacy_remarks
+
+    with pytest.raises(HTTPException, match="Maximale Länge") as error:
+        service.update_site_ticket_document(
+            site_id=site.id,
+            ticket_id=ticket.id,
+            current_user=actor,
+            payload=ExtraWorkTicketDocumentUpdate(
+                entry=ExtraWorkTicketDocumentEntryUpdate(
+                    component="BT A",
+                    floor="EG",
+                    remarks=f"{legacy_remarks} W",
+                ),
+            ),
+        )
+
+    assert error.value.status_code == 422
+    assert db.get(ExtraWorkTicketEntry, entry.id).remarks == legacy_remarks
 
 
 def test_site_create_uses_locked_site_sequence_and_mobile_kind_default(monkeypatch):
