@@ -41,6 +41,13 @@ test("master rows scroll independently while pagination stays outside their scro
   assert.match(styles, /\.project-extra-work-pagination \{[\s\S]*position: sticky;[\s\S]*bottom: 0;[\s\S]*flex: 0 0 auto/);
 });
 
+test("master row backgrounds reserve scrollbar space only for real overflow", () => {
+  assert.match(tabSource, /getExtraWorkOverviewScrollbarWidth\(masterBody\)/);
+  assert.match(tabSource, /--project-extra-work-master-scrollbar-width/);
+  assert.match(tabSource, /new ResizeObserver\(updateScrollbarWidth\)/);
+  assert.doesNotMatch(styles, /\.project-extra-work-master-body \{[^}]*scrollbar-gutter: stable/s);
+});
+
 test("desktop detail scroll is independent and resets for a newly selected ticket", () => {
   assert.match(detailSource, /detailRef\.current\.scrollTop = 0/);
   assert.match(detailSource, /\}, \[ticket\?\.id\]\)/);

@@ -27493,6 +27493,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-master {
+  --project-extra-work-master-scrollbar-width: 0px;
+
   display: flex;
   height: 100%;
   min-width: 0;
@@ -27512,14 +27514,14 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-master-head {
+  box-sizing: border-box;
   min-height: 42px;
-  overflow-y: auto;
+  padding-right: var(--project-extra-work-master-scrollbar-width);
   border-bottom: 1px solid var(--pf-border);
   background: #f7f9fc;
   color: #334e70;
   font-size: 0.75rem;
   font-weight: 800;
-  scrollbar-gutter: stable;
 }
 
 .project-extra-work-master-head > span,
@@ -27673,7 +27675,6 @@ body.mobile-modal-scroll-locked {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .project-extra-work-pagination {

@@ -223,7 +223,9 @@ test("the three right master columns align headers and values on shared axes", (
   assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(5\),[\s\S]*\.project-extra-work-master-row > strong:nth-child\(5\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: right/);
   assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(n \+ 3\) \{[\s\S]*white-space: nowrap/);
   assert.match(styles, /\.project-extra-work-master-head > span,[\s\S]*\.project-extra-work-master-row > \* \{[\s\S]*padding: 0 10px/);
-  assert.match(styles, /\.project-extra-work-master-head \{[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable/);
-  assert.match(styles, /\.project-extra-work-master-body \{[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable/);
+  assert.match(styles, /\.project-extra-work-master \{[\s\S]*--project-extra-work-master-scrollbar-width: 0px/);
+  assert.match(styles, /\.project-extra-work-master-head \{[\s\S]*padding-right: var\(--project-extra-work-master-scrollbar-width\)/);
+  assert.match(styles, /\.project-extra-work-master-body \{[\s\S]*overflow-y: auto/);
+  assert.doesNotMatch(styles, /\.project-extra-work-master-body \{[^}]*scrollbar-gutter: stable/s);
   assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
 });

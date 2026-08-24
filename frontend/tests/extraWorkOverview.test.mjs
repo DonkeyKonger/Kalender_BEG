@@ -12,6 +12,7 @@ import {
   getExtraWorkOverviewPageForIndex,
   getExtraWorkOverviewPageItems,
   getExtraWorkOverviewPageWindow,
+  getExtraWorkOverviewScrollbarWidth,
   normalizeExtraWorkOverviewSearch,
   resolveExtraWorkOverviewPeriod,
 } from "../src/lib/extraWorkOverview.ts";
@@ -102,6 +103,33 @@ test("resizing keeps the selected row on the page for the new page size", () => 
   assert.equal(getExtraWorkOverviewPageForIndex(17, 8), 3);
   assert.equal(getExtraWorkOverviewPageForIndex(17, 4), 5);
   assert.equal(getExtraWorkOverviewPageForIndex(-1, 8), 1);
+});
+
+test("master scrollbar width is reserved only for real overflow", () => {
+  assert.equal(getExtraWorkOverviewScrollbarWidth({
+    clientHeight: 264,
+    scrollHeight: 264,
+    clientWidth: 548,
+    offsetWidth: 563,
+  }), 0);
+  assert.equal(getExtraWorkOverviewScrollbarWidth({
+    clientHeight: 264,
+    scrollHeight: 265,
+    clientWidth: 548,
+    offsetWidth: 563,
+  }), 0);
+  assert.equal(getExtraWorkOverviewScrollbarWidth({
+    clientHeight: 264,
+    scrollHeight: 396,
+    clientWidth: 548,
+    offsetWidth: 563,
+  }), 15);
+  assert.equal(getExtraWorkOverviewScrollbarWidth({
+    clientHeight: 264,
+    scrollHeight: 396,
+    clientWidth: 563,
+    offsetWidth: 563,
+  }), 0);
 });
 
 test("compact pagination keeps edge pages and a small current-page window", () => {

@@ -39,6 +39,23 @@ export function getExtraWorkOverviewMasterHeight(pageSize: number): number {
     + boundedPageSize * EXTRA_WORK_OVERVIEW_ROW_HEIGHT;
 }
 
+export function getExtraWorkOverviewScrollbarWidth({
+  clientHeight,
+  clientWidth,
+  offsetWidth,
+  scrollHeight,
+}: {
+  clientHeight: number;
+  clientWidth: number;
+  offsetWidth: number;
+  scrollHeight: number;
+}): number {
+  if (scrollHeight <= clientHeight + 1) {
+    return 0;
+  }
+  return Math.max(0, offsetWidth - clientWidth);
+}
+
 export function getExtraWorkOverviewPageForIndex(index: number, pageSize: number): number {
   if (!Number.isInteger(index) || index < 0 || !Number.isInteger(pageSize) || pageSize < 1) {
     return 1;

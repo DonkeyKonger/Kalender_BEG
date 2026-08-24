@@ -28,6 +28,7 @@ import {
   getExtraWorkOverviewPageItems,
   getExtraWorkOverviewPageWindow,
   getExtraWorkOverviewPrimaryEntry,
+  getExtraWorkOverviewScrollbarWidth,
   resolveExtraWorkOverviewPeriod,
 } from "../lib/extraWorkOverview";
 import {
@@ -2977,6 +2978,29 @@ function ExtraWorkTab({
       masterBody.scrollTop += rowBounds.bottom - bodyBounds.bottom;
     }
   }, [overviewLayout.pageSize, pageWindow.page, selectedTicketId]);
+
+  useLayoutEffect(() => {
+    const masterBody = masterBodyRef.current;
+    const master = masterBody?.parentElement;
+    if (!masterBody || !master) {
+      return undefined;
+    }
+    const updateScrollbarWidth = () => {
+      const scrollbarWidth = getExtraWorkOverviewScrollbarWidth(masterBody);
+      master.style.setProperty("--project-extra-work-master-scrollbar-width", `${scrollbarWidth}px`);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updateScrollbarWidth);
+    updateScrollbarWidth();
+    resizeObserver?.observe(masterBody);
+    window.addEventListener("resize", updateScrollbarWidth);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollbarWidth);
+      master.style.removeProperty("--project-extra-work-master-scrollbar-width");
+    };
+  }, [filteredTickets.length, overviewLayout.pageSize, pageWindow.page]);
 
   useEffect(() => {
     setOpenStatusControl(null);
