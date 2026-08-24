@@ -40,6 +40,10 @@ from app.services.extra_work_document_context import (
     resolve_extra_work_approval_place,
     resolve_extra_work_ticket_dates,
 )
+from app.services.extra_work_number import (
+    build_extra_work_display_number,
+    next_extra_work_sequence,
+)
 from app.services.photo_filename import (
     build_photo_filename,
     extra_work_photo_document_label,
@@ -133,14 +137,16 @@ class ExtraWorkService:
         # remains the final guard, while this row lock prevents ordinary office
         # and mobile requests from selecting the same next number concurrently.
         site = self._get_site(site_id, for_update=True)
-        next_sequence = (
-            self.db.scalar(
-                select(func.max(ExtraWorkTicket.sequence_number)).where(
-                    ExtraWorkTicket.site_id == site_id
-                )
-            )
-            or 0
-        ) + 1
+        existing_numbers = self.db.execute(
+            select(
+                ExtraWorkTicket.sequence_number,
+                ExtraWorkTicket.display_number,
+            ).where(ExtraWorkTicket.site_id == site_id)
+        ).tuples()
+        next_sequence = next_extra_work_sequence(
+            site_number=site.site_number,
+            existing_numbers=existing_numbers,
+        )
         ticket = ExtraWorkTicket(
             site_id=site_id,
             sequence_number=next_sequence,
@@ -1329,10 +1335,13 @@ class ExtraWorkService:
 
     @staticmethod
     def _build_display_number(site: Site, sequence_number: int) -> str:
-        clean_site_number = site.site_number.strip() if site.site_number else ""
-        if clean_site_number:
-            return f"{clean_site_number}.SZ{sequence_number:02d}"
-        return f"Stundenzettel {sequence_number}"
+        try:
+            return build_extra_work_display_number(site.site_number, sequence_number)
+        except ValueError as error:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Für die Vergabe einer Zusatzauftragsnummer fehlt die Projektnummer.",
+            ) from error
 
 
 def _normalize_content_type(value: str | None) -> str:

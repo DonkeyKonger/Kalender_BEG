@@ -46,6 +46,7 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
 import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity } from "../lib/extraWorkMaterial";
+import { formatExtraWorkSequenceLabel } from "../lib/extraWorkNumber";
 import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
@@ -8213,10 +8214,10 @@ function formatMobileExtraWorkOrderTitle(order: MobileExtraWorkTicket): string {
 }
 
 function formatMobileExtraWorkEntrySubtitle(order: MobileExtraWorkTicket): string {
-  const displayNumber = order.display_number?.trim() ?? "";
-  const suffixMatch = displayNumber.match(/(?:^|[.\s_-])(SZ[\w.-]*)$/i);
-  const sequenceLabel = suffixMatch?.[1]
-    ?? `SZ${String(order.sequence_number).padStart(2, "0")}`;
+  const sequenceLabel = formatExtraWorkSequenceLabel(
+    order.display_number,
+    order.sequence_number,
+  );
   return `${order.kind === "approval" ? "Stundenfreigabe" : "Zusatzauftrag"} ${sequenceLabel.toUpperCase()}`;
 }
 

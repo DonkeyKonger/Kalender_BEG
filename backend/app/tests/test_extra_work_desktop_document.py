@@ -79,11 +79,94 @@ def test_site_create_uses_locked_site_sequence_and_mobile_kind_default(monkeypat
 
     assert lock_calls == [True, True]
     assert (first.sequence_number, second.sequence_number) == (1, 2)
-    assert (first.display_number, second.display_number) == ("8015.SZ01", "8015.SZ02")
+    assert (first.display_number, second.display_number) == ("8015.Z01", "8015.Z02")
     assert first.kind == second.kind == "approval"
     assert first.status == "draft"
     assert first.created_by_user_id == actor.id
     assert first.site_id == site.id
+
+
+def test_site_create_continues_after_legacy_number_without_renaming_history():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt")
+    actor = office_user()
+    legacy = ExtraWorkTicket(
+        site=site,
+        sequence_number=15,
+        display_number="8015.SZ15",
+        kind="billing",
+        status="draft",
+    )
+    db.add_all([site, actor, legacy])
+    db.commit()
+
+    created = ExtraWorkService(db).create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    assert created.sequence_number == 16
+    assert created.display_number == "8015.Z16"
+    assert db.get(ExtraWorkTicket, legacy.id).display_number == "8015.SZ15"
+
+
+def test_site_create_handles_gaps_and_mixed_legacy_current_display_numbers():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt")
+    actor = office_user()
+    tickets = [
+        ExtraWorkTicket(
+            site=site,
+            sequence_number=3,
+            display_number="8015.SZ15",
+            kind="billing",
+            status="draft",
+        ),
+        ExtraWorkTicket(
+            site=site,
+            sequence_number=7,
+            display_number="8015.Z17",
+            kind="billing",
+            status="draft",
+        ),
+        ExtraWorkTicket(
+            site=site,
+            sequence_number=9,
+            display_number="8015.AZ99",
+            kind="billing",
+            status="draft",
+        ),
+    ]
+    db.add_all([site, actor, *tickets])
+    db.commit()
+
+    created = ExtraWorkService(db).create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    assert created.sequence_number == 18
+    assert created.display_number == "8015.Z18"
+
+
+def test_site_create_rejects_missing_project_number():
+    db = db_session()
+    site = Site(site_number=None, name="Projekt ohne Nummer")
+    actor = office_user()
+    db.add_all([site, actor])
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        ExtraWorkService(db).create_site_ticket(
+            site_id=site.id,
+            current_user=actor,
+            payload=ExtraWorkTicketCreate(),
+        )
+
+    assert error.value.status_code == 409
+    assert "Projektnummer" in error.value.detail
 
 
 def test_ticket_customer_is_snapshotted_overridable_and_does_not_change_site_customer():

@@ -80,6 +80,22 @@ test("local overview search covers structured ticket and entry contents", () => 
   assert.equal(filterExtraWorkOverviewTickets(tickets, site, "   ").length, 1);
 });
 
+test("local overview search finds both legacy and current extra-work numbers", () => {
+  const tickets = [
+    ticket(),
+    ticket({ id: 14, sequence_number: 14, display_number: "9999.Z14" }),
+  ];
+
+  assert.deepEqual(
+    filterExtraWorkOverviewTickets(tickets, site, "SZ13").map((item) => item.id),
+    [13],
+  );
+  assert.deepEqual(
+    filterExtraWorkOverviewTickets(tickets, site, "Z14").map((item) => item.id),
+    [14],
+  );
+});
+
 test("German search normalization is case-insensitive and umlaut tolerant", () => {
   assert.equal(normalizeExtraWorkOverviewSearch("  MÜLLER  Straße "), "muller strasse");
 });

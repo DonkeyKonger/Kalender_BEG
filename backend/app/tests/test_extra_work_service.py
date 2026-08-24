@@ -754,7 +754,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
             date_prefix = datetime.now(PHOTO_FILENAME_TIMEZONE).strftime("%y%m%d")
             assert filename == (
                 f"{date_prefix}_Schüchtermann_Klinik_"
-                "ZusatzauftragSZ01_Max_Monteur_02.jpg"
+                "ZusatzauftragZ01_Max_Monteur_02.jpg"
             )
             assert content.startswith(b"\xff\xd8")
             assert content_type == "image/jpeg"
@@ -793,7 +793,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         external_item_id="existing-photo",
         filename=(
             f"{date_prefix}_Schüchtermann_Klinik_"
-            "ZusatzauftragSZ01_Max_Monteur.jpg"
+            "ZusatzauftragZ01_Max_Monteur.jpg"
         ),
         content_type="image/jpeg",
         file_size_bytes=100,
@@ -1223,10 +1223,10 @@ def test_mobile_extra_work_email_send_allows_missing_customer_signature(monkeypa
     assert deliveries == [
         {
             "recipients": ["kunde@example.de"],
-            "subject": "Anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag",
+            "subject": "Anliegend erhalten Sie Zusatzauftrag 8007.Z01 - Schüchtermann Klinik - Hauptauftrag",
             "body": (
                 "Sehr geehrte Damen und Herren,\n\n"
-                "anliegend erhalten Sie Zusatzauftrag 8007.SZ01 - Schüchtermann Klinik - Hauptauftrag.\n\n"
+                "anliegend erhalten Sie Zusatzauftrag 8007.Z01 - Schüchtermann Klinik - Hauptauftrag.\n\n"
                 "Mit freundlichen Grüßen\n\n"
                 "Max Monteur\n\n"
                 "BEG Badener Elektro GmbH\n"
@@ -2141,10 +2141,11 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     )
 
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
+    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 1
+    assert "8007.Z01" in pdf_text
     assert b"Unterschrift Kunde" not in content
     assert "Nachtrag Kabeltrasse 2. OG" in pdf_text
     assert "Kunde Beispiel" in pdf_text
@@ -2254,7 +2255,7 @@ def test_extra_work_pdf_is_available_again_after_restore():
     assert restored.status == submitted.status
     assert restored.total_hours == 2.5
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
+    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
@@ -2325,7 +2326,7 @@ def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
         current_user=current_user,
     )
 
-    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
+    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 2
@@ -2406,7 +2407,7 @@ def test_mobile_extra_work_pdf_builds_approval_template_pdf():
     )
 
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.SZ01.pdf"
+    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
     assert len(PdfReader(BytesIO(content)).pages) == 1
 
 

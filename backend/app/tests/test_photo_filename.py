@@ -50,3 +50,13 @@ def test_photo_document_labels_use_domain_numbers():
 
     assert measurement_photo_document_label(batch) == "Aufmaß21"
     assert extra_work_photo_document_label(ticket) == "ZusatzauftragSZ04"
+
+
+def test_extra_work_photo_document_label_uses_new_number_without_breaking_legacy():
+    ticket = SimpleNamespace(
+        id=5,
+        display_number="8007.Z05",
+        site=SimpleNamespace(site_number="8007"),
+    )
+
+    assert extra_work_photo_document_label(ticket) == "ZusatzauftragZ05"
