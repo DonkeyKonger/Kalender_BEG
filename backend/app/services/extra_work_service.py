@@ -6,7 +6,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.person import Person
@@ -35,6 +34,7 @@ from app.services.extra_work_archive_service import (
     ExtraWorkArchiveService,
     is_extra_work_completed_status,
 )
+from app.services.extra_work_assignment import get_mobile_extra_work_assignment
 from app.services.extra_work_document_context import (
     get_extra_work_assignment_context,
     resolve_extra_work_approval_place,
@@ -401,7 +401,7 @@ class ExtraWorkService:
         assignment_id: int,
         current_user: User,
     ) -> list[ExtraWorkTicketRead]:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         return self.list_site_tickets(assignment.site_id)
 
     def create_mobile_ticket(
@@ -411,7 +411,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkTicketCreate | None = None,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         site = self._get_site(assignment.site_id)
         requested = payload or ExtraWorkTicketCreate()
         default_kind = EXTRA_WORK_APPROVAL_KIND if site.requires_extra_work_approval else EXTRA_WORK_BILLING_KIND
@@ -433,7 +433,7 @@ class ExtraWorkService:
         ticket_id: int,
         current_user: User,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         return self._build_ticket_read(ticket)
 
@@ -444,7 +444,7 @@ class ExtraWorkService:
         ticket_id: int,
         current_user: User,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         if ticket.status not in EXTRA_WORK_SUBMITTABLE_STATUSES:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Stundenzettel kann nicht zur Prüfung gesendet werden.")
@@ -481,7 +481,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkTicketTitleUpdate,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         self._ensure_ticket_content_editable(ticket)
         ticket.title = self._clean_optional_text(payload.title)
@@ -498,7 +498,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkTicketDetailsUpdate,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         self._ensure_ticket_content_editable(ticket)
         ticket.manual_order_date = payload.manual_order_date
@@ -518,7 +518,7 @@ class ExtraWorkService:
         ticket_id: int,
         current_user: User,
     ) -> ExtraWorkTicketEntryRead | None:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         self._get_ticket_for_site(ticket_id, assignment.site_id)
         entry = self.db.scalar(
             select(ExtraWorkTicketEntry)
@@ -535,7 +535,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkTicketEntryPayload,
     ) -> ExtraWorkTicketEntryRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         self._ensure_ticket_content_editable(ticket)
         entry = self.db.scalar(
@@ -597,7 +597,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkCustomerSignatureCreate,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         if ticket.customer_signed_at is not None or (ticket.status or "").strip().lower() in {
             "signed",
@@ -645,7 +645,7 @@ class ExtraWorkService:
         current_user: User,
         payload: ExtraWorkWorkerSignatureCreate,
     ) -> ExtraWorkTicketRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
         if ticket.status in {"billed", "closed"}:
             raise HTTPException(
@@ -685,7 +685,7 @@ class ExtraWorkService:
         ticket_id: int,
         current_user: User,
     ) -> list[ExtraWorkTicketPhotoRead]:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         return self.list_site_ticket_photos(
             site_id=assignment.site_id,
             ticket_id=ticket_id,
@@ -724,7 +724,7 @@ class ExtraWorkService:
         content: bytes,
         content_type: str | None,
     ) -> ExtraWorkTicketPhotoRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(
             ticket_id,
             assignment.site_id,
@@ -858,7 +858,7 @@ class ExtraWorkService:
         photo_id: int,
         current_user: User,
     ) -> tuple[bytes, str, str]:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         return self.get_site_ticket_photo_content(
             site_id=assignment.site_id,
             ticket_id=ticket_id,
@@ -901,7 +901,7 @@ class ExtraWorkService:
         photo_id: int,
         current_user: User,
     ) -> None:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket_for_site(
             ticket_id,
             assignment.site_id,
@@ -939,7 +939,7 @@ class ExtraWorkService:
         caption: str | None,
         current_user: User,
     ) -> ExtraWorkTicketPhotoRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         return self.update_site_ticket_photo_caption(
             site_id=assignment.site_id,
             ticket_id=ticket_id,
@@ -991,22 +991,6 @@ class ExtraWorkService:
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         return site
-
-    def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
-        if current_user.person_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Dieser Benutzer ist keiner Person zugeordnet.",
-            )
-        assignment = self.db.scalar(
-            select(Assignment).options(selectinload(Assignment.person)).where(
-                Assignment.id == assignment_id,
-                Assignment.person_id == current_user.person_id,
-            )
-        )
-        if assignment is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
-        return assignment
 
     def _get_ticket_for_site(
         self,

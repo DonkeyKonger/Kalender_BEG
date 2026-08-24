@@ -35,6 +35,7 @@ import {
   createExtraWorkDocumentDraft,
   extraWorkPdfPointsToCqw,
   extraWorkPdfRectToPercent,
+  formatExtraWorkSignaturePlace,
   getExtraWorkHourRect,
   getExtraWorkOverallHours,
   getExtraWorkRowTotalRect,
@@ -1003,7 +1004,7 @@ export function SupplementaryOrderDetail({
               worker_signature_name: name,
               worker_signature_place: draft.worker_signature_place?.trim()
                 ? draft.worker_signature_place
-                : signaturePlaceShort(formatSiteSignatureLocation(site)),
+                : formatExtraWorkSignaturePlace(formatSiteSignatureLocation(site)) ?? "",
               worker_signature_date: draft.worker_signature_date || currentLocalDate(),
               worker_signature_strokes: strokes,
             });
@@ -1105,7 +1106,9 @@ function SupplementaryOrderPaperPage({
     ? `${ticket.display_number} / Blatt ${pageIndex + 1}`
     : ticket.display_number;
   const pageHours = getExtraWorkOverallHours(workers);
-  const customerSignaturePlace = signaturePlaceShort(document.customer_signature.place || formatSiteSignatureLocation(site));
+  const customerSignaturePlace = formatExtraWorkSignaturePlace(
+    document.customer_signature.place || formatSiteSignatureLocation(site),
+  ) ?? "";
 
   return (
     <div
@@ -1789,15 +1792,6 @@ function formatSiteSignatureLocation(site: Site): string {
   const city = [site.postal_code?.trim(), site.city?.trim()].filter(Boolean).join(" ");
   const structured = [street, city].filter(Boolean).join(", ");
   return structured || site.address?.trim() || site.location?.trim() || site.city?.trim() || "";
-}
-
-function signaturePlaceShort(place: string | null): string {
-  const value = place?.trim() ?? "";
-  if (!value) {
-    return "";
-  }
-  const candidate = value.split(",").at(-1)?.trim() ?? value;
-  return candidate.replace(/^\d{5}\s+/, "") || candidate;
 }
 
 function currentLocalDate(): string {

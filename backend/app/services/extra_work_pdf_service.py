@@ -22,6 +22,7 @@ from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, 
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
+from app.services.extra_work_assignment import get_mobile_extra_work_assignment
 from app.services.extra_work_document_context import (
     get_extra_work_assignment_context,
     resolve_extra_work_approval_place,
@@ -170,7 +171,7 @@ class ExtraWorkPdfService:
         ticket_id: int,
         current_user: User,
     ) -> tuple[bytes, str]:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
         started_at = perf_counter()
         filename = self._build_filename(ticket)
@@ -698,19 +699,6 @@ class ExtraWorkPdfService:
             signature_date=ticket.customer_signed_at.date() if ticket.customer_signed_at else None,
             place=customer_place,
         )
-
-    def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
-        if current_user.person_id is None:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Dieser Benutzer ist keiner Person zugeordnet.")
-        assignment = self.db.scalar(
-            select(Assignment).options(selectinload(Assignment.person)).where(
-                Assignment.id == assignment_id,
-                Assignment.person_id == current_user.person_id,
-            )
-        )
-        if assignment is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
-        return assignment
 
     def _get_ticket(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
         ticket = self.db.scalar(

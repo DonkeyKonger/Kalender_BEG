@@ -384,6 +384,9 @@ test("legacy defaults match the PDF fallback while visible dates come only from 
   assert.equal(draft.manual_execution_end, "2026-08-23");
   assert.equal(draft.worker_signature_place, "Bretten");
   assert.equal(formatExtraWorkSignaturePlace("Am Kurpark 1, 49214 Bad Rothenfelde"), "Bad Rothenfelde");
+  assert.match(componentSource, /formatExtraWorkSignaturePlace\(formatSiteSignatureLocation\(site\)\)/);
+  assert.match(componentSource, /formatExtraWorkSignaturePlace\(\s*document\.customer_signature\.place \|\| formatSiteSignatureLocation\(site\),?\s*\)/);
+  assert.doesNotMatch(componentSource, /function signaturePlaceShort\(/);
 
   const explicitLegacyFalseDraft = createExtraWorkDocumentDraft(documentRead({
     ticket: ticket({

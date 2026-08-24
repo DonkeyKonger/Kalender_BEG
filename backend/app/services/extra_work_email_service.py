@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.extra_work import ExtraWorkTicketEmailSendRead
 from app.services.audit_service import AuditService
 from app.services.email_delivery_service import EmailAttachment, EmailDeliveryService
+from app.services.extra_work_assignment import get_mobile_extra_work_assignment
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.measurement_pdf_service import MeasurementPdfService
 
@@ -30,14 +31,12 @@ class ExtraWorkEmailService:
         ticket_id: int,
         current_user: User,
     ) -> ExtraWorkTicketEmailSendRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
         if ticket.worker_signed_at is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Monteursunterschrift fehlt.")
 
-        recipients = self._selected_recipients(assignment.site_id)
-        if not recipients:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine E-Mail-Empfänger hinterlegt.")
+        recipients = self._required_recipients(assignment.site_id)
 
         content, filename = ExtraWorkPdfService(self.db).build_mobile_ticket_pdf(
             assignment_id=assignment_id,
@@ -47,30 +46,13 @@ class ExtraWorkEmailService:
         site_name = _clean_text(ticket.site.name if ticket.site else None) or "Baustelle"
         document_title = _email_document_title(ticket, site_name, filename)
         worker_name = _worker_name(assignment, current_user)
-        subject = f"Anliegend erhalten Sie {document_title}"
-        body = (
-            "Sehr geehrte Damen und Herren,\n\n"
-            f"anliegend erhalten Sie {document_title}.\n\n"
-            "Mit freundlichen Grüßen\n\n"
-            f"{worker_name}\n\n"
-            "BEG Badener Elektro GmbH\n"
-            "Firmenweg 16 · 28832 Achim\n"
-            "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
-            "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
-            "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
-        )
-        EmailDeliveryService().send_document_email(
+        sent_at = _deliver_pdf_email(
             recipients=recipients,
-            subject=subject,
-            body=body,
-            attachment=EmailAttachment(
-                filename=filename,
-                content=content,
-                content_type="application/pdf",
-            ),
+            document_title=document_title,
+            worker_name=worker_name,
+            filename=filename,
+            content=content,
         )
-
-        sent_at = datetime.now(UTC)
         AuditService(self.db).record(
             user_id=current_user.id,
             action="extra_work.email_sent",
@@ -100,12 +82,10 @@ class ExtraWorkEmailService:
         batch_id: int,
         current_user: User,
     ) -> ExtraWorkTicketEmailSendRead:
-        assignment = self._get_user_assignment(assignment_id, current_user)
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         batch = self._get_measurement_batch(batch_id, assignment.site_id)
 
-        recipients = self._selected_recipients(assignment.site_id)
-        if not recipients:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine E-Mail-Empfänger hinterlegt.")
+        recipients = self._required_recipients(assignment.site_id)
 
         content, filename = MeasurementPdfService(self.db).build_batch_pdf(
             site_id=assignment.site_id,
@@ -115,30 +95,13 @@ class ExtraWorkEmailService:
         site_name = _clean_text(batch.site.name if batch.site else None) or "Baustelle"
         document_title = _measurement_email_document_title(batch, site_name)
         worker_name = _worker_name(assignment, current_user)
-        subject = f"Anliegend erhalten Sie {document_title}"
-        body = (
-            "Sehr geehrte Damen und Herren,\n\n"
-            f"anliegend erhalten Sie {document_title}.\n\n"
-            "Mit freundlichen Grüßen\n\n"
-            f"{worker_name}\n\n"
-            "BEG Badener Elektro GmbH\n"
-            "Firmenweg 16 · 28832 Achim\n"
-            "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
-            "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
-            "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
-        )
-        EmailDeliveryService().send_document_email(
+        sent_at = _deliver_pdf_email(
             recipients=recipients,
-            subject=subject,
-            body=body,
-            attachment=EmailAttachment(
-                filename=filename,
-                content=content,
-                content_type="application/pdf",
-            ),
+            document_title=document_title,
+            worker_name=worker_name,
+            filename=filename,
+            content=content,
         )
-
-        sent_at = datetime.now(UTC)
         AuditService(self.db).record(
             user_id=current_user.id,
             action="measurement.email_sent",
@@ -160,19 +123,6 @@ class ExtraWorkEmailService:
             recipients=recipients,
             filename=filename,
         )
-
-    def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
-        if current_user.person_id is None:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Dieser Benutzer ist keiner Person zugeordnet.")
-        assignment = self.db.scalar(
-            select(Assignment).options(selectinload(Assignment.person)).where(
-                Assignment.id == assignment_id,
-                Assignment.person_id == current_user.person_id,
-            )
-        )
-        if assignment is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
-        return assignment
 
     def _get_ticket(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
         ticket = self.db.scalar(
@@ -217,6 +167,45 @@ class ExtraWorkEmailService:
                 .order_by(SiteEmailRecipient.email)
             )
         )
+
+    def _required_recipients(self, site_id: int) -> list[str]:
+        recipients = self._selected_recipients(site_id)
+        if not recipients:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine E-Mail-Empfänger hinterlegt.")
+        return recipients
+
+
+def _deliver_pdf_email(
+    *,
+    recipients: list[str],
+    document_title: str,
+    worker_name: str,
+    filename: str,
+    content: bytes,
+) -> datetime:
+    subject = f"Anliegend erhalten Sie {document_title}"
+    body = (
+        "Sehr geehrte Damen und Herren,\n\n"
+        f"anliegend erhalten Sie {document_title}.\n\n"
+        "Mit freundlichen Grüßen\n\n"
+        f"{worker_name}\n\n"
+        "BEG Badener Elektro GmbH\n"
+        "Firmenweg 16 · 28832 Achim\n"
+        "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
+        "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
+        "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
+    )
+    EmailDeliveryService().send_document_email(
+        recipients=recipients,
+        subject=subject,
+        body=body,
+        attachment=EmailAttachment(
+            filename=filename,
+            content=content,
+            content_type="application/pdf",
+        ),
+    )
+    return datetime.now(UTC)
 
 
 def _email_document_title(ticket: ExtraWorkTicket, site_name: str, filename: str) -> str:

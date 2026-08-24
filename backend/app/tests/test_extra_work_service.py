@@ -1358,6 +1358,7 @@ def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_s
             deliveries.append({
                 "recipients": recipients,
                 "subject": subject,
+                "body": body,
                 "filename": attachment.filename,
                 "content": attachment.content,
                 "content_type": attachment.content_type,
@@ -1380,8 +1381,23 @@ def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_s
     assert result.recipients == ["kunde@example.de"]
     assert result.filename == "Aufmass_geprueft_8007.01.pdf"
     assert deliveries[0]["recipients"] == ["kunde@example.de"]
+    assert deliveries[0]["subject"] == "Anliegend erhalten Sie Aufmaß 8007.01 - Schüchtermann Klinik"
+    assert deliveries[0]["body"] == (
+        "Sehr geehrte Damen und Herren,\n\n"
+        "anliegend erhalten Sie Aufmaß 8007.01 - Schüchtermann Klinik.\n\n"
+        "Mit freundlichen Grüßen\n\n"
+        "Max Monteur\n\n"
+        "BEG Badener Elektro GmbH\n"
+        "Firmenweg 16 · 28832 Achim\n"
+        "Tel.: +49 4202 97520  |  E-Mail: info@BEG-Achim.de\n"
+        "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
+        "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
+    )
     assert deliveries[0]["content"] == b"%PDF-measurement"
     assert deliveries[0]["content_type"] == "application/pdf"
+    assert audit_log.entity_type == "measurement_batch"
+    assert audit_log.entity_id == batch.id
+    assert audit_log.new_value_json["filename"] == "Aufmass_geprueft_8007.01.pdf"
     assert audit_log.new_value_json["customer_signature_present"] is False
 
 
