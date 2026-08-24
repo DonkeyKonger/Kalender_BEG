@@ -27377,6 +27377,7 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-extra-work-overview {
   --project-extra-work-header-inline-padding: 18px;
+  --project-extra-work-header-separator-inset: 8px;
   --project-extra-work-master-column: minmax(600px, 48%);
 }
 
@@ -27426,10 +27427,20 @@ body.mobile-modal-scroll-locked {
   min-width: 0;
   margin-left: 0;
   overflow-y: auto;
-  border-left: 1px solid var(--pf-border);
   gap: 8px;
   padding: 10px var(--project-extra-work-header-inline-padding);
   scrollbar-gutter: stable;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
+  position: absolute;
+  top: var(--project-extra-work-header-separator-inset);
+  bottom: var(--project-extra-work-header-separator-inset);
+  left: 0;
+  width: 1px;
+  background: var(--pf-border);
+  content: "";
+  pointer-events: none;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-overview .secondary-action,
@@ -27986,8 +27997,11 @@ body.mobile-modal-scroll-locked {
     width: 100%;
     margin-left: 0;
     border-top: 1px solid var(--pf-border);
-    border-left: 0;
     padding: 10px var(--project-extra-work-header-inline-padding);
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
+    display: none;
   }
 
   .project-extra-work-workspace {
