@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
@@ -15,6 +15,7 @@ import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } 
 import { SupplementaryOrderDetail } from "../components/SupplementaryOrderDetail";
 import { ApiError, api } from "../lib/api";
 import { containsDraggedFiles } from "../lib/fileDrag";
+import { getCustomerEmailStatus, type CustomerEmailStatusItem } from "../lib/customerEmailStatus";
 import {
   EXTRA_WORK_OVERVIEW_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
@@ -2911,15 +2912,10 @@ function ExtraWorkTab({
             pdfAction={pdfAction}
             archivingTicketId={archivingTicketId}
             restoringTicketId={restoringTicketId}
-            statusActionId={statusActionId}
-            canPromoteStatus={canPromoteStatus}
-            openStatusControl={openStatusControl}
-            onSetOpenStatusControl={setOpenStatusControl}
             onOpenTicket={onOpenTicket}
             onDownloadPdf={onDownloadPdf}
             onArchiveTicket={(ticket) => void removeSelectedTicket(ticket, onArchiveTicket)}
             onRestoreTicket={(ticket) => void removeSelectedTicket(ticket, onRestoreTicket)}
-            onPromoteStatus={onPromoteStatus}
           />
         </div>
       ) : null}
@@ -2934,15 +2930,10 @@ function ExtraWorkOverviewDetail({
   pdfAction,
   archivingTicketId,
   restoringTicketId,
-  statusActionId,
-  canPromoteStatus,
-  openStatusControl,
-  onSetOpenStatusControl,
   onOpenTicket,
   onDownloadPdf,
   onArchiveTicket,
   onRestoreTicket,
-  onPromoteStatus,
 }: {
   site: Site;
   ticket: MobileExtraWorkTicket | null;
@@ -2950,15 +2941,10 @@ function ExtraWorkOverviewDetail({
   pdfAction: string | null;
   archivingTicketId: number | null;
   restoringTicketId: number | null;
-  statusActionId: number | null;
-  canPromoteStatus: boolean;
-  openStatusControl: string | null;
-  onSetOpenStatusControl: (value: string | null) => void;
   onOpenTicket: (ticket: MobileExtraWorkTicket) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
   onArchiveTicket: (ticket: MobileExtraWorkTicket) => void;
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => void;
-  onPromoteStatus: (ticket: MobileExtraWorkTicket, status: ExtraWorkManualStatus) => void;
 }) {
   if (!ticket) {
     return (
@@ -2968,12 +2954,8 @@ function ExtraWorkOverviewDetail({
     );
   }
 
-  const statusBadge = getExtraWorkTicketStatusBadge(ticket);
   const emailStatus = getCustomerEmailStatus(ticket);
-  const statusOptions = canPromoteStatus && !archiveMode
-    ? extraWorkStatusPromotionOptions(ticket.status, ticket.customer_signed_at)
-    : [];
-  const detailControlKey = `detail:${ticket.id}`;
+  const emailStatusTooltipId = `extra-work-delivery-status-${ticket.id}`;
   const primaryEntry = getExtraWorkOverviewPrimaryEntry(ticket);
   const executionPeriod = resolveExtraWorkOverviewPeriod(ticket);
   const description = getExtraWorkOverviewDescription(ticket);
@@ -3019,31 +3001,6 @@ function ExtraWorkOverviewDetail({
         </div>
       </header>
 
-      <div className="project-extra-work-detail-statuses">
-        <div>
-          <span>Status</span>
-          <span className={statusBadge.className}>
-            <ProjectRecordStatusControl
-              active={openStatusControl === detailControlKey}
-              ariaLabel={`${formatExtraWorkOverviewTitle(ticket)}: Status ${statusBadge.label}`}
-              busy={statusActionId === ticket.id}
-              label={statusBadge.label}
-              options={statusOptions}
-              onClose={() => onSetOpenStatusControl(null)}
-              onSelect={(status) => {
-                onSetOpenStatusControl(null);
-                onPromoteStatus(ticket, status);
-              }}
-              onToggle={() => onSetOpenStatusControl(openStatusControl === detailControlKey ? null : detailControlKey)}
-            />
-          </span>
-        </div>
-        <div>
-          <span>Versandstatus</span>
-          <strong className={`measurement-review-email-status ${emailStatus.className}`}>{emailStatus.label}</strong>
-        </div>
-      </div>
-
       {archiveMode ? (
         <p className="project-extra-work-archive-note">
           Archiviert {ticket.deleted_at ? formatDateTime(ticket.deleted_at) : "ohne Datum"}
@@ -3064,6 +3021,23 @@ function ExtraWorkOverviewDetail({
           <div><dt>Kunde</dt><dd>{ticket.customer_name?.trim() || site.customer || "–"}</dd></div>
           <div><dt>Projekt</dt><dd>{site.name}</dd></div>
           <div><dt>Kom.-Nr.</dt><dd>{site.site_number || "–"}</dd></div>
+          <div className="project-extra-work-delivery-field">
+            <dt>Versandstatus</dt>
+            <dd>
+              <span
+                className={`project-extra-work-delivery-status ${emailStatus.className}`}
+                role="img"
+                tabIndex={0}
+                aria-label={emailStatus.accessibleLabel}
+                aria-describedby={emailStatusTooltipId}
+              >
+                {emailStatus.isSent ? <MailCheck aria-hidden="true" size={19} /> : <MailX aria-hidden="true" size={19} />}
+                <span className="project-extra-work-delivery-tooltip" id={emailStatusTooltipId} role="tooltip">
+                  {emailStatus.accessibleLabel}
+                </span>
+              </span>
+            </dd>
+          </div>
         </dl>
       </section>
 
@@ -7623,51 +7597,9 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
   };
 }
 
-type CustomerEmailStatusItem = {
-  customer_email_sent_at: string | null;
-  customer_email_signature_present: boolean | null;
-  customer_signed_at: string | null;
-  customer_signature_name?: string | null;
-  is_locked_for_worker?: boolean;
-};
-
 function CustomerEmailStatusLine({ item }: { item: CustomerEmailStatusItem }) {
   const status = getCustomerEmailStatus(item);
   return <small className={`measurement-review-email-status ${status.className}`}>{status.label}</small>;
-}
-
-function getCustomerEmailStatus(item: CustomerEmailStatusItem): { label: string; className: string } {
-  if (!item.customer_email_sent_at) {
-    return {
-      label: "Nicht an Kunden gesendet",
-      className: "is-not-sent",
-    };
-  }
-  const signaturePresent = Boolean(item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker)
-    || item.customer_email_signature_present === true;
-  const sentAt = formatCustomerEmailSentDate(item.customer_email_sent_at);
-  if (signaturePresent) {
-    return {
-      label: `An Kunden gesendet - Unterschrift erhalten · ${sentAt}`,
-      className: "is-complete",
-    };
-  }
-  return {
-    label: `An Kunden gesendet · Unterschrift fehlt · ${sentAt}`,
-    className: "is-signature-open",
-  };
-}
-
-function formatCustomerEmailSentDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "-";
-  }
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  }).format(parsed);
 }
 
 function formatExtraWorkTicketHours(ticket: MobileExtraWorkTicket): string {

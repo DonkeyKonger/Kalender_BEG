@@ -27473,8 +27473,7 @@ body.mobile-modal-scroll-locked {
   align-items: center;
 }
 
-.project-extra-work-master-status .measurement-status,
-.project-extra-work-detail-statuses .measurement-status {
+.project-extra-work-master-status .measurement-status {
   width: 100%;
   min-width: 0;
   min-height: 28px;
@@ -27482,8 +27481,7 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
-.project-extra-work-master-status .measurement-review-status-label,
-.project-extra-work-detail-statuses .measurement-review-status-label {
+.project-extra-work-master-status .measurement-review-status-label {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27614,34 +27612,10 @@ body.mobile-modal-scroll-locked {
   min-width: 76px;
 }
 
-.project-extra-work-detail-statuses {
-  display: grid;
-  grid-template-columns: 122px minmax(220px, 1fr);
-  align-items: end;
-  gap: 18px;
-  border-bottom: 1px solid var(--pf-border);
-  padding: 12px 22px 14px;
-}
-
-.project-extra-work-detail-statuses > div {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.project-extra-work-detail-statuses > div > span:first-child,
 .project-extra-work-detail dt {
   color: #58708e;
   font-size: 0.67rem;
   font-weight: 750;
-}
-
-.project-extra-work-detail-statuses strong {
-  overflow: hidden;
-  font-size: 0.75rem;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .project-extra-work-archive-note {
@@ -27706,7 +27680,71 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-project-data {
-  grid-template-columns: 1.2fr 1fr 0.6fr;
+  grid-template-columns: 1.2fr 1fr 0.6fr 0.55fr;
+}
+
+.project-extra-work-delivery-field dd {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+.project-extra-work-delivery-status {
+  position: relative;
+  display: inline-grid;
+  width: 28px;
+  height: 24px;
+  place-items: center;
+  border-radius: 2px;
+  cursor: default;
+}
+
+.project-extra-work-delivery-status.is-not-sent {
+  color: #8291a5;
+}
+
+.project-extra-work-delivery-status.is-signature-open {
+  color: #a96f16;
+}
+
+.project-extra-work-delivery-status.is-complete {
+  color: #2f6096;
+}
+
+.project-extra-work-delivery-status:focus-visible {
+  outline: 2px solid #6f94c2;
+  outline-offset: 2px;
+}
+
+.project-extra-work-delivery-tooltip {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 48px));
+  border-radius: 2px;
+  background: #172d4c;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.35;
+  opacity: 0;
+  padding: 6px 8px;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  visibility: hidden;
+  white-space: normal;
+}
+
+.project-extra-work-delivery-status:hover .project-extra-work-delivery-tooltip,
+.project-extra-work-delivery-status:focus-visible .project-extra-work-delivery-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .project-extra-work-description {
@@ -27803,6 +27841,15 @@ body.mobile-modal-scroll-locked {
     flex-wrap: wrap;
   }
 
+  .project-extra-work-project-data {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-extra-work-project-data > div:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
   .project-extra-work-additional-data {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -27830,6 +27877,21 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 480px) {
+  .project-extra-work-delivery-tooltip {
+    right: auto;
+    left: 0;
+  }
+
+  .project-extra-work-project-data {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .project-extra-work-project-data > div:nth-child(n) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
   .project-extra-work-additional-data {
     grid-template-columns: minmax(0, 1fr);
   }

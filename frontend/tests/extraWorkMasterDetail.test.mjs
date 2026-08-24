@@ -28,15 +28,39 @@ test("desktop extra-work overview uses one lightweight master-detail workspace",
   assert.doesNotMatch(tabSource, /Hauptauftrag/);
 });
 
-test("master rows omit the customer delivery subline while the detail keeps it", () => {
+test("master rows keep their status control while the detail removes its duplicate status row", () => {
   const masterRowsStart = tabSource.indexOf("visibleTickets.map");
   const masterRowsEnd = tabSource.indexOf("<ExtraWorkOverviewDetail", masterRowsStart);
   const masterRowsSource = tabSource.slice(masterRowsStart, masterRowsEnd);
+  const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
+  const detailSource = tabSource.slice(detailStart);
 
   assert.notEqual(masterRowsStart, -1);
   assert.ok(masterRowsEnd > masterRowsStart);
   assert.doesNotMatch(masterRowsSource, /getCustomerEmailStatus\(ticket\)/);
-  assert.match(tabSource.slice(masterRowsEnd), /getCustomerEmailStatus\(ticket\)/);
+  assert.match(masterRowsSource, /ProjectRecordStatusControl/);
+  assert.match(masterRowsSource, /onPromoteStatus\(ticket, status\)/);
+  assert.doesNotMatch(detailSource, /project-extra-work-detail-statuses/);
+  assert.doesNotMatch(detailSource, /ProjectRecordStatusControl/);
+  assert.doesNotMatch(detailSource, /<span>Status<\/span>/);
+});
+
+test("detail moves delivery state into the fourth customer-project field as an accessible icon", () => {
+  const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
+  const customerProjectStart = tabSource.indexOf("<h4>Kunde &amp; Projekt</h4>", detailStart);
+  const customerProjectEnd = tabSource.indexOf("</dl>", customerProjectStart);
+  const customerProjectSource = tabSource.slice(customerProjectStart, customerProjectEnd);
+  const labels = [...customerProjectSource.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);
+
+  assert.deepEqual(labels, ["Kunde", "Projekt", "Kom.-Nr.", "Versandstatus"]);
+  assert.match(customerProjectSource, /emailStatus\.isSent \? <MailCheck/);
+  assert.match(customerProjectSource, /: <MailX/);
+  assert.match(customerProjectSource, /role="img"/);
+  assert.match(customerProjectSource, /tabIndex=\{0\}/);
+  assert.match(customerProjectSource, /aria-label=\{emailStatus\.accessibleLabel\}/);
+  assert.match(customerProjectSource, /aria-describedby=\{emailStatusTooltipId\}/);
+  assert.match(customerProjectSource, /role="tooltip"/);
+  assert.equal(customerProjectSource.includes("{emailStatus.label}"), false);
 });
 
 test("master rows show only the creation date while the detail keeps date and time", () => {
@@ -136,6 +160,12 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*width: 1px;[\s\S]*background: var\(--pf-border\)/);
   assert.match(styles, /\.site-detail-status-select \{[\s\S]*border-radius: 2px/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px 22px/);
+  assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
+  assert.match(styles, /\.project-extra-work-project-data \{[\s\S]*grid-template-columns: 1\.2fr 1fr 0\.6fr 0\.55fr/);
+  assert.match(styles, /\.project-extra-work-delivery-status:hover \.project-extra-work-delivery-tooltip,[\s\S]*\.project-extra-work-delivery-status:focus-visible \.project-extra-work-delivery-tooltip/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-delivery-tooltip \{[\s\S]*right: auto;[\s\S]*left: 0/);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /\.project-extra-work-master-row\.is-selected::before/);
