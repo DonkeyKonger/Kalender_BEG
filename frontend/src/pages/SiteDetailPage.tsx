@@ -53,6 +53,7 @@ import {
   type ProjectRecordStatusOption,
 } from "../lib/projectRecordStatuses";
 import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors";
+import { getSiteStatusMenuNavigationIndex } from "../lib/siteStatusMenu";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import { calendarPersonCode, type Person } from "../types/person";
@@ -1463,22 +1464,12 @@ export function SiteDetailPage() {
         </div>
         <div className="site-detail-header-actions">
           {canEditSite ? (
-            <span className={`site-detail-status-control status-badge-${site.status}`}>
-              <select
-                aria-label={`Status fuer ${site.name} aendern`}
-                className="site-detail-status-select"
-                disabled={isSavingSiteStatus}
-                value={site.status}
-                onChange={(event) => void updateSiteHeaderStatus(event.target.value as Site["status"])}
-              >
-                {siteStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown aria-hidden="true" className="site-detail-status-caret" size={13} strokeWidth={2.2} />
-            </span>
+            <SiteHeaderStatusSelect
+              disabled={isSavingSiteStatus}
+              label={`Status fuer ${site.name} aendern`}
+              value={site.status}
+              onChange={(status) => void updateSiteHeaderStatus(status)}
+            />
           ) : (
             <SiteStatusBadge status={site.status} />
           )}
@@ -1684,6 +1675,164 @@ export function SiteDetailPage() {
         />
       ) : null}
     </section>
+  );
+}
+
+const siteHeaderStatusLabels: Record<Site["status"], string> = {
+  active: "Aktiv",
+  paused: "Pause",
+  planned: "Geplant",
+  completed: "Abgeschlossen",
+  deleted: "Gelöscht",
+};
+
+export function SiteHeaderStatusSelect({
+  disabled,
+  label,
+  value,
+  onChange,
+}: {
+  disabled: boolean;
+  label: string;
+  value: Site["status"];
+  onChange: (status: Site["status"]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const selectedLabel = siteHeaderStatusLabels[value];
+
+  const closeAndFocusTrigger = () => {
+    setIsOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    const focusFrame = window.requestAnimationFrame(() => {
+      listboxRef.current
+        ?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')
+        ?.focus();
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !triggerRef.current?.parentElement?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAndFocusTrigger();
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (disabled) {
+      setIsOpen(false);
+    }
+  }, [disabled]);
+
+  const moveOptionFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    const options = Array.from(
+      listboxRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? [],
+    );
+    const nextIndex = getSiteStatusMenuNavigationIndex(
+      options.indexOf(document.activeElement as HTMLButtonElement),
+      options.length,
+      event.key,
+    );
+    if (nextIndex === null) {
+      return;
+    }
+    event.preventDefault();
+    options[nextIndex]?.focus();
+  };
+
+  return (
+    <span
+      className={`site-detail-status-control status-badge-${value}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsOpen(false);
+        }
+      }}
+    >
+      <button
+        aria-busy={disabled}
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={label}
+        className="site-detail-status-trigger"
+        disabled={disabled}
+        ref={triggerRef}
+        role="combobox"
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+            event.preventDefault();
+            setIsOpen(true);
+          }
+        }}
+      >
+        <span>{selectedLabel}</span>
+        <ChevronDown aria-hidden="true" className="site-detail-status-caret" size={12} strokeWidth={2.2} />
+      </button>
+      {isOpen ? (
+        <div
+          aria-label="Baustellenstatus"
+          className="site-detail-status-menu"
+          id={listboxId}
+          ref={listboxRef}
+          role="listbox"
+          onKeyDown={(event) => {
+            if (
+              (event.key === "Enter" || event.key === " ")
+              && event.target instanceof HTMLButtonElement
+            ) {
+              event.preventDefault();
+              event.target.click();
+              return;
+            }
+            moveOptionFocus(event);
+          }}
+        >
+          {siteStatusOptions.map((option) => (
+            <button
+              aria-selected={option.value === value}
+              key={option.value}
+              role="option"
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                closeAndFocusTrigger();
+              }}
+            >
+              <span className={`site-detail-status-option-indicator status-badge-${option.value}`} aria-hidden="true" />
+              <span>{siteHeaderStatusLabels[option.value]}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </span>
   );
 }
 

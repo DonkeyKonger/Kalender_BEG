@@ -176,7 +176,8 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);[\s\S]*border-bottom: 0/);
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-left: 1px solid var\(--pf-border\)/);
-  assert.match(styles, /\.site-detail-status-select \{[\s\S]*appearance: none;[\s\S]*border-radius: 0/);
+  assert.match(styles, /\.site-detail-status-trigger \{[\s\S]*border-radius: 0/);
+  assert.match(styles, /\.site-detail-status-menu \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
   assert.match(styles, /\.project-extra-work-detail \{[\s\S]*--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);

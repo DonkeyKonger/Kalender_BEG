@@ -27123,19 +27123,23 @@ body.mobile-modal-scroll-locked {
   position: relative;
   display: inline-grid;
   align-self: start;
-  width: 118px;
+  width: max-content;
   max-width: 100%;
-  min-height: 28px;
+  min-height: 24px;
   border-radius: 0;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-status-select {
-  -webkit-appearance: none;
-  appearance: none;
+.site-detail-page.is-project-file-workspace .site-detail-status-trigger {
   box-sizing: border-box;
-  width: 100%;
-  height: 28px;
+  display: inline-flex;
+  width: max-content;
+  min-width: 64px;
+  max-width: 160px;
+  height: 24px;
   align-self: start;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
   border: 1px solid currentColor;
   border-radius: 0;
   background: transparent;
@@ -27145,39 +27149,86 @@ body.mobile-modal-scroll-locked {
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.2;
-  padding: 3px 24px 3px 8px;
+  padding: 2px 6px 2px 8px;
+  white-space: nowrap;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-status-select option {
-  background: #ffffff;
-  color: #111827;
-}
-
-.site-detail-page.is-project-file-workspace .site-detail-status-select:hover:not(:disabled) {
+.site-detail-page.is-project-file-workspace .site-detail-status-trigger:hover:not(:disabled),
+.site-detail-page.is-project-file-workspace .site-detail-status-trigger[aria-expanded="true"] {
   box-shadow: inset 0 0 0 1px currentColor;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-status-select:focus-visible {
+.site-detail-page.is-project-file-workspace .site-detail-status-trigger:focus-visible {
   outline: 2px solid var(--pf-active);
   outline-offset: 2px;
 }
 
 .site-detail-page.is-project-file-workspace .site-detail-status-caret {
-  position: absolute;
-  top: 50%;
-  right: 7px;
+  flex: 0 0 auto;
   color: currentColor;
   pointer-events: none;
-  transform: translateY(-50%);
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-status-select:disabled {
+.site-detail-page.is-project-file-workspace .site-detail-status-trigger:disabled {
   cursor: wait;
   opacity: 0.72;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-status-select:disabled + .site-detail-status-caret {
-  opacity: 0.58;
+.site-detail-page.is-project-file-workspace .site-detail-status-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 1px);
+  right: 0;
+  display: grid;
+  width: max(100%, 168px);
+  overflow: hidden;
+  border: 1px solid #b9c7d9;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 35, 58, 0.18);
+  color: #23344d;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-status-menu > button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #e4eaf2;
+  border-radius: 0;
+  background: #ffffff;
+  color: #23344d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-status-menu > button:last-child {
+  border-bottom: 0;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-status-menu > button:hover,
+.site-detail-page.is-project-file-workspace .site-detail-status-menu > button:focus-visible,
+.site-detail-page.is-project-file-workspace .site-detail-status-menu > button[aria-selected="true"] {
+  background: #eef4fb;
+  color: #173b6d;
+  outline: 2px solid #6f94c2;
+  outline-offset: -2px;
+}
+
+.site-detail-page.is-project-file-workspace .site-detail-status-option-indicator {
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  min-height: 0;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  padding: 0;
 }
 
 .site-detail-page.is-project-file-workspace .site-detail-header-actions {
