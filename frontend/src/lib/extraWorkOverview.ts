@@ -64,6 +64,42 @@ export function getExtraWorkOverviewPageWindow(
   };
 }
 
+export type ExtraWorkOverviewPageItem = number | "ellipsis-left" | "ellipsis-right";
+
+export function getExtraWorkOverviewPageItems(
+  pageCount: number,
+  currentPage: number,
+): ExtraWorkOverviewPageItem[] {
+  const safePageCount = Math.max(1, Math.floor(pageCount));
+  const safeCurrentPage = Math.min(safePageCount, Math.max(1, Math.floor(currentPage)));
+  if (safePageCount <= 7) {
+    return Array.from({ length: safePageCount }, (_, index) => index + 1);
+  }
+  if (safeCurrentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis-right", safePageCount];
+  }
+  if (safeCurrentPage >= safePageCount - 3) {
+    return [
+      1,
+      "ellipsis-left",
+      safePageCount - 4,
+      safePageCount - 3,
+      safePageCount - 2,
+      safePageCount - 1,
+      safePageCount,
+    ];
+  }
+  return [
+    1,
+    "ellipsis-left",
+    safeCurrentPage - 1,
+    safeCurrentPage,
+    safeCurrentPage + 1,
+    "ellipsis-right",
+    safePageCount,
+  ];
+}
+
 export function formatExtraWorkOverviewTitle(ticket: MobileExtraWorkTicket): string {
   return `Zusatzauftrag ${ticket.display_number}`;
 }

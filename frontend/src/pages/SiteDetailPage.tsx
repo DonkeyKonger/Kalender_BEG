@@ -25,6 +25,7 @@ import {
   getExtraWorkOverviewDescription,
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewPageForIndex,
+  getExtraWorkOverviewPageItems,
   getExtraWorkOverviewPageWindow,
   getExtraWorkOverviewPrimaryEntry,
   resolveExtraWorkOverviewPeriod,
@@ -2735,6 +2736,7 @@ function ExtraWorkTab({
     page,
     overviewLayout.pageSize,
   );
+  const pageItems = getExtraWorkOverviewPageItems(pageWindow.pageCount, pageWindow.page);
   const visibleTickets = filteredTickets.slice(pageWindow.start, pageWindow.end);
   const workspaceStyle = {
     "--project-extra-work-workspace-height": `${overviewLayout.workspaceHeight}px`,
@@ -2983,16 +2985,21 @@ function ExtraWorkTab({
                 <nav aria-label="Seiten der Zusatzaufträge">
                   <button type="button" aria-label="Erste Seite" disabled={pageWindow.page === 1} onClick={() => selectPage(1)}>«</button>
                   <button type="button" aria-label="Vorherige Seite" disabled={pageWindow.page === 1} onClick={() => selectPage(pageWindow.page - 1)}>‹</button>
-                  {Array.from({ length: pageWindow.pageCount }, (_, index) => index + 1).map((pageNumber) => (
-                    <button
-                      type="button"
-                      key={pageNumber}
-                      className={pageWindow.page === pageNumber ? "is-active" : ""}
-                      aria-current={pageWindow.page === pageNumber ? "page" : undefined}
-                      onClick={() => selectPage(pageNumber)}
-                    >
-                      {pageNumber}
-                    </button>
+                  {pageItems.map((pageItem) => (
+                    typeof pageItem === "number" ? (
+                      <button
+                        type="button"
+                        key={pageItem}
+                        className={pageWindow.page === pageItem ? "is-active" : ""}
+                        aria-label={`Seite ${pageItem}`}
+                        aria-current={pageWindow.page === pageItem ? "page" : undefined}
+                        onClick={() => selectPage(pageItem)}
+                      >
+                        {pageItem}
+                      </button>
+                    ) : (
+                      <span className="project-extra-work-pagination-ellipsis" key={pageItem} aria-hidden="true">…</span>
+                    )
                   ))}
                   <button type="button" aria-label="Nächste Seite" disabled={pageWindow.page === pageWindow.pageCount} onClick={() => selectPage(pageWindow.page + 1)}>›</button>
                   <button type="button" aria-label="Letzte Seite" disabled={pageWindow.page === pageWindow.pageCount} onClick={() => selectPage(pageWindow.pageCount)}>»</button>

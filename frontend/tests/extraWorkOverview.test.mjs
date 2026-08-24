@@ -10,6 +10,7 @@ import {
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewDescription,
   getExtraWorkOverviewPageForIndex,
+  getExtraWorkOverviewPageItems,
   getExtraWorkOverviewPageWindow,
   normalizeExtraWorkOverviewSearch,
   resolveExtraWorkOverviewPeriod,
@@ -101,6 +102,14 @@ test("resizing keeps the selected row on the page for the new page size", () => 
   assert.equal(getExtraWorkOverviewPageForIndex(17, 8), 3);
   assert.equal(getExtraWorkOverviewPageForIndex(17, 4), 5);
   assert.equal(getExtraWorkOverviewPageForIndex(-1, 8), 1);
+});
+
+test("compact pagination keeps edge pages and a small current-page window", () => {
+  assert.deepEqual(getExtraWorkOverviewPageItems(7, 4), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(getExtraWorkOverviewPageItems(20, 1), [1, 2, 3, 4, 5, "ellipsis-right", 20]);
+  assert.deepEqual(getExtraWorkOverviewPageItems(20, 10), [1, "ellipsis-left", 9, 10, 11, "ellipsis-right", 20]);
+  assert.deepEqual(getExtraWorkOverviewPageItems(20, 20), [1, "ellipsis-left", 16, 17, 18, 19, 20]);
+  assert.deepEqual(getExtraWorkOverviewPageItems(20, 99), [1, "ellipsis-left", 16, 17, 18, 19, 20]);
 });
 
 test("local overview search covers structured ticket and entry contents", () => {

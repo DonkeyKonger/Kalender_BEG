@@ -27622,6 +27622,16 @@ body.mobile-modal-scroll-locked {
   gap: 3px;
 }
 
+.project-extra-work-pagination-ellipsis {
+  display: inline-grid;
+  width: 22px;
+  min-height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #71839a;
+  font-weight: 750;
+}
+
 .project-extra-work-pagination button {
   display: inline-grid;
   width: 28px;
@@ -27989,7 +27999,21 @@ body.mobile-modal-scroll-locked {
 
   .project-extra-work-pagination nav {
     min-width: 0;
-    overflow-x: auto;
+    gap: 2px;
+  }
+
+  .project-extra-work-pagination button {
+    width: 24px;
+  }
+
+  .project-extra-work-pagination-ellipsis {
+    width: 18px;
+  }
+}
+
+@media (max-width: 400px) {
+  .project-extra-work-pagination > span:first-child {
+    display: none;
   }
 }
 

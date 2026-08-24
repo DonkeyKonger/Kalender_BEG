@@ -55,5 +55,15 @@ test("stacked layouts keep a bounded master but return detail content to natural
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-detail \{[\s\S]*height: auto;[\s\S]*overflow: visible/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-detail-head \{[\s\S]*position: static/);
   assert.match(styles, /@media \(max-width: 600px\)[\s\S]*\.project-extra-work-pagination \{[\s\S]*left: 0;[\s\S]*min-width: 100%/);
-  assert.match(styles, /@media \(max-width: 600px\)[\s\S]*\.project-extra-work-pagination nav \{[\s\S]*overflow-x: auto/);
+  assert.match(styles, /@media \(max-width: 600px\)[\s\S]*\.project-extra-work-pagination nav \{[\s\S]*gap: 2px/);
+});
+
+test("pagination renders a bounded page window with accessible edge navigation", () => {
+  assert.match(tabSource, /getExtraWorkOverviewPageItems\(pageWindow\.pageCount, pageWindow\.page\)/);
+  assert.doesNotMatch(tabSource, /Array\.from\(\{ length: pageWindow\.pageCount \}/);
+  assert.match(tabSource, /aria-label="Erste Seite"/);
+  assert.match(tabSource, /aria-label="Letzte Seite"/);
+  assert.match(tabSource, /aria-label=\{`Seite \$\{pageItem\}`\}/);
+  assert.match(tabSource, /aria-current=\{pageWindow\.page === pageItem \? "page" : undefined\}/);
+  assert.match(tabSource, /project-extra-work-pagination-ellipsis/);
 });
