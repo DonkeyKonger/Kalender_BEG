@@ -27124,7 +27124,7 @@ body.mobile-modal-scroll-locked {
   max-width: 92px;
   min-height: 26px;
   border: 1px solid currentColor;
-  border-radius: 0;
+  border-radius: 2px;
   padding: 3px 20px 3px 8px;
   font-size: 0.72rem;
 }
@@ -27278,40 +27278,60 @@ body.mobile-modal-scroll-locked {
   line-height: 1.15;
 }
 
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
+  display: flex;
+  min-height: 54px;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   margin: 18px 0 12px;
   border-color: var(--pf-border);
   border-radius: 2px;
-  padding: 16px 18px;
+  padding: 10px 18px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-copy {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  gap: 0;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 {
+  margin: 0;
   gap: 9px;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 svg {
   color: #334155;
 }
 
-.site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar p {
-  margin-top: 2px;
-  font-size: 0.86rem;
-  line-height: 1.45;
-}
-
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
   --project-extra-work-control-height: 32px;
 
+  position: relative;
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  min-width: 0;
+  margin-left: auto;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 1px;
+  background: var(--pf-border);
+  content: "";
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-overview .secondary-action,
@@ -27320,6 +27340,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions > .secondary-action,
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions > .primary-action,
 .site-detail-page.is-project-file-workspace .project-extra-work-search {
   height: var(--project-extra-work-control-height);
   min-height: var(--project-extra-work-control-height);
@@ -27565,12 +27586,13 @@ body.mobile-modal-scroll-locked {
 
 .project-extra-work-detail-head {
   display: flex;
-  min-height: 94px;
+  height: 60px;
+  min-height: 60px;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--pf-border);
-  padding: 18px 22px;
+  padding: 10px 22px;
 }
 
 .project-extra-work-detail-head h3 {
@@ -27717,14 +27739,6 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 1280px) {
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
-    justify-content: flex-start;
-  }
-
   .project-extra-work-workspace {
     grid-template-columns: minmax(560px, 48%) minmax(0, 1fr);
   }
@@ -27741,11 +27755,52 @@ body.mobile-modal-scroll-locked {
   }
 }
 
+@media (max-width: 900px) {
+  .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 10px 14px;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
+    width: 100%;
+    margin-left: 0;
+    padding: 10px 0 0;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
+    top: 0;
+    right: auto;
+    bottom: auto;
+    width: 44px;
+    height: 1px;
+  }
+}
+
 @media (max-width: 760px) {
   .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
     align-self: stretch;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-search {
+    flex: 1 1 224px;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .project-extra-work-detail-head {
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 10px 14px;
+  }
+
+  .project-extra-work-detail-actions {
+    flex-wrap: wrap;
   }
 
   .project-extra-work-additional-data {
@@ -27765,6 +27820,12 @@ body.mobile-modal-scroll-locked {
 
   .project-extra-work-additional-data > div:nth-last-child(-n + 2) {
     border-bottom: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .site-detail-page.is-project-file-workspace .project-extra-work-search {
+    flex-basis: 100%;
   }
 }
 

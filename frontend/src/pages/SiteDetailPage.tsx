@@ -2764,31 +2764,8 @@ function ExtraWorkTab({
       <header className="project-record-toolbar project-extra-work-toolbar measurement-review-toolbar">
         <div className="measurement-review-header-copy">
           <h2><FileText aria-hidden="true" size={18} />{archiveMode ? "Archivierte Zusatzaufträge" : "Zusatzaufträge"}</h2>
-          <p>
-            {archiveMode
-              ? "Archivierte Zusatzaufträge können hier eingesehen und wiederhergestellt werden."
-              : `Mobile Stundenzettel und Zusatzaufträge zu ${site.name} zur Einsicht und PDF-Ausgabe.`}
-          </p>
         </div>
         <div className="measurement-review-header-actions">
-          {canCreate && !archiveMode ? (
-            <button
-              type="button"
-              className="secondary-action"
-              disabled={actionBusy}
-              onClick={onCreate}
-            >
-              {isCreating ? "Wird erstellt..." : "+ Zusatzauftrag erstellen"}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="secondary-action"
-            disabled={actionBusy}
-            onClick={onToggleArchive}
-          >
-            {archiveMode ? "Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"}
-          </button>
           <label className="project-extra-work-search">
             <span className="sr-only">Zusatzaufträge durchsuchen</span>
             <input
@@ -2799,6 +2776,24 @@ function ExtraWorkTab({
             />
             <Search aria-hidden="true" size={16} />
           </label>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={actionBusy}
+            onClick={onToggleArchive}
+          >
+            {archiveMode ? "Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"}
+          </button>
+          {canCreate && !archiveMode ? (
+            <button
+              type="button"
+              className="primary-action"
+              disabled={actionBusy}
+              onClick={onCreate}
+            >
+              {isCreating ? "Wird erstellt..." : "+ Zusatzauftrag erstellen"}
+            </button>
+          ) : null}
         </div>
       </header>
       {message ? <div className="project-record-empty-state is-success">{message}</div> : null}

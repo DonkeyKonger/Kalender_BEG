@@ -26,7 +26,7 @@ test("extra-work API and type expose archive metadata, archive filter, and resto
 test("archive stays inside the master-detail tab and remains visibly separate", () => {
   assert.match(pageSource, /const \[extraWorkArchiveMode, setExtraWorkArchiveMode\] = useState\(false\)/);
   assert.match(tabSource, /"Archivierte Zusatzaufträge"/);
-  assert.match(tabSource, /"Archivierte Zusatzaufträge können hier eingesehen und wiederhergestellt werden\."/);
+  assert.doesNotMatch(tabSource, /Archivierte Zusatzaufträge können hier eingesehen und wiederhergestellt werden\./);
   assert.match(tabSource, /"Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"/);
   assert.match(tabSource, /"Keine archivierten Zusatzaufträge vorhanden\."/);
   assert.match(pageSource, /siteExtraWorkTickets\(site\.id, \{ archivedOnly \}\)/);
