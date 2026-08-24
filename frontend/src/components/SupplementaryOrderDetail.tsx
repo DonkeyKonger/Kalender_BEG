@@ -70,6 +70,7 @@ import type {
   CustomerSignatureStroke,
   ExtraWorkTicketDocumentRead,
   MobileExtraWorkTicket,
+  MobileExtraWorkTicketEntry,
   MobileExtraWorkTicketPhoto,
   MobileExtraWorkWorkerHours,
   Site,
@@ -288,7 +289,7 @@ export function SupplementaryOrderDetail({
   actionError: string | null;
   onBack: () => void;
   onDirtyChange: (dirty: boolean) => void;
-  onTicketUpdated: (ticket: MobileExtraWorkTicket) => void;
+  onTicketUpdated: (ticket: MobileExtraWorkTicket, entry?: MobileExtraWorkTicketEntry | null) => void;
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
 }) {
   const [documentTicket, setDocumentTicket] = useState(ticket);
@@ -534,7 +535,7 @@ export function SupplementaryOrderDetail({
       setExecutionRangeEdited(false);
       setDirtyFields(new Set());
       setSaveMessage("Zusatzauftrag wurde gespeichert.");
-      onTicketUpdated(saved.ticket);
+      onTicketUpdated(saved.ticket, saved.entry);
     } catch (requestError) {
       setSaveError(readError(requestError, "Zusatzauftrag konnte nicht gespeichert werden."));
     } finally {

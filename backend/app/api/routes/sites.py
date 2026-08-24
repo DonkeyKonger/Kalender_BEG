@@ -527,7 +527,11 @@ def list_extra_work_tickets(
     _user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> list[ExtraWorkTicketRead]:
-    return ExtraWorkService(db).list_site_tickets(site_id, archived_only=archived_only)
+    return ExtraWorkService(db).list_site_tickets(
+        site_id,
+        archived_only=archived_only,
+        include_entry_summaries=True,
+    )
 
 
 @router.post("/{site_id}/extra-work-tickets", response_model=ExtraWorkTicketRead, status_code=status.HTTP_201_CREATED)

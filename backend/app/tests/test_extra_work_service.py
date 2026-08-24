@@ -1442,6 +1442,11 @@ def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
                 site_id=site.id,
                 component="Bauteil",
                 floor="EG",
+                room_number="Serverraum",
+                axis="A-1",
+                remarks="Zusätzliche Kabeltrasse montiert",
+                material_text="Brandschott dokumentieren",
+                material_items=[{"quantity": 2, "unit": "Stk.", "description": "Kabelrinne"}],
                 worker_rows=[{"worker_name": "Max", "monday_hours": index + 1}],
             )
         ]
@@ -1476,13 +1481,20 @@ def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
     engine = db.get_bind()
     event.listen(engine, "before_cursor_execute", record_select)
     try:
-        result = ExtraWorkService(db).list_site_tickets(site.id)
+        result = ExtraWorkService(db).list_site_tickets(
+            site.id,
+            include_entry_summaries=True,
+        )
     finally:
         event.remove(engine, "before_cursor_execute", record_select)
 
     assert len(result) == 20
     assert all(ticket.entry_count == 1 for ticket in result)
     assert all(ticket.photo_count == 1 for ticket in result)
+    assert result[0].entry_summaries[0].room_number == "Serverraum"
+    assert result[0].entry_summaries[0].remarks == "Zusätzliche Kabeltrasse montiert"
+    assert result[0].entry_summaries[0].material_descriptions == ["Kabelrinne"]
+    assert result[0].entry_summaries[0].worker_names == ["Max"]
     assert len(select_statements) <= 7
     assert sum("FROM extra_work_ticket_entries" in sql for sql in select_statements) == 1
     assert sum("FROM extra_work_ticket_photos" in sql for sql in select_statements) == 1

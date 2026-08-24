@@ -23,6 +23,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
     ExtraWorkTicketEntryRead,
+    ExtraWorkTicketEntrySummaryRead,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
     ExtraWorkTicketTitleUpdate,
@@ -89,6 +90,7 @@ class ExtraWorkService:
         site_id: int,
         *,
         archived_only: bool = False,
+        include_entry_summaries: bool = False,
     ) -> list[ExtraWorkTicketRead]:
         self._get_site(site_id)
         statement = (
@@ -115,6 +117,7 @@ class ExtraWorkService:
             self._build_ticket_read(
                 ticket,
                 customer_email_status=customer_email_statuses.get(ticket.id),
+                include_entry_summaries=include_entry_summaries,
             )
             for ticket in tickets
         ]
@@ -1142,10 +1145,17 @@ class ExtraWorkService:
         self,
         ticket: ExtraWorkTicket,
         customer_email_status: CustomerEmailStatus | None = None,
+        *,
+        include_entry_summaries: bool = False,
     ) -> ExtraWorkTicketRead:
         result = ExtraWorkTicketRead.model_validate(ticket)
         result.created_by_name = self._format_user_display_name(ticket.created_by)
         result.deleted_by_name = self._format_user_display_name(ticket.deleted_by)
+        if include_entry_summaries:
+            result.entry_summaries = [
+                self._build_ticket_entry_summary(entry)
+                for entry in sorted(ticket.entries or [], key=lambda candidate: candidate.id)
+            ]
         if customer_email_status is not None:
             result.customer_email_sent_at = customer_email_status[0]
             result.customer_email_signature_present = (
@@ -1154,6 +1164,33 @@ class ExtraWorkService:
                 else ticket.customer_signed_at is not None
             )
         return result
+
+    @staticmethod
+    def _build_ticket_entry_summary(
+        entry: ExtraWorkTicketEntry,
+    ) -> ExtraWorkTicketEntrySummaryRead:
+        worker_names = [
+            str(row.get("worker_name") or "").strip()
+            for row in entry.worker_rows or []
+            if str(row.get("worker_name") or "").strip()
+        ]
+        material_descriptions = [
+            str(item.get("description") or "").strip()
+            for item in entry.material_items or []
+            if isinstance(item, dict) and str(item.get("description") or "").strip()
+        ]
+        return ExtraWorkTicketEntrySummaryRead(
+            id=entry.id,
+            component=entry.component,
+            floor=entry.floor,
+            room_number=entry.room_number,
+            axis=entry.axis,
+            remarks=entry.remarks,
+            material_text=entry.material_text,
+            material_descriptions=material_descriptions,
+            worker_names=worker_names,
+            estimated_hours=float(entry.estimated_hours) if entry.estimated_hours is not None else None,
+        )
 
     def _latest_customer_email_statuses(self, ticket_ids: list[int]) -> dict[int, CustomerEmailStatus]:
         if not ticket_ids:

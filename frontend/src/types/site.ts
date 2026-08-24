@@ -416,10 +416,24 @@ export type MobileExtraWorkTicket = {
   deleted_by_name: string | null;
   entry_count: number;
   photo_count: number;
+  entry_summaries?: ExtraWorkTicketEntrySummary[];
   total_hours: MeasurementNumericValue;
   estimated_hours: MeasurementNumericValue | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ExtraWorkTicketEntrySummary = {
+  id: number;
+  component: string;
+  floor: string;
+  room_number: string | null;
+  axis: string | null;
+  remarks: string | null;
+  material_text: string | null;
+  material_descriptions: string[];
+  worker_names: string[];
+  estimated_hours: MeasurementNumericValue | null;
 };
 
 export type MobileExtraWorkTicketDetailsUpdate = {

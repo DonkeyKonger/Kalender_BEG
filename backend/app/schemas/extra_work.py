@@ -246,6 +246,21 @@ class ExtraWorkTicketPhotoRead(BaseModel):
     updated_at: datetime
 
 
+class ExtraWorkTicketEntrySummaryRead(BaseModel):
+    """Compact structured entry data for the desktop master-detail overview."""
+
+    id: int
+    component: str
+    floor: str
+    room_number: str | None
+    axis: str | None
+    remarks: str | None
+    material_text: str | None
+    material_descriptions: list[str] = Field(default_factory=list)
+    worker_names: list[str] = Field(default_factory=list)
+    estimated_hours: float | None
+
+
 class ExtraWorkTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -294,6 +309,7 @@ class ExtraWorkTicketRead(BaseModel):
     deleted_by_name: str | None = None
     entry_count: int
     photo_count: int
+    entry_summaries: list[ExtraWorkTicketEntrySummaryRead] = Field(default_factory=list)
     total_hours: float
     estimated_hours: float | None
     created_at: datetime

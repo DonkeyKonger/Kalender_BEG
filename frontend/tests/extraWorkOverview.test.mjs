@@ -1,0 +1,137 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  EXTRA_WORK_OVERVIEW_PAGE_SIZE,
+  buildExtraWorkOverviewEntrySummary,
+  filterExtraWorkOverviewTickets,
+  formatExtraWorkOverviewTitle,
+  getExtraWorkOverviewDescription,
+  normalizeExtraWorkOverviewSearch,
+  resolveExtraWorkOverviewPeriod,
+} from "../src/lib/extraWorkOverview.ts";
+
+const site = {
+  site_number: "9999",
+  name: "Testbaustelle Finienweg",
+  customer: "Projektkunde GmbH",
+};
+
+function ticket(overrides = {}) {
+  return {
+    id: 13,
+    site_id: 3,
+    sequence_number: 13,
+    display_number: "9999.SZ13",
+    title: "Hauptauftrag",
+    created_by_name: "Christopher Erichsen",
+    customer_name: "Müller Generalunternehmer GmbH",
+    ordered_by_name: "Frau Schüßler",
+    ordered_by_company: "ebm elektro-bau-montage GmbH",
+    notes: null,
+    work_description: "Zusätzliche Kabeltrasse im Serverraum montiert",
+    executor_other_name: null,
+    worker_signature_name: null,
+    customer_signature_name: null,
+    total_hours: 4,
+    estimated_order_value: 1200,
+    created_at: "2026-08-24T12:06:00Z",
+    manual_execution_start: "2026-08-24",
+    manual_execution_end: "2026-08-30",
+    manual_execution_week: 35,
+    manual_execution_week_year: 2026,
+    entry_summaries: [{
+      id: 1,
+      component: "Halle A",
+      floor: "1. OG",
+      room_number: "Serverraum Süd",
+      axis: "A-1",
+      remarks: "Brandschott nach Montage dokumentiert",
+      material_text: "Kabelrinne und Befestiger",
+      material_descriptions: ["Kabelrinne 60 mm"],
+      worker_names: ["Marcin Cholewka"],
+      estimated_hours: 8,
+    }],
+    ...overrides,
+  };
+}
+
+test("overview title deliberately omits the internal Hauptauftrag suffix", () => {
+  assert.equal(formatExtraWorkOverviewTitle(ticket()), "Zusatzauftrag 9999.SZ13");
+  assert.equal(EXTRA_WORK_OVERVIEW_PAGE_SIZE, 8);
+});
+
+test("local overview search covers structured ticket and entry contents", () => {
+  const tickets = [ticket()];
+  for (const query of [
+    "SZ13",
+    "erichsen",
+    "muller general",
+    "schuessler",
+    "server",
+    "KABEL",
+    "brandschott",
+    "cholewka",
+    "9999",
+  ]) {
+    assert.equal(filterExtraWorkOverviewTickets(tickets, site, query).length, 1, query);
+  }
+  assert.equal(filterExtraWorkOverviewTickets(tickets, site, "kein treffer").length, 0);
+  assert.equal(filterExtraWorkOverviewTickets(tickets, site, "   ").length, 1);
+});
+
+test("German search normalization is case-insensitive and umlaut tolerant", () => {
+  assert.equal(normalizeExtraWorkOverviewSearch("  MÜLLER  Straße "), "muller strasse");
+});
+
+test("description and execution period reuse the existing structured fields", () => {
+  assert.equal(
+    getExtraWorkOverviewDescription(ticket()),
+    "Zusätzliche Kabeltrasse im Serverraum montiert",
+  );
+  assert.deepEqual(resolveExtraWorkOverviewPeriod(ticket()), {
+    start: "2026-08-24",
+    end: "2026-08-30",
+  });
+  assert.deepEqual(resolveExtraWorkOverviewPeriod(ticket({
+    manual_execution_start: null,
+    manual_execution_end: null,
+    manual_execution_week: 1,
+    manual_execution_week_year: 2027,
+  })), {
+    start: "2027-01-04",
+    end: "2027-01-10",
+  });
+});
+
+test("a saved document entry refreshes the compact overview data without another request", () => {
+  assert.deepEqual(buildExtraWorkOverviewEntrySummary({
+    id: 7,
+    component: "Bauteil B",
+    floor: "2. OG",
+    room_number: "2.14",
+    axis: "B-4",
+    remarks: "Neue Beschreibung",
+    material_text: "Altmaterial ausgebaut",
+    material_items: [
+      { quantity: 3, unit: "m", description: " Kabelrinne " },
+      { quantity: 1, unit: "Stk", description: "" },
+    ],
+    estimated_hours: 6,
+    worker_rows: [
+      { worker_name: " Christopher Monteur " },
+      { worker_name: "" },
+    ],
+  }), {
+    id: 7,
+    component: "Bauteil B",
+    floor: "2. OG",
+    room_number: "2.14",
+    axis: "B-4",
+    remarks: "Neue Beschreibung",
+    material_text: "Altmaterial ausgebaut",
+    material_descriptions: ["Kabelrinne"],
+    worker_names: ["Christopher Monteur"],
+    estimated_hours: 6,
+  });
+});

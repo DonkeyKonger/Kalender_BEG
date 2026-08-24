@@ -66,8 +66,14 @@ class FakeExtraWorkService:
     def __init__(self, _db) -> None:
         pass
 
-    def list_site_tickets(self, site_id, *, archived_only=False):
-        self.calls.append(("list", site_id, archived_only))
+    def list_site_tickets(
+        self,
+        site_id,
+        *,
+        archived_only=False,
+        include_entry_summaries=False,
+    ):
+        self.calls.append(("list", site_id, archived_only, include_entry_summaries))
         return [archived_ticket()] if archived_only else []
 
     def delete_site_ticket(self, *, site_id, ticket_id, current_user):
@@ -101,7 +107,7 @@ def test_archive_list_forwards_archived_only_query(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()[0]["deleted_by_name"] == "Archiv Admin"
-    assert FakeExtraWorkService.calls == [("list", 8, True)]
+    assert FakeExtraWorkService.calls == [("list", 8, True, True)]
 
 
 @pytest.mark.parametrize(
