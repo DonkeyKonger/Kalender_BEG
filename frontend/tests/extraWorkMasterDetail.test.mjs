@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [pageSource, styles, typeSource, schemaSource, serviceSource, routeSource] = await Promise.all([
+const [pageSource, styles, typeSource, schemaSource, serviceSource, routeSource, documentSource] = await Promise.all([
   readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../src/types/site.ts", import.meta.url), "utf8"),
   readFile(new URL("../../backend/app/schemas/extra_work.py", import.meta.url), "utf8"),
   readFile(new URL("../../backend/app/services/extra_work_service.py", import.meta.url), "utf8"),
   readFile(new URL("../../backend/app/api/routes/sites.py", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/SupplementaryOrderDetail.tsx", import.meta.url), "utf8"),
 ]);
 
 const tabStart = pageSource.indexOf("function ExtraWorkTab");
@@ -38,6 +39,17 @@ test("master rows omit the customer delivery subline while the detail keeps it",
   assert.match(tabSource.slice(masterRowsEnd), /getCustomerEmailStatus\(ticket\)/);
 });
 
+test("master rows show only the creation date while the detail keeps date and time", () => {
+  const masterRowsStart = tabSource.indexOf("visibleTickets.map");
+  const masterRowsEnd = tabSource.indexOf("<ExtraWorkOverviewDetail", masterRowsStart);
+  const masterRowsSource = tabSource.slice(masterRowsStart, masterRowsEnd);
+
+  assert.match(masterRowsSource, /const createdDate = formatExtraWorkOverviewCreatedDate\(ticket\.created_at\)/);
+  assert.match(masterRowsSource, /<time role="gridcell" dateTime=\{ticket\.created_at\}>\{createdDate\}<\/time>/);
+  assert.doesNotMatch(masterRowsSource, /created\.time/);
+  assert.match(tabSource.slice(masterRowsEnd), /<dt>Erstelldatum<\/dt><dd>\{formatDateTime\(ticket\.created_at\)\}<\/dd>/);
+});
+
 test("toolbar contains only create, archive switch and global search", () => {
   assert.match(tabSource, /\+ Zusatzauftrag erstellen/);
   assert.match(tabSource, /Archiv anzeigen/);
@@ -53,6 +65,36 @@ test("detail action set stays reduced to open, PDF and archive or restore", () =
   assert.match(tabSource, /"Wiederherstellen"/);
   assert.doesNotMatch(tabSource, />Löschen</);
   assert.doesNotMatch(tabSource, /Weitere Aktionen/);
+});
+
+test("additional information shows eight fields in two desktop rows without removing form data", () => {
+  const headingStart = tabSource.indexOf("<h4>Weitere Informationen</h4>");
+  const listEnd = tabSource.indexOf("</dl>", headingStart);
+  const additionalInformationSource = tabSource.slice(headingStart, listEnd);
+  const labels = [...additionalInformationSource.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);
+
+  assert.deepEqual(labels, [
+    "Bauteil",
+    "Etage",
+    "Raum Nr.",
+    "Achse",
+    "Material",
+    "Ausführung",
+    "Firma",
+    "Monteure",
+  ]);
+  assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+
+  for (const field of ["ordered_by_name", "billing_type", "estimated_order_value", "estimated_hours"]) {
+    assert.match(typeSource, new RegExp(`${field}[?]?:`));
+  }
+  assert.match(documentSource, /label="Anordnung von"[\s\S]*draft\.ordered_by_name/);
+  assert.match(documentSource, /label="Firma"[\s\S]*draft\.ordered_by_company/);
+  assert.match(documentSource, /draft\.billing_type === "flat_rate"/);
+  assert.match(documentSource, /label="Stundenvorgabe"[\s\S]*draft\.entry\.estimated_hours/);
+  assert.match(documentSource, /label="Geschätzter Auftragswert"[\s\S]*draft\.estimated_order_value/);
 });
 
 test("list response exposes compact structured entry summaries without per-row loading", () => {

@@ -2836,7 +2836,7 @@ function ExtraWorkTab({
                   const statusOptions = canPromoteStatus && !archiveMode
                     ? extraWorkStatusPromotionOptions(ticket.status, ticket.customer_signed_at)
                     : [];
-                  const created = formatExtraWorkOverviewCreated(ticket.created_at);
+                  const createdDate = formatExtraWorkOverviewCreatedDate(ticket.created_at);
                   return (
                     <div
                       key={ticket.id}
@@ -2875,10 +2875,7 @@ function ExtraWorkTab({
                       <div className="project-extra-work-master-title" role="gridcell">
                         <strong>{formatExtraWorkOverviewTitle(ticket)}</strong>
                       </div>
-                      <time role="gridcell" dateTime={ticket.created_at}>
-                        <span>{created.date}</span>
-                        <span>{created.time}</span>
-                      </time>
+                      <time role="gridcell" dateTime={ticket.created_at}>{createdDate}</time>
                       <span role="gridcell">{ticket.created_by_name || "–"}</span>
                       <strong role="gridcell">{formatExtraWorkTicketHours(ticket)}</strong>
                     </div>
@@ -3087,13 +3084,9 @@ function ExtraWorkOverviewDetail({
           <div><dt>Etage</dt><dd>{primaryEntry?.floor?.trim() || "–"}</dd></div>
           <div><dt>Raum Nr.</dt><dd>{primaryEntry?.room_number?.trim() || "–"}</dd></div>
           <div><dt>Achse</dt><dd>{primaryEntry?.axis?.trim() || "–"}</dd></div>
-          <div><dt>Auftragswert (ca.)</dt><dd>{formatExtraWorkOverviewCurrency(ticket.estimated_order_value)}</dd></div>
-          <div><dt>Abrechnungsart</dt><dd>{formatExtraWorkOverviewBillingType(ticket.billing_type)}</dd></div>
-          <div><dt>Stundenvorgabe</dt><dd>{formatExtraWorkOverviewEstimatedHours(primaryEntry?.estimated_hours ?? ticket.estimated_hours)}</dd></div>
           <div><dt>Material</dt><dd>{formatExtraWorkOverviewMaterial(ticket)}</dd></div>
           <div><dt>Ausführung</dt><dd>{formatExtraWorkOverviewExecutors(ticket)}</dd></div>
           <div><dt>Firma</dt><dd>{ticket.ordered_by_company?.trim() || "–"}</dd></div>
-          <div><dt>Auftraggeber / Herr</dt><dd>{ticket.ordered_by_name?.trim() || "–"}</dd></div>
           <div><dt>Monteure</dt><dd>{primaryEntry?.worker_names.join(", ") || "–"}</dd></div>
         </dl>
       </section>
@@ -7686,22 +7679,16 @@ function formatExtraWorkTicketHours(ticket: MobileExtraWorkTicket): string {
   return `${formatMeasurementNumber(ticket.total_hours)} h`;
 }
 
-function formatExtraWorkOverviewCreated(value: string): { date: string; time: string } {
+function formatExtraWorkOverviewCreatedDate(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return { date: "–", time: "" };
+    return "–";
   }
-  return {
-    date: new Intl.DateTimeFormat("de-DE", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
-    }).format(parsed),
-    time: new Intl.DateTimeFormat("de-DE", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(parsed),
-  };
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(parsed);
 }
 
 function formatExtraWorkOverviewPeriod(period: { start: string; end: string } | null): string {
@@ -7709,34 +7696,6 @@ function formatExtraWorkOverviewPeriod(period: { start: string; end: string } | 
     return "–";
   }
   return `${formatDateOnly(period.start)} – ${formatDateOnly(period.end)}`;
-}
-
-function formatExtraWorkOverviewCurrency(value: string | number | null): string {
-  if (value === null || value === "") {
-    return "–";
-  }
-  const numericValue = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numericValue)) {
-    return String(value);
-  }
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-  }).format(numericValue);
-}
-
-function formatExtraWorkOverviewBillingType(value: MobileExtraWorkTicket["billing_type"]): string {
-  const labels: Record<NonNullable<MobileExtraWorkTicket["billing_type"]>, string> = {
-    flat_rate: "Pauschal",
-    hourly: "Nach Stundensätzen",
-    unit_price: "Nach Einheitspreisen",
-  };
-  return value ? labels[value] : "–";
-}
-
-function formatExtraWorkOverviewEstimatedHours(value: string | number | null): string {
-  return value === null || value === "" ? "–" : `${formatMeasurementNumber(value)} h`;
 }
 
 function formatExtraWorkOverviewMaterial(ticket: MobileExtraWorkTicket): string {

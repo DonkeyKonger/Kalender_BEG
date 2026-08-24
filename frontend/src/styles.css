@@ -27747,6 +27747,41 @@ body.mobile-modal-scroll-locked {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
+
+  .project-extra-work-additional-data {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-extra-work-additional-data > div:nth-child(n) {
+    border-left: 0;
+    border-bottom: 1px solid #e2e8f0;
+    padding-left: 11px;
+  }
+
+  .project-extra-work-additional-data > div:nth-child(2n) {
+    border-left: 1px solid #e2e8f0;
+    padding-left: 14px;
+  }
+
+  .project-extra-work-additional-data > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-extra-work-additional-data {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-extra-work-additional-data > div:nth-child(n) {
+    border-left: 0;
+    border-bottom: 1px solid #e2e8f0;
+    padding-left: 11px;
+  }
+
+  .project-extra-work-additional-data > div:last-child {
+    border-bottom: 0;
+  }
 }
 
 .site-detail-page.is-project-file-workspace .project-record-toolbar p,
