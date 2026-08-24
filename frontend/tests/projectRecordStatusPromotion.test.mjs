@@ -49,3 +49,34 @@ test("both project-record lists use the shared anchored status popover and APIs"
   assert.match(apiSource, /extra-work-tickets\/\$\{ticketId\}\/status/);
   assert.match(styles, /\.project-record-status-popover\s*\{[^}]*position:\s*fixed/s);
 });
+
+test("extra-work list status keeps full menu semantics without a visible caret", () => {
+  const tabStart = pageSource.indexOf("function ExtraWorkTab");
+  const tabEnd = pageSource.indexOf("function MeasurementTab", tabStart);
+  const tabSource = pageSource.slice(tabStart, tabEnd);
+  const masterStart = tabSource.indexOf("visibleTickets.map");
+  const masterEnd = tabSource.indexOf("<ExtraWorkOverviewDetail", masterStart);
+  const masterSource = tabSource.slice(masterStart, masterEnd);
+  const controlStart = pageSource.indexOf("function ProjectRecordStatusControl");
+  const controlEnd = pageSource.indexOf("function mergeExtraWorkOverviewEntrySummaries", controlStart);
+  const controlSource = pageSource.slice(controlStart, controlEnd);
+
+  assert.match(masterSource, /showCaret=\{false\}/);
+  assert.doesNotMatch(masterSource, /measurement-review-status-caret/);
+  assert.match(controlSource, /aria-haspopup="menu"/);
+  assert.match(controlSource, /aria-expanded=\{active\}/);
+  assert.match(controlSource, /aria-label=\{ariaLabel\}/);
+  assert.match(controlSource, /onClick=\{onToggle\}/);
+  assert.match(controlSource, /event\.key === "Escape"/);
+  assert.match(controlSource, /onClick=\{\(\) => onSelect\(option\.value\)\}/);
+  assert.match(controlSource, /showCaret \? <span aria-hidden="true" className="measurement-review-status-caret">⌄<\/span> : null/);
+});
+
+test("extra-work editable statuses reuse static chip geometry with distinct semantic accents", () => {
+  assert.match(styles, /\.project-extra-work-master-status \.measurement-review-status-trigger \{[\s\S]*border-left: 0;[\s\S]*background: transparent;[\s\S]*cursor: pointer/);
+  assert.match(styles, /\.project-extra-work-master-status \.measurement-review-status-trigger:hover,[\s\S]*\[aria-expanded="true"\][\s\S]*background: rgba\(15, 23, 42, 0\.06\)/);
+  assert.match(styles, /\.project-extra-work-master-status \.measurement-review-status-trigger:focus-visible \{[\s\S]*outline: 2px solid #3b82f6/);
+  assert.match(styles, /\.measurement-review-status-badge\.is-draft::before \{[\s\S]*background: #64748b/);
+  assert.match(styles, /\.measurement-review-status-badge\.is-signed-review::before,[\s\S]*\.measurement-review-status-badge\.is-signed::before \{[\s\S]*background: #0891b2/);
+  assert.match(styles, /\.measurement-review-status-badge\.is-billed::before,[\s\S]*\.measurement-review-status-badge\.is-closed::before \{[\s\S]*background: #16a34a/);
+});

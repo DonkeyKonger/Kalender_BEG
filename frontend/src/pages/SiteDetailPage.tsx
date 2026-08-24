@@ -2532,6 +2532,7 @@ function ProjectRecordStatusControl<T extends string>({
   onClose,
   onSelect,
   onToggle,
+  showCaret = true,
 }: {
   active: boolean;
   ariaLabel: string;
@@ -2541,6 +2542,7 @@ function ProjectRecordStatusControl<T extends string>({
   onClose: () => void;
   onSelect: (status: T) => void;
   onToggle: () => void;
+  showCaret?: boolean;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -2610,7 +2612,7 @@ function ProjectRecordStatusControl<T extends string>({
         onClick={onToggle}
       >
         <span>{busy ? "Speichert..." : label}</span>
-        <span aria-hidden="true" className="measurement-review-status-caret">⌄</span>
+        {showCaret ? <span aria-hidden="true" className="measurement-review-status-caret">⌄</span> : null}
       </button>
       {active ? createPortal(
         <div
@@ -2955,6 +2957,7 @@ function ExtraWorkTab({
                               onPromoteStatus(ticket, status);
                             }}
                             onToggle={() => setOpenStatusControl((current) => current === listControlKey ? null : listControlKey)}
+                            showCaret={false}
                           />
                         </span>
                       </div>

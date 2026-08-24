@@ -27494,6 +27494,30 @@ body.mobile-modal-scroll-locked {
   padding: 4px 8px;
 }
 
+.project-extra-work-master-status .measurement-review-status-trigger {
+  border-left: 0;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  gap: 0;
+}
+
+.project-extra-work-master-status .measurement-review-status-trigger:hover,
+.project-extra-work-master-status .measurement-review-status-trigger[aria-expanded="true"] {
+  background: rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.project-extra-work-master-status .measurement-review-status-trigger:focus-visible {
+  background: rgba(15, 23, 42, 0.06);
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.project-extra-work-master-status .measurement-review-status-trigger:disabled {
+  cursor: wait;
+}
+
 .project-extra-work-master-title {
   display: grid;
 }
