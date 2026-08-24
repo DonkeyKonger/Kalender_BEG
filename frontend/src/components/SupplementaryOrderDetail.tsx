@@ -197,6 +197,7 @@ export function SupplementaryOrderDetail({
         setDocumentTicket(documentResult.value.ticket);
         setOriginalWorkerRowCount(documentResult.value.entry?.worker_rows.length ?? 0);
         setDraft(createExtraWorkDocumentDraft(documentResult.value, {
+          customerNameFallback: site.customer,
           orderedByNameFallback: documentResult.value.customer_signature.name,
           orderedByCompanyFallback: site.customer,
         }));
@@ -374,6 +375,7 @@ export function SupplementaryOrderDetail({
       setDocumentTicket(saved.ticket);
       setOriginalWorkerRowCount(saved.entry?.worker_rows.length ?? 0);
       setDraft(createExtraWorkDocumentDraft(saved, {
+        customerNameFallback: site.customer,
         orderedByNameFallback: saved.customer_signature.name,
         orderedByCompanyFallback: site.customer,
       }));
@@ -863,7 +865,7 @@ function SupplementaryOrderPaperPage({
       {templateData ? <SupplementaryOrderPdfBackground data={templateData} /> : null}
       {templateError ? <div className="supplementary-order-template-error">{templateError}</div> : null}
       <div className="supplementary-order-overlay" aria-label={`Zusatzauftrag bearbeiten, Blatt ${pageIndex + 1}`}>
-        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.customer} label="Kunde" value={site.customer ?? ""} />
+        <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.customer} label="Kunde" value={draft.customer_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ customer_name: value })} />
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.project} label="Projekt" value={site.name} />
         <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.orderedByName} label="Anordnung von" value={draft.ordered_by_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ ordered_by_name: value })} />
         <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.manualOrderDate} label="Datum der Auftragserteilung" type="date" value={draft.manual_order_date ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ manual_order_date: value || null })} />

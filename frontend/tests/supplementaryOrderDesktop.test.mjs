@@ -54,6 +54,7 @@ function ticket(overrides = {}) {
     submitted_by_user_id: null,
     submitted_at: null,
     notes: null,
+    customer_name: null,
     ordered_by_name: null,
     ordered_by_company: null,
     billing_type: null,
@@ -272,12 +273,14 @@ test("the material textarea scales with the paper, preserves wrapping and warns 
 
 test("legacy defaults match the PDF fallback while visible dates come only from the server resolver", () => {
   const draft = createExtraWorkDocumentDraft(documentRead(), {
+    customerNameFallback: "Kunde GmbH",
     orderedByCompanyFallback: "Kunde GmbH",
     orderedByNameFallback: "Besteller Alt",
   });
   assert.equal(draft.billing_type, "hourly");
   assert.equal(draft.material_required, false);
   assert.equal(draft.executed_by_monteur, true);
+  assert.equal(draft.customer_name, "Kunde GmbH");
   assert.equal(draft.ordered_by_company, "Kunde GmbH");
   assert.equal(draft.ordered_by_name, "Besteller Alt");
   assert.equal(draft.manual_order_date, "2026-08-20");
@@ -357,6 +360,7 @@ test("server numeric values are displayed in German without changing their numer
 test("display-only legacy fallbacks remain null when only the title is edited", () => {
   const originalTicket = ticket();
   const draft = createExtraWorkDocumentDraft(documentRead({ ticket: originalTicket }), {
+    customerNameFallback: "Kunde GmbH",
     orderedByNameFallback: "Besteller Alt",
     orderedByCompanyFallback: "Kunde GmbH",
   });
@@ -366,6 +370,7 @@ test("display-only legacy fallbacks remain null when only the title is edited", 
     dirtyFields: new Set(["title"]),
   });
   assert.equal(payload.title, "Neue Bezeichnung");
+  assert.equal(payload.customer_name, null);
   assert.equal(payload.ordered_by_name, null);
   assert.equal(payload.ordered_by_company, null);
   assert.equal(payload.billing_type, null);
@@ -378,6 +383,27 @@ test("display-only legacy fallbacks remain null when only the title is edited", 
   assert.equal(payload.worker_signature_place, null);
   assert.equal(payload.worker_signature_date, null);
   assert.equal(payload.worker_signature_strokes, null);
+});
+
+test("ticket-specific customer is editable, persisted and follows the shared lock state", () => {
+  const originalTicket = ticket({ customer_name: "Firma A" });
+  const draft = createExtraWorkDocumentDraft(documentRead({ ticket: originalTicket }), {
+    customerNameFallback: "Baustellenkunde",
+  });
+  assert.equal(draft.customer_name, "Firma A");
+  draft.customer_name = "Muster Generalunternehmer GmbH";
+  const payload = buildExtraWorkDocumentPayload(draft, 0, {
+    originalTicket,
+    dirtyFields: new Set(["customer_name"]),
+  });
+  assert.equal(payload.customer_name, "Muster Generalunternehmer GmbH");
+  assert.match(typeSource, /type MobileExtraWorkTicket = \{[\s\S]*customer_name: string \| null;/);
+  assert.match(typeSource, /type ExtraWorkTicketDocumentUpdate = \{[\s\S]*customer_name: string \| null;/);
+  assert.match(
+    componentSource,
+    /<PaperInput rect=\{EXTRA_WORK_PDF_FIELD_RECTS\.customer\} label="Kunde" value=\{draft\.customer_name \?\? ""\} readOnly=\{readOnly\}/,
+  );
+  assert.doesNotMatch(componentSource, /EXTRA_WORK_PDF_FIELD_RECTS\.customer[^\n]*site\.customer/);
 });
 
 test("empty new worker slots are removed while all loaded rows beyond the paper remain intact", () => {

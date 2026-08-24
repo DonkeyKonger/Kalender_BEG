@@ -262,6 +262,7 @@ class ExtraWorkTicketRead(BaseModel):
     submitted_by_user_id: int | None
     submitted_at: datetime | None
     notes: str | None
+    customer_name: str | None = None
     ordered_by_name: str | None = None
     ordered_by_company: str | None = None
     billing_type: str | None = None
@@ -333,6 +334,7 @@ class ExtraWorkTicketDocumentRead(BaseModel):
 
 class ExtraWorkTicketDocumentUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=160)
+    customer_name: str | None = Field(default=None, max_length=200)
     ordered_by_name: str | None = Field(default=None, max_length=160)
     ordered_by_company: str | None = Field(default=None, max_length=200)
     billing_type: str | None = Field(

@@ -234,6 +234,7 @@ class ExtraWorkPdfService:
                 "manual_execution_week_year": ticket.manual_execution_week_year,
                 "manual_execution_start": ticket.manual_execution_start,
                 "manual_execution_end": ticket.manual_execution_end,
+                "customer_name": ticket.customer_name,
                 "ordered_by_name": ticket.ordered_by_name,
                 "ordered_by_company": ticket.ordered_by_company,
                 "billing_type": ticket.billing_type,
@@ -464,7 +465,11 @@ class ExtraWorkPdfService:
     ) -> None:
         site = ticket.site
         document_dates = resolve_extra_work_ticket_dates(ticket, assignment)
-        _field(commands, FIELD_RECTS["Kunde"], site.customer or "")
+        _field(
+            commands,
+            FIELD_RECTS["Kunde"],
+            ticket.customer_name or site.customer or "",
+        )
         _field(commands, FIELD_RECTS["Projekt"], site.name)
         _field(commands, FIELD_RECTS["Datum"], _format_date(document_dates.order_date))
         _field(

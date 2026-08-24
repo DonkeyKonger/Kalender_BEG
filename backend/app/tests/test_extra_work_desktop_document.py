@@ -86,6 +86,43 @@ def test_site_create_uses_locked_site_sequence_and_mobile_kind_default(monkeypat
     assert first.site_id == site.id
 
 
+def test_ticket_customer_is_snapshotted_overridable_and_does_not_change_site_customer():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt", customer="Firma A")
+    actor = office_user()
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db)
+
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    assert created.customer_name == "Firma A"
+    updated = service.update_site_ticket_document(
+        site_id=site.id,
+        ticket_id=created.id,
+        current_user=actor,
+        payload=ExtraWorkTicketDocumentUpdate(customer_name="  Firma B  "),
+    )
+
+    assert updated.ticket.customer_name == "Firma B"
+    assert service.get_site_ticket_document(
+        site_id=site.id,
+        ticket_id=created.id,
+    ).ticket.customer_name == "Firma B"
+    legacy_client_update = service.update_site_ticket_document(
+        site_id=site.id,
+        ticket_id=created.id,
+        current_user=actor,
+        payload=ExtraWorkTicketDocumentUpdate(title="Alte Client-Version"),
+    )
+    assert legacy_client_update.ticket.customer_name == "Firma B"
+    assert db.get(Site, site.id).customer == "Firma A"
+
+
 def test_document_put_persists_form_updates_first_entry_and_keeps_legacy_entry():
     db = db_session()
     person = Person(
@@ -130,6 +167,7 @@ def test_document_put_persists_form_updates_first_entry_and_keeps_legacy_entry()
         current_user=actor,
         payload=ExtraWorkTicketDocumentUpdate(
             title="Brandschott",
+            customer_name="Muster Generalunternehmer GmbH",
             ordered_by_name="Herr Mustermann",
             ordered_by_company="Bredow GmbH",
             billing_type="unit_price",
@@ -168,6 +206,7 @@ def test_document_put_persists_form_updates_first_entry_and_keeps_legacy_entry()
     )
 
     assert document.ticket.work_description == "  Zeile eins\nZeile zwei  "
+    assert document.ticket.customer_name == "Muster Generalunternehmer GmbH"
     assert document.ticket.billing_type == "unit_price"
     assert document.ticket.manual_execution_week is None
     assert document.ticket.manual_execution_week_year is None

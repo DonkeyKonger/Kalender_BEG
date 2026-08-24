@@ -206,6 +206,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
         kind="billing",
         status="draft",
         created_by_user_id=office.id,
+        customer_name="Muster Generalunternehmer GmbH",
         ordered_by_name="Herr Mustermann",
         ordered_by_company="Muster Auftraggeber GmbH",
         billing_type="unit_price",
@@ -259,6 +260,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
     for value in (
         "8015",
         "8015.SZ01",
+        "Muster Generalunternehmer GmbH",
         "Herr Mustermann",
         "Muster Auftraggeber GmbH",
         "Brandschott nacharbeiten",
@@ -271,6 +273,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
         "1.250,50 €",
     ):
         assert value in text
+    assert "Bredow GmbH" not in text
     assert "Legacy Kundenname" not in text
     assert text.count("Herr Mustermann") == 1
     assert "2" in text and "1,5" in text and "0,5" in text and "4" in text
@@ -305,6 +308,29 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
     } & set(checked)
 
 
+def test_legacy_ticket_without_customer_name_uses_site_customer_in_pdf():
+    db = db_session()
+    site = Site(site_number="9999", name="Altprojekt", customer="Firma A")
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="9999.SZ01",
+        kind="billing",
+        status="draft",
+        customer_name=None,
+    )
+    db.add(ticket)
+    db.commit()
+
+    rendered, _ = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site.id,
+        ticket_id=ticket.id,
+    )
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(rendered)).pages)
+
+    assert "Firma A" in text
+
+
 def test_pdf_cache_hash_changes_for_new_ticket_and_surcharge_fields():
     db = db_session()
     site = Site(site_number="9999", name="Testprojekt")
@@ -328,6 +354,8 @@ def test_pdf_cache_hash_changes_for_new_ticket_and_surcharge_fields():
     loaded = service._get_ticket(ticket.id, site.id)
 
     initial = service._build_ticket_pdf_version_hash(loaded, None)
+    loaded.customer_name = "Abweichender Kunde"
+    customer_changed = service._build_ticket_pdf_version_hash(loaded, None)
     loaded.work_description = "Neue Beschreibung"
     ticket_field_changed = service._build_ticket_pdf_version_hash(loaded, None)
     loaded.entries[0].worker_rows = [
@@ -342,7 +370,8 @@ def test_pdf_cache_hash_changes_for_new_ticket_and_surcharge_fields():
     loaded.worker_signature_date = date(2026, 8, 19)
     signature_details_changed = service._build_ticket_pdf_version_hash(loaded, None)
 
-    assert initial != ticket_field_changed
+    assert initial != customer_changed
+    assert customer_changed != ticket_field_changed
     assert ticket_field_changed != surcharge_changed
     assert surcharge_changed != signature_details_changed
 

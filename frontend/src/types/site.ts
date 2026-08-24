@@ -384,6 +384,7 @@ export type MobileExtraWorkTicket = {
   submitted_by_user_id: number | null;
   submitted_at: string | null;
   notes: string | null;
+  customer_name: string | null;
   ordered_by_name: string | null;
   ordered_by_company: string | null;
   billing_type: ExtraWorkBillingType | null;
@@ -559,6 +560,7 @@ export type ExtraWorkTicketDocumentRead = {
 
 export type ExtraWorkTicketDocumentUpdate = {
   title: string | null;
+  customer_name: string | null;
   ordered_by_name: string | null;
   ordered_by_company: string | null;
   billing_type: ExtraWorkBillingType | null;

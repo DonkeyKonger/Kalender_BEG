@@ -153,6 +153,7 @@ class ExtraWorkService:
             status="draft",
             created_by_user_id=current_user.id,
             notes=payload.notes.strip() if payload.notes and payload.notes.strip() else None,
+            customer_name=self._clean_optional_text(site.customer),
         )
         self.db.add(ticket)
         self.db.commit()
@@ -224,6 +225,8 @@ class ExtraWorkService:
         self._ensure_ticket_content_editable(ticket)
 
         ticket.title = self._clean_optional_text(payload.title)
+        if "customer_name" in payload.model_fields_set:
+            ticket.customer_name = self._clean_optional_text(payload.customer_name)
         ticket.ordered_by_name = self._clean_optional_text(payload.ordered_by_name)
         ticket.ordered_by_company = self._clean_optional_text(payload.ordered_by_company)
         ticket.billing_type = payload.billing_type

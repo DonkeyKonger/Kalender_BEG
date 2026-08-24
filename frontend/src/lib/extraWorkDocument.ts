@@ -89,6 +89,7 @@ type ExtraWorkDocumentPreservableField = Exclude<
 >;
 
 export type ExtraWorkDocumentDraftOptions = {
+  customerNameFallback?: string | null;
   orderedByNameFallback?: string | null;
   orderedByCompanyFallback?: string | null;
 };
@@ -300,6 +301,7 @@ export function createExtraWorkDocumentDraft(
     || Boolean(ticket.executor_other_name?.trim());
   return {
     title: ticket.title ?? null,
+    customer_name: ticket.customer_name ?? options.customerNameFallback ?? null,
     ordered_by_name: ticket.ordered_by_name ?? options.orderedByNameFallback ?? null,
     ordered_by_company: ticket.ordered_by_company ?? options.orderedByCompanyFallback ?? null,
     billing_type: ticket.billing_type ?? "hourly",
@@ -370,6 +372,7 @@ export function buildExtraWorkDocumentPayload(
   }
   const normalizedPayload: ExtraWorkTicketDocumentUpdate = {
     title: toNullableText(draft.title),
+    customer_name: toNullableText(draft.customer_name),
     ordered_by_name: toNullableText(draft.ordered_by_name),
     ordered_by_company: toNullableText(draft.ordered_by_company),
     billing_type: draft.billing_type,
@@ -437,6 +440,7 @@ export function buildExtraWorkDocumentPayload(
   return {
     ...normalizedPayload,
     title: preserveWhenUntouched("title", normalizedPayload.title),
+    customer_name: preserveWhenUntouched("customer_name", normalizedPayload.customer_name),
     ordered_by_name: preserveWhenUntouched("ordered_by_name", normalizedPayload.ordered_by_name),
     ordered_by_company: preserveWhenUntouched("ordered_by_company", normalizedPayload.ordered_by_company),
     billing_type: preserveWhenUntouched("billing_type", normalizedPayload.billing_type),

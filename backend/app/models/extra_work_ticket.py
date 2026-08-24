@@ -55,6 +55,7 @@ class ExtraWorkTicket(TimestampMixin, Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+    customer_name: Mapped[str | None] = mapped_column(String(200))
     ordered_by_name: Mapped[str | None] = mapped_column(String(160))
     ordered_by_company: Mapped[str | None] = mapped_column(String(200))
     billing_type: Mapped[str | None] = mapped_column(String(32))
