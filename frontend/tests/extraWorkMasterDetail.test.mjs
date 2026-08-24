@@ -195,3 +195,24 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-workspace/);
   assert.doesNotMatch(overviewStyles, /\nbutton\s*\{/);
 });
+
+test("extra-work typography is locally strengthened without changing compact geometry", () => {
+  assert.match(styles, /\.project-extra-work-master-head \{[\s\S]*font-size: 0\.75rem/);
+  assert.match(styles, /\.project-extra-work-master-row \{[\s\S]*min-height: 66px;[\s\S]*font-size: 0\.82rem;[\s\S]*font-weight: 550/);
+  assert.match(styles, /\.project-extra-work-master-title strong \{[\s\S]*font-size: 0\.84rem;[\s\S]*font-weight: 650/);
+  assert.match(styles, /\.project-extra-work-detail dt \{[\s\S]*font-size: 0\.75rem/);
+  assert.match(styles, /\.project-extra-work-detail dd \{[\s\S]*font-size: 0\.82rem;[\s\S]*font-weight: 600/);
+  assert.match(styles, /\.project-extra-work-detail-section h4 \{[\s\S]*font-size: 0\.875rem/);
+  assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px/);
+  assert.match(styles, /--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
+});
+
+test("the three right master columns align headers and values on shared axes", () => {
+  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(3\),[\s\S]*\.project-extra-work-master-row > time:nth-child\(3\),[\s\S]*\.project-extra-work-master-row > span:nth-child\(4\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: left/);
+  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(5\),[\s\S]*\.project-extra-work-master-row > strong:nth-child\(5\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: right/);
+  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(n \+ 3\) \{[\s\S]*white-space: nowrap/);
+  assert.match(styles, /\.project-extra-work-master-head > span,[\s\S]*\.project-extra-work-master-row > \* \{[\s\S]*padding: 0 10px/);
+  assert.match(styles, /\.project-extra-work-master-head \{[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable/);
+  assert.match(styles, /\.project-extra-work-master-body \{[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable/);
+  assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
+});
