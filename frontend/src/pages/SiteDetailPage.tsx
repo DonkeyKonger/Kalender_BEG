@@ -17,11 +17,15 @@ import { ApiError, api } from "../lib/api";
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { getCustomerEmailStatus, type CustomerEmailStatusItem } from "../lib/customerEmailStatus";
 import {
-  EXTRA_WORK_OVERVIEW_PAGE_SIZE,
+  EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
+  calculateExtraWorkOverviewPageSize,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewDescription,
+  getExtraWorkOverviewMasterHeight,
+  getExtraWorkOverviewPageForIndex,
+  getExtraWorkOverviewPageWindow,
   getExtraWorkOverviewPrimaryEntry,
   resolveExtraWorkOverviewPeriod,
 } from "../lib/extraWorkOverview";
@@ -86,6 +90,8 @@ const MEASUREMENT_TABLE_MIN_AREA_ROWS = 12;
 const MEASUREMENT_TIMESHEET_ROW_HEIGHT = 38;
 const MEASUREMENT_TIMESHEET_OVERSCAN_ROWS = 10;
 const MEASUREMENT_TIMESHEET_DEFAULT_VIEWPORT_HEIGHT = 560;
+const EXTRA_WORK_OVERVIEW_MIN_WORKSPACE_HEIGHT = 280;
+const EXTRA_WORK_OVERVIEW_VIEWPORT_GAP = 18;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
   { key: "timesheet", label: "Ausführungsstand" },
@@ -2699,6 +2705,13 @@ function ExtraWorkTab({
   const [openStatusControl, setOpenStatusControl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [overviewLayout, setOverviewLayout] = useState(() => ({
+    pageSize: EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
+    workspaceHeight: getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE),
+  }));
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const masterBodyRef = useRef<HTMLDivElement>(null);
+  const selectedRowRef = useRef<HTMLDivElement>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const sortedTickets = useMemo(
     () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
@@ -2712,11 +2725,72 @@ function ExtraWorkTab({
     () => filteredTickets.find((ticket) => ticket.id === selectedTicketId) ?? null,
     [filteredTickets, selectedTicketId],
   );
-  const pageCount = Math.max(1, Math.ceil(filteredTickets.length / EXTRA_WORK_OVERVIEW_PAGE_SIZE));
-  const pageStart = (page - 1) * EXTRA_WORK_OVERVIEW_PAGE_SIZE;
-  const visibleTickets = filteredTickets.slice(pageStart, pageStart + EXTRA_WORK_OVERVIEW_PAGE_SIZE);
+  const pageWindow = getExtraWorkOverviewPageWindow(
+    filteredTickets.length,
+    page,
+    overviewLayout.pageSize,
+  );
+  const visibleTickets = filteredTickets.slice(pageWindow.start, pageWindow.end);
+  const workspaceStyle = {
+    "--project-extra-work-workspace-height": `${overviewLayout.workspaceHeight}px`,
+    "--project-extra-work-master-height": `${getExtraWorkOverviewMasterHeight(overviewLayout.pageSize)}px`,
+  } as CSSProperties;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) {
+      return;
+    }
+
+    let frameId: number | null = null;
+    const updateLayout = () => {
+      frameId = null;
+      const workspaceTop = workspace.getBoundingClientRect().top;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.max(
+        EXTRA_WORK_OVERVIEW_MIN_WORKSPACE_HEIGHT,
+        Math.floor(viewportHeight - workspaceTop - EXTRA_WORK_OVERVIEW_VIEWPORT_GAP),
+      );
+      const nextPageSize = calculateExtraWorkOverviewPageSize(availableHeight);
+      setOverviewLayout((current) => (
+        current.pageSize === nextPageSize && current.workspaceHeight === availableHeight
+          ? current
+          : { pageSize: nextPageSize, workspaceHeight: availableHeight }
+      ));
+
+      const selectedIndex = filteredTickets.findIndex((ticket) => ticket.id === selectedTicketId);
+      setPage((current) => {
+        if (selectedIndex >= 0) {
+          return getExtraWorkOverviewPageForIndex(selectedIndex, nextPageSize);
+        }
+        return getExtraWorkOverviewPageWindow(filteredTickets.length, current, nextPageSize).page;
+      });
+    };
+    const scheduleLayout = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(updateLayout);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(scheduleLayout);
+    resizeObserver?.observe(workspace.parentElement ?? workspace);
+    window.addEventListener("resize", scheduleLayout);
+    window.visualViewport?.addEventListener("resize", scheduleLayout);
+    scheduleLayout();
+
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleLayout);
+      window.visualViewport?.removeEventListener("resize", scheduleLayout);
+    };
+  }, [filteredTickets, selectedTicketId]);
+
+  useLayoutEffect(() => {
     if (filteredTickets.length === 0) {
       if (selectedTicketId !== null) {
         onSelectTicketId(null);
@@ -2729,17 +2803,32 @@ function ExtraWorkTab({
     if (selectedIndex < 0) {
       onSelectTicketId(filteredTickets[nextIndex].id);
     }
-    const nextPage = Math.floor(nextIndex / EXTRA_WORK_OVERVIEW_PAGE_SIZE) + 1;
+    const nextPage = getExtraWorkOverviewPageForIndex(nextIndex, overviewLayout.pageSize);
     setPage((current) => (current === nextPage ? current : nextPage));
-  }, [filteredTickets, onSelectTicketId, selectedTicketId]);
+  }, [filteredTickets, onSelectTicketId, overviewLayout.pageSize, selectedTicketId]);
+
+  useLayoutEffect(() => {
+    const masterBody = masterBodyRef.current;
+    const selectedRow = selectedRowRef.current;
+    if (!masterBody || !selectedRow) {
+      return;
+    }
+    const bodyBounds = masterBody.getBoundingClientRect();
+    const rowBounds = selectedRow.getBoundingClientRect();
+    if (rowBounds.top < bodyBounds.top) {
+      masterBody.scrollTop -= bodyBounds.top - rowBounds.top;
+    } else if (rowBounds.bottom > bodyBounds.bottom) {
+      masterBody.scrollTop += rowBounds.bottom - bodyBounds.bottom;
+    }
+  }, [overviewLayout.pageSize, pageWindow.page, selectedTicketId]);
 
   useEffect(() => {
     setOpenStatusControl(null);
   }, [archiveMode, deferredSearchQuery, selectedTicketId]);
 
   function selectPage(nextPage: number): void {
-    const boundedPage = Math.min(Math.max(nextPage, 1), pageCount);
-    const firstTicket = filteredTickets[(boundedPage - 1) * EXTRA_WORK_OVERVIEW_PAGE_SIZE];
+    const boundedPage = Math.min(Math.max(nextPage, 1), pageWindow.pageCount);
+    const firstTicket = filteredTickets[(boundedPage - 1) * overviewLayout.pageSize];
     setPage(boundedPage);
     onSelectTicketId(firstTicket?.id ?? null);
   }
@@ -2811,7 +2900,7 @@ function ExtraWorkTab({
         </div>
       ) : null}
       {!isLoading && !error && sortedTickets.length > 0 ? (
-        <div className="project-extra-work-workspace">
+        <div className="project-extra-work-workspace" ref={workspaceRef} style={workspaceStyle}>
           <div className="project-extra-work-master" role="grid" aria-label="Zusatzaufträge">
             <div className="project-extra-work-master-head" role="row">
               <span role="columnheader">Status</span>
@@ -2820,13 +2909,13 @@ function ExtraWorkTab({
               <span role="columnheader">Ersteller</span>
               <span role="columnheader">Stunden</span>
             </div>
-            {filteredTickets.length === 0 ? (
-              <div className="project-extra-work-master-empty">
-                {hasSearch ? "Keine passenden Zusatzaufträge gefunden." : "Keine Zusatzaufträge vorhanden."}
-              </div>
-            ) : (
-              <div role="rowgroup">
-                {visibleTickets.map((ticket) => {
+            <div className="project-extra-work-master-body" ref={masterBodyRef} role="rowgroup">
+              {filteredTickets.length === 0 ? (
+                <div className="project-extra-work-master-empty">
+                  {hasSearch ? "Keine passenden Zusatzaufträge gefunden." : "Keine Zusatzaufträge vorhanden."}
+                </div>
+              ) : (
+                visibleTickets.map((ticket) => {
                   const statusBadge = getExtraWorkTicketStatusBadge(ticket);
                   const listControlKey = `list:${ticket.id}`;
                   const statusOptions = canPromoteStatus && !archiveMode
@@ -2836,6 +2925,7 @@ function ExtraWorkTab({
                   return (
                     <div
                       key={ticket.id}
+                      ref={selectedTicketId === ticket.id ? selectedRowRef : undefined}
                       role="row"
                       tabIndex={0}
                       aria-selected={selectedTicketId === ticket.id}
@@ -2876,30 +2966,30 @@ function ExtraWorkTab({
                       <strong role="gridcell">{formatExtraWorkTicketHours(ticket)}</strong>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
             {filteredTickets.length > 0 ? (
               <footer className="project-extra-work-pagination">
                 <span>
-                  {pageStart + 1}–{Math.min(pageStart + EXTRA_WORK_OVERVIEW_PAGE_SIZE, filteredTickets.length)} von {filteredTickets.length}
+                  {pageWindow.start + 1}–{pageWindow.end} von {filteredTickets.length}
                 </span>
                 <nav aria-label="Seiten der Zusatzaufträge">
-                  <button type="button" aria-label="Erste Seite" disabled={page === 1} onClick={() => selectPage(1)}>«</button>
-                  <button type="button" aria-label="Vorherige Seite" disabled={page === 1} onClick={() => selectPage(page - 1)}>‹</button>
-                  {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+                  <button type="button" aria-label="Erste Seite" disabled={pageWindow.page === 1} onClick={() => selectPage(1)}>«</button>
+                  <button type="button" aria-label="Vorherige Seite" disabled={pageWindow.page === 1} onClick={() => selectPage(pageWindow.page - 1)}>‹</button>
+                  {Array.from({ length: pageWindow.pageCount }, (_, index) => index + 1).map((pageNumber) => (
                     <button
                       type="button"
                       key={pageNumber}
-                      className={page === pageNumber ? "is-active" : ""}
-                      aria-current={page === pageNumber ? "page" : undefined}
+                      className={pageWindow.page === pageNumber ? "is-active" : ""}
+                      aria-current={pageWindow.page === pageNumber ? "page" : undefined}
                       onClick={() => selectPage(pageNumber)}
                     >
                       {pageNumber}
                     </button>
                   ))}
-                  <button type="button" aria-label="Nächste Seite" disabled={page === pageCount} onClick={() => selectPage(page + 1)}>›</button>
-                  <button type="button" aria-label="Letzte Seite" disabled={page === pageCount} onClick={() => selectPage(pageCount)}>»</button>
+                  <button type="button" aria-label="Nächste Seite" disabled={pageWindow.page === pageWindow.pageCount} onClick={() => selectPage(pageWindow.page + 1)}>›</button>
+                  <button type="button" aria-label="Letzte Seite" disabled={pageWindow.page === pageWindow.pageCount} onClick={() => selectPage(pageWindow.pageCount)}>»</button>
                 </nav>
               </footer>
             ) : null}
@@ -2946,9 +3036,17 @@ function ExtraWorkOverviewDetail({
   onArchiveTicket: (ticket: MobileExtraWorkTicket) => void;
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => void;
 }) {
+  const detailRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (detailRef.current) {
+      detailRef.current.scrollTop = 0;
+    }
+  }, [ticket?.id]);
+
   if (!ticket) {
     return (
-      <aside className="project-extra-work-detail is-empty">
+      <aside className="project-extra-work-detail is-empty" ref={detailRef}>
         <p>Kein Zusatzauftrag für die Detailansicht ausgewählt.</p>
       </aside>
     );
@@ -2964,7 +3062,7 @@ function ExtraWorkOverviewDetail({
   const isRestoring = restoringTicketId === ticket.id;
 
   return (
-    <aside className="project-extra-work-detail" aria-label={`Details zu ${formatExtraWorkOverviewTitle(ticket)}`}>
+    <aside className="project-extra-work-detail" ref={detailRef} aria-label={`Details zu ${formatExtraWorkOverviewTitle(ticket)}`}>
       <header className="project-extra-work-detail-head">
         <h3>{formatExtraWorkOverviewTitle(ticket)}</h3>
         <div className="project-extra-work-detail-actions">

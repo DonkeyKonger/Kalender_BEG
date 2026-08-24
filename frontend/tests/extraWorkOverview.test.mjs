@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXTRA_WORK_OVERVIEW_PAGE_SIZE,
+  EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
+  calculateExtraWorkOverviewPageSize,
   buildExtraWorkOverviewEntrySummary,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewTitle,
+  getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewDescription,
+  getExtraWorkOverviewPageForIndex,
+  getExtraWorkOverviewPageWindow,
   normalizeExtraWorkOverviewSearch,
   resolveExtraWorkOverviewPeriod,
 } from "../src/lib/extraWorkOverview.ts";
@@ -58,7 +62,45 @@ function ticket(overrides = {}) {
 
 test("overview title deliberately omits the internal Hauptauftrag suffix", () => {
   assert.equal(formatExtraWorkOverviewTitle(ticket()), "Zusatzauftrag 9999.SZ13");
-  assert.equal(EXTRA_WORK_OVERVIEW_PAGE_SIZE, 8);
+  assert.equal(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, 8);
+});
+
+test("overview page size follows available height between four and ten real rows", () => {
+  assert.equal(calculateExtraWorkOverviewPageSize(280), 4);
+  assert.equal(calculateExtraWorkOverviewPageSize(356), 4);
+  assert.equal(calculateExtraWorkOverviewPageSize(620), 8);
+  assert.equal(calculateExtraWorkOverviewPageSize(752), 10);
+  assert.equal(calculateExtraWorkOverviewPageSize(1200), 10);
+  assert.equal(getExtraWorkOverviewMasterHeight(4), 356);
+  assert.equal(getExtraWorkOverviewMasterHeight(10), 752);
+});
+
+test("overview pages stay stable for full and partially filled final pages", () => {
+  assert.deepEqual(getExtraWorkOverviewPageWindow(21, 1, 10), {
+    start: 0,
+    end: 10,
+    page: 1,
+    pageCount: 3,
+  });
+  assert.deepEqual(getExtraWorkOverviewPageWindow(21, 3, 10), {
+    start: 20,
+    end: 21,
+    page: 3,
+    pageCount: 3,
+  });
+  assert.deepEqual(getExtraWorkOverviewPageWindow(3, 8, 4), {
+    start: 0,
+    end: 3,
+    page: 1,
+    pageCount: 1,
+  });
+});
+
+test("resizing keeps the selected row on the page for the new page size", () => {
+  assert.equal(getExtraWorkOverviewPageForIndex(17, 10), 2);
+  assert.equal(getExtraWorkOverviewPageForIndex(17, 8), 3);
+  assert.equal(getExtraWorkOverviewPageForIndex(17, 4), 5);
+  assert.equal(getExtraWorkOverviewPageForIndex(-1, 8), 1);
 });
 
 test("local overview search covers structured ticket and entry contents", () => {

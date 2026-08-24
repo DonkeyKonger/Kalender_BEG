@@ -5,7 +5,64 @@ import type {
   Site,
 } from "../types/site";
 
-export const EXTRA_WORK_OVERVIEW_PAGE_SIZE = 8;
+export const EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE = 8;
+export const EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE = 4;
+export const EXTRA_WORK_OVERVIEW_MAX_PAGE_SIZE = 10;
+export const EXTRA_WORK_OVERVIEW_ROW_HEIGHT = 66;
+export const EXTRA_WORK_OVERVIEW_HEADER_HEIGHT = 42;
+export const EXTRA_WORK_OVERVIEW_PAGINATION_HEIGHT = 48;
+export const EXTRA_WORK_OVERVIEW_CONTAINER_BORDER = 2;
+
+export function calculateExtraWorkOverviewPageSize(availableHeight: number): number {
+  const rowAreaHeight = Math.max(
+    0,
+    availableHeight
+      - EXTRA_WORK_OVERVIEW_HEADER_HEIGHT
+      - EXTRA_WORK_OVERVIEW_PAGINATION_HEIGHT
+      - EXTRA_WORK_OVERVIEW_CONTAINER_BORDER,
+  );
+  const measuredRows = Math.floor(rowAreaHeight / EXTRA_WORK_OVERVIEW_ROW_HEIGHT);
+  return Math.min(
+    EXTRA_WORK_OVERVIEW_MAX_PAGE_SIZE,
+    Math.max(EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, measuredRows),
+  );
+}
+
+export function getExtraWorkOverviewMasterHeight(pageSize: number): number {
+  const boundedPageSize = Math.min(
+    EXTRA_WORK_OVERVIEW_MAX_PAGE_SIZE,
+    Math.max(EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, Math.floor(pageSize)),
+  );
+  return EXTRA_WORK_OVERVIEW_HEADER_HEIGHT
+    + EXTRA_WORK_OVERVIEW_PAGINATION_HEIGHT
+    + EXTRA_WORK_OVERVIEW_CONTAINER_BORDER
+    + boundedPageSize * EXTRA_WORK_OVERVIEW_ROW_HEIGHT;
+}
+
+export function getExtraWorkOverviewPageForIndex(index: number, pageSize: number): number {
+  if (!Number.isInteger(index) || index < 0 || !Number.isInteger(pageSize) || pageSize < 1) {
+    return 1;
+  }
+  return Math.floor(index / pageSize) + 1;
+}
+
+export function getExtraWorkOverviewPageWindow(
+  itemCount: number,
+  requestedPage: number,
+  pageSize: number,
+): { end: number; page: number; pageCount: number; start: number } {
+  const safeItemCount = Math.max(0, Math.floor(itemCount));
+  const safePageSize = Math.max(1, Math.floor(pageSize));
+  const pageCount = Math.max(1, Math.ceil(safeItemCount / safePageSize));
+  const page = Math.min(pageCount, Math.max(1, Math.floor(requestedPage)));
+  const start = (page - 1) * safePageSize;
+  return {
+    end: Math.min(safeItemCount, start + safePageSize),
+    page,
+    pageCount,
+    start,
+  };
+}
 
 export function formatExtraWorkOverviewTitle(ticket: MobileExtraWorkTicket): string {
   return `Zusatzauftrag ${ticket.display_number}`;
