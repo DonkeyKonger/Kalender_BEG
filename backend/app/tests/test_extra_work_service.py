@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import ValidationError
 from pypdf import PdfReader
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -1419,6 +1419,73 @@ def test_site_extra_work_tickets_include_customer_email_status():
 
     assert read_ticket.customer_email_sent_at is not None
     assert read_ticket.customer_email_signature_present is True
+
+
+def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add(site)
+    db.commit()
+
+    tickets: list[ExtraWorkTicket] = []
+    for index in range(20):
+        ticket = ExtraWorkTicket(
+            site_id=site.id,
+            sequence_number=index + 1,
+            display_number=f"8007.SZ{index + 1:02d}",
+            title=f"Zusatzauftrag {index + 1}",
+            kind="billing",
+            status="draft",
+        )
+        ticket.entries = [
+            ExtraWorkTicketEntry(
+                site_id=site.id,
+                component="Bauteil",
+                floor="EG",
+                worker_rows=[{"worker_name": "Max", "monday_hours": index + 1}],
+            )
+        ]
+        ticket.photos = [
+            ExtraWorkTicketPhoto(
+                site_id=site.id,
+                project_folder_key="fotos",
+                external_drive_id="drive",
+                external_item_id=f"photo-{index + 1}",
+                filename=f"foto-{index + 1}.jpg",
+                content_type="image/jpeg",
+            )
+        ]
+        tickets.append(ticket)
+    db.add_all(tickets)
+    db.commit()
+    db.expire_all()
+
+    select_statements: list[str] = []
+
+    def record_select(
+        _connection,
+        _cursor,
+        statement,
+        _parameters,
+        _context,
+        _executemany,
+    ):
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record_select)
+    try:
+        result = ExtraWorkService(db).list_site_tickets(site.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_select)
+
+    assert len(result) == 20
+    assert all(ticket.entry_count == 1 for ticket in result)
+    assert all(ticket.photo_count == 1 for ticket in result)
+    assert len(select_statements) <= 7
+    assert sum("FROM extra_work_ticket_entries" in sql for sql in select_statements) == 1
+    assert sum("FROM extra_work_ticket_photos" in sql for sql in select_statements) == 1
 
 
 def test_extra_work_ticket_archive_preserves_data_filters_mobile_and_restores_idempotently():

@@ -71,7 +71,8 @@ test("toolbar, resize observer and paper stack share one persisted zoom width", 
   assert.match(componentSource, /SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS\.map/);
   assert.match(componentSource, /readSupplementaryOrderDocumentZoom\(getSupplementaryOrderZoomStorage\(\)\)/);
   assert.match(componentSource, /writeSupplementaryOrderDocumentZoom\(getSupplementaryOrderZoomStorage\(\), nextZoom\)/);
-  assert.match(componentSource, /setAutoFitPaperWidth\(getSupplementaryOrderAutoFitWidth\(availableWidth\)\)/);
+  assert.match(componentSource, /const nextWidth = getSupplementaryOrderAutoFitWidth\(availableWidth\);[\s\S]{0,250}setAutoFitPaperWidth/);
+  assert.match(componentSource, /Math\.abs\(current - nextWidth\) < 1 \? current : nextWidth/);
   assert.match(componentSource, /new ResizeObserver/);
   assert.match(componentSource, /getSupplementaryOrderFinalPaperWidth\(autoFitPaperWidth, documentZoom\)/);
   assert.match(componentSource, /data-document-zoom=\{documentZoom\}[\s\S]*width: `\$\{finalPaperWidth\}px`/);
@@ -82,11 +83,14 @@ test("toolbar, resize observer and paper stack share one persisted zoom width", 
   assert.match(styles, /\.supplementary-order-document-actions \.secondary-action,[\s\S]*?height:\s*34px;[\s\S]*?border-radius:\s*2px;/);
 });
 
-test("PDF canvas and HTML overlay resize synchronously at every document zoom", () => {
-  assert.match(componentSource, /canvasNode\.width = Math\.ceil\(renderViewport\.width\);/);
-  assert.match(componentSource, /canvasNode\.height = Math\.ceil\(renderViewport\.height\);/);
-  assert.doesNotMatch(componentSource, /canvasNode\.style\.(?:width|height)\s*=/);
-  assert.match(styles, /\.supplementary-order-pdf-background canvas \{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+test("one bounded PDF image and the HTML overlay scale synchronously at every document zoom", () => {
+  assert.equal(componentSource.match(/pdfjsLib\.getDocument\(/g)?.length, 1);
+  assert.match(componentSource, /SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH = 1600;/);
+  assert.match(componentSource, /SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_MAX_PIXELS = 4_000_000;/);
+  assert.match(componentSource, /Math\.min\(SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH, pixelBudgetWidth\)/);
+  assert.match(componentSource, /<img[\s\S]{0,300}src=\{previewUrl\}/);
+  assert.doesNotMatch(componentSource, /renderVersion|canvasRef=\{canvasRef\}/);
+  assert.match(styles, /\.supplementary-order-pdf-background img \{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
   assert.match(styles, /\.supplementary-order-pdf-background,\s*\.supplementary-order-overlay \{[^}]*position:\s*absolute;[^}]*inset:\s*0;/s);
 });
 

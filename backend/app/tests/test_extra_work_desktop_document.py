@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 
 from fastapi import HTTPException
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -121,6 +121,65 @@ def test_ticket_customer_is_snapshotted_overridable_and_does_not_change_site_cus
     )
     assert legacy_client_update.ticket.customer_name == "Firma B"
     assert db.get(Site, site.id).customer == "Firma A"
+
+
+def test_document_reuses_eager_loaded_first_entry_without_a_second_entry_query():
+    db = db_session()
+    site = Site(site_number="8015", name="Projekt")
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="8015.SZ01",
+        kind="billing",
+        status="draft",
+    )
+    first_entry = ExtraWorkTicketEntry(
+        ticket=ticket,
+        site=site,
+        component="Erster Eintrag",
+        floor="EG",
+        worker_rows=[],
+    )
+    second_entry = ExtraWorkTicketEntry(
+        ticket=ticket,
+        site=site,
+        component="Zweiter Eintrag",
+        floor="1. OG",
+        worker_rows=[],
+    )
+    db.add_all([site, ticket, first_entry, second_entry])
+    db.commit()
+    site_id = site.id
+    ticket_id = ticket.id
+    first_entry_id = first_entry.id
+    db.expire_all()
+
+    select_statements: list[str] = []
+
+    def record_select(
+        _connection,
+        _cursor,
+        statement,
+        _parameters,
+        _context,
+        _executemany,
+    ):
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record_select)
+    try:
+        document = ExtraWorkService(db).get_site_ticket_document(
+            site_id=site_id,
+            ticket_id=ticket_id,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record_select)
+
+    assert document.entry is not None
+    assert document.entry.id == first_entry_id
+    assert sum("FROM extra_work_ticket_entries" in sql for sql in select_statements) == 1
 
 
 def test_document_put_persists_form_updates_first_entry_and_keeps_legacy_entry():

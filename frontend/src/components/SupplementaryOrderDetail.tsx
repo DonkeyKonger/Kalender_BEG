@@ -1,7 +1,8 @@
 import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText, LoaderCircle, LockKeyhole, Paperclip, Save, Trash2, UploadCloud, X } from "lucide-react";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import {
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 
 import { ApiError, api } from "../lib/api";
@@ -74,6 +76,12 @@ import type {
 } from "../types/site";
 
 let supplementaryOrderPdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
+let supplementaryOrderTemplateLoader: Promise<ArrayBuffer> | null = null;
+const supplementaryOrderDocumentLoaders = new Map<string, Promise<ExtraWorkTicketDocumentRead>>();
+const supplementaryOrderAttachmentContentLoaders = new Map<string, Promise<Blob>>();
+const supplementaryOrderTemplatePreviewLoaders = new WeakMap<ArrayBuffer, Promise<string>>();
+const SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH = 1600;
+const SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_MAX_PIXELS = 4_000_000;
 
 type ExtraWorkAttachmentUpload = {
   key: number;
@@ -90,6 +98,163 @@ function loadSupplementaryOrderPdfJs(): Promise<typeof import("pdfjs-dist")> {
     });
   }
   return supplementaryOrderPdfJsLoader;
+}
+
+function loadSupplementaryOrderTemplate(siteId: number): Promise<ArrayBuffer> {
+  if (!supplementaryOrderTemplateLoader) {
+    supplementaryOrderTemplateLoader = api.siteExtraWorkTemplate(siteId)
+      .then((blob) => blob.arrayBuffer())
+      .catch((error) => {
+        supplementaryOrderTemplateLoader = null;
+        throw error;
+      });
+  }
+  return supplementaryOrderTemplateLoader;
+}
+
+function loadSupplementaryOrderDocument(
+  siteId: number,
+  ticketId: number,
+  includeDeleted: boolean,
+): Promise<ExtraWorkTicketDocumentRead> {
+  const key = `${siteId}:${ticketId}:${includeDeleted ? "deleted" : "active"}`;
+  const existing = supplementaryOrderDocumentLoaders.get(key);
+  if (existing) {
+    return existing;
+  }
+  const loader = api.siteExtraWorkTicketDocument(siteId, ticketId, { includeDeleted });
+  supplementaryOrderDocumentLoaders.set(key, loader);
+  void loader.then(
+    () => {
+      if (supplementaryOrderDocumentLoaders.get(key) === loader) {
+        supplementaryOrderDocumentLoaders.delete(key);
+      }
+    },
+    () => {
+      if (supplementaryOrderDocumentLoaders.get(key) === loader) {
+        supplementaryOrderDocumentLoaders.delete(key);
+      }
+    },
+  );
+  return loader;
+}
+
+function loadSupplementaryOrderAttachmentContent(
+  siteId: number,
+  ticketId: number,
+  photoId: number,
+  includeDeleted: boolean,
+): Promise<Blob> {
+  const key = `${siteId}:${ticketId}:${photoId}:${includeDeleted ? "deleted" : "active"}`;
+  const existing = supplementaryOrderAttachmentContentLoaders.get(key);
+  if (existing) {
+    return existing;
+  }
+  const loader = api.siteExtraWorkTicketPhotoContent(siteId, ticketId, photoId, { includeDeleted });
+  supplementaryOrderAttachmentContentLoaders.set(key, loader);
+  void loader.then(
+    () => {
+      if (supplementaryOrderAttachmentContentLoaders.get(key) === loader) {
+        supplementaryOrderAttachmentContentLoaders.delete(key);
+      }
+    },
+    () => {
+      if (supplementaryOrderAttachmentContentLoaders.get(key) === loader) {
+        supplementaryOrderAttachmentContentLoaders.delete(key);
+      }
+    },
+  );
+  return loader;
+}
+
+function loadSupplementaryOrderTemplatePreview(data: ArrayBuffer): Promise<string> {
+  const existing = supplementaryOrderTemplatePreviewLoaders.get(data);
+  if (existing) {
+    return existing;
+  }
+  const loader = renderSupplementaryOrderTemplatePreview(data).catch((error) => {
+    supplementaryOrderTemplatePreviewLoaders.delete(data);
+    throw error;
+  });
+  supplementaryOrderTemplatePreviewLoaders.set(data, loader);
+  return loader;
+}
+
+async function renderSupplementaryOrderTemplatePreview(data: ArrayBuffer): Promise<string> {
+  const pdfjsLib = await loadSupplementaryOrderPdfJs();
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
+  try {
+    const pdfDocument = await loadingTask.promise;
+    const page = await pdfDocument.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const aspectRatio = baseViewport.width / baseViewport.height;
+    const pixelBudgetWidth = Math.floor(Math.sqrt(SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_MAX_PIXELS * aspectRatio));
+    const renderWidth = Math.min(SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH, pixelBudgetWidth);
+    const renderViewport = page.getViewport({ scale: renderWidth / baseViewport.width });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(renderViewport.width);
+    canvas.height = Math.ceil(renderViewport.height);
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      throw new Error("Canvas konnte nicht initialisiert werden.");
+    }
+    await page.render({
+      canvas,
+      canvasContext: context,
+      viewport: renderViewport,
+      annotationMode: pdfjsLib.AnnotationMode.DISABLE,
+    }).promise;
+    const previewBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("PDF-Vorschau konnte nicht erstellt werden."));
+        }
+      }, "image/png");
+    });
+    canvas.width = 0;
+    canvas.height = 0;
+    return URL.createObjectURL(previewBlob);
+  } finally {
+    void loadingTask.destroy();
+  }
+}
+
+function useSupplementaryOrderTemplatePreview(data: ArrayBuffer | null): {
+  previewUrl: string | null;
+  previewError: string | null;
+} {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setPreviewUrl(null);
+    setPreviewError(null);
+    if (!data) {
+      return () => {
+        isCancelled = true;
+      };
+    }
+    void loadSupplementaryOrderTemplatePreview(data)
+      .then((url) => {
+        if (!isCancelled) {
+          setPreviewUrl(url);
+        }
+      })
+      .catch((error) => {
+        console.error("Supplementary order template render failed", error);
+        if (!isCancelled) {
+          setPreviewError("Master-Vorlage konnte nicht dargestellt werden.");
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [data]);
+
+  return { previewUrl, previewError };
 }
 
 function getSupplementaryOrderZoomStorage(): Storage | null {
@@ -131,6 +296,8 @@ export function SupplementaryOrderDetail({
   const [draft, setDraft] = useState<ExtraWorkDocumentDraft | null>(null);
   const [originalWorkerRowCount, setOriginalWorkerRowCount] = useState(0);
   const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
+  const [photosLoaded, setPhotosLoaded] = useState(false);
+  const [photosLoading, setPhotosLoading] = useState(false);
   const [templateData, setTemplateData] = useState<ArrayBuffer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -150,13 +317,14 @@ export function SupplementaryOrderDetail({
   const [documentZoom, setDocumentZoom] = useState<SupplementaryOrderDocumentZoom>(() => (
     readSupplementaryOrderDocumentZoom(getSupplementaryOrderZoomStorage())
   ));
-  const [autoFitPaperWidth, setAutoFitPaperWidth] = useState<number | null>(null);
   const [isWorkerSignatureOpen, setIsWorkerSignatureOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const attachmentDragDepthRef = useRef(0);
   const attachmentUploadPendingRef = useRef(false);
   const attachmentUploadSequenceRef = useRef(0);
-  const paperViewportRef = useRef<HTMLDivElement | null>(null);
+  const attachmentListRequestRef = useRef<Promise<MobileExtraWorkTicketPhoto[]> | null>(null);
+  const attachmentListGenerationRef = useRef(0);
+  const templatePreview = useSupplementaryOrderTemplatePreview(documentData ? templateData : null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -170,54 +338,56 @@ export function SupplementaryOrderDetail({
     setDocumentData(null);
     setTemplateData(null);
     setPhotos([]);
+    setPhotosLoaded(false);
+    setPhotosLoading(false);
     setAttachmentUploads([]);
     setIsAttachmentDragActive(false);
     setIsAttachmentsOpen(false);
     setDeletingPhotoId(null);
     attachmentDragDepthRef.current = 0;
     attachmentUploadPendingRef.current = false;
+    attachmentListRequestRef.current = null;
+    attachmentListGenerationRef.current += 1;
     setIsDirty(false);
     setExecutionRangeEdited(false);
     setDirtyFields(new Set());
 
-    async function loadDocument(): Promise<void> {
-      const [documentResult, templateResult, photosResult] = await Promise.allSettled([
-        api.siteExtraWorkTicketDocument(site.id, ticket.id, { includeDeleted }),
-        api.siteExtraWorkTemplate(site.id),
-        api.siteExtraWorkTicketPhotos(site.id, ticket.id, { includeDeleted }),
-      ]);
-      if (isCancelled) {
-        return;
-      }
-
-      if (documentResult.status === "rejected") {
-        setLoadError(readError(documentResult.reason, "Zusatzauftrag konnte nicht geladen werden."));
-      } else {
-        setDocumentData(documentResult.value);
-        setDocumentTicket(documentResult.value.ticket);
-        setOriginalWorkerRowCount(documentResult.value.entry?.worker_rows.length ?? 0);
-        setDraft(createExtraWorkDocumentDraft(documentResult.value, {
+    void loadSupplementaryOrderDocument(site.id, ticket.id, includeDeleted)
+      .then((document) => {
+        if (isCancelled) {
+          return;
+        }
+        setDocumentData(document);
+        setDocumentTicket(document.ticket);
+        setOriginalWorkerRowCount(document.entry?.worker_rows.length ?? 0);
+        setDraft(createExtraWorkDocumentDraft(document, {
           customerNameFallback: site.customer,
-          orderedByNameFallback: documentResult.value.customer_signature.name,
+          orderedByNameFallback: document.customer_signature.name,
           orderedByCompanyFallback: site.customer,
         }));
-      }
+      })
+      .catch((error) => {
+        if (!isCancelled) {
+          setLoadError(readError(error, "Zusatzauftrag konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      });
 
-      if (templateResult.status === "rejected") {
-        setTemplateError(readError(templateResult.reason, "Master-Vorlage konnte nicht geladen werden."));
-      } else {
-        setTemplateData(await templateResult.value.arrayBuffer());
-      }
-
-      if (photosResult.status === "rejected") {
-        setPhotoError(readError(photosResult.reason, "Fotos konnten nicht geladen werden."));
-      } else {
-        setPhotos(photosResult.value);
-      }
-      setIsLoading(false);
-    }
-
-    void loadDocument();
+    void loadSupplementaryOrderTemplate(site.id)
+      .then((data) => {
+        if (!isCancelled) {
+          setTemplateData(data);
+        }
+      })
+      .catch((error) => {
+        if (!isCancelled) {
+          setTemplateError(readError(error, "Master-Vorlage konnte nicht geladen werden."));
+        }
+      });
     return () => {
       isCancelled = true;
     };
@@ -252,25 +422,6 @@ export function SupplementaryOrderDetail({
     };
   }, []);
 
-  useLayoutEffect(() => {
-    const viewport = paperViewportRef.current;
-    if (!viewport) {
-      return;
-    }
-    const updateAutoFitWidth = (availableWidth: number) => {
-      setAutoFitPaperWidth(getSupplementaryOrderAutoFitWidth(availableWidth));
-    };
-    updateAutoFitWidth(viewport.clientWidth);
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(([entry]) => {
-      updateAutoFitWidth(entry.contentRect.width);
-    });
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [isLoading, loadError]);
-
   useEffect(() => {
     if (!isDirty) {
       return;
@@ -289,43 +440,46 @@ export function SupplementaryOrderDetail({
     [draft?.entry.worker_rows],
   );
   const isAttachmentUploading = attachmentUploads.some((upload) => upload.status !== "error");
-  const isPhotoLimitReached = photos.length >= MAX_EXTRA_WORK_PHOTOS;
-  const finalPaperWidth = autoFitPaperWidth === null
-    ? null
-    : getSupplementaryOrderFinalPaperWidth(autoFitPaperWidth, documentZoom);
-
-  function changeDocumentZoom(value: string): void {
+  const attachmentCount = photosLoaded ? photos.length : documentTicket.photo_count;
+  const isPhotoLimitReached = attachmentCount >= MAX_EXTRA_WORK_PHOTOS;
+  const changeDocumentZoom = useCallback((value: string): void => {
     const nextZoom = normalizeSupplementaryOrderDocumentZoom(value);
     setDocumentZoom(nextZoom);
     writeSupplementaryOrderDocumentZoom(getSupplementaryOrderZoomStorage(), nextZoom);
-  }
+  }, []);
 
-  function changeDraft(patch: Partial<ExtraWorkDocumentDraft>): void {
+  const markDirty = useCallback((): void => {
+    setIsDirty(true);
+    setSaveMessage(null);
+    setSaveError(null);
+  }, []);
+
+  const changeDraft = useCallback((patch: Partial<ExtraWorkDocumentDraft>): void => {
     if (isLocked) {
       return;
     }
     setDraft((current) => current ? { ...current, ...patch } : current);
     setDirtyFields((current) => {
+      const changedFields = Object.keys(patch).filter((field) => field !== "entry") as ExtraWorkDocumentDirtyField[];
+      if (changedFields.every((field) => current.has(field))) {
+        return current;
+      }
       const next = new Set(current);
-      Object.keys(patch).forEach((field) => {
-        if (field !== "entry") {
-          next.add(field as ExtraWorkDocumentDirtyField);
-        }
-      });
+      changedFields.forEach((field) => next.add(field));
       return next;
     });
     markDirty();
-  }
+  }, [isLocked, markDirty]);
 
-  function changeEntry(patch: Partial<ExtraWorkDocumentDraft["entry"]>): void {
+  const changeEntry = useCallback((patch: Partial<ExtraWorkDocumentDraft["entry"]>): void => {
     if (isLocked) {
       return;
     }
     setDraft((current) => current ? { ...current, entry: { ...current.entry, ...patch } } : current);
     markDirty();
-  }
+  }, [isLocked, markDirty]);
 
-  function changeWorker(workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>): void {
+  const changeWorker = useCallback((workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>): void => {
     if (isLocked) {
       return;
     }
@@ -339,13 +493,10 @@ export function SupplementaryOrderDetail({
       return { ...current, entry: { ...current.entry, worker_rows: workerRows } };
     });
     markDirty();
-  }
+  }, [isLocked, markDirty]);
 
-  function markDirty(): void {
-    setIsDirty(true);
-    setSaveMessage(null);
-    setSaveError(null);
-  }
+  const markExecutionRangeEdited = useCallback(() => setExecutionRangeEdited(true), []);
+  const openWorkerSignature = useCallback(() => setIsWorkerSignatureOpen(true), []);
 
   function handleBack(): void {
     if (isDirty && !window.confirm("Ungespeicherte Änderungen verwerfen und zur Liste zurückkehren?")) {
@@ -403,7 +554,7 @@ export function SupplementaryOrderDetail({
     setOpeningPhotoId(photo.id);
     setPhotoError(null);
     try {
-      const blob = await api.siteExtraWorkTicketPhotoContent(site.id, documentTicket.id, photo.id, { includeDeleted });
+      const blob = await loadSupplementaryOrderAttachmentContent(site.id, documentTicket.id, photo.id, includeDeleted);
       const url = window.URL.createObjectURL(blob);
       if (openedWindow) {
         openedWindow.location.href = url;
@@ -419,6 +570,49 @@ export function SupplementaryOrderDetail({
     }
   }
 
+  function loadAttachments(): Promise<MobileExtraWorkTicketPhoto[]> {
+    if (photosLoaded) {
+      return Promise.resolve(photos);
+    }
+    const pendingRequest = attachmentListRequestRef.current;
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+    const generation = attachmentListGenerationRef.current;
+    setPhotosLoading(true);
+    setPhotoError(null);
+    const request = api.siteExtraWorkTicketPhotos(site.id, documentTicket.id, { includeDeleted })
+      .then((loadedPhotos) => {
+        if (attachmentListGenerationRef.current === generation) {
+          setPhotos(loadedPhotos);
+          setPhotosLoaded(true);
+        }
+        return loadedPhotos;
+      })
+      .catch((error) => {
+        if (attachmentListGenerationRef.current === generation) {
+          setPhotoError(readError(error, "Fotos und Anlagen konnten nicht geladen werden."));
+        }
+        return [];
+      })
+      .finally(() => {
+        if (
+          attachmentListGenerationRef.current === generation
+          && attachmentListRequestRef.current === request
+        ) {
+          attachmentListRequestRef.current = null;
+          setPhotosLoading(false);
+        }
+      });
+    attachmentListRequestRef.current = request;
+    return request;
+  }
+
+  function openAttachments(): void {
+    setIsAttachmentsOpen(true);
+    void loadAttachments();
+  }
+
   function updatePersistedPhotoCount(count: number): void {
     const updatedTicket = { ...documentTicket, photo_count: count };
     setDocumentTicket(updatedTicket);
@@ -426,7 +620,7 @@ export function SupplementaryOrderDetail({
   }
 
   async function uploadAttachments(files: ArrayLike<File>): Promise<void> {
-    if (isLocked || attachmentUploadPendingRef.current || files.length === 0) {
+    if (!photosLoaded || photosLoading || isLocked || attachmentUploadPendingRef.current || files.length === 0) {
       return;
     }
     const candidates = validateExtraWorkPhotoFiles(files, photos.length);
@@ -513,7 +707,7 @@ export function SupplementaryOrderDetail({
     }
     event.preventDefault();
     event.stopPropagation();
-    if (isLocked || attachmentUploadPendingRef.current) {
+    if (!photosLoaded || photosLoading || isLocked || attachmentUploadPendingRef.current) {
       event.dataTransfer.dropEffect = "none";
       return;
     }
@@ -527,7 +721,7 @@ export function SupplementaryOrderDetail({
     }
     event.preventDefault();
     event.stopPropagation();
-    event.dataTransfer.dropEffect = isLocked || attachmentUploadPendingRef.current ? "none" : "copy";
+    event.dataTransfer.dropEffect = !photosLoaded || photosLoading || isLocked || attachmentUploadPendingRef.current ? "none" : "copy";
   }
 
   function handleAttachmentDragLeave(event: ReactDragEvent<HTMLDivElement>): void {
@@ -549,7 +743,7 @@ export function SupplementaryOrderDetail({
     event.preventDefault();
     event.stopPropagation();
     resetAttachmentDragState();
-    if (isLocked || attachmentUploadPendingRef.current || event.dataTransfer.files.length === 0) {
+    if (!photosLoaded || photosLoading || isLocked || attachmentUploadPendingRef.current || event.dataTransfer.files.length === 0) {
       return;
     }
     void uploadAttachments(event.dataTransfer.files);
@@ -617,10 +811,10 @@ export function SupplementaryOrderDetail({
             className="secondary-action"
             aria-expanded={isAttachmentsOpen}
             aria-controls="supplementary-order-attachment-panel"
-            onClick={() => setIsAttachmentsOpen(true)}
+            onClick={openAttachments}
           >
             <Paperclip aria-hidden="true" size={15} />
-            Anlagen ({photos.length})
+            Anlagen ({attachmentCount})
           </button>
           {!documentTicket.deleted_at ? (
             <button
@@ -663,34 +857,29 @@ export function SupplementaryOrderDetail({
       ) : null}
 
       <div className="supplementary-order-workspace">
-        <div className="supplementary-order-paper-viewport" ref={paperViewportRef}>
-          <div
-            className="supplementary-order-paper-stack"
-            data-document-zoom={documentZoom}
-            style={finalPaperWidth === null ? undefined : { width: `${finalPaperWidth}px` }}
-          >
-            {workerPages.map((workers, pageIndex) => (
-              <SupplementaryOrderPaperPage
-                key={pageIndex}
-                site={site}
-                document={documentData}
-                draft={draft}
-                workers={workers}
-                pageIndex={pageIndex}
-                pageCount={workerPages.length}
-                templateData={templateData}
-                templateError={templateError}
-                readOnly={isLocked}
-                onDraftChange={changeDraft}
-                onEntryChange={changeEntry}
-                onWorkerChange={(localIndex, patch) => changeWorker((pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS) + localIndex, patch)}
-                onExecutionRangeEdited={() => setExecutionRangeEdited(true)}
-                onEditWorkerSignature={() => setIsWorkerSignatureOpen(true)}
-              />
-            ))}
-          </div>
-        </div>
-
+        <SupplementaryOrderPaperViewport documentZoom={documentZoom}>
+          {workerPages.map((workers, pageIndex) => (
+            <SupplementaryOrderPaperPage
+              key={pageIndex}
+              site={site}
+              document={documentData}
+              draft={draft}
+              workers={workers}
+              pageIndex={pageIndex}
+              pageCount={workerPages.length}
+              templatePreviewUrl={templatePreview.previewUrl}
+              templateLoading={!templateError && !templatePreview.previewError && !templatePreview.previewUrl}
+              templateError={templateError ?? templatePreview.previewError}
+              readOnly={isLocked}
+              onDraftChange={changeDraft}
+              onEntryChange={changeEntry}
+              workerOffset={pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS}
+              onWorkerChange={changeWorker}
+              onExecutionRangeEdited={markExecutionRangeEdited}
+              onEditWorkerSignature={openWorkerSignature}
+            />
+          ))}
+        </SupplementaryOrderPaperViewport>
       </div>
 
       {isAttachmentsOpen ? (
@@ -706,7 +895,7 @@ export function SupplementaryOrderDetail({
             <header>
               <div>
                 <h2 id="supplementary-order-attachment-panel-title">Fotos / Anlagen</h2>
-                <p>{photos.length} von {MAX_EXTRA_WORK_PHOTOS} Anlagen</p>
+                <p>{attachmentCount} von {MAX_EXTRA_WORK_PHOTOS} Anlagen</p>
               </div>
               <button type="button" aria-label="Anlagen schließen" onClick={() => setIsAttachmentsOpen(false)}>
                 <X aria-hidden="true" size={18} />
@@ -721,11 +910,17 @@ export function SupplementaryOrderDetail({
               onDragEnd={resetAttachmentDragState}
               onDrop={handleAttachmentDrop}
             >
-              {photoError ? <p className="form-error">{photoError}</p> : null}
-              {photos.length === 0 && isLocked ? (
+              {photosLoading ? <p className="supplementary-order-sidebar-empty" role="status">Fotos und Anlagen werden geladen…</p> : null}
+              {photoError ? (
+                <div className="form-error">
+                  <p>{photoError}</p>
+                  {!photosLoaded ? <button type="button" className="secondary-action" onClick={() => void loadAttachments()}>Erneut laden</button> : null}
+                </div>
+              ) : null}
+              {photosLoaded && photos.length === 0 && isLocked ? (
                 <p className="supplementary-order-sidebar-empty">Keine Fotos oder Anlagen vorhanden.</p>
               ) : null}
-              {photos.length > 0 ? (
+              {photosLoaded && photos.length > 0 ? (
                 <div className="supplementary-order-photo-list">
                   {photos.map((photo) => (
                     <ExtraWorkAttachmentRow
@@ -744,7 +939,7 @@ export function SupplementaryOrderDetail({
                   ))}
                 </div>
               ) : null}
-              {attachmentUploads.length > 0 ? (
+              {photosLoaded && attachmentUploads.length > 0 ? (
                 <div className="supplementary-order-upload-list" aria-live="polite">
                   {attachmentUploads.map((upload) => (
                     <div key={upload.key} className={upload.status === "error" ? "is-error" : "is-pending"}>
@@ -757,7 +952,7 @@ export function SupplementaryOrderDetail({
                   ))}
                 </div>
               ) : null}
-              {!isLocked ? (
+              {photosLoaded && !isLocked ? (
                 <label className={`supplementary-order-attachment-dropzone${photos.length > 0 ? " is-compact" : ""}${isAttachmentUploading || isPhotoLimitReached ? " is-disabled" : ""}`}>
                   <UploadCloud aria-hidden="true" size={photos.length > 0 ? 17 : 22} />
                   <span>
@@ -768,7 +963,7 @@ export function SupplementaryOrderDetail({
                     type="file"
                     accept={EXTRA_WORK_PHOTO_ACCEPT}
                     multiple
-                    disabled={isAttachmentUploading || isPhotoLimitReached}
+                    disabled={photosLoading || isAttachmentUploading || isPhotoLimitReached}
                     onChange={(event) => {
                       if (event.target.files) {
                         void uploadAttachments(event.target.files);
@@ -778,12 +973,12 @@ export function SupplementaryOrderDetail({
                   />
                 </label>
               ) : null}
-              {!isLocked ? (
+              {photosLoaded && !isLocked ? (
                 <p className={`supplementary-order-attachment-limit${isPhotoLimitReached ? " is-reached" : ""}`}>
                   {isPhotoLimitReached ? "Maximal 5 Fotos erreicht." : "JPEG, PNG, WebP oder HEIC · max. 15 MB · 5 Fotos"}
                 </p>
               ) : null}
-              {isAttachmentDragActive ? (
+              {photosLoaded && isAttachmentDragActive ? (
                 <div className="supplementary-order-attachment-drop-hint" role="status">
                   <UploadCloud aria-hidden="true" size={24} />
                   <strong>Fotos hier ablegen</strong>
@@ -817,6 +1012,55 @@ export function SupplementaryOrderDetail({
   );
 }
 
+const SupplementaryOrderPaperViewport = memo(function SupplementaryOrderPaperViewport({
+  documentZoom,
+  children,
+}: {
+  documentZoom: SupplementaryOrderDocumentZoom;
+  children: ReactNode;
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [autoFitPaperWidth, setAutoFitPaperWidth] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    const updateAutoFitWidth = (availableWidth: number) => {
+      const nextWidth = getSupplementaryOrderAutoFitWidth(availableWidth);
+      setAutoFitPaperWidth((current) => (
+        current !== null && Math.abs(current - nextWidth) < 1 ? current : nextWidth
+      ));
+    };
+    updateAutoFitWidth(viewport.clientWidth);
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      updateAutoFitWidth(entry.contentRect.width);
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  const finalPaperWidth = autoFitPaperWidth === null
+    ? null
+    : getSupplementaryOrderFinalPaperWidth(autoFitPaperWidth, documentZoom);
+
+  return (
+    <div className="supplementary-order-paper-viewport" ref={viewportRef}>
+      <div
+        className="supplementary-order-paper-stack"
+        data-document-zoom={documentZoom}
+        style={finalPaperWidth === null ? undefined : { width: `${finalPaperWidth}px` }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+});
+
 function SupplementaryOrderPaperPage({
   site,
   document,
@@ -824,9 +1068,11 @@ function SupplementaryOrderPaperPage({
   workers,
   pageIndex,
   pageCount,
-  templateData,
+  templatePreviewUrl,
+  templateLoading,
   templateError,
   readOnly,
+  workerOffset,
   onDraftChange,
   onEntryChange,
   onWorkerChange,
@@ -839,9 +1085,11 @@ function SupplementaryOrderPaperPage({
   workers: MobileExtraWorkWorkerHours[];
   pageIndex: number;
   pageCount: number;
-  templateData: ArrayBuffer | null;
+  templatePreviewUrl: string | null;
+  templateLoading: boolean;
   templateError: string | null;
   readOnly: boolean;
+  workerOffset: number;
   onDraftChange: (patch: Partial<ExtraWorkDocumentDraft>) => void;
   onEntryChange: (patch: Partial<ExtraWorkDocumentDraft["entry"]>) => void;
   onWorkerChange: (workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>) => void;
@@ -862,7 +1110,7 @@ function SupplementaryOrderPaperPage({
       style={{ aspectRatio: `${EXTRA_WORK_PDF_WIDTH} / ${EXTRA_WORK_PDF_HEIGHT}` }}
       data-page-number={pageIndex + 1}
     >
-      {templateData ? <SupplementaryOrderPdfBackground data={templateData} /> : null}
+      <SupplementaryOrderPdfBackground previewUrl={templatePreviewUrl} isLoading={templateLoading} />
       {templateError ? <div className="supplementary-order-template-error">{templateError}</div> : null}
       <div className="supplementary-order-overlay" aria-label={`Zusatzauftrag bearbeiten, Blatt ${pageIndex + 1}`}>
         <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.customer} label="Kunde" value={draft.customer_name ?? ""} readOnly={readOnly} onChange={(value) => onDraftChange({ customer_name: value })} />
@@ -913,8 +1161,9 @@ function SupplementaryOrderPaperPage({
             key={(pageIndex * EXTRA_WORK_VISIBLE_WORKER_ROWS) + localWorkerIndex}
             worker={worker}
             workerIndex={localWorkerIndex}
+            workerStateIndex={workerOffset + localWorkerIndex}
             readOnly={readOnly}
-            onChange={(patch) => onWorkerChange(localWorkerIndex, patch)}
+            onChange={onWorkerChange}
           />
         ))}
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.overallHours} label="Gesamtstunden dieses Blatts" value={formatPaperHours(pageHours)} />
@@ -936,111 +1185,33 @@ function SupplementaryOrderPaperPage({
   );
 }
 
-function SupplementaryOrderPdfBackground({ data }: { data: ArrayBuffer }) {
-  const paperRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [renderVersion, setRenderVersion] = useState(0);
-  const [renderError, setRenderError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const paper = paperRef.current;
-    if (!paper || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    let lastWidth = Math.round(paper.getBoundingClientRect().width);
-    let timer: number | null = null;
-    const observer = new ResizeObserver(([entry]) => {
-      const nextWidth = Math.round(entry.contentRect.width);
-      if (nextWidth <= 0 || Math.abs(nextWidth - lastWidth) < 4) {
-        return;
-      }
-      lastWidth = nextWidth;
-      if (timer !== null) {
-        window.clearTimeout(timer);
-      }
-      timer = window.setTimeout(() => setRenderVersion((value) => value + 1), 120);
-    });
-    observer.observe(paper);
-    return () => {
-      observer.disconnect();
-      if (timer !== null) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const paper = paperRef.current;
-    const canvas = canvasRef.current;
-    if (!paper || !canvas) {
-      return;
-    }
-    const paperNode = paper;
-    const canvasNode = canvas;
-    let isCancelled = false;
-    let loadingTask: PDFDocumentLoadingTask | null = null;
-    let pdfDocument: PDFDocumentProxy | null = null;
-    setRenderError(null);
-
-    async function renderPage(): Promise<void> {
-      try {
-        const pdfjsLib = await loadSupplementaryOrderPdfJs();
-        loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
-        pdfDocument = await loadingTask.promise;
-        const page = await pdfDocument.getPage(1);
-        if (isCancelled) {
-          return;
-        }
-        const baseViewport = page.getViewport({ scale: 1 });
-        const cssScale = Math.max(paperNode.clientWidth, 1) / baseViewport.width;
-        const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
-        const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
-        const context = canvasNode.getContext("2d", { alpha: false });
-        if (!context) {
-          throw new Error("Canvas konnte nicht initialisiert werden.");
-        }
-        canvasNode.width = Math.ceil(renderViewport.width);
-        canvasNode.height = Math.ceil(renderViewport.height);
-        await page.render({
-          canvas: canvasNode,
-          canvasContext: context,
-          viewport: renderViewport,
-          annotationMode: pdfjsLib.AnnotationMode.DISABLE,
-        }).promise;
-      } catch (error) {
-        if (!isCancelled) {
-          console.error("Supplementary order template render failed", error);
-          setRenderError("Master-Vorlage konnte nicht dargestellt werden.");
-        }
-      }
-    }
-
-    void renderPage();
-    return () => {
-      isCancelled = true;
-      void loadingTask?.destroy();
-      void pdfDocument?.cleanup();
-    };
-  }, [data, renderVersion]);
-
+const SupplementaryOrderPdfBackground = memo(function SupplementaryOrderPdfBackground({
+  previewUrl,
+  isLoading,
+}: {
+  previewUrl: string | null;
+  isLoading: boolean;
+}) {
   return (
-    <div className="supplementary-order-pdf-background" ref={paperRef} aria-hidden="true">
-      <canvas ref={canvasRef} />
-      {renderError ? <span>{renderError}</span> : null}
+    <div className="supplementary-order-pdf-background" aria-hidden="true">
+      {previewUrl ? <img src={previewUrl} alt="" /> : null}
+      {isLoading ? <span className="is-loading">Vorlage wird geladen…</span> : null}
     </div>
   );
-}
+});
 
-function WorkerPaperFields({
+const WorkerPaperFields = memo(function WorkerPaperFields({
   worker,
   workerIndex,
+  workerStateIndex,
   readOnly,
   onChange,
 }: {
   worker: MobileExtraWorkWorkerHours;
   workerIndex: number;
+  workerStateIndex: number;
   readOnly: boolean;
-  onChange: (patch: Partial<MobileExtraWorkWorkerHours>) => void;
+  onChange: (workerIndex: number, patch: Partial<MobileExtraWorkWorkerHours>) => void;
 }) {
   const tiers: Array<{ key: ExtraWorkHoursTier; field: "normal" | "surcharge25" | "surcharge50"; label: string }> = [
     { key: "normal", field: "normal", label: "Normalstunden" },
@@ -1049,7 +1220,7 @@ function WorkerPaperFields({
   ];
   return (
     <>
-      <PaperTextarea rect={getExtraWorkWorkerNameRect(workerIndex)} label={`Name Monteur ${workerIndex + 1}`} value={worker.worker_name} readOnly={readOnly} centered onChange={(value) => onChange({ worker_name: value })} />
+      <PaperTextarea rect={getExtraWorkWorkerNameRect(workerIndex)} label={`Name Monteur ${workerIndex + 1}`} value={worker.worker_name} readOnly={readOnly} centered onChange={(value) => onChange(workerStateIndex, { worker_name: value })} />
       {tiers.map((tier) => (
         <span key={tier.key}>
           {EXTRA_WORK_DAYS.map((day, dayIndex) => {
@@ -1062,7 +1233,7 @@ function WorkerPaperFields({
                 value={worker[field]}
                 readOnly={readOnly}
                 compact
-                onChange={(value) => onChange({ [field]: value })}
+                onChange={(value) => onChange(workerStateIndex, { [field]: value })}
               />
             );
           })}
@@ -1075,9 +1246,14 @@ function WorkerPaperFields({
       ))}
     </>
   );
-}
+}, (previous, next) => (
+  previous.worker === next.worker
+  && previous.workerIndex === next.workerIndex
+  && previous.workerStateIndex === next.workerStateIndex
+  && previous.readOnly === next.readOnly
+));
 
-function PaperInput({ rect, label, value, readOnly, onChange, type = "text", centered = false }: {
+type PaperInputProps = {
   rect: ExtraWorkPdfRect;
   label: string;
   value: string;
@@ -1085,23 +1261,34 @@ function PaperInput({ rect, label, value, readOnly, onChange, type = "text", cen
   onChange: (value: string) => void;
   type?: "text" | "date";
   centered?: boolean;
-}) {
+};
+
+const PaperInput = memo(function PaperInput({ rect, label, value, readOnly, onChange, type = "text", centered = false }: PaperInputProps) {
   return (
     <label className={`supplementary-order-paper-field${readOnly ? " is-read-only" : " is-editable"}${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label}>
       <span className="sr-only">{label}</span>
       <input autoComplete="off" type={type} value={value} readOnly={readOnly} aria-label={label} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.label === next.label
+  && previous.value === next.value
+  && previous.readOnly === next.readOnly
+  && previous.type === next.type
+  && previous.centered === next.centered
+));
 
-function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = false }: {
+type PaperNumberInputProps = {
   rect: ExtraWorkPdfRect;
   label: string;
   value: string | number | null | undefined;
   readOnly: boolean;
   onChange: (value: string | number | null) => void;
   compact?: boolean;
-}) {
+};
+
+const PaperNumberInput = memo(function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = false }: PaperNumberInputProps) {
   const visibleValue = compact && Number(String(value ?? "").replace(",", ".")) === 0
     ? ""
     : value ?? "";
@@ -1120,9 +1307,15 @@ function PaperNumberInput({ rect, label, value, readOnly, onChange, compact = fa
       />
     </label>
   );
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.label === next.label
+  && previous.value === next.value
+  && previous.readOnly === next.readOnly
+  && previous.compact === next.compact
+));
 
-function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centered = false }: {
+type PaperTextareaProps = {
   rect: ExtraWorkPdfRect;
   layout?: ExtraWorkPdfTextareaLayout;
   label: string;
@@ -1130,27 +1323,35 @@ function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centere
   readOnly: boolean;
   onChange: (value: string) => void;
   centered?: boolean;
-}) {
+};
+
+const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centered = false }: PaperTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
-  useEffect(() => {
+  const updateOverflow = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea || !layout) {
-      setIsOverflowing(false);
+      setIsOverflowing((current) => current ? false : current);
       return;
     }
-    const updateOverflow = () => {
-      setIsOverflowing(textarea.scrollHeight > textarea.clientHeight + 1);
-    };
+    const nextOverflow = textarea.scrollHeight > textarea.clientHeight + 1;
+    setIsOverflowing((current) => current === nextOverflow ? current : nextOverflow);
+  }, [layout]);
+
+  useLayoutEffect(() => {
     updateOverflow();
-    if (typeof ResizeObserver === "undefined") {
+  }, [updateOverflow, value]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !layout || typeof ResizeObserver === "undefined") {
       return;
     }
     const observer = new ResizeObserver(updateOverflow);
     observer.observe(textarea);
     return () => observer.disconnect();
-  }, [layout, value]);
+  }, [layout, updateOverflow]);
 
   const overflowMessage = layout && isOverflowing
     ? `${label}: Der Text überschreitet die ${layout.maxLines} druckbaren Zeilen.`
@@ -1175,19 +1376,33 @@ function PaperTextarea({ rect, layout, label, value, readOnly, onChange, centere
       {overflowMessage ? <span className="supplementary-order-paper-overflow-note" role="status">Mehr als {layout?.maxLines} Druckzeilen</span> : null}
     </label>
   );
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.layout === next.layout
+  && previous.label === next.label
+  && previous.value === next.value
+  && previous.readOnly === next.readOnly
+  && previous.centered === next.centered
+));
 
-function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean }) {
+const PaperValue = memo(function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean }) {
   return <span className={`supplementary-order-paper-value${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label} aria-label={`${label}: ${value || "Nicht angegeben"}`}>{value}</span>;
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.label === next.label
+  && previous.value === next.value
+  && previous.centered === next.centered
+));
 
-function PaperSignature({ rect, label, strokes, readOnly, onEdit }: {
+type PaperSignatureProps = {
   rect: ExtraWorkPdfRect;
   label: string;
   strokes: CustomerSignatureStroke[] | null;
   readOnly: boolean;
   onEdit?: () => void;
-}) {
+};
+
+const PaperSignature = memo(function PaperSignature({ rect, label, strokes, readOnly, onEdit }: PaperSignatureProps) {
   const validStrokes = validSignatureStrokes(strokes);
   if (validStrokes.length === 0 && readOnly) {
     return null;
@@ -1228,7 +1443,12 @@ function PaperSignature({ rect, label, strokes, readOnly, onEdit }: {
       {signature}
     </button>
   );
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.label === next.label
+  && previous.strokes === next.strokes
+  && previous.readOnly === next.readOnly
+));
 
 function WorkerSignatureDialog({ initialName, initialStrokes, onCancel, onApply }: {
   initialName: string;
@@ -1352,13 +1572,15 @@ function WorkerSignatureDialog({ initialName, initialStrokes, onCancel, onApply 
   );
 }
 
-function PaperChoice({ rect, label, selected, disabled, onSelect }: {
+type PaperChoiceProps = {
   rect: ExtraWorkPdfRect;
   label: string;
   selected: boolean;
   disabled: boolean;
   onSelect: () => void;
-}) {
+};
+
+const PaperChoice = memo(function PaperChoice({ rect, label, selected, disabled, onSelect }: PaperChoiceProps) {
   return (
     <button
       type="button"
@@ -1373,7 +1595,12 @@ function PaperChoice({ rect, label, selected, disabled, onSelect }: {
       {selected ? "✓" : ""}
     </button>
   );
-}
+}, (previous, next) => (
+  samePaperRect(previous.rect, next.rect)
+  && previous.label === next.label
+  && previous.selected === next.selected
+  && previous.disabled === next.disabled
+));
 
 function ExtraWorkAttachmentRow({
   siteId,
@@ -1408,7 +1635,7 @@ function ExtraWorkAttachmentRow({
     }
     let active = true;
     let objectUrl: string | null = null;
-    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, photo.id, { includeDeleted })
+    void loadSupplementaryOrderAttachmentContent(siteId, ticketId, photo.id, includeDeleted)
       .then((blob) => {
         if (!active) {
           return;
@@ -1473,6 +1700,15 @@ function paperRectStyle(rect: ExtraWorkPdfRect): CSSProperties {
     width: `${percent.width}%`,
     height: `${percent.height}%`,
   };
+}
+
+function samePaperRect(previous: ExtraWorkPdfRect, next: ExtraWorkPdfRect): boolean {
+  return previous === next || (
+    previous.x === next.x
+    && previous.y === next.y
+    && previous.width === next.width
+    && previous.height === next.height
+  );
 }
 
 type PaperTextareaStyle = CSSProperties & {

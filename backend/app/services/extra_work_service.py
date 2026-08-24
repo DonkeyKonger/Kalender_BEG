@@ -96,6 +96,8 @@ class ExtraWorkService:
             .options(
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.deleted_by).selectinload(User.person),
+                selectinload(ExtraWorkTicket.entries),
+                selectinload(ExtraWorkTicket.photos),
             )
             .where(ExtraWorkTicket.site_id == site_id)
         )
@@ -173,7 +175,7 @@ class ExtraWorkService:
             site_id,
             include_deleted=include_deleted,
         )
-        entry = self._get_first_ticket_entry(ticket.id)
+        entry = min(ticket.entries, key=lambda candidate: candidate.id, default=None)
         document_dates = resolve_extra_work_ticket_dates(
             ticket,
             get_extra_work_assignment_context(self.db, ticket),

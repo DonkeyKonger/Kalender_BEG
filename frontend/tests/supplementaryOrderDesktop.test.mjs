@@ -161,7 +161,7 @@ test("opened extra-work records replace the project shell with one exclusive doc
 
 test("document toolbar owns back, attachment, PDF and save actions without browser fullscreen", () => {
   assert.match(componentSource, /supplementary-order-document-back[\s\S]*Zurück/);
-  assert.match(componentSource, /Anlagen \(\{photos\.length\}\)/);
+  assert.match(componentSource, /Anlagen \(\{attachmentCount\}\)/);
   assert.match(componentSource, /PDF herunterladen/);
   assert.match(componentSource, /isSaving \? "Speichert\.\.\." : "Speichern"/);
   assert.match(componentSource, /Ungespeicherte Änderungen verwerfen und zur Liste zurückkehren/);
@@ -169,6 +169,80 @@ test("document toolbar owns back, attachment, PDF and save actions without brows
   assert.match(styles, /\.supplementary-order-detail\.supplementary-order-document-mode \{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
   assert.match(styles, /\.supplementary-order-workspace \{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
   assert.match(styles, /\.supplementary-order-paper-viewport \{[^}]*overflow:\s*visible;/s);
+});
+
+test("document data gates the editor while template and attachments load independently", () => {
+  const documentLoadStart = componentSource.indexOf("void loadSupplementaryOrderDocument(");
+  const templateLoadStart = componentSource.indexOf("void loadSupplementaryOrderTemplate(", documentLoadStart);
+  const initialLoadEnd = componentSource.indexOf("onDirtyChange(isDirty)", templateLoadStart);
+  assert.ok(documentLoadStart >= 0, "document request exists");
+  assert.ok(templateLoadStart > documentLoadStart, "template request starts independently after document request");
+  assert.ok(initialLoadEnd > templateLoadStart, "initial-load effect could be isolated");
+
+  const documentLoadSection = componentSource.slice(documentLoadStart, templateLoadStart);
+  const initialLoadSection = componentSource.slice(documentLoadStart, initialLoadEnd);
+  assert.match(documentLoadSection, /\.finally\(\(\) => \{[\s\S]*setIsLoading\(false\)/);
+  assert.doesNotMatch(initialLoadSection, /siteExtraWorkTicketPhotos|Promise\.allSettled/);
+
+  const attachmentLoaderStart = componentSource.search(/(?:(?:async\s+)?function\s+loadAttachments|const\s+loadAttachments)\b/);
+  assert.ok(attachmentLoaderStart >= 0, "lazy attachment loader exists");
+  const attachmentLoaderSection = componentSource.slice(attachmentLoaderStart, attachmentLoaderStart + 2_500);
+  assert.match(attachmentLoaderSection, /api\.siteExtraWorkTicketPhotos\(site\.id, documentTicket\.id, \{ includeDeleted \}\)/);
+  assert.match(componentSource, /setIsAttachmentsOpen\(true\);[\s\S]{0,300}(?:void |await )?loadAttachments\(\)/);
+});
+
+test("attachment totals use ticket metadata until the lazy photo list has loaded", () => {
+  assert.match(componentSource, /const attachmentCount = photosLoaded \? photos\.length : documentTicket\.photo_count;/);
+  assert.match(componentSource, /const isPhotoLimitReached = attachmentCount >= MAX_EXTRA_WORK_PHOTOS;/);
+  assert.match(componentSource, /Anlagen \(\{attachmentCount\}\)/);
+  assert.match(componentSource, /\{attachmentCount\} von \{MAX_EXTRA_WORK_PHOTOS\} Anlagen/);
+  assert.match(componentSource, /photosLoading[\s\S]*Fotos(?: und Anlagen)? werden geladen/);
+});
+
+test("template preview is cached once per session and shared by every paper page", () => {
+  assert.match(componentSource, /let supplementaryOrderTemplateLoader: Promise<ArrayBuffer> \| null = null;/);
+  assert.match(componentSource, /if \(!supplementaryOrderTemplateLoader\) \{[\s\S]*api\.siteExtraWorkTemplate\(siteId\)/);
+  assert.match(componentSource, /new WeakMap<ArrayBuffer, Promise<string>>\(\)/);
+  assert.match(componentSource, /SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH = 1600;/);
+  assert.match(componentSource, /SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_MAX_PIXELS = 4_000_000;/);
+  assert.equal(componentSource.match(/pdfjsLib\.getDocument\(/g)?.length, 1);
+  assert.match(componentSource, /pdfDocument\.getPage\(1\)/);
+  assert.match(componentSource, /Math\.min\(SUPPLEMENTARY_ORDER_TEMPLATE_PREVIEW_WIDTH, pixelBudgetWidth\)/);
+  assert.match(componentSource, /canvas\.toBlob[\s\S]*"image\/png"/);
+  assert.match(componentSource, /templatePreviewUrl=\{templatePreview\.previewUrl\}/);
+  assert.match(componentSource, /<img[\s\S]{0,300}src=\{previewUrl\}/);
+  assert.doesNotMatch(componentSource, /renderVersion|canvasRef=\{canvasRef\}/);
+});
+
+test("high-cardinality paper controls are memoized and receive stable update handlers", () => {
+  const memoizedComponents = [
+    "WorkerPaperFields",
+    "PaperInput",
+    "PaperNumberInput",
+    "PaperTextarea",
+    "PaperValue",
+    "PaperSignature",
+    "PaperChoice",
+  ];
+  for (const componentName of memoizedComponents) {
+    assert.match(
+      componentSource,
+      new RegExp(`const\\s+${componentName}\\s*=\\s*memo\\s*\\(`),
+      `${componentName} should be memoized`,
+    );
+  }
+  for (const handlerName of ["changeDocumentZoom", "markDirty", "changeDraft", "changeEntry", "changeWorker"]) {
+    assert.match(
+      componentSource,
+      new RegExp(`const\\s+${handlerName}\\s*=\\s*useCallback\\s*\\(`),
+      `${handlerName} should stay stable between renders`,
+    );
+  }
+  assert.match(componentSource, /onDraftChange=\{changeDraft\}/);
+  assert.match(componentSource, /onEntryChange=\{changeEntry\}/);
+  assert.match(componentSource, /onWorkerChange=\{changeWorker\}/);
+  assert.match(componentSource, /onExecutionRangeEdited=\{markExecutionRangeEdited\}/);
+  assert.match(componentSource, /onEditWorkerSignature=\{openWorkerSignature\}/);
 });
 
 test("site API uses one shared document, template and archived-photo contract", () => {
@@ -437,14 +511,14 @@ test("submitted and worker-signed records stay editable but permission, customer
   assert.equal(isExtraWorkDocumentLocked(ticket({ status: "billed" }), true), true);
 });
 
-test("detail has explicit save, dirty guards, annotation-free canvas and no archived PDF action", () => {
+test("detail has explicit save, dirty guards, annotation-free preview and no archived PDF action", () => {
   assert.match(componentSource, /api\.saveSiteExtraWorkTicketDocument/);
   assert.match(componentSource, /Ungespeicherte Änderungen verwerfen/);
   assert.match(componentSource, /beforeunload/);
   assert.equal(componentSource.match(/disabled=\{pdfBusy \|\| isDirty\}/g)?.length, 1);
   assert.match(componentSource, /Vor dem PDF-Download zuerst speichern/);
   assert.match(componentSource, /!documentTicket\.deleted_at \? \(/);
-  assert.match(componentSource, /siteExtraWorkTicketPhotos\(site\.id, ticket\.id, \{ includeDeleted \}\)/);
+  assert.match(componentSource, /siteExtraWorkTicketPhotos\(site\.id, documentTicket\.id, \{ includeDeleted \}\)/);
   assert.match(componentSource, /type="text"[\s\S]*inputMode="decimal"[\s\S]*pattern="\[0-9\]\+\(\[,.\]\[0-9\]\+\)\?"/);
 });
 

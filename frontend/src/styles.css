@@ -29274,10 +29274,16 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   pointer-events: none;
 }
 
-.supplementary-order-pdf-background canvas {
+.supplementary-order-pdf-background img {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.supplementary-order-pdf-background > span.is-loading {
+  border-color: #cbd7e6;
+  background: rgb(245 248 252 / 94%);
+  color: #53657c;
 }
 
 .supplementary-order-pdf-background > span,
