@@ -1144,7 +1144,7 @@ function SupplementaryOrderPaperPage({
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationPlace} label="Ort der Ausführungsgenehmigung" value={ticket.kind === "approval" ? (document.resolved_dates.approval_place ?? "") : ""} />
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.authorizationDate} label="Datum der Ausführungsgenehmigung" value={ticket.kind === "approval" ? formatPaperDate(document.resolved_dates.approval_date) : ""} />
 
-        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.documentNumber} label="Zusatzstundennachweis Nummer" value={documentNumber} />
+        <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.documentNumber} label="Zusatzstundennachweis Nummer" value={documentNumber} documentNumber />
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.title} label="Bezeichnung" value={draft.title ?? ""} />
         <PaperInput rect={EXTRA_WORK_PDF_FIELD_RECTS.executionStart} label="Ausführung von" type="date" value={draft.manual_execution_start ?? ""} readOnly={readOnly} onChange={(value) => {
           onExecutionRangeEdited();
@@ -1412,13 +1412,14 @@ const PaperTextarea = memo(function PaperTextarea({ rect, layout, label, value, 
   && previous.pdfCapacity === next.pdfCapacity
 ));
 
-const PaperValue = memo(function PaperValue({ rect, label, value, centered = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean }) {
-  return <span className={`supplementary-order-paper-value${centered ? " is-centered" : ""}`} style={paperRectStyle(rect)} title={label} aria-label={`${label}: ${value || "Nicht angegeben"}`}>{value}</span>;
+const PaperValue = memo(function PaperValue({ rect, label, value, centered = false, documentNumber = false }: { rect: ExtraWorkPdfRect; label: string; value: string; centered?: boolean; documentNumber?: boolean }) {
+  return <span className={`supplementary-order-paper-value${centered ? " is-centered" : ""}${documentNumber ? " is-document-number" : ""}`} style={paperRectStyle(rect)} title={label} aria-label={`${label}: ${value || "Nicht angegeben"}`}>{value}</span>;
 }, (previous, next) => (
   samePaperRect(previous.rect, next.rect)
   && previous.label === next.label
   && previous.value === next.value
   && previous.centered === next.centered
+  && previous.documentNumber === next.documentNumber
 ));
 
 type PaperSignatureProps = {

@@ -536,6 +536,16 @@ test("paper preview mirrors multi-page PDF chunks, document numbering, totals an
   assert.match(componentSource, /if \(value <= 0\) \{\s*return "";/);
 });
 
+test("paper preview gives only the supplementary-hours document number the PDF red bold emphasis", () => {
+  assert.match(componentSource, /<PaperValue rect=\{EXTRA_WORK_PDF_FIELD_RECTS\.documentNumber\} label="Zusatzstundennachweis Nummer" value=\{documentNumber\} documentNumber \/>/);
+  assert.match(componentSource, /documentNumber \? " is-document-number" : ""/);
+  assert.match(componentSource, /previous\.documentNumber === next\.documentNumber/);
+  assert.match(styles, /\.supplementary-order-paper-value\.is-document-number \{[^}]*color: rgb\(199 13 13\);[^}]*font-weight: 800;/s);
+  assert.match(styles, /\.supplementary-order-paper-value \{[^}]*color: #111827;/s);
+  assert.match(pdfServiceSource, /BEG_PDF_RED = \(0\.78, 0\.05, 0\.05\)/);
+  assert.match(pdfServiceSource, /FIELD_RECTS\["Zusatzstundenachweis Nr"\],[\s\S]*font="F2",[\s\S]*fill=BEG_PDF_RED/);
+});
+
 test("the incorrect upper work-description textarea is absent from both rects and the React tree", () => {
   assert.equal("workDescription" in EXTRA_WORK_PDF_FIELD_RECTS, false);
   assert.doesNotMatch(componentSource, /EXTRA_WORK_PDF_FIELD_RECTS\.workDescription/);

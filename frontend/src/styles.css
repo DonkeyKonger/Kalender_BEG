@@ -30089,6 +30089,11 @@ body.supplementary-order-document-open .mobile-appshell-actions {
   text-align: center;
 }
 
+.supplementary-order-paper-value.is-document-number {
+  color: rgb(199 13 13);
+  font-weight: 800;
+}
+
 .supplementary-order-paper-signature-field {
   position: absolute;
   z-index: 3;
