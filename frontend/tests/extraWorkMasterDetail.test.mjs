@@ -168,14 +168,16 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
 
   assert.notEqual(overviewStyleStart, -1);
   assert.match(styles, /\.project-extra-work-workspace \{/);
-  assert.match(styles, /grid-template-columns: minmax\(600px, 48%\) minmax\(0, 1fr\)/);
+  assert.match(styles, /--project-extra-work-master-column: minmax\(600px, 48%\)/);
+  assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\)/);
   assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
   assert.match(styles, /--project-extra-work-control-height: 32px/);
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions > \.secondary-action,[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*width: 1px;[\s\S]*background: var\(--pf-border\)/);
+  assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);[\s\S]*border-bottom: 0/);
+  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-left: 1px solid var\(--pf-border\)/);
   assert.match(styles, /\.site-detail-status-select \{[\s\S]*appearance: none;[\s\S]*border-radius: 0/);
-  assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px 22px/);
+  assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
   assert.match(styles, /\.project-extra-work-detail \{[\s\S]*--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
   assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: var\(--project-extra-work-detail-columns\)/);
@@ -188,12 +190,20 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-delivery-tooltip \{[\s\S]*right: auto;[\s\S]*left: 0/);
-  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*flex-wrap: wrap/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*--project-extra-work-master-column: minmax\(0, 1fr\)/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-top: 1px solid var\(--pf-border\);[\s\S]*border-left: 0/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /\.project-extra-work-master-row\.is-selected::before/);
   assert.match(styles, /\.project-extra-work-overview \.secondary-action,[\s\S]*border-radius: 2px/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-workspace/);
   assert.doesNotMatch(overviewStyles, /\nbutton\s*\{/);
+});
+
+test("toolbar and detail action edges share the responsive right inset", () => {
+  assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-header-inline-padding: 18px/);
+  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*overflow-y: auto;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\);[\s\S]*scrollbar-gutter: stable/);
+  assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
+  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*--project-extra-work-header-inline-padding: 14px/);
 });
 
 test("extra-work typography is locally strengthened without changing compact geometry", () => {

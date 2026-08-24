@@ -27324,16 +27324,22 @@ body.mobile-modal-scroll-locked {
   line-height: 1.15;
 }
 
+.site-detail-page.is-project-file-workspace .project-extra-work-overview {
+  --project-extra-work-header-inline-padding: 18px;
+  --project-extra-work-master-column: minmax(600px, 48%);
+}
+
 .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--project-extra-work-master-column) minmax(0, 1fr);
   min-height: 54px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 18px 0 12px;
+  align-items: stretch;
+  gap: 0;
+  margin: 18px 0 0;
   border-color: var(--pf-border);
+  border-bottom: 0;
   border-radius: 2px;
-  padding: 10px 18px;
+  padding: 0;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-copy {
@@ -27342,6 +27348,7 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   min-width: 0;
   gap: 0;
+  padding: 10px var(--project-extra-work-header-inline-padding);
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 {
@@ -27366,19 +27373,12 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
-  margin-left: auto;
+  margin-left: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--pf-border);
   gap: 8px;
-  padding-left: 22px;
-}
-
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 0;
-  width: 1px;
-  background: var(--pf-border);
-  content: "";
+  padding: 10px var(--project-extra-work-header-inline-padding);
+  scrollbar-gutter: stable;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-overview .secondary-action,
@@ -27431,7 +27431,7 @@ body.mobile-modal-scroll-locked {
 
 .project-extra-work-workspace {
   display: grid;
-  grid-template-columns: minmax(600px, 48%) minmax(0, 1fr);
+  grid-template-columns: var(--project-extra-work-master-column) minmax(0, 1fr);
   height: var(--project-extra-work-workspace-height, 618px);
   min-width: 0;
   min-height: 0;
@@ -27727,7 +27727,7 @@ body.mobile-modal-scroll-locked {
   gap: 18px;
   border-bottom: 1px solid var(--pf-border);
   background: #ffffff;
-  padding: 10px 22px;
+  padding: 10px var(--project-extra-work-header-inline-padding);
 }
 
 .project-extra-work-detail-head h3 {
@@ -27911,14 +27911,30 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 1280px) {
-  .project-extra-work-workspace {
-    grid-template-columns: minmax(560px, 48%) minmax(0, 1fr);
+  .site-detail-page.is-project-file-workspace .project-extra-work-overview {
+    --project-extra-work-master-column: minmax(560px, 48%);
   }
 }
 
 @media (max-width: 1180px) {
+  .site-detail-page.is-project-file-workspace .project-extra-work-overview {
+    --project-extra-work-master-column: minmax(0, 1fr);
+  }
+
+  .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
+    grid-template-columns: var(--project-extra-work-master-column);
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
+    width: 100%;
+    margin-left: 0;
+    border-top: 1px solid var(--pf-border);
+    border-left: 0;
+    padding: 10px var(--project-extra-work-header-inline-padding);
+  }
+
   .project-extra-work-workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: var(--project-extra-work-master-column);
     height: auto;
     overflow: visible;
   }
@@ -27940,26 +27956,14 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 900px) {
+  .site-detail-page.is-project-file-workspace .project-extra-work-overview {
+    --project-extra-work-header-inline-padding: 14px;
+  }
+
   .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 10px 16px;
-    padding: 10px 14px;
+    min-height: 0;
   }
 
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
-    width: 100%;
-    margin-left: 0;
-    padding: 10px 0 0;
-  }
-
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
-    top: 0;
-    right: auto;
-    bottom: auto;
-    width: 44px;
-    height: 1px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -27980,7 +27984,7 @@ body.mobile-modal-scroll-locked {
     min-height: 60px;
     flex-wrap: wrap;
     gap: 8px 14px;
-    padding: 10px 14px;
+    padding: 10px var(--project-extra-work-header-inline-padding);
   }
 
   .project-extra-work-detail-actions {
