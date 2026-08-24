@@ -74,6 +74,12 @@ test("master rows show only the creation date while the detail keeps date and ti
   assert.match(tabSource.slice(masterRowsEnd), /<dt>Erstelldatum<\/dt><dd>\{formatDateTime\(ticket\.created_at\)\}<\/dd>/);
 });
 
+test("master creator names stay abbreviated and fully accessible", () => {
+  assert.match(tabSource, /formatExtraWorkOverviewCreatorName\(ticket\.created_by_name\)/);
+  assert.match(tabSource, /className="project-extra-work-master-creator"[\s\S]*aria-label=\{creatorName\.accessibleName\}[\s\S]*title=\{creatorName\.fullName \|\| undefined\}[\s\S]*creatorName\.shortName/);
+  assert.match(styles, /\.project-extra-work-master-row > \.project-extra-work-master-creator \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap/);
+});
+
 test("toolbar contains only create, archive switch and global search", () => {
   const toolbarStart = tabSource.indexOf('<header className="project-record-toolbar project-extra-work-toolbar');
   const toolbarEnd = tabSource.indexOf("</header>", toolbarStart);

@@ -6,6 +6,7 @@ import {
   calculateExtraWorkOverviewPageSize,
   buildExtraWorkOverviewEntrySummary,
   filterExtraWorkOverviewTickets,
+  formatExtraWorkOverviewCreatorName,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewDescription,
@@ -105,6 +106,32 @@ test("resizing keeps the selected row on the page for the new page size", () => 
   assert.equal(getExtraWorkOverviewPageForIndex(-1, 8), 1);
 });
 
+test("overview creator names use one initial while preserving the full accessible name", () => {
+  assert.deepEqual(formatExtraWorkOverviewCreatorName("Christopher Eriksen"), {
+    accessibleName: "Christopher Eriksen",
+    fullName: "Christopher Eriksen",
+    shortName: "C. Eriksen",
+  });
+  assert.equal(formatExtraWorkOverviewCreatorName("Marcin Cholewka").shortName, "M. Cholewka");
+  assert.equal(formatExtraWorkOverviewCreatorName("Detlef von Salzen").shortName, "D. von Salzen");
+  assert.equal(formatExtraWorkOverviewCreatorName("Alexandru-Stefan Ardelean").shortName, "A. Ardelean");
+  assert.deepEqual(formatExtraWorkOverviewCreatorName("  Cher   "), {
+    accessibleName: "Cher",
+    fullName: "Cher",
+    shortName: "Cher",
+  });
+  assert.deepEqual(formatExtraWorkOverviewCreatorName("  Anna   Maria   von   Beispiel  "), {
+    accessibleName: "Anna Maria von Beispiel",
+    fullName: "Anna Maria von Beispiel",
+    shortName: "A. Maria von Beispiel",
+  });
+  assert.deepEqual(formatExtraWorkOverviewCreatorName("   "), {
+    accessibleName: "Ersteller nicht angegeben",
+    fullName: "",
+    shortName: "–",
+  });
+});
+
 test("master scrollbar width is reserved only for real overflow", () => {
   assert.equal(getExtraWorkOverviewScrollbarWidth({
     clientHeight: 264,
@@ -145,6 +172,7 @@ test("local overview search covers structured ticket and entry contents", () => 
   for (const query of [
     "SZ13",
     "erichsen",
+    "christopher erichsen",
     "muller general",
     "schuessler",
     "server",

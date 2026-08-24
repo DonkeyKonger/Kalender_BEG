@@ -27553,6 +27553,13 @@ body.mobile-modal-scroll-locked {
   overflow-wrap: anywhere;
 }
 
+.project-extra-work-master-row > .project-extra-work-master-creator {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-extra-work-master-row > strong {
   color: #294a72;
   font-size: 0.84rem;

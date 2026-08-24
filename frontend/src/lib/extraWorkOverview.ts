@@ -121,6 +121,29 @@ export function formatExtraWorkOverviewTitle(ticket: MobileExtraWorkTicket): str
   return `Zusatzauftrag ${ticket.display_number}`;
 }
 
+export function formatExtraWorkOverviewCreatorName(
+  value: string | null | undefined,
+): { accessibleName: string; fullName: string; shortName: string } {
+  const fullName = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!fullName) {
+    return {
+      accessibleName: "Ersteller nicht angegeben",
+      fullName: "",
+      shortName: "–",
+    };
+  }
+  const [firstNamePart, ...remainingNameParts] = fullName.split(" ");
+  if (remainingNameParts.length === 0) {
+    return { accessibleName: fullName, fullName, shortName: fullName };
+  }
+  const initial = Array.from(firstNamePart)[0] ?? firstNamePart;
+  return {
+    accessibleName: fullName,
+    fullName,
+    shortName: `${initial}. ${remainingNameParts.join(" ")}`,
+  };
+}
+
 export function getExtraWorkOverviewPrimaryEntry(
   ticket: MobileExtraWorkTicket,
 ): ExtraWorkTicketEntrySummary | null {

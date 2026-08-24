@@ -21,6 +21,7 @@ import {
   buildExtraWorkOverviewEntrySummary,
   calculateExtraWorkOverviewPageSize,
   filterExtraWorkOverviewTickets,
+  formatExtraWorkOverviewCreatorName,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewDescription,
   getExtraWorkOverviewMasterHeight,
@@ -3102,6 +3103,7 @@ function ExtraWorkTab({
                     ? extraWorkStatusPromotionOptions(ticket.status, ticket.customer_signed_at)
                     : [];
                   const createdDate = formatExtraWorkOverviewCreatedDate(ticket.created_at);
+                  const creatorName = formatExtraWorkOverviewCreatorName(ticket.created_by_name);
                   return (
                     <div
                       key={ticket.id}
@@ -3143,7 +3145,14 @@ function ExtraWorkTab({
                         <strong>{formatExtraWorkOverviewTitle(ticket)}</strong>
                       </div>
                       <time role="gridcell" dateTime={ticket.created_at}>{createdDate}</time>
-                      <span role="gridcell">{ticket.created_by_name || "–"}</span>
+                      <span
+                        className="project-extra-work-master-creator"
+                        role="gridcell"
+                        aria-label={creatorName.accessibleName}
+                        title={creatorName.fullName || undefined}
+                      >
+                        {creatorName.shortName}
+                      </span>
                       <strong role="gridcell">{formatExtraWorkTicketHours(ticket)}</strong>
                     </div>
                   );
