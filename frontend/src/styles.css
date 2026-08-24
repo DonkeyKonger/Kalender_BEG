@@ -27821,8 +27821,12 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-project-data,
 .project-extra-work-additional-data {
   display: grid;
-  grid-template-columns: var(--project-extra-work-detail-columns);
   margin: 0;
+}
+
+.project-extra-work-key-data,
+.project-extra-work-project-data {
+  grid-template-columns: var(--project-extra-work-detail-columns);
 }
 
 .project-extra-work-key-data {
@@ -27947,6 +27951,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-additional-data {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: solid #dbe4ef;
   border-width: 1px 0;
   background: #fbfcfe;
